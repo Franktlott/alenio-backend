@@ -11,7 +11,7 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { agentDebugLog, authClient, clearAccessToken } from "@/lib/auth/auth-client";
+import { agentDebugLog, authClient, clearAccessToken, setAccessToken } from "@/lib/auth/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
 import { clearSignedOutMark, markSessionSignedOut, cancelMobileAuthQueries } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,6 +23,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 import { setPendingJoinCode } from "@/lib/auth/pending-join-code";
 import { completeMobileAuthEntry } from "@/lib/auth/complete-auth-entry";
+import {
+  extractAuthTokenFromCallbackUrl,
+  signInWithMicrosoft,
+} from "@/lib/auth/microsoft-auth";
 
 export default function SignIn() {
   const params = useLocalSearchParams<{
@@ -42,6 +46,7 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const signingInRef = useRef(false);
@@ -69,7 +74,7 @@ export default function SignIn() {
   }, [joinCode]);
 
   const handleSignIn = async () => {
-    if (loading) return;
+    if (loading || microsoftLoading) return;
     setError(null);
     if (!email.trim()) {
       setError("Please enter your email address");
@@ -146,6 +151,38 @@ export default function SignIn() {
     } finally {
       signingInRef.current = false;
       setLoading(false);
+    }
+  };
+
+  const handleMicrosoft = async () => {
+    if (loading || microsoftLoading) return;
+    setError(null);
+    setMicrosoftLoading(true);
+    signingInRef.current = true;
+    clearAccessToken();
+    clearSignedOutMark();
+    await cancelMobileAuthQueries(queryClient);
+    try {
+      const result = await signInWithMicrosoft();
+      if (result.error) {
+        setError(result.error.message ?? "Microsoft sign-in failed.");
+        return;
+      }
+      const token = result.callbackUrl ? extractAuthTokenFromCallbackUrl(result.callbackUrl) : null;
+      if (!token) {
+        setError("Sign-in did not return a session. Please try again.");
+        return;
+      }
+      setAccessToken(token);
+      const completed = await completeMobileAuthEntry(queryClient, null);
+      if (!completed.ok) {
+        setError(completed.error);
+      }
+    } catch (err) {
+      setError(formatAuthFlowError(err));
+    } finally {
+      signingInRef.current = false;
+      setMicrosoftLoading(false);
     }
   };
 
@@ -243,7 +280,7 @@ export default function SignIn() {
               <TouchableOpacity
                 className="bg-indigo-600 rounded-xl py-4 items-center"
                 onPress={handleSignIn}
-                disabled={loading}
+                disabled={loading || microsoftLoading}
                 activeOpacity={0.8}
                 testID="sign-in-button"
               >
@@ -251,6 +288,28 @@ export default function SignIn() {
                   <ActivityIndicator color="white" />
                 ) : (
                   <Text className="text-white font-semibold text-base">Sign In</Text>
+                )}
+              </TouchableOpacity>
+
+              <View className="flex-row items-center my-5">
+                <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                <Text className="mx-3 text-xs text-slate-400 uppercase">or</Text>
+                <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+              </View>
+
+              <TouchableOpacity
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-4 items-center"
+                onPress={handleMicrosoft}
+                disabled={loading || microsoftLoading}
+                activeOpacity={0.8}
+                testID="sign-in-microsoft"
+              >
+                {microsoftLoading ? (
+                  <ActivityIndicator color="#4361EE" />
+                ) : (
+                  <Text className="text-slate-900 dark:text-white font-semibold text-base">
+                    Continue with Microsoft
+                  </Text>
                 )}
               </TouchableOpacity>
 

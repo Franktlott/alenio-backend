@@ -1006,6 +1006,7 @@ export type ApiTask = {
   priority: string;
   status: string;
   completedAt: string | null;
+  archivedAt?: string | null;
   teamId?: string;
   creatorId?: string;
   attachmentUrl?: string | null;

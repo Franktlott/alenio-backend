@@ -31,8 +31,11 @@ function serializeBackendEnv(existing: Map<string, string>, updates: Record<stri
   for (const [key, value] of Object.entries(updates)) {
     if (value) merged.set(key, value);
   }
-  // Cutover: stop writing NEON_AUTH_URL into backend/.env
+  // Remove obsolete Neon Auth URL if still present in an old backend/.env
   merged.delete("NEON_AUTH_URL");
+  merged.delete("NEON_API_KEY");
+  merged.delete("NEON_PROJECT_ID");
+  merged.delete("NEON_BRANCH_ID");
 
   const lines: string[] = [
     "# Synced from web/.env via `bun run sync-env` — edit web/.env, then re-run sync.",
@@ -51,6 +54,9 @@ function serializeBackendEnv(existing: Map<string, string>, updates: Record<stri
     "DEV_DATABASE_URL",
     "PROD_DATABASE_URL",
     "NEON_AUTH_URL",
+    "NEON_API_KEY",
+    "NEON_PROJECT_ID",
+    "NEON_BRANCH_ID",
   ]);
   for (const [key, value] of merged) {
     if (syncedKeys.has(key)) continue;

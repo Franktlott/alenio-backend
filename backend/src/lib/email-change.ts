@@ -37,7 +37,7 @@ export async function confirmEmailChange(
 ) {
   await assertEmailAvailableForUser(userId, newEmail, currentEmail);
   await verifyEmailVerificationOtp(newEmail, otp);
-  await updateNeonAuthUserEmail(userId, newEmail);
+  await updateAuthUserEmail(userId, newEmail);
 
   const updated = await prisma.user.update({
     where: { id: userId },
@@ -48,7 +48,7 @@ export async function confirmEmailChange(
   return updated;
 }
 
-async function updateNeonAuthUserEmail(userId: string, newEmail: string): Promise<void> {
+async function updateAuthUserEmail(userId: string, newEmail: string): Promise<void> {
   try {
     await prisma.$executeRaw`
       UPDATE neon_auth."user"

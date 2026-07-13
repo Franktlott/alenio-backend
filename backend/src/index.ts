@@ -35,7 +35,7 @@ import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
 import { isBetterAuthMounted } from "./lib/better-auth-status";
-import { syncAppUserFromNeonAuth } from "./lib/ensure-app-user";
+import { syncAppUserFromAuth } from "./lib/ensure-app-user";
 import { deleteAppUserCompletely } from "./lib/delete-app-user";
 import { assertAccountDeletionAllowed, getAccountDeletionReadiness } from "./lib/account-deletion-readiness";
 import {
@@ -131,7 +131,7 @@ function buildHealthPayload() {
     betterAuthConfigured: (env.BETTER_AUTH_SECRET?.trim().length ?? 0) >= 32,
     /** Routes mounted successfully after deferred init. */
     betterAuthEnabled: isBetterAuthMounted(),
-    /** API accepts Better Auth bearer sessions only (Neon Auth fallback removed). */
+    /** API accepts Better Auth bearer sessions only (legacy Neon JWT fallback removed). */
     betterAuthSessionVerify: isBetterAuthMounted(),
     /** Microsoft Entra social sign-in configured (MICROSOFT_CLIENT_ID + SECRET). */
     microsoftSignInConfigured: !!(
@@ -144,7 +144,7 @@ type Variables = {
   user: AppUser | null;
   session: AppSession | null;
   authDebug: {
-    neonAuthUserFound: boolean;
+    authUserFound: boolean;
     matchedBy: "auth_user_id" | "email" | "created" | "none";
     authUserId: string | null;
     authEmail: string | null;
@@ -158,7 +158,7 @@ const BACKEND_BUILD_MARKER = env.BACKEND_BUILD_MARKER;
 // Fast health for Railway — must not wait on schema/auth startup work.
 app.get("/health", (c) => c.json(buildHealthPayload()));
 
-/** Post-cutover diagnostics: neon_auth schema still readable after Neon Auth Console disable? */
+/** Diagnostics: neon_auth schema tables readable for Better Auth? */
 app.get("/api/auth-schema-check", async (c) => {
   const ensure = await ensureBetterAuthSchema(prisma);
   const out: Record<string, unknown> = {
@@ -267,7 +267,7 @@ app.use("*", async (c, next) => {
     c.set("user", null);
     c.set("session", null);
     c.set("authDebug", {
-      neonAuthUserFound: false,
+      authUserFound: false,
       matchedBy: "none",
       authUserId: null,
       authEmail: null,
@@ -275,7 +275,7 @@ app.use("*", async (c, next) => {
     });
   } else {
     const sessionEmail = session.user.email?.trim() ?? null;
-    const synced = await syncAppUserFromNeonAuth(session.user);
+    const synced = await syncAppUserFromAuth(session.user);
     const user = synced?.user ?? null;
     const matchedBy: "auth_user_id" | "email" | "created" | "none" = synced?.matchedBy ?? "none";
 
@@ -289,7 +289,7 @@ app.use("*", async (c, next) => {
       c.set("user", null);
       c.set("session", null);
       c.set("authDebug", {
-        neonAuthUserFound: true,
+        authUserFound: true,
         matchedBy: "none",
         authUserId: session.user.id,
         authEmail: sessionEmail,
@@ -301,7 +301,7 @@ app.use("*", async (c, next) => {
     c.set("user", user);
     c.set("session", session.session);
     c.set("authDebug", {
-      neonAuthUserFound: true,
+      authUserFound: true,
       matchedBy,
       authUserId: session.user.id,
       authEmail: sessionEmail,
@@ -379,7 +379,7 @@ app.get("/auth/callback", (c) => {
   return c.redirect(dest.toString(), 302);
 });
 
-/** Explicit Neon Auth → Prisma user sync (middleware already runs sync; this is for the mobile app right after sign-up / verify). */
+/** Explicit Better Auth → Prisma user sync (middleware already runs sync; this is for the mobile app right after sign-up / verify). */
 app.post("/api/auth/sync-user", (c) => {
   const user = c.get("user");
   if (!user) {
@@ -881,7 +881,7 @@ app.get("/api/me/debug", async (c) => {
         authenticated: false,
         database: getDatabasePublicSummary(),
         buildMarker: BACKEND_BUILD_MARKER,
-        neonAuthUserFound: authDebug?.neonAuthUserFound ?? false,
+        authUserFound: authDebug?.authUserFound ?? false,
         appUserFound: false,
         matchedBy: authDebug?.matchedBy ?? "none",
         authUserId: authDebug?.authUserId ?? null,
@@ -909,7 +909,7 @@ app.get("/api/me/debug", async (c) => {
       database: getDatabasePublicSummary(),
       buildMarker: BACKEND_BUILD_MARKER,
       authUserId: user.id,
-      neonAuthUserFound: authDebug?.neonAuthUserFound ?? true,
+      authUserFound: authDebug?.authUserFound ?? true,
       appUserFound: !!dbUser,
       matchedBy: authDebug?.matchedBy ?? "auth_user_id",
       authProviderUserId: authDebug?.authUserId ?? user.id,

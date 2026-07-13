@@ -40,7 +40,7 @@ export function LinkedDevicesAccessPanel({ teamId, teamName, inviteCode, canMana
             <li>
               <strong>Open the linking page</strong> on the tablet browser at{" "}
               <a href="/aleniogo" className="enterprise-inline-link">
-                alenio.app/aleniogo
+                alenio.com/aleniogo
               </a>
               .
             </li>

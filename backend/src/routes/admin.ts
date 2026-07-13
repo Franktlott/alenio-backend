@@ -14,7 +14,7 @@ adminRouter.use("/api/*", async (c, next) => {
   await next();
 });
 
-async function findNeonAuthUserIdByEmail(email: string): Promise<string | null> {
+async function findAuthUserIdByEmail(email: string): Promise<string | null> {
   try {
     const rows = await prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM neon_auth."user" WHERE email = ${email} LIMIT 1
@@ -26,7 +26,7 @@ async function findNeonAuthUserIdByEmail(email: string): Promise<string | null> 
   }
 }
 
-async function markNeonAuthEmailVerified(authUserId: string): Promise<void> {
+async function markAuthEmailVerified(authUserId: string): Promise<void> {
   try {
     await prisma.$executeRaw`
       UPDATE neon_auth."user"
@@ -45,7 +45,7 @@ adminRouter.post("/api/bootstrap-admin", async (c) => {
     password?: string;
     name?: string;
   };
-  const email = (body.email ?? "admin@alenio.app").trim().toLowerCase();
+  const email = (body.email ?? "admin@alenio.com").trim().toLowerCase();
   const password = body.password ?? "AlenioAdmin123!";
   const name = (body.name ?? "Alenio Admin").trim() || "Alenio Admin";
 
@@ -55,7 +55,7 @@ adminRouter.post("/api/bootstrap-admin", async (c) => {
 
   await createEmailPasswordUser(email, password, name);
 
-  let authId = await findNeonAuthUserIdByEmail(email);
+  let authId = await findAuthUserIdByEmail(email);
   if (!authId) {
     // Auth row may take a moment; fall back to existing app user id.
     const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
@@ -71,7 +71,7 @@ adminRouter.post("/api/bootstrap-admin", async (c) => {
     );
   }
 
-  await markNeonAuthEmailVerified(authId);
+  await markAuthEmailVerified(authId);
 
   const byId = await prisma.user.findUnique({ where: { id: authId } });
   const byEmail = await prisma.user.findUnique({ where: { email } });

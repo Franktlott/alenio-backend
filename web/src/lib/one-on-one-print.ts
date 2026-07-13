@@ -450,7 +450,7 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 
     <div class="bottom-bar">
       <img src="${escapeHtml(logoUrl)}" alt="Alenio" class="brand-logo" />
-      <span>alenio.app</span>
+      <span>alenio.com</span>
     </div>
   </div>
 </body>

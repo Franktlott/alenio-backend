@@ -4,8 +4,8 @@ Thin Expo shell for floor tablets. It loads the existing Alenio Go web kiosk in 
 
 ## What it does (mock v0.1)
 
-- Opens `https://alenio.app/aleniogo` until a workspace is linked
-- After link approval, reopens `https://alenio.app/checklist/{hubToken}`
+- Opens `https://alenio.com/aleniogo` until a workspace is linked
+- After link approval, reopens `https://alenio.com/checklist/{hubToken}`
 - Keeps the screen awake while the app is open
 - Remembers the linked workspace between launches
 - Registers a mock Expo push token locally (backend hookup comes later)
@@ -25,7 +25,7 @@ Use Expo Go or a dev build on an iPad/tablet. For store tablets, prefer a dedica
 
 | Variable | Purpose |
 |----------|---------|
-| `EXPO_PUBLIC_GO_WEB_URL` | Web host for link + kiosk pages (default `https://alenio.app`) |
+| `EXPO_PUBLIC_GO_WEB_URL` | Web host for link + kiosk pages (default `https://alenio.com`) |
 
 ## Next steps (not in mock)
 

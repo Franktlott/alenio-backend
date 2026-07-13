@@ -23,6 +23,9 @@ export function TaskActivityCard({ item, footer, onLongPress, testID }: Props) {
   const assignees = item.metadata.assignees ?? [];
   const actorName = item.actor?.name ?? "Someone";
   const involvedCount = Math.max(assignees.length, item.metadata.taskCount ?? 1);
+  const title = isAssigned
+    ? (item.description ?? item.title)
+    : `“${item.metadata.taskTitle ?? item.title}”`;
 
   const navigate = () => {
     if (item.actionRoute) router.push(item.actionRoute as never);
@@ -43,51 +46,67 @@ export function TaskActivityCard({ item, footer, onLongPress, testID }: Props) {
         tint={tint}
         timestamp={item.timestamp}
       >
-        {isAssigned ? (
-          <Text style={{ fontSize: 13, fontWeight: "600", color: ACTIVITY_COLORS.slate900, lineHeight: 18 }}>
-            {item.description ?? item.title}
-          </Text>
-        ) : (
-          <View style={{ gap: 1 }}>
-            <Text style={{ fontSize: 11, fontWeight: "500", color: ACTIVITY_COLORS.slate500 }}>
-              {actorName} completed
-            </Text>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: ACTIVITY_COLORS.slate900, lineHeight: 18 }}>
-              “{item.metadata.taskTitle ?? item.title}”
-            </Text>
-          </View>
-        )}
+        <Text
+          style={{
+            fontSize: 14,
+            fontWeight: "600",
+            color: ACTIVITY_COLORS.slate900,
+            lineHeight: 19,
+          }}
+          numberOfLines={2}
+        >
+          {title}
+        </Text>
 
-        {isAssigned && involvedCount > 0 ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 }}>
-            {assignees.length > 0 ? (
-              <AvatarStack people={assignees} size={16} borderColor={ACTIVITY_COLORS.white} />
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            marginTop: 2,
+          }}
+        >
+          <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+            {!isAssigned ? (
+              <Text style={{ fontSize: 12, color: ACTIVITY_COLORS.slate500 }} numberOfLines={1}>
+                {actorName} completed
+              </Text>
             ) : null}
-            <Text style={{ fontSize: 11, color: ACTIVITY_COLORS.slate500 }}>
-              {assignees.length > 0
-                ? `${Math.max(assignees.length, involvedCount)} involved`
-                : `${involvedCount} tasks`}
-            </Text>
-          </View>
-        ) : null}
 
-        {!isAssigned && assignees.length > 0 ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 }}>
-            <AvatarStack people={assignees} size={16} borderColor={ACTIVITY_COLORS.white} />
-            <Text style={{ fontSize: 11, color: ACTIVITY_COLORS.slate500, flex: 1 }} numberOfLines={1}>
-              {formatAvatarStackNames(assignees)}
-            </Text>
-          </View>
-        ) : null}
+            {isAssigned && involvedCount > 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                {assignees.length > 0 ? (
+                  <AvatarStack people={assignees} size={18} borderColor={ACTIVITY_COLORS.white} />
+                ) : null}
+                <Text style={{ fontSize: 12, color: ACTIVITY_COLORS.slate500, flex: 1 }} numberOfLines={1}>
+                  {assignees.length > 0
+                    ? `${Math.max(assignees.length, involvedCount)} involved`
+                    : `${involvedCount} tasks`}
+                </Text>
+              </View>
+            ) : null}
 
-        {item.actionLabel ? (
-          <ActivityActionButton
-            label={item.actionLabel}
-            onPress={navigate}
-            accentColor={ACTIVITY_COLORS.primary}
-            testID={`${testID ?? item.id}-action`}
-          />
-        ) : null}
+            {!isAssigned && assignees.length > 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <AvatarStack people={assignees} size={18} borderColor={ACTIVITY_COLORS.white} />
+                <Text style={{ fontSize: 12, color: ACTIVITY_COLORS.slate500, flex: 1 }} numberOfLines={1}>
+                  {formatAvatarStackNames(assignees)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {item.actionLabel ? (
+            <ActivityActionButton
+              label={item.actionLabel}
+              onPress={navigate}
+              accentColor={ACTIVITY_COLORS.primary}
+              variant="pill"
+              testID={`${testID ?? item.id}-action`}
+            />
+          ) : null}
+        </View>
       </ActivityCardBody>
     </ActivityCardShell>
   );

@@ -13,14 +13,14 @@ export type ActivityTintTokens = {
 };
 
 export const ACTIVITY_LAYOUT = {
-  cardRadius: 8,
-  cardPadding: 10,
+  cardRadius: 10,
+  cardPadding: 12,
   cardGap: 4,
   cardMarginHorizontal: 16,
-  cardMarginVertical: 3,
+  cardMarginVertical: 4,
   sectionGap: 8,
-  avatarSize: 32,
-  avatarColumn: 38,
+  avatarSize: 34,
+  avatarColumn: 40,
 } as const;
 
 export const ACTIVITY_COLORS = {

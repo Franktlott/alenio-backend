@@ -246,6 +246,7 @@ model Task {
   priority    String   @default("medium")
   dueDate     DateTime?
   completedAt   DateTime?
+  archivedAt    DateTime?
   attachmentUrl String?
   incognito   Boolean  @default(false)
   isJoint     Boolean  @default(false)
@@ -272,6 +273,7 @@ model Task {
   @@index([teamId, status])
   @@index([teamId, dueDate])
   @@index([teamId, completedAt])
+  @@index([teamId, archivedAt])
   @@index([oneOnOneMeetingId])
 }
 

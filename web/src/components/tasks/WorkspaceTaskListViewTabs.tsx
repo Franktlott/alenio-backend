@@ -8,7 +8,7 @@ type Props = {
 };
 
 const TABS: Array<{ id: TaskListView; label: string }> = [
-  { id: "active", label: "Open" },
+  { id: "active", label: "Active" },
   { id: "completed", label: "Completed" },
   { id: "archived", label: "Archive" },
 ];

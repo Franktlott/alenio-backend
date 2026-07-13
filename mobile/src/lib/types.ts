@@ -65,6 +65,7 @@ export interface Task {
   priority: TaskPriority;
   dueDate?: string | null;
   completedAt?: string | null;
+  archivedAt?: string | null;
   attachmentUrl?: string | null;
   incognito?: boolean;
   createdAt: string;
@@ -120,6 +121,7 @@ export interface DirectMessage {
 export interface PinnedMessageSummary {
   messageId: string;
   content?: string | null;
+  mediaUrl?: string | null;
   mediaType?: "image" | "video" | null;
   sender: { id: string; name: string | null; image?: string | null };
   pinnedAt: string;

@@ -13,8 +13,15 @@ function SkeletonRow() {
   );
 }
 
-type Props = {
+export type TaskListSection = {
+  id: string;
+  title: string;
   tasks: Task[];
+};
+
+type Props = {
+  tasks?: Task[];
+  sections?: TaskListSection[];
   loading: boolean;
   loadError?: string | null;
   onRetry?: () => void;
@@ -29,8 +36,28 @@ type Props = {
   footer?: React.ReactNode;
 };
 
+function renderTaskRows(
+  tasks: Task[],
+  onToggle: (task: Task) => void,
+  onPress: (task: Task) => void,
+  onLongPress?: (task: Task) => void,
+  isLastSection = true,
+) {
+  return tasks.map((task, index) => (
+    <TaskRow
+      key={task.id}
+      task={task}
+      onToggle={() => onToggle(task)}
+      onPress={() => onPress(task)}
+      onLongPress={onLongPress ? () => onLongPress(task) : undefined}
+      showSeparator={index < tasks.length - 1 || !isLastSection}
+    />
+  ));
+}
+
 export function TaskListCard({
-  tasks,
+  tasks = [],
+  sections,
   loading,
   loadError,
   onRetry,
@@ -44,7 +71,12 @@ export function TaskListCard({
   onEmptyAction,
   footer,
 }: Props) {
-  if (!loading && !loadError && tasks.length === 0) {
+  const sectionList = sections?.filter((s) => s.tasks.length > 0) ?? null;
+  const taskCount = sectionList
+    ? sectionList.reduce((sum, s) => sum + s.tasks.length, 0)
+    : tasks.length;
+
+  if (!loading && !loadError && taskCount === 0) {
     return (
       <TasksEmptyState
         title={emptyTitle}
@@ -85,17 +117,34 @@ export function TaskListCard({
             </Pressable>
           ) : null}
         </View>
-      ) : (
-        tasks.map((task, index) => (
-          <TaskRow
-            key={task.id}
-            task={task}
-            onToggle={() => onToggle(task)}
-            onPress={() => onPress(task)}
-            onLongPress={onLongPress ? () => onLongPress(task) : undefined}
-            showSeparator={index < tasks.length - 1}
-          />
+      ) : sectionList ? (
+        sectionList.map((section, sectionIndex) => (
+          <View key={section.id}>
+            <View
+              style={{
+                paddingHorizontal: 12,
+                paddingTop: sectionIndex === 0 ? 10 : 12,
+                paddingBottom: 4,
+                backgroundColor: sectionIndex === 0 ? WS.surface : "#F8FAFC",
+                borderTopWidth: sectionIndex === 0 ? 0 : 1,
+                borderTopColor: "#F1F5F9",
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 0.4, textTransform: "uppercase" }}>
+                {section.title}
+              </Text>
+            </View>
+            {renderTaskRows(
+              section.tasks,
+              onToggle,
+              onPress,
+              onLongPress,
+              sectionIndex === sectionList.length - 1,
+            )}
+          </View>
         ))
+      ) : (
+        renderTaskRows(tasks, onToggle, onPress, onLongPress)
       )}
       {footer}
     </View>

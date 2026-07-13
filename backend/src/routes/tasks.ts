@@ -21,6 +21,7 @@ import {
 } from "../lib/recurrence-series";
 import { isValidTimeZone, resolveTimeZone } from "../lib/timezone";
 import { normalizeTaskStatus } from "../lib/task-status";
+import { archiveCutoffDate, archiveOldCompletedTasksForTeam } from "../lib/task-archive";
 import {
   buildDevelopmentGoalActivityAlerts,
   reconcileInactiveDevelopmentGoals,
@@ -272,6 +273,7 @@ tasksRouter.get("/", async (c) => {
 
   const { status, priority, assigneeId, creatorId, myTasks, cursor, dueYear, dueMonth, completedYear, completedMonth, recurrenceSeriesId } =
     c.req.query();
+  const archivedOnly = c.req.query("archived") === "true";
   const rawLimit = Number(c.req.query("limit") ?? 50);
   const maxLimit = recurrenceSeriesId ? 400 : 200;
   const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit, maxLimit);
@@ -310,10 +312,18 @@ tasksRouter.get("/", async (c) => {
   }
 
   const activeOnly = c.req.query("activeOnly") === "true";
+  const listingCompleted =
+    status === "done" || (!!completedYear && completedMonth !== undefined) || archivedOnly;
 
-  if (!cursor || activeOnly || recurrenceSeriesId) {
+  if (!cursor || activeOnly || recurrenceSeriesId || listingCompleted) {
     await materializeRecurringTasksForTeam(prisma, teamId);
   }
+
+  if (listingCompleted || archivedOnly) {
+    await archiveOldCompletedTasksForTeam(prisma, teamId);
+  }
+
+  const searchQ = (c.req.query("q") ?? "").trim();
 
   if (recurrenceSeriesId) {
     const series = await prisma.recurrenceSeries.findFirst({
@@ -325,6 +335,11 @@ tasksRouter.get("/", async (c) => {
     }
   }
 
+  // Archive is search-first — don't dump every old task without a query.
+  if (archivedOnly && !searchQ && !recurrenceSeriesId) {
+    return c.json({ data: { tasks: [], nextCursor: null } });
+  }
+
   const tasks = await prisma.task.findMany({
     where: {
       teamId,
@@ -334,6 +349,19 @@ tasksRouter.get("/", async (c) => {
         : !recurrenceSeriesId && activeOnly
           ? { status: { not: "done" } }
           : {}),
+      // Series chain shows all occurrences. Completed list hides archived unless requested.
+      // Archive search: must be archived AND completed at least 30 days ago.
+      ...(!recurrenceSeriesId
+        ? archivedOnly
+          ? {
+              status: "done",
+              archivedAt: { not: null },
+              completedAt: { lte: archiveCutoffDate() },
+            }
+          : listingCompleted
+            ? { archivedAt: null }
+            : {}
+        : {}),
       ...(priority ? { priority } : {}),
       ...(!recurrenceSeriesId && myTasks === "true" ? {
         OR: [
@@ -345,6 +373,11 @@ tasksRouter.get("/", async (c) => {
       // "me" is a shorthand that resolves to the authenticated user's ID
       ...(!recurrenceSeriesId && creatorId ? { creatorId: creatorId === "me" ? user.id : creatorId } : {}),
       ...(monthFilters.length ? { AND: monthFilters } : {}),
+      ...(searchQ
+        ? {
+            title: { contains: searchQ, mode: "insensitive" as const },
+          }
+        : {}),
     },
     include: {
       assignments: {
@@ -1057,7 +1090,13 @@ tasksRouter.patch("/:taskId", async (c) => {
       ...(title !== undefined ? { title: title.trim() } : {}),
       ...(priority !== undefined ? { priority } : {}),
       ...(dueDate !== undefined ? { dueDate: dueDate ? parseCalendarDueDate(dueDate, userTimeZone) : null } : {}),
-      ...(status !== undefined ? { status, completedAt: status === "done" ? new Date() : null } : {}),
+      ...(status !== undefined
+        ? {
+            status,
+            completedAt: status === "done" ? new Date() : null,
+            archivedAt: null,
+          }
+        : {}),
     },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },

@@ -303,6 +303,7 @@ dmsRouter.get("/:conversationId/messages/pin", async (c) => {
         select: {
           id: true,
           content: true,
+          mediaUrl: true,
           mediaType: true,
           sender: { select: { id: true, name: true, image: true } },
         },
@@ -316,6 +317,7 @@ dmsRouter.get("/:conversationId/messages/pin", async (c) => {
     data: pins.map((pin) => ({
       messageId: pin.directMessage.id,
       content: pin.directMessage.content,
+      mediaUrl: pin.directMessage.mediaUrl,
       mediaType: pin.directMessage.mediaType as "image" | "video" | null,
       sender: pin.directMessage.sender,
       pinnedAt: pin.pinnedAt.toISOString(),
@@ -344,6 +346,7 @@ dmsRouter.put("/:conversationId/messages/pin", async (c) => {
     select: {
       id: true,
       content: true,
+      mediaUrl: true,
       mediaType: true,
       sender: { select: { id: true, name: true, image: true } },
     },
@@ -383,6 +386,7 @@ dmsRouter.put("/:conversationId/messages/pin", async (c) => {
         select: {
           id: true,
           content: true,
+          mediaUrl: true,
           mediaType: true,
           sender: { select: { id: true, name: true, image: true } },
         },
@@ -394,6 +398,7 @@ dmsRouter.put("/:conversationId/messages/pin", async (c) => {
   const summaries = pins.map((pin) => ({
     messageId: pin.directMessage.id,
     content: pin.directMessage.content,
+    mediaUrl: pin.directMessage.mediaUrl,
     mediaType: pin.directMessage.mediaType as "image" | "video" | null,
     sender: pin.directMessage.sender,
     pinnedAt: pin.pinnedAt.toISOString(),
@@ -442,6 +447,7 @@ dmsRouter.delete("/:conversationId/messages/pin", async (c) => {
         select: {
           id: true,
           content: true,
+          mediaUrl: true,
           mediaType: true,
           sender: { select: { id: true, name: true, image: true } },
         },
@@ -453,6 +459,7 @@ dmsRouter.delete("/:conversationId/messages/pin", async (c) => {
   const summaries = pins.map((pin) => ({
     messageId: pin.directMessage.id,
     content: pin.directMessage.content,
+    mediaUrl: pin.directMessage.mediaUrl,
     mediaType: pin.directMessage.mediaType as "image" | "video" | null,
     sender: pin.directMessage.sender,
     pinnedAt: pin.pinnedAt.toISOString(),
@@ -725,6 +732,7 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
           select: {
             id: true,
             content: true,
+            mediaUrl: true,
             mediaType: true,
             sender: { select: { id: true, name: true, image: true } },
           },
@@ -738,6 +746,7 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
       pinnedMessages: pins.map((pin) => ({
         messageId: pin.directMessage.id,
         content: pin.directMessage.content,
+        mediaUrl: pin.directMessage.mediaUrl,
         mediaType: pin.directMessage.mediaType,
         sender: pin.directMessage.sender,
         pinnedAt: pin.pinnedAt.toISOString(),

@@ -46,6 +46,7 @@ function channelKeyFromTopicId(topicId: string | null): string {
 type PinSummaryMessage = {
   id: string;
   content: string | null;
+  mediaUrl: string | null;
   mediaType: string | null;
   sender: { id: string; name: string | null; image: string | null };
 };
@@ -58,6 +59,7 @@ function toPinnedSummary(
   return {
     messageId: message.id,
     content: message.content,
+    mediaUrl: message.mediaUrl,
     mediaType: message.mediaType as "image" | "video" | null,
     sender: {
       id: message.sender.id,
@@ -72,6 +74,7 @@ function toPinnedSummary(
 const pinMessageSelect = {
   id: true,
   content: true,
+  mediaUrl: true,
   mediaType: true,
   sender: { select: { id: true, name: true, image: true } },
 } as const;
@@ -543,6 +546,7 @@ messagesRouter.delete("/:messageId", async (c) => {
           select: {
             id: true,
             content: true,
+            mediaUrl: true,
             mediaType: true,
             sender: { select: { id: true, name: true, image: true } },
           },
@@ -557,6 +561,7 @@ messagesRouter.delete("/:messageId", async (c) => {
       pinnedMessages: pins.map((pin) => ({
         messageId: pin.message.id,
         content: pin.message.content,
+        mediaUrl: pin.message.mediaUrl,
         mediaType: pin.message.mediaType,
         sender: pin.message.sender,
         pinnedAt: pin.pinnedAt.toISOString(),

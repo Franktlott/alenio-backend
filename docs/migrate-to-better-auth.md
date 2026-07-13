@@ -287,13 +287,15 @@ Keep **calendar** OAuth (`MICROSOFT_CALENDAR_*` → `/api/calendar-connections/m
 
 ## Phase 7 — Cleanup
 
-**Status: largely done with Phase 5 (2026-07-12)**
+**Status: done (2026-07-12)**
 
 - [x] Remove `@neondatabase/auth` from backend, mobile, and web  
 - [x] Delete dead JWKS / Neon client session path  
 - [x] Refresh `.env.example` files  
-- [ ] Optional later: rename helpers still branded `neon_auth` / `syncAppUserFromNeonAuth` (schema name can stay)  
-- [ ] After Console disable: delete `NEON_AUTH_URL` from Railway if still present  
+- [x] Rename helpers (`syncAppUserFromAuth`, `deleteAuthUser`, etc.; schema name `neon_auth` stays)  
+- [x] Code ignores retired `alenio.app` / obsolete `NEON_AUTH_URL` — remove those vars from Railway if still present  
+
+**Phase 6 mobile:** Microsoft sign-in uses `/api/oauth/microsoft/start` + `alenio://auth-callback` deep link (same Entra redirect URI as web).
 
 ---
 

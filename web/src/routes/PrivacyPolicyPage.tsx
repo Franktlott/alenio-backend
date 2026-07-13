@@ -95,7 +95,7 @@ export function PrivacyPolicyPage() {
               <strong>Within your team:</strong> Content you share is visible to members of your team as part of core functionality.
             </li>
             <li>
-              <strong>Service providers:</strong> We use third-party services including Neon (database and authentication), Stripe
+              <strong>Service providers:</strong> We use third-party services including Neon (database hosting), Stripe
               (subscription billing on the Website), Google Firebase (FCM for Android push and storage for uploads), Expo and Apple/Google
               (distribution and push), Daily.co (video meetings), Resend (email), and other infrastructure providers.
               They process data under their respective terms and privacy policies.

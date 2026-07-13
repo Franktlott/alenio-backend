@@ -50,7 +50,7 @@ export function GoDeviceLinkQrCode({ url, label = "Scan to open linking page on 
 }
 
 export function buildGoDeviceLinkUrl(inviteCode?: string | null): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://alenio.app";
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://alenio.com";
   const base = `${origin}/aleniogo`;
   if (!inviteCode?.trim()) return base;
   return `${base}?code=${encodeURIComponent(inviteCode.trim().toUpperCase())}`;

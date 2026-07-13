@@ -1,15 +1,14 @@
-/**
- * Self-hosted Better Auth (Phase 1+).
- * Reuses Neon Auth tables in the `neon_auth` schema via Postgres search_path.
- * Mobile/web still use Neon Auth until Phase 3–4; this mounts `/api/auth/*` for cutover.
- *
- * Better Auth is loaded lazily so a package/init failure cannot prevent the API from booting
- * while Neon Auth remains the live login path.
- */
 import { Pool } from "pg";
 import { Resend } from "resend";
 import { env } from "../env";
+import { mobileTrustedOriginPatterns } from "./auth-callback-trust";
 import { webAuthCallbackUrl, webPublicBaseUrl } from "./web-public-url";
+
+/**
+ * Self-hosted Better Auth.
+ * Reuses auth tables in the `neon_auth` schema via Postgres search_path.
+ * Clients talk to `/api/auth/*` on this API (Bearer for mobile/web SPA).
+ */
 
 type SessionUser = {
   id: string;
@@ -100,6 +99,10 @@ function collectTrustedOrigins(): string[] {
   for (const part of (env.CORS_ALLOWED_ORIGINS ?? "").split(",")) {
     const o = part.trim();
     if (o) origins.add(o.replace(/\/$/, ""));
+  }
+
+  for (const pattern of mobileTrustedOriginPatterns()) {
+    origins.add(pattern);
   }
 
   return [...origins];

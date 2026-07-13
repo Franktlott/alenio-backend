@@ -13,7 +13,7 @@ const subscriptionRouter = new Hono<{ Variables: Variables }>();
 subscriptionRouter.use("*", authGuard);
 
 const WEB_BILLING_MESSAGE =
-  "Subscribe and manage your team plan at https://alenio.app/billing (Stripe on the web).";
+  "Subscribe and manage your team plan at https://alenio.com/billing (Stripe on the web).";
 
 // Helper: fetch or create a free subscription for a team
 export function billingProviderFromSubscription(sub: {

@@ -1,5 +1,5 @@
 /**
- * Postgres `User.id` from global auth middleware (`syncAppUserFromNeonAuth`).
+ * Postgres `User.id` from global auth middleware (`syncAppUserFromAuth`).
  * Can differ from the Neon JWT subject when an existing row was matched by email.
  */
 export function webPrismaUserIdFromContext(c: { get: (key: "user") => unknown }): string | null {

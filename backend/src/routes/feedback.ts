@@ -31,11 +31,11 @@ feedbackRouter.post(
 
     const { error } = await resend.emails.send({
       from: env.FROM_EMAIL,
-      to: "info@lotttechnologies.com",
-      subject: `${categoryLabel}App Feedback`,
+      to: "info@alenio.com",
+      subject: `${categoryLabel}Alenio Feedback`,
       html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #4361EE; margin-bottom: 8px;">New App Feedback</h2>
+          <h2 style="color: #4361EE; margin-bottom: 8px;">New Alenio Feedback</h2>
           ${senderInfo}
           ${category ? `<p><strong>Category:</strong> ${category}</p>` : ""}
           <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 16px 0;" />

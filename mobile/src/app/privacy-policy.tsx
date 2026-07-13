@@ -116,7 +116,7 @@ export default function PrivacyPolicy() {
               <Text className="font-semibold">Within Your Team:</Text> Content you share (messages, tasks, reactions) is visible to members of your team as part of the App's core functionality.
             </Bullet>
             <Bullet>
-              <Text className="font-semibold">Service Providers:</Text> We use third-party services including Neon (database and authentication for accounts and app data), Stripe (subscription billing on the web at alenio.app), Google Firebase (Android push notifications via FCM and cloud storage for uploaded media such as attachments and profile images), Expo and Apple Push Notification service (push delivery), Daily.co (video meetings), Resend (email delivery for certain product or support messages), and other cloud infrastructure providers. These providers process data under their respective terms and privacy policies and are engaged to protect your information.
+              <Text className="font-semibold">Service Providers:</Text> We use third-party services including Neon (database hosting for accounts and app data), Stripe (subscription billing on the web at alenio.com), Google Firebase (Android push notifications via FCM and cloud storage for uploaded media such as attachments and profile images), Expo and Apple Push Notification service (push delivery), Daily.co (video meetings), Resend (email delivery for certain product or support messages), and other cloud infrastructure providers. These providers process data under their respective terms and privacy policies and are engaged to protect your information.
             </Bullet>
             <Bullet>
               <Text className="font-semibold">Legal Requirements:</Text> We may disclose your information if required by law or to protect our rights, users, or the public.
@@ -172,10 +172,10 @@ export default function PrivacyPolicy() {
         <Section title="8. Third-Party Services">
           <Body>The App and Website integrate with the following third-party services, each governed by their own privacy policies:</Body>
           <View className="mt-2">
-            <Bullet>Neon — Database hosting and authentication (sign-in, sessions, and application data storage).</Bullet>
+            <Bullet>Neon — Database hosting (application data storage).</Bullet>
             <Bullet>Apple Push Notification Service (APNs) — iOS push notifications.</Bullet>
             <Bullet>Google Firebase — Firebase Cloud Messaging (FCM) for Android push notifications; Firebase Storage for user-uploaded files and media where the App stores attachments.</Bullet>
-            <Bullet>Stripe — Web subscription checkout and billing (alenio.app).</Bullet>
+            <Bullet>Stripe — Web subscription checkout and billing (alenio.com).</Bullet>
             <Bullet>Stripe — Payment processing when you subscribe or manage a team plan on the Website ({WEBSITE_LABEL}); subject to Stripe&apos;s terms and privacy policy.</Bullet>
             <Bullet>Resend — Transactional email (for example when you submit feedback or when we send operational emails).</Bullet>
             <Bullet>Expo — App infrastructure and updates.</Bullet>

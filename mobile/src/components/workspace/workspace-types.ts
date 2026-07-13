@@ -1,6 +1,6 @@
 import type { TaskPriority } from "@/lib/types";
 
-export type TaskStatusTab = "active" | "completed";
+export type TaskStatusTab = "active" | "completed" | "archived";
 
 export type AssignedToFilter =
   | "me"

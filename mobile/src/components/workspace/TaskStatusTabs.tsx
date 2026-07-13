@@ -9,10 +9,16 @@ type Props = {
   onChange: (tab: TaskStatusTab) => void;
 };
 
-export function TaskStatusTabs({ statusTab, activeCount, completedCount, onChange }: Props) {
+export function TaskStatusTabs({
+  statusTab,
+  activeCount,
+  completedCount,
+  onChange,
+}: Props) {
   const tabs: { key: TaskStatusTab; label: string }[] = [
     { key: "active", label: `Active (${activeCount})` },
     { key: "completed", label: `Completed (${completedCount})` },
+    { key: "archived", label: "Archive" },
   ];
 
   return (
@@ -26,14 +32,16 @@ export function TaskStatusTabs({ statusTab, activeCount, completedCount, onChang
     >
       {tabs.map((tab) => {
         const selected = statusTab === tab.key;
+        const isArchive = tab.key === "archived";
         return (
           <Pressable
             key={tab.key}
             onPress={() => onChange(tab.key)}
             style={{
-              flex: 1,
+              flex: isArchive ? 0.72 : 1.14,
               borderRadius: 8,
               paddingVertical: 7,
+              paddingHorizontal: isArchive ? 4 : 2,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: selected ? WS.accent : "transparent",
@@ -42,11 +50,13 @@ export function TaskStatusTabs({ statusTab, activeCount, completedCount, onChang
           >
             <Text
               style={{
-                fontSize: WS.control,
+                fontSize: WS.control - 1,
                 fontWeight: WS.controlWeight,
                 color: selected ? "white" : WS.muted,
               }}
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
               {tab.label}
             </Text>

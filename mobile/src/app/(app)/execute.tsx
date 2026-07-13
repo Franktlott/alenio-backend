@@ -23,7 +23,7 @@ const MEETING_ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.62);
 const MEETING_DURATION_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.55);
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, Trash2, Pencil, RefreshCw } from "lucide-react-native";
+import { Plus, User, Users, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, Trash2, Pencil, RefreshCw, AlertTriangle, Search } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -36,6 +36,8 @@ import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
 import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
+import { earlierIncompleteSeriesTasks } from "@/lib/recurring-task";
+import { formatTaskDueDateLabel } from "@/lib/timezone";
 import { hasTeamPlan, hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { workspaceTaskClearance } from "@/lib/tab-bar";
 import { WorkspaceHeader } from "@/components/workspace/WorkspaceHeader";
@@ -64,6 +66,7 @@ import {
   assignedToQueryKey,
   buildWorkspaceTasksPath,
   filterTasksClientSide,
+  groupTasksByWeek,
   isSameDay,
   startOfDay,
   toLocalIso,
@@ -96,6 +99,12 @@ export default function TasksScreen() {
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
 
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
+  const [seriesOrderWarning, setSeriesOrderWarning] = useState<{
+    task: Task;
+    earlierCount: number;
+    nextDueLabel: string;
+  } | null>(null);
+  const [checkingSeriesOrder, setCheckingSeriesOrder] = useState(false);
   const [actionMenuTask, setActionMenuTask] = useState<Task | null>(null);
   const [actionMenuEvent, setActionMenuEvent] = useState<CalendarEvent | null>(null);
   const [confirmDeleteActionEvent, setConfirmDeleteActionEvent] = useState(false);
@@ -125,7 +134,9 @@ export default function TasksScreen() {
   const [showDurationPicker, setShowDurationPicker] = useState(false);
   const [meetingDurationMinutes, setMeetingDurationMinutes] = useState(60);
   const [formError, setFormError] = useState<string | null>(null);
-  const [visibleCount, setVisibleCount] = useState<number>(5);
+  const [visibleWeeks, setVisibleWeeks] = useState<number>(1);
+  const [archiveSearch, setArchiveSearch] = useState("");
+  const [archiveSearchDebounced, setArchiveSearchDebounced] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const { data: session } = useSession();
@@ -138,6 +149,13 @@ export default function TasksScreen() {
   const acknowledgedEventCounts = useTaskStore((s) => s.acknowledgedEventCounts);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const workspacePollInterval = isScreenFocused ? 15_000 : false;
+
+  useEffect(() => {
+    const handle = setTimeout(() => setArchiveSearchDebounced(archiveSearch.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [archiveSearch]);
+
+  const archiveSearchReady = archiveSearchDebounced.length >= 2;
 
   useFocusEffect(
     useCallback(() => {
@@ -167,7 +185,7 @@ export default function TasksScreen() {
     const keepToday =
       now.getFullYear() === year && now.getMonth() === month ? toLocalIso(now) : toLocalIso(new Date(year, month, 1));
     setSelectedDay(keepToday);
-    setVisibleCount(5);
+    setVisibleWeeks(1);
     setNextCursor(null);
   }, []);
 
@@ -193,9 +211,17 @@ export default function TasksScreen() {
     if (!activeTeamId || !nextCursor || loadingMore) return;
     setLoadingMore(true);
     const queryKey =
-      filters.statusTab === "completed"
-        ? (["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), calendarYear, calendarMonth, "completed"] as const)
-        : (["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), "active"] as const);
+      filters.statusTab === "archived"
+        ? ([
+            "tasks",
+            activeTeamId,
+            assignedToQueryKey(filters.assignedTo),
+            "archived",
+            archiveSearchDebounced,
+          ] as const)
+        : filters.statusTab === "completed"
+          ? (["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), calendarYear, calendarMonth, "completed"] as const)
+          : (["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), "active"] as const);
     try {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId, {
@@ -204,6 +230,7 @@ export default function TasksScreen() {
           calendarMonth,
           assignedTo: filters.assignedTo,
           cursor: nextCursor,
+          search: filters.statusTab === "archived" ? archiveSearchDebounced : undefined,
         }),
       );
       queryClient.setQueryData<{ tasks: Task[]; nextCursor: string | null }>(queryKey, (prev) => ({
@@ -308,8 +335,35 @@ export default function TasksScreen() {
     refetchIntervalInBackground: false,
   });
 
+  const { data: archivedTasksData, isPending: archivedPending, isFetching: archivedFetching } = useQuery({
+    queryKey: [
+      "tasks",
+      activeTeamId,
+      assignedToQueryKey(filters.assignedTo),
+      "archived",
+      archiveSearchDebounced,
+    ],
+    queryFn: async () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        buildWorkspaceTasksPath(activeTeamId!, {
+          statusTab: "archived",
+          calendarYear,
+          calendarMonth,
+          assignedTo: filters.assignedTo,
+          search: archiveSearchDebounced,
+        }),
+      ),
+    enabled: !!activeTeamId && hasTaskAccess && filters.statusTab === "archived" && archiveSearchReady,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
+  });
+
   const rawTasks: Task[] =
-    filters.statusTab === "completed" ? (completedTasksData?.tasks ?? []) : (activeTasksData?.tasks ?? []);
+    filters.statusTab === "archived"
+      ? (archivedTasksData?.tasks ?? [])
+      : filters.statusTab === "completed"
+        ? (completedTasksData?.tasks ?? [])
+        : (activeTasksData?.tasks ?? []);
   const { data: teamData } = useQuery({
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
@@ -443,6 +497,64 @@ export default function TasksScreen() {
       return;
     }
     setConfirmCompleteTask(task);
+  };
+
+  const completeTaskFromList = (task: Task) => {
+    toggleMutation.mutate(task);
+    setConfirmCompleteTask(null);
+    setSeriesOrderWarning(null);
+  };
+
+  const confirmListComplete = async () => {
+    const task = confirmCompleteTask;
+    if (!task) return;
+
+    if (
+      task.status !== "done" &&
+      isFeedbackTaskDescription(task.description)
+    ) {
+      setConfirmCompleteTask(null);
+      if (activeTeamId) {
+        router.push({
+          pathname: "/task-detail",
+          params: { taskId: task.id, teamId: activeTeamId },
+        });
+      }
+      return;
+    }
+
+    if (task.status === "done" || !task.recurrenceSeriesId || !activeTeamId) {
+      completeTaskFromList(task);
+      return;
+    }
+
+    setCheckingSeriesOrder(true);
+    try {
+      const data = await queryClient.fetchQuery({
+        queryKey: ["series-tasks", activeTeamId, task.recurrenceSeriesId],
+        queryFn: () =>
+          api.get<{ tasks: Task[]; nextCursor: string | null }>(
+            `/api/teams/${activeTeamId}/tasks?recurrenceSeriesId=${encodeURIComponent(task.recurrenceSeriesId!)}&limit=400`,
+          ),
+        staleTime: 15_000,
+      });
+      const earlier = earlierIncompleteSeriesTasks(data.tasks, task.id);
+      if (earlier.length > 0) {
+        setConfirmCompleteTask(null);
+        setSeriesOrderWarning({
+          task,
+          earlierCount: earlier.length,
+          nextDueLabel: formatTaskDueDateLabel(earlier[0]!.dueDate),
+        });
+        return;
+      }
+    } catch {
+      // If series check fails, still allow completion.
+    } finally {
+      setCheckingSeriesOrder(false);
+    }
+
+    completeTaskFromList(task);
   };
 
   const reassignMutation = useMutation({
@@ -680,21 +792,40 @@ export default function TasksScreen() {
     setFilters((f) => ({
       ...f,
       statusTab: tab,
-      sort: tab === "completed" ? "completed" : f.sort === "completed" ? "due" : f.sort,
+      sort: tab === "completed" || tab === "archived" ? "completed" : f.sort === "completed" ? "due" : f.sort,
     }));
-    setVisibleCount(5);
+    setVisibleWeeks(1);
+    if (tab !== "archived") {
+      setArchiveSearch("");
+      setArchiveSearchDebounced("");
+    }
   }, []);
 
   const showTasksLoading =
-    filters.statusTab === "completed"
-      ? completedPending && rawTasks.length === 0
-      : activePending && rawTasks.length === 0;
+    filters.statusTab === "archived"
+      ? archiveSearchReady && archivedPending
+      : filters.statusTab === "completed"
+        ? completedPending && rawTasks.length === 0
+        : activePending && rawTasks.length === 0;
 
   useEffect(() => {
-    setVisibleCount(5);
-    const source = filters.statusTab === "completed" ? completedTasksData : activeTasksData;
+    setVisibleWeeks(1);
+    const source =
+      filters.statusTab === "archived"
+        ? archivedTasksData
+        : filters.statusTab === "completed"
+          ? completedTasksData
+          : activeTasksData;
     setNextCursor(source?.nextCursor ?? null);
-  }, [filters.statusTab, filters.assignedTo, calendarYear, calendarMonth, activeTasksData?.nextCursor, completedTasksData?.nextCursor]);
+  }, [
+    filters.statusTab,
+    filters.assignedTo,
+    calendarYear,
+    calendarMonth,
+    activeTasksData?.nextCursor,
+    completedTasksData?.nextCursor,
+    archivedTasksData?.nextCursor,
+  ]);
 
   const tasks = React.useMemo(
     () =>
@@ -738,7 +869,20 @@ export default function TasksScreen() {
     [completedTasksData?.tasks, filters, currentUserId, teamMembers, calendarYear, calendarMonth, isOwnerOrLeader],
   );
 
-  const visibleTasks = tasks.slice(0, visibleCount);
+  const taskWeekGroups = React.useMemo(
+    () =>
+      groupTasksByWeek(
+        tasks,
+        filters.statusTab === "completed" || filters.statusTab === "archived" ? "completed" : "due",
+      ),
+    [tasks, filters.statusTab],
+  );
+  const visibleWeekGroups = taskWeekGroups.slice(0, visibleWeeks);
+  const remainingWeekCount = Math.max(0, taskWeekGroups.length - visibleWeeks);
+  const visibleTasks = React.useMemo(
+    () => visibleWeekGroups.flatMap((group) => group.tasks),
+    [visibleWeekGroups],
+  );
 
   const holidays = React.useMemo(() => {
     const years = new Set([calendarYear, calendarYear - 1, calendarYear + 1, new Date().getFullYear()]);
@@ -802,7 +946,7 @@ export default function TasksScreen() {
   }
 
   const tasksLoadError =
-    filters.statusTab === "completed"
+    filters.statusTab === "completed" || filters.statusTab === "archived"
       ? null
       : activeError
         ? activeLoadError instanceof Error
@@ -917,16 +1061,52 @@ export default function TasksScreen() {
                 onChange={handleStatusTabChange}
               />
 
-              <View style={{ marginTop: 6 }}>
-                <TaskFilterBar
-                  filters={filters}
-                  selectedDay={selectedDay}
-                  onOpenPicker={setFilterPicker}
-                  directReportsDisabled={!isOwnerOrLeader}
-                  unassignedDisabled={!isOwnerOrLeader}
-                  entireTeamDisabled={!isOwnerOrLeader}
-                />
-              </View>
+              {filters.statusTab === "archived" ? (
+                <View
+                  style={{
+                    marginTop: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    backgroundColor: WS.surface,
+                    borderWidth: 1,
+                    borderColor: WS.cardBorder,
+                    borderRadius: 12,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <Search size={16} color="#94A3B8" />
+                  <TextInput
+                    value={archiveSearch}
+                    onChangeText={setArchiveSearch}
+                    placeholder="Search archived tasks..."
+                    placeholderTextColor="#94A3B8"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    style={{ flex: 1, fontSize: 14, color: "#0F172A", padding: 0 }}
+                    testID="archive-search-input"
+                  />
+                  {archiveSearch.length > 0 ? (
+                    <Pressable onPress={() => setArchiveSearch("")} hitSlop={8} testID="archive-search-clear">
+                      <X size={16} color="#94A3B8" />
+                    </Pressable>
+                  ) : null}
+                  {archivedFetching ? <ActivityIndicator size="small" color="#4361EE" /> : null}
+                </View>
+              ) : (
+                <View style={{ marginTop: 6 }}>
+                  <TaskFilterBar
+                    filters={filters}
+                    selectedDay={selectedDay}
+                    onOpenPicker={setFilterPicker}
+                    directReportsDisabled={!isOwnerOrLeader}
+                    unassignedDisabled={!isOwnerOrLeader}
+                    entireTeamDisabled={!isOwnerOrLeader}
+                  />
+                </View>
+              )}
             </View>
 
             <View style={{ flex: 1, minHeight: 140, paddingHorizontal: WS.pageGutter }}>
@@ -942,7 +1122,11 @@ export default function TasksScreen() {
                 }}
               >
                 <TaskListCard
-                  tasks={visibleTasks}
+                  sections={visibleWeekGroups.map((group) => ({
+                    id: group.key,
+                    title: group.label,
+                    tasks: group.tasks,
+                  }))}
                   loading={showTasksLoading}
                   loadError={tasksLoadError}
                   onRetry={() => void refetchActiveTasks()}
@@ -953,27 +1137,39 @@ export default function TasksScreen() {
                     setActionMenuTask(task);
                   }}
                   emptyTitle={
-                    filters.statusTab === "completed"
-                      ? "Nothing completed"
-                      : filters.dueDate === "calendar_day"
-                        ? "No active tasks"
-                        : "You're all"
+                    filters.statusTab === "archived"
+                      ? archiveSearchReady
+                        ? "No matches"
+                        : "Search archive"
+                      : filters.statusTab === "completed"
+                        ? "Nothing completed"
+                        : filters.dueDate === "calendar_day"
+                          ? "No active tasks"
+                          : "You're all"
                   }
                   emptyAccentTitle={
-                    filters.statusTab === "completed"
-                      ? filters.dueDate === "calendar_day"
-                        ? "for this day."
-                        : "yet."
-                      : filters.dueDate === "calendar_day"
-                        ? "for this day."
-                        : "caught up."
+                    filters.statusTab === "archived"
+                      ? archiveSearchReady
+                        ? "found."
+                        : "by name."
+                      : filters.statusTab === "completed"
+                        ? filters.dueDate === "calendar_day"
+                          ? "for this day."
+                          : "yet."
+                        : filters.dueDate === "calendar_day"
+                          ? "for this day."
+                          : "caught up."
                   }
                   emptySubtitle={
-                    filters.dueDate === "calendar_day" && selectedDay
-                      ? "Try viewing upcoming tasks or adjust your filters."
-                      : filters.statusTab === "completed"
-                        ? "Completed work will show up here."
-                        : "No active tasks for the current filters."
+                    filters.statusTab === "archived"
+                      ? archiveSearchReady
+                        ? `Nothing matched “${archiveSearchDebounced}”. Try another title.`
+                        : "Completed tasks move here after 30 days. Type at least 2 letters to find them."
+                      : filters.dueDate === "calendar_day" && selectedDay
+                        ? "Try viewing upcoming tasks or adjust your filters."
+                        : filters.statusTab === "completed"
+                          ? "Completed work from the last 30 days shows here."
+                          : "No active tasks for the current filters."
                   }
                   emptyActionLabel={filters.dueDate === "calendar_day" ? "View upcoming tasks" : undefined}
                   onEmptyAction={
@@ -983,14 +1179,16 @@ export default function TasksScreen() {
                   }
                   footer={
                     <>
-                      {tasks.length > visibleCount ? (
+                      {remainingWeekCount > 0 ? (
                         <Pressable
-                          onPress={() => setVisibleCount((v) => v + 5)}
+                          onPress={() => setVisibleWeeks((v) => v + 1)}
                           style={{ margin: 12, paddingVertical: 12, borderRadius: 10, alignItems: "center", backgroundColor: "#F1F5F9" }}
                           testID="show-more-button"
                         >
                           <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>
-                            Show {Math.min(5, tasks.length - visibleCount)} more
+                            {remainingWeekCount === 1
+                              ? "Show 1 more week"
+                              : `Show more weeks (${remainingWeekCount} left)`}
                           </Text>
                         </Pressable>
                       ) : null}
@@ -1025,7 +1223,7 @@ export default function TasksScreen() {
         onApply={(next) => {
           setFilters((f) => ({ ...f, ...next }));
           setFilterPicker(null);
-          setVisibleCount(5);
+          setVisibleWeeks(1);
         }}
       />
 
@@ -1042,28 +1240,19 @@ export default function TasksScreen() {
             </Text>
             <Pressable
               onPress={() => {
-                if (
-                  confirmCompleteTask.status !== "done" &&
-                  isFeedbackTaskDescription(confirmCompleteTask.description)
-                ) {
-                  setConfirmCompleteTask(null);
-                  if (activeTeamId) {
-                    router.push({
-                      pathname: "/task-detail",
-                      params: { taskId: confirmCompleteTask.id, teamId: activeTeamId },
-                    });
-                  }
-                  return;
-                }
-                toggleMutation.mutate(confirmCompleteTask);
-                setConfirmCompleteTask(null);
+                void confirmListComplete();
               }}
-              style={{ backgroundColor: confirmCompleteTask.status === "done" ? "#F59E0B" : "#10B981", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10 }}
+              disabled={checkingSeriesOrder || toggleMutation.isPending}
+              style={{ backgroundColor: confirmCompleteTask.status === "done" ? "#F59E0B" : "#10B981", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10, opacity: checkingSeriesOrder ? 0.7 : 1 }}
               testID="complete-confirm-yes"
             >
-              <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>
-                {confirmCompleteTask.status === "done" ? "Reopen Task" : "Complete Task"}
-              </Text>
+              {checkingSeriesOrder ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>
+                  {confirmCompleteTask.status === "done" ? "Reopen Task" : "Complete Task"}
+                </Text>
+              )}
             </Pressable>
             <Pressable
               onPress={() => setConfirmCompleteTask(null)}
@@ -1075,6 +1264,71 @@ export default function TasksScreen() {
           </View>
         </View>
       ) : null}
+
+      <AlenioBottomSheet
+        visible={!!seriesOrderWarning}
+        title="Earlier tasks still open"
+        subtitle="You're completing this out of order"
+        onClose={() => setSeriesOrderWarning(null)}
+        compact
+        showCloseButton
+        testID="series-order-warning-sheet"
+        footer={
+          <TouchableOpacity
+            onPress={() => setSeriesOrderWarning(null)}
+            style={alenioSheetStyles.cancelButton}
+            activeOpacity={0.8}
+            testID="series-order-warning-cancel"
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Go back</Text>
+          </TouchableOpacity>
+        }
+      >
+        <AlenioSheetCard tint="danger" compact>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                backgroundColor: "#FEE2E2",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <AlertTriangle size={18} color="#EF4444" strokeWidth={2.25} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#991B1B" }}>
+                {seriesOrderWarning?.earlierCount === 1
+                  ? "1 earlier task is still incomplete"
+                  : `${seriesOrderWarning?.earlierCount ?? 0} earlier tasks are still incomplete`}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#B91C1C", marginTop: 4, lineHeight: 17 }}>
+                {seriesOrderWarning
+                  ? `The next open date is ${seriesOrderWarning.nextDueLabel}. You can still complete this one if you want.`
+                  : "You can still complete this one if you want."}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            onPress={() => {
+              if (!seriesOrderWarning) return;
+              completeTaskFromList(seriesOrderWarning.task);
+            }}
+            disabled={toggleMutation.isPending}
+            style={[alenioSheetStyles.primaryButton, { marginTop: 14 }]}
+            activeOpacity={0.92}
+            testID="series-order-warning-continue"
+          >
+            {toggleMutation.isPending ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={alenioSheetStyles.primaryButtonText}>Complete anyway</Text>
+            )}
+          </TouchableOpacity>
+        </AlenioSheetCard>
+      </AlenioBottomSheet>
 
       {/* Subtask block modal */}
       {subtaskBlockMessage ? (

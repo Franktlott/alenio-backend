@@ -1,11 +1,11 @@
 import { prisma } from "../prisma";
 import { deleteAllUserStorageObjects } from "./firebase-storage";
-import { deleteNeonAuthUser } from "./delete-neon-auth-user";
+import { deleteAuthUser } from "./delete-auth-user";
 import { assertAccountDeletionAllowed } from "./account-deletion-readiness";
 import { deleteWorkspaceCompletely } from "./delete-workspace";
 
 /**
- * Permanently deletes a user: app rows in Postgres, storage, then Neon Auth.
+ * Permanently deletes a user: app rows in Postgres, storage, then Better Auth (`neon_auth`).
  * Ensures the `User` record is removed after clearing FK-restricted relations.
  */
 export async function deleteAppUserCompletely(userId: string): Promise<void> {
@@ -55,5 +55,5 @@ export async function deleteAppUserCompletely(userId: string): Promise<void> {
   );
 
   await deleteAllUserStorageObjects(userId);
-  await deleteNeonAuthUser(userId);
+  await deleteAuthUser(userId);
 }

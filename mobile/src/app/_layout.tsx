@@ -343,6 +343,7 @@ function RootLayoutNav() {
             <Stack.Screen name="welcome" />
             <Stack.Screen name="sign-in" />
             <Stack.Screen name="sign-up" />
+            <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
             <Stack.Screen name="forgot-password" />
             <Stack.Screen name="verify-reset-code" />
             <Stack.Screen name="reset-password" />

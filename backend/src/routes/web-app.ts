@@ -5,6 +5,7 @@ import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { cleanupWorkspaceMemberDeparture } from "../lib/workspace-member-departure";
 import { materializeRecurringTasksForTeam, parseCalendarDueDate } from "../lib/recurrence-series";
+import { archiveOldCompletedTasksForTeam } from "../lib/task-archive";
 import { isValidTimeZone, resolveTimeZone } from "../lib/timezone";
 import { mountWebStripeBilling } from "./web-stripe-billing";
 import { oneOnOneTemplatesRouter } from "./one-on-one-templates";
@@ -476,6 +477,7 @@ webRouter.get("/api/teams/:id/tasks", async (c) => {
   const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: "Not found" }, 404);
   await materializeRecurringTasksForTeam(prisma, id);
+  await archiveOldCompletedTasksForTeam(prisma, id);
   const tasks = await prisma.task.findMany({
     where: { teamId: id },
     include: {

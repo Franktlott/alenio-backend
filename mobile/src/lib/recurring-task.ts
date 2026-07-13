@@ -47,3 +47,23 @@ export function recurrenceCountHint(type: string): string {
   const max = maxRecurrenceCount(type);
   return `Creates one task per ${singular} (max ${max}).`;
 }
+
+type SeriesTaskLike = {
+  id: string;
+  status?: string | null;
+  dueDate?: string | null;
+};
+
+/** Incomplete series tasks due before the current occurrence (by due date). */
+export function earlierIncompleteSeriesTasks<T extends SeriesTaskLike>(
+  seriesTasks: T[],
+  currentTaskId: string,
+): T[] {
+  const current = seriesTasks.find((t) => t.id === currentTaskId);
+  if (!current?.dueDate) return [];
+  const currentDue = new Date(current.dueDate).getTime();
+  return seriesTasks.filter((t) => {
+    if (t.id === currentTaskId || t.status === "done" || !t.dueDate) return false;
+    return new Date(t.dueDate).getTime() < currentDue;
+  });
+}

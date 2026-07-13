@@ -51,6 +51,7 @@ export const AUTH_ENTRY_PREFIXES = [
   "/welcome",
   "/sign-in",
   "/sign-up",
+  "/auth-callback",
   "/verify-otp",
   "/forgot-password",
   "/verify-reset-code",

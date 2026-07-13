@@ -118,7 +118,7 @@ export function WorkspaceFilterPicker({ picker, filters, members, isLeader, onCl
               ) : null}
               {picker === "sort" ? (
                 <>
-                  {(filters.statusTab === "completed"
+                  {(filters.statusTab === "completed" || filters.statusTab === "archived"
                     ? (["completed", "priority", "due"] as const)
                     : (["due", "priority"] as const)
                   ).map((s) => (

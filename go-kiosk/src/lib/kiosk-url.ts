@@ -1,4 +1,4 @@
-const DEFAULT_WEB_URL = "https://alenio.app";
+const DEFAULT_WEB_URL = "https://alenio.com";
 
 export function goWebBaseUrl(): string {
   const raw = process.env.EXPO_PUBLIC_GO_WEB_URL?.trim() || DEFAULT_WEB_URL;

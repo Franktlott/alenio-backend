@@ -25,7 +25,7 @@ export function workplaceAccessSubtitle(isOwner: boolean): string {
   return "This workplace's access is managed on the web. Your administrator can upgrade the workplace, manage billing, and view invoices from the Alenio web dashboard.";
 }
 
-export const WEB_WORKSPACE_DASHBOARD_URL = "https://alenio.app/billing";
+export const WEB_WORKSPACE_DASHBOARD_URL = "https://alenio.com/billing";
 
 export function webBillingUrlForTeam(teamId?: string, opts?: { subscribe?: boolean }): string {
   const params = new URLSearchParams();

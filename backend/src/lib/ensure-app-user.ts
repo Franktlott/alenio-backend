@@ -21,14 +21,14 @@ function normalizeEmail(email: string | null | undefined): string | null {
 }
 
 /**
- * Ensures a Prisma `User` row exists for the given Neon Auth identity (id, email, name, image).
+ * Ensures a Prisma `User` row exists for the given Better Auth identity (id, email, name, image).
  * Idempotent: safe to call on every authenticated request.
  *
  * Also repairs a common split-identity case: an older admin/bootstrap row keyed by email
- * while a later Neon-id row is what sessions bind to. Admin flags are merged onto the
- * Neon-id row so platform admin UI keeps working.
+ * while a later auth-id row is what sessions bind to. Admin flags are merged onto the
+ * auth-id row so platform admin UI keeps working.
  */
-export async function syncAppUserFromNeonAuth(authUser: AppUser): Promise<{
+export async function syncAppUserFromAuth(authUser: AppUser): Promise<{
   user: SyncedAppUser;
   matchedBy: SyncMatchedBy;
 } | null> {
@@ -144,7 +144,7 @@ export async function syncAppUserFromNeonAuth(authUser: AppUser): Promise<{
             matchedBy = user ? "email" : "none";
           }
         } else {
-          logSyncFailure(`failed to create user row for Neon auth id=${authUser.id}`, err);
+          logSyncFailure(`failed to create user row for auth id=${authUser.id}`, err);
           return null;
         }
       }
@@ -172,26 +172,26 @@ export async function syncAppUserFromNeonAuth(authUser: AppUser): Promise<{
           });
           matchedBy = user ? "auth_user_id" : "none";
         } else {
-          logSyncFailure(`failed to create placeholder-email user for Neon auth id=${authUser.id}`, err);
+          logSyncFailure(`failed to create placeholder-email user for auth id=${authUser.id}`, err);
           return null;
         }
       }
     }
   } catch (err) {
-    logSyncFailure(`unexpected error syncing Neon auth user id=${authUser.id}`, err);
+    logSyncFailure(`unexpected error syncing auth user id=${authUser.id}`, err);
     return null;
   }
 
   if (!user) {
     logSyncFailure(
-      `could not resolve app user row for Neon auth id=${authUser.id} email=${sessionEmail ?? "null"}`,
-      new Error("syncAppUserFromNeonAuth_no_row"),
+      `could not resolve app user row for auth id=${authUser.id} email=${sessionEmail ?? "null"}`,
+      new Error("syncAppUserFromAuth_no_row"),
     );
     return null;
   }
 
   if (matchedBy === "none") {
-    logSyncFailure(`inconsistent sync state for Neon auth id=${authUser.id}`, new Error("syncAppUserFromNeonAuth_matched_none"));
+    logSyncFailure(`inconsistent sync state for auth id=${authUser.id}`, new Error("syncAppUserFromAuth_matched_none"));
     return null;
   }
 

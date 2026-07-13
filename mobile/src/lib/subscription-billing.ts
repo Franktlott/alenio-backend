@@ -23,7 +23,8 @@ export function isBillingWebViewUrl(url: string): boolean {
     const u = new URL(url);
     if (u.protocol !== "https:") return false;
     const h = u.hostname.toLowerCase().replace(/^www\./, "");
-    if (h === "alenio.app" && (u.pathname === "/billing" || u.pathname.startsWith("/billing/"))) {
+    const isAlenioHost = h === "alenio.com" || h === "alenio.app";
+    if (isAlenioHost && (u.pathname === "/billing" || u.pathname.startsWith("/billing/"))) {
       return true;
     }
     return false;
@@ -36,7 +37,7 @@ export function billingFlowCompleteFromUrl(url: string): "success" | "cancel" | 
   try {
     const u = new URL(url);
     const h = u.hostname.toLowerCase().replace(/^www\./, "");
-    if (h !== "alenio.app") return null;
+    if (h !== "alenio.com" && h !== "alenio.app") return null;
     if (!u.pathname.startsWith("/billing")) return null;
     const flash = u.searchParams.get("billing");
     if (flash === "success") return "success";

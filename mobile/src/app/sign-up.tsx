@@ -11,11 +11,11 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { authClient, clearAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { authClient, clearAccessToken, setAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { setPendingSignUp } from "@/lib/auth/pending-signup";
 import { formatAuthFlowError, isEmailAlreadyRegisteredError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
-import { markSessionSignedOut } from "@/lib/auth/use-session";
+import { cancelMobileAuthQueries, clearSignedOutMark, markSessionSignedOut } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -24,6 +24,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 import { completeMobileAuthEntry } from "@/lib/auth/complete-auth-entry";
 import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "@/lib/legal-constants";
+import {
+  extractAuthTokenFromCallbackUrl,
+  signInWithMicrosoft,
+} from "@/lib/auth/microsoft-auth";
 
 export default function SignUp() {
   const params = useLocalSearchParams<{ email?: string | string[]; inviteToken?: string | string[] }>();
@@ -40,6 +44,7 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -52,6 +57,7 @@ export default function SignUp() {
   }, [inviteToken]);
 
   const handleSignUp = async () => {
+    if (loading || microsoftLoading) return;
     setError(null);
     if (!name.trim()) { setError("Please enter your name"); return; }
     if (!email.trim()) { setError("Please enter your email address"); return; }
@@ -133,11 +139,11 @@ export default function SignUp() {
         return;
       }
 
-      // Persist Neon Auth UID, email, and profile to the app database while session/token may still be present.
+      // Sync Better Auth user into the app database while session/token may still be present.
       setAccessTokenFromAuthData(result);
       await provisionBackendUserAfterAuth();
 
-      // Neon Auth sends the verification email on signUp.email — do not send again here.
+      // Verification email is sent on signUp.email — do not send again here.
       clearAccessToken();
       markSessionSignedOut(60_000);
       setPendingSignUp(emailNorm, password);
@@ -150,6 +156,36 @@ export default function SignUp() {
       setError(formatAuthFlowError(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMicrosoft = async () => {
+    if (loading || microsoftLoading) return;
+    setError(null);
+    setMicrosoftLoading(true);
+    clearAccessToken();
+    clearSignedOutMark();
+    await cancelMobileAuthQueries(queryClient);
+    try {
+      const result = await signInWithMicrosoft();
+      if (result.error) {
+        setError(result.error.message ?? "Microsoft sign-in failed.");
+        return;
+      }
+      const token = result.callbackUrl ? extractAuthTokenFromCallbackUrl(result.callbackUrl) : null;
+      if (!token) {
+        setError("Sign-in did not return a session. Please try again.");
+        return;
+      }
+      setAccessToken(token);
+      const completed = await completeMobileAuthEntry(queryClient, null);
+      if (!completed.ok) {
+        setError(completed.error);
+      }
+    } catch (err) {
+      setError(formatAuthFlowError(err));
+    } finally {
+      setMicrosoftLoading(false);
     }
   };
 
@@ -264,11 +300,33 @@ export default function SignUp() {
           <TouchableOpacity
             className="bg-indigo-600 rounded-xl py-4 items-center"
             onPress={handleSignUp}
-            disabled={loading}
+            disabled={loading || microsoftLoading}
             activeOpacity={0.8}
             testID="create-account-button"
           >
             {loading ? <ActivityIndicator color="white" /> : <Text className="text-white font-semibold text-base">Create Account</Text>}
+          </TouchableOpacity>
+
+          <View className="flex-row items-center my-5">
+            <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+            <Text className="mx-3 text-xs text-slate-400 uppercase">or</Text>
+            <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+          </View>
+
+          <TouchableOpacity
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-4 items-center"
+            onPress={handleMicrosoft}
+            disabled={loading || microsoftLoading}
+            activeOpacity={0.8}
+            testID="sign-up-microsoft"
+          >
+            {microsoftLoading ? (
+              <ActivityIndicator color="#4361EE" />
+            ) : (
+              <Text className="text-slate-900 dark:text-white font-semibold text-base">
+                Continue with Microsoft
+              </Text>
+            )}
           </TouchableOpacity>
 
           <View className="flex-row justify-center items-center mt-6">

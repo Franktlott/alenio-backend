@@ -53,12 +53,15 @@ export function TeamActivityCard({ item, footer, onLongPress, testID }: Props) {
         ) : null}
 
         {item.actionLabel ? (
-          <ActivityActionButton
-            label={item.actionLabel}
-            onPress={navigate}
-            accentColor={ACTIVITY_COLORS.primary}
-            testID={`${testID ?? item.id}-action`}
-          />
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2 }}>
+            <ActivityActionButton
+              label={item.actionLabel}
+              onPress={navigate}
+              accentColor={ACTIVITY_COLORS.primary}
+              variant="pill"
+              testID={`${testID ?? item.id}-action`}
+            />
+          </View>
         ) : null}
       </ActivityCardBody>
     </ActivityCardShell>

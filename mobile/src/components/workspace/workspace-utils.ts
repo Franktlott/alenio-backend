@@ -85,17 +85,23 @@ export function buildWorkspaceTasksPath(
     calendarMonth: number;
     assignedTo: AssignedToFilter;
     cursor?: string;
+    /** Archive search query — required for archived results. */
+    search?: string;
   },
 ): string {
-  // Active: load all open tasks (not just the viewed month) so recurring series stay visible.
-  // Completed: keep month scoping for history browsing.
+  // Active: open tasks. Completed: recent done (not archived). Archived: search-only.
   const params = new URLSearchParams({
-    limit: opts.statusTab === "completed" ? "200" : "500",
+    limit: opts.statusTab === "active" ? "500" : "200",
   });
   if (opts.statusTab === "completed") {
     params.set("completedYear", String(opts.calendarYear));
     params.set("completedMonth", String(opts.calendarMonth));
     params.set("status", "done");
+  } else if (opts.statusTab === "archived") {
+    params.set("archived", "true");
+    if (opts.search?.trim()) {
+      params.set("q", opts.search.trim());
+    }
   } else {
     params.set("activeOnly", "true");
   }
@@ -135,8 +141,22 @@ export function filterTasksClientSide(
 
   if (filters.statusTab === "active") {
     result = result.filter((t) => t.status !== "done");
+  } else if (filters.statusTab === "archived") {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    result = result.filter((t) => {
+      if (t.status !== "done") return false;
+      if (t.archivedAt) return true;
+      if (!t.completedAt) return false;
+      return new Date(t.completedAt).getTime() <= cutoff;
+    });
   } else {
-    result = result.filter((t) => t.status === "done");
+    // Completed: recent done only (last 30 days, not archived)
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    result = result.filter((t) => {
+      if (t.status !== "done" || t.archivedAt) return false;
+      if (!t.completedAt) return true;
+      return new Date(t.completedAt).getTime() > cutoff;
+    });
   }
 
   if (filters.assignedTo === "entire_team" || filters.assignedTo === "unassigned" || filters.assignedTo === "direct_reports") {
@@ -173,7 +193,7 @@ export function filterTasksClientSide(
     result = result.filter((t) => t.dueDate && startOfDay(new Date(t.dueDate)) < todayStart);
   } else if (effectiveDay) {
     result = result.filter((t) => {
-      if (filters.statusTab === "completed") {
+      if (filters.statusTab === "completed" || filters.statusTab === "archived") {
         return t.completedAt ? toLocalIso(new Date(t.completedAt)) === effectiveDay : false;
       }
       if (!t.dueDate) return false;
@@ -200,4 +220,69 @@ function sortTasks(a: Task, b: Task, sort: SortFilter): number {
   if (!a.dueDate) return 1;
   if (!b.dueDate) return -1;
   return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+}
+
+export type TaskWeekGroup = {
+  key: string;
+  label: string;
+  sortKey: number;
+  tasks: Task[];
+};
+
+/** Sunday-start week, matching the workspace calendar. */
+export function startOfWeekSunday(d: Date): Date {
+  const day = startOfDay(d);
+  day.setDate(day.getDate() - day.getDay());
+  return day;
+}
+
+export function formatWeekRangeLabel(weekStart: Date, now = new Date()): string {
+  const thisWeek = startOfWeekSunday(now).getTime();
+  const start = weekStart.getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (start === thisWeek) return "This week";
+  if (start === thisWeek + 7 * dayMs) return "Next week";
+  if (start === thisWeek - 7 * dayMs) return "Last week";
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const startLabel = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (weekStart.getMonth() === weekEnd.getMonth()) {
+    return `${startLabel} – ${weekEnd.getDate()}`;
+  }
+  return `${startLabel} – ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+}
+
+/** Group already-sorted tasks into week sections (due date, or completed date). */
+export function groupTasksByWeek(
+  tasks: Task[],
+  mode: "due" | "completed" = "due",
+): TaskWeekGroup[] {
+  const map = new Map<string, TaskWeekGroup>();
+  for (const task of tasks) {
+    const raw = mode === "completed" ? task.completedAt : task.dueDate;
+    let key: string;
+    let label: string;
+    let sortKey: number;
+    if (!raw) {
+      key = "none";
+      label = mode === "completed" ? "No completion date" : "No due date";
+      sortKey = mode === "completed" ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+    } else {
+      const weekStart = startOfWeekSunday(new Date(raw));
+      key = toLocalIso(weekStart);
+      label = formatWeekRangeLabel(weekStart);
+      sortKey = weekStart.getTime();
+    }
+    const existing = map.get(key);
+    if (existing) {
+      existing.tasks.push(task);
+    } else {
+      map.set(key, { key, label, sortKey, tasks: [task] });
+    }
+  }
+
+  const groups = [...map.values()];
+  groups.sort((a, b) => (mode === "completed" ? b.sortKey - a.sortKey : a.sortKey - b.sortKey));
+  return groups;
 }

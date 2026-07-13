@@ -88,6 +88,14 @@ function taskCreatorId(task: ApiTask): string | undefined {
   return task.creatorId ?? task.creator?.id;
 }
 
+/** Matches backend 30-day archive rule when archivedAt is not yet set. */
+function isArchivedByAge(task: Pick<ApiTask, "completedAt" | "archivedAt">): boolean {
+  if (task.archivedAt) return true;
+  if (!task.completedAt) return false;
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  return new Date(task.completedAt).getTime() <= cutoff;
+}
+
 /** Workspace task list: assigned to me, or created by me with no assignee. */
 function isMyWorkspaceTask(task: ApiTask, userId: string): boolean {
   if (task.assignments.some((a) => a.user.id === userId)) return true;
@@ -550,7 +558,14 @@ export function DashboardPage() {
   const selectedTasks = selectedDate ? getTasksForDay(selectedDate) : [];
 
   const activeTasks = useMemo(() => myTasks.filter((t) => t.status !== "done"), [myTasks]);
-  const completedTasks = useMemo(() => myTasks.filter((t) => t.status === "done"), [myTasks]);
+  const completedTasks = useMemo(
+    () => myTasks.filter((t) => t.status === "done" && !t.archivedAt && !isArchivedByAge(t)),
+    [myTasks],
+  );
+  const archivedTasks = useMemo(
+    () => myTasks.filter((t) => t.status === "done" && (!!t.archivedAt || isArchivedByAge(t))),
+    [myTasks],
+  );
 
   const activeDelegatedTasks = useMemo(() => {
     if (!me?.id) return [];
@@ -559,11 +574,22 @@ export function DashboardPage() {
 
   const completedDelegatedTasks = useMemo(() => {
     if (!me?.id) return [];
-    return tasks.filter((t) => isDelegatedTeamTask(t, me.id) && t.status === "done");
+    return tasks.filter(
+      (t) => isDelegatedTeamTask(t, me.id) && t.status === "done" && !t.archivedAt && !isArchivedByAge(t),
+    );
+  }, [tasks, me?.id]);
+
+  const archivedDelegatedTasks = useMemo(() => {
+    if (!me?.id) return [];
+    return tasks.filter(
+      (t) => isDelegatedTeamTask(t, me.id) && t.status === "done" && (!!t.archivedAt || isArchivedByAge(t)),
+    );
   }, [tasks, me?.id]);
 
   const tabTasks = useMemo(() => {
-    if (taskListView === "archived") return [];
+    if (taskListView === "archived") {
+      return taskScope === "team" ? archivedDelegatedTasks : archivedTasks;
+    }
     if (taskListView === "completed") {
       return taskScope === "team" ? completedDelegatedTasks : completedTasks;
     }
@@ -573,8 +599,10 @@ export function DashboardPage() {
     taskScope,
     activeTasks,
     completedTasks,
+    archivedTasks,
     activeDelegatedTasks,
     completedDelegatedTasks,
+    archivedDelegatedTasks,
   ]);
 
   const memberNameByUserId = useMemo(() => {
@@ -1283,9 +1311,9 @@ export function DashboardPage() {
                     </p>
                     <p className="enterprise-dashboard-empty-sub">
                       {taskListView === "archived"
-                        ? "Deleted tasks are removed permanently and are not stored here."
+                        ? "Search by task name to find older completed work. Completed tasks move here after 30 days."
                         : taskListView === "completed"
-                          ? "Finished tasks show up here so you can review what got done."
+                          ? "Recent finished work from the last 30 days shows here."
                           : taskScope === "team"
                             ? "Tasks you assign to teammates appear on the Open tab."
                             : "Create a task or switch to Completed to see finished work."}

@@ -4,41 +4,14 @@
  */
 import type { Context, Hono } from "hono";
 import { env } from "../env";
+import { isTrustedAuthCallbackUrl, isMobileAuthDeepLink } from "./auth-callback-trust";
 import { isAuthServerEnabled, loadAuthServer } from "./better-auth";
 import { setBetterAuthMounted } from "./better-auth-status";
 import { webAuthCallbackUrl, webPublicBaseUrl } from "./web-public-url";
 
-function isTrustedFrontendRedirect(url: URL): boolean {
-  const allowed = new Set<string>([
-    "https://alenio.com",
-    "https://www.alenio.com",
-    "https://alenio---prod.web.app",
-    "https://alenio---prod.firebaseapp.com",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-  ]);
-  try {
-    allowed.add(webPublicBaseUrl());
-  } catch {
-    /* ignore */
-  }
-  for (const part of (env.CORS_ALLOWED_ORIGINS ?? "").split(",")) {
-    const o = part.trim().replace(/\/$/, "");
-    if (o) {
-      try {
-        allowed.add(new URL(o).origin);
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-  return allowed.has(url.origin);
-}
-
 /**
- * OAuth callbacks set a session cookie on the API host, then redirect to the SPA.
- * Cross-origin SPAs never see that cookie — append the bearer token in the URL hash
- * so the web callback page can store it (hash is not sent to servers).
+ * OAuth callbacks set a session cookie on the API host, then redirect to the SPA / app.
+ * Cross-origin clients never see that cookie — append the bearer token so they can store it.
  *
  * Also: if Better Auth fell back to `baseURL` (API origin) as callbackURL, rewrite
  * the redirect to the real web app so users don't land on the API homepage.
@@ -71,12 +44,17 @@ function maybeAttachBearerTokenToOAuthRedirect(requestPath: string, res: Respons
       url = next;
     }
 
-    if (!isTrustedFrontendRedirect(url)) return res;
+    if (!isTrustedAuthCallbackUrl(url)) return res;
 
     if (authToken) {
-      const hash = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
-      hash.set("auth_token", authToken);
-      url.hash = hash.toString();
+      if (isMobileAuthDeepLink(url)) {
+        // Query params are more reliable than hash for React Native Linking.
+        url.searchParams.set("auth_token", authToken);
+      } else {
+        const hash = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+        hash.set("auth_token", authToken);
+        url.hash = hash.toString();
+      }
     }
 
     const headers = new Headers(res.headers);
@@ -99,7 +77,7 @@ async function startMicrosoftOAuth(c: Context): Promise<Response> {
     const cb = new URL(callbackURL);
     if (cb.hostname === "alenio.app" || cb.hostname === "www.alenio.app") {
       callbackURL = webAuthCallbackUrl();
-    } else if (!isTrustedFrontendRedirect(cb)) {
+    } else if (!isTrustedAuthCallbackUrl(cb)) {
       return c.text("Invalid callback URL.", 400);
     }
   } catch {

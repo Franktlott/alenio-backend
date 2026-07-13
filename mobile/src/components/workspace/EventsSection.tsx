@@ -170,8 +170,13 @@ function DayListEventCard({ row }: { row: EventRow }) {
       }}
     >
       <View style={{ width: 3, alignSelf: "stretch", backgroundColor: row.accentColor, marginRight: 10 }} />
-      <View style={{ width: 52, paddingRight: 4 }}>
-        <Text style={{ fontSize: WS.body + 1, fontWeight: "700", color: WS.ink }} numberOfLines={2}>
+      <View style={{ width: 68, paddingRight: 4, flexShrink: 0 }}>
+        <Text
+          style={{ fontSize: WS.body + 1, fontWeight: "700", color: WS.ink }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+        >
           {row.timeLabel}
         </Text>
       </View>

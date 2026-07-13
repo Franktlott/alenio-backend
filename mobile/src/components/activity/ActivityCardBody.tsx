@@ -16,11 +16,11 @@ type Props = {
   children: ReactNode;
 };
 
-/** Shared enterprise card body: fixed avatar column + dense content stack */
+/** Shared enterprise card body: avatar + balanced full-width content */
 export function ActivityCardBody({ actor, label, LabelIcon, tint, timestamp, children }: Props) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-      <View style={{ width: ACTIVITY_LAYOUT.avatarColumn, alignItems: "flex-start", paddingTop: 1 }}>
+    <View style={{ flexDirection: "row", alignItems: "stretch", gap: 10 }}>
+      <View style={{ paddingTop: 2 }}>
         <UserAvatar
           user={actor}
           size={ACTIVITY_LAYOUT.avatarSize}
@@ -30,23 +30,23 @@ export function ActivityCardBody({ actor, label, LabelIcon, tint, timestamp, chi
         />
       </View>
 
-      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              maxWidth: "78%",
-            }}
-          >
-            <LabelIcon size={11} color={tint.icon} strokeWidth={2.25} />
+      <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 1, minWidth: 0 }}>
+            <LabelIcon size={12} color={tint.icon} strokeWidth={2.25} />
             <Text
               style={{
                 fontSize: 10,
                 fontWeight: "700",
                 color: tint.labelText,
-                letterSpacing: 0.45,
+                letterSpacing: 0.4,
                 textTransform: "uppercase",
               }}
               numberOfLines={1}
@@ -54,11 +54,19 @@ export function ActivityCardBody({ actor, label, LabelIcon, tint, timestamp, chi
               {label}
             </Text>
           </View>
-          <Text style={{ fontSize: 10, color: ACTIVITY_COLORS.slate400, fontWeight: "500", flexShrink: 0 }}>
+          <Text
+            style={{
+              fontSize: 11,
+              color: ACTIVITY_COLORS.slate400,
+              fontWeight: "500",
+              flexShrink: 0,
+            }}
+          >
             {formatRelativeTime(timestamp)}
           </Text>
         </View>
-        {children}
+
+        <View style={{ gap: 6, width: "100%" }}>{children}</View>
       </View>
     </View>
   );
