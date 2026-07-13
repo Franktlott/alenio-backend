@@ -320,14 +320,35 @@ app.use("*", async (c, next) => {
 /** Browsers opening the API port directly see a hint (API has no HTML app at `/`). */
 app.get("/", (c) => {
   const incoming = new URL(c.req.url);
-  // Entra sometimes misconfigured to redirect to API root instead of /api/auth/callback/microsoft
-  if (incoming.searchParams.get("code") && incoming.searchParams.get("state")) {
-    const qs = incoming.searchParams.toString();
-    return c.redirect(`/api/auth/callback/microsoft?${qs}`, 302);
-  }
-
   const webBase = webPublicBaseUrl();
   const webLogin = `${webBase}/login`;
+  const expectedCallback =
+    `${env.BACKEND_URL.replace(/\/$/, "")}/api/auth/callback/microsoft`;
+
+  // Entra redirect URI must be the callback path — NOT this homepage.
+  // Forwarding code+state here would cause Microsoft `invalid_code` (redirect_uri mismatch).
+  if (incoming.searchParams.get("code") || incoming.searchParams.get("error")) {
+    return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Microsoft redirect misconfigured</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 560px; margin: 48px auto; padding: 0 20px; color: #0f172a; line-height: 1.5; }
+    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; word-break: break-all; }
+    a { color: #4f46e5; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Microsoft redirect needs a quick fix</h1>
+  <p>Microsoft sent you to the API homepage. In Entra, the <strong>Redirect URI</strong> must be exactly:</p>
+  <p><code>${expectedCallback}</code></p>
+  <p>Platform type: <strong>Web</strong> (not SPA). Then try again from <a href="${webLogin}">${webLogin}</a>.</p>
+</body>
+</html>`);
+  }
+
   return c.html(`<!DOCTYPE html>
 <html lang="en">
 <head>

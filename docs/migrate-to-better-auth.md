@@ -239,32 +239,24 @@ After deploy, `/health` should show `"betterAuthSessionVerify": true`.
 
 ## Phase 5 — Production cutover
 
-**Status: in progress (2026-07-12)** — code cut over; disable Neon Auth in Console.
+**Status: recovered (2026-07-12)** — Neon Auth Console disable wiped `neon_auth` tables; schema recreated by API.
 
-**Owner:** You · **Support:** Cursor
+**What happened:** Disabling Neon Auth with **delete data** removed login tables (`user` / `session` / `account`). App data in Prisma was not deleted. The API now recreates empty Better Auth tables on boot / `/api/auth-schema-check`.
 
-Already done in code:
+**You — get back in**
 
-1. Backend session verify is **Better Auth only** (Neon JWT / hosted client removed).  
-2. `@neondatabase/auth` removed from backend + web + mobile.  
-3. `NEON_AUTH_URL` is optional on the API (safe to delete from Railway after Console disable).  
-4. Web + mobile clients already use `{BACKEND_URL}/api/auth`.
+1. Open https://alenio.com/login → **Create account** (same email as before).  
+2. Verify the email code.  
+3. Sign in — workspaces should reconnect by email.  
+4. Do the same on mobile if needed.  
+5. Do **not** re-enable Neon Auth in Neon Console (leave it off).  
 
-**You — do this now in Neon Console**
-
-1. Open [Neon Console](https://console.neon.tech) → your production project.  
-2. Find **Auth** (Neon Auth) and **disable / turn off** the Auth integration.  
-   - Do **not** delete the Postgres database or the `neon_auth` schema — Better Auth still uses those tables.  
-3. Optionally remove Railway env var `NEON_AUTH_URL` (no longer required).  
-4. Spot-check: https://alenio.com/login and the mobile app still sign in.
-
-**Expect:** anyone still holding an old Neon JWT must sign in again (you already did this).
+Optional: remove Railway `NEON_AUTH_URL` if still present.
 
 ### Rollback
 
-1. Re-enable Neon Auth in Neon Console.  
-2. Redeploy a previous backend that still had the Neon JWT fallback (git history).  
-3. Restore the DB branch only if a destructive migration was applied (avoid that).
+1. Neon branch/PITR restore only if you need old password hashes (usually unnecessary — re-sign-up is enough).  
+2. Redeploy a previous backend that still had the Neon JWT fallback only if Better Auth itself is broken.
 
 ---
 
@@ -274,12 +266,16 @@ Do this **after** email/password is green in production.
 
 1. Configure `socialProviders.microsoft` on the Better Auth server.  
 2. Add Railway env: `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID`.  
-3. In Entra, set redirect URI:
+3. In Entra (App registration → Authentication):
+   - Platform: **Web** (not SPA)
+   - Redirect URI (exact):
 
 ```text
-https://<BACKEND_URL>/api/auth/callback/microsoft
+https://alenio-backend-production.up.railway.app/api/auth/callback/microsoft
 ```
 
+   - Remove any URI that is only the Railway homepage, `alenio.app`, or `alenio.com/auth/callback`
+   - Client secret under Certificates & secrets must match Railway `MICROSOFT_CLIENT_SECRET`
 4. Add “Continue with Microsoft” on web (then mobile).  
 5. Confirm Prisma user sync / linking by email rules you choose.
 

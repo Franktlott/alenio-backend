@@ -185,6 +185,15 @@ export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
       }
       const res = await authServer.handler(c.req.raw);
       const withToken = maybeAttachBearerTokenToOAuthRedirect(c.req.path, res);
+      const loc = withToken.headers.get("Location") || "";
+      if (loc.includes("invalid_code") || loc.includes("error=")) {
+        console.error(
+          "[better-auth] OAuth redirect error",
+          c.req.path,
+          loc.slice(0, 300),
+          "hint=check Entra redirect URI equals BACKEND_URL/api/auth/callback/microsoft and client secret",
+        );
+      }
       if (withToken.status >= 500) {
         const detail = await withToken.clone().text().catch(() => "");
         console.error("[better-auth] upstream", withToken.status, c.req.path, detail.slice(0, 800));
