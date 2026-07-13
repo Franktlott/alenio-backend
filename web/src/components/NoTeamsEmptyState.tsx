@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import type { WebTeamRow } from "../lib/api";
+import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
+import { setPersistedEnterpriseTeamId } from "../lib/enterprise-selected-team";
 import { WorkspaceCreateJoinModals } from "./WorkspaceCreateJoinModals";
 
 const ONBOARDING_STEPS = [
@@ -29,9 +33,27 @@ type Props = {
 };
 
 export function NoTeamsEmptyState({ onRefreshWorkspaces }: Props) {
+  const navigate = useNavigate();
+  const { setTeams, setSelectedTeamId } = useEnterpriseShell();
   const [joinOpen, setJoinOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
+
+  const enterWorkspace = async (team: WebTeamRow) => {
+    const row: WebTeamRow = {
+      ...team,
+      role: team.role ?? "owner",
+      hasTeamFeatures: team.hasTeamFeatures ?? false,
+    };
+    setTeams((prev) => {
+      const list = prev ?? [];
+      if (list.some((t) => t.id === row.id)) return list;
+      return [...list, row];
+    });
+    setPersistedEnterpriseTeamId(row.id);
+    setSelectedTeamId(row.id);
+    navigate(`/chat?teamId=${encodeURIComponent(row.id)}`, { replace: true });
+  };
 
   return (
     <div className="enterprise-no-teams-root" data-testid="dashboard-no-teams">
@@ -110,6 +132,7 @@ export function NoTeamsEmptyState({ onRefreshWorkspaces }: Props) {
         onCloseCreate={() => setCreateOpen(false)}
         onRefreshWorkspaces={onRefreshWorkspaces}
         onJoinSuccessInfo={(msg) => setInfo(msg)}
+        onWorkspaceEntered={enterWorkspace}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createWebTeam, postJoinTeamByCode, type JoinByCodeResult } from "../lib/api";
+import { createWebTeam, postJoinTeamByCode, type JoinByCodeResult, type WebTeamRow } from "../lib/api";
 
 function isJoinPendingResult(r: JoinByCodeResult): r is { status: "pending"; teamName: string; requestId: string } {
   return "status" in r && r.status === "pending";
@@ -12,6 +12,8 @@ type Props = {
   onCloseCreate: () => void;
   onRefreshWorkspaces: () => Promise<void>;
   onJoinSuccessInfo?: (msg: string) => void;
+  /** Fired after create (or an immediate join) so the shell can select the workspace and navigate. */
+  onWorkspaceEntered?: (team: WebTeamRow) => void | Promise<void>;
 };
 
 export function WorkspaceCreateJoinModals({
@@ -21,6 +23,7 @@ export function WorkspaceCreateJoinModals({
   onCloseCreate,
   onRefreshWorkspaces,
   onJoinSuccessInfo,
+  onWorkspaceEntered,
 }: Props) {
   const [joinCode, setJoinCode] = useState("");
   const [createName, setCreateName] = useState("");
@@ -61,9 +64,12 @@ export function WorkspaceCreateJoinModals({
     setCreateBusy(true);
     setCreateErr(null);
     try {
-      await createWebTeam(trimmed);
+      const team = await createWebTeam(trimmed);
       closeCreate();
-      await onRefreshWorkspaces();
+      await onWorkspaceEntered?.(team);
+      await onRefreshWorkspaces().catch(() => {
+        /* shell already has optimistic team from onWorkspaceEntered */
+      });
     } catch (e) {
       setCreateErr(e instanceof Error ? e.message : "Could not create workspace.");
     } finally {
@@ -140,10 +146,12 @@ export function WorkspaceCreateJoinModals({
                     if (isJoinPendingResult(res)) {
                       onJoinSuccessInfo?.(`Request sent to ${res.teamName}. A team leader will approve your join.`);
                       closeJoin();
+                      await onRefreshWorkspaces();
                     } else {
                       closeJoin();
+                      await onWorkspaceEntered?.(res);
+                      await onRefreshWorkspaces().catch(() => undefined);
                     }
-                    await onRefreshWorkspaces();
                   } catch (e) {
                     setJoinErr(e instanceof Error ? e.message : "Could not join.");
                   } finally {
