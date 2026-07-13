@@ -105,7 +105,6 @@ export function buildAuthOtpEmail(input: {
                   </td>
                   <td style="vertical-align:middle;padding-left:12px;">
                     <div style="color:#FFFFFF;font-size:16px;font-weight:700;letter-spacing:-0.02em;">Alenio</div>
-                    <div style="color:#94A3B8;font-size:12px;font-weight:600;margin-top:2px;">Enterprise workspace</div>
                   </td>
                 </tr>
               </table>
