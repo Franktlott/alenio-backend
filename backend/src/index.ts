@@ -151,6 +151,50 @@ const BACKEND_BUILD_MARKER = env.BACKEND_BUILD_MARKER;
 // Fast health for Railway — must not wait on schema/auth startup work.
 app.get("/health", (c) => c.json(buildHealthPayload()));
 
+/** Post-cutover diagnostics: neon_auth schema still readable after Neon Auth Console disable? */
+app.get("/api/auth-schema-check", async (c) => {
+  const out: Record<string, unknown> = {
+    buildMarker: env.BACKEND_BUILD_MARKER,
+    betterAuthMounted: isBetterAuthMounted(),
+  };
+  try {
+    const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'neon_auth'
+      ORDER BY table_name
+    `;
+    out.tables = tables.map((t) => t.table_name);
+  } catch (err) {
+    out.tablesError = err instanceof Error ? err.message : String(err);
+  }
+  try {
+    const users = await prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n FROM neon_auth."user"
+    `;
+    out.userCount = users[0]?.n ?? null;
+  } catch (err) {
+    out.userCountError = err instanceof Error ? err.message : String(err);
+  }
+  try {
+    const sessions = await prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n FROM neon_auth.session
+    `;
+    out.sessionCount = sessions[0]?.n ?? null;
+  } catch (err) {
+    out.sessionCountError = err instanceof Error ? err.message : String(err);
+  }
+  try {
+    const accounts = await prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n FROM neon_auth.account WHERE "providerId" = 'credential'
+    `;
+    out.credentialAccountCount = accounts[0]?.n ?? null;
+  } catch (err) {
+    out.accountCountError = err instanceof Error ? err.message : String(err);
+  }
+  return c.json(out);
+});
+
 // CORS middleware - validates origin against allowlist
 const allowedPatterns = [
   /^http:\/\/localhost(:\d+)?$/,

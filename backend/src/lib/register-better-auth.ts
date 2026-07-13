@@ -29,29 +29,31 @@ export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
       const res = await authServer.handler(c.req.raw);
       if (res.status >= 500) {
         const detail = await res.clone().text().catch(() => "");
-        console.error("[better-auth] upstream", res.status, c.req.path, detail.slice(0, 500));
-        if (!detail) {
-          return c.json(
-            {
-              error: {
-                message: "Better Auth request failed",
-                path: c.req.path,
-                code: "BETTER_AUTH_UPSTREAM_500",
-              },
+        console.error("[better-auth] upstream", res.status, c.req.path, detail.slice(0, 800));
+        return c.json(
+          {
+            error: {
+              message: detail.trim() || "Better Auth request failed",
+              path: c.req.path,
+              code: "BETTER_AUTH_UPSTREAM_500",
+              detail: detail.slice(0, 800) || null,
+              statusText: res.statusText || null,
             },
-            500,
-          );
-        }
+          },
+          500,
+        );
       }
       return res;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack?.slice(0, 800) : null;
       console.error("[better-auth] handler threw:", message, err);
       return c.json(
         {
           error: {
             message: "Better Auth request failed",
             detail: message,
+            stack,
             code: "BETTER_AUTH_HANDLER_ERROR",
           },
         },
