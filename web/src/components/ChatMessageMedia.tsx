@@ -25,9 +25,11 @@ type Props = {
 
 /**
  * Team chat attachments. Mobile uses mediaType `image` | `video`, not image/* MIME.
+ * Fixed frame size avoids message-row layout jump when media loads.
  */
 export function ChatMessageMedia({ url, mediaType }: Props) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const isVideo = isVideoType(mediaType);
   const isImage =
@@ -35,19 +37,26 @@ export function ChatMessageMedia({ url, mediaType }: Props) {
     (!isVideo && (looksLikeImagePath(url) || looksLikeFirebaseStorage(url)));
 
   if (isVideo) {
-    return <video src={url} controls className="chat-video" preload="metadata" />;
+    return (
+      <div className="chat-media-frame chat-media-frame--video">
+        <video src={url} controls className="chat-video" preload="metadata" />
+      </div>
+    );
   }
 
   if (isImage && !imgFailed) {
     return (
-      <img
-        src={url}
-        alt="Shared image"
-        className="chat-media"
-        onError={() => setImgFailed(true)}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-      />
+      <div className={`chat-media-frame${loaded ? " is-loaded" : ""}`}>
+        <img
+          src={url}
+          alt="Shared image"
+          className="chat-media"
+          onLoad={() => setLoaded(true)}
+          onError={() => setImgFailed(true)}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      </div>
     );
   }
 

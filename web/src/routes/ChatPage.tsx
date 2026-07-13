@@ -1322,11 +1322,21 @@ export function ChatPage() {
                     onScroll={handleMessagesScroll}
                   >
                     {messages.length === 0 ? (
-                      <p className="chat-messages-empty">
-                        {loadingMeetings
-                          ? "Loading messages…"
-                          : `No messages yet. Say hello${selectedTeamName ? ` in ${selectedTeamName}` : ""}.`}
-                      </p>
+                      <div className="chat-messages-empty" data-testid="chat-messages-empty">
+                        <div className="chat-messages-empty-card">
+                          <span className="chat-messages-empty-icon" aria-hidden>
+                            #
+                          </span>
+                          <p className="chat-messages-empty-title">
+                            {loadingMeetings ? "Loading conversation…" : "Start the conversation"}
+                          </p>
+                          <p className="chat-messages-empty-copy">
+                            {loadingMeetings
+                              ? "Pulling in the latest messages."
+                              : `No messages yet. Say hello${selectedTeamName ? ` in ${selectedTeamName}` : ""}.`}
+                          </p>
+                        </div>
+                      </div>
                     ) : (
                       messageBlocks.map((block) => {
                         if (block.kind === "date") {
