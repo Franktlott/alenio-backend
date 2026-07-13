@@ -36,7 +36,7 @@ function copyForType(type: AuthOtpEmailType): OtpCopy {
         "We received a request to reset the password for your Alenio account. Enter this code on the reset screen to continue.",
       steps: [
         "Return to the Alenio password reset page",
-        "Enter the code below exactly as shown",
+        "Enter the code above exactly as shown",
         "Choose a new password and sign in",
       ],
       codeLabel: "One-time code",
@@ -53,7 +53,7 @@ function copyForType(type: AuthOtpEmailType): OtpCopy {
         "Thanks for signing up for Alenio. Enter this verification code to confirm your email and activate your account.",
       steps: [
         "Return to the Alenio sign-up verification screen",
-        "Enter the code below exactly as shown",
+        "Enter the code above exactly as shown",
         "Start using Alenio on web or mobile",
       ],
       codeLabel: "Verification code",
@@ -66,7 +66,7 @@ function copyForType(type: AuthOtpEmailType): OtpCopy {
     eyebrow: "Secure sign-in",
     title: "Your one-time sign-in code",
     intro: "Use this code to finish signing in to Alenio.",
-    steps: ["Return to the sign-in screen", "Enter the code below", "Continue to your workspace"],
+    steps: ["Return to the sign-in screen", "Enter the code above", "Continue to your workspace"],
     codeLabel: "One-time code",
     footerNote:
       "This code expires shortly. If you did not request it, you can ignore this email — your account stays secure.",
