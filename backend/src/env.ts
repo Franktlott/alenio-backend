@@ -23,14 +23,27 @@ const envSchema = z.object({
   /**
    * Self-hosted Better Auth secret (32+ chars). When set with a Postgres DATABASE_URL,
    * the API mounts `/api/auth/*` against the `neon_auth` schema.
+   * Empty / too-short values are ignored so a bad Railway variable cannot crash boot.
    */
-  BETTER_AUTH_SECRET: z.string().min(32).optional(),
+  BETTER_AUTH_SECRET: z.preprocess((value) => {
+    if (value == null) return undefined;
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    if (trimmed.length < 32) {
+      console.warn(
+        `[env] BETTER_AUTH_SECRET is ${trimmed.length} chars (need 32+); ignoring so the API can still boot.`,
+      );
+      return undefined;
+    }
+    return trimmed;
+  }, z.string().min(32).optional()),
   // Backend URL
   BACKEND_URL: z.string().default("http://localhost:3000"),
   /** Comma-separated browser origins allowed for CORS (e.g. Firebase Hosting https://your-app.web.app). Localhost is always allowed. */
   CORS_ALLOWED_ORIGINS: z.string().optional(),
   // Build marker for quick deploy verification
-  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-12-better-auth-phase1"),
+  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-12-better-auth-phase1b"),
   // Admin Dashboard
   ADMIN_PASSWORD: z.string().optional().default("admin123"),
   // Email (Resend)

@@ -35,7 +35,7 @@ import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
 import { syncAppUserFromNeonAuth } from "./lib/ensure-app-user";
-import { isAuthServerEnabled, tryGetAuthServer } from "./lib/better-auth";
+import { isAuthServerEnabled, loadAuthServer } from "./lib/better-auth";
 import { deleteAppUserCompletely } from "./lib/delete-app-user";
 import { assertAccountDeletionAllowed, getAccountDeletionReadiness } from "./lib/account-deletion-readiness";
 import {
@@ -310,14 +310,27 @@ app.post("/api/auth/sync-user", (c) => {
   });
 });
 
-/** Self-hosted Better Auth (Phase 1). Registered after sync-user so that route is not stolen. */
-const authServer = tryGetAuthServer();
-if (authServer) {
-  console.log("[better-auth] Mounting /api/auth/** (neon_auth schema)");
-  app.on(["POST", "GET"], "/api/auth/**", (c) => authServer.handler(c.req.raw));
+/** Self-hosted Better Auth (Phase 1). Exact `/api/auth/sync-user` is registered above and takes priority. */
+app.on(["POST", "GET"], "/api/auth/**", async (c) => {
+  const authServer = await loadAuthServer();
+  if (!authServer) {
+    return c.json(
+      {
+        error: {
+          message: "Better Auth is not enabled on this server",
+          code: "BETTER_AUTH_DISABLED",
+        },
+      },
+      503,
+    );
+  }
+  return authServer.handler(c.req.raw);
+});
+if (isAuthServerEnabled) {
+  console.log("[better-auth] /api/auth/** ready (lazy init on first request, neon_auth schema)");
 } else {
   console.log(
-    "[better-auth] Not mounted — set BETTER_AUTH_SECRET (32+ chars) and a Postgres DATABASE_URL to enable.",
+    "[better-auth] Not enabled — set BETTER_AUTH_SECRET (32+ chars) and a Postgres DATABASE_URL to enable.",
   );
 }
 
