@@ -24,9 +24,23 @@ export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
 
   // Hono 4.6: `/api/auth/*` matches nested paths (sign-in/email, email-otp/...).
   // `/api/auth/**` does NOT match those routes in this Hono version (returns 404).
-  app.on(["POST", "GET"], "/api/auth/*", (c) => {
-    // Exact sync-user route is registered first and takes priority for that path.
-    return authServer.handler(c.req.raw);
+  app.on(["POST", "GET"], "/api/auth/*", async (c) => {
+    try {
+      return await authServer.handler(c.req.raw);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[better-auth] handler threw:", message, err);
+      return c.json(
+        {
+          error: {
+            message: "Better Auth request failed",
+            detail: message,
+            code: "BETTER_AUTH_HANDLER_ERROR",
+          },
+        },
+        500,
+      );
+    }
   });
   setBetterAuthMounted(true);
   console.log("[better-auth] Mounted /api/auth/* (neon_auth schema)");

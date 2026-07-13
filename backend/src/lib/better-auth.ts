@@ -29,22 +29,18 @@ function isPostgresUrl(url: string): boolean {
   return u.startsWith("postgres://") || u.startsWith("postgresql://");
 }
 
-function withNeonAuthSearchPath(connectionString: string): string {
-  try {
-    const url = new URL(connectionString);
-    const existing = url.searchParams.get("options") ?? "";
-    if (/search_path\s*=\s*neon_auth/i.test(existing)) {
-      return connectionString;
-    }
-    const next = existing
-      ? `${existing} -c search_path=neon_auth`
-      : `-c search_path=neon_auth`;
-    url.searchParams.set("options", next);
-    return url.toString();
-  } catch {
-    const sep = connectionString.includes("?") ? "&" : "?";
-    return `${connectionString}${sep}options=-c%20search_path%3Dneon_auth`;
-  }
+/**
+ * Neon pooler often ignores `options=-c search_path=...` in the URL.
+ * Set search_path on every new client instead (works with pooler + direct).
+ */
+function createAuthPool(connectionString: string): Pool {
+  const pool = new Pool({ connectionString });
+  pool.on("connect", (client) => {
+    void client.query('SET search_path TO "neon_auth", public').catch((err) => {
+      console.error("[better-auth] failed to SET search_path:", err);
+    });
+  });
+  return pool;
 }
 
 function collectTrustedOrigins(): string[] {
@@ -108,9 +104,7 @@ async function createAuthServer(): Promise<AuthServer | null> {
       import("better-auth/plugins"),
     ]);
 
-    const pool = new Pool({
-      connectionString: withNeonAuthSearchPath(env.DATABASE_URL),
-    });
+    const pool = createAuthPool(env.DATABASE_URL);
 
     const auth = betterAuth({
       appName: "Alenio",
