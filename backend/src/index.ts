@@ -136,6 +136,8 @@ function buildHealthPayload() {
     betterAuthConfigured: (env.BETTER_AUTH_SECRET?.trim().length ?? 0) >= 32,
     /** Routes mounted successfully after deferred init. */
     betterAuthEnabled: isBetterAuthMounted(),
+    /** Phase 2: API accepts Better Auth bearer sessions (Neon fallback still active). */
+    betterAuthSessionVerify: isBetterAuthMounted(),
   };
 }
 

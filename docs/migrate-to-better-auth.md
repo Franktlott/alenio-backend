@@ -181,27 +181,19 @@ Confirm `/api/auth/...` responds on local/staging (sign-up, sign-in, get-session
 
 ## Phase 2 — Backend: session verification
 
+**Status: done in repo (2026-07-12)** — dual verify: Better Auth first, Neon Auth fallback.
+
 **Owner:** Cursor · **Verify:** You
 
-Replace Neon JWKS / `createAuthClient(NEON_AUTH_URL)` in `backend/src/auth.ts` with Better Auth session resolution (`auth.api.getSession` and/or Bearer validation matching the client).
+`backend/src/auth.ts` now:
 
-**Keep the existing request pipeline:**
+1. Tries Better Auth `getSession` when `/api/auth` is mounted  
+2. Falls back to Neon JWKS / Neon session API so **current mobile + web keep working**
 
-1. Resolve auth user from headers  
-2. Sync into Prisma (`syncAppUserFromNeonAuth` → rename to `syncAppUserFromAuth`)  
-3. Set `user` / `session` on context  
-4. Leave `authGuard` and business routes alone  
+Prisma sync + `/api/auth/sync-user` unchanged.  
+Email/password admin helpers still use Neon until Phases 3–4 (same `neon_auth` users).
 
-Preserve `POST /api/auth/sync-user` for mobile post-login provisioning.
-
-Retarget Neon-specific maintenance code so it no longer depends on the Neon Management API:
-
-- `delete-neon-auth-user.ts`  
-- `email-change.ts`  
-- Admin verify / lookup SQL  
-- `bootstrap-admin.ts`  
-
-Deploy backend to **staging** (or a Railway environment) and confirm auth routes are live before flipping clients.
+After deploy, `/health` should show `"betterAuthSessionVerify": true`.
 
 ---
 

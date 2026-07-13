@@ -10,8 +10,18 @@ import { Pool } from "pg";
 import { Resend } from "resend";
 import { env } from "../env";
 
+type SessionUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  image?: string | null;
+};
+
 export type AuthServer = {
   handler: (request: Request) => Promise<Response>;
+  getSessionFromHeaders: (
+    headers: Headers,
+  ) => Promise<{ user: SessionUser; expiresAt: Date | null; token: string | null } | null>;
 };
 
 function isPostgresUrl(url: string): boolean {
@@ -77,6 +87,14 @@ export const isAuthServerEnabled = (() => {
 })();
 
 let authServerPromise: Promise<AuthServer | null> | null = null;
+
+function readBearerToken(headers: Headers): string | null {
+  const authHeader = headers.get("authorization");
+  if (!authHeader) return null;
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  const token = match?.[1]?.trim();
+  return token?.length ? token : null;
+}
 
 async function createAuthServer(): Promise<AuthServer | null> {
   const secret = env.BETTER_AUTH_SECRET?.trim();
@@ -157,6 +175,34 @@ async function createAuthServer(): Promise<AuthServer | null> {
 
     return {
       handler: (request: Request) => auth.handler(request),
+      async getSessionFromHeaders(headers: Headers) {
+        try {
+          const session = await auth.api.getSession({ headers });
+          const user = session?.user;
+          const id = user?.id?.trim();
+          if (!id) return null;
+          const expiresAtRaw = session?.session?.expiresAt;
+          const expiresAt =
+            expiresAtRaw == null
+              ? null
+              : expiresAtRaw instanceof Date
+                ? expiresAtRaw
+                : new Date(expiresAtRaw);
+          return {
+            user: {
+              id,
+              email: user.email ?? null,
+              name: user.name ?? null,
+              image: user.image ?? null,
+            },
+            expiresAt,
+            token: readBearerToken(headers) ?? session?.session?.token ?? null,
+          };
+        } catch (err) {
+          console.warn("[better-auth] getSession failed:", err);
+          return null;
+        }
+      },
     };
   } catch (err) {
     console.error("[better-auth] failed to initialize (API will keep using Neon Auth):", err);

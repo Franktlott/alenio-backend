@@ -1,6 +1,7 @@
 import { createAuthClient } from "@neondatabase/auth";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { env } from "./env";
+import { isAuthServerEnabled, loadAuthServer } from "./lib/better-auth";
 
 export type AppUser = {
   id: string;
@@ -122,11 +123,29 @@ async function getSessionFromNeon(token: string): Promise<{ user: AppUser; expir
   }
 }
 
-export async function getSessionFromHeaders(headers: Headers): Promise<{ user: AppUser; session: AppSession } | null> {
-  const token = readBearerToken(headers);
-  if (!token) {
-    return null;
-  }
+async function getSessionFromBetterAuth(
+  headers: Headers,
+): Promise<{ user: AppUser; session: AppSession } | null> {
+  if (!isAuthServerEnabled) return null;
+  const server = await loadAuthServer();
+  if (!server) return null;
+  const result = await server.getSessionFromHeaders(headers);
+  if (!result) return null;
+  const token = result.token ?? readBearerToken(headers);
+  if (!token) return null;
+  return {
+    user: result.user,
+    session: {
+      token,
+      expiresAt: result.expiresAt,
+    },
+  };
+}
+
+async function getSessionFromNeonPath(
+  headers: Headers,
+  token: string,
+): Promise<{ user: AppUser; session: AppSession } | null> {
   try {
     const tokenLooksLikeJwt = token.split(".").length === 3;
     if (!tokenLooksLikeJwt) {
@@ -148,29 +167,23 @@ export async function getSessionFromHeaders(headers: Headers): Promise<{ user: A
         },
       };
     }
-    let userId = claims.sub;
-    let email = claims.email ?? null;
-    let name = claims.name ?? claims.preferred_username ?? null;
-    let image = claims.picture ?? null;
-    const expiresAt = claims.exp ? new Date(claims.exp * 1000) : null;
     return {
       user: {
-        id: userId,
-        email,
-        name,
-        image,
+        id: claims.sub,
+        email: claims.email ?? null,
+        name: claims.name ?? claims.preferred_username ?? null,
+        image: claims.picture ?? null,
       },
       session: {
         token,
-        expiresAt,
+        expiresAt: claims.exp ? new Date(claims.exp * 1000) : null,
       },
     };
   } catch (jwtErr) {
-    // Signature/issuer mismatch or non-JWS: try Neon’s session API with the same server as NEON_AUTH_URL.
     const neon = await getSessionFromNeon(token);
     if (!neon) {
       console.warn(
-        "[auth] could not establish session: JWT verify failed and getSessionFromNeon returned null. Same NEON_AUTH host as the mobile app?",
+        "[auth] could not establish session: JWT verify failed and getSessionFromNeon returned null. Same Neon Auth host as the mobile app?",
         jwtErr,
       );
       return null;
@@ -183,6 +196,29 @@ export async function getSessionFromHeaders(headers: Headers): Promise<{ user: A
       },
     };
   }
+}
+
+/**
+ * Phase 2: accept Better Auth sessions when mounted; keep Neon Auth for current clients.
+ * Neon JWTs (3-part) are verified on the Neon path first for speed; opaque bearer tokens
+ * try Better Auth first.
+ */
+export async function getSessionFromHeaders(headers: Headers): Promise<{ user: AppUser; session: AppSession } | null> {
+  const token = readBearerToken(headers);
+  if (!token) {
+    return null;
+  }
+
+  const looksLikeJwt = token.split(".").length === 3;
+  if (looksLikeJwt) {
+    const fromNeon = await getSessionFromNeonPath(headers, token);
+    if (fromNeon) return fromNeon;
+    return getSessionFromBetterAuth(headers);
+  }
+
+  const fromBetterAuth = await getSessionFromBetterAuth(headers);
+  if (fromBetterAuth) return fromBetterAuth;
+  return getSessionFromNeonPath(headers, token);
 }
 
 export async function verifyEmailPassword(email: string, password: string): Promise<boolean> {
