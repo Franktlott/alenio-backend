@@ -31,15 +31,41 @@ function isPostgresUrl(url: string): boolean {
 
 /**
  * Neon pooler often ignores `options=-c search_path=...` in the URL.
- * Set search_path on every new client instead (works with pooler + direct).
+ * Ensure every checked-out client uses neon_auth before Better Auth queries.
  */
 function createAuthPool(connectionString: string): Pool {
   const pool = new Pool({ connectionString });
-  pool.on("connect", (client) => {
-    void client.query('SET search_path TO "neon_auth", public').catch((err) => {
-      console.error("[better-auth] failed to SET search_path:", err);
+  const originalConnect = pool.connect.bind(pool);
+
+  pool.connect = ((...args: Parameters<Pool["connect"]>) => {
+    const callback = typeof args[0] === "function" ? args[0] : undefined;
+    if (callback) {
+      return originalConnect(async (err, client, done) => {
+        if (err || !client) {
+          callback(err, client as never, done);
+          return;
+        }
+        try {
+          await client.query('SET search_path TO "neon_auth", public');
+          callback(null, client, done);
+        } catch (setErr) {
+          done();
+          callback(setErr as Error, undefined as never, done);
+        }
+      });
+    }
+
+    return originalConnect().then(async (client) => {
+      try {
+        await client.query('SET search_path TO "neon_auth", public');
+        return client;
+      } catch (setErr) {
+        client.release();
+        throw setErr;
+      }
     });
-  });
+  }) as Pool["connect"];
+
   return pool;
 }
 
