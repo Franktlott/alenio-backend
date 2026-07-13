@@ -63,6 +63,7 @@ model User {
   pollsCreated  Poll[]     @relation("PollCreatedBy")
   pollVotes     PollVote[] @relation("PollVoteUser")
   subtaskCompletions SubtaskCompletion[]
+  organizationMemberships OrganizationMembership[]
 }
 
 model Session {
@@ -103,14 +104,96 @@ model Verification {
   updatedAt  DateTime @updatedAt
 }
 
+/// Company / customer account above workspaces. SSO and verified email domains hang off this.
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  /** "active" | "suspended" */
+  status        String   @default("active")
+  /** When true, users on verified org domains must use this org's SSO (not password / shared Microsoft). */
+  ssoRequired   Boolean  @default(false)
+  /** Optional workspace new SSO users join first. */
+  defaultTeamId String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  defaultTeam  Team?                     @relation("OrgDefaultTeam", fields: [defaultTeamId], references: [id], onDelete: SetNull)
+  teams        Team[]                    @relation("OrgWorkspaces")
+  domains      OrganizationDomain[]
+  ssoConfig    OrganizationSsoConfig?
+  memberships  OrganizationMembership[]
+}
+
+/// Verified email domains that route login to an organization (e.g. acme.com).
+model OrganizationDomain {
+  id             String    @id @default(cuid())
+  organizationId String
+  /** Normalized hostname only, lowercase, no @ (e.g. acme.com). */
+  domain         String    @unique
+  verifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+/// Per-organization identity provider settings (Entra / Okta / Google / SAML).
+model OrganizationSsoConfig {
+  id               String   @id @default(cuid())
+  organizationId   String   @unique
+  /** "microsoft" | "okta" | "google" | "saml" | custom */
+  provider         String
+  /** "oidc" | "saml" */
+  protocol         String   @default("oidc")
+  issuer           String?
+  metadataUrl      String?
+  clientId         String?
+  /** Encrypted secret or secret-manager reference — never return to clients. */
+  clientSecretEnc  String?
+  /** Microsoft Entra tenant GUID when provider = microsoft. */
+  tenantId         String?
+  /** SAML IdP SSO URL */
+  entryPoint       String?
+  /** SAML IdP signing certificate (PEM) */
+  cert             String?
+  enabled          Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+/// Company-level membership (separate from TeamMember workspace roles).
+model OrganizationMembership {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  /** "org_owner" | "org_admin" | "org_member" */
+  role           String   @default("org_member")
+  joinedAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
 model Team {
   id          String       @id @default(cuid())
   /** Trimmed in API; unique so two workspaces cannot share the same name (case-insensitive check in routes). */
   name        String       @unique
   image       String?
   inviteCode  String       @unique
+  /** Optional parent company for SSO / multi-workspace orgs. Null = standalone workspace. */
+  organizationId String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  organization Organization? @relation("OrgWorkspaces", fields: [organizationId], references: [id], onDelete: SetNull)
+  orgDefaultFor Organization? @relation("OrgDefaultTeam")
   members     TeamMember[]
   tasks       Task[]
   messages    Message[]
@@ -143,6 +226,8 @@ model Team {
   workspaceModules WorkspaceModule[]
   moduleTestSessions ModuleTestSession[]
   chatPins TeamChatPin[]
+
+  @@index([organizationId])
 }
 
 /// Per-workspace lifecycle + operating mode for an Alenio module.

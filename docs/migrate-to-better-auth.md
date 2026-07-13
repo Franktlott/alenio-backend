@@ -297,6 +297,13 @@ Keep **calendar** OAuth (`MICROSOFT_CALENDAR_*` → `/api/calendar-connections/m
 
 **Phase 6 mobile:** Microsoft sign-in uses `/api/oauth/microsoft/start` + `alenio://auth-callback` deep link (same Entra redirect URI as web).
 
+### Organization + SSO (schema only, 2026-07-12)
+
+Prisma models added (no admin UI / login routing yet):
+
+- `Organization`, `OrganizationDomain`, `OrganizationSsoConfig`, `OrganizationMembership`
+- `Team.organizationId` (optional link workspace → company)
+
 ---
 
 ## Environment reference (end state)
