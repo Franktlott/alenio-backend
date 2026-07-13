@@ -2,24 +2,23 @@
  * Registers Better Auth routes after the HTTP server is already listening.
  * Kept separate from index.ts boot so package/init failures cannot fail Railway /health.
  */
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { env } from "../env";
 import { isAuthServerEnabled, loadAuthServer } from "./better-auth";
 import { setBetterAuthMounted } from "./better-auth-status";
+import { webAuthCallbackUrl, webPublicBaseUrl } from "./web-public-url";
 
 function isTrustedFrontendRedirect(url: URL): boolean {
   const allowed = new Set<string>([
     "https://alenio.com",
     "https://www.alenio.com",
-    "https://alenio.app",
-    "https://www.alenio.app",
     "https://alenio---prod.web.app",
     "https://alenio---prod.firebaseapp.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
   ]);
   try {
-    if (env.WEB_PUBLIC_URL) allowed.add(new URL(env.WEB_PUBLIC_URL).origin);
+    allowed.add(webPublicBaseUrl());
   } catch {
     /* ignore */
   }
@@ -55,10 +54,21 @@ function maybeAttachBearerTokenToOAuthRedirect(requestPath: string, res: Respons
   try {
     let url = new URL(location, env.BACKEND_URL.replace(/\/$/, ""));
     const backendOrigin = new URL(env.BACKEND_URL.replace(/\/$/, "")).origin;
-    const webBase = (env.WEB_PUBLIC_URL?.trim() || "https://alenio.com").replace(/\/$/, "");
+    const webBase = webPublicBaseUrl();
 
     if (url.origin === backendOrigin) {
-      url = new URL(`${webBase}/auth/callback`);
+      const next = new URL(`${webBase}/auth/callback`);
+      url.searchParams.forEach((value, key) => next.searchParams.set(key, value));
+      if (url.hash) next.hash = url.hash;
+      url = next;
+    }
+
+    // Never send users to retired hosts even if an old callbackURL was stored.
+    if (url.hostname === "alenio.app" || url.hostname === "www.alenio.app") {
+      const next = new URL(`${webBase}/auth/callback`);
+      url.searchParams.forEach((value, key) => next.searchParams.set(key, value));
+      if (url.hash) next.hash = url.hash;
+      url = next;
     }
 
     if (!isTrustedFrontendRedirect(url)) return res;
@@ -77,6 +87,76 @@ function maybeAttachBearerTokenToOAuthRedirect(requestPath: string, res: Respons
   }
 }
 
+/** First-party browser navigation so OAuth cookies are set on the API host (Safari-safe). */
+async function startMicrosoftOAuth(c: Context): Promise<Response> {
+  const authServer = await loadAuthServer();
+  if (!authServer) {
+    return c.text("Microsoft sign-in is not available.", 503);
+  }
+
+  let callbackURL = c.req.query("callbackURL")?.trim() || webAuthCallbackUrl();
+  try {
+    const cb = new URL(callbackURL);
+    if (cb.hostname === "alenio.app" || cb.hostname === "www.alenio.app") {
+      callbackURL = webAuthCallbackUrl();
+    } else if (!isTrustedFrontendRedirect(cb)) {
+      return c.text("Invalid callback URL.", 400);
+    }
+  } catch {
+    return c.text("Invalid callback URL.", 400);
+  }
+
+  const signInUrl = new URL("/api/auth/sign-in/social", env.BACKEND_URL.replace(/\/$/, ""));
+  const origin = c.req.header("origin") || webPublicBaseUrl();
+  const internal = new Request(signInUrl.toString(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin,
+      cookie: c.req.header("cookie") ?? "",
+    },
+    body: JSON.stringify({
+      provider: "microsoft",
+      callbackURL,
+      errorCallbackURL: callbackURL,
+      newUserCallbackURL: callbackURL,
+    }),
+  });
+
+  const res = await authServer.handler(internal);
+
+  const cookieHeaders = new Headers();
+  const getSetCookie = res.headers.getSetCookie?.bind(res.headers);
+  const cookies = getSetCookie ? getSetCookie() : [];
+  for (const cookie of cookies) cookieHeaders.append("Set-Cookie", cookie);
+  if (cookies.length === 0) {
+    const single = res.headers.get("set-cookie");
+    if (single) cookieHeaders.append("Set-Cookie", single);
+  }
+
+  if (res.status >= 300 && res.status < 400) {
+    const location = res.headers.get("Location");
+    if (location) {
+      cookieHeaders.set("Location", location);
+      return new Response(null, { status: 302, headers: cookieHeaders });
+    }
+  }
+
+  try {
+    const data = (await res.clone().json()) as { url?: string; redirect?: boolean };
+    if (data?.url) {
+      cookieHeaders.set("Location", data.url);
+      return new Response(null, { status: 302, headers: cookieHeaders });
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const detail = await res.text().catch(() => "");
+  console.error("[better-auth] microsoft start failed", res.status, detail.slice(0, 500));
+  return c.redirect(`${webAuthCallbackUrl()}?error=microsoft_start_failed`, 302);
+}
+
 export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
   if (!isAuthServerEnabled) {
     console.log(
@@ -93,10 +173,16 @@ export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
     return false;
   }
 
+  // Outside `/api/auth/*` so the catch-all does not swallow it.
+  app.get("/api/oauth/microsoft/start", (c) => startMicrosoftOAuth(c));
+
   // Hono 4.6: `/api/auth/*` matches nested paths (sign-in/email, email-otp/...).
   // `/api/auth/**` does NOT match those routes in this Hono version (returns 404).
   app.on(["POST", "GET"], "/api/auth/*", async (c) => {
     try {
+      if (c.req.path.includes("/callback/") && !new URL(c.req.url).searchParams.get("state")) {
+        console.error("[better-auth] OAuth callback missing state", c.req.path, c.req.url);
+      }
       const res = await authServer.handler(c.req.raw);
       const withToken = maybeAttachBearerTokenToOAuthRedirect(c.req.path, res);
       if (withToken.status >= 500) {

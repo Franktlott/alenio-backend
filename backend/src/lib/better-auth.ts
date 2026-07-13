@@ -9,6 +9,7 @@
 import { Pool } from "pg";
 import { Resend } from "resend";
 import { env } from "../env";
+import { webAuthCallbackUrl, webPublicBaseUrl } from "./web-public-url";
 
 type SessionUser = {
   id: string;
@@ -77,8 +78,6 @@ function collectTrustedOrigins(): string[] {
   const origins = new Set<string>([
     "https://alenio.com",
     "https://www.alenio.com",
-    "https://alenio.app",
-    "https://www.alenio.app",
     "https://alenio---prod.web.app",
     "https://alenio---prod.firebaseapp.com",
     "http://localhost:5173",
@@ -93,7 +92,7 @@ function collectTrustedOrigins(): string[] {
     /* ignore */
   }
   try {
-    if (env.WEB_PUBLIC_URL) origins.add(new URL(env.WEB_PUBLIC_URL).origin);
+    origins.add(webPublicBaseUrl());
   } catch {
     /* ignore */
   }
@@ -161,6 +160,9 @@ async function createAuthServer(): Promise<AuthServer | null> {
           enabled: true,
           trustedProviders: microsoftEnabled ? ["microsoft"] : [],
         },
+        // SPA on alenio.com + API on Railway: Safari blocks cross-site auth cookies.
+        // OAuth state lives in the DB; skip the extra cookie check on callback.
+        skipStateCookieCheck: true,
       },
       socialProviders: microsoftEnabled
         ? {
@@ -175,7 +177,7 @@ async function createAuthServer(): Promise<AuthServer | null> {
           }
         : {},
       onAPIError: {
-        errorURL: `${(env.WEB_PUBLIC_URL?.trim() || "https://alenio.com").replace(/\/$/, "")}/auth/callback`,
+        errorURL: webAuthCallbackUrl(),
       },
       plugins: [
         bearer(),

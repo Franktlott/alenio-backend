@@ -27,9 +27,15 @@ function readOAuthError(): string | null {
   try {
     const q = new URLSearchParams(window.location.search);
     const err = q.get("error")?.trim();
-    if (!err) return null;
-    const desc = q.get("error_description")?.trim();
-    return desc ? `${err}: ${desc}` : err;
+    if (err) {
+      const desc = q.get("error_description")?.trim();
+      return desc ? `${err}: ${desc}` : err;
+    }
+    // Better Auth sends this when the OAuth callback was missing `state`.
+    if (q.get("state") === "state_not_found") {
+      return "Microsoft sign-in expired or was interrupted. Please try again.";
+    }
+    return null;
   } catch {
     return null;
   }

@@ -66,6 +66,7 @@ import { ensureNotificationPreferencesSchema } from "./lib/ensure-notification-p
 import { ensurePinnedMessageSchema } from "./lib/ensure-pinned-message-schema";
 import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
 import { ensureBetterAuthSchema } from "./lib/ensure-better-auth-schema";
+import { webPublicBaseUrl } from "./lib/web-public-url";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
@@ -325,7 +326,7 @@ app.get("/", (c) => {
     return c.redirect(`/api/auth/callback/microsoft?${qs}`, 302);
   }
 
-  const webBase = (env.WEB_PUBLIC_URL?.trim() || "https://alenio.com").replace(/\/$/, "");
+  const webBase = webPublicBaseUrl();
   const webLogin = `${webBase}/login`;
   return c.html(`<!DOCTYPE html>
 <html lang="en">
@@ -351,8 +352,7 @@ app.get("/", (c) => {
 
 /** If OAuth lands on the API host's /auth/callback, bounce to the real web app. */
 app.get("/auth/callback", (c) => {
-  const webBase = (env.WEB_PUBLIC_URL?.trim() || "https://alenio.com").replace(/\/$/, "");
-  const dest = new URL(`${webBase}/auth/callback`);
+  const dest = new URL(`${webPublicBaseUrl()}/auth/callback`);
   const incoming = new URL(c.req.url);
   incoming.searchParams.forEach((value, key) => dest.searchParams.set(key, value));
   return c.redirect(dest.toString(), 302);
