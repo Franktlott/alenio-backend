@@ -3,20 +3,24 @@ import { WorkspaceCreateJoinModals } from "./WorkspaceCreateJoinModals";
 
 const ONBOARDING_STEPS = [
   {
-    title: "Create your account",
-    detail: "You're signed in — verification is complete.",
+    title: "Account ready",
+    detail: "You're signed in and verified.",
+    done: true,
   },
   {
-    title: "Create or join a workspace",
-    detail: "Use an invite code from your manager, or create a new workspace to get started.",
+    title: "Connect a workspace",
+    detail: "Join with a code from your organization, or create one as the owner.",
+    done: false,
   },
   {
-    title: "Invite your team",
-    detail: "Open Team to send invites so everyone lands in the same workspace.",
+    title: "Bring your team in",
+    detail: "From Team, send invites so leaders and associates share one workspace.",
+    done: false,
   },
   {
-    title: "Start in Chat",
-    detail: "Once you're in a workspace, Chat is your home base for shift updates and execution.",
+    title: "Operate from Chat",
+    detail: "Chat becomes home base for updates, tasks, and day-to-day execution.",
+    done: false,
   },
 ] as const;
 
@@ -31,37 +35,71 @@ export function NoTeamsEmptyState({ onRefreshWorkspaces }: Props) {
 
   return (
     <div className="enterprise-no-teams-root" data-testid="dashboard-no-teams">
-      <section className="enterprise-card enterprise-no-teams-card">
-        <h2 className="enterprise-card-title enterprise-card-title-spaced">Get started with Alenio</h2>
-        <p className="enterprise-muted enterprise-no-teams-lead">
-          You need a workspace before Chat, Activity, and execution tools unlock. Follow the steps below, then pick an
-          option to join or create one.
-        </p>
-        <ol className="enterprise-no-teams-steps" aria-label="Getting started steps">
-          {ONBOARDING_STEPS.map((step, index) => (
-            <li key={step.title} className="enterprise-no-teams-step">
-              <span className="enterprise-no-teams-step-num" aria-hidden>
-                {index + 1}
-              </span>
-              <div>
-                <strong>{step.title}</strong>
-                <span>{step.detail}</span>
-              </div>
-            </li>
-          ))}
-        </ol>
-        {info ? (
-          <p className="enterprise-no-teams-info" role="status">
-            {info}
+      <section className="enterprise-no-teams-panel" aria-labelledby="enterprise-no-teams-title">
+        <header className="enterprise-no-teams-header">
+          <p className="enterprise-no-teams-eyebrow">Workspace setup</p>
+          <h2 id="enterprise-no-teams-title" className="enterprise-no-teams-title">
+            Set up your organization workspace
+          </h2>
+          <p className="enterprise-no-teams-lead">
+            Chat, Activity, and execution tools unlock after you join or create a workspace. Most teams join with a
+            manager code; owners create the workspace first.
           </p>
-        ) : null}
-        <div className="enterprise-no-teams-actions">
-          <button type="button" className="auth-submit enterprise-no-teams-btn-secondary" onClick={() => setJoinOpen(true)}>
-            Join with code
-          </button>
-          <button type="button" className="auth-submit" onClick={() => setCreateOpen(true)}>
-            Create workspace
-          </button>
+        </header>
+
+        <div className="enterprise-no-teams-body">
+          <ol className="enterprise-no-teams-rail" aria-label="Getting started">
+            {ONBOARDING_STEPS.map((step, index) => (
+              <li
+                key={step.title}
+                className={`enterprise-no-teams-rail-item${step.done ? " is-done" : ""}${index === 1 ? " is-current" : ""}`}
+              >
+                <span className="enterprise-no-teams-rail-marker" aria-hidden>
+                  {step.done ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <span>{index + 1}</span>
+                  )}
+                </span>
+                <div className="enterprise-no-teams-rail-copy">
+                  <strong>{step.title}</strong>
+                  <span>{step.detail}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <aside className="enterprise-no-teams-cta">
+            <p className="enterprise-no-teams-cta-label">Choose how to continue</p>
+            {info ? (
+              <p className="enterprise-no-teams-info" role="status">
+                {info}
+              </p>
+            ) : null}
+            <div className="enterprise-no-teams-actions">
+              <button
+                type="button"
+                className="enterprise-no-teams-btn enterprise-no-teams-btn-primary"
+                onClick={() => setCreateOpen(true)}
+                data-testid="no-teams-create"
+              >
+                Create workspace
+              </button>
+              <button
+                type="button"
+                className="enterprise-no-teams-btn enterprise-no-teams-btn-secondary"
+                onClick={() => setJoinOpen(true)}
+                data-testid="no-teams-join"
+              >
+                Join with invite code
+              </button>
+            </div>
+            <p className="enterprise-no-teams-footnote">
+              Creating a workspace makes you the owner. Billing is managed per workspace on Plan.
+            </p>
+          </aside>
         </div>
       </section>
 
