@@ -174,6 +174,9 @@ async function createAuthServer(): Promise<AuthServer | null> {
             },
           }
         : {},
+      onAPIError: {
+        errorURL: `${(env.WEB_PUBLIC_URL?.trim() || "https://alenio.com").replace(/\/$/, "")}/auth/callback`,
+      },
       plugins: [
         bearer(),
         emailOTP({

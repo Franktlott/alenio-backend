@@ -40,6 +40,9 @@ function isTrustedFrontendRedirect(url: URL): boolean {
  * OAuth callbacks set a session cookie on the API host, then redirect to the SPA.
  * Cross-origin SPAs never see that cookie — append the bearer token in the URL hash
  * so the web callback page can store it (hash is not sent to servers).
+ *
+ * Also: if Better Auth fell back to `baseURL` (API origin) as callbackURL, rewrite
+ * the redirect to the real web app so users don't land on the API homepage.
  */
 function maybeAttachBearerTokenToOAuthRedirect(requestPath: string, res: Response): Response {
   if (!requestPath.includes("/callback/")) return res;
@@ -47,15 +50,25 @@ function maybeAttachBearerTokenToOAuthRedirect(requestPath: string, res: Respons
 
   const location = res.headers.get("Location");
   const authToken = res.headers.get("set-auth-token")?.trim();
-  if (!location || !authToken) return res;
+  if (!location) return res;
 
   try {
-    const url = new URL(location, env.BACKEND_URL.replace(/\/$/, ""));
+    let url = new URL(location, env.BACKEND_URL.replace(/\/$/, ""));
+    const backendOrigin = new URL(env.BACKEND_URL.replace(/\/$/, "")).origin;
+    const webBase = (env.WEB_PUBLIC_URL?.trim() || "https://alenio.com").replace(/\/$/, "");
+
+    if (url.origin === backendOrigin) {
+      url = new URL(`${webBase}/auth/callback`);
+    }
+
     if (!isTrustedFrontendRedirect(url)) return res;
-    // Prefer hash so the token is not sent as a Referer query param.
-    const hash = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
-    hash.set("auth_token", authToken);
-    url.hash = hash.toString();
+
+    if (authToken) {
+      const hash = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+      hash.set("auth_token", authToken);
+      url.hash = hash.toString();
+    }
+
     const headers = new Headers(res.headers);
     headers.set("Location", url.toString());
     return new Response(null, { status: res.status, statusText: res.statusText, headers });

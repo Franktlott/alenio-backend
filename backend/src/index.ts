@@ -318,10 +318,15 @@ app.use("*", async (c, next) => {
 
 /** Browsers opening the API port directly see a hint (API has no HTML app at `/`). */
 app.get("/", (c) => {
-  const host = c.req.header("host") ?? `localhost:${env.PORT ?? "3000"}`;
-  const hostname = host.replace(/:\d+$/, "");
-  const webHintPort = "5173";
-  const webUrl = `http://${hostname}:${webHintPort}`;
+  const incoming = new URL(c.req.url);
+  // Entra sometimes misconfigured to redirect to API root instead of /api/auth/callback/microsoft
+  if (incoming.searchParams.get("code") && incoming.searchParams.get("state")) {
+    const qs = incoming.searchParams.toString();
+    return c.redirect(`/api/auth/callback/microsoft?${qs}`, 302);
+  }
+
+  const webBase = (env.WEB_PUBLIC_URL?.trim() || "https://alenio.com").replace(/\/$/, "");
+  const webLogin = `${webBase}/login`;
   return c.html(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -336,12 +341,21 @@ app.get("/", (c) => {
 </head>
 <body>
   <h1>Alenio API</h1>
-  <p>This address is the <strong>backend</strong> (JSON API). A blank or empty page here is normal—there is no web UI on this port.</p>
-  <p>Open the <strong>web app</strong> (Vite dev server, usually port <code>${webHintPort}</code>):</p>
-  <p><a href="${webUrl}">${webUrl}</a></p>
+  <p>This address is the <strong>backend</strong> (JSON API). There is no login screen here.</p>
+  <p>Open the Alenio website:</p>
+  <p><a href="${webLogin}">${webLogin}</a></p>
   <p style="color:#64748b;font-size:14px">Health: <a href="/health">/health</a></p>
 </body>
 </html>`);
+});
+
+/** If OAuth lands on the API host's /auth/callback, bounce to the real web app. */
+app.get("/auth/callback", (c) => {
+  const webBase = (env.WEB_PUBLIC_URL?.trim() || "https://alenio.com").replace(/\/$/, "");
+  const dest = new URL(`${webBase}/auth/callback`);
+  const incoming = new URL(c.req.url);
+  incoming.searchParams.forEach((value, key) => dest.searchParams.set(key, value));
+  return c.redirect(dest.toString(), 302);
 });
 
 /** Explicit Neon Auth → Prisma user sync (middleware already runs sync; this is for the mobile app right after sign-up / verify). */
