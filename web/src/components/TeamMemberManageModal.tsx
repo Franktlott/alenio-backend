@@ -1,4 +1,5 @@
 import type { WebTeamMemberRow } from "../lib/api";
+import { UserAvatar } from "./UserAvatar";
 
 type Props = {
   member: WebTeamMemberRow;
@@ -64,13 +65,7 @@ export function TeamMemberManageModal({
 
         <header className="enterprise-member-manage-head">
           <div className="enterprise-member-manage-identity">
-            <span className="enterprise-member-manage-avatar">
-              {member.user.image ? (
-                <img src={member.user.image} alt={displayName} />
-              ) : (
-                (member.user.name?.[0] ?? member.user.email?.[0] ?? "?").toUpperCase()
-              )}
-            </span>
+            <UserAvatar user={member.user} className="enterprise-member-manage-avatar" alt={displayName} />
             <div className="enterprise-member-manage-copy">
               <h3 id="member-manage-title" className="enterprise-member-manage-title">
                 {displayName}

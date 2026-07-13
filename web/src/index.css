@@ -11191,6 +11191,7 @@ a.go-dash-alert-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .enterprise-team-roster-name {
@@ -12041,6 +12042,7 @@ a.go-dash-alert-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .enterprise-team-profile-identity-text {
@@ -18761,9 +18763,14 @@ body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
   flex-shrink: 0;
 }
 
+.enterprise-topbar-avatar img,
 .enterprise-topbar-avatar-img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  display: block;
   padding: 0;
+  border-radius: inherit;
 }
 
 .enterprise-topbar-profile-text {
@@ -20548,6 +20555,26 @@ button.enterprise-profile-legal-link {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.enterprise-profile-avatar-img-wrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #4361ee;
+  background: #eef2ff;
+}
+
+.enterprise-profile-avatar-img-wrap img,
+.enterprise-profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .enterprise-profile-name-display {

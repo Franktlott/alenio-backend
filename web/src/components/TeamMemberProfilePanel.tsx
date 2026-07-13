@@ -9,6 +9,7 @@ import {
 import { DevelopmentPlanTab } from "./DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
 import { ProfileOverviewTab } from "./ProfileOverviewTab";
+import { UserAvatar } from "./UserAvatar";
 
 type ProfileSection =
   | "Overview"
@@ -52,13 +53,6 @@ type Props = {
   onBack: () => void;
   onManage: () => void;
 };
-
-function initials(name: string | null | undefined, email: string | null | undefined): string {
-  const source = (name ?? email ?? "?").trim();
-  const parts = source.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
-  return (source[0] ?? "?").toUpperCase();
-}
 
 function nextCheckInLabel(
   standards: WorkplaceStandards | undefined,
@@ -196,13 +190,11 @@ export function TeamMemberProfilePanel({
 
       <header className="enterprise-team-profile-hero">
         <div className="enterprise-team-profile-hero-main">
-          <span className="enterprise-team-profile-avatar enterprise-team-profile-avatar--lg">
-            {member.user.image ? (
-              <img src={member.user.image} alt={displayName} />
-            ) : (
-              initials(member.user.name, member.user.email)
-            )}
-          </span>
+          <UserAvatar
+            user={member.user}
+            className="enterprise-team-profile-avatar enterprise-team-profile-avatar--lg"
+            alt={displayName}
+          />
           <div className="enterprise-team-profile-hero-copy">
             <div className="enterprise-team-profile-name-row">
               <h2 className="enterprise-team-profile-name">

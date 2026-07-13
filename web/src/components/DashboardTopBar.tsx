@@ -2,16 +2,7 @@ import type { ReactNode } from "react";
 import type { WebMeUser } from "../lib/api";
 import { JoinRequestBell } from "./JoinRequestBell";
 import { VideoMeetingTopBarJoin } from "./VideoMeetingTopBarJoin";
-
-function initials(user: WebMeUser | null): string {
-  if (!user) return "?";
-  const n = user.name?.trim() || user.email?.trim() || "";
-  const parts = n.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return "U";
-}
+import { UserAvatar } from "./UserAvatar";
 
 type Props = {
   user: WebMeUser | null;
@@ -67,11 +58,12 @@ export function DashboardTopBar({
         {actionsPrefix}
         <JoinRequestBell extraNotificationCount={notificationCount} />
         <div className="enterprise-topbar-profile" data-testid="topbar-profile">
-          {user?.image ? (
-            <img src={user.image} alt={user?.name ?? user?.email ?? "Account"} className="enterprise-topbar-avatar enterprise-topbar-avatar-img" />
-          ) : (
-            <div className="enterprise-topbar-avatar">{initials(user)}</div>
-          )}
+          <UserAvatar
+            user={user ?? { name: null, email: null, image: null }}
+            className="enterprise-topbar-avatar"
+            imgClassName="enterprise-topbar-avatar-img"
+            alt={user?.name ?? user?.email ?? "Account"}
+          />
           <div className="enterprise-topbar-profile-text">
             <span className="enterprise-topbar-profile-name">{user?.name ?? user?.email ?? "Account"}</span>
             {roleLabel ? (

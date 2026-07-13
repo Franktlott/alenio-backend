@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 import { clearAccessToken, getAuthClient, syncBackendUser } from "../lib/auth-client";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
@@ -13,21 +14,11 @@ import {
   fetchWebTeams,
   patchApiProfile,
   uploadProfilePhoto,
-  type WebMeUser,
   type WebTeamRow,
 } from "../lib/api";
 import { pickEnterpriseTeamId, setPersistedEnterpriseTeamId, switchEnterpriseWorkspace } from "../lib/enterprise-selected-team";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "../lib/timezone";
-
-function userInitials(user: WebMeUser | null): string {
-  if (!user) return "?";
-  const n = user.name?.trim() || user.email?.trim() || "";
-  const parts = n.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0]! + parts[1][0]!).toUpperCase();
-  if (parts.length === 1 && parts[0]!.length >= 2) return parts[0]!.slice(0, 2).toUpperCase();
-  if (parts.length === 1) return parts[0]![0]!.toUpperCase();
-  return "U";
-}
+import { UserAvatar } from "../components/UserAvatar";
 
 function userAccountBadgeLabel(teams: WebTeamRow[]): string {
   if (teams.some((t) => t.role === "owner")) return "Owner account";
@@ -57,6 +48,7 @@ export function ProfilePage() {
     setSelectedTeamId,
     refreshMeAndTeams,
   } = useEnterpriseShell();
+  const queryClient = useQueryClient();
   const [nameEdit, setNameEdit] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -165,6 +157,7 @@ export function ProfilePage() {
               }
             : prev,
         );
+        void queryClient.invalidateQueries({ queryKey: ["team", "context"] });
       } catch (e) {
         setFormErr(e instanceof Error ? e.message : "Photo upload failed.");
       } finally {
@@ -233,10 +226,13 @@ export function ProfilePage() {
               <div className="enterprise-profile-avatar-preview">
                 {photoBusy ? (
                   <span className="enterprise-muted">…</span>
-                ) : me?.image ? (
-                  <img src={me.image} alt={`${me.name ?? me.email ?? "Your"} profile photo`} className="enterprise-profile-avatar-img" />
                 ) : (
-                  <span className="enterprise-profile-avatar-initials">{userInitials(me ?? null)}</span>
+                  <UserAvatar
+                    user={me ?? { name: null, email: null, image: null }}
+                    className="enterprise-profile-avatar-img-wrap"
+                    imgClassName="enterprise-profile-avatar-img"
+                    alt={`${me?.name ?? me?.email ?? "Your"} profile photo`}
+                  />
                 )}
               </div>
               {isEditing ? (

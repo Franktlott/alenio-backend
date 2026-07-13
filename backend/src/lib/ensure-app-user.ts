@@ -75,7 +75,10 @@ export async function syncAppUserFromAuth(authUser: AppUser): Promise<{
         updates.name = authUser.name;
       }
       if (authUser.image !== undefined && authUser.image !== byId.image) {
-        updates.image = authUser.image ?? null;
+        // Never wipe an uploaded app photo with a null/empty auth image (e.g. Microsoft OAuth strips photos).
+        if (authUser.image) {
+          updates.image = authUser.image;
+        }
       }
       // Merge platform admin from a legacy email-keyed row onto the Neon-id session row.
       if (!byId.isAdmin && byEmail && byEmail.id !== byId.id && byEmail.isAdmin) {
@@ -104,7 +107,9 @@ export async function syncAppUserFromAuth(authUser: AppUser): Promise<{
       const updates: { name?: string; image?: string | null } = {};
       if (authUser.name && authUser.name !== byEmail.name) updates.name = authUser.name;
       if (authUser.image !== undefined && authUser.image !== byEmail.image) {
-        updates.image = authUser.image ?? null;
+        if (authUser.image) {
+          updates.image = authUser.image;
+        }
       }
       if (Object.keys(updates).length > 0) {
         user = await prisma.user.update({

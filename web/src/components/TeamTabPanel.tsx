@@ -10,6 +10,7 @@ import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
 import { WorkplaceStandardsModal, mergeWorkplaceStandards } from "./WorkplaceStandardsModal";
 import { StandardsStatusKey } from "./StandardsStatusKey";
+import { UserAvatar } from "./UserAvatar";
 import {
   approveTeamJoinRequest,
   fetchPendingCalendarEvents,
@@ -449,6 +450,13 @@ function memberSort(a: WebTeamMemberRow, b: WebTeamMemberRow, myId: string): num
   return (a.user.name ?? "").localeCompare(b.user.name ?? "");
 }
 
+/** Prefer live account photo for the signed-in user when roster data is stale/empty. */
+function withLiveProfilePhoto(m: WebTeamMemberRow, me: WebMeUser | null | undefined): WebTeamMemberRow {
+  if (!me?.image || m.userId !== me.id) return m;
+  if (m.user.image === me.image) return m;
+  return { ...m, user: { ...m.user, image: me.image } };
+}
+
 function formerToMemberRow(former: WebFormerMemberRow): WebTeamMemberRow {
   return {
     id: `former-${former.userId}`,
@@ -549,8 +557,11 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   }, [showInitialLoading, onWorkspaceSwitchLoading]);
 
   const sortedMembers = useMemo(
-    () => [...(teamDetail?.members ?? [])].sort((a, b) => memberSort(a, b, myId)),
-    [teamDetail?.members, myId],
+    () =>
+      [...(teamDetail?.members ?? [])]
+        .map((m) => withLiveProfilePhoto(m, me))
+        .sort((a, b) => memberSort(a, b, myId)),
+    [teamDetail?.members, myId, me],
   );
 
   useEffect(() => {
@@ -883,13 +894,11 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   const name = req.user.name ?? req.user.email ?? "Someone";
                   return (
                     <li key={req.id} className="enterprise-team-pending-row">
-                      <span className="enterprise-team-pending-avatar enterprise-team-pending-avatar--person">
-                        {req.user.image ? (
-                          <img src={req.user.image} alt={name} />
-                        ) : (
-                          (name[0] ?? "?").toUpperCase()
-                        )}
-                      </span>
+                      <UserAvatar
+                        user={req.user}
+                        className="enterprise-team-pending-avatar enterprise-team-pending-avatar--person"
+                        alt={name}
+                      />
                       <div className="enterprise-team-pending-main">
                         <div className="enterprise-team-pending-topline">
                           <strong className="enterprise-team-pending-email">{name}</strong>
@@ -1008,13 +1017,11 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                     const cardClass = `enterprise-team-roster-card enterprise-team-roster-card--list${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
                     const cardBody = (
                       <>
-                        <span className="enterprise-team-roster-avatar">
-                          {m.user.image ? (
-                            <img src={m.user.image} alt={displayName} />
-                          ) : (
-                            (m.user.name?.[0] ?? m.user.email?.[0] ?? "?").toUpperCase()
-                          )}
-                        </span>
+                        <UserAvatar
+                          user={m.user}
+                          className="enterprise-team-roster-avatar"
+                          alt={displayName}
+                        />
                         <span className="enterprise-team-roster-member-copy">
                           <span className="enterprise-team-roster-name">
                             {displayName}
@@ -1082,13 +1089,11 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                               onClick={() => setSelectedMemberId(former.userId)}
                               data-testid={`team-roster-former-${former.userId}`}
                             >
-                              <span className="enterprise-team-roster-avatar">
-                                {former.user.image ? (
-                                  <img src={former.user.image} alt={displayName} />
-                                ) : (
-                                  (former.user.name?.[0] ?? former.user.email?.[0] ?? "?").toUpperCase()
-                                )}
-                              </span>
+                              <UserAvatar
+                                user={former.user}
+                                className="enterprise-team-roster-avatar"
+                                alt={displayName}
+                              />
                               <span className="enterprise-team-roster-member-copy">
                                 <span className="enterprise-team-roster-name">{displayName}</span>
                                 <span className="enterprise-team-roster-role-line">Former member</span>
