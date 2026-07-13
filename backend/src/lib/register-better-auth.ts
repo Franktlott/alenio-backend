@@ -26,7 +26,24 @@ export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
   // `/api/auth/**` does NOT match those routes in this Hono version (returns 404).
   app.on(["POST", "GET"], "/api/auth/*", async (c) => {
     try {
-      return await authServer.handler(c.req.raw);
+      const res = await authServer.handler(c.req.raw);
+      if (res.status >= 500) {
+        const detail = await res.clone().text().catch(() => "");
+        console.error("[better-auth] upstream", res.status, c.req.path, detail.slice(0, 500));
+        if (!detail) {
+          return c.json(
+            {
+              error: {
+                message: "Better Auth request failed",
+                path: c.req.path,
+                code: "BETTER_AUTH_UPSTREAM_500",
+              },
+            },
+            500,
+          );
+        }
+      }
+      return res;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("[better-auth] handler threw:", message, err);

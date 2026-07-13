@@ -185,8 +185,12 @@ async function createAuthServer(): Promise<AuthServer | null> {
             `,
             });
             if (error) {
-              console.error("[better-auth] Resend OTP error:", error);
-              throw new Error("Failed to send verification email");
+              console.error("[better-auth] Resend OTP error:", JSON.stringify(error));
+              throw new Error(
+                typeof error === "object" && error && "message" in error
+                  ? `Email send failed: ${String((error as { message?: string }).message)}`
+                  : "Email send failed. Check FROM_EMAIL / Resend domain.",
+              );
             }
           },
         }),
