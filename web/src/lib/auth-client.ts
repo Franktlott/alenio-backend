@@ -1,54 +1,57 @@
-import { createAuthClient } from "@neondatabase/auth";
-import { BetterAuthVanillaAdapter } from "@neondatabase/auth/vanilla/adapters";
+import { createAuthClient } from "better-auth/client";
+import { emailOTPClient } from "better-auth/client/plugins";
 import { getWebApiBase } from "./api-base";
-import { getResolvedNeonAuthUrl } from "./env-config";
+import { getResolvedBackendUrl } from "./env-config";
 import {
   extractTokenFromAuthPayload,
   getStoredToken,
-  isJwtExpiredSkew,
-  looksLikeJwt,
+  isSessionTokenUsable,
   setStoredToken,
 } from "./token";
 
-function readNeonAuthUrl(): string {
-  return getResolvedNeonAuthUrl();
+/** Better Auth is served from the Alenio API (`/api/auth/*`). */
+function readAuthBaseUrl(): string {
+  const backend = getResolvedBackendUrl();
+  if (!backend) {
+    throw new Error(
+      "Missing backend URL. Copy web/.env.example to web/.env, set VITE_DEV_BACKEND_URL / VITE_PROD_BACKEND_URL, then restart the dev server.",
+    );
+  }
+  return backend;
 }
 
 let authClientInstance: ReturnType<typeof createAuthClient> | null = null;
 
-/** Token-based session — omit cookies so cross-origin Neon Auth requests skip cookie CSRF origin checks. */
-function webAuthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  return fetch(input, { ...init, credentials: "omit" });
-}
-
-/** Drop cached Neon client so sign-out / re-login does not reuse stale in-memory session. */
+/** Drop cached client so sign-out / re-login does not reuse stale in-memory session. */
 export function resetAuthClient(): void {
   authClientInstance = null;
 }
 
 function getAuthClientInstance(): ReturnType<typeof createAuthClient> {
-  const url = readNeonAuthUrl();
-  if (!url) {
-    throw new Error(
-      "Missing Neon Auth URL. Copy web/.env.example to web/.env, set VITE_DEV_NEON_AUTH_URL / VITE_PROD_NEON_AUTH_URL (and matching backend URLs), then restart the dev server.",
-    );
-  }
-  authClientInstance ??= createAuthClient(url, {
-    adapter: BetterAuthVanillaAdapter({
-      fetchOptions: {
-        customFetchImpl: webAuthFetch,
+  const baseURL = readAuthBaseUrl();
+  authClientInstance ??= createAuthClient({
+    baseURL,
+    plugins: [emailOTPClient()],
+    fetchOptions: {
+      credentials: "omit",
+      auth: {
+        type: "Bearer",
+        token: () => getStoredToken() || "",
       },
-    }),
+      onSuccess: (ctx) => {
+        const authToken = ctx.response.headers.get("set-auth-token");
+        if (authToken?.trim()) setStoredToken(authToken.trim());
+      },
+    },
   });
   return authClientInstance;
 }
 
-/** Same adapter as the mobile app — avoids broken nested APIs (e.g. `signIn.email`) from a Proxy or wrong client shape. */
 export function getAuthClient(): ReturnType<typeof createAuthClient> {
   return getAuthClientInstance();
 }
 
-/** Password-reset + OTP; `@neondatabase/auth` typings omit these on the client union. */
+/** Password-reset + OTP — same shape the web screens already call. */
 export type AuthPasswordFlowClient = {
   forgetPassword: {
     emailOtp: (input: { email: string }) => Promise<{ error?: { message?: string } | null }>;
@@ -69,7 +72,32 @@ export type AuthPasswordFlowClient = {
 };
 
 export function getAuthPasswordFlowClient(): AuthPasswordFlowClient {
-  return getAuthClient() as unknown as AuthPasswordFlowClient;
+  const client = getAuthClient();
+  return {
+    forgetPassword: {
+      emailOtp: async ({ email }) => {
+        const result = await client.emailOtp.sendVerificationOtp({
+          email,
+          type: "forget-password",
+        });
+        return { error: result.error ? { message: result.error.message ?? "Could not send code." } : null };
+      },
+    },
+    emailOtp: {
+      checkVerificationOtp: async ({ email, otp, type }) => {
+        const result = await client.emailOtp.checkVerificationOtp({ email, otp, type });
+        return { error: result.error ? { message: result.error.message ?? "Invalid code." } : null };
+      },
+      resetPassword: async ({ email, otp, password }) => {
+        const result = await client.emailOtp.resetPassword({ email, otp, password });
+        return { error: result.error ? { message: result.error.message ?? "Could not reset password." } : null };
+      },
+    },
+    resetPassword: async ({ newPassword, token }) => {
+      const result = await client.resetPassword({ newPassword, token });
+      return { error: result.error ? { message: result.error.message ?? "Could not reset password." } : null };
+    },
+  };
 }
 
 export function setAccessTokenFromAuthData(data: unknown): string | null {
@@ -100,14 +128,12 @@ function authPayloadHasUser(payload: unknown): boolean {
   return false;
 }
 
-function storedAccessJwtReady(): boolean {
-  const token = getStoredToken()?.trim() ?? null;
-  return !!(token && looksLikeJwt(token) && !isJwtExpiredSkew(token));
+function storedAccessReady(): boolean {
+  return isSessionTokenUsable(getStoredToken());
 }
 
 /**
- * Refreshes session from Neon Auth and persists any rotated access token.
- * Succeeds when a non-expired JWT is stored — `getSession` sometimes omits `data.user` while the bearer is valid.
+ * Refreshes session from Better Auth and persists any rotated access token.
  */
 export async function ensureWebSessionAndToken(maxAttempts = 8): Promise<boolean> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -115,22 +141,21 @@ export async function ensureWebSessionAndToken(maxAttempts = 8): Promise<boolean
     const sessionRes = await getAuthClient().getSession({
       fetchOptions: {
         headers: {
-          "X-Force-Fetch": "1",
           ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
         },
       },
-    } as never);
+    });
     setAccessTokenFromAuthData(sessionRes ?? null);
     setAccessTokenFromAuthData((sessionRes as { data?: unknown })?.data ?? null);
 
     const data = (sessionRes as { data?: unknown })?.data ?? sessionRes;
     const userPresent = authPayloadHasUser(data);
-    if (storedAccessJwtReady() && userPresent) return true;
-    if (storedAccessJwtReady() && attempt >= 1) return true;
+    if (storedAccessReady() && userPresent) return true;
+    if (storedAccessReady() && attempt >= 1) return true;
 
     await new Promise((r) => setTimeout(r, 120 + attempt * 80));
   }
-  return storedAccessJwtReady();
+  return storedAccessReady();
 }
 
 let refreshInFlight: Promise<boolean> | null = null;
@@ -144,14 +169,13 @@ export async function refreshSessionTokens(): Promise<boolean> {
       const forced = await getAuthClient().getSession({
         fetchOptions: {
           headers: {
-            "X-Force-Fetch": "1",
             Authorization: `Bearer ${bearer}`,
           },
         },
-      } as never);
+      });
       const next =
         setAccessTokenFromAuthData(forced?.data ?? null) ?? setAccessTokenFromAuthData(forced ?? null);
-      return !!next;
+      return !!next || isSessionTokenUsable(bearer);
     } catch {
       return false;
     }

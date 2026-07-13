@@ -11,7 +11,7 @@ import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors
 import { authErrorMessage, messageLooksLikeResumeSignUp } from "../lib/signup-recovery";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
 import { isMobileBrowser } from "../lib/mobile-browser";
-import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
+import { isSessionTokenExpired, isSessionTokenUsable } from "../lib/token";
 import { goToEmailVerification, needsEmailVerification } from "../lib/verify-redirect";
 
 export function LoginPage() {
@@ -32,13 +32,13 @@ export function LoginPage() {
 
   useEffect(() => {
     const t = getAccessToken();
-    if (t && looksLikeJwt(t) && isJwtExpiredSkew(t)) {
+    if (t && isSessionTokenExpired(t)) {
       clearAccessToken();
     }
   }, []);
 
   const existing = getAccessToken();
-  if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
+  if (isSessionTokenUsable(existing)) {
     return <Navigate to={isMobileBrowser() ? "/get-app" : "/chat"} replace />;
   }
 

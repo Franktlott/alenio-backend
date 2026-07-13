@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { clearAccessToken, getAccessToken, getAuthClient } from "../lib/auth-client";
-import { looksLikeJwt } from "../lib/token";
+import { isSessionTokenUsable } from "../lib/token";
 
 const IDLE_MS = 5 * 60 * 1000;
 const WARNING_SECONDS = 5 * 60;
@@ -76,7 +76,7 @@ export function SessionIdleGuard() {
   const [warningOpen, setWarningOpen] = useState(false);
   const [countdownSec, setCountdownSec] = useState(WARNING_SECONDS);
 
-  const hasSession = looksLikeJwt(getAccessToken() ?? "");
+  const hasSession = isSessionTokenUsable(getAccessToken());
   const guardActive = hasSession && !isPublicPath(location.pathname);
 
   const restoreTitle = useCallback(() => {
@@ -143,7 +143,7 @@ export function SessionIdleGuard() {
 
   const syncSessionState = useCallback(() => {
     if (signingOutRef.current || !guardActive) return;
-    if (!looksLikeJwt(getAccessToken() ?? "")) {
+    if (!isSessionTokenUsable(getAccessToken())) {
       closeWarning();
       return;
     }

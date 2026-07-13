@@ -27,6 +27,24 @@ export function isJwtExpiredSkew(token: string, skewMs = 30_000): boolean {
   }
 }
 
+/**
+ * Session usable for web gates.
+ * Neon Auth used JWTs; Better Auth bearer sessions are opaque strings.
+ */
+export function isSessionTokenUsable(token: string | null | undefined): boolean {
+  const t = token?.trim() ?? "";
+  if (!t) return false;
+  if (looksLikeJwt(t)) return !isJwtExpiredSkew(t);
+  return true;
+}
+
+export function isSessionTokenExpired(token: string | null | undefined): boolean {
+  const t = token?.trim() ?? "";
+  if (!t) return true;
+  if (looksLikeJwt(t)) return isJwtExpiredSkew(t);
+  return false;
+}
+
 function pickTokenFromUnknown(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
   const rec = data as Record<string, unknown>;
@@ -34,15 +52,15 @@ function pickTokenFromUnknown(data: unknown): string | null {
     (typeof rec.token === "string" ? rec.token : null) ??
     (typeof rec.accessToken === "string" ? rec.accessToken : null) ??
     (typeof rec.access_token === "string" ? rec.access_token : null);
-  if (direct) return direct;
+  if (direct?.trim()) return direct.trim();
   const nestedSession = rec.session;
   if (nestedSession && typeof nestedSession === "object") {
     const s = nestedSession as Record<string, unknown>;
-    return (
+    const nested =
       (typeof s.token === "string" ? s.token : null) ??
       (typeof s.accessToken === "string" ? s.accessToken : null) ??
-      (typeof s.access_token === "string" ? s.access_token : null)
-    );
+      (typeof s.access_token === "string" ? s.access_token : null);
+    if (nested?.trim()) return nested.trim();
   }
   return null;
 }
@@ -50,7 +68,9 @@ function pickTokenFromUnknown(data: unknown): string | null {
 function deepFindToken(data: unknown, depth = 0): string | null {
   if (!data || depth > 5) return null;
   if (typeof data === "string") {
-    return looksLikeJwt(data) ? data : null;
+    const t = data.trim();
+    if (!t) return null;
+    return looksLikeJwt(t) ? t : null;
   }
   if (Array.isArray(data)) {
     for (const item of data) {

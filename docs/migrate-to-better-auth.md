@@ -199,20 +199,17 @@ After deploy, `/health` should show `"betterAuthSessionVerify": true`.
 
 ## Phase 3 — Web client
 
+**Status: done in repo (2026-07-12)** — web login uses Better Auth on `{BACKEND_URL}/api/auth`.
+
 **Owner:** Cursor · **Verify:** You in the browser
 
-1. Add `better-auth@1.4.18` in `web/`; prepare to remove `@neondatabase/auth`.  
-2. Rewrite `web/src/lib/auth-client.ts` to use `{BACKEND_URL}/api/auth`.  
-3. Update login, sign-up, reset/verify flows, `AuthGate`, and `SessionIdleGuard`.  
-4. Keep `web/src/lib/api.ts` attaching the Bearer token.  
-5. Drop `VITE_*_NEON_AUTH_URL` from `env-config`.  
-6. Local test, then:
+1. `better-auth@1.4.18` in `web/`; auth client no longer uses `@neondatabase/auth`.  
+2. `web/src/lib/auth-client.ts` points at the Alenio backend.  
+3. Login / sign-up / OTP / reset flows + AuthGate accept Better Auth bearer tokens.  
+4. Env only requires `VITE_*_BACKEND_URL` (Neon Auth URL optional/legacy).  
+5. Deploy Firebase Hosting after build.
 
-```bash
-cd web && bun run build && cd .. && npx firebase-tools deploy --only hosting
-```
-
-Validate on https://alenio.com/login.
+**You:** Open https://alenio.com/login, sign in with your existing email/password, confirm dashboard loads.
 
 ---
 

@@ -79,10 +79,10 @@ function SetupEnvScreen({ message }: { message: string }) {
             <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>cp .env.example .env</code>
           </li>
           <li>
-            Under <strong>Development</strong>, set <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_DEV_NEON_AUTH_URL</code> and{" "}
+            Under <strong>Development</strong>, set{" "}
             <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_DEV_BACKEND_URL</code>. Under <strong>Production</strong>, set{" "}
-            <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_PROD_NEON_AUTH_URL</code> and{" "}
-            <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_PROD_BACKEND_URL</code>. Use{" "}
+            <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_PROD_BACKEND_URL</code>. Auth uses the same backend URL (Better Auth at{" "}
+            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>/api/auth</code>). Use{" "}
             <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_API_TARGET</code> to switch locally.
           </li>
           <li>

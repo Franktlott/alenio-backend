@@ -49,6 +49,11 @@ export function getResolvedNeonAuthUrl(): string {
   return resolveNeonAuthUrl(import.meta.env, import.meta.env.PROD);
 }
 
+/** Auth API base — Better Auth is mounted on the Alenio backend. */
+export function getResolvedAuthBaseUrl(): string {
+  return getResolvedBackendUrl();
+}
+
 export function getResolvedBackendUrl(): string {
   return resolveBackendUrl(import.meta.env, import.meta.env.PROD);
 }
@@ -59,14 +64,8 @@ export function usesDevApiProxy(env: EnvRecord = import.meta.env): boolean {
 
 export function getWebEnvConfigError(): string | null {
   const target = getActiveApiTarget();
-  const auth = getResolvedNeonAuthUrl();
   const backend = getResolvedBackendUrl();
 
-  if (!auth) {
-    return target === "production"
-      ? "VITE_PROD_NEON_AUTH_URL is not set (add it in web/.env or web/.env.production)."
-      : "VITE_DEV_NEON_AUTH_URL is not set (add it in web/.env).";
-  }
   if (!backend) {
     return target === "production"
       ? "VITE_PROD_BACKEND_URL is not set (add it in web/.env or web/.env.production)."

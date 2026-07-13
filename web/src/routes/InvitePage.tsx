@@ -6,7 +6,7 @@ import { getInviteAppUrl } from "../lib/app-links";
 import { ensureWebSessionAndToken, getAccessToken } from "../lib/auth-client";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
 import { isMobileBrowser } from "../lib/mobile-browser";
-import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
+import { isSessionTokenUsable } from "../lib/token";
 
 export function InvitePage() {
   const { token = "" } = useParams();
@@ -31,7 +31,7 @@ export function InvitePage() {
         setPreview(data);
 
         const existing = getAccessToken();
-        if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
+        if (isSessionTokenUsable(existing)) {
           const ready = await ensureWebSessionAndToken();
           if (ready) {
             setPendingInviteToken(token);

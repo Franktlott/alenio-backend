@@ -9,7 +9,7 @@ import {
 } from "../lib/app-links";
 import { getAccessToken } from "../lib/auth-client";
 import { isMobileBrowser } from "../lib/mobile-browser";
-import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
+import { isSessionTokenUsable } from "../lib/token";
 
 export function GetAppPage() {
   const [params] = useSearchParams();
@@ -23,7 +23,7 @@ export function GetAppPage() {
     };
   }, [emailFromQuery]);
 
-  if (!token || !looksLikeJwt(token) || isJwtExpiredSkew(token)) {
+  if (!isSessionTokenUsable(token)) {
     return <Navigate to="/login" replace />;
   }
 

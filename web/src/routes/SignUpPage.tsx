@@ -15,7 +15,7 @@ import {
   isExistingEmailSignUpError,
   messageLooksLikeResumeSignUp,
 } from "../lib/signup-recovery";
-import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
+import { isSessionTokenExpired, isSessionTokenUsable } from "../lib/token";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { goToEmailVerification } from "../lib/verify-redirect";
@@ -34,7 +34,7 @@ export function SignUpPage() {
 
   useEffect(() => {
     const t = getAccessToken();
-    if (t && looksLikeJwt(t) && isJwtExpiredSkew(t)) {
+    if (t && isSessionTokenExpired(t)) {
       clearAccessToken();
     }
   }, []);
@@ -48,7 +48,7 @@ export function SignUpPage() {
   }, [emailFromInvite]);
 
   const existing = getAccessToken();
-  if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
+  if (isSessionTokenUsable(existing)) {
     return <Navigate to={isMobileBrowser() ? "/get-app" : "/chat"} replace />;
   }
 
