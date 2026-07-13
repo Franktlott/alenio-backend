@@ -138,6 +138,12 @@ async function createAuthServer(): Promise<AuthServer | null> {
       secret,
       database: pool,
       trustedOrigins: collectTrustedOrigins(),
+      // Neon Auth tables use uuid PKs; default nanoid ids fail inserts (OTP / sessions → 500).
+      advanced: {
+        database: {
+          generateId: "uuid",
+        },
+      },
       emailAndPassword: {
         enabled: true,
         requireEmailVerification: true,
