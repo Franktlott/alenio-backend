@@ -22,6 +22,8 @@ type OtpCopy = {
   title: string;
   intro: string;
   steps: string[];
+  codeLabel: string;
+  footerNote: string;
 };
 
 function copyForType(type: AuthOtpEmailType): OtpCopy {
@@ -37,15 +39,26 @@ function copyForType(type: AuthOtpEmailType): OtpCopy {
         "Enter the code below exactly as shown",
         "Choose a new password and sign in",
       ],
+      codeLabel: "One-time code",
+      footerNote:
+        "This code expires shortly. If you did not request it, you can ignore this email — your account stays secure.",
     };
   }
   if (type === "email-verification") {
     return {
-      subject: "Verify your Alenio email",
-      eyebrow: "Email verification",
-      title: "Confirm your email address",
-      intro: "Use this code to verify your Alenio account and finish setting up access.",
-      steps: ["Open the verification screen", "Enter the code below", "Continue into Alenio"],
+      subject: "Welcome to Alenio — verify your email",
+      eyebrow: "Welcome",
+      title: "Finish creating your account",
+      intro:
+        "Thanks for signing up for Alenio. Enter this verification code to confirm your email and activate your account.",
+      steps: [
+        "Return to the Alenio sign-up verification screen",
+        "Enter the code below exactly as shown",
+        "Start using Alenio on web or mobile",
+      ],
+      codeLabel: "Verification code",
+      footerNote:
+        "This code expires shortly. If you did not create an Alenio account, you can ignore this email.",
     };
   }
   return {
@@ -54,6 +67,9 @@ function copyForType(type: AuthOtpEmailType): OtpCopy {
     title: "Your one-time sign-in code",
     intro: "Use this code to finish signing in to Alenio.",
     steps: ["Return to the sign-in screen", "Enter the code below", "Continue to your workspace"],
+    codeLabel: "One-time code",
+    footerNote:
+      "This code expires shortly. If you did not request it, you can ignore this email — your account stays secure.",
   };
 }
 
@@ -121,7 +137,7 @@ export function buildAuthOtpEmail(input: {
           <tr>
             <td style="padding:18px 28px 8px;">
               <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:20px 16px;text-align:center;">
-                <div style="color:#64748B;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">One-time code</div>
+                <div style="color:#64748B;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">${escapeHtml(copy.codeLabel)}</div>
                 <div style="font-size:34px;font-weight:700;letter-spacing:0.28em;color:#0F172A;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;">${otp}</div>
               </div>
             </td>
@@ -135,7 +151,7 @@ export function buildAuthOtpEmail(input: {
           <tr>
             <td style="padding:12px 28px 24px;">
               <p style="margin:0;color:#64748B;font-size:13px;line-height:1.5;">
-                This code expires shortly. If you did not request it, you can ignore this email — your account stays secure.
+                ${escapeHtml(copy.footerNote)}
               </p>
             </td>
           </tr>
@@ -164,7 +180,7 @@ export function buildAuthOtpEmail(input: {
     "Next steps:",
     ...copy.steps.map((s, i) => `${i + 1}. ${s}`),
     "",
-    "This code expires shortly. If you did not request it, ignore this email.",
+    copy.footerNote,
   ]
     .filter(Boolean)
     .join("\n");
