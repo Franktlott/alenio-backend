@@ -35,6 +35,7 @@ import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
 import { syncAppUserFromNeonAuth } from "./lib/ensure-app-user";
+import { isAuthServerEnabled, tryGetAuthServer } from "./lib/better-auth";
 import { deleteAppUserCompletely } from "./lib/delete-app-user";
 import { assertAccountDeletionAllowed, getAccountDeletionReadiness } from "./lib/account-deletion-readiness";
 import {
@@ -63,6 +64,7 @@ import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection
 import { ensureTopicImageSchema } from "./lib/ensure-topic-image-schema";
 import { ensureNotificationPreferencesSchema } from "./lib/ensure-notification-preferences-schema";
 import { ensurePinnedMessageSchema } from "./lib/ensure-pinned-message-schema";
+import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
@@ -83,7 +85,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureTaskArchiveSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -105,6 +107,7 @@ const startupSchemaReady = Promise.all([
         ensureTopicImageSchema(prisma),
         ensureNotificationPreferencesSchema(prisma),
         ensurePinnedMessageSchema(prisma),
+        ensureTaskArchiveSchema(prisma),
       ]),
 ]);
 
@@ -129,6 +132,8 @@ function buildHealthPayload() {
     senecaDiagnostics: senecaDiagnostics(),
     /** Compare with EXPO_PUBLIC_NEON_AUTH_URL from the app — hostnames must be the same Neon Auth project. */
     neonAuthHostname: authProjectHint,
+    /** True when BETTER_AUTH_SECRET is set and DATABASE_URL is Postgres (`/api/auth/*` mounted). */
+    betterAuthEnabled: isAuthServerEnabled,
   };
 }
 
@@ -161,6 +166,7 @@ const allowedPatterns = [
   /^https:\/\/[a-z0-9][a-z0-9-]*[a-z0-9]\.web\.app$/i,
   /^https:\/\/[a-z0-9][a-z0-9-]*[a-z0-9]\.firebaseapp\.com$/i,
   // Production enterprise web (add more custom domains via CORS_ALLOWED_ORIGINS)
+  /^https:\/\/(www\.)?alenio\.com$/i,
   /^https:\/\/(www\.)?alenio\.app$/i,
 ];
 const extraOrigins = (env.CORS_ALLOWED_ORIGINS ?? "")
@@ -303,6 +309,17 @@ app.post("/api/auth/sync-user", (c) => {
     matchedBy: debug?.matchedBy ?? null,
   });
 });
+
+/** Self-hosted Better Auth (Phase 1). Registered after sync-user so that route is not stolen. */
+const authServer = tryGetAuthServer();
+if (authServer) {
+  console.log("[better-auth] Mounting /api/auth/** (neon_auth schema)");
+  app.on(["POST", "GET"], "/api/auth/**", (c) => authServer.handler(c.req.raw));
+} else {
+  console.log(
+    "[better-auth] Not mounted — set BETTER_AUTH_SECRET (32+ chars) and a Postgres DATABASE_URL to enable.",
+  );
+}
 
 // Email verified success page
 app.get("/email-verified", (c) => {

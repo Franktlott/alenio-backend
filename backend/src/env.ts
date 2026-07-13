@@ -14,23 +14,28 @@ const envSchema = z.object({
   NODE_ENV: z.string().optional(),
   // Database
   DATABASE_URL: z.string().default("file:./dev.db"),
-  // Neon Auth
+  // Neon Auth (retire after Better Auth cutover)
   NEON_AUTH_URL: z.string().url(),
   /** Optional: delete auth users via Neon Management API (see Neon Console → API keys, project/branch IDs). */
   NEON_API_KEY: z.string().optional(),
   NEON_PROJECT_ID: z.string().optional(),
   NEON_BRANCH_ID: z.string().optional(),
+  /**
+   * Self-hosted Better Auth secret (32+ chars). When set with a Postgres DATABASE_URL,
+   * the API mounts `/api/auth/*` against the `neon_auth` schema.
+   */
+  BETTER_AUTH_SECRET: z.string().min(32).optional(),
   // Backend URL
   BACKEND_URL: z.string().default("http://localhost:3000"),
   /** Comma-separated browser origins allowed for CORS (e.g. Firebase Hosting https://your-app.web.app). Localhost is always allowed. */
   CORS_ALLOWED_ORIGINS: z.string().optional(),
   // Build marker for quick deploy verification
-  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-11-multi-pins"),
+  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-12-better-auth-phase1"),
   // Admin Dashboard
   ADMIN_PASSWORD: z.string().optional().default("admin123"),
   // Email (Resend)
   RESEND_API_KEY: z.string().optional(),
-  FROM_EMAIL: z.string().optional().default("noreply@yourdomain.com"),
+  FROM_EMAIL: z.string().optional().default("noreply@alenio.com"),
   // Mobile app deep link scheme (e.g. "alenio")
   APP_SCHEME: z.string().optional().default("alenio"),
   /** Optional: linked from team invite emails */
