@@ -65,6 +65,7 @@ import { ensureTopicImageSchema } from "./lib/ensure-topic-image-schema";
 import { ensureNotificationPreferencesSchema } from "./lib/ensure-notification-preferences-schema";
 import { ensurePinnedMessageSchema } from "./lib/ensure-pinned-message-schema";
 import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
+import { ensureBetterAuthSchema } from "./lib/ensure-better-auth-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
@@ -84,6 +85,7 @@ if (!isProduction) {
 
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
+  ensureBetterAuthSchema(prisma),
   ...(isProduction
     ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureTaskArchiveSchema(prisma)]
     : [
