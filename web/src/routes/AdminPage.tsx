@@ -186,19 +186,23 @@ export function AdminPage() {
 
   return (
     <div
-      className="enterprise-tab-shell enterprise-tab-shell-scroll enterprise-admin-page"
+      className={`enterprise-tab-shell enterprise-tab-shell-scroll enterprise-admin-page${
+        section === "seneca-studio" ? " enterprise-admin-page--studio" : ""
+      }`}
       data-testid="admin-screen"
     >
-      <div className="enterprise-admin-header">
-        <div>
-          <h1 className="enterprise-admin-title">{sectionCopy.title}</h1>
-          <p className="enterprise-muted">{sectionCopy.subtitle}</p>
-        </div>
-      </div>
-
       {section === "seneca-studio" ? (
         <SenecaStudioPage scope="platform" embedded />
-      ) : section === "users" ? (
+      ) : (
+        <>
+          <div className="enterprise-admin-header">
+            <div>
+              <h1 className="enterprise-admin-title">{sectionCopy.title}</h1>
+              <p className="enterprise-muted">{sectionCopy.subtitle}</p>
+            </div>
+          </div>
+
+          {section === "users" ? (
         <div className={`enterprise-admin-layout${selectedUserId ? " enterprise-admin-layout--detail" : ""}`}>
           <div className="enterprise-admin-list">
             <label className="enterprise-admin-search">
@@ -415,6 +419,8 @@ export function AdminPage() {
             </tbody>
           </table>
         </div>
+      )}
+        </>
       )}
 
       <AlenioNoticeModal

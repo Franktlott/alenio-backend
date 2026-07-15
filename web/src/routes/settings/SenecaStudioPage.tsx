@@ -80,7 +80,7 @@ function EditableChecklist({
   const [draft, setDraft] = useState("");
 
   return (
-    <section className="seneca-studio-card">
+    <section className="seneca-studio-card seneca-studio-card--dense">
       <h3 className="seneca-studio-card-title">{title}</h3>
       {subtitle ? <p className="seneca-studio-card-subtitle">{subtitle}</p> : null}
       <ul className={`seneca-studio-checklist seneca-studio-checklist--${variant}`}>
@@ -159,7 +159,7 @@ function TermPills({
   const [draft, setDraft] = useState("");
 
   return (
-    <section className="seneca-studio-card">
+    <section className="seneca-studio-card seneca-studio-card--dense">
       <h3 className="seneca-studio-card-title">{title}</h3>
       {subtitle ? <p className="seneca-studio-card-subtitle">{subtitle}</p> : null}
       <div className="seneca-studio-pills">
@@ -251,6 +251,9 @@ export function SenecaStudioPage({
   const [versionNotes, setVersionNotes] = useState<string | null>(null);
   const [noteModal, setNoteModal] = useState<"save" | "publish" | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  const [panel, setPanel] = useState<"studio" | "terms" | "knowledge" | "templates" | "preview">(
+    "studio",
+  );
 
   const patchStudio = useCallback((partial: Partial<SenecaStudioData>) => {
     setStudio((prev) => ({ ...prev, ...partial }));
@@ -530,9 +533,10 @@ export function SenecaStudioPage({
     return <EnterprisePageLoading label="Loading Seneca Studio" />;
   }
 
+
   return (
     <div
-      className={`seneca-studio-page${embedded ? " seneca-studio-page--embedded" : " enterprise-tab-shell"}`}
+      className={`seneca-studio-page seneca-studio-page--compact${embedded ? " seneca-studio-page--embedded" : " enterprise-tab-shell enterprise-tab-shell-scroll"}`}
       data-testid={isPlatform ? "admin-seneca-studio" : "seneca-studio-page"}
     >
       <div className="seneca-studio-page-inner">
@@ -556,103 +560,70 @@ export function SenecaStudioPage({
           </nav>
         ) : null}
 
-        <header className={`seneca-studio-header${embedded ? " seneca-studio-header--toolbar" : ""}`}>
-          {embedded ? (
-            <div className="seneca-studio-header-actions seneca-studio-header-actions--end">
-              <button
-                type="button"
-                className="enterprise-team-pill-btn"
-                disabled={previewBusy || !previewQuestion.trim()}
-                onClick={() => void onGeneratePreview()}
-              >
-                {previewBusy ? "Generating…" : "Preview"}
-              </button>
-              {canEdit ? (
-                <>
-                  <button
-                    type="button"
-                    className="enterprise-team-pill-btn"
-                    disabled={busy || !dirty}
-                    onClick={() => openNoteModal("save")}
-                  >
-                    Save draft
-                  </button>
-                  <button
-                    type="button"
-                    className="auth-submit seneca-studio-publish-btn"
-                    disabled={busy}
-                    onClick={() => openNoteModal("publish")}
-                  >
-                    Publish changes
-                  </button>
-                </>
-              ) : (
-                <span className="seneca-studio-badge seneca-studio-badge--readonly">View only</span>
-              )}
+        <header className="seneca-studio-toolbar">
+          <div className="seneca-studio-toolbar-left">
+            <div className="seneca-studio-toolbar-title-row">
+              <h1 className="seneca-studio-title">Seneca Studio</h1>
+              <StatusBadge source={source} status={status} />
+              {dirty ? <span className="seneca-studio-badge seneca-studio-badge--dirty">Unsaved</span> : null}
             </div>
-          ) : (
-            <>
-              <div>
-                <h1 className="seneca-studio-title">Seneca Studio</h1>
-                <p className="seneca-studio-subtitle">
-                  {isPlatform
-                    ? "Platform-wide coaching tone, rules, knowledge, and templates for every workspace."
-                    : "Configure how Seneca coaches your managers and teams."}
-                </p>
-              </div>
-              <div className="seneca-studio-header-actions">
+            <p className="seneca-studio-toolbar-meta">
+              {versionLabel}
+              {versionNotes && (status === "DRAFT" || source === "draft") ? ` · Note: ${versionNotes}` : ""}
+              {" · "}
+              <button type="button" className="seneca-studio-link-btn" onClick={() => void onOpenHistory()}>
+                Version history
+              </button>
+            </p>
+          </div>
+          <div className="seneca-studio-toolbar-actions">
+            {canEdit ? (
+              <>
                 <button
                   type="button"
                   className="enterprise-team-pill-btn"
-                  disabled={previewBusy || !previewQuestion.trim()}
-                  onClick={() => void onGeneratePreview()}
+                  disabled={busy || !dirty}
+                  onClick={() => openNoteModal("save")}
                 >
-                  {previewBusy ? "Generating…" : "Preview"}
+                  Save draft
                 </button>
-                {canEdit ? (
-                  <>
-                    <button
-                      type="button"
-                      className="enterprise-team-pill-btn"
-                      disabled={busy || !dirty}
-                      onClick={() => openNoteModal("save")}
-                    >
-                      Save draft
-                    </button>
-                    <button
-                      type="button"
-                      className="auth-submit seneca-studio-publish-btn"
-                      disabled={busy}
-                      onClick={() => openNoteModal("publish")}
-                    >
-                      Publish changes
-                    </button>
-                  </>
-                ) : (
-                  <span className="seneca-studio-badge seneca-studio-badge--readonly">View only</span>
-                )}
-              </div>
-            </>
-          )}
+                <button
+                  type="button"
+                  className="seneca-studio-publish-btn"
+                  disabled={busy}
+                  onClick={() => openNoteModal("publish")}
+                >
+                  Publish
+                </button>
+              </>
+            ) : (
+              <span className="seneca-studio-badge seneca-studio-badge--readonly">View only</span>
+            )}
+          </div>
         </header>
 
-        <div className="seneca-studio-version-bar">
-          <div className="seneca-studio-version-meta">
-            <span className="seneca-studio-version-label">Current version</span>
-            <StatusBadge source={source} status={status} />
-            <span className="seneca-studio-version-detail">{versionLabel}</span>
-            {dirty ? <span className="seneca-studio-badge seneca-studio-badge--dirty">Unsaved</span> : null}
-          </div>
-          <button type="button" className="seneca-studio-link-btn" onClick={() => void onOpenHistory()}>
-            View version history
-          </button>
+        <div className="seneca-studio-panel-tabs" role="tablist" aria-label="Studio sections">
+          {(
+            [
+              { id: "studio", label: "Studio" },
+              { id: "terms", label: "Terminology" },
+              { id: "knowledge", label: "Knowledge" },
+              { id: "templates", label: "Templates" },
+              { id: "preview", label: "Preview" },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={panel === tab.id}
+              className={`seneca-studio-panel-tab${panel === tab.id ? " is-active" : ""}`}
+              onClick={() => setPanel(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-
-        {versionNotes && (status === "DRAFT" || source === "draft") ? (
-          <p className="seneca-studio-version-note" role="note">
-            Draft note: {versionNotes}
-          </p>
-        ) : null}
 
         {error ? (
           <p className="enterprise-form-error" role="alert">
@@ -661,97 +632,90 @@ export function SenecaStudioPage({
         ) : null}
         {notice ? <p className="seneca-studio-notice">{notice}</p> : null}
 
-        <div className="seneca-studio-columns">
-          <div className="seneca-studio-col seneca-studio-col--left">
-            <section className="seneca-studio-card">
+        {panel === "studio" ? (
+          <div className="seneca-studio-board">
+            <section className="seneca-studio-card seneca-studio-card--dense">
               <h3 className="seneca-studio-card-title">Coaching behavior</h3>
-              <p className="seneca-studio-card-subtitle">Tone, length, and coaching focus.</p>
-
-              <label className="seneca-studio-field-label">Tone</label>
-              <div className="seneca-studio-segment" role="group" aria-label="Tone">
-                {(["supportive", "balanced", "direct"] as SenecaTone[]).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`seneca-studio-segment-btn${studio.tone === value ? " is-active" : ""}`}
-                    disabled={!canEdit}
-                    onClick={() => patchStudio({ tone: value })}
-                  >
-                    {value[0].toUpperCase() + value.slice(1)}
-                  </button>
-                ))}
-              </div>
-
-              <label className="seneca-studio-field-label">Response length</label>
-              <div className="seneca-studio-segment" role="group" aria-label="Response length">
-                {(["concise", "standard", "detailed"] as SenecaResponseLength[]).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`seneca-studio-segment-btn${studio.responseLength === value ? " is-active" : ""}`}
-                    disabled={!canEdit}
-                    onClick={() => patchStudio({ responseLength: value })}
-                  >
-                    {value[0].toUpperCase() + value.slice(1)}
-                  </button>
-                ))}
-              </div>
-
-              <label className="seneca-studio-field-label" htmlFor="seneca-coaching-style">
-                Coaching approach
-              </label>
-              <select
-                id="seneca-coaching-style"
-                className="auth-input"
-                disabled={!canEdit}
-                value={studio.coachingStyle}
-                onChange={(e) => patchStudio({ coachingStyle: e.target.value as SenecaCoachingStyle })}
-              >
-                {COACHING_STYLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-
-              <div className="seneca-studio-toggle-row">
+              <div className="seneca-studio-behavior-grid">
                 <div>
-                  <p className="seneca-studio-toggle-label">Ask follow-up questions</p>
-                  <p className="seneca-studio-card-subtitle">Clarify before giving coaching advice.</p>
+                  <label className="seneca-studio-field-label">Tone</label>
+                  <div className="seneca-studio-segment" role="group" aria-label="Tone">
+                    {(["supportive", "balanced", "direct"] as SenecaTone[]).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`seneca-studio-segment-btn${studio.tone === value ? " is-active" : ""}`}
+                        disabled={!canEdit}
+                        onClick={() => patchStudio({ tone: value })}
+                      >
+                        {value[0].toUpperCase() + value.slice(1)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={studio.askFollowUps}
-                  className={`seneca-studio-switch${studio.askFollowUps ? " is-on" : ""}`}
-                  disabled={!canEdit}
-                  onClick={() => patchStudio({ askFollowUps: !studio.askFollowUps })}
-                >
-                  <span className="seneca-studio-switch-knob" />
-                </button>
+                <div>
+                  <label className="seneca-studio-field-label">Response length</label>
+                  <div className="seneca-studio-segment" role="group" aria-label="Response length">
+                    {(["concise", "standard", "detailed"] as SenecaResponseLength[]).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`seneca-studio-segment-btn${studio.responseLength === value ? " is-active" : ""}`}
+                        disabled={!canEdit}
+                        onClick={() => patchStudio({ responseLength: value })}
+                      >
+                        {value[0].toUpperCase() + value.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="seneca-studio-field-label" htmlFor="seneca-coaching-style">
+                    Coaching approach
+                  </label>
+                  <select
+                    id="seneca-coaching-style"
+                    className="auth-input"
+                    disabled={!canEdit}
+                    value={studio.coachingStyle}
+                    onChange={(e) => patchStudio({ coachingStyle: e.target.value as SenecaCoachingStyle })}
+                  >
+                    {COACHING_STYLE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="seneca-studio-toggle-row seneca-studio-toggle-row--compact">
+                  <p className="seneca-studio-toggle-label">Ask follow-up questions</p>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={studio.askFollowUps}
+                    className={`seneca-studio-switch${studio.askFollowUps ? " is-on" : ""}`}
+                    disabled={!canEdit}
+                    onClick={() => patchStudio({ askFollowUps: !studio.askFollowUps })}
+                  >
+                    <span className="seneca-studio-switch-knob" />
+                  </button>
+                </div>
               </div>
             </section>
 
-            <section className="seneca-studio-card">
+            <section className="seneca-studio-card seneca-studio-card--dense">
               <h3 className="seneca-studio-card-title">Global coaching instructions</h3>
-              <p className="seneca-studio-card-subtitle">
-                These instructions shape how Seneca coaches in any situation.
-              </p>
               <textarea
-                className="auth-input seneca-studio-textarea seneca-studio-textarea--instructions"
-                rows={8}
+                className="auth-input seneca-studio-textarea seneca-studio-textarea--board"
+                rows={7}
                 disabled={!canEdit}
                 value={studio.leadershipPhilosophy}
                 onChange={(e) => patchStudio({ leadershipPhilosophy: e.target.value })}
                 placeholder="Describe leadership style, coaching expectations, and values…"
               />
-              <p className="seneca-studio-char-count">
-                Characters: {studio.leadershipPhilosophy.length}
-              </p>
+              <p className="seneca-studio-char-count">Characters: {studio.leadershipPhilosophy.length}</p>
             </section>
-          </div>
 
-          <div className="seneca-studio-col seneca-studio-col--middle">
             <EditableChecklist
               title="Always do"
               subtitle=""
@@ -768,9 +732,14 @@ export function SenecaStudioPage({
               canEdit={canEdit}
               onChange={(neverDo) => patchStudio({ neverDo })}
             />
+          </div>
+        ) : null}
+
+        {panel === "terms" ? (
+          <div className="seneca-studio-board seneca-studio-board--two">
             <TermPills
               title="Approved terminology"
-              subtitle=""
+              subtitle="Words Seneca should prefer."
               terms={studio.approvedTerms}
               variant="approved"
               canEdit={canEdit}
@@ -778,195 +747,199 @@ export function SenecaStudioPage({
             />
             <TermPills
               title="Avoid terminology"
-              subtitle=""
+              subtitle="Words Seneca should avoid."
               terms={studio.avoidedTerms}
               variant="avoided"
               canEdit={canEdit}
               onChange={(avoidedTerms) => patchStudio({ avoidedTerms })}
             />
           </div>
+        ) : null}
 
-          <aside className="seneca-studio-col seneca-studio-col--right">
-            <section className="seneca-studio-card seneca-studio-preview-card">
-              <div className="seneca-studio-card-head-row">
-                <h3 className="seneca-studio-card-title">Live preview</h3>
-                <button
-                  type="button"
-                  className="seneca-studio-link-btn"
-                  onClick={() =>
-                    setPreviewQuestion(
-                      "Vera has missed two check-ins in a row. How should I address it?",
-                    )
-                  }
-                >
-                  Change scenario
+        {panel === "knowledge" ? (
+          <section className="seneca-studio-card seneca-studio-card--panel">
+            <h3 className="seneca-studio-card-title">Knowledge base</h3>
+            <p className="seneca-studio-card-subtitle">
+              Active documents Seneca can use for coaching context.
+            </p>
+            <ul className="seneca-studio-kb-list">
+              {knowledge.length === 0 ? (
+                <li className="seneca-studio-empty">No knowledge documents yet.</li>
+              ) : (
+                knowledge.map((row) => (
+                  <li key={row.id} className="seneca-studio-kb-item">
+                    <div>
+                      <p className="seneca-studio-kb-title">{row.title}</p>
+                      <p className="seneca-studio-kb-meta">
+                        {row.category} · {row.status} · v{row.version}
+                      </p>
+                    </div>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        className="seneca-studio-icon-btn"
+                        aria-label={`Remove ${row.title}`}
+                        onClick={() => void onRemoveKnowledge(row.id)}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </li>
+                ))
+              )}
+            </ul>
+            {canEdit ? (
+              <form className="seneca-studio-kb-form" onSubmit={(e) => void onAddKnowledge(e)}>
+                <input
+                  className="auth-input"
+                  placeholder="Title"
+                  value={kbTitle}
+                  onChange={(e) => setKbTitle(e.target.value)}
+                  required
+                />
+                <input
+                  className="auth-input"
+                  placeholder="Category"
+                  value={kbCategory}
+                  onChange={(e) => setKbCategory(e.target.value)}
+                />
+                <textarea
+                  className="auth-input seneca-studio-textarea"
+                  rows={3}
+                  placeholder="Content or notes…"
+                  value={kbContent}
+                  onChange={(e) => setKbContent(e.target.value)}
+                />
+                <button type="submit" className="enterprise-team-pill-btn" disabled={busy || !kbTitle.trim()}>
+                  Add document
                 </button>
-              </div>
-              <p className="seneca-studio-card-subtitle">Test how Seneca will respond.</p>
-              <label className="seneca-studio-field-label" htmlFor="seneca-preview-q">
-                Manager question
-              </label>
-              <textarea
-                id="seneca-preview-q"
-                className="auth-input seneca-studio-textarea"
-                rows={3}
-                value={previewQuestion}
-                onChange={(e) => setPreviewQuestion(e.target.value)}
-              />
+              </form>
+            ) : null}
+          </section>
+        ) : null}
+
+        {panel === "templates" ? (
+          <section className="seneca-studio-card seneca-studio-card--panel">
+            <h3 className="seneca-studio-card-title">Prompt templates</h3>
+            <p className="seneca-studio-card-subtitle">
+              {isPlatform
+                ? "Platform instructions appended to Seneca's global coaching prompt."
+                : "Workspace instructions appended to Seneca's global coaching prompt."}
+            </p>
+            <div className="seneca-studio-templates">
+              {templates.length === 0 ? (
+                <p className="seneca-studio-empty">Templates will appear once the API is available.</p>
+              ) : (
+                templates.map((tpl) => (
+                  <div key={tpl.templateKey} className="seneca-studio-template">
+                    <label className="seneca-studio-field-label" htmlFor={`tpl-${tpl.templateKey}`}>
+                      {tpl.title}
+                    </label>
+                    <textarea
+                      id={`tpl-${tpl.templateKey}`}
+                      className="auth-input seneca-studio-textarea"
+                      rows={3}
+                      disabled={!canEdit}
+                      defaultValue={tpl.instructions}
+                      key={`${tpl.templateKey}-${tpl.version}`}
+                      onBlur={(e) => {
+                        if (!canEdit) return;
+                        if (e.target.value === tpl.instructions) return;
+                        void onSaveTemplate(tpl.templateKey, e.target.value);
+                      }}
+                    />
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        {panel === "preview" ? (
+          <section className="seneca-studio-card seneca-studio-preview-card seneca-studio-card--panel">
+            <div className="seneca-studio-card-head-row">
+              <h3 className="seneca-studio-card-title">Live preview</h3>
               <button
                 type="button"
-                className="auth-submit seneca-studio-preview-btn"
-                disabled={previewBusy || !previewQuestion.trim()}
-                onClick={() => void onGeneratePreview()}
+                className="seneca-studio-link-btn"
+                onClick={() =>
+                  setPreviewQuestion("Vera has missed two check-ins in a row. How should I address it?")
+                }
               >
-                {previewBusy ? "Generating…" : "Generate preview"}
+                Change scenario
               </button>
-
-              {preview ? (
-                <div className="seneca-studio-preview-result">
-                  <div className="seneca-studio-preview-you">
-                    <span>You</span>
-                    <p>{preview.question}</p>
-                  </div>
-                  <div className="seneca-studio-preview-seneca">
-                    <div className="seneca-studio-preview-seneca-head">
-                      <span aria-hidden>✦</span> Seneca
+            </div>
+            <div className="seneca-studio-preview-layout">
+              <div>
+                <label className="seneca-studio-field-label" htmlFor="seneca-preview-q">
+                  Manager question
+                </label>
+                <textarea
+                  id="seneca-preview-q"
+                  className="auth-input seneca-studio-textarea"
+                  rows={4}
+                  value={previewQuestion}
+                  onChange={(e) => setPreviewQuestion(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="seneca-studio-publish-btn seneca-studio-preview-run"
+                  disabled={previewBusy || !previewQuestion.trim()}
+                  onClick={() => void onGeneratePreview()}
+                >
+                  {previewBusy ? "Generating…" : "Generate preview"}
+                </button>
+              </div>
+              <div className="seneca-studio-preview-result-pane">
+                {preview ? (
+                  <div className="seneca-studio-preview-result">
+                    <div className="seneca-studio-preview-you">
+                      <span>You</span>
+                      <p>{preview.question}</p>
                     </div>
-                    <p>{preview.response}</p>
-                    {preview.promptVersion ? (
-                      <p className="seneca-studio-preview-meta">Prompt: {preview.promptVersion}</p>
-                    ) : null}
-                    {preview.knowledgeUsed?.length ? (
-                      <p className="seneca-studio-preview-meta">
-                        Knowledge: {preview.knowledgeUsed.join(", ")}
-                      </p>
-                    ) : null}
-                    <div className="seneca-studio-feedback">
-                      <button
-                        type="button"
-                        className={`seneca-studio-feedback-btn${feedbackSent === "helpful" ? " is-active" : ""}`}
-                        onClick={() => void onFeedback("helpful")}
-                        aria-label="Helpful"
-                      >
-                        👍
-                      </button>
-                      <button
-                        type="button"
-                        className={`seneca-studio-feedback-btn${feedbackSent === "needs_improvement" ? " is-active" : ""}`}
-                        onClick={() => void onFeedback("needs_improvement")}
-                        aria-label="Needs improvement"
-                      >
-                        👎
-                      </button>
-                      {feedbackSent ? (
-                        <span className="seneca-studio-preview-meta">Thanks for the feedback</span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="seneca-studio-empty">Generate a preview to see Seneca&apos;s response here.</p>
-              )}
-            </section>
-          </aside>
-        </div>
-
-        <div className="seneca-studio-secondary-grid">
-            <section className="seneca-studio-card">
-              <h3 className="seneca-studio-card-title">Knowledge base</h3>
-              <p className="seneca-studio-card-subtitle">
-                Active documents Seneca can use for coaching context.
-              </p>
-              <ul className="seneca-studio-kb-list">
-                {knowledge.length === 0 ? (
-                  <li className="seneca-studio-empty">No knowledge documents yet.</li>
-                ) : (
-                  knowledge.map((row) => (
-                    <li key={row.id} className="seneca-studio-kb-item">
-                      <div>
-                        <p className="seneca-studio-kb-title">{row.title}</p>
-                        <p className="seneca-studio-kb-meta">
-                          {row.category} · {row.status} · v{row.version}
-                        </p>
+                    <div className="seneca-studio-preview-seneca">
+                      <div className="seneca-studio-preview-seneca-head">
+                        <span aria-hidden>✦</span> Seneca
                       </div>
-                      {canEdit ? (
+                      <p>{preview.response}</p>
+                      {preview.promptVersion ? (
+                        <p className="seneca-studio-preview-meta">Prompt: {preview.promptVersion}</p>
+                      ) : null}
+                      {preview.knowledgeUsed?.length ? (
+                        <p className="seneca-studio-preview-meta">
+                          Knowledge: {preview.knowledgeUsed.join(", ")}
+                        </p>
+                      ) : null}
+                      <div className="seneca-studio-feedback">
                         <button
                           type="button"
-                          className="seneca-studio-icon-btn"
-                          aria-label={`Remove ${row.title}`}
-                          onClick={() => void onRemoveKnowledge(row.id)}
+                          className={`seneca-studio-feedback-btn${feedbackSent === "helpful" ? " is-active" : ""}`}
+                          onClick={() => void onFeedback("helpful")}
+                          aria-label="Helpful"
                         >
-                          ×
+                          👍
                         </button>
-                      ) : null}
-                    </li>
-                  ))
-                )}
-              </ul>
-              {canEdit ? (
-                <form className="seneca-studio-kb-form" onSubmit={(e) => void onAddKnowledge(e)}>
-                  <input
-                    className="auth-input"
-                    placeholder="Title"
-                    value={kbTitle}
-                    onChange={(e) => setKbTitle(e.target.value)}
-                    required
-                  />
-                  <input
-                    className="auth-input"
-                    placeholder="Category"
-                    value={kbCategory}
-                    onChange={(e) => setKbCategory(e.target.value)}
-                  />
-                  <textarea
-                    className="auth-input seneca-studio-textarea"
-                    rows={3}
-                    placeholder="Content or notes…"
-                    value={kbContent}
-                    onChange={(e) => setKbContent(e.target.value)}
-                  />
-                  <button type="submit" className="enterprise-team-pill-btn" disabled={busy || !kbTitle.trim()}>
-                    Add document
-                  </button>
-                </form>
-              ) : null}
-            </section>
-
-            <section className="seneca-studio-card">
-              <h3 className="seneca-studio-card-title">Prompt templates</h3>
-              <p className="seneca-studio-card-subtitle">
-                {isPlatform
-                  ? "Platform instructions appended to Seneca's global coaching prompt."
-                  : "Workspace instructions appended to Seneca's global coaching prompt."}
-              </p>
-              <div className="seneca-studio-templates">
-                {templates.length === 0 ? (
-                  <p className="seneca-studio-empty">Templates will appear once the API is available.</p>
-                ) : (
-                  templates.map((tpl) => (
-                    <div key={tpl.templateKey} className="seneca-studio-template">
-                      <label className="seneca-studio-field-label" htmlFor={`tpl-${tpl.templateKey}`}>
-                        {tpl.title}
-                      </label>
-                      <textarea
-                        id={`tpl-${tpl.templateKey}`}
-                        className="auth-input seneca-studio-textarea"
-                        rows={3}
-                        disabled={!canEdit}
-                        defaultValue={tpl.instructions}
-                        key={`${tpl.templateKey}-${tpl.version}`}
-                        onBlur={(e) => {
-                          if (!canEdit) return;
-                          if (e.target.value === tpl.instructions) return;
-                          void onSaveTemplate(tpl.templateKey, e.target.value);
-                        }}
-                      />
+                        <button
+                          type="button"
+                          className={`seneca-studio-feedback-btn${feedbackSent === "needs_improvement" ? " is-active" : ""}`}
+                          onClick={() => void onFeedback("needs_improvement")}
+                          aria-label="Needs improvement"
+                        >
+                          👎
+                        </button>
+                        {feedbackSent ? (
+                          <span className="seneca-studio-preview-meta">Thanks for the feedback</span>
+                        ) : null}
+                      </div>
                     </div>
-                  ))
+                  </div>
+                ) : (
+                  <p className="seneca-studio-empty">Generate a preview to see Seneca&apos;s response here.</p>
                 )}
               </div>
-            </section>
-        </div>
+            </div>
+          </section>
+        ) : null}
       </div>
 
       {noteModal ? (
@@ -1012,7 +985,7 @@ export function SenecaStudioPage({
               </button>
               <button
                 type="button"
-                className="auth-submit seneca-studio-publish-btn"
+                className="seneca-studio-publish-btn"
                 disabled={busy}
                 onClick={() => void confirmNoteModal()}
               >
