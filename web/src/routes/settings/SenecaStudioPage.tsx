@@ -5,18 +5,30 @@ import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import {
   COACHING_STYLE_OPTIONS,
   DEFAULT_STUDIO_DATA,
+  createPlatformSenecaKnowledge,
   createSenecaKnowledge,
+  deletePlatformSenecaKnowledge,
   deleteSenecaKnowledge,
+  fetchPlatformSenecaKnowledge,
+  fetchPlatformSenecaPromptTemplates,
+  fetchPlatformSenecaStudio,
+  fetchPlatformSenecaStudioVersions,
   fetchSenecaKnowledge,
   fetchSenecaPromptTemplates,
   fetchSenecaStudio,
   fetchSenecaStudioVersions,
+  previewPlatformSenecaStudio,
   previewSenecaStudio,
+  publishPlatformSenecaStudio,
   publishSenecaStudio,
+  restorePlatformSenecaStudioVersion,
   restoreSenecaStudioVersion,
+  savePlatformSenecaStudioDraft,
   saveSenecaStudioDraft,
   senecaStudioAccess,
+  submitPlatformSenecaGenerationFeedback,
   submitSenecaGenerationFeedback,
+  updatePlatformSenecaPromptTemplate,
   updateSenecaPromptTemplate,
   type SenecaCoachingStyle,
   type SenecaConfigVersionRow,
@@ -25,6 +37,7 @@ import {
   type SenecaPreviewResponse,
   type SenecaPromptTemplateRow,
   type SenecaResponseLength,
+  type SenecaStudioApiScope,
   type SenecaStudioData,
   type SenecaTone,
 } from "../../lib/seneca-studio-api";
@@ -190,12 +203,20 @@ function TermPills({
   );
 }
 
-export function SenecaStudioPage() {
+export function SenecaStudioPage({
+  scope = "workspace",
+  embedded = false,
+}: {
+  scope?: SenecaStudioApiScope;
+  embedded?: boolean;
+} = {}) {
+  const isPlatform = scope === "platform";
   const { me, teams, selectedTeamId } = useEnterpriseShell();
   const teamId = selectedTeamId || teams?.[0]?.id || "";
   const team = teams?.find((t) => t.id === teamId);
-  const access = senecaStudioAccess(team?.role);
-  const canEdit = access.canEdit;
+  const workspaceAccess = senecaStudioAccess(team?.role);
+  const canEdit = isPlatform ? me?.isAdmin === true : workspaceAccess.canEdit;
+  const canView = isPlatform ? me?.isAdmin === true : workspaceAccess.canView;
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -232,14 +253,19 @@ export function SenecaStudioPage() {
   }, []);
 
   const load = useCallback(async () => {
-    if (!teamId) return;
+    if (!isPlatform && !teamId) return;
     setLoading(true);
     setError(null);
     try {
       const [studioRes, knowledgeRes, templateRes] = await Promise.all([
-        fetchSenecaStudio(teamId),
-        fetchSenecaKnowledge(teamId).catch(() => [] as SenecaKnowledgeRow[]),
-        fetchSenecaPromptTemplates(teamId).catch(() => [] as SenecaPromptTemplateRow[]),
+        isPlatform ? fetchPlatformSenecaStudio() : fetchSenecaStudio(teamId),
+        (isPlatform ? fetchPlatformSenecaKnowledge() : fetchSenecaKnowledge(teamId)).catch(
+          () => [] as SenecaKnowledgeRow[],
+        ),
+        (isPlatform
+          ? fetchPlatformSenecaPromptTemplates()
+          : fetchSenecaPromptTemplates(teamId)
+        ).catch(() => [] as SenecaPromptTemplateRow[]),
       ]);
       setStudio(studioRes.studio ?? DEFAULT_STUDIO_DATA);
       setSource(studioRes.source);
@@ -255,7 +281,7 @@ export function SenecaStudioPage() {
     } finally {
       setLoading(false);
     }
-  }, [teamId]);
+  }, [isPlatform, teamId]);
 
   useEffect(() => {
     void load();
@@ -290,8 +316,13 @@ export function SenecaStudioPage() {
   }
 
   async function onSaveDraft() {
-    if (!teamId || !canEdit) return;
-    const res = await withBusy(() => saveSenecaStudioDraft(teamId, studio), "Draft saved.");
+    if (!canEdit) return;
+    if (!isPlatform && !teamId) return;
+    const res = await withBusy(
+      () =>
+        isPlatform ? savePlatformSenecaStudioDraft(studio) : saveSenecaStudioDraft(teamId, studio),
+      "Draft saved.",
+    );
     if (!res) return;
     setSource(res.source);
     setStatus(res.status);
@@ -301,12 +332,18 @@ export function SenecaStudioPage() {
   }
 
   async function onPublish() {
-    if (!teamId || !canEdit) return;
+    if (!canEdit) return;
+    if (!isPlatform && !teamId) return;
     if (dirty) {
-      const saved = await withBusy(() => saveSenecaStudioDraft(teamId, studio));
+      const saved = await withBusy(() =>
+        isPlatform ? savePlatformSenecaStudioDraft(studio) : saveSenecaStudioDraft(teamId, studio),
+      );
       if (!saved) return;
     }
-    const res = await withBusy(() => publishSenecaStudio(teamId), "Published.");
+    const res = await withBusy(
+      () => (isPlatform ? publishPlatformSenecaStudio() : publishSenecaStudio(teamId)),
+      "Published.",
+    );
     if (!res) return;
     setStudio(res.studio);
     setSource(res.source);
@@ -317,18 +354,27 @@ export function SenecaStudioPage() {
   }
 
   async function onOpenHistory() {
-    if (!teamId) return;
+    if (!isPlatform && !teamId) return;
     setHistoryOpen(true);
     try {
-      setVersions(await fetchSenecaStudioVersions(teamId));
+      setVersions(
+        isPlatform ? await fetchPlatformSenecaStudioVersions() : await fetchSenecaStudioVersions(teamId),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load version history.");
     }
   }
 
   async function onRestore(v: number) {
-    if (!teamId || !canEdit) return;
-    const res = await withBusy(() => restoreSenecaStudioVersion(teamId, v), `Restored v${v} as draft.`);
+    if (!canEdit) return;
+    if (!isPlatform && !teamId) return;
+    const res = await withBusy(
+      () =>
+        isPlatform
+          ? restorePlatformSenecaStudioVersion(v)
+          : restoreSenecaStudioVersion(teamId, v),
+      `Restored v${v} as draft.`,
+    );
     if (!res) return;
     setStudio(res.studio);
     setSource(res.source);
@@ -341,14 +387,21 @@ export function SenecaStudioPage() {
 
   async function onAddKnowledge(e: FormEvent) {
     e.preventDefault();
-    if (!teamId || !canEdit || !kbTitle.trim()) return;
+    if (!canEdit || !kbTitle.trim()) return;
+    if (!isPlatform && !teamId) return;
     const row = await withBusy(
       () =>
-        createSenecaKnowledge(teamId, {
-          title: kbTitle.trim(),
-          category: kbCategory.trim() || "general",
-          contentText: kbContent.trim(),
-        }),
+        isPlatform
+          ? createPlatformSenecaKnowledge({
+              title: kbTitle.trim(),
+              category: kbCategory.trim() || "general",
+              contentText: kbContent.trim(),
+            })
+          : createSenecaKnowledge(teamId, {
+              title: kbTitle.trim(),
+              category: kbCategory.trim() || "general",
+              contentText: kbContent.trim(),
+            }),
       "Knowledge added.",
     );
     if (!row) return;
@@ -359,15 +412,24 @@ export function SenecaStudioPage() {
   }
 
   async function onRemoveKnowledge(id: string) {
-    if (!teamId || !canEdit) return;
-    await withBusy(() => deleteSenecaKnowledge(teamId, id), "Knowledge removed.");
+    if (!canEdit) return;
+    if (!isPlatform && !teamId) return;
+    await withBusy(
+      () =>
+        isPlatform ? deletePlatformSenecaKnowledge(id) : deleteSenecaKnowledge(teamId, id),
+      "Knowledge removed.",
+    );
     setKnowledge((prev) => prev.filter((k) => k.id !== id));
   }
 
   async function onSaveTemplate(templateKey: string, instructions: string) {
-    if (!teamId || !canEdit) return;
+    if (!canEdit) return;
+    if (!isPlatform && !teamId) return;
     const row = await withBusy(
-      () => updateSenecaPromptTemplate(teamId, templateKey, instructions),
+      () =>
+        isPlatform
+          ? updatePlatformSenecaPromptTemplate(templateKey, instructions)
+          : updateSenecaPromptTemplate(teamId, templateKey, instructions),
       "Template saved.",
     );
     if (!row) return;
@@ -375,16 +437,20 @@ export function SenecaStudioPage() {
   }
 
   async function onGeneratePreview() {
-    if (!teamId || !previewQuestion.trim()) return;
+    if (!previewQuestion.trim()) return;
+    if (!isPlatform && !teamId) return;
     setPreviewBusy(true);
     setError(null);
     setFeedbackSent(null);
     try {
       if (canEdit && dirty) {
-        await saveSenecaStudioDraft(teamId, studio);
+        if (isPlatform) await savePlatformSenecaStudioDraft(studio);
+        else await saveSenecaStudioDraft(teamId, studio);
         setDirty(false);
       }
-      const res = await previewSenecaStudio(teamId, { question: previewQuestion.trim() });
+      const res = isPlatform
+        ? await previewPlatformSenecaStudio({ question: previewQuestion.trim() })
+        : await previewSenecaStudio(teamId, { question: previewQuestion.trim() });
       setPreview(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview failed.");
@@ -394,21 +460,26 @@ export function SenecaStudioPage() {
   }
 
   async function onFeedback(rating: SenecaFeedbackRating) {
-    if (!teamId || !preview?.generationId) return;
+    if (!preview?.generationId) return;
+    if (!isPlatform && !teamId) return;
     try {
-      await submitSenecaGenerationFeedback(teamId, preview.generationId, { rating });
+      if (isPlatform) {
+        await submitPlatformSenecaGenerationFeedback(preview.generationId, { rating });
+      } else {
+        await submitSenecaGenerationFeedback(teamId, preview.generationId, { rating });
+      }
       setFeedbackSent(rating);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save feedback.");
     }
   }
 
-  if (me === undefined || teams === null) {
+  if (me === undefined || (!isPlatform && teams === null)) {
     return <EnterprisePageLoading label="Loading Seneca Studio" />;
   }
 
-  if (!access.canView) {
-    return <Navigate to="/settings" replace />;
+  if (!canView) {
+    return <Navigate to={isPlatform ? "/dashboard" : "/settings"} replace />;
   }
 
   if (loading) {
@@ -416,21 +487,42 @@ export function SenecaStudioPage() {
   }
 
   return (
-    <div className="enterprise-tab-shell seneca-studio-page" data-testid="seneca-studio-page">
+    <div
+      className={`seneca-studio-page${embedded ? " seneca-studio-page--embedded" : " enterprise-tab-shell"}`}
+      data-testid={isPlatform ? "admin-seneca-studio" : "seneca-studio-page"}
+    >
       <div className="seneca-studio-page-inner">
-        <nav className="seneca-studio-breadcrumb" aria-label="Breadcrumb">
-          <Link to="/settings">Settings</Link>
-          <span aria-hidden>›</span>
-          <Link to="/settings/ai">AI</Link>
-          <span aria-hidden>›</span>
-          <span>Seneca Studio</span>
-        </nav>
+        {!embedded ? (
+          <nav className="seneca-studio-breadcrumb" aria-label="Breadcrumb">
+            {isPlatform ? (
+              <>
+                <Link to="/admin">Admin</Link>
+                <span aria-hidden>›</span>
+                <span>Seneca Studio</span>
+              </>
+            ) : (
+              <>
+                <Link to="/settings">Settings</Link>
+                <span aria-hidden>›</span>
+                <Link to="/settings/ai">AI</Link>
+                <span aria-hidden>›</span>
+                <span>Seneca Studio</span>
+              </>
+            )}
+          </nav>
+        ) : null}
 
         <header className="seneca-studio-header">
           <div>
-            <h1 className="seneca-studio-title">Seneca Studio</h1>
+            {embedded ? (
+              <h2 className="seneca-studio-title">Seneca Studio</h2>
+            ) : (
+              <h1 className="seneca-studio-title">Seneca Studio</h1>
+            )}
             <p className="seneca-studio-subtitle">
-              Configure how Seneca coaches your managers and teams.
+              {isPlatform
+                ? "Platform-wide coaching tone, rules, knowledge, and templates for every workspace."
+                : "Configure how Seneca coaches your managers and teams."}
             </p>
           </div>
           <div className="seneca-studio-header-actions">
@@ -673,7 +765,9 @@ export function SenecaStudioPage() {
             <section className="seneca-studio-card">
               <h3 className="seneca-studio-card-title">Prompt templates</h3>
               <p className="seneca-studio-card-subtitle">
-                Workspace instructions appended to Seneca&apos;s global coaching prompt.
+                {isPlatform
+                  ? "Platform instructions appended to Seneca's global coaching prompt."
+                  : "Workspace instructions appended to Seneca's global coaching prompt."}
               </p>
               <div className="seneca-studio-templates">
                 {templates.length === 0 ? (

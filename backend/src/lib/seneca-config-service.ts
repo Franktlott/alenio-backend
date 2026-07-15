@@ -24,6 +24,11 @@ export type SenecaOwnerRef = {
   ownerId: string;
 };
 
+/** Platform-wide Seneca Studio (Admin). */
+export function globalOwner(): SenecaOwnerRef {
+  return { ownerType: "GLOBAL", ownerId: "platform" };
+}
+
 /** Future Organization inheritance plugs in here without changing Studio UI. */
 export function workspaceOwner(teamId: string): SenecaOwnerRef {
   return { ownerType: "WORKSPACE", ownerId: teamId };

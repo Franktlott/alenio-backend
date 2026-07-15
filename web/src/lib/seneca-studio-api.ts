@@ -204,6 +204,8 @@ function studioBase(teamId: string) {
   return `/api/teams/${encodeURIComponent(teamId)}/seneca-studio`;
 }
 
+const PLATFORM_STUDIO_BASE = "/api/admin/seneca-studio";
+
 /** Owner can edit; team_leader / admin can view; members have no access. */
 export function senecaStudioAccess(role: string | null | undefined): {
   canView: boolean;
@@ -215,12 +217,24 @@ export function senecaStudioAccess(role: string | null | undefined): {
   return { canView: false, canEdit: false };
 }
 
+export type SenecaStudioApiScope = "workspace" | "platform";
+
 export function fetchSenecaStudio(teamId: string) {
   return apiGetJson<{ data: SenecaStudioResponse }>(`${studioBase(teamId)}/studio`).then((r) => r.data);
 }
 
+export function fetchPlatformSenecaStudio() {
+  return apiGetJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio`).then((r) => r.data);
+}
+
 export function saveSenecaStudioDraft(teamId: string, studio: SenecaStudioData) {
   return apiPutJson<{ data: SenecaStudioResponse }>(`${studioBase(teamId)}/studio`, { studio }).then(
+    (r) => r.data,
+  );
+}
+
+export function savePlatformSenecaStudioDraft(studio: SenecaStudioData) {
+  return apiPutJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio`, { studio }).then(
     (r) => r.data,
   );
 }
@@ -231,14 +245,32 @@ export function publishSenecaStudio(teamId: string) {
   );
 }
 
+export function publishPlatformSenecaStudio() {
+  return apiPostJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio/publish`, {}).then(
+    (r) => r.data,
+  );
+}
+
 export function fetchSenecaStudioVersions(teamId: string) {
   return apiGetJson<{ data: SenecaConfigVersionRow[] }>(`${studioBase(teamId)}/studio/versions`).then(
     (r) => r.data,
   );
 }
 
+export function fetchPlatformSenecaStudioVersions() {
+  return apiGetJson<{ data: SenecaConfigVersionRow[] }>(`${PLATFORM_STUDIO_BASE}/studio/versions`).then(
+    (r) => r.data,
+  );
+}
+
 export function restoreSenecaStudioVersion(teamId: string, version: number) {
   return apiPostJson<{ data: SenecaStudioResponse }>(`${studioBase(teamId)}/studio/restore`, {
+    version,
+  }).then((r) => r.data);
+}
+
+export function restorePlatformSenecaStudioVersion(version: number) {
+  return apiPostJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio/restore`, {
     version,
   }).then((r) => r.data);
 }
@@ -285,6 +317,12 @@ export function fetchSenecaKnowledge(teamId: string) {
   );
 }
 
+export function fetchPlatformSenecaKnowledge() {
+  return apiGetJson<{ data: SenecaKnowledgeRow[] }>(`${PLATFORM_STUDIO_BASE}/knowledge`).then(
+    (r) => r.data,
+  );
+}
+
 export function createSenecaKnowledge(
   teamId: string,
   body: {
@@ -296,6 +334,18 @@ export function createSenecaKnowledge(
   },
 ) {
   return apiPostJson<{ data: SenecaKnowledgeRow }>(`${studioBase(teamId)}/knowledge`, body).then(
+    (r) => r.data,
+  );
+}
+
+export function createPlatformSenecaKnowledge(body: {
+  title: string;
+  category?: string;
+  description?: string;
+  contentText?: string;
+  status?: "ACTIVE" | "ARCHIVED";
+}) {
+  return apiPostJson<{ data: SenecaKnowledgeRow }>(`${PLATFORM_STUDIO_BASE}/knowledge`, body).then(
     (r) => r.data,
   );
 }
@@ -323,9 +373,21 @@ export function deleteSenecaKnowledge(teamId: string, knowledgeId: string) {
   ).then((r) => r.data);
 }
 
+export function deletePlatformSenecaKnowledge(knowledgeId: string) {
+  return apiDeleteJson<{ data: { ok: true } }>(
+    `${PLATFORM_STUDIO_BASE}/knowledge/${encodeURIComponent(knowledgeId)}`,
+  ).then((r) => r.data);
+}
+
 export function fetchSenecaPromptTemplates(teamId: string) {
   return apiGetJson<{ data: SenecaPromptTemplateRow[] }>(
     `${studioBase(teamId)}/prompt-templates`,
+  ).then((r) => r.data);
+}
+
+export function fetchPlatformSenecaPromptTemplates() {
+  return apiGetJson<{ data: SenecaPromptTemplateRow[] }>(
+    `${PLATFORM_STUDIO_BASE}/prompt-templates`,
   ).then((r) => r.data);
 }
 
@@ -340,11 +402,24 @@ export function updateSenecaPromptTemplate(
   ).then((r) => r.data);
 }
 
+export function updatePlatformSenecaPromptTemplate(templateKey: string, instructions: string) {
+  return apiPatchJson<{ data: SenecaPromptTemplateRow }>(
+    `${PLATFORM_STUDIO_BASE}/prompt-templates/${encodeURIComponent(templateKey)}`,
+    { instructions },
+  ).then((r) => r.data);
+}
+
 export function previewSenecaStudio(
   teamId: string,
   body: { question: string; templateKey?: string | null },
 ) {
   return apiPostJson<{ data: SenecaPreviewResponse }>(`${studioBase(teamId)}/preview`, body).then(
+    (r) => r.data,
+  );
+}
+
+export function previewPlatformSenecaStudio(body: { question: string; templateKey?: string | null }) {
+  return apiPostJson<{ data: SenecaPreviewResponse }>(`${PLATFORM_STUDIO_BASE}/preview`, body).then(
     (r) => r.data,
   );
 }
@@ -356,6 +431,16 @@ export function submitSenecaGenerationFeedback(
 ) {
   return apiPostJson<{ data: { ok: true } }>(
     `${studioBase(teamId)}/generations/${encodeURIComponent(generationId)}/feedback`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function submitPlatformSenecaGenerationFeedback(
+  generationId: string,
+  body: { rating: SenecaFeedbackRating; note?: string },
+) {
+  return apiPostJson<{ data: { ok: true } }>(
+    `${PLATFORM_STUDIO_BASE}/generations/${encodeURIComponent(generationId)}/feedback`,
     body,
   ).then((r) => r.data);
 }

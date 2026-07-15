@@ -4,12 +4,13 @@ import { SENECA_DATA_GROUNDING_RULES } from "./seneca-grounding";
 import {
   getPublishedOrDraftOperational,
   getPublishedOrDraftStudio,
+  globalOwner,
   listActiveKnowledge,
   listPromptTemplates,
   type SenecaOwnerRef,
   workspaceOwner,
 } from "./seneca-config-service";
-import type { SenecaPromptTemplateKey } from "./seneca-config-types";
+import type { SenecaPromptTemplateKey, SenecaStudioData } from "./seneca-config-types";
 
 export type AssembledSenecaPrompt = {
   systemPrompt: string;
@@ -20,40 +21,12 @@ export type AssembledSenecaPrompt = {
   operationalVersion: number | null;
 };
 
-/**
- * Prompt assembly chain (future-proof for Organizations):
- * Global Core → (Organization Studio) → Workspace Studio → Operational Context → request context
- */
-export async function assembleSenecaSystemPrompt(
-  prisma: PrismaClient,
-  opts: {
-    owner: SenecaOwnerRef;
-    /** Optional Organization owner for future inheritance. */
-    organizationOwner?: SenecaOwnerRef | null;
-    templateKey?: SenecaPromptTemplateKey | null;
-    userContext?: string | null;
-    requestContext?: string | null;
-  },
-): Promise<AssembledSenecaPrompt> {
-  const layers: string[] = [];
-  const knowledgeUsed: string[] = [];
-
-  layers.push(`# Global Seneca Core v${SENECA_GLOBAL_CORE.version}`);
-  layers.push(SENECA_GLOBAL_CORE.baseSystemPrompt);
-  layers.push("## Safety rules\n" + SENECA_GLOBAL_CORE.safetyRules.map((r) => `- ${r}`).join("\n"));
-  layers.push("## Privacy rules\n" + SENECA_GLOBAL_CORE.privacyRules.map((r) => `- ${r}`).join("\n"));
-  layers.push(
-    "## Coaching framework\n" + SENECA_GLOBAL_CORE.coachingFramework.map((r) => `- ${r}`).join("\n"),
-  );
-  layers.push(
-    "## Response formatting\n" + SENECA_GLOBAL_CORE.responseFormatting.map((r) => `- ${r}`).join("\n"),
-  );
-  layers.push(SENECA_DATA_GROUNDING_RULES);
-
-  // Future: if opts.organizationOwner, load ORGANIZATION STUDIO here.
-
-  const studio = await getPublishedOrDraftStudio(prisma, opts.owner);
-  layers.push(`# Workspace Seneca Studio (${studio.source}, v${studio.row?.version ?? 0})`);
+function pushStudioLayers(
+  layers: string[],
+  heading: string,
+  studio: { data: SenecaStudioData; source: string; row: { version: number } | null },
+) {
+  layers.push(`# ${heading} (${studio.source}, v${studio.row?.version ?? 0})`);
   layers.push(`Tone: ${studio.data.tone}`);
   layers.push(`Response length: ${studio.data.responseLength}`);
   layers.push(`Coaching style: ${studio.data.coachingStyle}`);
@@ -73,44 +46,98 @@ export async function assembleSenecaSystemPrompt(
   if (studio.data.avoidedTerms.length) {
     layers.push("## Avoid terminology\n" + studio.data.avoidedTerms.map((t) => `- ${t}`).join("\n"));
   }
+}
 
-  const operational = await getPublishedOrDraftOperational(prisma, opts.owner);
-  layers.push(`# Workspace Operational Context (${operational.source}, v${operational.row?.version ?? 0})`);
-  if (operational.data.currentPriorities.length) {
-    layers.push(
-      "## Current priorities\n" + operational.data.currentPriorities.map((p) => `- ${p}`).join("\n"),
-    );
+/**
+ * Prompt assembly chain (future-proof for Organizations):
+ * Global Core → Platform Studio → (Organization Studio) → Workspace Studio → Operational Context → request context
+ */
+export async function assembleSenecaSystemPrompt(
+  prisma: PrismaClient,
+  opts: {
+    owner: SenecaOwnerRef;
+    /** Optional Organization owner for future inheritance. */
+    organizationOwner?: SenecaOwnerRef | null;
+    templateKey?: SenecaPromptTemplateKey | null;
+    userContext?: string | null;
+    requestContext?: string | null;
+  },
+): Promise<AssembledSenecaPrompt> {
+  const layers: string[] = [];
+  const knowledgeUsed: string[] = [];
+  const isPlatformOnly = opts.owner.ownerType === "GLOBAL";
+
+  layers.push(`# Global Seneca Core v${SENECA_GLOBAL_CORE.version}`);
+  layers.push(SENECA_GLOBAL_CORE.baseSystemPrompt);
+  layers.push("## Safety rules\n" + SENECA_GLOBAL_CORE.safetyRules.map((r) => `- ${r}`).join("\n"));
+  layers.push("## Privacy rules\n" + SENECA_GLOBAL_CORE.privacyRules.map((r) => `- ${r}`).join("\n"));
+  layers.push(
+    "## Coaching framework\n" + SENECA_GLOBAL_CORE.coachingFramework.map((r) => `- ${r}`).join("\n"),
+  );
+  layers.push(
+    "## Response formatting\n" + SENECA_GLOBAL_CORE.responseFormatting.map((r) => `- ${r}`).join("\n"),
+  );
+  layers.push(SENECA_DATA_GROUNDING_RULES);
+
+  const platformStudio = await getPublishedOrDraftStudio(prisma, globalOwner());
+  if (!isPlatformOnly || platformStudio.source !== "default") {
+    pushStudioLayers(layers, "Platform Seneca Studio", platformStudio);
   }
-  if (operational.data.currentGoals.length) {
+
+  // Future: if opts.organizationOwner, load ORGANIZATION STUDIO here.
+
+  const studio = isPlatformOnly
+    ? platformStudio
+    : await getPublishedOrDraftStudio(prisma, opts.owner);
+  if (!isPlatformOnly) {
+    pushStudioLayers(layers, "Workspace Seneca Studio", studio);
+  }
+
+  let operationalVersion: number | null = null;
+  let operationalSource: string = "default";
+  if (!isPlatformOnly) {
+    const operational = await getPublishedOrDraftOperational(prisma, opts.owner);
+    operationalVersion = operational.row?.version ?? null;
+    operationalSource = operational.source;
+    layers.push(`# Workspace Operational Context (${operational.source}, v${operational.row?.version ?? 0})`);
+    if (operational.data.currentPriorities.length) {
+      layers.push(
+        "## Current priorities\n" + operational.data.currentPriorities.map((p) => `- ${p}`).join("\n"),
+      );
+    }
+    if (operational.data.currentGoals.length) {
+      layers.push(
+        "## Current goals\n" +
+          operational.data.currentGoals
+            .map((g) => `- ${g.title}${g.description ? `: ${g.description}` : ""} [${g.status}]`)
+            .join("\n"),
+      );
+    }
+    if (operational.data.currentInitiatives.length) {
+      layers.push(
+        "## Current initiatives\n" + operational.data.currentInitiatives.map((i) => `- ${i}`).join("\n"),
+      );
+    }
+    if (operational.data.focusAreas.length) {
+      layers.push("## Focus areas\n" + operational.data.focusAreas.map((f) => `- ${f}`).join("\n"));
+    }
+    if (operational.data.workspaceNotes.trim()) {
+      layers.push("## Workspace notes\n" + operational.data.workspaceNotes.trim());
+    }
     layers.push(
-      "## Current goals\n" +
-        operational.data.currentGoals
-          .map((g) => `- ${g.title}${g.description ? `: ${g.description}` : ""} [${g.status}]`)
+      "## Recognition preferences\n" +
+        Object.entries(operational.data.recognitionPreferences)
+          .map(([k, v]) => `- ${k}: ${v ? "yes" : "no"}`)
           .join("\n"),
     );
   }
-  if (operational.data.currentInitiatives.length) {
-    layers.push(
-      "## Current initiatives\n" + operational.data.currentInitiatives.map((i) => `- ${i}`).join("\n"),
-    );
-  }
-  if (operational.data.focusAreas.length) {
-    layers.push("## Focus areas\n" + operational.data.focusAreas.map((f) => `- ${f}`).join("\n"));
-  }
-  if (operational.data.workspaceNotes.trim()) {
-    layers.push("## Workspace notes\n" + operational.data.workspaceNotes.trim());
-  }
-  layers.push(
-    "## Recognition preferences\n" +
-      Object.entries(operational.data.recognitionPreferences)
-        .map(([k, v]) => `- ${k}: ${v ? "yes" : "no"}`)
-        .join("\n"),
-  );
 
-  const knowledge = await listActiveKnowledge(prisma, opts.owner);
+  const platformKnowledge = await listActiveKnowledge(prisma, globalOwner());
+  const workspaceKnowledge = isPlatformOnly ? [] : await listActiveKnowledge(prisma, opts.owner);
+  const knowledge = [...platformKnowledge, ...workspaceKnowledge].slice(0, 12);
   if (knowledge.length) {
     layers.push("# Knowledge base (active documents only)");
-    for (const doc of knowledge.slice(0, 12)) {
+    for (const doc of knowledge) {
       knowledgeUsed.push(`${doc.title} v${doc.version}`);
       const body = doc.contentText.trim().slice(0, 4000);
       layers.push(`## ${doc.title} (${doc.category})\n${doc.description ?? ""}\n${body}`);
@@ -118,8 +145,11 @@ export async function assembleSenecaSystemPrompt(
   }
 
   if (opts.templateKey) {
-    const templates = await listPromptTemplates(prisma, opts.owner);
-    const match = templates.find((t) => t.templateKey === opts.templateKey);
+    const workspaceTemplates = isPlatformOnly ? [] : await listPromptTemplates(prisma, opts.owner);
+    const platformTemplates = await listPromptTemplates(prisma, globalOwner());
+    const match =
+      workspaceTemplates.find((t) => t.templateKey === opts.templateKey && t.instructions.trim()) ??
+      platformTemplates.find((t) => t.templateKey === opts.templateKey && t.instructions.trim());
     if (match?.instructions.trim()) {
       layers.push(`# Prompt template: ${match.title}\n${match.instructions.trim()}`);
     }
@@ -134,17 +164,18 @@ export async function assembleSenecaSystemPrompt(
 
   const promptVersion = [
     `global:${SENECA_GLOBAL_CORE.version}`,
+    `platform:${platformStudio.row?.version ?? 0}:${platformStudio.source}`,
     `studio:${studio.row?.version ?? 0}:${studio.source}`,
-    `ops:${operational.row?.version ?? 0}:${operational.source}`,
+    `ops:${operationalVersion ?? 0}:${operationalSource}`,
   ].join("|");
 
   return {
     systemPrompt: layers.join("\n\n"),
     promptVersion,
     knowledgeUsed,
-    contextLayers: ["global", "studio", "operational", "knowledge", "user", "request"],
+    contextLayers: ["global", "platform", "studio", "operational", "knowledge", "user", "request"],
     studioVersion: studio.row?.version ?? null,
-    operationalVersion: operational.row?.version ?? null,
+    operationalVersion,
   };
 }
 

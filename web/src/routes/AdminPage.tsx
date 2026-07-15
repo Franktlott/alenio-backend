@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { AlenioNoticeModal } from "../components/AlenioNoticeModal";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { UserAvatar } from "../components/UserAvatar";
@@ -16,13 +16,20 @@ import {
   type AdminUserDetail,
   type AdminUserRow,
 } from "../lib/admin-api";
+import { SenecaStudioPage } from "./settings/SenecaStudioPage";
 
-type AdminSection = "users" | "workspaces";
+type AdminSection = "users" | "workspaces" | "seneca-studio";
+
+function parseAdminSection(raw: string | null): AdminSection {
+  if (raw === "workspaces" || raw === "seneca-studio") return raw;
+  return "users";
+}
 
 export function AdminPage() {
   const { me } = useEnterpriseShell();
   const queryClient = useQueryClient();
-  const [section, setSection] = useState<AdminSection>("users");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [section, setSection] = useState<AdminSection>(() => parseAdminSection(searchParams.get("tab")));
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -30,6 +37,21 @@ export function AdminPage() {
   const [notice, setNotice] = useState<{ title: string; message: string; tone: "success" | "error" | "info" } | null>(
     null,
   );
+
+  useEffect(() => {
+    const next = parseAdminSection(searchParams.get("tab"));
+    setSection((prev) => (prev === next ? prev : next));
+  }, [searchParams]);
+
+  function selectSection(next: AdminSection) {
+    setSection(next);
+    if (next === "users") {
+      setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ tab: next }, { replace: true });
+    }
+    if (next !== "users") setSelectedUserId(null);
+  }
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 280);
@@ -160,7 +182,11 @@ export function AdminPage() {
       <div className="enterprise-admin-header">
         <div>
           <h1 className="enterprise-admin-title">Admin</h1>
-          <p className="enterprise-muted">Platform users and workspaces</p>
+          <p className="enterprise-muted">
+            {section === "seneca-studio"
+              ? "Platform Seneca coaching configuration"
+              : "Platform users and workspaces"}
+          </p>
         </div>
         <div className="enterprise-admin-segments" role="tablist" aria-label="Admin sections">
           <button
@@ -168,7 +194,7 @@ export function AdminPage() {
             role="tab"
             aria-selected={section === "users"}
             className={`enterprise-admin-segment${section === "users" ? " enterprise-admin-segment--active" : ""}`}
-            onClick={() => setSection("users")}
+            onClick={() => selectSection("users")}
           >
             Users
           </button>
@@ -177,17 +203,26 @@ export function AdminPage() {
             role="tab"
             aria-selected={section === "workspaces"}
             className={`enterprise-admin-segment${section === "workspaces" ? " enterprise-admin-segment--active" : ""}`}
-            onClick={() => {
-              setSection("workspaces");
-              setSelectedUserId(null);
-            }}
+            onClick={() => selectSection("workspaces")}
           >
             Workspaces
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={section === "seneca-studio"}
+            className={`enterprise-admin-segment${section === "seneca-studio" ? " enterprise-admin-segment--active" : ""}`}
+            onClick={() => selectSection("seneca-studio")}
+            data-testid="admin-seneca-studio-tab"
+          >
+            Seneca Studio
           </button>
         </div>
       </div>
 
-      {section === "users" ? (
+      {section === "seneca-studio" ? (
+        <SenecaStudioPage scope="platform" embedded />
+      ) : section === "users" ? (
         <div className={`enterprise-admin-layout${selectedUserId ? " enterprise-admin-layout--detail" : ""}`}>
           <div className="enterprise-admin-list">
             <label className="enterprise-admin-search">

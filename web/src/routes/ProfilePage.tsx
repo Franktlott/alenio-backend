@@ -187,7 +187,7 @@ export function ProfilePage() {
                 <div>
                   <h2 className="enterprise-card-title enterprise-card-title-spaced">AI</h2>
                   <p className="enterprise-muted seneca-studio-settings-entry-desc">
-                    Configure Seneca coaching and workspace context for{" "}
+                    Set workspace priorities and context Seneca should keep in mind for{" "}
                     {activeTeam?.name ?? "this workspace"}.
                     {!aiAccess.canEdit ? " View only for your role." : null}
                   </p>

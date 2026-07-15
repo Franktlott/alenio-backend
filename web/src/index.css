@@ -40558,6 +40558,25 @@ button.enterprise-profile-legal-link {
   min-height: 100%;
 }
 
+.seneca-studio-page--embedded {
+  background: transparent;
+  min-height: 0;
+}
+
+.seneca-studio-page--embedded .seneca-studio-page-inner {
+  max-width: none;
+  margin: 0;
+  padding: 0 0 2rem;
+}
+
+.seneca-studio-page--embedded .seneca-studio-header {
+  margin-top: 0.25rem;
+}
+
+.seneca-studio-page--embedded .seneca-studio-title {
+  font-size: 1.25rem;
+}
+
 .seneca-studio-page-inner {
   max-width: 1280px;
   margin: 0 auto;

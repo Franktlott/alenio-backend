@@ -29,7 +29,8 @@ export function SettingsAiHubPage() {
           <div>
             <h1 className="seneca-studio-title">AI</h1>
             <p className="seneca-studio-subtitle">
-              Configure how Seneca coaches leaders in {team?.name ?? "this workspace"}.
+              Workspace context Seneca should keep in mind for {team?.name ?? "this workspace"}.
+              Platform coaching defaults live in Admin → Seneca Studio.
             </p>
           </div>
           {!access.canEdit ? (
@@ -38,21 +39,6 @@ export function SettingsAiHubPage() {
         </header>
 
         <div className="seneca-studio-hub-grid">
-          <Link
-            to="/settings/ai/seneca-studio"
-            className="seneca-studio-hub-card"
-            data-testid="settings-ai-seneca-studio-card"
-          >
-            <span className="seneca-studio-hub-card-icon" aria-hidden>
-              ✦
-            </span>
-            <h2 className="seneca-studio-hub-card-title">Seneca Studio</h2>
-            <p className="seneca-studio-hub-card-desc">
-              Coaching tone, always/never rules, terminology, knowledge base, and prompt templates.
-            </p>
-            <span className="seneca-studio-hub-card-cta">Open Studio →</span>
-          </Link>
-
           <Link
             to="/settings/ai/workspace-context"
             className="seneca-studio-hub-card"
