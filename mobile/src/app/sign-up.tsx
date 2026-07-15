@@ -11,7 +11,9 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { authClient, clearAccessToken, setAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { clearAccessToken, setAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { sendEmailVerificationOtp, signUpWithEmailPassword } from "@/lib/auth/auth-api";
+import { signInWithEmailPassword } from "@/lib/auth/sign-in-email";
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { setPendingSignUp } from "@/lib/auth/pending-signup";
 import { formatAuthFlowError, isEmailAlreadyRegisteredError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
@@ -79,23 +81,23 @@ export default function SignUp() {
 
     setLoading(true);
     try {
-      const result = await authClient.signUp.email({
+      console.warn("[alenio-auth] sign-up start", { emailLen: emailNorm.length });
+      const result = await signUpWithEmailPassword({
         name: name.trim(),
         email: emailNorm,
         password,
       });
+      console.warn("[alenio-auth] sign-up result", {
+        ok: result.ok,
+        status: result.status,
+        errorMsg: result.error?.message ?? null,
+      });
       if (result.error) {
         if (isEmailNotVerifiedError(result.error) || isEmailAlreadyRegisteredError(result.error)) {
-          const signIn = await authClient.signIn.email({
-            email: emailNorm,
-            password,
-          });
+          const signIn = await signInWithEmailPassword(emailNorm, password);
           if (signIn.error && isEmailNotVerifiedError(signIn.error)) {
             try {
-              await authClient.emailOtp.sendVerificationOtp({
-                email: emailNorm,
-                type: "email-verification",
-              });
+              await sendEmailVerificationOtp(emailNorm);
             } catch {
               /* still send user to verify screen */
             }
@@ -138,17 +140,21 @@ export default function SignUp() {
         return;
       }
 
-      if (!result.data?.user) {
+      const user =
+        result.data && typeof result.data === "object"
+          ? (result.data as { user?: unknown }).user
+          : null;
+      if (!user) {
         setError("Account could not be confirmed. Please try signing in.");
         router.replace("/sign-in");
         return;
       }
 
       // Sync Better Auth user into the app database while session/token may still be present.
-      setAccessTokenFromAuthData(result);
+      setAccessTokenFromAuthData(result.data);
       await provisionBackendUserAfterAuth();
 
-      // Verification email is sent on signUp.email — do not send again here.
+      // Verification email is sent on sign-up — do not send again here.
       clearAccessToken();
       markSessionSignedOut(60_000);
       setPendingSignUp(emailNorm, password);
@@ -227,7 +233,7 @@ export default function SignUp() {
       <SafeAreaView edges={["top"]}>
         <View className="items-center py-10 px-6">
           <Image source={require("@/assets/alenio-logo-white.png")} style={{ width: 200, height: 72 }} resizeMode="contain" />
-          <Text className="text-white/80 text-base mt-2">Connect. Execute. Celebrate</Text>
+          <Text className="text-white/80 text-base mt-2">Connect. Execute. Elevate.</Text>
         </View>
       </SafeAreaView>
     </LinearGradient>

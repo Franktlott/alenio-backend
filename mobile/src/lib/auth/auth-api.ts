@@ -1,7 +1,16 @@
 import { getBackendUrl } from "../backend-url";
+import { setAccessToken, setAccessTokenFromAuthData } from "./auth-client";
 import { safeFetch } from "./safe-fetch";
 
 export type AuthApiError = { message?: string; code?: string } | null;
+
+export type AuthApiResult = {
+  ok: boolean;
+  status: number;
+  data: unknown;
+  error: AuthApiError;
+  authToken: string | null;
+};
 
 function pickError(body: unknown, fallback: string): { message: string; code?: string } {
   const rec = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
@@ -17,11 +26,20 @@ function pickError(body: unknown, fallback: string): { message: string; code?: s
   return { message, code };
 }
 
+function captureAuthToken(res: Response, data: unknown): string | null {
+  const headerToken = res.headers.get("set-auth-token")?.trim() || null;
+  if (headerToken) {
+    setAccessToken(headerToken);
+  }
+  const fromBody = setAccessTokenFromAuthData(data);
+  return headerToken ?? fromBody;
+}
+
 /** POST JSON to Better Auth `/api/auth/*` using XHR (avoids Expo winter fetch crash). */
 export async function postAuthApi(
   path: string,
   body: Record<string, unknown>,
-): Promise<{ ok: boolean; status: number; data: unknown; error: AuthApiError }> {
+): Promise<AuthApiResult> {
   const url = `${getBackendUrl()}/api/auth${path.startsWith("/") ? path : `/${path}`}`;
   try {
     const res = await safeFetch(url, {
@@ -39,14 +57,53 @@ export async function postAuthApi(
     } catch {
       data = null;
     }
+    const authToken = captureAuthToken(res, data);
     if (!res.ok) {
-      return { ok: false, status: res.status, data, error: pickError(data, `Request failed (${res.status})`) };
+      return {
+        ok: false,
+        status: res.status,
+        data,
+        error: pickError(data, `Request failed (${res.status})`),
+        authToken,
+      };
     }
-    return { ok: true, status: res.status, data, error: null };
+    return { ok: true, status: res.status, data, error: null, authToken };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, status: 0, data: null, error: { message: message || "Network request failed" } };
+    return {
+      ok: false,
+      status: 0,
+      data: null,
+      error: { message: message || "Network request failed" },
+      authToken: null,
+    };
   }
+}
+
+export async function signUpWithEmailPassword(input: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  return postAuthApi("/sign-up/email", {
+    name: input.name,
+    email: input.email,
+    password: input.password,
+  });
+}
+
+export async function sendEmailVerificationOtp(email: string) {
+  return postAuthApi("/email-otp/send-verification-otp", {
+    email,
+    type: "email-verification",
+  });
+}
+
+export async function verifyEmailOtp(email: string, otp: string) {
+  return postAuthApi("/email-otp/verify-email", {
+    email,
+    otp,
+  });
 }
 
 export async function sendForgetPasswordOtp(email: string) {
@@ -74,7 +131,7 @@ export async function sendForgetPasswordOtp(email: string) {
       data,
     });
     if (res.ok) {
-      return { ok: true, status: res.status, data, error: null as AuthApiError };
+      return { ok: true, status: res.status, data, error: null as AuthApiError, authToken: null };
     }
   } catch (err) {
     console.warn("[alenio-auth] password-reset/request failed, falling back", err);

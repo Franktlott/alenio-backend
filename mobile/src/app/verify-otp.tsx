@@ -15,12 +15,16 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { authClient, getAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { getAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { sendEmailVerificationOtp, verifyEmailOtp } from "@/lib/auth/auth-api";
+import { signInWithEmailPassword } from "@/lib/auth/sign-in-email";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearPendingSignUp, getPendingSignUp } from "@/lib/auth/pending-signup";
 import { useInvalidateSession } from "@/lib/auth/use-session";
 import { completeMobileAuthEntry } from "@/lib/auth/complete-auth-entry";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
+import { getBackendUrl } from "@/lib/backend-url";
+import { safeFetch } from "@/lib/auth/safe-fetch";
 
 /** Better Auth defaults to 6; some projects use longer OTPs. */
 const OTP_MIN_LEN = 6;
@@ -60,11 +64,8 @@ export default function VerifyOtp() {
     setLoading(true);
     try {
       try {
-        const result = await authClient.emailOtp.verifyEmail({
-          email: emailNorm,
-          otp: code,
-        });
-        if (result?.error) {
+        const result = await verifyEmailOtp(emailNorm, code);
+        if (result.error) {
           setError(
             typeof result.error.message === "string"
               ? result.error.message
@@ -72,7 +73,6 @@ export default function VerifyOtp() {
           );
           return;
         }
-        setAccessTokenFromAuthData(result ?? null);
         setAccessTokenFromAuthData(result.data ?? null);
       } catch (e) {
         setError(formatAuthFlowError(e));
@@ -80,24 +80,33 @@ export default function VerifyOtp() {
       }
 
       await invalidateSession();
-      const sessionHeaders = async () => {
-        const bearer = (await getAccessToken())?.trim() ?? null;
-        return {
-          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-        };
-      };
-      let sessionRes = await authClient.getSession({
-        fetchOptions: { headers: await sessionHeaders() },
-      });
+      const bearer = (await getAccessToken())?.trim() ?? null;
+      let sessionUser: unknown = null;
+      if (bearer) {
+        try {
+          const sessionRes = await safeFetch(`${getBackendUrl()}/api/auth/get-session`, {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${bearer}`,
+            },
+            credentials: "omit",
+          });
+          if (sessionRes.ok) {
+            const body = (await sessionRes.json()) as { user?: unknown } | null;
+            sessionUser = body?.user ?? null;
+            setAccessTokenFromAuthData(body);
+          }
+        } catch {
+          /* fall through to pending sign-in */
+        }
+      }
 
-      if (!sessionRes.data?.user) {
+      if (!sessionUser) {
         const pending = getPendingSignUp();
         if (pending && pending.email === emailNorm) {
           try {
-            const si = await authClient.signIn.email({
-              email: pending.email,
-              password: pending.password,
-            });
+            const si = await signInWithEmailPassword(pending.email, pending.password);
             if (!si.error) {
               clearPendingSignUp();
               const completed = await completeMobileAuthEntry(queryClient, si);
@@ -115,8 +124,8 @@ export default function VerifyOtp() {
         }
       }
 
-      if (sessionRes.data?.user) {
-        const completed = await completeMobileAuthEntry(queryClient, sessionRes);
+      if (sessionUser) {
+        const completed = await completeMobileAuthEntry(queryClient, { data: { user: sessionUser } });
         if (!completed.ok) {
           setError(completed.error);
           router.replace("/sign-in");
@@ -136,10 +145,7 @@ export default function VerifyOtp() {
     setError(null);
     setResendLoading(true);
     try {
-      const sent = await authClient.emailOtp.sendVerificationOtp({
-        email: email.trim().toLowerCase(),
-        type: "email-verification",
-      });
+      const sent = await sendEmailVerificationOtp(email.trim().toLowerCase());
       if (sent.error) {
         setError(sent.error.message ?? "Could not resend code.");
       } else {

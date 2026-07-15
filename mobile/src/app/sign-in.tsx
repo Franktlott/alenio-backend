@@ -11,7 +11,8 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { agentDebugLog, authClient, clearAccessToken, setAccessToken } from "@/lib/auth/auth-client";
+import { agentDebugLog, clearAccessToken, setAccessToken } from "@/lib/auth/auth-client";
+import { sendEmailVerificationOtp } from "@/lib/auth/auth-api";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
 import { clearSignedOutMark, markSessionSignedOut, cancelMobileAuthQueries } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -106,10 +107,7 @@ export default function SignIn() {
       });
       if (result.error && isEmailNotVerifiedError(result.error)) {
         try {
-          await authClient.emailOtp.sendVerificationOtp({
-            email: emailNorm,
-            type: "email-verification",
-          });
+          await sendEmailVerificationOtp(emailNorm);
         } catch {
           /* still send user to verify screen */
         }
@@ -124,10 +122,7 @@ export default function SignIn() {
       const signedInUser = result.data?.user as { emailVerified?: boolean } | undefined;
       if (!result.error && signedInUser?.emailVerified === false) {
         try {
-          await authClient.emailOtp.sendVerificationOtp({
-            email: emailNorm,
-            type: "email-verification",
-          });
+          await sendEmailVerificationOtp(emailNorm);
         } catch {
           /* still send user to verify screen */
         }
