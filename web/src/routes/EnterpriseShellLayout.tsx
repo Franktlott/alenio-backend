@@ -9,7 +9,7 @@ import { getBrowserTimeZone } from "../lib/timezone";
 import { hasMobileWebPreferred } from "../lib/app-links";
 import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, resolveEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
-import { enterpriseNavTitle } from "../lib/enterprise-nav";
+import { enterpriseNavTitle, enterpriseTeamNavTitle } from "../lib/enterprise-nav";
 import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
 
 export type EnterpriseRouteHandle = {
@@ -36,7 +36,7 @@ function activeNavFromPath(pathname: string): EnterpriseNavId {
   if (pathname.startsWith("/billing")) return "plan";
   if (pathname.startsWith("/team")) return "team";
   if (pathname.startsWith("/admin")) return "admin";
-  if (pathname.startsWith("/profile")) return "profile";
+  if (pathname.startsWith("/settings") || pathname.startsWith("/profile")) return "settings";
   if (pathname.startsWith("/tasks")) return "execute";
   return "execute";
 }
@@ -194,15 +194,18 @@ export function EnterpriseShellLayout() {
     return picked && teams.some((t) => t.id === picked) ? picked : "";
   }, [teams, selectedTeamId]);
 
-  const topBarPageTitle = enterpriseNavTitle(activeNav);
-  const hasNoTeams = teams !== null && teams.length === 0;
-  const isProfileRoute = location.pathname.startsWith("/profile");
-  const isAdminRoute = location.pathname.startsWith("/admin");
-  const showAdminNav = me?.isAdmin === true;
-  const showNoTeamsEmptyState = hasNoTeams && !isProfileRoute && !isAdminRoute;
-
   const workspaceOwner =
     teams !== null && !!effectiveTeamId && teams.find((t) => t.id === effectiveTeamId)?.role === "owner";
+  const workspaceRole =
+    teams !== null && effectiveTeamId ? teams.find((t) => t.id === effectiveTeamId)?.role : undefined;
+  const teamNavLabel = enterpriseTeamNavTitle(workspaceRole);
+  const topBarPageTitle = activeNav === "team" ? teamNavLabel : enterpriseNavTitle(activeNav);
+  const hasNoTeams = teams !== null && teams.length === 0;
+  const isSettingsRoute =
+    location.pathname.startsWith("/settings") || location.pathname.startsWith("/profile");
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  const showAdminNav = me?.isAdmin === true;
+  const showNoTeamsEmptyState = hasNoTeams && !isSettingsRoute && !isAdminRoute;
   /** Treat missing `hasTeamFeatures` as allowed so refetches / first paint never redirect to Chat. */
   const showActivityExecuteNav =
     teams === null ||
@@ -303,6 +306,7 @@ export function EnterpriseShellLayout() {
         showActivityExecuteNav={showActivityExecuteNav}
         showGoNav={showGoNav}
         showAdminNav={showAdminNav}
+        teamNavLabel={teamNavLabel}
       >
         {teams === null ? (
           <div className="enterprise-tab-shell">

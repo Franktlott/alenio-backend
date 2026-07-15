@@ -156,7 +156,8 @@ export default function App() {
           <Route path="/billing" element={<BillingPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/admin" element={<AdminPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/settings" element={<ProfilePage />} />
+          <Route path="/profile" element={<Navigate to="/settings" replace />} />
           <Route path="/tasks/new" element={<CreateTaskPage />} />
         </Route>
         <Route

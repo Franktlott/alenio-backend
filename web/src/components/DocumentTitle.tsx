@@ -28,7 +28,7 @@ function pageTitleForPath(pathname: string): string | null {
   if (pathname.startsWith("/billing")) return enterpriseNavTitle("plan");
   if (pathname.startsWith("/team")) return enterpriseNavTitle("team");
   if (pathname.startsWith("/admin")) return enterpriseNavTitle("admin");
-  if (pathname.startsWith("/profile")) return enterpriseNavTitle("profile");
+  if (pathname.startsWith("/settings") || pathname.startsWith("/profile")) return enterpriseNavTitle("settings");
   return null;
 }
 

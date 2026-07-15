@@ -7,7 +7,7 @@ export const ENTERPRISE_NAV_TITLES: Record<EnterpriseNavId, string> = {
   go: "Alenio Go",
   team: "Team",
   plan: "Billing",
-  profile: "Profile",
+  settings: "Settings",
   admin: "Admin",
 };
 

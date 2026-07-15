@@ -12,7 +12,7 @@ import {
 } from "../lib/enterprise-selected-team";
 import type { WebMeUser, WebTeamRow } from "../lib/api";
 
-export type EnterpriseNavId = "activity" | "chat" | "execute" | "go" | "team" | "plan" | "profile" | "admin";
+export type EnterpriseNavId = "activity" | "chat" | "execute" | "go" | "team" | "plan" | "settings" | "admin";
 
 type Props = {
   activeNav: EnterpriseNavId;
@@ -38,6 +38,8 @@ type Props = {
   showGoNav?: boolean;
   /** When true, platform Admin sidebar item is shown. */
   showAdminNav?: boolean;
+  /** Sidebar + page label for `/team` — "Profile" for regular members. */
+  teamNavLabel?: string;
 };
 
 const WORKSPACE_OVERLAY_MIN_MS = 220;
@@ -95,6 +97,24 @@ function IconAdmin() {
   );
 }
 
+function IconSettings() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function IconProfile() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
 function NavItem({
   to,
   navId,
@@ -121,16 +141,6 @@ function NavItem({
   );
 }
 
-function userInitials(user: WebMeUser | null): string {
-  if (!user) return "?";
-  const n = user.name?.trim() || user.email?.trim() || "";
-  const parts = n.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return "U";
-}
-
 export function EnterpriseLayout({
   activeNav,
   teams,
@@ -147,6 +157,7 @@ export function EnterpriseLayout({
   showActivityExecuteNav,
   showGoNav = false,
   showAdminNav = false,
+  teamNavLabel = "Team",
 }: Props) {
   const [showWorkspaceOverlay, setShowWorkspaceOverlay] = useState(false);
   /** User changed workspace (sidebar or profile); until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
@@ -310,7 +321,13 @@ export function EnterpriseLayout({
               label="Alenio Go"
             />
           ) : null}
-          <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
+          <NavItem
+            to="/team"
+            navId="team"
+            activeNav={activeNav}
+            icon={teamNavLabel === "Profile" ? <IconProfile /> : <IconTeam />}
+            label={teamNavLabel}
+          />
           {showPlanNav ? (
             <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
           ) : null}
@@ -386,18 +403,14 @@ export function EnterpriseLayout({
               : null}
           </div>
           <Link
-            to="/profile"
-            className={`enterprise-nav-item${activeNav === "profile" ? " enterprise-nav-item-active" : ""}`}
-            data-testid="nav-profile"
+            to="/settings"
+            className={`enterprise-nav-item${activeNav === "settings" ? " enterprise-nav-item-active" : ""}`}
+            data-testid="nav-settings"
           >
             <span className="enterprise-nav-icon">
-              {user?.image ? (
-                <img src={user.image} alt="" className="enterprise-rail-avatar-img" />
-              ) : (
-                <span className="enterprise-rail-avatar-fallback">{userInitials(user)}</span>
-              )}
+              <IconSettings />
             </span>
-            <span className="enterprise-nav-label">Profile</span>
+            <span className="enterprise-nav-label">Settings</span>
           </Link>
           <button
             type="button"
