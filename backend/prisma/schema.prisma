@@ -1102,6 +1102,8 @@ model SenecaConfig {
   version     Int      @default(1)
   /** JSON payload for the config type. */
   data        String   @default("{}")
+  /** Optional human note for this version (shown in version history). */
+  notes       String?
   publishedAt DateTime?
   publishedBy String?
   createdBy   String?

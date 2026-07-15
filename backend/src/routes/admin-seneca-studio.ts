@@ -6,6 +6,7 @@ import { adminGuard } from "../middleware/admin-guard";
 import { prisma } from "../prisma";
 import { env } from "../env";
 import {
+  deleteDraftConfig,
   getPublishedOrDraftStudio,
   globalOwner,
   listAllKnowledge,
@@ -30,46 +31,69 @@ adminSenecaStudioRouter.use("*", adminGuard);
 
 const owner = globalOwner();
 
+async function resolveUserNames(ids: Array<string | null | undefined>) {
+  const unique = [...new Set(ids.filter((id): id is string => !!id))];
+  if (!unique.length) return new Map<string, string>();
+  const users = await prisma.user.findMany({
+    where: { id: { in: unique } },
+    select: { id: true, name: true, email: true },
+  });
+  return new Map(
+    users.map((u) => [u.id, (u.name?.trim() || u.email?.trim() || "Unknown") as string]),
+  );
+}
+
 function metaFromRow(
   row: {
     id: string;
     status: string;
     version: number;
+    notes?: string | null;
     publishedAt: Date | null;
     publishedBy: string | null;
     updatedAt: Date;
   } | null,
   source: "published" | "draft" | "default",
+  authorName: string | null = null,
 ) {
   return {
     id: row?.id ?? null,
     status: (row?.status as "DRAFT" | "PUBLISHED" | "ARCHIVED") ?? null,
     version: row?.version ?? null,
     source,
+    notes: row?.notes ?? null,
     publishedAt: row?.publishedAt?.toISOString() ?? null,
     publishedBy: row?.publishedBy ?? null,
+    publishedByName: authorName,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
     canEdit: true,
   };
 }
 
-function versionRow(v: {
-  id: string;
-  status: string;
-  version: number;
-  publishedAt: Date | null;
-  publishedBy: string | null;
-  createdBy: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}) {
+function versionRow(
+  v: {
+    id: string;
+    status: string;
+    version: number;
+    notes?: string | null;
+    publishedAt: Date | null;
+    publishedBy: string | null;
+    createdBy: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  names: Map<string, string>,
+) {
+  const authorId = v.publishedBy || v.createdBy;
   return {
     id: v.id,
     status: v.status,
     version: v.version,
+    notes: v.notes ?? null,
     publishedAt: v.publishedAt?.toISOString() ?? null,
     publishedBy: v.publishedBy,
     createdBy: v.createdBy,
+    authorName: authorId ? names.get(authorId) ?? null : null,
     createdAt: v.createdAt.toISOString(),
     updatedAt: v.updatedAt.toISOString(),
   };
@@ -93,6 +117,11 @@ const studioBodySchema = z.object({
     approvedTerms: z.array(z.string().trim().min(1).max(80)).max(80),
     avoidedTerms: z.array(z.string().trim().min(1).max(80)).max(80),
   }),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+const notesOnlySchema = z.object({
+  notes: z.string().max(2000).optional().nullable(),
 });
 
 function serializeKnowledge(k: {
@@ -129,9 +158,11 @@ function serializeKnowledge(k: {
 
 adminSenecaStudioRouter.get("/studio", async (c) => {
   const studio = await getPublishedOrDraftStudio(prisma, owner);
+  const names = await resolveUserNames([studio.row?.publishedBy, studio.row?.createdBy]);
+  const authorId = studio.row?.publishedBy || studio.row?.createdBy || null;
   return c.json({
     data: {
-      ...metaFromRow(studio.row, studio.source),
+      ...metaFromRow(studio.row, studio.source, authorId ? names.get(authorId) ?? null : null),
       studio: studio.data,
     },
   });
@@ -141,27 +172,32 @@ adminSenecaStudioRouter.put("/studio", zValidator("json", studioBodySchema), asy
   const user = c.get("user")!;
   const body = c.req.valid("json");
   const data = { ...DEFAULT_STUDIO_DATA, ...body.studio } as SenecaStudioData;
-  await saveStudioDraft(prisma, owner, data, user.id);
+  await saveStudioDraft(prisma, owner, data, user.id, body.notes);
   const studio = await getPublishedOrDraftStudio(prisma, owner);
+  const names = await resolveUserNames([studio.row?.publishedBy, studio.row?.createdBy]);
+  const authorId = studio.row?.publishedBy || studio.row?.createdBy || null;
   return c.json({
     data: {
-      ...metaFromRow(studio.row, studio.source),
+      ...metaFromRow(studio.row, studio.source, authorId ? names.get(authorId) ?? null : null),
       studio: studio.data,
     },
   });
 });
 
-adminSenecaStudioRouter.post("/studio/publish", async (c) => {
+adminSenecaStudioRouter.post("/studio/publish", zValidator("json", notesOnlySchema), async (c) => {
   const user = c.get("user")!;
+  const body = c.req.valid("json");
   try {
-    await publishConfig(prisma, owner, "STUDIO", user.id);
+    await publishConfig(prisma, owner, "STUDIO", user.id, body.notes);
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : "Could not publish." }, 400);
   }
   const studio = await getPublishedOrDraftStudio(prisma, owner);
+  const names = await resolveUserNames([studio.row?.publishedBy, studio.row?.createdBy]);
+  const authorId = studio.row?.publishedBy || studio.row?.createdBy || null;
   return c.json({
     data: {
-      ...metaFromRow(studio.row, studio.source),
+      ...metaFromRow(studio.row, studio.source, authorId ? names.get(authorId) ?? null : null),
       studio: studio.data,
     },
   });
@@ -169,7 +205,8 @@ adminSenecaStudioRouter.post("/studio/publish", async (c) => {
 
 adminSenecaStudioRouter.get("/studio/versions", async (c) => {
   const versions = await listConfigVersions(prisma, owner, "STUDIO");
-  return c.json({ data: versions.map(versionRow) });
+  const names = await resolveUserNames(versions.flatMap((v) => [v.publishedBy, v.createdBy]));
+  return c.json({ data: versions.map((v) => versionRow(v, names)) });
 });
 
 adminSenecaStudioRouter.post(
@@ -184,12 +221,30 @@ adminSenecaStudioRouter.post(
       return c.json({ error: e instanceof Error ? e.message : "Could not restore." }, 400);
     }
     const studio = await getPublishedOrDraftStudio(prisma, owner);
+    const names = await resolveUserNames([studio.row?.publishedBy, studio.row?.createdBy]);
+    const authorId = studio.row?.publishedBy || studio.row?.createdBy || null;
     return c.json({
       data: {
-        ...metaFromRow(studio.row, studio.source),
+        ...metaFromRow(studio.row, studio.source, authorId ? names.get(authorId) ?? null : null),
         studio: studio.data,
       },
     });
+  },
+);
+
+adminSenecaStudioRouter.delete(
+  "/studio/versions/:version",
+  async (c) => {
+    const version = Number(c.req.param("version"));
+    if (!Number.isInteger(version) || version < 1) {
+      return c.json({ error: "Invalid version." }, 400);
+    }
+    try {
+      await deleteDraftConfig(prisma, owner, "STUDIO", version);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "Could not delete draft." }, 400);
+    }
+    return c.json({ data: { ok: true as const } });
   },
 );
 

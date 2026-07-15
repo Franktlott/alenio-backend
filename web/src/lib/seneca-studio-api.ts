@@ -55,8 +55,10 @@ export type SenecaConfigMeta = {
   status: SenecaConfigStatus | null;
   version: number | null;
   source: SenecaConfigSource;
+  notes?: string | null;
   publishedAt: string | null;
   publishedBy: string | null;
+  publishedByName?: string | null;
   updatedAt: string | null;
   canEdit: boolean;
 };
@@ -73,9 +75,11 @@ export type SenecaConfigVersionRow = {
   id: string;
   status: SenecaConfigStatus;
   version: number;
+  notes?: string | null;
   publishedAt: string | null;
   publishedBy: string | null;
   createdBy: string | null;
+  authorName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -227,28 +231,30 @@ export function fetchPlatformSenecaStudio() {
   return apiGetJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio`).then((r) => r.data);
 }
 
-export function saveSenecaStudioDraft(teamId: string, studio: SenecaStudioData) {
-  return apiPutJson<{ data: SenecaStudioResponse }>(`${studioBase(teamId)}/studio`, { studio }).then(
-    (r) => r.data,
-  );
+export function saveSenecaStudioDraft(teamId: string, studio: SenecaStudioData, notes?: string | null) {
+  return apiPutJson<{ data: SenecaStudioResponse }>(`${studioBase(teamId)}/studio`, {
+    studio,
+    notes: notes ?? null,
+  }).then((r) => r.data);
 }
 
-export function savePlatformSenecaStudioDraft(studio: SenecaStudioData) {
-  return apiPutJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio`, { studio }).then(
-    (r) => r.data,
-  );
+export function savePlatformSenecaStudioDraft(studio: SenecaStudioData, notes?: string | null) {
+  return apiPutJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio`, {
+    studio,
+    notes: notes ?? null,
+  }).then((r) => r.data);
 }
 
-export function publishSenecaStudio(teamId: string) {
-  return apiPostJson<{ data: SenecaStudioResponse }>(`${studioBase(teamId)}/studio/publish`, {}).then(
-    (r) => r.data,
-  );
+export function publishSenecaStudio(teamId: string, notes?: string | null) {
+  return apiPostJson<{ data: SenecaStudioResponse }>(`${studioBase(teamId)}/studio/publish`, {
+    notes: notes ?? null,
+  }).then((r) => r.data);
 }
 
-export function publishPlatformSenecaStudio() {
-  return apiPostJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio/publish`, {}).then(
-    (r) => r.data,
-  );
+export function publishPlatformSenecaStudio(notes?: string | null) {
+  return apiPostJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio/publish`, {
+    notes: notes ?? null,
+  }).then((r) => r.data);
 }
 
 export function fetchSenecaStudioVersions(teamId: string) {
@@ -273,6 +279,18 @@ export function restorePlatformSenecaStudioVersion(version: number) {
   return apiPostJson<{ data: SenecaStudioResponse }>(`${PLATFORM_STUDIO_BASE}/studio/restore`, {
     version,
   }).then((r) => r.data);
+}
+
+export function deleteSenecaStudioDraft(teamId: string, version: number) {
+  return apiDeleteJson<{ data: { ok: true } }>(
+    `${studioBase(teamId)}/studio/versions/${encodeURIComponent(String(version))}`,
+  ).then((r) => r.data);
+}
+
+export function deletePlatformSenecaStudioDraft(version: number) {
+  return apiDeleteJson<{ data: { ok: true } }>(
+    `${PLATFORM_STUDIO_BASE}/studio/versions/${encodeURIComponent(String(version))}`,
+  ).then((r) => r.data);
 }
 
 export function fetchSenecaOperationalContext(teamId: string) {

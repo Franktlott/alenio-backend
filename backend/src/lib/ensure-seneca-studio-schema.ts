@@ -11,6 +11,7 @@ export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<vo
         "status" TEXT NOT NULL DEFAULT 'DRAFT',
         "version" INTEGER NOT NULL DEFAULT 1,
         "data" TEXT NOT NULL DEFAULT '{}',
+        "notes" TEXT,
         "publishedAt" TIMESTAMP(3),
         "publishedBy" TEXT,
         "createdBy" TEXT,
@@ -18,6 +19,9 @@ export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<vo
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "SenecaConfig_pkey" PRIMARY KEY ("id")
       );
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE public."SenecaConfig" ADD COLUMN IF NOT EXISTS "notes" TEXT;
     `);
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "SenecaConfig_ownerType_ownerId_type_version_key"

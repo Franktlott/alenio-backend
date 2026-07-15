@@ -107,13 +107,24 @@ export async function saveStudioDraft(
   owner: SenecaOwnerRef,
   data: SenecaStudioData,
   userId: string,
+  notes?: string | null,
 ) {
   const existing = await getLatestConfig(prisma, owner, "STUDIO", "DRAFT");
   const payload = JSON.stringify(data);
+  const noteValue =
+    notes === undefined
+      ? undefined
+      : notes != null && notes.trim()
+        ? notes.trim().slice(0, 2000)
+        : null;
   if (existing) {
     return prisma.senecaConfig.update({
       where: { id: existing.id },
-      data: { data: payload, updatedAt: new Date() },
+      data: {
+        data: payload,
+        updatedAt: new Date(),
+        ...(noteValue !== undefined ? { notes: noteValue } : {}),
+      },
     });
   }
   const latestAny = await getLatestConfig(prisma, owner, "STUDIO");
@@ -126,6 +137,7 @@ export async function saveStudioDraft(
       status: "DRAFT",
       version,
       data: payload,
+      notes: noteValue ?? null,
       createdBy: userId,
     },
   });
@@ -165,6 +177,7 @@ export async function publishConfig(
   owner: SenecaOwnerRef,
   type: Extract<SenecaConfigType, "STUDIO" | "OPERATIONAL_CONTEXT">,
   userId: string,
+  notes?: string | null,
 ) {
   const draft = await getLatestConfig(prisma, owner, type, "DRAFT");
   if (!draft) {
@@ -183,14 +196,44 @@ export async function publishConfig(
     data: { status: "ARCHIVED" },
   });
 
+  const noteValue =
+    notes === undefined
+      ? undefined
+      : notes != null && notes.trim()
+        ? notes.trim().slice(0, 2000)
+        : null;
+
   return prisma.senecaConfig.update({
     where: { id: draft.id },
     data: {
       status: "PUBLISHED",
       publishedAt: new Date(),
       publishedBy: userId,
+      ...(noteValue !== undefined ? { notes: noteValue } : {}),
     },
   });
+}
+
+export async function deleteDraftConfig(
+  prisma: PrismaClient,
+  owner: SenecaOwnerRef,
+  type: Extract<SenecaConfigType, "STUDIO" | "OPERATIONAL_CONTEXT">,
+  version: number,
+) {
+  const row = await prisma.senecaConfig.findFirst({
+    where: {
+      ownerType: owner.ownerType,
+      ownerId: owner.ownerId,
+      type,
+      version,
+    },
+  });
+  if (!row) throw new Error("Version not found.");
+  if (row.status !== "DRAFT") {
+    throw new Error("Only draft versions can be deleted.");
+  }
+  await prisma.senecaConfig.delete({ where: { id: row.id } });
+  return { ok: true as const };
 }
 
 export async function listConfigVersions(
@@ -239,6 +282,7 @@ export async function restoreConfigVersion(
       status: "DRAFT",
       version: nextVersion,
       data: source.data,
+      notes: source.notes ? `Restored from v${source.version}: ${source.notes}` : `Restored from v${source.version}`,
       createdBy: userId,
     },
   });

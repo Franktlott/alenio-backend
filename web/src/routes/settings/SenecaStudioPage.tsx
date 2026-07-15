@@ -8,7 +8,9 @@ import {
   createPlatformSenecaKnowledge,
   createSenecaKnowledge,
   deletePlatformSenecaKnowledge,
+  deletePlatformSenecaStudioDraft,
   deleteSenecaKnowledge,
+  deleteSenecaStudioDraft,
   fetchPlatformSenecaKnowledge,
   fetchPlatformSenecaPromptTemplates,
   fetchPlatformSenecaStudio,
@@ -80,7 +82,7 @@ function EditableChecklist({
   return (
     <section className="seneca-studio-card">
       <h3 className="seneca-studio-card-title">{title}</h3>
-      <p className="seneca-studio-card-subtitle">{subtitle}</p>
+      {subtitle ? <p className="seneca-studio-card-subtitle">{subtitle}</p> : null}
       <ul className={`seneca-studio-checklist seneca-studio-checklist--${variant}`}>
         {items.map((item, index) => (
           <li key={`${item}-${index}`}>
@@ -159,7 +161,7 @@ function TermPills({
   return (
     <section className="seneca-studio-card">
       <h3 className="seneca-studio-card-title">{title}</h3>
-      <p className="seneca-studio-card-subtitle">{subtitle}</p>
+      {subtitle ? <p className="seneca-studio-card-subtitle">{subtitle}</p> : null}
       <div className="seneca-studio-pills">
         {terms.map((term) => (
           <span key={term} className={`seneca-studio-pill seneca-studio-pill--${variant}`}>
@@ -245,11 +247,34 @@ export function SenecaStudioPage({
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [versions, setVersions] = useState<SenecaConfigVersionRow[]>([]);
+  const [publishedByName, setPublishedByName] = useState<string | null>(null);
+  const [versionNotes, setVersionNotes] = useState<string | null>(null);
+  const [noteModal, setNoteModal] = useState<"save" | "publish" | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
 
   const patchStudio = useCallback((partial: Partial<SenecaStudioData>) => {
     setStudio((prev) => ({ ...prev, ...partial }));
     setDirty(true);
     setNotice(null);
+  }, []);
+
+  const applyStudioMeta = useCallback((res: {
+    studio?: SenecaStudioData;
+    source: string;
+    status: string | null;
+    version: number | null;
+    publishedAt: string | null;
+    publishedByName?: string | null;
+    notes?: string | null;
+  }) => {
+    if (res.studio) setStudio(res.studio);
+    setSource(res.source);
+    setStatus(res.status);
+    setVersion(res.version);
+    setPublishedAt(res.publishedAt);
+    setPublishedByName(res.publishedByName ?? null);
+    setVersionNotes(res.notes ?? null);
+    setDirty(false);
   }, []);
 
   const load = useCallback(async () => {
@@ -272,6 +297,8 @@ export function SenecaStudioPage({
       setStatus(studioRes.status);
       setVersion(studioRes.version);
       setPublishedAt(studioRes.publishedAt);
+      setPublishedByName(studioRes.publishedByName ?? null);
+      setVersionNotes(studioRes.notes ?? null);
       setKnowledge(knowledgeRes);
       setTemplates(templateRes);
       setDirty(false);
@@ -289,15 +316,19 @@ export function SenecaStudioPage({
 
   const versionLabel = useMemo(() => {
     if (version == null) return "Using defaults";
-    const date = publishedAt
-      ? new Date(publishedAt).toLocaleDateString(undefined, {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })
-      : null;
-    return date ? `v${version} · Published ${date}` : `v${version}`;
-  }, [version, publishedAt]);
+    if (status === "PUBLISHED" || source === "published") {
+      const date = publishedAt
+        ? new Date(publishedAt).toLocaleDateString(undefined, {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })
+        : null;
+      const by = publishedByName ? ` by ${publishedByName}` : "";
+      return date ? `v${version} · Published ${date}${by}` : `v${version}`;
+    }
+    return `v${version}${versionNotes ? ` · ${versionNotes}` : ""}`;
+  }, [version, publishedAt, publishedByName, status, source, versionNotes]);
 
   async function withBusy<T>(fn: () => Promise<T>, okMessage?: string) {
     setBusy(true);
@@ -315,42 +346,45 @@ export function SenecaStudioPage({
     }
   }
 
-  async function onSaveDraft() {
+  function openNoteModal(kind: "save" | "publish") {
     if (!canEdit) return;
     if (!isPlatform && !teamId) return;
-    const res = await withBusy(
-      () =>
-        isPlatform ? savePlatformSenecaStudioDraft(studio) : saveSenecaStudioDraft(teamId, studio),
-      "Draft saved.",
-    );
-    if (!res) return;
-    setSource(res.source);
-    setStatus(res.status);
-    setVersion(res.version);
-    setPublishedAt(res.publishedAt);
-    setDirty(false);
+    setNoteDraft(versionNotes ?? "");
+    setNoteModal(kind);
   }
 
-  async function onPublish() {
-    if (!canEdit) return;
-    if (!isPlatform && !teamId) return;
+  async function confirmNoteModal() {
+    if (!noteModal) return;
+    const note = noteDraft.trim() || null;
+    const kind = noteModal;
+    setNoteModal(null);
+    if (kind === "save") {
+      const res = await withBusy(
+        () =>
+          isPlatform
+            ? savePlatformSenecaStudioDraft(studio, note)
+            : saveSenecaStudioDraft(teamId, studio, note),
+        "Draft saved.",
+      );
+      if (!res) return;
+      applyStudioMeta(res);
+      return;
+    }
     if (dirty) {
       const saved = await withBusy(() =>
-        isPlatform ? savePlatformSenecaStudioDraft(studio) : saveSenecaStudioDraft(teamId, studio),
+        isPlatform
+          ? savePlatformSenecaStudioDraft(studio, note)
+          : saveSenecaStudioDraft(teamId, studio, note),
       );
       if (!saved) return;
     }
     const res = await withBusy(
-      () => (isPlatform ? publishPlatformSenecaStudio() : publishSenecaStudio(teamId)),
+      () =>
+        isPlatform ? publishPlatformSenecaStudio(note) : publishSenecaStudio(teamId, note),
       "Published.",
     );
     if (!res) return;
-    setStudio(res.studio);
-    setSource(res.source);
-    setStatus(res.status);
-    setVersion(res.version);
-    setPublishedAt(res.publishedAt);
-    setDirty(false);
+    applyStudioMeta(res);
   }
 
   async function onOpenHistory() {
@@ -376,13 +410,23 @@ export function SenecaStudioPage({
       `Restored v${v} as draft.`,
     );
     if (!res) return;
-    setStudio(res.studio);
-    setSource(res.source);
-    setStatus(res.status);
-    setVersion(res.version);
-    setPublishedAt(res.publishedAt);
-    setDirty(false);
+    applyStudioMeta(res);
     setHistoryOpen(false);
+  }
+
+  async function onDeleteDraft(v: number) {
+    if (!canEdit) return;
+    if (!isPlatform && !teamId) return;
+    const ok = window.confirm(`Delete draft v${v}? This cannot be undone.`);
+    if (!ok) return;
+    const res = await withBusy(
+      () =>
+        isPlatform ? deletePlatformSenecaStudioDraft(v) : deleteSenecaStudioDraft(teamId, v),
+      `Draft v${v} deleted.`,
+    );
+    if (!res) return;
+    setVersions((prev) => prev.filter((row) => row.version !== v));
+    await load();
   }
 
   async function onAddKnowledge(e: FormEvent) {
@@ -529,7 +573,7 @@ export function SenecaStudioPage({
                     type="button"
                     className="enterprise-team-pill-btn"
                     disabled={busy || !dirty}
-                    onClick={() => void onSaveDraft()}
+                    onClick={() => openNoteModal("save")}
                   >
                     Save draft
                   </button>
@@ -537,7 +581,7 @@ export function SenecaStudioPage({
                     type="button"
                     className="auth-submit seneca-studio-publish-btn"
                     disabled={busy}
-                    onClick={() => void onPublish()}
+                    onClick={() => openNoteModal("publish")}
                   >
                     Publish changes
                   </button>
@@ -571,7 +615,7 @@ export function SenecaStudioPage({
                       type="button"
                       className="enterprise-team-pill-btn"
                       disabled={busy || !dirty}
-                      onClick={() => void onSaveDraft()}
+                      onClick={() => openNoteModal("save")}
                     >
                       Save draft
                     </button>
@@ -579,7 +623,7 @@ export function SenecaStudioPage({
                       type="button"
                       className="auth-submit seneca-studio-publish-btn"
                       disabled={busy}
-                      onClick={() => void onPublish()}
+                      onClick={() => openNoteModal("publish")}
                     >
                       Publish changes
                     </button>
@@ -603,6 +647,12 @@ export function SenecaStudioPage({
             View version history
           </button>
         </div>
+
+        {versionNotes && (status === "DRAFT" || source === "draft") ? (
+          <p className="seneca-studio-version-note" role="note">
+            Draft note: {versionNotes}
+          </p>
+        ) : null}
 
         {error ? (
           <p className="enterprise-form-error" role="alert">
@@ -648,7 +698,7 @@ export function SenecaStudioPage({
               </div>
 
               <label className="seneca-studio-field-label" htmlFor="seneca-coaching-style">
-                Coaching style
+                Coaching approach
               </label>
               <select
                 id="seneca-coaching-style"
@@ -683,13 +733,13 @@ export function SenecaStudioPage({
             </section>
 
             <section className="seneca-studio-card">
-              <h3 className="seneca-studio-card-title">Leadership philosophy</h3>
+              <h3 className="seneca-studio-card-title">Global coaching instructions</h3>
               <p className="seneca-studio-card-subtitle">
                 These instructions shape how Seneca coaches in any situation.
               </p>
               <textarea
-                className="auth-input seneca-studio-textarea"
-                rows={10}
+                className="auth-input seneca-studio-textarea seneca-studio-textarea--instructions"
+                rows={8}
                 disabled={!canEdit}
                 value={studio.leadershipPhilosophy}
                 onChange={(e) => patchStudio({ leadershipPhilosophy: e.target.value })}
@@ -704,7 +754,7 @@ export function SenecaStudioPage({
           <div className="seneca-studio-col seneca-studio-col--middle">
             <EditableChecklist
               title="Always do"
-              subtitle="Things Seneca should always do."
+              subtitle=""
               items={studio.alwaysDo}
               variant="always"
               canEdit={canEdit}
@@ -712,7 +762,7 @@ export function SenecaStudioPage({
             />
             <EditableChecklist
               title="Never do"
-              subtitle="Things Seneca should never do."
+              subtitle=""
               items={studio.neverDo}
               variant="never"
               canEdit={canEdit}
@@ -720,7 +770,7 @@ export function SenecaStudioPage({
             />
             <TermPills
               title="Approved terminology"
-              subtitle="Words and phrases Seneca should use."
+              subtitle=""
               terms={studio.approvedTerms}
               variant="approved"
               canEdit={canEdit}
@@ -728,13 +778,100 @@ export function SenecaStudioPage({
             />
             <TermPills
               title="Avoid terminology"
-              subtitle="Words and phrases Seneca should avoid."
+              subtitle=""
               terms={studio.avoidedTerms}
               variant="avoided"
               canEdit={canEdit}
               onChange={(avoidedTerms) => patchStudio({ avoidedTerms })}
             />
+          </div>
 
+          <aside className="seneca-studio-col seneca-studio-col--right">
+            <section className="seneca-studio-card seneca-studio-preview-card">
+              <div className="seneca-studio-card-head-row">
+                <h3 className="seneca-studio-card-title">Live preview</h3>
+                <button
+                  type="button"
+                  className="seneca-studio-link-btn"
+                  onClick={() =>
+                    setPreviewQuestion(
+                      "Vera has missed two check-ins in a row. How should I address it?",
+                    )
+                  }
+                >
+                  Change scenario
+                </button>
+              </div>
+              <p className="seneca-studio-card-subtitle">Test how Seneca will respond.</p>
+              <label className="seneca-studio-field-label" htmlFor="seneca-preview-q">
+                Manager question
+              </label>
+              <textarea
+                id="seneca-preview-q"
+                className="auth-input seneca-studio-textarea"
+                rows={3}
+                value={previewQuestion}
+                onChange={(e) => setPreviewQuestion(e.target.value)}
+              />
+              <button
+                type="button"
+                className="auth-submit seneca-studio-preview-btn"
+                disabled={previewBusy || !previewQuestion.trim()}
+                onClick={() => void onGeneratePreview()}
+              >
+                {previewBusy ? "Generating…" : "Generate preview"}
+              </button>
+
+              {preview ? (
+                <div className="seneca-studio-preview-result">
+                  <div className="seneca-studio-preview-you">
+                    <span>You</span>
+                    <p>{preview.question}</p>
+                  </div>
+                  <div className="seneca-studio-preview-seneca">
+                    <div className="seneca-studio-preview-seneca-head">
+                      <span aria-hidden>✦</span> Seneca
+                    </div>
+                    <p>{preview.response}</p>
+                    {preview.promptVersion ? (
+                      <p className="seneca-studio-preview-meta">Prompt: {preview.promptVersion}</p>
+                    ) : null}
+                    {preview.knowledgeUsed?.length ? (
+                      <p className="seneca-studio-preview-meta">
+                        Knowledge: {preview.knowledgeUsed.join(", ")}
+                      </p>
+                    ) : null}
+                    <div className="seneca-studio-feedback">
+                      <button
+                        type="button"
+                        className={`seneca-studio-feedback-btn${feedbackSent === "helpful" ? " is-active" : ""}`}
+                        onClick={() => void onFeedback("helpful")}
+                        aria-label="Helpful"
+                      >
+                        👍
+                      </button>
+                      <button
+                        type="button"
+                        className={`seneca-studio-feedback-btn${feedbackSent === "needs_improvement" ? " is-active" : ""}`}
+                        onClick={() => void onFeedback("needs_improvement")}
+                        aria-label="Needs improvement"
+                      >
+                        👎
+                      </button>
+                      {feedbackSent ? (
+                        <span className="seneca-studio-preview-meta">Thanks for the feedback</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="seneca-studio-empty">Generate a preview to see Seneca&apos;s response here.</p>
+              )}
+            </section>
+          </aside>
+        </div>
+
+        <div className="seneca-studio-secondary-grid">
             <section className="seneca-studio-card">
               <h3 className="seneca-studio-card-title">Knowledge base</h3>
               <p className="seneca-studio-card-subtitle">
@@ -829,78 +966,62 @@ export function SenecaStudioPage({
                 )}
               </div>
             </section>
-          </div>
-
-          <aside className="seneca-studio-col seneca-studio-col--right">
-            <section className="seneca-studio-card seneca-studio-preview-card">
-              <h3 className="seneca-studio-card-title">Live preview</h3>
-              <p className="seneca-studio-card-subtitle">Test how Seneca will respond.</p>
-              <label className="seneca-studio-field-label" htmlFor="seneca-preview-q">
-                Manager question
-              </label>
-              <textarea
-                id="seneca-preview-q"
-                className="auth-input seneca-studio-textarea"
-                rows={4}
-                value={previewQuestion}
-                onChange={(e) => setPreviewQuestion(e.target.value)}
-              />
-              <button
-                type="button"
-                className="auth-submit seneca-studio-preview-btn"
-                disabled={previewBusy || !previewQuestion.trim()}
-                onClick={() => void onGeneratePreview()}
-              >
-                {previewBusy ? "Generating…" : "Generate preview"}
-              </button>
-
-              {preview ? (
-                <div className="seneca-studio-preview-result">
-                  <div className="seneca-studio-preview-you">
-                    <span>You</span>
-                    <p>{preview.question}</p>
-                  </div>
-                  <div className="seneca-studio-preview-seneca">
-                    <div className="seneca-studio-preview-seneca-head">
-                      <span aria-hidden>✦</span> Seneca
-                    </div>
-                    <p>{preview.response}</p>
-                    {preview.promptVersion ? (
-                      <p className="seneca-studio-preview-meta">Prompt: {preview.promptVersion}</p>
-                    ) : null}
-                    {preview.knowledgeUsed?.length ? (
-                      <p className="seneca-studio-preview-meta">
-                        Knowledge: {preview.knowledgeUsed.join(", ")}
-                      </p>
-                    ) : null}
-                    <div className="seneca-studio-feedback">
-                      <button
-                        type="button"
-                        className={`seneca-studio-feedback-btn${feedbackSent === "helpful" ? " is-active" : ""}`}
-                        onClick={() => void onFeedback("helpful")}
-                        aria-label="Helpful"
-                      >
-                        👍
-                      </button>
-                      <button
-                        type="button"
-                        className={`seneca-studio-feedback-btn${feedbackSent === "needs_improvement" ? " is-active" : ""}`}
-                        onClick={() => void onFeedback("needs_improvement")}
-                        aria-label="Needs improvement"
-                      >
-                        👎
-                      </button>
-                      {feedbackSent ? <span className="seneca-studio-preview-meta">Thanks for the feedback</span> : null}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="seneca-studio-empty">Generate a preview to see Seneca&apos;s response here.</p>
-              )}
-            </section>
-          </aside>
         </div>
       </div>
+
+      {noteModal ? (
+        <div
+          className="seneca-studio-modal-backdrop"
+          role="presentation"
+          onClick={() => setNoteModal(null)}
+        >
+          <div
+            className="seneca-studio-modal seneca-studio-modal--note"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="seneca-note-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="seneca-studio-modal-head">
+              <h2 id="seneca-note-modal-title">
+                {noteModal === "publish" ? "Publish changes" : "Save draft"}
+              </h2>
+              <button
+                type="button"
+                className="seneca-studio-icon-btn"
+                aria-label="Close"
+                onClick={() => setNoteModal(null)}
+              >
+                ×
+              </button>
+            </div>
+            <p className="seneca-studio-card-subtitle">
+              Add an optional note for version history so your team knows what changed.
+            </p>
+            <textarea
+              className="auth-input seneca-studio-textarea"
+              rows={4}
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              placeholder="e.g. Tightened never-do rules for HR topics"
+              maxLength={2000}
+            />
+            <div className="seneca-studio-modal-actions">
+              <button type="button" className="enterprise-team-pill-btn" onClick={() => setNoteModal(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="auth-submit seneca-studio-publish-btn"
+                disabled={busy}
+                onClick={() => void confirmNoteModal()}
+              >
+                {noteModal === "publish" ? "Publish" : "Save draft"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {historyOpen ? (
         <div className="seneca-studio-modal-backdrop" role="presentation" onClick={() => setHistoryOpen(false)}>
@@ -923,25 +1044,45 @@ export function SenecaStudioPage({
               ) : (
                 versions.map((row) => (
                   <li key={row.id} className="seneca-studio-version-row">
-                    <div>
+                    <div className="seneca-studio-version-row-main">
                       <p className="seneca-studio-kb-title">
                         v{row.version}{" "}
                         <StatusBadge source={row.status.toLowerCase()} status={row.status} />
                       </p>
                       <p className="seneca-studio-kb-meta">
                         {new Date(row.updatedAt || row.createdAt).toLocaleString()}
+                        {row.authorName ? ` · ${row.authorName}` : ""}
                       </p>
+                      {row.notes ? (
+                        <p className="seneca-studio-version-row-note">{row.notes}</p>
+                      ) : (
+                        <p className="seneca-studio-version-row-note seneca-studio-version-row-note--empty">
+                          No note
+                        </p>
+                      )}
                     </div>
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        className="enterprise-team-pill-btn"
-                        disabled={busy}
-                        onClick={() => void onRestore(row.version)}
-                      >
-                        Restore
-                      </button>
-                    ) : null}
+                    <div className="seneca-studio-version-row-actions">
+                      {canEdit && row.status === "DRAFT" ? (
+                        <button
+                          type="button"
+                          className="seneca-studio-delete-btn"
+                          disabled={busy}
+                          onClick={() => void onDeleteDraft(row.version)}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          className="enterprise-team-pill-btn"
+                          disabled={busy}
+                          onClick={() => void onRestore(row.version)}
+                        >
+                          Restore
+                        </button>
+                      ) : null}
+                    </div>
                   </li>
                 ))
               )}
