@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addCheckInTemplateFromLibrary,
   createOneOnOneTemplate,
@@ -14,6 +14,20 @@ import {
 import { appendLeaderCommentsIfMissing, stripLeaderCommentsFields } from "../lib/check-in-leader-comments";
 import { printOneOnOneTemplateWorksheet } from "../lib/one-on-one-print";
 import { SenecaCheckInTemplateModal } from "./seneca/SenecaCheckInTemplateModal";
+
+function editorSnapshot(input: {
+  title: string;
+  description: string;
+  leaderPrep: string[];
+  fields: OneOnOneTemplateField[];
+}): string {
+  return JSON.stringify({
+    title: input.title,
+    description: input.description,
+    leaderPrep: input.leaderPrep,
+    fields: input.fields,
+  });
+}
 
 const QUESTION_TYPE_OPTIONS: {
   value: OneOnOneTemplateFieldType;
@@ -165,6 +179,7 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
   const [dragFieldId, setDragFieldId] = useState<string | null>(null);
   const [dragSectionId, setDragSectionId] = useState<string | null>(null);
   const [senecaOpen, setSenecaOpen] = useState(false);
+  const editorBaselineRef = useRef<string | null>(null);
 
   const sectionGroups = useMemo(
     () => parseSections(editorView === "preview" ? appendLeaderCommentsIfMissing(fields) : fields),
@@ -272,22 +287,63 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
     setCollapsedSections(new Set());
     setErr(null);
     setEditorView("edit");
+    editorBaselineRef.current = editorSnapshot(blank);
     setView("editor");
   };
 
   const loadTemplateIntoEditor = (template: OneOnOneTemplate, mode: EditorView, readOnly: boolean) => {
     const normalized = normalizeLoadedFields(template.fields);
+    const next = {
+      title: template.title,
+      description: template.description ?? "",
+      leaderPrep: template.leaderPrep ?? [],
+      fields: normalized,
+    };
     setEditingId(template.id);
     setPreviewOnly(readOnly);
-    setTitle(template.title);
-    setDescription(template.description ?? "");
-    setLeaderPrep(template.leaderPrep ?? []);
-    setFields(normalized);
+    setTitle(next.title);
+    setDescription(next.description);
+    setLeaderPrep(next.leaderPrep);
+    setFields(next.fields);
     setSelectedFieldId(normalized.find((f) => !isSection(f))?.id ?? null);
     setCollapsedSections(new Set());
     setErr(null);
     setEditorView(mode);
+    editorBaselineRef.current = readOnly ? null : editorSnapshot(next);
     setView("editor");
+  };
+
+  const editorIsDirty = useMemo(() => {
+    if (view !== "editor" || previewOnly || !editorBaselineRef.current) return false;
+    return (
+      editorSnapshot({ title, description, leaderPrep, fields }) !== editorBaselineRef.current
+    );
+  }, [view, previewOnly, title, description, leaderPrep, fields]);
+
+  const confirmDiscardEdits = () =>
+    window.confirm(
+      "Leave without saving?\n\nYour changes haven’t been saved. If you leave now, this work will be discarded.",
+    );
+
+  const requestClose = () => {
+    if (editorIsDirty && !confirmDiscardEdits()) return;
+    editorBaselineRef.current = null;
+    onClose();
+  };
+
+  const leaveEditor = () => {
+    if (previewOnly && !editingId) {
+      exitPreviewToSource();
+      return;
+    }
+    if (editorIsDirty && !confirmDiscardEdits()) return;
+    editorBaselineRef.current = null;
+    setView(previewSource === "library" ? "library" : "list");
+    setEditingId(null);
+    setEditorView("edit");
+    setPreviewOnly(false);
+    setPreviewSource(null);
+    setErr(null);
   };
 
   const openEdit = (template: OneOnOneTemplate) => {
@@ -563,6 +619,7 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
         await createOneOnOneTemplate(teamId, payload);
       }
       await loadTemplates();
+      editorBaselineRef.current = null;
       setView("list");
       setEditingId(null);
     } catch (e) {
@@ -594,11 +651,12 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
 
   return (
     <>
-    <div className="enterprise-modal-backdrop enterprise-oneone-templates-backdrop" role="presentation" onClick={onClose}>
+    <div className="enterprise-modal-backdrop enterprise-oneone-templates-backdrop" role="presentation">
       <div
         className={`enterprise-modal-sheet enterprise-oneone-templates-modal${view === "editor" ? " enterprise-oneone-templates-modal--editor" : " enterprise-oneone-templates-modal--list"}`}
         role="dialog"
         aria-label="Check-in templates"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
         {view === "list" ? (
@@ -631,7 +689,7 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
                 <button type="button" className="enterprise-oneone-templates-primary-btn" onClick={openCreate}>
                   + New Template
                 </button>
-                <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={onClose}>
+                <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={requestClose}>
                   ×
                 </button>
               </div>
@@ -738,7 +796,7 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
                 </p>
               </div>
               <div className="enterprise-oneone-templates-list-header-actions">
-                <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={onClose}>
+                <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={requestClose}>
                   ×
                 </button>
               </div>
@@ -811,22 +869,7 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
           <>
             <header className="enterprise-oneone-templates-editor-top">
               <div className="enterprise-oneone-templates-editor-top-left">
-                <button
-                  type="button"
-                  className="enterprise-oneone-templates-back"
-                  onClick={() => {
-                    if (previewOnly && !editingId) {
-                      exitPreviewToSource();
-                      return;
-                    }
-                    setView(previewSource === "library" ? "library" : "list");
-                    setEditingId(null);
-                    setEditorView("edit");
-                    setPreviewOnly(false);
-                    setPreviewSource(null);
-                    setErr(null);
-                  }}
-                >
+                <button type="button" className="enterprise-oneone-templates-back" onClick={leaveEditor}>
                   ← Back to templates
                 </button>
                 <div className="enterprise-oneone-templates-editor-title-row">
@@ -862,6 +905,12 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
                     type="button"
                     className="enterprise-oneone-templates-toolbar-btn"
                     onClick={() => {
+                      editorBaselineRef.current = editorSnapshot({
+                        title,
+                        description,
+                        leaderPrep,
+                        fields,
+                      });
                       setPreviewOnly(false);
                       setEditorView("edit");
                     }}
@@ -918,7 +967,7 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
                     {saving ? "Saving…" : "Save template"}
                   </button>
                 ) : null}
-                <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={onClose}>
+                <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={requestClose}>
                   ×
                 </button>
               </div>
@@ -1075,11 +1124,25 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
                             </button>
                             <button
                               type="button"
-                              className="enterprise-oneone-templates-section-toggle"
+                              className={`enterprise-oneone-templates-section-toggle${
+                                collapsed ? " enterprise-oneone-templates-section-toggle--collapsed" : ""
+                              }`}
                               onClick={() => toggleSection(group.section.id)}
                               aria-expanded={!collapsed}
+                              aria-label={
+                                collapsed
+                                  ? `Expand section, ${group.fields.length} question${group.fields.length !== 1 ? "s" : ""} hidden`
+                                  : "Collapse section"
+                              }
                             >
-                              <span className="enterprise-oneone-templates-section-chevron">{collapsed ? "▸" : "▾"}</span>
+                              <span
+                                className={`enterprise-oneone-templates-section-chevron${
+                                  collapsed ? " enterprise-oneone-templates-section-chevron--collapsed" : ""
+                                }`}
+                                aria-hidden
+                              >
+                                {collapsed ? "▸" : "▾"}
+                              </span>
                               <input
                                 className={`enterprise-oneone-templates-section-title-input${
                                   !group.section.label.trim() ? " enterprise-oneone-templates-section-title-input--empty" : ""
@@ -1090,8 +1153,14 @@ export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Prop
                                 placeholder="Section name"
                                 aria-label="Section name"
                               />
-                              <span className="enterprise-oneone-templates-section-count">
-                                {group.fields.length} question{group.fields.length !== 1 ? "s" : ""}
+                              <span
+                                className={`enterprise-oneone-templates-section-count${
+                                  collapsed ? " enterprise-oneone-templates-section-count--hidden" : ""
+                                }`}
+                              >
+                                {collapsed
+                                  ? `${group.fields.length} hidden`
+                                  : `${group.fields.length} question${group.fields.length !== 1 ? "s" : ""}`}
                               </span>
                             </button>
                             <button

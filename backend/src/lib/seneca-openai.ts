@@ -79,7 +79,11 @@ export function senecaUnavailableMessage(): string {
   return "Seneca is not configured on this server. Add OPENAI_API_KEY to enable coaching assistance.";
 }
 
-export async function senecaJson<T>(instruction: string, context: string): Promise<T> {
+export async function senecaJson<T>(
+  instruction: string,
+  context: string,
+  options?: { systemPrompt?: string },
+): Promise<T> {
   if (!senecaAvailable()) {
     throw new Error(senecaUnavailableMessage());
   }
@@ -95,7 +99,7 @@ export async function senecaJson<T>(instruction: string, context: string): Promi
       temperature: 0.4,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: COACHING_SYSTEM },
+        { role: "system", content: options?.systemPrompt ?? COACHING_SYSTEM },
         {
           role: "user",
           content: `${instruction}\n\n---\nContext:\n${context}`,
@@ -122,7 +126,11 @@ export async function senecaJson<T>(instruction: string, context: string): Promi
   }
 }
 
-export async function senecaText(instruction: string, context: string): Promise<string> {
+export async function senecaText(
+  instruction: string,
+  context: string,
+  options?: { systemPrompt?: string },
+): Promise<string> {
   if (!senecaAvailable()) {
     throw new Error(senecaUnavailableMessage());
   }
@@ -137,7 +145,7 @@ export async function senecaText(instruction: string, context: string): Promise<
       model: env.OPENAI_MODEL,
       temperature: 0.5,
       messages: [
-        { role: "system", content: COACHING_SYSTEM },
+        { role: "system", content: options?.systemPrompt ?? COACHING_SYSTEM },
         {
           role: "user",
           content: `${instruction}\n\n---\nContext:\n${context}`,

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { queryKeys } from "../lib/query-keys";
 import {
@@ -762,13 +763,7 @@ export function DashboardPage() {
   };
 
   if (me === undefined) {
-    return (
-      <div className="enterprise-tab-shell">
-        <p className="enterprise-muted" data-testid="dashboard-loading">
-          Loading…
-        </p>
-      </div>
-    );
+    return <EnterprisePageLoading label="Loading your dashboard" testId="dashboard-loading" />;
   }
 
   return (

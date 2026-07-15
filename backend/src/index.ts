@@ -67,11 +67,13 @@ import { ensurePinnedMessageSchema } from "./lib/ensure-pinned-message-schema";
 import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
 import { ensureBetterAuthSchema } from "./lib/ensure-better-auth-schema";
 import { ensureOrganizationSchema } from "./lib/ensure-organization-schema";
+import { ensureSenecaStudioSchema } from "./lib/ensure-seneca-studio-schema";
 import { webPublicBaseUrl } from "./lib/web-public-url";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
 import { senecaTeamRouter } from "./routes/seneca-team";
+import { senecaStudioRouter } from "./routes/seneca-studio";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
 import { publicGoLinkRouter } from "./routes/public-go-link";
@@ -89,6 +91,7 @@ if (!isProduction) {
 const startupSchemaReady = Promise.all([
   ensureBetterAuthSchema(prisma),
   ensureOrganizationSchema(prisma),
+  ensureSenecaStudioSchema(prisma),
   ...(isProduction
     ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureTaskArchiveSchema(prisma)]
     : [
@@ -1219,6 +1222,7 @@ app.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
 app.route("/api/teams/:teamId/members", developmentGoalsRouter);
 app.route("/api/teams/:teamId/members", senecaRouter);
 app.route("/api/teams/:teamId/seneca", senecaTeamRouter);
+app.route("/api/teams/:teamId/seneca-studio", senecaStudioRouter as any);
 app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);

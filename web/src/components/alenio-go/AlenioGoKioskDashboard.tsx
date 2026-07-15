@@ -26,6 +26,7 @@ import {
 } from "./go-dash-parts";
 import { GoKioskAlertModal, GoAlertSoundUnlockBanner } from "./GoKioskWorkplaceAlerts";
 import { GoKioskModuleTestCodeScreen, GoTestingModeBanner } from "./GoKioskModuleGate";
+import { EnterprisePageLoading } from "../EnterprisePageLoading";
 
 type Props = {
   hubToken: string;
@@ -247,10 +248,11 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
   if (loading) {
     return (
-      <div className="go-dash go-dash--kiosk go-dash--store" data-testid="alenio-go-kiosk-dashboard">
-        <GoDashKioskHeader teamName="" />
-        <p className="go-dash-loading">Loading workspace…</p>
-      </div>
+      <EnterprisePageLoading
+        label="Loading your workspace"
+        fullScreen
+        testId="alenio-go-kiosk-dashboard"
+      />
     );
   }
 

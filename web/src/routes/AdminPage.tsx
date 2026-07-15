@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { AlenioNoticeModal } from "../components/AlenioNoticeModal";
+import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { UserAvatar } from "../components/UserAvatar";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
@@ -54,11 +55,7 @@ export function AdminPage() {
   });
 
   if (me === undefined) {
-    return (
-      <div className="enterprise-tab-shell">
-        <p className="enterprise-muted">Loading…</p>
-      </div>
-    );
+    return <EnterprisePageLoading label="Loading administration" />;
   }
 
   if (me === null || me.isAdmin !== true) {

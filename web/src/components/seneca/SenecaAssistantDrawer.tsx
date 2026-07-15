@@ -5,7 +5,6 @@ import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import {
   buildSenecaResponse,
   loadWorkspaceSnapshot,
-  SENECA_QUICK_PROMPTS,
   senecaActionPath,
   type SenecaActionCard,
   type SenecaInsightItem,
@@ -19,9 +18,6 @@ import {
   buildTeamPulse,
   getSenecaGreeting,
   matchStructuredPrompt,
-  quickActionPath,
-  SENECA_ASK_EXAMPLES,
-  SENECA_COMPACT_QUICK_ACTIONS,
   type BriefingInsightCard,
   type BriefingTone,
   type TeamPulseMetric,
@@ -183,7 +179,7 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
     (label: string, promptId: SenecaPromptId) => {
       if (!teamId) return;
 
-      const prompt = SENECA_QUICK_PROMPTS.find((p) => p.id === promptId) ?? {
+      const prompt: SenecaPrompt = {
         id: promptId,
         label,
         hint: "",
@@ -274,12 +270,6 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
     if (!teamId) return;
     handleClose();
     navigate(briefingActionPath(actionId, teamId));
-  };
-
-  const onQuickAction = (actionId: (typeof SENECA_COMPACT_QUICK_ACTIONS)[number]["id"]) => {
-    if (!teamId) return;
-    handleClose();
-    navigate(quickActionPath(actionId, teamId));
   };
 
   const onSenecaAction = (action: SenecaActionCard) => {
@@ -421,36 +411,6 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
                       Ask
                     </button>
                   </form>
-                  <div className="seneca-ask-examples">
-                    {SENECA_ASK_EXAMPLES.map((example) => (
-                      <button
-                        key={example}
-                        type="button"
-                        className="seneca-ask-chip"
-                        onClick={() => onAskSubmit(example)}
-                      >
-                        {example}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="seneca-quick-section" aria-labelledby="seneca-quick-heading">
-                  <h3 id="seneca-quick-heading" className="seneca-quick-heading">
-                    Quick Actions
-                  </h3>
-                  <div className="seneca-quick-grid">
-                    {SENECA_COMPACT_QUICK_ACTIONS.map((action) => (
-                      <button
-                        key={action.id}
-                        type="button"
-                        className="seneca-quick-btn"
-                        onClick={() => onQuickAction(action.id)}
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
                 </section>
 
                 <p className="seneca-drawer-footer-note">

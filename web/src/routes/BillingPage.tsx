@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { AlenioNoticeModal } from "../components/AlenioNoticeModal";
+import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { queryKeys } from "../lib/query-keys";
 import {
@@ -370,11 +371,7 @@ export function BillingPage() {
   }, [actionErr, subErr, dismissedSubErr, billingFlash, dismissedFlash, configNoticeOpen, clearBillingParam]);
 
   if (me === undefined) {
-    return (
-      <div className="enterprise-tab-shell billing-shell">
-        <p className="enterprise-muted">Loading…</p>
-      </div>
-    );
+    return <EnterprisePageLoading label="Loading your plan" />;
   }
 
   const supportHref = `mailto:${LEGAL_CONTACT_EMAIL}?subject=${encodeURIComponent("Alenio billing support")}`;

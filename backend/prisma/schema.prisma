@@ -1090,3 +1090,128 @@ model ChecklistLocationSubmission {
   @@index([locationId, submittedAt])
 }
 
+/// Polymorphic Seneca configuration (GLOBAL / WORKSPACE today; ORGANIZATION later).
+/// type: CORE | STUDIO | OPERATIONAL_CONTEXT
+/// status: DRAFT | PUBLISHED | ARCHIVED
+model SenecaConfig {
+  id          String   @id @default(cuid())
+  ownerType   String
+  ownerId     String
+  type        String
+  status      String   @default("DRAFT")
+  version     Int      @default(1)
+  /** JSON payload for the config type. */
+  data        String   @default("{}")
+  publishedAt DateTime?
+  publishedBy String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([ownerType, ownerId, type, version])
+  @@index([ownerType, ownerId, type, status])
+}
+
+model SenecaKnowledge {
+  id          String   @id @default(cuid())
+  ownerType   String
+  ownerId     String
+  title       String
+  category    String   @default("general")
+  description String?
+  status      String   @default("ACTIVE")
+  version     Int      @default(1)
+  contentText String   @default("")
+  fileUrl     String?
+  fileName    String?
+  mimeType    String?
+  uploadedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+  versions    SenecaKnowledgeVersion[]
+
+  @@index([ownerType, ownerId, status])
+}
+
+model SenecaKnowledgeVersion {
+  id            String   @id @default(cuid())
+  knowledgeId   String
+  version       Int
+  title         String
+  category      String
+  description   String?
+  contentText   String
+  fileUrl       String?
+  fileName      String?
+  createdAt     DateTime @default(now())
+  createdBy     String?
+  knowledge     SenecaKnowledge @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
+
+  @@unique([knowledgeId, version])
+  @@index([knowledgeId])
+}
+
+model SenecaPromptTemplate {
+  id          String   @id @default(cuid())
+  ownerType   String
+  ownerId     String
+  templateKey String
+  title       String
+  status      String   @default("ACTIVE")
+  version     Int      @default(1)
+  instructions String  @default("")
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  createdBy   String?
+  versions    SenecaPromptVersion[]
+
+  @@unique([ownerType, ownerId, templateKey])
+  @@index([ownerType, ownerId])
+}
+
+model SenecaPromptVersion {
+  id           String   @id @default(cuid())
+  templateId   String
+  version      Int
+  instructions String
+  createdAt    DateTime @default(now())
+  createdBy    String?
+  template     SenecaPromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  @@index([templateId])
+}
+
+model SenecaGeneration {
+  id              String   @id @default(cuid())
+  ownerType       String
+  ownerId         String
+  userId          String?
+  source          String   @default("ask")
+  model           String?
+  promptVersion   String?
+  knowledgeUsed   String?
+  contextUsed     String?
+  question        String?
+  response        String?
+  systemPrompt    String?
+  tokensIn        Int?
+  tokensOut       Int?
+  latencyMs       Int?
+  createdAt       DateTime @default(now())
+  feedback        SenecaGenerationFeedback?
+
+  @@index([ownerType, ownerId, createdAt])
+  @@index([userId])
+}
+
+model SenecaGenerationFeedback {
+  id           String   @id @default(cuid())
+  generationId String   @unique
+  rating       String
+  note         String?
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  generation   SenecaGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+}
+

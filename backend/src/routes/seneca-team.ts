@@ -5,6 +5,9 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
 import { senecaAvailable, senecaJson, senecaUnavailableMessage } from "../lib/seneca-openai";
+import { assembleForWorkspaceTeam } from "../lib/seneca-prompt-assembly";
+import { workspaceOwner } from "../lib/seneca-config-service";
+import { env } from "../env";
 import { buildSenecaChatContext, senecaChatContextToPrompt } from "../lib/seneca-chat-context";
 import type { SenecaWorkspaceContext } from "../lib/seneca-workspace-context";
 import { normalizeCheckInTemplateDraft } from "../lib/seneca-normalize";
@@ -307,9 +310,21 @@ CREATING A TASK (critical):
 - Treat the conversation as continuous. Follow-up messages refer to earlier context.
 `;
 
+    const started = Date.now();
+    let assembledSystemPrompt: string | undefined;
+    let assembledMeta: Awaited<ReturnType<typeof assembleForWorkspaceTeam>> | null = null;
+    try {
+      assembledMeta = await assembleForWorkspaceTeam(prisma, teamId, {
+        templateKey: "general_coaching",
+        requestContext: conversationPrompt,
+      });
+      assembledSystemPrompt = assembledMeta.systemPrompt;
+    } catch {
+      assembledSystemPrompt = undefined;
+    }
+
     const out = await senecaJson<SenecaAskAi>(
-      `You are Seneca, an AI leadership assistant for frontline managers using Alenio.
-Answer using the conversation history and the light team context below (team name and member names only).
+      `Answer using the conversation history and the light team context below (team name and member names only).
 - Be practical, warm, and concise (2-4 sentences unless they ask for a list).
 - You do NOT have access to live tasks, metrics, overdue work, or check-in history unless the manager tells you in chat.
 - Do not invent tasks, overdue items, or performance data.
@@ -340,7 +355,28 @@ Return JSON:
             2,
           )
         : senecaChatContextToPrompt(ctx),
+      assembledSystemPrompt ? { systemPrompt: assembledSystemPrompt } : undefined,
     );
+
+    void prisma.senecaGeneration
+      .create({
+        data: {
+          ownerType: workspaceOwner(teamId).ownerType,
+          ownerId: teamId,
+          userId: user.id,
+          source: "ask",
+          model: env.OPENAI_MODEL,
+          promptVersion: assembledMeta?.promptVersion ?? null,
+          knowledgeUsed: assembledMeta ? JSON.stringify(assembledMeta.knowledgeUsed) : null,
+          contextUsed: assembledMeta ? JSON.stringify(assembledMeta.contextLayers) : null,
+          question: body.question,
+          response: out.message ?? null,
+          latencyMs: Date.now() - started,
+        },
+      })
+      .catch(() => {
+        /* logging must not break ask */
+      });
 
     const cancelOneOnOne = resolveCancelProposal(
       out.cancelOneOnOne,

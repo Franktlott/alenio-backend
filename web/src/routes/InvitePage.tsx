@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { MobileAppCta } from "../components/MobileAppCta";
+import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { fetchTeamInviteByToken } from "../lib/api";
 import { getInviteAppUrl } from "../lib/app-links";
 import { ensureWebSessionAndToken, getAccessToken } from "../lib/auth-client";
@@ -73,15 +74,7 @@ export function InvitePage() {
   };
 
   if (loading) {
-    return (
-      <div className="auth-v2-shell" data-testid="invite-screen-loading">
-        <main className="auth-v2-main">
-          <div className="auth-v2-card">
-            <p className="auth-sub">Loading invite…</p>
-          </div>
-        </main>
-      </div>
-    );
+    return <EnterprisePageLoading label="Loading your invitation" fullScreen testId="invite-screen-loading" />;
   }
 
   if (error || !preview) {

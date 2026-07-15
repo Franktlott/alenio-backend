@@ -18,6 +18,7 @@ import { signInWithMicrosoft } from "../lib/microsoft-auth";
 export function LoginPage() {
   const [params] = useSearchParams();
   const reason = params.get("reason");
+  const sessionExpired = reason === "session";
   const verified = params.get("verified") === "1";
   const inviteToken = (params.get("invite") ?? "").trim();
   const emailFromInvite = (params.get("email") ?? "").trim().toLowerCase();
@@ -25,9 +26,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [microsoftLoading, setMicrosoftLoading] = useState(false);
-  const [error, setError] = useState<string | null>(
-    reason === "session" ? "Your session expired. Sign in again." : null,
-  );
+  const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(
     verified ? "Email verified. Sign in with your password to continue." : null,
   );
@@ -163,6 +162,19 @@ export function LoginPage() {
             <p className="auth-sub">Use your work credentials to continue.</p>
           </div>
           <form onSubmit={onSubmit}>
+          {sessionExpired ? (
+            <div className="auth-session-notice" role="status" data-testid="login-session-notice">
+              <span className="auth-session-notice-icon" aria-hidden="true">
+                ⏱
+              </span>
+              <div>
+                <p className="auth-session-notice-title">Your session has ended</p>
+                <p className="auth-session-notice-copy">
+                  For your security, you were signed out after a period of inactivity. Sign in to continue.
+                </p>
+              </div>
+            </div>
+          ) : null}
           <label className="auth-label" htmlFor="email">
             Email address
           </label>

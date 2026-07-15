@@ -19,6 +19,9 @@ import { OneOnOneFeedbackPage } from "./routes/OneOnOneFeedbackPage";
 import { TaskDetailPage } from "./routes/TaskDetailPage";
 import { TeamPage } from "./routes/TeamPage";
 import { ProfilePage } from "./routes/ProfilePage";
+import { SettingsAiHubPage } from "./routes/settings/SettingsAiHubPage";
+import { SenecaStudioPage } from "./routes/settings/SenecaStudioPage";
+import { SenecaWorkspaceContextPage } from "./routes/settings/SenecaWorkspaceContextPage";
 import { ForgotPasswordPage } from "./routes/ForgotPasswordPage";
 import { LoginPage } from "./routes/LoginPage";
 import { SignUpPage } from "./routes/SignUpPage";
@@ -157,6 +160,9 @@ export default function App() {
           <Route path="/team" element={<TeamPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/settings" element={<ProfilePage />} />
+          <Route path="/settings/ai" element={<SettingsAiHubPage />} />
+          <Route path="/settings/ai/seneca-studio" element={<SenecaStudioPage />} />
+          <Route path="/settings/ai/workspace-context" element={<SenecaWorkspaceContextPage />} />
           <Route path="/profile" element={<Navigate to="/settings" replace />} />
           <Route path="/tasks/new" element={<CreateTaskPage />} />
         </Route>

@@ -68,12 +68,6 @@ type SenecaChatMessage = {
   createTaskProposal?: SenecaCreateTaskProposal | null;
 };
 
-const STARTER_PROMPTS = [
-  "Create a task for a team member",
-  "Schedule a check-in with a team member",
-  "Help me prep for a difficult conversation",
-];
-
 const COLORS = {
   bg: "#F4F6F8",
   surface: "#FFFFFF",
@@ -420,20 +414,6 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   <Text style={styles.welcomeText}>
                     Get coaching guidance, schedule check-ins, and prepare for leadership conversations.
                   </Text>
-                  <Text style={styles.starterLabel}>Suggested prompts</Text>
-                  <View style={styles.starterList}>
-                    {STARTER_PROMPTS.map((prompt) => (
-                      <Pressable
-                        key={prompt}
-                        onPress={() => runAsk(prompt)}
-                        style={styles.starterChip}
-                        testID={`seneca-starter-${prompt}`}
-                      >
-                        <Text style={styles.starterChipText}>{prompt}</Text>
-                        <ChevronRight size={16} color={COLORS.brand} />
-                      </Pressable>
-                    ))}
-                  </View>
                 </View>
               ) : null}
 

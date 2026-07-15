@@ -11,6 +11,7 @@ import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, resolveEnterpriseTe
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle, enterpriseTeamNavTitle } from "../lib/enterprise-nav";
 import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
+import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 
 export type EnterpriseRouteHandle = {
   enterpriseContentClassName?: string;
@@ -309,9 +310,7 @@ export function EnterpriseShellLayout() {
         teamNavLabel={teamNavLabel}
       >
         {teams === null ? (
-          <div className="enterprise-tab-shell">
-            <p className="enterprise-muted">Loading…</p>
-          </div>
+          <EnterprisePageLoading label="Loading your workspace" />
         ) : showNoTeamsEmptyState ? (
           <div className="chat-app-body chat-app-body-enterprise chat-app-body-no-teams enterprise-tab-shell">
             <NoTeamsEmptyState onRefreshWorkspaces={refreshMeAndTeams} />

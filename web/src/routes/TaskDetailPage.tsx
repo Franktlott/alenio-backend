@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout } from "../components/EnterpriseLayout";
+import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { OneOnOneAssociateFeedbackForm } from "../components/OneOnOneAssociateFeedbackForm";
 import {
   fetchOneOnOneAssociateFeedbackContext,
@@ -233,13 +234,7 @@ export function TaskDetailPage() {
   }, [teams, workspaceId, task, navigate]);
 
   if (me === undefined) {
-    return (
-      <div className="enterprise-app enterprise-app-simple">
-        <main className="enterprise-dashboard-inner">
-          <p className="enterprise-muted">Loading…</p>
-        </main>
-      </div>
-    );
+    return <EnterprisePageLoading label="Loading your workspace" fullScreen />;
   }
 
   if (err && !task) {
@@ -258,13 +253,7 @@ export function TaskDetailPage() {
   }
 
   if (!task) {
-    return (
-      <div className="enterprise-app enterprise-app-simple">
-        <main className="enterprise-dashboard-inner">
-          <p className="enterprise-muted">Loading…</p>
-        </main>
-      </div>
-    );
+    return <EnterprisePageLoading label="Loading task details" fullScreen />;
   }
 
   const showPlanNav =

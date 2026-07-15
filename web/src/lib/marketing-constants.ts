@@ -8,22 +8,52 @@ export const MARKETING_CTA_JOIN = "Join Alenio";
 
 export const MARKETING_DEMO_HREF = `mailto:${LEGAL_CONTACT_EMAIL}?subject=${encodeURIComponent("Alenio demo request")}`;
 
+export const MARKETING_HERO_BADGE = "AI-powered operations platform";
 export const MARKETING_HERO_HEADLINE = "The operating system for";
-export const MARKETING_HERO_HEADLINE_ACCENT = "team execution.";
+export const MARKETING_HERO_HEADLINE_ACCENT = "frontline teams";
 export const MARKETING_HERO_SUBCOPY =
-  "Alenio unifies chat, tasks, and calendar — with optional Outlook sync, Seneca AI coaching, check-ins, and development plans — so managers spend less time chasing updates and more time leading the floor.";
+  "Connect your team. Execute daily work. Develop great leaders. All in one place.";
+export const MARKETING_HERO_TRUST = ["Free forever", "No credit card", "Setup in minutes"] as const;
 
 export const MARKETING_FINAL_CTA_HEADLINE = "Stop guessing. Start executing.";
 export const MARKETING_FINAL_CTA_SUBCOPY =
   "Create a free account in minutes. Upgrade when your team is ready for Seneca AI, check-ins, and full execution tools.";
 
+export const MARKETING_PLATFORM_PILLARS = [
+  {
+    id: "connect",
+    title: "Connect",
+    tone: "connect",
+    desc: "Team chat, channels, and updates so every location stays aligned in real time.",
+    href: "#connect",
+    cta: "Explore Connect",
+  },
+  {
+    id: "execute",
+    title: "Execute",
+    tone: "execute",
+    desc: "Tasks, checklists, and proof of work so daily operations run consistently.",
+    href: "#execute",
+    cta: "Explore Execute",
+  },
+  {
+    id: "elevate",
+    title: "Elevate",
+    tone: "elevate",
+    desc: "Check-ins, development plans, and leadership coaching built into the flow of work.",
+    href: "#elevate",
+    cta: "Explore Elevate",
+  },
+] as const;
+
 export const MARKETING_SENECA_SECTION = {
-  eyebrow: "Seneca AI",
-  title: "Your manager's AI chief of staff",
+  eyebrow: "AI Coach",
+  title: "Meet Seneca",
   subcopy:
-    "Seneca is built for frontline leaders — not generic help. It surfaces what needs attention, preps you for check-ins, turns notes into tasks, and helps you recognize wins across your workspace.",
-  insightExample:
-    "You have 3 overdue tasks, 1 missed checklist, and Vera hasn't had a check-in in 42 days.",
+    "Your AI assistant built for frontline leaders — surfaces what needs attention, preps check-ins, and turns notes into action.",
+  promptExample: "Seneca, what should I focus on today?",
+  insightExample: "You have 3 overdue tasks, 1 store needs attention, and Vera is due for a check-in.",
+  actions: ["Prep for check-in", "Create follow-up task", "Build checklist", "Draft team message"] as const,
   prompts: [
     "What needs my attention?",
     "Prep a check-in",
@@ -49,6 +79,21 @@ export const MARKETING_SENECA_SECTION = {
     },
   ] as const,
 };
+
+export const MARKETING_ENTERPRISE_TRUST = [
+  { title: "SSO & SCIM", desc: "User provisioning" },
+  { title: "Role-based permissions", desc: "Control who sees what" },
+  { title: "Data security", desc: "You can trust" },
+  { title: "Integrations", desc: "That work for you" },
+] as const;
+
+export const MARKETING_TRUSTED_INDUSTRIES = [
+  "Convenience",
+  "Retail",
+  "Restaurants",
+  "Healthcare",
+  "Warehousing",
+] as const;
 
 export const MARKETING_COACHING_PILLARS = [
   {

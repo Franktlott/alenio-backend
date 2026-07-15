@@ -167,9 +167,31 @@ export function EnterpriseLayout({
   const prevSelectedTeamIdRef = useRef(selectedTeamId);
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const workspaceWrapRef = useRef<HTMLDivElement>(null);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
   const [workspaceMenuStyle, setWorkspaceMenuStyle] = useState<CSSProperties | null>(null);
+  const workspaceCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearWorkspaceCloseTimer = useCallback(() => {
+    if (workspaceCloseTimerRef.current) {
+      clearTimeout(workspaceCloseTimerRef.current);
+      workspaceCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const openWorkspaceMenu = useCallback(() => {
+    clearWorkspaceCloseTimer();
+    setWorkspaceMenuOpen(true);
+  }, [clearWorkspaceCloseTimer]);
+
+  const scheduleCloseWorkspaceMenu = useCallback(() => {
+    clearWorkspaceCloseTimer();
+    workspaceCloseTimerRef.current = setTimeout(() => {
+      setWorkspaceMenuOpen(false);
+      workspaceCloseTimerRef.current = null;
+    }, 180);
+  }, [clearWorkspaceCloseTimer]);
 
   const updateWorkspaceMenuPosition = useCallback(() => {
     const trigger = workspaceTriggerRef.current;
@@ -177,8 +199,8 @@ export function EnterpriseLayout({
     const rect = trigger.getBoundingClientRect();
     setWorkspaceMenuStyle({
       position: "fixed",
-      left: rect.right + 7,
-      bottom: window.innerHeight - rect.bottom,
+      left: rect.right + 8,
+      bottom: Math.max(12, window.innerHeight - rect.bottom),
       zIndex: 300,
     });
   }, []);
@@ -270,20 +292,27 @@ export function EnterpriseLayout({
     updateWorkspaceMenuPosition();
     const onPointerDown = (e: MouseEvent) => {
       const target = e.target as Node;
+      if (workspaceWrapRef.current?.contains(target)) return;
       if (workspaceMenuRef.current?.contains(target)) return;
-      if (workspaceTriggerRef.current?.contains(target)) return;
       setWorkspaceMenuOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setWorkspaceMenuOpen(false);
     };
     const onLayoutChange = () => updateWorkspaceMenuPosition();
     document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", onLayoutChange);
     window.addEventListener("scroll", onLayoutChange, true);
     return () => {
       document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onLayoutChange);
       window.removeEventListener("scroll", onLayoutChange, true);
     };
   }, [workspaceMenuOpen, updateWorkspaceMenuPosition]);
+
+  useEffect(() => () => clearWorkspaceCloseTimer(), [clearWorkspaceCloseTimer]);
 
   const signOut = async () => {
     try {
@@ -297,8 +326,7 @@ export function EnterpriseLayout({
   };
 
   const activeTeam = teams.find((t) => t.id === selectedTeamId) ?? teams[0] ?? null;
-  const workspaceLabel =
-    activeTeam?.name?.trim().split(/\s+/)[0]?.slice(0, 10) ?? "Workspace";
+  const workspaceName = activeTeam?.name?.trim() || "Workspace";
   const canSwitchWorkspace = teams.length > 1;
 
   return (
@@ -336,32 +364,57 @@ export function EnterpriseLayout({
           ) : null}
         </nav>
         <div className="enterprise-rail-footer">
-          <div className="enterprise-rail-footer-item-wrap" ref={workspaceMenuRef}>
+          <div
+            className="enterprise-rail-footer-item-wrap"
+            ref={workspaceWrapRef}
+            onMouseEnter={() => {
+              if (canSwitchWorkspace) openWorkspaceMenu();
+            }}
+            onMouseLeave={() => {
+              if (canSwitchWorkspace) scheduleCloseWorkspaceMenu();
+            }}
+          >
             <button
               ref={workspaceTriggerRef}
               type="button"
-              className={`enterprise-nav-item enterprise-nav-item--button${workspaceMenuOpen ? " enterprise-nav-item-active" : ""}${canSwitchWorkspace ? " enterprise-nav-item--switchable" : ""}`}
+              className={`enterprise-nav-item enterprise-nav-item--button enterprise-nav-item--workspace${
+                workspaceMenuOpen ? " enterprise-nav-item-active" : ""
+              }${canSwitchWorkspace ? " enterprise-nav-item--switchable" : ""}`}
               onClick={() => {
-                if (canSwitchWorkspace) setWorkspaceMenuOpen((open) => !open);
+                if (!canSwitchWorkspace) return;
+                setWorkspaceMenuOpen((open) => !open);
               }}
               aria-expanded={canSwitchWorkspace ? workspaceMenuOpen : undefined}
               aria-haspopup={canSwitchWorkspace ? "menu" : undefined}
-              aria-label={canSwitchWorkspace ? `Switch workspace, current: ${activeTeam?.name ?? "none"}` : activeTeam?.name ?? "Workspace"}
+              aria-label={
+                canSwitchWorkspace
+                  ? `Switch workspace, current: ${workspaceName}`
+                  : `Current workspace: ${workspaceName}`
+              }
+              title={canSwitchWorkspace ? `${workspaceName} — hover or click to switch` : workspaceName}
               data-testid="enterprise-workspace-menu-trigger"
-              disabled={!canSwitchWorkspace && teams.length === 0}
+              disabled={teams.length === 0}
             >
               <span className="enterprise-nav-icon">
                 {activeTeam?.image ? (
                   <img src={activeTeam.image} alt="" className="enterprise-rail-ws-icon-img" />
                 ) : (
-                  <span className="enterprise-rail-ws-fallback">{activeTeam?.name?.[0]?.toUpperCase() ?? "W"}</span>
+                  <span className="enterprise-rail-ws-fallback">{workspaceName[0]?.toUpperCase() ?? "W"}</span>
                 )}
               </span>
-              <span className="enterprise-nav-label enterprise-nav-label--stack">
-                <span>{workspaceLabel}</span>
+              <span className="enterprise-nav-label enterprise-nav-label--workspace">
+                <span className="enterprise-nav-workspace-kicker">
+                  {canSwitchWorkspace ? "Switch" : "Workspace"}
+                </span>
+                <span className="enterprise-nav-workspace-name">{workspaceName}</span>
+                {activeTeam?.inviteCode ? (
+                  <span className="enterprise-nav-workspace-code">
+                    Code: {activeTeam.inviteCode}
+                  </span>
+                ) : null}
                 {canSwitchWorkspace ? (
                   <span className="enterprise-nav-chevron" aria-hidden>
-                    {workspaceMenuOpen ? "▴" : "▾"}
+                    {workspaceMenuOpen ? "◂" : "▸"}
                   </span>
                 ) : null}
               </span>
@@ -374,8 +427,10 @@ export function EnterpriseLayout({
                     style={workspaceMenuStyle}
                     role="menu"
                     aria-label="Switch workspace"
+                    onMouseEnter={openWorkspaceMenu}
+                    onMouseLeave={scheduleCloseWorkspaceMenu}
                   >
-                    <p className="enterprise-ws-menu-title">Switch workspace</p>
+                    <p className="enterprise-ws-menu-title">Your workspaces</p>
                     {teams.map((t) => (
                       <button
                         key={t.id}
@@ -394,7 +449,15 @@ export function EnterpriseLayout({
                             <span className="enterprise-rail-ws-fallback">{t.name?.[0]?.toUpperCase() ?? "W"}</span>
                           )}
                         </span>
-                        <span className="enterprise-ws-menu-item-name">{t.name}</span>
+                        <span className="enterprise-ws-menu-item-copy">
+                          <span className="enterprise-ws-menu-item-name">{t.name}</span>
+                          <span className="enterprise-ws-menu-item-code">
+                            {t.inviteCode ? `Workspace code: ${t.inviteCode}` : "Workspace code unavailable"}
+                          </span>
+                        </span>
+                        {t.id === selectedTeamId ? (
+                          <span className="enterprise-ws-menu-item-current">Current</span>
+                        ) : null}
                       </button>
                     ))}
                   </div>,

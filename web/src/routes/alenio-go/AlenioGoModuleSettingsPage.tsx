@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
+import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import {
   fetchWorkspaceModule,
   fetchWorkspaceModuleTestSessions,
@@ -152,11 +153,15 @@ export function AlenioGoModuleSettingsPage({ moduleKey }: Props) {
     if (m) setModule(m);
   }
 
-  if (loading || !module) {
+  if (loading) {
+    return <EnterprisePageLoading label="Loading module settings" />;
+  }
+
+  if (!module) {
     return (
-      <GoBackendModuleShell title="Module" subtitle="Loading…" tone={tone}>
+      <GoBackendModuleShell title="Module unavailable" subtitle="The module could not be opened." tone={tone}>
         <div className="go-backend-module-panel go-backend-panel-card">
-          <p className="enterprise-muted">{error ?? "Loading module settings…"}</p>
+          <p className="enterprise-muted">{error ?? "Could not load module."}</p>
         </div>
       </GoBackendModuleShell>
     );

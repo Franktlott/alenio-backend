@@ -93,6 +93,8 @@ export type WorkspaceSnapshot = {
   fromLiveData: boolean;
   loadError?: string | null;
 };
+
+/** @deprecated Prefer freeform ask + Seneca Studio. Kept for local rule-based matching only. */
 export const SENECA_QUICK_PROMPTS: SenecaPrompt[] = [
   {
     id: "attention",

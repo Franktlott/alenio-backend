@@ -22,14 +22,12 @@ import {
   fetchTeamMemberStats,
   fetchWebTeam,
   fetchWebTeamSubscription,
-  fetchWebTeamTasks,
   fetchFormerWorkspaceMembers,
   inviteMemberByEmail,
   rejectTeamJoinRequest,
   removeTeamMemberApi,
   setTeamMemberRole,
   transferTeamOwnership,
-  type ApiTask,
   type TeamMemberStatsMap,
   type WebMeUser,
   type WebTeamDetail,
@@ -46,12 +44,6 @@ import {
   type MemberStandardsCompliance,
   type WorkplaceStandards,
 } from "../lib/workplace-standards";
-
-function isTaskOverdue(t: ApiTask, todayStart: Date): boolean {
-  if (t.status === "done") return false;
-  if (!t.dueDate) return false;
-  return new Date(t.dueDate) < todayStart;
-}
 
 function roleLabel(role: string): string {
   if (role === "owner") return "Owner";
@@ -363,15 +355,6 @@ function IconChevronDown({ size = 16 }: { size?: number }) {
   );
 }
 
-function IconStatActions() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
-    </svg>
-  );
-}
-
 function IconTemplateOneOne() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -443,14 +426,10 @@ async function fetchTeamCore(teamId: string, shellRole: string | undefined) {
 }
 
 async function fetchTeamEnrichment(teamId: string) {
-  const [stats, tasks] = await Promise.all([
-    fetchTeamMemberStats(teamId).catch(() => null),
-    fetchWebTeamTasks(teamId).catch(() => []),
-  ]);
+  const stats = await fetchTeamMemberStats(teamId).catch(() => null);
   return {
     memberStats: stats?.stats ?? null,
     workplaceStandards: stats?.workplaceStandards ? mergeWorkplaceStandards(stats.workplaceStandards) : null,
-    overviewTasks: Array.isArray(tasks) ? tasks : [],
   };
 }
 
@@ -560,7 +539,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     teamEnrichmentQuery.data?.workplaceStandards ??
     teamCoreQuery.data?.workplaceStandards ??
     mergeWorkplaceStandards(null);
-  const overviewTasks = teamEnrichmentQuery.data?.overviewTasks ?? [];
   const isPaid = teamCoreQuery.data?.isPaid ?? false;
   const incoming = teamCoreQuery.data?.incoming ?? [];
   const pendingInvites = teamCoreQuery.data?.pendingInvites ?? [];
@@ -653,12 +631,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     setSelectedMemberId(myId);
   }, [teamDetail?.id, teamDetail?.myRole, myId]);
 
-  const todayStart = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-
 
   useEffect(() => {
     setMemberSearch("");
@@ -731,11 +703,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const isFormerMemberProfile = !!selectedFormerMember;
 
   const ownerMember = useMemo(() => sortedMembers.find((m) => m.role === "owner") ?? null, [sortedMembers]);
-
-  const openActionCount = useMemo(
-    () => overviewTasks.filter((t) => t.status !== "done" && !isTaskOverdue(t, todayStart)).length,
-    [overviewTasks, todayStart],
-  );
 
   const onAddMemberByEmail = async (email: string) => {
     if (!selectedTeamId || !email.trim()) return;
@@ -927,17 +894,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
             </div>
           </header>
 
-          <div className={`enterprise-team-stat-row${showOwnerManageRow ? " enterprise-team-stat-row--three" : " enterprise-team-stat-row--one"}`}>
-            <div className="enterprise-team-stat-card enterprise-team-stat-card--actions">
-              <span className="enterprise-team-stat-icon enterprise-team-stat-icon--actions" aria-hidden>
-                <IconStatActions />
-              </span>
-              <span className="enterprise-team-stat-copy enterprise-team-stat-copy--stat">
-                <span className="enterprise-team-stat-title">Actions</span>
-                <span className="enterprise-team-stat-sub">{openActionCount} open</span>
-              </span>
-            </div>
-            {showOwnerManageRow ? (
+          {showOwnerManageRow ? (
+            <div className="enterprise-team-stat-row enterprise-team-stat-row--two">
               <button
                 type="button"
                 className="enterprise-team-stat-card enterprise-team-stat-card--templates enterprise-team-stat-card--action"
@@ -953,8 +911,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   <span className="enterprise-team-stat-sub">Check-ins</span>
                 </span>
               </button>
-            ) : null}
-            {showOwnerManageRow ? (
               <button
                 type="button"
                 className="enterprise-team-stat-card enterprise-team-stat-card--standards enterprise-team-stat-card--action"
@@ -970,8 +926,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   <span className="enterprise-team-stat-sub">Workplace</span>
                 </span>
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           {manageJoin && incoming.length > 0 ? (
             <section className="enterprise-team-pending-panel" aria-label="Pending join requests">

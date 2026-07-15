@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
   createWebTask,
@@ -129,11 +130,7 @@ export function CreateTaskPage() {
   };
 
   if (me === undefined) {
-    return (
-      <div className="enterprise-dashboard-inner">
-        <p className="enterprise-muted">Loading…</p>
-      </div>
-    );
+    return <EnterprisePageLoading label="Preparing your task" />;
   }
 
   return (

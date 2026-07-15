@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { TeamTabPanel } from "../components/TeamTabPanel";
 import { TeamUpgradePanel } from "../components/TeamUpgradePanel";
+import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 
 export function TeamPage() {
   const {
@@ -19,11 +20,7 @@ export function TeamPage() {
   }, [workspaceOverlayLoading, setWorkspaceMainLoading]);
 
   if (me === undefined || teams === null) {
-    return (
-      <div className="enterprise-tab-shell">
-        <p className="enterprise-muted">Loading…</p>
-      </div>
-    );
+    return <EnterprisePageLoading label="Loading your team" />;
   }
 
   const activeTeam = teams.find((t) => t.id === selectedTeamId) ?? null;

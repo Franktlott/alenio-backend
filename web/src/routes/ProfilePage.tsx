@@ -9,6 +9,7 @@ import { ChangeEmailModal } from "../components/ChangeEmailModal";
 import { ProfileTeamsSection } from "../components/ProfileTeamsSection";
 import { OutlookCalendarPanel } from "../components/OutlookCalendarPanel";
 import { OutlookCalendarAlert } from "../components/OutlookCalendarAlert";
+import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { formatOutlookUserError } from "../lib/outlook-calendar-errors";
 import {
   fetchWebTeams,
@@ -17,6 +18,7 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import { pickEnterpriseTeamId, setPersistedEnterpriseTeamId, switchEnterpriseWorkspace } from "../lib/enterprise-selected-team";
+import { senecaStudioAccess } from "../lib/seneca-studio-api";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "../lib/timezone";
 import { UserAvatar } from "../components/UserAvatar";
 
@@ -168,18 +170,34 @@ export function ProfilePage() {
   };
 
   if (me === undefined) {
-    return (
-      <div className="enterprise-tab-shell">
-        <p className="enterprise-muted">Loading…</p>
-      </div>
-    );
+    return <EnterprisePageLoading label="Loading your settings" />;
   }
+
+  const activeTeam = teams?.find((t) => t.id === selectedTeamId) ?? teams?.[0];
+  const aiAccess = senecaStudioAccess(activeTeam?.role);
 
   return (
     <>
       <div className="enterprise-tab-shell enterprise-profile-page" data-testid="settings-screen">
         <div className="enterprise-profile-page-body">
           <div className="enterprise-profile-grid">
+          {aiAccess.canView ? (
+            <section className="enterprise-card seneca-studio-settings-entry" data-testid="settings-ai-entry">
+              <div className="seneca-studio-settings-entry-row">
+                <div>
+                  <h2 className="enterprise-card-title enterprise-card-title-spaced">AI</h2>
+                  <p className="enterprise-muted seneca-studio-settings-entry-desc">
+                    Configure Seneca coaching and workspace context for{" "}
+                    {activeTeam?.name ?? "this workspace"}.
+                    {!aiAccess.canEdit ? " View only for your role." : null}
+                  </p>
+                </div>
+                <Link to="/settings/ai" className="auth-submit seneca-studio-settings-entry-btn">
+                  Open AI settings
+                </Link>
+              </div>
+            </section>
+          ) : null}
           <section className="enterprise-card enterprise-profile-account">
             <div className="enterprise-profile-account-head">
             <h2 className="enterprise-card-title enterprise-card-title-spaced enterprise-profile-account-title">Account</h2>
