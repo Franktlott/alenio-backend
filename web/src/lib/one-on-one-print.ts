@@ -484,3 +484,358 @@ export function meetingNumberFor(meetings: OneOnOneMeeting[], meetingId: string)
   const idx = sorted.findIndex((m) => m.id === meetingId);
   return idx >= 0 ? idx + 1 : sorted.length;
 }
+
+export type OneOnOneTemplateWorksheetOptions = {
+  title: string;
+  description?: string | null;
+  fields: OneOnOneTemplateField[];
+  teamName?: string | null;
+};
+
+function renderBlankAnswer(field: OneOnOneTemplateField): string {
+  if (field.type === "rating") {
+    const max = field.ratingMax ?? 5;
+    const circles = Array.from({ length: max }, (_, i) => {
+      const n = i + 1;
+      return `<span class="rating-dot">${n}</span>`;
+    }).join("");
+    return `<div class="rating-row">${circles}<span class="rating-hint">1 = Not great · ${max} = Excellent</span></div>`;
+  }
+  if (field.type === "yes_no") {
+    return `<div class="yn-row"><span class="yn-box">☐ Yes</span><span class="yn-box">☐ No</span></div>`;
+  }
+  if (field.type === "long_text" || field.type === "manager_notes" || field.type === "associate_notes") {
+    return `
+      <div class="answer-line answer-line--blank">&nbsp;</div>
+      <div class="answer-line answer-line--blank">&nbsp;</div>
+      <div class="answer-line answer-line--blank">&nbsp;</div>
+    `;
+  }
+  return `<div class="answer-line answer-line--blank">&nbsp;</div>`;
+}
+
+function renderBlankQuestion(num: number, field: OneOnOneTemplateField): string {
+  return `
+    <div class="question">
+      <div class="question-label">${num}. ${escapeHtml(field.label)}</div>
+      ${renderBlankAnswer(field)}
+    </div>
+  `;
+}
+
+function renderBlankSections(fields: OneOnOneTemplateField[]): string {
+  const sorted = [...fields].filter((field) => field.type !== "associate_notes").sort((a, b) => a.order - b.order);
+  let html = "";
+  let questionNum = 0;
+  let sectionOpen = false;
+
+  for (const field of sorted) {
+    if (field.type === "section") {
+      if (sectionOpen) html += "</div></div>";
+      sectionOpen = true;
+      html += `
+        <div class="section">
+          <div class="section-head">
+            <span class="section-dot"></span>
+            <span class="section-title">${escapeHtml(field.label).toUpperCase()}</span>
+          </div>
+          <div class="section-body">
+      `;
+      continue;
+    }
+    questionNum += 1;
+    html += renderBlankQuestion(questionNum, field);
+  }
+
+  if (sectionOpen) html += "</div></div>";
+  else if (questionNum > 0) {
+    html = `<div class="section"><div class="section-body">${html}</div></div>`;
+  }
+
+  return html;
+}
+
+function buildTemplateWorksheetHtml(options: OneOnOneTemplateWorksheetOptions, logoUrl: string): string {
+  const title = options.title.trim() || "Check-in";
+  const intro =
+    options.description?.trim() ||
+    "Use this worksheet during the conversation, then enter notes into Alenio when you are done.";
+  const teamLabel = options.teamName?.trim() || "—";
+  const sectionsHtml = renderBlankSections(options.fields);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escapeHtml(title)} — Worksheet</title>
+  <style>
+    @page { size: letter; margin: 0.38in 0.42in; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      font-size: 8.5pt;
+      line-height: 1.32;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .doc { max-width: 100%; margin: 0 auto; }
+    .top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      border-bottom: 1.5px solid #0f172a;
+      padding-bottom: 7px;
+      margin-bottom: 9px;
+    }
+    .brand-logo {
+      height: 28px;
+      width: auto;
+      max-width: 118px;
+      display: block;
+      object-fit: contain;
+    }
+    .doc-type { text-align: right; flex-shrink: 0; }
+    .doc-type-kicker {
+      font-size: 6.5pt;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: #64748b;
+      margin: 0 0 2px;
+      text-transform: uppercase;
+    }
+    .doc-type-title {
+      font-size: 11.5pt;
+      font-weight: 700;
+      margin: 0;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px 10px;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+    }
+    .meta-item label {
+      display: block;
+      font-size: 6pt;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      color: #64748b;
+      margin-bottom: 1px;
+      text-transform: uppercase;
+    }
+    .meta-item .fill-line {
+      border-bottom: 1px solid #94a3b8;
+      min-height: 16px;
+      margin-top: 2px;
+    }
+    .meta-item span {
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: #0f172a;
+      line-height: 1.25;
+    }
+    .intro {
+      font-size: 7.5pt;
+      color: #475569;
+      margin: 0 0 10px;
+      line-height: 1.4;
+    }
+    .section { margin-bottom: 9px; }
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #e8f4fc;
+      border-left: 3px solid #0284c7;
+      padding: 4px 8px;
+      margin-bottom: 6px;
+    }
+    .section-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #0284c7;
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-size: 7pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #0c4a6e;
+    }
+    .section-body { padding: 0 2px; }
+    .question {
+      margin-bottom: 8px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .question-label {
+      font-size: 8pt;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 3px;
+      line-height: 1.25;
+    }
+    .answer-line {
+      border-bottom: 1px solid #cbd5e1;
+      min-height: 16px;
+      padding: 1px 0 2px;
+      font-size: 8pt;
+      color: #334155;
+      line-height: 1.3;
+    }
+    .answer-line--blank { margin-bottom: 2px; }
+    .rating-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .rating-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1px solid #94a3b8;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 7pt;
+      font-weight: 700;
+      color: #475569;
+    }
+    .rating-hint {
+      font-size: 6.5pt;
+      color: #64748b;
+      margin-left: 2px;
+    }
+    .yn-row {
+      display: flex;
+      gap: 1.25rem;
+      font-size: 8.5pt;
+      color: #334155;
+      font-weight: 600;
+    }
+    .yn-box { letter-spacing: 0.01em; }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border-top: 1px solid #cbd5e1;
+      margin-top: 12px;
+      padding-top: 8px;
+    }
+    .footer-col {
+      padding: 0 10px;
+      border-right: 1px solid #e2e8f0;
+    }
+    .footer-col:first-child { padding-left: 0; }
+    .footer-col:last-child { border-right: none; padding-right: 0; }
+    .footer-col h4 {
+      margin: 0 0 1px;
+      font-size: 6.5pt;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      color: #0f172a;
+      text-transform: uppercase;
+    }
+    .footer-col p {
+      margin: 0 0 4px;
+      font-size: 6.5pt;
+      color: #64748b;
+      line-height: 1.25;
+    }
+    .footer-line {
+      border-bottom: 1px solid #cbd5e1;
+      min-height: 14px;
+      margin-bottom: 5px;
+    }
+    .bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #e2e8f0;
+      margin-top: 10px;
+      padding-top: 6px;
+      font-size: 7pt;
+      color: #64748b;
+    }
+    .bottom-bar .brand-logo {
+      height: 16px;
+      max-width: 72px;
+      opacity: 0.85;
+    }
+    .worksheet-note {
+      margin: 0;
+      font-size: 7pt;
+      color: #64748b;
+      font-style: italic;
+    }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .section-head { background: #e8f4fc !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="doc">
+    <div class="top-row">
+      <img src="${escapeHtml(logoUrl)}" alt="Alenio" class="brand-logo" />
+      <div class="doc-type">
+        <p class="doc-type-kicker">Check-in worksheet</p>
+        <h1 class="doc-type-title">${escapeHtml(title)}</h1>
+      </div>
+    </div>
+
+    <div class="meta-grid">
+      <div class="meta-item"><label>Employee</label><div class="fill-line"></div></div>
+      <div class="meta-item"><label>Manager</label><div class="fill-line"></div></div>
+      <div class="meta-item"><label>Date</label><div class="fill-line"></div></div>
+      <div class="meta-item"><label>Workspace</label><span>${escapeHtml(teamLabel)}</span></div>
+    </div>
+
+    <p class="intro">${escapeHtml(intro)}</p>
+
+    ${sectionsHtml}
+
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h4>Action items</h4>
+        <p>Follow-up tasks from this check-in</p>
+        <div class="footer-line"></div>
+        <div class="footer-line"></div>
+        <div class="footer-line"></div>
+      </div>
+      <div class="footer-col">
+        <h4>Prepared by</h4>
+        <p>Manager signature</p>
+        <div class="footer-line"></div>
+        <p class="worksheet-note">Enter completed notes into Alenio after the conversation.</p>
+      </div>
+    </div>
+
+    <div class="bottom-bar">
+      <img src="${escapeHtml(logoUrl)}" alt="Alenio" class="brand-logo" />
+      <span>alenio.com</span>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/** Opens the browser print dialog for a blank check-in worksheet from a template. */
+export function printOneOnOneTemplateWorksheet(options: OneOnOneTemplateWorksheetOptions): void {
+  const fields = options.fields ?? [];
+  if (!fields.some((f) => f.type !== "section")) {
+    throw new Error("This template has no questions to print.");
+  }
+  const html = buildTemplateWorksheetHtml(options, alenioLogoUrl());
+  printHtmlInHiddenFrame(html, "Check-in worksheet");
+}

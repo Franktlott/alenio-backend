@@ -12,6 +12,7 @@ import {
   type OneOnOneTemplateFieldType,
 } from "../lib/api";
 import { appendLeaderCommentsIfMissing, stripLeaderCommentsFields } from "../lib/check-in-leader-comments";
+import { printOneOnOneTemplateWorksheet } from "../lib/one-on-one-print";
 import { SenecaCheckInTemplateModal } from "./seneca/SenecaCheckInTemplateModal";
 
 const QUESTION_TYPE_OPTIONS: {
@@ -131,6 +132,7 @@ function emptyEditorState() {
 
 type Props = {
   teamId: string;
+  teamName?: string | null;
   open: boolean;
   onClose: () => void;
 };
@@ -138,7 +140,7 @@ type Props = {
 type EditorView = "edit" | "preview";
 type ModalView = "list" | "library" | "editor";
 
-export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
+export function OneOnOneTemplatesModal({ teamId, teamName, open, onClose }: Props) {
   const [templates, setTemplates] = useState<OneOnOneTemplate[]>([]);
   const [library, setLibrary] = useState<CheckInLibraryTemplate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -677,6 +679,25 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                                 onClick={() => openPreview(template)}
                               >
                                 Preview
+                              </button>
+                              <button
+                                type="button"
+                                className="enterprise-oneone-templates-table-action"
+                                onClick={() => {
+                                  try {
+                                    printOneOnOneTemplateWorksheet({
+                                      title: template.title,
+                                      description: template.description,
+                                      fields: template.fields,
+                                      teamName,
+                                    });
+                                    setErr(null);
+                                  } catch (e) {
+                                    setErr(e instanceof Error ? e.message : "Could not open print view.");
+                                  }
+                                }}
+                              >
+                                Print
                               </button>
                               <button
                                 type="button"

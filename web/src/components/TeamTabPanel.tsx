@@ -1470,6 +1470,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
       <OneOnOneTemplatesModal
         teamId={teamDetail.id}
+        teamName={teamDetail.name}
         open={oneOneTemplatesOpen}
         onClose={() => setOneOneTemplatesOpen(false)}
       />
