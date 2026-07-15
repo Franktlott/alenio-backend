@@ -324,11 +324,13 @@ export function BillingPage() {
       return { title: "Couldn't load subscription", message: subErr, tone: "error", confirmLabel: "Close" };
     }
     if (!dismissedFlash && billingFlash === "success") {
+      const firstName = me?.name?.trim().split(/\s+/)[0];
       return {
-        title: "Payment received",
-        message: "Thanks — your payment is processing. It may take a moment for your workspace plan to update.",
+        title: firstName ? `Welcome, ${firstName}` : "Welcome to Alenio",
+        message:
+          "You're all set. Your workspace is unlocking now — this usually takes just a moment.",
         tone: "success",
-        confirmLabel: "Continue",
+        confirmLabel: "Get started",
       };
     }
     if (!dismissedFlash && billingFlash === "cancel") {
@@ -349,7 +351,7 @@ export function BillingPage() {
       };
     }
     return null;
-  }, [actionErr, subErr, dismissedSubErr, billingFlash, dismissedFlash, configNoticeOpen]);
+  }, [actionErr, subErr, dismissedSubErr, billingFlash, dismissedFlash, configNoticeOpen, me?.name]);
 
   const closeNotice = useCallback(() => {
     if (actionErr) {

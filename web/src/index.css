@@ -38066,9 +38066,16 @@ button.enterprise-profile-legal-link {
   width: min(100%, 380px);
   background: #fff;
   border-radius: 16px;
-  padding: 1.35rem 1.4rem 1.25rem;
+  padding: 1.45rem 1.45rem 1.3rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
   text-align: center;
+}
+
+.alenio-notice-modal--success {
+  border: 1px solid #e0e7ff;
+  box-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(88, 80, 236, 0.04);
 }
 
 .alenio-notice-brand {
@@ -38090,17 +38097,35 @@ button.enterprise-profile-legal-link {
   color: var(--muted);
 }
 
+.alenio-notice-modal--success .alenio-notice-kicker {
+  color: #5850ec;
+}
+
 .alenio-notice-title {
   margin: 0.35rem 0 0.5rem;
   font-size: 1.15rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.alenio-notice-modal--success .alenio-notice-title {
+  font-size: 1.28rem;
+  font-weight: 750;
 }
 
 .alenio-notice-message {
   margin: 0 0 1.1rem;
   color: var(--muted);
-  line-height: 1.45;
+  line-height: 1.5;
   font-size: 0.925rem;
+}
+
+.alenio-notice-modal--success .alenio-notice-message {
+  color: #475569;
+  max-width: 28ch;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .alenio-notice-confirm {
@@ -38109,7 +38134,7 @@ button.enterprise-profile-legal-link {
   font-weight: 650;
   border: none;
   border-radius: 10px;
-  padding: 0.65rem 1.1rem;
+  padding: 0.7rem 1.1rem;
   background: var(--text, #0f172a);
   color: #fff;
   cursor: pointer;
@@ -38117,7 +38142,12 @@ button.enterprise-profile-legal-link {
 }
 
 .alenio-notice-modal--success .alenio-notice-confirm {
-  background: #047857;
+  background: #5850ec;
+  box-shadow: 0 8px 18px rgba(88, 80, 236, 0.22);
+}
+
+.alenio-notice-modal--success .alenio-notice-confirm:hover {
+  background: #4f46e5;
 }
 
 .alenio-notice-modal--error .alenio-notice-confirm {
