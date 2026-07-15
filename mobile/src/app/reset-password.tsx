@@ -11,7 +11,7 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { authClient } from "@/lib/auth/auth-client";
+import { resetPasswordWithOtp, resetPasswordWithToken } from "@/lib/auth/auth-api";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -48,10 +48,7 @@ export default function ResetPassword() {
     setLoading(true);
     try {
       if (typeof token === "string" && token.trim()) {
-        const result = await authClient.resetPassword({
-          newPassword,
-          token,
-        });
+        const result = await resetPasswordWithToken(newPassword, token);
         if (result.error) {
           setError(result.error.message ?? "Failed to reset password. The link may have expired.");
         } else {
@@ -69,11 +66,7 @@ export default function ResetPassword() {
         return;
       }
 
-      const otpResult = await authClient.emailOtp.resetPassword({
-        email: emailNorm,
-        otp: otpNorm,
-        password: newPassword,
-      });
+      const otpResult = await resetPasswordWithOtp(emailNorm, otpNorm, newPassword);
       if (otpResult.error) {
         setError(otpResult.error.message ?? "Failed to reset password. Check your code and try again.");
       } else {

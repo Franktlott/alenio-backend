@@ -154,6 +154,28 @@ export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
   // Outside `/api/auth/*` so the catch-all does not swallow it.
   app.get("/api/oauth/microsoft/start", (c) => startMicrosoftOAuth(c));
 
+  /**
+   * Password reset request with real send logging.
+   * Better Auth's `/email-otp/send-verification-otp` returns `{success:true}` even when
+   * no user exists (and therefore no email is sent) — which looks like a silent failure.
+   */
+  app.post("/api/password-reset/request", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { email?: unknown } | null;
+    const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    if (!email) {
+      return c.json({ success: true });
+    }
+    try {
+      const outcome = await authServer.sendForgetPasswordOtp(email);
+      console.log("[password-reset/request]", email, outcome);
+      // Always generic success to the client (do not leak account existence).
+      return c.json({ success: true, delivered: outcome === "sent" });
+    } catch (err) {
+      console.error("[password-reset/request] failed:", err);
+      return c.json({ success: true, delivered: false });
+    }
+  });
+
   // Hono 4.6: `/api/auth/*` matches nested paths (sign-in/email, email-otp/...).
   // `/api/auth/**` does NOT match those routes in this Hono version (returns 404).
   app.on(["POST", "GET"], "/api/auth/*", async (c) => {

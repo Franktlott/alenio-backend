@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
-import { authClient } from "@/lib/auth/auth-client";
+import { checkForgetPasswordOtp } from "@/lib/auth/auth-api";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 
 export default function VerifyResetCode() {
@@ -40,11 +40,7 @@ export default function VerifyResetCode() {
 
     setLoading(true);
     try {
-      const check = await authClient.emailOtp.checkVerificationOtp({
-        email: emailNorm,
-        otp: otpNorm,
-        type: "forget-password",
-      });
+      const check = await checkForgetPasswordOtp(emailNorm, otpNorm);
       if (check.error) {
         setError(check.error.message ?? "Invalid code. Please try again.");
         return;

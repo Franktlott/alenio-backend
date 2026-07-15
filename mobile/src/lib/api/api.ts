@@ -34,7 +34,7 @@ const request = async <T>(
   let authHeaders = await getAuthHeaders();
   const doFetch = (headers: Record<string, string>) =>
     fetch(`${baseUrl}${url}`, {
-      method,
+      method: method ?? (body ? "POST" : "GET"),
       body,
       credentials: "include",
       headers: {

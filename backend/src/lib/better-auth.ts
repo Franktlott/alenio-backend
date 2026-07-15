@@ -26,6 +26,8 @@ export type AuthServer = {
   createEmailPasswordUser: (email: string, password: string, name: string) => Promise<boolean>;
   sendEmailVerificationOtp: (email: string) => Promise<void>;
   verifyEmailVerificationOtp: (email: string, otp: string) => Promise<void>;
+  /** Returns whether an OTP email was actually handed to Resend. */
+  sendForgetPasswordOtp: (email: string) => Promise<"sent" | "no_user" | "error">;
 };
 
 function isPostgresUrl(url: string): boolean {
@@ -318,6 +320,46 @@ async function createAuthServer(): Promise<AuthServer | null> {
             type: "email-verification",
           },
         });
+      },
+      async sendForgetPasswordOtp(email: string) {
+        const normalized = email.trim().toLowerCase();
+        if (!normalized) return "no_user";
+
+        // Better Auth's HTTP handler returns success without emailing when the user
+        // is missing. Check neon_auth first so we can log the real outcome.
+        const client = await pool.connect();
+        let exists = false;
+        try {
+          const found = await client.query<{ id: string }>(
+            `SELECT id FROM "user" WHERE lower(email) = lower($1) LIMIT 1`,
+            [normalized],
+          );
+          exists = (found.rowCount ?? 0) > 0;
+        } catch (err) {
+          console.error("[better-auth] forget-password user lookup failed:", err);
+          client.release();
+          return "error";
+        }
+        client.release();
+
+        if (!exists) {
+          console.warn("[better-auth] forget-password skipped; no neon_auth user for", normalized);
+          return "no_user";
+        }
+
+        try {
+          await auth.api.sendVerificationOTP({
+            body: {
+              email: normalized,
+              type: "forget-password",
+            },
+          });
+          console.log("[better-auth] forget-password OTP requested for", normalized);
+          return "sent";
+        } catch (err) {
+          console.error("[better-auth] forget-password OTP send failed:", err);
+          return "error";
+        }
       },
     };
   } catch (err) {

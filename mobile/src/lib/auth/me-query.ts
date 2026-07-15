@@ -1,7 +1,7 @@
-import { fetch } from "expo/fetch";
 import { authHeadersFromToken, agentDebugLog, getAuthHeaders } from "@/lib/auth/auth-client";
 import { readJsonSafe } from "@/lib/api/api";
 import { getBackendUrl } from "@/lib/backend-url";
+import { safeFetch } from "@/lib/auth/safe-fetch";
 
 export type MeUser = {
   id: string;
@@ -23,8 +23,9 @@ export async function fetchMeUser(bearerToken?: string | null): Promise<MeUser |
   } catch {
     return null;
   }
-  const res = await fetch(`${base}/api/me`, {
-    credentials: "include",
+  const res = await safeFetch(`${base}/api/me`, {
+    method: "GET",
+    credentials: "omit",
     headers: authHeaders,
   });
   const json = await readJsonSafe<{ data: MeUser | null }>(res);

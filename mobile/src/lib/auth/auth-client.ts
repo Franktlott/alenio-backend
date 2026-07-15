@@ -5,10 +5,16 @@
 import { createAuthClient } from "better-auth/client";
 import { emailOTPClient } from "better-auth/client/plugins";
 import Constants from "expo-constants";
-import { fetch as expoFetch } from "expo/fetch";
 import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getBackendUrl } from "../backend-url";
+import {
+  checkForgetPasswordOtp,
+  resetPasswordWithOtp,
+  resetPasswordWithToken,
+  sendForgetPasswordOtp,
+} from "./auth-api";
+import { safeFetch } from "./safe-fetch";
 
 const ACCESS_TOKEN_KEY = "alenio:access-token";
 
@@ -194,7 +200,9 @@ function createMobileAuthClient() {
     plugins: [emailOTPClient()],
     fetchOptions: {
       credentials: "omit",
-      customFetchImpl: expoFetch as unknown as typeof fetch,
+      // XHR-based: Expo winter fetch crashes on better-fetch's context object.
+      customFetchImpl: ((input, init) =>
+        safeFetch(input, init as RequestInit & Record<string, unknown>)) as typeof fetch,
       auth: {
         type: "Bearer",
         token: () => syncTokenForClient(),
@@ -246,29 +254,26 @@ export type AuthPasswordFlowClient = {
 };
 
 export function getAuthPasswordFlowClient(): AuthPasswordFlowClient {
-  const client = getAuthClientInstance();
+  // Direct API calls — better-auth client crashes under Expo winter fetch.
   return {
     forgetPassword: {
       emailOtp: async ({ email }) => {
-        const result = await client.emailOtp.sendVerificationOtp({
-          email,
-          type: "forget-password",
-        });
+        const result = await sendForgetPasswordOtp(email);
         return { error: result.error ? { message: result.error.message ?? "Could not send code." } : null };
       },
     },
     emailOtp: {
-      checkVerificationOtp: async ({ email, otp, type }) => {
-        const result = await client.emailOtp.checkVerificationOtp({ email, otp, type });
+      checkVerificationOtp: async ({ email, otp }) => {
+        const result = await checkForgetPasswordOtp(email, otp);
         return { error: result.error ? { message: result.error.message ?? "Invalid code." } : null };
       },
       resetPassword: async ({ email, otp, password }) => {
-        const result = await client.emailOtp.resetPassword({ email, otp, password });
+        const result = await resetPasswordWithOtp(email, otp, password);
         return { error: result.error ? { message: result.error.message ?? "Could not reset password." } : null };
       },
     },
     resetPassword: async ({ newPassword, token }) => {
-      const result = await client.resetPassword({ newPassword, token });
+      const result = await resetPasswordWithToken(newPassword, token);
       return { error: result.error ? { message: result.error.message ?? "Could not reset password." } : null };
     },
   };

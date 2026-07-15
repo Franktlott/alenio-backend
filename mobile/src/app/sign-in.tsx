@@ -23,6 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 import { setPendingJoinCode } from "@/lib/auth/pending-join-code";
 import { completeMobileAuthEntry } from "@/lib/auth/complete-auth-entry";
+import { signInWithEmailPassword } from "@/lib/auth/sign-in-email";
 import {
   extractAuthTokenFromCallbackUrl,
   signInWithMicrosoft,
@@ -95,11 +96,13 @@ export default function SignIn() {
     clearSignedOutMark();
     await cancelMobileAuthQueries(queryClient);
     const emailNorm = email.trim().toLowerCase();
-    agentDebugLog("sign-in start", { runId: "account-switch-v3", hypothesisId: "H8", emailLen: emailNorm.length });
+    console.warn("[alenio-auth] sign-in start v3-direct", { emailLen: emailNorm.length });
     try {
-      const result = await authClient.signIn.email({
-        email: emailNorm,
-        password,
+      const result = await signInWithEmailPassword(emailNorm, password);
+      console.warn("[alenio-auth] sign-in result", {
+        hasError: !!result.error,
+        errorMsg: result.error?.message ?? null,
+        hasUser: !!result.data?.user,
       });
       if (result.error && isEmailNotVerifiedError(result.error)) {
         try {
@@ -152,6 +155,7 @@ export default function SignIn() {
         });
       }
     } catch (err) {
+      console.warn("[alenio-auth] sign-in threw", err);
       setError(formatAuthFlowError(err));
     } finally {
       signingInRef.current = false;
@@ -230,7 +234,7 @@ export default function SignIn() {
               style={{ width: 200, height: 72 }}
               resizeMode="contain"
             />
-            <Text className="text-white/80 text-base mt-2">Connect. Execute. Celebrate</Text>
+            <Text className="text-white/80 text-base mt-2">Connect. Execute. Elevate.</Text>
           </View>
         </SafeAreaView>
       </LinearGradient>

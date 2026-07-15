@@ -1,51 +1,53 @@
 import type { QueryClient } from "@tanstack/react-query";
-import {
-  authClient,
-  getAccessToken,
-  resolveBackendBearerToken,
-  setAccessTokenFromAuthData,
-} from "@/lib/auth/auth-client";
+import { getAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { fetchMeUser, type MeUser } from "@/lib/auth/me-query";
 import { primeMobileAuthSession } from "@/lib/auth/finish-post-auth";
 import { navigateToMobileHomeWithRetry } from "@/lib/auth/auth-entry";
 import { clearSignedOutMark } from "@/lib/auth/use-session";
+import { getBackendUrl } from "@/lib/backend-url";
+import { safeFetch } from "@/lib/auth/safe-fetch";
 
 type SessionData = { user: unknown };
 
+async function fetchSessionViaSafeFetch(token: string): Promise<SessionData | null> {
+  try {
+    const res = await safeFetch(`${getBackendUrl()}/api/auth/get-session`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      credentials: "omit",
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as SessionData | null;
+    return body?.user ? body : null;
+  } catch (err) {
+    console.warn("[alenio-auth] get-session failed", err);
+    return null;
+  }
+}
+
 /**
  * After Better Auth sign-in/sign-up returns a session payload, materialize a backend-ready bearer + session.
+ * Avoids better-auth client (Expo fetch / better-fetch crashes).
  */
 export async function resolveSessionAfterAuth(
   result: { data?: { user?: unknown } | null } | null | undefined,
 ): Promise<{ sessionData: SessionData; token: string } | null> {
   setAccessTokenFromAuthData(result ?? null);
   setAccessTokenFromAuthData(result?.data ?? null);
-  let token =
+  const token =
     setAccessTokenFromAuthData(result?.data ?? null) ??
     setAccessTokenFromAuthData(result ?? null) ??
     (await getAccessToken());
+  if (!token) return null;
 
-  const sessionRes = await authClient.getSession({
-    fetchOptions: {
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    },
-  });
-  token =
-    setAccessTokenFromAuthData(sessionRes ?? null) ??
-    setAccessTokenFromAuthData(sessionRes.data ?? null) ??
-    token;
-
-  const sessionData = (sessionRes.data ?? null) as SessionData | null;
-  const sessionUserId = (sessionData?.user as { id?: string } | undefined)?.id;
-  const backendToken = await resolveBackendBearerToken({
-    fresh: true,
-    expectedUserId: sessionUserId,
-  });
-  if (!sessionData?.user || !backendToken) return null;
-  return { sessionData, token: backendToken };
+  const fromSignIn = result?.data?.user ? ({ user: result.data.user } as SessionData) : null;
+  const sessionData = fromSignIn ?? (await fetchSessionViaSafeFetch(token));
+  if (!sessionData?.user) return null;
+  return { sessionData, token };
 }
 
 /** Sync Prisma user, load /api/me with retries, then prime auth-ready. */

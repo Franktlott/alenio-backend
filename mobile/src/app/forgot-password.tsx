@@ -32,17 +32,24 @@ export default function ForgotPassword() {
     }
 
     setLoading(true);
+    const emailNorm = email.trim().toLowerCase();
     try {
+      console.warn("[alenio-auth] forgot-password send", { emailLen: emailNorm.length });
       const result = await getAuthPasswordFlowClient().forgetPassword.emailOtp({
-        email: email.trim().toLowerCase(),
+        email: emailNorm,
+      });
+      console.warn("[alenio-auth] forgot-password result", {
+        hasError: !!result.error,
+        errorMsg: result.error?.message ?? null,
       });
       if (!result.error) {
         setSuccess(true);
-        router.replace({ pathname: "/verify-reset-code", params: { email: email.trim().toLowerCase() } });
+        router.replace({ pathname: "/verify-reset-code", params: { email: emailNorm } });
       } else {
         setError(result.error.message ?? "Something went wrong. Please try again.");
       }
     } catch (err) {
+      console.warn("[alenio-auth] forgot-password threw", err);
       setError(formatAuthFlowError(err));
     } finally {
       setLoading(false);
@@ -72,7 +79,8 @@ export default function ForgotPassword() {
         >
           <Text className="text-slate-900 dark:text-white text-2xl font-bold mb-2">Reset password</Text>
           <Text className="text-slate-500 dark:text-slate-400 text-sm mb-8">
-            Enter your email and we'll send you a code to reset your password.
+            Enter the email for your Alenio account. If it matches an account, we'll send a reset code
+            (check spam/junk if you don't see it).
           </Text>
 
           {success ? (

@@ -1,5 +1,6 @@
 import { authHeadersFromToken, getAuthHeaders } from "./auth-client";
 import { getBackendUrl } from "../backend-url";
+import { safeFetch } from "./safe-fetch";
 
 /**
  * Ensures the backend has a Prisma user row for the current Neon Auth session.
@@ -22,7 +23,7 @@ export async function provisionBackendUserAfterAuth(bearerToken?: string | null)
   }
   const url = `${base}/api/auth/sync-user`;
   try {
-    const res = await fetch(url, {
+    const res = await safeFetch(url, {
       method: "POST",
       headers: { ...auth, "Content-Type": "application/json" },
     });
