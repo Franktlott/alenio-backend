@@ -82,15 +82,6 @@ function firstNameFrom(displayName: string): string {
   return trimmed.split(/\s+/)[0] ?? trimmed;
 }
 
-function IconMail() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="m3 7 9 6 9-6" />
-    </svg>
-  );
-}
-
 function IconCamera() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -242,8 +233,8 @@ export function TeamMemberProfilePanel({
   canCreateDevGoal,
   canAddDevNotes,
   streak,
-  activeTasks,
-  completedTasks,
+  activeTasks: _activeTasks,
+  completedTasks: _completedTasks,
   activeDevGoals,
   completedDevGoals,
   workplaceStandards,
@@ -256,7 +247,6 @@ export function TeamMemberProfilePanel({
 }: Props) {
   const [section, setSection] = useState<ProfileSection>("Overview");
   const displayName = member.user.name ?? member.user.email ?? "Member";
-  const email = member.user.email?.trim() || null;
   const firstName = firstNameFrom(displayName);
 
   useEffect(() => {
@@ -282,7 +272,7 @@ export function TeamMemberProfilePanel({
     contentSection === "Check-ins"
       ? "Stay consistent. Small check-ins lead to big impact."
       : contentSection === "Overview"
-        ? "Review details, goals, and what’s next for this teammate."
+        ? "Review goals and what’s next for this teammate."
         : "Track growth, goals, and progress over time.";
 
   const nextDueGreen =
@@ -412,67 +402,6 @@ export function TeamMemberProfilePanel({
               </div>
             </div>
           </section>
-
-          {contentSection === "Overview" ? (
-            <section className="enterprise-team-profile-wd-details" aria-label="Member details">
-              <div className="enterprise-team-profile-wd-details-grid">
-                <div className="enterprise-team-profile-wd-details-col">
-                  <h3 className="enterprise-team-profile-wd-details-title">Member details</h3>
-                  <dl className="enterprise-team-profile-wd-kv">
-                    <div>
-                      <dt>Name</dt>
-                      <dd>{displayName}</dd>
-                    </div>
-                    <div>
-                      <dt>Role</dt>
-                      <dd>{roleLabel}</dd>
-                    </div>
-                    <div>
-                      <dt>Team</dt>
-                      <dd>{teamName || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Manager</dt>
-                      <dd>{reportsTo}</dd>
-                    </div>
-                    <div>
-                      <dt>Active goals</dt>
-                      <dd>{activeDevGoals ?? 0}</dd>
-                    </div>
-                    <div>
-                      <dt>Tasks assigned</dt>
-                      <dd>
-                        {activeTasks ?? 0}
-                        {completedTasks != null ? (
-                          <span className="enterprise-team-profile-wd-summary-muted"> · {completedTasks} completed</span>
-                        ) : null}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Next check-in</dt>
-                      <dd>
-                        {nextCheckIn.value}
-                        <span className="enterprise-team-profile-wd-summary-muted"> · {nextCheckIn.hint}</span>
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-                <div className="enterprise-team-profile-wd-details-col">
-                  <h3 className="enterprise-team-profile-wd-details-title">Contact information</h3>
-                  <div className="enterprise-team-profile-wd-contact">
-                    {email ? (
-                      <a className="enterprise-team-profile-wd-contact-row" href={`mailto:${email}`}>
-                        <IconMail />
-                        <span>{email}</span>
-                      </a>
-                    ) : (
-                      <p className="enterprise-muted">No email on file.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </section>
-          ) : null}
 
           <div className="enterprise-team-profile-wd-body">
             {contentSection === "Overview" ? (
