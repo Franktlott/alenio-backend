@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AlenioGoLogo } from "./AlenioGoLogo";
 import { AlenioWorkspaceLoading } from "./AlenioWorkspaceLoading";
 import { clearAccessToken, getAuthClient } from "../lib/auth-client";
@@ -13,6 +13,25 @@ import {
 import type { WebMeUser, WebTeamRow } from "../lib/api";
 
 export type EnterpriseNavId = "activity" | "chat" | "execute" | "go" | "team" | "plan" | "settings" | "admin";
+
+type AdminSection = "users" | "workspaces" | "seneca-studio";
+
+const ADMIN_SECTIONS: Array<{ id: AdminSection; label: string; to: string; hint: string }> = [
+  { id: "users", label: "Users", to: "/admin", hint: "Platform users" },
+  { id: "workspaces", label: "Workspaces", to: "/admin?tab=workspaces", hint: "All workspaces" },
+  {
+    id: "seneca-studio",
+    label: "Seneca Studio",
+    to: "/admin?tab=seneca-studio",
+    hint: "Platform coaching",
+  },
+];
+
+function adminSectionFromSearch(search: string): AdminSection {
+  const tab = new URLSearchParams(search).get("tab");
+  if (tab === "workspaces" || tab === "seneca-studio") return tab;
+  return "users";
+}
 
 type Props = {
   activeNav: EnterpriseNavId;
@@ -138,6 +157,163 @@ function NavItem({
       <span className="enterprise-nav-icon">{icon}</span>
       <span className="enterprise-nav-label">{label}</span>
     </Link>
+  );
+}
+
+function AdminNavItem({ activeNav, icon }: { activeNav: EnterpriseNavId; icon: ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const active = activeNav === "admin";
+  const currentSection = active ? adminSectionFromSearch(location.search) : null;
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  const openMenu = useCallback(() => {
+    clearCloseTimer();
+    setMenuOpen(true);
+  }, [clearCloseTimer]);
+
+  const scheduleCloseMenu = useCallback(() => {
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(() => {
+      setMenuOpen(false);
+      closeTimerRef.current = null;
+    }, 180);
+  }, [clearCloseTimer]);
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const menuHeight = 168;
+    const top = Math.min(
+      Math.max(12, rect.top),
+      Math.max(12, window.innerHeight - menuHeight - 12),
+    );
+    setMenuStyle({
+      position: "fixed",
+      left: rect.right + 8,
+      top,
+      zIndex: 300,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      setMenuStyle(null);
+      return;
+    }
+    updateMenuPosition();
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    const onLayoutChange = () => updateMenuPosition();
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onLayoutChange);
+    window.addEventListener("scroll", onLayoutChange, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onLayoutChange);
+      window.removeEventListener("scroll", onLayoutChange, true);
+    };
+  }, [menuOpen, updateMenuPosition]);
+
+  useEffect(() => () => clearCloseTimer(), [clearCloseTimer]);
+
+  return (
+    <div
+      className="enterprise-rail-nav-item-wrap"
+      ref={wrapRef}
+      onMouseEnter={openMenu}
+      onMouseLeave={scheduleCloseMenu}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`enterprise-nav-item enterprise-nav-item--button enterprise-nav-item--switchable${
+          active || menuOpen ? " enterprise-nav-item-active" : ""
+        }`}
+        onClick={() => {
+          if (!active) {
+            navigate("/admin");
+            setMenuOpen(false);
+            return;
+          }
+          setMenuOpen((open) => !open);
+        }}
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+        aria-label="Admin sections — hover or click to switch"
+        title="Admin — hover or click to switch"
+        data-testid="nav-admin"
+      >
+        <span className="enterprise-nav-icon">{icon}</span>
+        <span className="enterprise-nav-label enterprise-nav-label--with-chevron">
+          Admin
+          <span className="enterprise-nav-chevron" aria-hidden>
+            {menuOpen ? "◂" : "▸"}
+          </span>
+        </span>
+      </button>
+      {menuOpen && menuStyle
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="enterprise-ws-menu enterprise-ws-menu--portal enterprise-admin-menu"
+              style={menuStyle}
+              role="menu"
+              aria-label="Admin sections"
+              onMouseEnter={openMenu}
+              onMouseLeave={scheduleCloseMenu}
+            >
+              <p className="enterprise-ws-menu-title">Admin</p>
+              {ADMIN_SECTIONS.map((section) => {
+                const isCurrent = currentSection === section.id;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    role="menuitem"
+                    className={`enterprise-ws-menu-item${isCurrent ? " enterprise-ws-menu-item--active" : ""}`}
+                    data-testid={`admin-nav-${section.id}`}
+                    onClick={() => {
+                      navigate(section.to);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <span className="enterprise-ws-menu-item-copy">
+                      <span className="enterprise-ws-menu-item-name">{section.label}</span>
+                      <span className="enterprise-ws-menu-item-code">{section.hint}</span>
+                    </span>
+                    {isCurrent ? <span className="enterprise-ws-menu-item-current">Current</span> : null}
+                  </button>
+                );
+              })}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
   );
 }
 
@@ -359,9 +535,7 @@ export function EnterpriseLayout({
           {showPlanNav ? (
             <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
           ) : null}
-          {showAdminNav ? (
-            <NavItem to="/admin" navId="admin" activeNav={activeNav} icon={<IconAdmin />} label="Admin" />
-          ) : null}
+          {showAdminNav ? <AdminNavItem activeNav={activeNav} icon={<IconAdmin />} /> : null}
         </nav>
         <div className="enterprise-rail-footer">
           <div

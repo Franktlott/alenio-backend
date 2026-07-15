@@ -28,7 +28,7 @@ function parseAdminSection(raw: string | null): AdminSection {
 export function AdminPage() {
   const { me } = useEnterpriseShell();
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [section, setSection] = useState<AdminSection>(() => parseAdminSection(searchParams.get("tab")));
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -41,17 +41,8 @@ export function AdminPage() {
   useEffect(() => {
     const next = parseAdminSection(searchParams.get("tab"));
     setSection((prev) => (prev === next ? prev : next));
-  }, [searchParams]);
-
-  function selectSection(next: AdminSection) {
-    setSection(next);
-    if (next === "users") {
-      setSearchParams({}, { replace: true });
-    } else {
-      setSearchParams({ tab: next }, { replace: true });
-    }
     if (next !== "users") setSelectedUserId(null);
-  }
+  }, [searchParams]);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 280);
@@ -177,46 +168,31 @@ export function AdminPage() {
     }
   }
 
+  const sectionCopy =
+    section === "seneca-studio"
+      ? {
+          title: "Seneca Studio",
+          subtitle: "Platform-wide coaching tone, rules, knowledge, and templates for every workspace.",
+        }
+      : section === "workspaces"
+        ? {
+            title: "Workspaces",
+            subtitle: "All workspaces on the platform.",
+          }
+        : {
+            title: "Users",
+            subtitle: "Platform users and admin access.",
+          };
+
   return (
-    <div className="enterprise-tab-shell enterprise-admin-page" data-testid="admin-screen">
+    <div
+      className="enterprise-tab-shell enterprise-tab-shell-scroll enterprise-admin-page"
+      data-testid="admin-screen"
+    >
       <div className="enterprise-admin-header">
         <div>
-          <h1 className="enterprise-admin-title">Admin</h1>
-          <p className="enterprise-muted">
-            {section === "seneca-studio"
-              ? "Platform Seneca coaching configuration"
-              : "Platform users and workspaces"}
-          </p>
-        </div>
-        <div className="enterprise-admin-segments" role="tablist" aria-label="Admin sections">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={section === "users"}
-            className={`enterprise-admin-segment${section === "users" ? " enterprise-admin-segment--active" : ""}`}
-            onClick={() => selectSection("users")}
-          >
-            Users
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={section === "workspaces"}
-            className={`enterprise-admin-segment${section === "workspaces" ? " enterprise-admin-segment--active" : ""}`}
-            onClick={() => selectSection("workspaces")}
-          >
-            Workspaces
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={section === "seneca-studio"}
-            className={`enterprise-admin-segment${section === "seneca-studio" ? " enterprise-admin-segment--active" : ""}`}
-            onClick={() => selectSection("seneca-studio")}
-            data-testid="admin-seneca-studio-tab"
-          >
-            Seneca Studio
-          </button>
+          <h1 className="enterprise-admin-title">{sectionCopy.title}</h1>
+          <p className="enterprise-muted">{sectionCopy.subtitle}</p>
         </div>
       </div>
 

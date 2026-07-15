@@ -1891,6 +1891,13 @@ input {
   max-width: 100%;
 }
 
+.enterprise-nav-label--with-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+}
+
 .enterprise-nav-label--stack {
   display: flex;
   flex-direction: column;
@@ -39107,12 +39114,34 @@ button.enterprise-profile-legal-link {
   min-height: 0;
 }
 
+.enterprise-tab-shell.enterprise-admin-page {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.enterprise-rail-nav-item-wrap {
+  position: relative;
+  z-index: 201;
+}
+
+.enterprise-admin-menu {
+  min-width: 15.5rem;
+  max-height: none;
+  overflow: visible;
+}
+
+.enterprise-admin-menu .enterprise-ws-menu-item-copy {
+  padding-left: 0.15rem;
+}
+
 .enterprise-admin-header {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
+  flex-shrink: 0;
 }
 
 .enterprise-admin-title {
@@ -40561,20 +40590,37 @@ button.enterprise-profile-legal-link {
 .seneca-studio-page--embedded {
   background: transparent;
   min-height: 0;
+  flex: 1 0 auto;
+  overflow: visible;
 }
 
 .seneca-studio-page--embedded .seneca-studio-page-inner {
   max-width: none;
   margin: 0;
-  padding: 0 0 2rem;
+  padding: 0 0 2.5rem;
+  overflow: visible;
 }
 
 .seneca-studio-page--embedded .seneca-studio-header {
-  margin-top: 0.25rem;
+  margin-top: 0;
+}
+
+.seneca-studio-header--toolbar {
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.seneca-studio-header-actions--end {
+  margin-left: auto;
 }
 
 .seneca-studio-page--embedded .seneca-studio-title {
   font-size: 1.25rem;
+}
+
+.seneca-studio-page--embedded .seneca-studio-col--right {
+  position: static;
+  top: auto;
 }
 
 .seneca-studio-page-inner {

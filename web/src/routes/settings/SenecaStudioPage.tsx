@@ -512,51 +512,84 @@ export function SenecaStudioPage({
           </nav>
         ) : null}
 
-        <header className="seneca-studio-header">
-          <div>
-            {embedded ? (
-              <h2 className="seneca-studio-title">Seneca Studio</h2>
-            ) : (
-              <h1 className="seneca-studio-title">Seneca Studio</h1>
-            )}
-            <p className="seneca-studio-subtitle">
-              {isPlatform
-                ? "Platform-wide coaching tone, rules, knowledge, and templates for every workspace."
-                : "Configure how Seneca coaches your managers and teams."}
-            </p>
-          </div>
-          <div className="seneca-studio-header-actions">
-            <button
-              type="button"
-              className="enterprise-team-pill-btn"
-              disabled={previewBusy || !previewQuestion.trim()}
-              onClick={() => void onGeneratePreview()}
-            >
-              {previewBusy ? "Generating…" : "Preview"}
-            </button>
-            {canEdit ? (
-              <>
+        <header className={`seneca-studio-header${embedded ? " seneca-studio-header--toolbar" : ""}`}>
+          {embedded ? (
+            <div className="seneca-studio-header-actions seneca-studio-header-actions--end">
+              <button
+                type="button"
+                className="enterprise-team-pill-btn"
+                disabled={previewBusy || !previewQuestion.trim()}
+                onClick={() => void onGeneratePreview()}
+              >
+                {previewBusy ? "Generating…" : "Preview"}
+              </button>
+              {canEdit ? (
+                <>
+                  <button
+                    type="button"
+                    className="enterprise-team-pill-btn"
+                    disabled={busy || !dirty}
+                    onClick={() => void onSaveDraft()}
+                  >
+                    Save draft
+                  </button>
+                  <button
+                    type="button"
+                    className="auth-submit seneca-studio-publish-btn"
+                    disabled={busy}
+                    onClick={() => void onPublish()}
+                  >
+                    Publish changes
+                  </button>
+                </>
+              ) : (
+                <span className="seneca-studio-badge seneca-studio-badge--readonly">View only</span>
+              )}
+            </div>
+          ) : (
+            <>
+              <div>
+                <h1 className="seneca-studio-title">Seneca Studio</h1>
+                <p className="seneca-studio-subtitle">
+                  {isPlatform
+                    ? "Platform-wide coaching tone, rules, knowledge, and templates for every workspace."
+                    : "Configure how Seneca coaches your managers and teams."}
+                </p>
+              </div>
+              <div className="seneca-studio-header-actions">
                 <button
                   type="button"
                   className="enterprise-team-pill-btn"
-                  disabled={busy || !dirty}
-                  onClick={() => void onSaveDraft()}
+                  disabled={previewBusy || !previewQuestion.trim()}
+                  onClick={() => void onGeneratePreview()}
                 >
-                  Save draft
+                  {previewBusy ? "Generating…" : "Preview"}
                 </button>
-                <button
-                  type="button"
-                  className="auth-submit seneca-studio-publish-btn"
-                  disabled={busy}
-                  onClick={() => void onPublish()}
-                >
-                  Publish changes
-                </button>
-              </>
-            ) : (
-              <span className="seneca-studio-badge seneca-studio-badge--readonly">View only</span>
-            )}
-          </div>
+                {canEdit ? (
+                  <>
+                    <button
+                      type="button"
+                      className="enterprise-team-pill-btn"
+                      disabled={busy || !dirty}
+                      onClick={() => void onSaveDraft()}
+                    >
+                      Save draft
+                    </button>
+                    <button
+                      type="button"
+                      className="auth-submit seneca-studio-publish-btn"
+                      disabled={busy}
+                      onClick={() => void onPublish()}
+                    >
+                      Publish changes
+                    </button>
+                  </>
+                ) : (
+                  <span className="seneca-studio-badge seneca-studio-badge--readonly">View only</span>
+                )}
+              </div>
+            </>
+          )}
         </header>
 
         <div className="seneca-studio-version-bar">
