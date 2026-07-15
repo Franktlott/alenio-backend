@@ -1,4 +1,5 @@
 import { getBackendUrl } from "../backend-url";
+import { mobileAuthHeaders } from "./auth-api";
 import { safeFetch } from "./safe-fetch";
 import { setAccessToken, setAccessTokenFromAuthData } from "./auth-client";
 
@@ -22,10 +23,7 @@ export async function signInWithEmailPassword(
   try {
     res = await safeFetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: mobileAuthHeaders(),
       body: JSON.stringify({ email, password }),
       credentials: "omit",
     });

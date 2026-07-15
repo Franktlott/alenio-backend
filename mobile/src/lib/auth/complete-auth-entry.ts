@@ -6,6 +6,7 @@ import { primeMobileAuthSession } from "@/lib/auth/finish-post-auth";
 import { navigateToMobileHomeWithRetry } from "@/lib/auth/auth-entry";
 import { clearSignedOutMark } from "@/lib/auth/use-session";
 import { getBackendUrl } from "@/lib/backend-url";
+import { mobileAuthHeaders } from "@/lib/auth/auth-api";
 import { safeFetch } from "@/lib/auth/safe-fetch";
 
 type SessionData = { user: unknown };
@@ -14,10 +15,9 @@ async function fetchSessionViaSafeFetch(token: string): Promise<SessionData | nu
   try {
     const res = await safeFetch(`${getBackendUrl()}/api/auth/get-session`, {
       method: "GET",
-      headers: {
-        Accept: "application/json",
+      headers: mobileAuthHeaders({
         Authorization: `Bearer ${token}`,
-      },
+      }),
       credentials: "omit",
     });
     if (!res.ok) return null;

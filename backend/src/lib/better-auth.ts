@@ -155,6 +155,9 @@ async function createAuthServer(): Promise<AuthServer | null> {
         database: {
           generateId: "uuid",
         },
+        // Mobile (Expo) uses Bearer tokens via XHR and often has no browser Origin / may send
+        // sticky cookies — CSRF cookie checks then fail with "Missing or null Origin".
+        disableCSRFCheck: true,
       },
       emailAndPassword: {
         enabled: true,

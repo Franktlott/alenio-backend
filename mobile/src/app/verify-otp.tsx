@@ -16,7 +16,7 @@ import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { getAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
-import { sendEmailVerificationOtp, verifyEmailOtp } from "@/lib/auth/auth-api";
+import { mobileAuthHeaders, sendEmailVerificationOtp, verifyEmailOtp } from "@/lib/auth/auth-api";
 import { signInWithEmailPassword } from "@/lib/auth/sign-in-email";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearPendingSignUp, getPendingSignUp } from "@/lib/auth/pending-signup";
@@ -86,10 +86,9 @@ export default function VerifyOtp() {
         try {
           const sessionRes = await safeFetch(`${getBackendUrl()}/api/auth/get-session`, {
             method: "GET",
-            headers: {
-              Accept: "application/json",
+            headers: mobileAuthHeaders({
               Authorization: `Bearer ${bearer}`,
-            },
+            }),
             credentials: "omit",
           });
           if (sessionRes.ok) {

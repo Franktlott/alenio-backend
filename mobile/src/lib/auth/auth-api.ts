@@ -2,6 +2,18 @@ import { getBackendUrl } from "../backend-url";
 import { setAccessToken, setAccessTokenFromAuthData } from "./auth-client";
 import { safeFetch } from "./safe-fetch";
 
+/** Better Auth CSRF requires a trusted Origin (RN XHR often sends none / cookies). */
+export const MOBILE_AUTH_ORIGIN = "https://alenio.com";
+
+export function mobileAuthHeaders(extra?: Record<string, string>): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    Origin: MOBILE_AUTH_ORIGIN,
+    ...extra,
+  };
+}
+
 export type AuthApiError = { message?: string; code?: string } | null;
 
 export type AuthApiResult = {
@@ -44,10 +56,7 @@ export async function postAuthApi(
   try {
     const res = await safeFetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: mobileAuthHeaders(),
       body: JSON.stringify(body),
       credentials: "omit",
     });
@@ -112,10 +121,7 @@ export async function sendForgetPasswordOtp(email: string) {
   try {
     const res = await safeFetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: mobileAuthHeaders(),
       body: JSON.stringify({ email }),
       credentials: "omit",
     });
