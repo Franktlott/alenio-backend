@@ -38406,7 +38406,8 @@ button.enterprise-profile-legal-link {
 
 .billing-page {
   width: 100%;
-  height: auto;
+  height: 100%;
+  min-height: 100%;
   max-width: 1080px;
   margin: 0 auto;
   display: flex;
@@ -38414,7 +38415,6 @@ button.enterprise-profile-legal-link {
   gap: 0.85rem;
   padding: 1rem 1.35rem 1.25rem;
   box-sizing: border-box;
-  min-height: 0;
 }
 
 .billing-hero {
@@ -38527,12 +38527,14 @@ button.enterprise-profile-legal-link {
 }
 
 .billing-plans {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.85rem;
-  align-items: stretch;
+  align-items: start;
+  align-content: center;
   width: 100%;
+  min-height: 0;
 }
 
 .billing-card {
@@ -38749,7 +38751,7 @@ button.enterprise-profile-legal-link {
 }
 
 .billing-help {
-  margin: 0;
+  margin: auto 0 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -38820,8 +38822,8 @@ button.enterprise-profile-legal-link {
 
   .billing-page {
     height: auto;
+    min-height: 100%;
     max-width: 420px;
-    overflow: visible;
   }
 
   .billing-hero {
@@ -38834,7 +38836,8 @@ button.enterprise-profile-legal-link {
 
   .billing-plans {
     grid-template-columns: 1fr;
-    height: auto;
+    flex: 0 0 auto;
+    align-content: start;
   }
 
   .billing-card {
@@ -38848,6 +38851,7 @@ button.enterprise-profile-legal-link {
   .billing-help {
     flex-direction: column;
     align-items: stretch;
+    margin-top: 1rem;
   }
 }
 
