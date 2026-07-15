@@ -181,6 +181,8 @@ export type WebMeUser = {
   image: string | null;
   createdAt: string;
   timezone?: string | null;
+  /** Platform admin — Alenio-wide Admin tab /ops. Absent on older API responses. */
+  isAdmin?: boolean;
 };
 
 export type WebTeamRow = {

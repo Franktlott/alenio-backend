@@ -35,6 +35,7 @@ function activeNavFromPath(pathname: string): EnterpriseNavId {
   if (pathname.startsWith("/go")) return "go";
   if (pathname.startsWith("/billing")) return "plan";
   if (pathname.startsWith("/team")) return "team";
+  if (pathname.startsWith("/admin")) return "admin";
   if (pathname.startsWith("/profile")) return "profile";
   if (pathname.startsWith("/tasks")) return "execute";
   return "execute";
@@ -196,7 +197,9 @@ export function EnterpriseShellLayout() {
   const topBarPageTitle = enterpriseNavTitle(activeNav);
   const hasNoTeams = teams !== null && teams.length === 0;
   const isProfileRoute = location.pathname.startsWith("/profile");
-  const showNoTeamsEmptyState = hasNoTeams && !isProfileRoute;
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  const showAdminNav = me?.isAdmin === true;
+  const showNoTeamsEmptyState = hasNoTeams && !isProfileRoute && !isAdminRoute;
 
   const workspaceOwner =
     teams !== null && !!effectiveTeamId && teams.find((t) => t.id === effectiveTeamId)?.role === "owner";
@@ -217,10 +220,16 @@ export function EnterpriseShellLayout() {
     navigate("/get-app", { replace: true });
   }, [navigate]);
 
-  /** Plan / billing is owner-only; Workspace requires Pro+; Go requires Operations. */
+  /** Plan / billing is owner-only; Workspace requires Pro+; Go requires Operations; Admin is platform-admin-only. */
   useLayoutEffect(() => {
     if (teams === null) return;
     const path = location.pathname;
+    if (path.startsWith("/admin")) {
+      if (me !== undefined && me?.isAdmin !== true) {
+        navigate("/dashboard", { replace: true });
+      }
+      return;
+    }
     if (path.startsWith("/billing")) {
       if (!workspaceOwner && effectiveTeamId) {
         navigate("/dashboard", { replace: true });
@@ -235,7 +244,7 @@ export function EnterpriseShellLayout() {
     if (isTeamGatedShellRoute && !showActivityExecuteNav && path !== "/chat") {
       navigate("/chat", { replace: true });
     }
-  }, [teams, location.pathname, workspaceOwner, showActivityExecuteNav, showGoNav, effectiveTeamId, navigate]);
+  }, [teams, location.pathname, workspaceOwner, showActivityExecuteNav, showGoNav, effectiveTeamId, navigate, me]);
 
   const contextValue = useMemo<EnterpriseShellContextValue>(
     () => ({
@@ -293,6 +302,7 @@ export function EnterpriseShellLayout() {
         showPlanNav={workspaceOwner}
         showActivityExecuteNav={showActivityExecuteNav}
         showGoNav={showGoNav}
+        showAdminNav={showAdminNav}
       >
         {teams === null ? (
           <div className="enterprise-tab-shell">

@@ -9,6 +9,7 @@ import { AlenioGoAlertsModulePage } from "./routes/alenio-go/AlenioGoAlertsModul
 import { AlenioGoLinkedDevicesRoutes } from "./routes/alenio-go/AlenioGoLinkedDevicesRoutes";
 import { AlenioGoModuleSettingsPage } from "./routes/alenio-go/AlenioGoModuleSettingsPage";
 import { ActivityPage } from "./routes/ActivityPage";
+import { AdminPage } from "./routes/AdminPage";
 import { BillingPage } from "./routes/BillingPage";
 import { ChatPage } from "./routes/ChatPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
@@ -154,6 +155,7 @@ export default function App() {
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/billing" element={<BillingPage />} />
           <Route path="/team" element={<TeamPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/tasks/new" element={<CreateTaskPage />} />
         </Route>

@@ -12,7 +12,7 @@ import {
 } from "../lib/enterprise-selected-team";
 import type { WebMeUser, WebTeamRow } from "../lib/api";
 
-export type EnterpriseNavId = "activity" | "chat" | "execute" | "go" | "team" | "plan" | "profile";
+export type EnterpriseNavId = "activity" | "chat" | "execute" | "go" | "team" | "plan" | "profile" | "admin";
 
 type Props = {
   activeNav: EnterpriseNavId;
@@ -36,6 +36,8 @@ type Props = {
   showActivityExecuteNav: boolean;
   /** When false, Alenio Go is hidden (requires Operations plan). */
   showGoNav?: boolean;
+  /** When true, platform Admin sidebar item is shown. */
+  showAdminNav?: boolean;
 };
 
 const WORKSPACE_OVERLAY_MIN_MS = 220;
@@ -81,6 +83,14 @@ function IconSignOut() {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+function IconAdmin() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   );
 }
@@ -136,6 +146,7 @@ export function EnterpriseLayout({
   showPlanNav,
   showActivityExecuteNav,
   showGoNav = false,
+  showAdminNav = false,
 }: Props) {
   const [showWorkspaceOverlay, setShowWorkspaceOverlay] = useState(false);
   /** User changed workspace (sidebar or profile); until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
@@ -302,6 +313,9 @@ export function EnterpriseLayout({
           <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
           {showPlanNav ? (
             <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
+          ) : null}
+          {showAdminNav ? (
+            <NavItem to="/admin" navId="admin" activeNav={activeNav} icon={<IconAdmin />} label="Admin" />
           ) : null}
         </nav>
         <div className="enterprise-rail-footer">

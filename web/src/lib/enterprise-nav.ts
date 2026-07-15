@@ -8,6 +8,7 @@ export const ENTERPRISE_NAV_TITLES: Record<EnterpriseNavId, string> = {
   team: "Team",
   plan: "Billing",
   profile: "Profile",
+  admin: "Admin",
 };
 
 export function enterpriseNavTitle(nav: EnterpriseNavId): string {

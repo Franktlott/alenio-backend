@@ -95,7 +95,15 @@ webRouter.get("/api/me", async (c) => {
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, image: true, createdAt: true, timezone: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      createdAt: true,
+      timezone: true,
+      isAdmin: true,
+    },
   });
   // Do not return 200 + null — that lets the empty-workspace UI look "signed in" with a broken user row.
   if (!user) return c.json({ error: "Unauthorized" }, 401);
