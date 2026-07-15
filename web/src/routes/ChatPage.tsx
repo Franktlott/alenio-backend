@@ -13,6 +13,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 import { TeamActivityPanel } from "../components/activity/TeamActivityPanel";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
+import { useEnterprisePaneActive } from "./EnterpriseKeepAliveOutlet";
 import { queryKeys } from "../lib/query-keys";
 import { CreateChannelModal, CreateGroupModal, NewDmModal } from "../components/ChatCreateModals";
 import {
@@ -250,12 +251,49 @@ function conversationRecencyMs(c: DmConversation): number {
 
 export function ChatPage() {
   const queryClient = useQueryClient();
-  const [params, setParams] = useSearchParams();
-  const teamIdFromUrl = params.get("teamId")?.trim() ?? "";
-  const topicIdFromUrl = params.get("topicId")?.trim() ?? "";
-  const conversationIdFromUrl = params.get("conversationId")?.trim() ?? "";
-
+  const paneActive = useEnterprisePaneActive();
   const { me, teams, selectedTeamId, setSelectedTeamId, refreshMeAndTeams } = useEnterpriseShell();
+  const [params, setParams] = useSearchParams();
+  const liveTeamId = params.get("teamId")?.trim() ?? "";
+  const liveTopicId = params.get("topicId")?.trim() ?? "";
+  const liveConversationId = params.get("conversationId")?.trim() ?? "";
+  const frozenChatUrl = useRef({
+    teamId: liveTeamId,
+    topicId: liveTopicId,
+    conversationId: liveConversationId,
+  });
+  useEffect(() => {
+    if (!paneActive) return;
+    // Sidebar links to bare `/chat` — restore the last channel/DM instead of wiping it.
+    const hasLiveSelection = Boolean(liveTopicId || liveConversationId || liveTeamId);
+    if (!hasLiveSelection) {
+      const frozen = frozenChatUrl.current;
+      if (frozen.conversationId || frozen.topicId || frozen.teamId || selectedTeamId) {
+        setParams(
+          frozen.conversationId
+            ? {
+                ...(frozen.teamId || selectedTeamId ? { teamId: frozen.teamId || selectedTeamId } : {}),
+                conversationId: frozen.conversationId,
+              }
+            : {
+                teamId: frozen.teamId || selectedTeamId,
+                topicId: frozen.topicId || "general",
+              },
+          { replace: true },
+        );
+      }
+      return;
+    }
+    frozenChatUrl.current = {
+      teamId: liveTeamId,
+      topicId: liveTopicId,
+      conversationId: liveConversationId,
+    };
+  }, [paneActive, liveTeamId, liveTopicId, liveConversationId, selectedTeamId, setParams]);
+  const teamIdFromUrl = paneActive ? liveTeamId : frozenChatUrl.current.teamId;
+  const topicIdFromUrl = paneActive ? liveTopicId : frozenChatUrl.current.topicId;
+  const conversationIdFromUrl = paneActive ? liveConversationId : frozenChatUrl.current.conversationId;
+
   const [sendErr, setSendErr] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -309,18 +347,24 @@ export function ChatPage() {
   const conversationsQuery = useQuery({
     queryKey: queryKeys.chatConversations,
     queryFn: () => fetchDmConversations(),
+    staleTime: 60_000,
+    refetchOnMount: false,
   });
 
   const topicsQuery = useQuery({
     queryKey: queryKeys.chatTopics(selectedTeamId),
     queryFn: () => fetchTeamTopics(selectedTeamId),
     enabled: !!selectedTeamId,
+    staleTime: 60_000,
+    refetchOnMount: false,
   });
 
   const teamDetailQuery = useQuery({
     queryKey: queryKeys.teamDetail(selectedTeamId),
     queryFn: () => fetchWebTeam(selectedTeamId),
     enabled: !!selectedTeamId,
+    staleTime: 60_000,
+    refetchOnMount: false,
   });
 
   const threadQuery = useQuery({
@@ -339,7 +383,9 @@ export function ChatPage() {
       return { messages, polls };
     },
     enabled: isDmMode ? !!selectedConversationId : !!selectedTeamId,
-    refetchInterval: MESSAGE_REFRESH_MS,
+    refetchInterval: paneActive ? MESSAGE_REFRESH_MS : false,
+    staleTime: 15_000,
+    refetchOnMount: false,
   });
 
   const conversations = conversationsQuery.data ?? [];
@@ -364,6 +410,7 @@ export function ChatPage() {
           : null;
   const loadingMeetings = threadQuery.isPending && messages.length === 0;
 
+
   const refreshConversations = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.chatConversations });
   }, [queryClient]);
@@ -375,6 +422,7 @@ export function ChatPage() {
   }, [queryClient, isDmMode, threadId]);
 
   useEffect(() => {
+    if (!paneActive) return;
     if (!teams?.length) return;
     if (
       teamIdFromUrl &&
@@ -384,14 +432,15 @@ export function ChatPage() {
     ) {
       setSelectedTeamId(teamIdFromUrl);
     }
-  }, [teams, teamIdFromUrl, selectedTeamId, setSelectedTeamId]);
+  }, [paneActive, teams, teamIdFromUrl, selectedTeamId, setSelectedTeamId]);
 
   useEffect(() => {
+    if (!paneActive) return;
     if (!teams?.length || !selectedTeamId) return;
     if (isDmMode) return;
     if (teamIdFromUrl === selectedTeamId && topicIdFromUrl === selectedTopicId) return;
     setParams({ teamId: selectedTeamId, topicId: selectedTopicId }, { replace: true });
-  }, [teams, selectedTeamId, teamIdFromUrl, topicIdFromUrl, selectedTopicId, isDmMode, setParams]);
+  }, [paneActive, teams, selectedTeamId, teamIdFromUrl, topicIdFromUrl, selectedTopicId, isDmMode, setParams]);
 
   const canCreateChannel = teamDetail?.myRole === "owner" || teamDetail?.myRole === "admin";
 

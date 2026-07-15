@@ -14,3 +14,8 @@ export const ENTERPRISE_NAV_TITLES: Record<EnterpriseNavId, string> = {
 export function enterpriseNavTitle(nav: EnterpriseNavId): string {
   return ENTERPRISE_NAV_TITLES[nav];
 }
+
+/** Regular members see Profile (their own card); leaders and owners see Team. */
+export function enterpriseTeamNavTitle(role?: string | null): string {
+  return role === "member" ? "Profile" : "Team";
+}

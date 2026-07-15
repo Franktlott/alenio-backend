@@ -57,8 +57,8 @@ export function AccountDeletionPage() {
             </li>
             <li>
               Open <strong>Profile</strong> from the sidebar (or go to{" "}
-              <Link to="/profile" className="legal-doc-inline-link">
-                {LEGAL_WEBSITE_LABEL}/profile
+              <Link to="/settings" className="legal-doc-inline-link">
+                {LEGAL_WEBSITE_LABEL}/settings
               </Link>
               ).
             </li>

@@ -49,7 +49,7 @@ type Props = {
   daysSinceLastCheckIn?: number | null;
   canManageStandards?: boolean;
   onManageStandards?: () => void;
-  onBack: () => void;
+  onBack?: () => void;
   onManage: () => void;
 };
 
@@ -157,9 +157,11 @@ export function TeamMemberProfilePanel({
 
   return (
     <div className="enterprise-team-profile enterprise-team-profile--wd" data-testid="team-member-profile">
-      <button type="button" className="enterprise-team-profile-back" onClick={onBack}>
-        ← Back to team
-      </button>
+      {onBack ? (
+        <button type="button" className="enterprise-team-profile-back" onClick={onBack}>
+          ← Back to team
+        </button>
+      ) : null}
 
       <div className="enterprise-team-profile-wd-layout">
         <aside className="enterprise-team-profile-rail">

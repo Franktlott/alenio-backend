@@ -18,6 +18,7 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import { ASSOCIATE_FEEDBACK_SECTION_TITLE, parseFeedbackTaskDescription } from "../lib/one-on-one-feedback";
+import { enterpriseTeamNavTitle } from "../lib/enterprise-nav";
 import { normalizeTaskStatus } from "../lib/task-status";
 import { isTaskPhotoUrl } from "../lib/task-attachment";
 import { formatTaskDueDateLabel } from "../lib/timezone";
@@ -272,6 +273,9 @@ export function TaskDetailPage() {
     teams === null ||
     !workspaceId ||
     teams.find((t) => t.id === workspaceId)?.hasTeamFeatures === true;
+  const teamNavLabel = enterpriseTeamNavTitle(
+    teams !== null && workspaceId ? teams.find((t) => t.id === workspaceId)?.role : undefined,
+  );
 
   return (
     <EnterpriseLayout
@@ -286,6 +290,7 @@ export function TaskDetailPage() {
       }
       showPlanNav={showPlanNav}
       showActivityExecuteNav={showActivityExecuteNav}
+      teamNavLabel={teamNavLabel}
     >
       <div className="enterprise-dashboard-inner task-detail-page" data-testid="task-detail-screen">
         <div className="task-detail-head">

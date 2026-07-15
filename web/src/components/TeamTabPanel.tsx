@@ -1,8 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { queryKeys } from "../lib/query-keys";
 import { AddMemberModal } from "./AddMemberModal";
+import { AlenioWorkspaceLoading } from "./AlenioWorkspaceLoading";
 import { PendingInvitesModal } from "./PendingInvitesModal";
 import { PendingCalendarEventsModal } from "./PendingCalendarEventsModal";
 import { TeamMemberManageModal } from "./TeamMemberManageModal";
@@ -11,6 +12,8 @@ import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
 import { WorkplaceStandardsModal, mergeWorkplaceStandards } from "./WorkplaceStandardsModal";
 import { StandardsStatusKey } from "./StandardsStatusKey";
 import { UserAvatar } from "./UserAvatar";
+import { isRecentFooterEnterpriseWorkspaceSelect } from "../lib/enterprise-selected-team";
+import { useEnterprisePaneActive } from "../routes/EnterpriseKeepAliveOutlet";
 import {
   approveTeamJoinRequest,
   fetchPendingCalendarEvents,
@@ -352,6 +355,14 @@ function IconSearch({ size = 18 }: { size?: number }) {
   );
 }
 
+function IconChevronDown({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" aria-hidden>
+      <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function IconStatActions() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -391,29 +402,55 @@ function IconGear() {
   );
 }
 
-async function fetchTeamContext(teamId: string) {
-  const detail = await fetchWebTeam(teamId);
-  const manageJoin = canManageJoinRequests(detail.myRole);
-  const [stats, tasks, sub, joinList, inviteList, calendarPending, formerMembers] = await Promise.all([
-    fetchTeamMemberStats(teamId).catch(() => null),
-    fetchWebTeamTasks(teamId).catch(() => []),
+async function fetchTeamCore(teamId: string, shellRole: string | undefined) {
+  const manageJoinHint = shellRole ? canManageJoinRequests(shellRole) : true;
+  const [detail, sub, joinList, inviteList, calendarPending, formerMembers] = await Promise.all([
+    fetchWebTeam(teamId),
     fetchWebTeamSubscription(teamId).catch(() => null),
-    manageJoin ? fetchTeamJoinRequests(teamId).catch(() => []) : Promise.resolve([]),
-    manageJoin ? fetchTeamInvites(teamId).catch(() => []) : Promise.resolve([]),
-    manageJoin ? fetchPendingCalendarEvents(teamId).catch(() => []) : Promise.resolve([]),
-    manageJoin ? fetchFormerWorkspaceMembers(teamId).catch(() => []) : Promise.resolve([]),
+    manageJoinHint ? fetchTeamJoinRequests(teamId).catch(() => []) : Promise.resolve([]),
+    manageJoinHint ? fetchTeamInvites(teamId).catch(() => []) : Promise.resolve([]),
+    manageJoinHint ? fetchPendingCalendarEvents(teamId).catch(() => []) : Promise.resolve([]),
+    manageJoinHint ? fetchFormerWorkspaceMembers(teamId).catch(() => []) : Promise.resolve([]),
   ]);
+  const manageJoin = canManageJoinRequests(detail.myRole);
+  // If shell role was incomplete, fetch admin lists after detail resolves.
+  let incoming = manageJoin ? joinList : [];
+  let pendingInvites = manageJoin ? inviteList : [];
+  let pendingCalendarEvents = manageJoin ? calendarPending : [];
+  let formers = manageJoin ? (Array.isArray(formerMembers) ? formerMembers : []) : [];
+  if (manageJoin && !manageJoinHint) {
+    const [j, i, c, f] = await Promise.all([
+      fetchTeamJoinRequests(teamId).catch(() => []),
+      fetchTeamInvites(teamId).catch(() => []),
+      fetchPendingCalendarEvents(teamId).catch(() => []),
+      fetchFormerWorkspaceMembers(teamId).catch(() => []),
+    ]);
+    incoming = j;
+    pendingInvites = i;
+    pendingCalendarEvents = c;
+    formers = Array.isArray(f) ? f : [];
+  }
   const plan = sub?.plan ?? "free";
   return {
     detail,
-    memberStats: stats?.stats ?? null,
-    workplaceStandards: mergeWorkplaceStandards(stats?.workplaceStandards ?? detail.workplaceStandards),
-    overviewTasks: Array.isArray(tasks) ? tasks : [],
+    workplaceStandards: mergeWorkplaceStandards(detail.workplaceStandards),
     isPaid: plan === "team" || plan === "pro" || plan === "operations",
-    incoming: manageJoin ? joinList : [],
-    pendingInvites: manageJoin ? inviteList : [],
-    pendingCalendarEvents: manageJoin ? calendarPending : [],
-    formerMembers: Array.isArray(formerMembers) ? formerMembers : [],
+    incoming,
+    pendingInvites,
+    pendingCalendarEvents,
+    formerMembers: formers,
+  };
+}
+
+async function fetchTeamEnrichment(teamId: string) {
+  const [stats, tasks] = await Promise.all([
+    fetchTeamMemberStats(teamId).catch(() => null),
+    fetchWebTeamTasks(teamId).catch(() => []),
+  ]);
+  return {
+    memberStats: stats?.stats ?? null,
+    workplaceStandards: stats?.workplaceStandards ? mergeWorkplaceStandards(stats.workplaceStandards) : null,
+    overviewTasks: Array.isArray(tasks) ? tasks : [],
   };
 }
 
@@ -487,33 +524,57 @@ type Props = {
 export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWorkspaceSwitchLoading }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const teamContextQuery = useQuery({
+  const paneActive = useEnterprisePaneActive();
+  const shellRole = teams?.find((t) => t.id === selectedTeamId)?.role;
+  const prevTeamIdRef = useRef(selectedTeamId);
+
+  const teamCoreQuery = useQuery({
     queryKey: queryKeys.teamContext(selectedTeamId),
-    queryFn: () => fetchTeamContext(selectedTeamId),
+    queryFn: () => fetchTeamCore(selectedTeamId, shellRole),
     enabled: !!selectedTeamId,
+    staleTime: 60_000,
     refetchOnMount: false,
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 
-  const teamDetail = teamContextQuery.data?.detail ?? null;
-  const memberStats = teamContextQuery.data?.memberStats ?? null;
-  const workplaceStandards = teamContextQuery.data?.workplaceStandards ?? mergeWorkplaceStandards(null);
-  const overviewTasks = teamContextQuery.data?.overviewTasks ?? [];
-  const isPaid = teamContextQuery.data?.isPaid ?? false;
-  const incoming = teamContextQuery.data?.incoming ?? [];
-  const pendingInvites = teamContextQuery.data?.pendingInvites ?? [];
-  const pendingCalendarEvents = teamContextQuery.data?.pendingCalendarEvents ?? [];
-  const formerMembers = teamContextQuery.data?.formerMembers ?? [];
+  const teamEnrichmentQuery = useQuery({
+    queryKey: [...queryKeys.teamContext(selectedTeamId), "enrichment"] as const,
+    queryFn: () => fetchTeamEnrichment(selectedTeamId),
+    enabled: !!selectedTeamId && !!teamCoreQuery.data,
+    staleTime: 60_000,
+    refetchOnMount: false,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+  });
+
+  useEffect(() => {
+    const detail = teamCoreQuery.data?.detail;
+    if (!detail || !selectedTeamId) return;
+    queryClient.setQueryData(queryKeys.teamDetail(selectedTeamId), detail);
+  }, [teamCoreQuery.data?.detail, selectedTeamId, queryClient]);
+
+  const teamDetail = teamCoreQuery.data?.detail ?? null;
+  const memberStats = teamEnrichmentQuery.data?.memberStats ?? null;
+  const workplaceStandards =
+    teamEnrichmentQuery.data?.workplaceStandards ??
+    teamCoreQuery.data?.workplaceStandards ??
+    mergeWorkplaceStandards(null);
+  const overviewTasks = teamEnrichmentQuery.data?.overviewTasks ?? [];
+  const isPaid = teamCoreQuery.data?.isPaid ?? false;
+  const incoming = teamCoreQuery.data?.incoming ?? [];
+  const pendingInvites = teamCoreQuery.data?.pendingInvites ?? [];
+  const pendingCalendarEvents = teamCoreQuery.data?.pendingCalendarEvents ?? [];
+  const formerMembers = teamCoreQuery.data?.formerMembers ?? [];
   const loadErr =
-    teamContextQuery.error instanceof Error
-      ? teamContextQuery.error.message
-      : teamContextQuery.isError
+    teamCoreQuery.error instanceof Error
+      ? teamCoreQuery.error.message
+      : teamCoreQuery.isError
         ? "Could not load team."
         : null;
   const [actionErr, setActionErr] = useState<string | null>(null);
   const displayErr = actionErr ?? loadErr;
-  const showInitialLoading = teamContextQuery.isPending && !teamContextQuery.data;
+  const showInitialLoading = paneActive && teamCoreQuery.isPending && !teamCoreQuery.data;
 
   const reloadTeamContext = useCallback(async () => {
     if (!selectedTeamId) return;
@@ -535,6 +596,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const memberPickerRef = useRef<HTMLDivElement>(null);
   const [roleFilter, setRoleFilter] = useState<"all" | "owner" | "team_leader" | "admin" | "member">("all");
   const [oneOneTemplatesOpen, setOneOneTemplatesOpen] = useState(false);
   const [workplaceStandardsOpen, setWorkplaceStandardsOpen] = useState(false);
@@ -550,11 +613,14 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   useEffect(() => {
     if (!onWorkspaceSwitchLoading) return;
-    onWorkspaceSwitchLoading(showInitialLoading);
+    const teamChanged = prevTeamIdRef.current !== selectedTeamId;
+    prevTeamIdRef.current = selectedTeamId;
+    const workspaceSwitch = teamChanged || isRecentFooterEnterpriseWorkspaceSelect();
+    onWorkspaceSwitchLoading(Boolean(showInitialLoading && workspaceSwitch && paneActive));
     return () => {
       onWorkspaceSwitchLoading(false);
     };
-  }, [showInitialLoading, onWorkspaceSwitchLoading]);
+  }, [showInitialLoading, onWorkspaceSwitchLoading, selectedTeamId, paneActive]);
 
   const sortedMembers = useMemo(
     () =>
@@ -579,6 +645,10 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   useEffect(() => {
     if (!teamDetail || !myId) return;
+    if (teamDetail.myRole === "member") {
+      setSelectedMemberId(myId);
+      return;
+    }
     if (teamDetail.myRole === "owner" || teamDetail.myRole === "team_leader") return;
     setSelectedMemberId(myId);
   }, [teamDetail?.id, teamDetail?.myRole, myId]);
@@ -592,9 +662,24 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   useEffect(() => {
     setMemberSearch("");
+    setMemberPickerOpen(false);
   }, [selectedTeamId]);
 
   useEffect(() => {
+    if (!memberPickerOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (memberPickerRef.current?.contains(e.target as Node)) return;
+      setMemberPickerOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [memberPickerOpen]);
+
+  useEffect(() => {
+    if (teamDetail?.myRole === "member" && myId) {
+      setSelectedMemberId(myId);
+      return;
+    }
     if (sortedMembers.length === 0 && formerMembers.length === 0) {
       setSelectedMemberId(null);
       return;
@@ -604,9 +689,10 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       if (prev && formerMembers.some((f) => f.userId === prev)) return prev;
       return sortedMembers[0]?.userId ?? formerMembers[0]?.userId ?? null;
     });
-  }, [selectedTeamId, sortedMembers, formerMembers]);
+  }, [selectedTeamId, sortedMembers, formerMembers, teamDetail?.myRole, myId]);
 
   useEffect(() => {
+    if (!paneActive) return;
     const member = searchParams.get("member")?.trim().toLowerCase();
     if (member !== "me" || !myId) return;
     if (!sortedMembers.some((m) => m.userId === myId)) return;
@@ -614,7 +700,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     const next = new URLSearchParams(searchParams);
     next.delete("member");
     setSearchParams(next, { replace: true });
-  }, [myId, searchParams, setSearchParams, sortedMembers]);
+  }, [paneActive, myId, searchParams, setSearchParams, sortedMembers]);
 
   const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();
@@ -751,6 +837,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const manageMembers = canRemoveMembers(myRole);
   const canManageOneOneTemplates = myRole === "owner";
   const showOwnerManageRow = canManageOneOneTemplates;
+  const isRegularMember = myRole === "member";
+  const showTeamRosterChrome = !isRegularMember;
 
   if (!selectedTeamId) {
     return (
@@ -761,7 +849,11 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   }
 
   if (showInitialLoading) {
-    return <div className="enterprise-team-tab enterprise-team-tab-loading-host" aria-busy="true" />;
+    return (
+      <div className="enterprise-team-tab enterprise-team-tab-loading-host" aria-busy="true">
+        <AlenioWorkspaceLoading label="Loading team" />
+      </div>
+    );
   }
 
   if (!teamDetail) {
@@ -780,7 +872,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </p>
       ) : null}
 
-      <div className="enterprise-team-split">
+      <div className={`enterprise-team-split${isRegularMember ? " enterprise-team-split--member-self" : ""}`}>
+        {showTeamRosterChrome ? (
         <aside className="enterprise-team-split-list">
           <header className="enterprise-team-list-header">
             <div className="enterprise-team-list-toolbar">
@@ -957,6 +1050,141 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           ) : null}
 
           <div className="enterprise-team-roster-section">
+            <div
+              className={`enterprise-team-associates-picker${memberPickerOpen ? " enterprise-team-associates-picker--open" : ""}`}
+              ref={memberPickerRef}
+            >
+              <div className="enterprise-team-associates-picker-head">
+                <p className="enterprise-team-associates-label">Associates</p>
+                <span className="enterprise-team-associates-count">{filteredMembers.length}</span>
+              </div>
+              <button
+                type="button"
+                className="enterprise-team-associates-trigger"
+                aria-expanded={memberPickerOpen}
+                aria-haspopup="listbox"
+                onClick={() => setMemberPickerOpen((open) => !open)}
+              >
+                {profileMember ? (
+                  <>
+                    <UserAvatar
+                      user={profileMember.user}
+                      className="enterprise-team-associates-avatar"
+                      alt={profileMember.user.name ?? profileMember.user.email ?? "Member"}
+                    />
+                    <span className="enterprise-team-associates-trigger-copy">
+                      <span className="enterprise-team-associates-trigger-name">
+                        {profileMember.user.name ?? profileMember.user.email ?? "Member"}
+                        {profileMember.userId === myId ? " (you)" : ""}
+                      </span>
+                      <span className="enterprise-team-associates-trigger-role">
+                        {isFormerMemberProfile ? "Former member" : roleLabel(profileMember.role)}
+                      </span>
+                    </span>
+                  </>
+                ) : (
+                  <span className="enterprise-team-associates-trigger-copy">
+                    <span className="enterprise-team-associates-trigger-name">Select a member</span>
+                    <span className="enterprise-team-associates-trigger-role">Team roster</span>
+                  </span>
+                )}
+                <span className="enterprise-team-associates-chevron" aria-hidden>
+                  <IconChevronDown />
+                </span>
+              </button>
+              {memberPickerOpen ? (
+                <div className="enterprise-team-associates-menu" role="listbox" aria-label="Team associates">
+                  <div className="enterprise-team-associates-menu-search">
+                    <IconSearch size={16} />
+                    <input
+                      type="search"
+                      value={memberSearch}
+                      onChange={(e) => setMemberSearch(e.target.value)}
+                      placeholder="Search associates…"
+                      aria-label="Search associates"
+                      autoFocus
+                    />
+                  </div>
+                  <ul className="enterprise-team-associates-menu-list">
+                    {filteredMembers.map((m) => {
+                      const isSelf = m.userId === myId;
+                      const isSelected = m.userId === selectedMemberId;
+                      const canView = canViewMemberProfile(myRole, m.userId, myId, m.role);
+                      const displayName = m.user.name ?? m.user.email ?? "Member";
+                      return (
+                        <li key={m.id}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            className={`enterprise-team-associates-option${isSelected ? " enterprise-team-associates-option--selected" : ""}${!canView ? " enterprise-team-associates-option--locked" : ""}`}
+                            disabled={!canView}
+                            onClick={() => {
+                              if (!canView) return;
+                              setSelectedMemberId(m.userId);
+                              setMemberPickerOpen(false);
+                            }}
+                          >
+                            <UserAvatar user={m.user} className="enterprise-team-associates-avatar" alt={displayName} />
+                            <span className="enterprise-team-associates-option-copy">
+                              <span className="enterprise-team-associates-option-name">
+                                {displayName}
+                                {isSelf ? " (you)" : ""}
+                              </span>
+                              <span className="enterprise-team-associates-option-role">{roleLabel(m.role)}</span>
+                            </span>
+                            {!canView ? (
+                              <span className="enterprise-team-associates-lock" aria-hidden>
+                                <IconLock />
+                              </span>
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                    {manageMembers && formerMembers.length > 0 ? (
+                      <>
+                        <li className="enterprise-team-associates-divider" aria-hidden>
+                          Former members
+                        </li>
+                        {formerMembers.map((former) => {
+                          const isSelected = former.userId === selectedMemberId;
+                          const displayName = former.user.name ?? former.user.email ?? "Member";
+                          return (
+                            <li key={former.userId}>
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={isSelected}
+                                className={`enterprise-team-associates-option${isSelected ? " enterprise-team-associates-option--selected" : ""}`}
+                                onClick={() => {
+                                  setSelectedMemberId(former.userId);
+                                  setMemberPickerOpen(false);
+                                }}
+                              >
+                                <UserAvatar
+                                  user={former.user}
+                                  className="enterprise-team-associates-avatar"
+                                  alt={displayName}
+                                />
+                                <span className="enterprise-team-associates-option-copy">
+                                  <span className="enterprise-team-associates-option-name">{displayName}</span>
+                                  <span className="enterprise-team-associates-option-role">Former member</span>
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </>
+                    ) : null}
+                    {filteredMembers.length === 0 && formerMembers.length === 0 ? (
+                      <li className="enterprise-team-associates-empty">No associates found</li>
+                    ) : null}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+
             <div className="enterprise-team-roster-panel">
               <div className="enterprise-team-roster-head">
                 <div className="enterprise-team-roster-head-copy">
@@ -1125,6 +1353,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
             </div>
           </div>
         </aside>
+        ) : null}
 
         <main className="enterprise-team-split-detail">
           {profileMember &&
@@ -1168,7 +1397,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               daysSinceLastCheckIn={memberStats?.[profileMember.userId]?.daysSinceLastOneOnOne}
               canManageStandards={canManageOneOneTemplates}
               onManageStandards={() => setWorkplaceStandardsOpen(true)}
-              onBack={() => setSelectedMemberId(null)}
+              onBack={isRegularMember ? undefined : () => setSelectedMemberId(null)}
               onManage={() => openMemberModal(profileMember)}
             />
           ) : (

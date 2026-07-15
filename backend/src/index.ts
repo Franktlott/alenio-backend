@@ -440,7 +440,7 @@ app.get("/email-verified", (c) => {
   <div class="card">
     <div class="header">
       <img src="/static/alenio-logo-white.png" alt="Alenio" onerror="this.style.display='none'" />
-      <p>Connect. Execute. Celebrate.</p>
+      <p>Connect. Execute. Elevate.</p>
     </div>
     <div class="body">
       <span class="icon">✅</span>

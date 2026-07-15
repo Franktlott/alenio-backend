@@ -63,7 +63,7 @@ export function GetAppPage() {
 
           <p className="auth-v2-footnote" style={{ marginTop: "1rem" }}>
             <Link
-              to="/profile"
+              to="/settings"
               className="auth-v2-inline-link"
               onClick={() => setMobileWebPreferred()}
             >

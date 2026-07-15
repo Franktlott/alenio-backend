@@ -177,7 +177,7 @@ export function ProfilePage() {
 
   return (
     <>
-      <div className="enterprise-tab-shell enterprise-profile-page" data-testid="profile-screen">
+      <div className="enterprise-tab-shell enterprise-profile-page" data-testid="settings-screen">
         <div className="enterprise-profile-page-body">
           <div className="enterprise-profile-grid">
           <section className="enterprise-card enterprise-profile-account">

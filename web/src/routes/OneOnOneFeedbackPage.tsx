@@ -12,6 +12,7 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import { ASSOCIATE_FEEDBACK_SECTION_TITLE } from "../lib/one-on-one-feedback";
+import { enterpriseTeamNavTitle } from "../lib/enterprise-nav";
 
 export function OneOnOneFeedbackPage() {
   const [searchParams] = useSearchParams();
@@ -83,6 +84,9 @@ export function OneOnOneFeedbackPage() {
   const showPlanNav = teams !== null && !!workspaceId && teams.find((t) => t.id === workspaceId)?.role === "owner";
   const showActivityExecuteNav =
     teams === null || !workspaceId || teams.find((t) => t.id === workspaceId)?.hasTeamFeatures === true;
+  const teamNavLabel = enterpriseTeamNavTitle(
+    teams !== null && workspaceId ? teams.find((t) => t.id === workspaceId)?.role : undefined,
+  );
 
   return (
     <EnterpriseLayout
@@ -99,6 +103,7 @@ export function OneOnOneFeedbackPage() {
       }
       showPlanNav={showPlanNav}
       showActivityExecuteNav={showActivityExecuteNav}
+      teamNavLabel={teamNavLabel}
     >
       <div className="enterprise-dashboard-inner oneone-feedback-page">
         <Link to="/dashboard" className="create-task-back">

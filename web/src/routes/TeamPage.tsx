@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { TeamTabPanel } from "../components/TeamTabPanel";
+import { TeamUpgradePanel } from "../components/TeamUpgradePanel";
 
 export function TeamPage() {
   const {
@@ -17,10 +18,21 @@ export function TeamPage() {
     return () => setWorkspaceMainLoading(false);
   }, [workspaceOverlayLoading, setWorkspaceMainLoading]);
 
-  if (me === undefined) {
+  if (me === undefined || teams === null) {
     return (
       <div className="enterprise-tab-shell">
         <p className="enterprise-muted">Loading…</p>
+      </div>
+    );
+  }
+
+  const activeTeam = teams.find((t) => t.id === selectedTeamId) ?? null;
+  const teamFeaturesUnlocked = activeTeam?.hasTeamFeatures !== false;
+
+  if (activeTeam && !teamFeaturesUnlocked) {
+    return (
+      <div className="enterprise-tab-shell enterprise-team-page-shell enterprise-team-page-shell--upgrade" data-testid="team-screen">
+        <TeamUpgradePanel isOwner={activeTeam.role === "owner"} teamId={activeTeam.id} />
       </div>
     );
   }

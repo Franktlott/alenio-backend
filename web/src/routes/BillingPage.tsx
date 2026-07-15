@@ -1,27 +1,37 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { AlenioGoLogo } from "../components/AlenioGoLogo";
+import { AlenioNoticeModal } from "../components/AlenioNoticeModal";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { queryKeys } from "../lib/query-keys";
 import {
   fetchWebTeamSubscription,
   postWebBillingCheckout,
   postWebBillingPortal,
-  type WebTeamSubscription,
 } from "../lib/api";
 import { loadWebCheckoutConfig, peekWebCheckoutConfig, type WebCheckoutConfig } from "../lib/checkout-config-cache";
-import {
-  BILLING_COMPARE_FEATURES,
-  FREE_BEST_FOR,
-  FREE_INCLUDED,
-  OPERATIONS_BEST_FOR,
-  OPERATIONS_FEATURES,
-  OPERATIONS_PRICE_AMOUNT,
-  OPERATIONS_PRICE_PERIOD,
-  PRO_BEST_FOR,
-  PRO_PRICE_AMOUNT,
-  PRO_PRICE_PERIOD,
-} from "../lib/plan-catalog";
+import { LEGAL_CONTACT_EMAIL } from "../lib/legal-constants";
+
+const FREE_FEATURES = ["Activity feed", "Team chat", "Team members (limited)"] as const;
+const PRO_CARD_FEATURES = [
+  "Tasks & action items",
+  "Seneca AI coaching",
+  "Check-ins & development plans",
+  "Team calendar & Outlook sync",
+  "Metrics & dashboards",
+  "Performance insights",
+  "Celebrations & shoutouts",
+  "Priority support",
+] as const;
+const OPS_CARD_FEATURES = [
+  "Alenio Go (checklists, walks, briefs)",
+  "Temperature checks",
+  "Shift briefings & cascades",
+  "Workflow execution tools",
+  "Floor-ready ops workflows",
+  "Everything in Pro",
+] as const;
 
 function planLabel(plan: string): string {
   if (plan === "operations") return "Operations";
@@ -36,57 +46,72 @@ function formatRenewalDate(iso: string | null | undefined): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function subscriptionLine(sub: WebTeamSubscription, stripeActive: boolean): string | null {
-  if (stripeActive) {
-    return "Billed on the web — use Manage billing to update payment or cancel.";
-  }
-  if (
-    sub.currentPeriodEnd &&
-    (sub.plan === "team" || sub.plan === "pro" || sub.plan === "operations") &&
-    ["active", "trialing", "past_due"].includes(sub.status)
-  ) {
-    return `Renews ${formatRenewalDate(sub.currentPeriodEnd)}`;
-  }
-  return null;
-}
-
-function CompareIcon({ included }: { included: boolean }) {
+function CheckIcon() {
   return (
-    <span
-      className={`enterprise-billing-compare-icon ${included ? "enterprise-billing-compare-icon--yes" : "enterprise-billing-compare-icon--no"}`}
-      aria-hidden
-    >
-      {included ? (
-        <svg viewBox="0 0 12 12" fill="none">
-          <path
-            d="M2.5 6L5 8.5L9.5 3.5"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 12 12" fill="none">
-          <path d="M3 6H9" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-        </svg>
-      )}
+    <span className="billing-check" aria-hidden>
+      <svg viewBox="0 0 16 16" fill="none">
+        <path
+          d="M3.5 8.25 6.6 11.25 12.5 4.75"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     </span>
   );
 }
+
+function ExternalIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M14 4h6v6M10 14 20 4M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 17.5V8.75A2.75 2.75 0 0 1 7.75 6h8.5A2.75 2.75 0 0 1 19 8.75v5A2.75 2.75 0 0 1 16.25 16.5H9.2L5 19.5v-2Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+type NoticeState = {
+  title: string;
+  message: string;
+  tone: "info" | "success" | "error";
+  confirmLabel?: string;
+} | null;
 
 export function BillingPage() {
   const [params, setParams] = useSearchParams();
   const { me, teams, selectedTeamId, refreshMeAndTeams } = useEnterpriseShell();
   const [actionErr, setActionErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyPlan, setBusyPlan] = useState<"pro" | "operations" | "portal" | null>(null);
   const [checkoutCfg, setCheckoutCfg] = useState<WebCheckoutConfig | null>(() => peekWebCheckoutConfig());
   const [checkoutCfgLoading, setCheckoutCfgLoading] = useState(() => peekWebCheckoutConfig() === null);
+  const [dismissedFlash, setDismissedFlash] = useState(false);
+  const [dismissedSubErr, setDismissedSubErr] = useState(false);
+  const [configNoticeOpen, setConfigNoticeOpen] = useState(false);
   const autoCheckoutStarted = useRef(false);
 
   const billingFlash = params.get("billing");
   const myRole = teams === null ? undefined : teams.find((t) => t.id === selectedTeamId)?.role;
   const isOwner = myRole === "owner";
+  const busy = busyPlan !== null;
   const teamListErr =
     teams && selectedTeamId && !teams.some((t) => t.id === selectedTeamId)
       ? "That workspace is not in your team list. Pick another workspace above."
@@ -101,7 +126,7 @@ export function BillingPage() {
       if (!s) return false;
       const billable =
         !!s.stripeSubscriptionId?.trim() ||
-        ((s.plan === "team" || s.plan === "pro") &&
+        ((s.plan === "team" || s.plan === "pro" || s.plan === "operations") &&
           ["active", "trialing", "past_due", "incomplete", "paused"].includes(s.status));
       return billable ? 35_000 : false;
     },
@@ -118,10 +143,10 @@ export function BillingPage() {
   const showPlanLoading = subQuery.isPending && !sub;
   const subLoading = subQuery.isFetching;
 
-  /** After checkout redirect, webhooks can lag; refetch subscription until it reflects payment. */
   useEffect(() => {
     if (billingFlash !== "success" || !selectedTeamId) return;
     void subQuery.refetch();
+    void refreshMeAndTeams?.();
     let n = 0;
     const max = 44;
     const id = window.setInterval(() => {
@@ -130,7 +155,7 @@ export function BillingPage() {
       if (n >= max) window.clearInterval(id);
     }, 2000);
     return () => window.clearInterval(id);
-  }, [billingFlash, selectedTeamId, subQuery]);
+  }, [billingFlash, selectedTeamId, subQuery, refreshMeAndTeams]);
 
   useEffect(() => {
     if (!isOwner) {
@@ -139,7 +164,6 @@ export function BillingPage() {
     }
     let cancelled = false;
     setCheckoutCfgLoading(true);
-    // Always refetch on Billing so Operations readiness updates after Railway env/deploys.
     void loadWebCheckoutConfig({ force: true })
       .then((d) => {
         if (!cancelled) setCheckoutCfg(d);
@@ -153,6 +177,7 @@ export function BillingPage() {
   }, [isOwner, selectedTeamId]);
 
   const clearBillingParam = useCallback(() => {
+    setDismissedFlash(true);
     setParams(
       (prev) => {
         const n = new URLSearchParams(prev);
@@ -173,20 +198,19 @@ export function BillingPage() {
     sub.status === "active" &&
     !sub.stripeSubscriptionId;
 
-  /** Portal works with customer id or subscription id (server resolves the billing customer). */
   const canOpenStripePortal =
     !!sub?.stripeCustomerId?.trim() || !!sub?.stripeSubscriptionId?.trim();
 
   const onSubscribe = useCallback(
     async (plan: "pro" | "operations") => {
       if (!selectedTeamId || !isOwner) return;
-      setBusy(true);
+      setBusyPlan(plan);
       setActionErr(null);
       try {
         const result = await postWebBillingCheckout(selectedTeamId, plan);
         if (result.upgraded) {
           await Promise.all([subQuery.refetch(), refreshMeAndTeams?.()].filter(Boolean));
-          setBusy(false);
+          setBusyPlan(null);
           return;
         }
         if (result.url) {
@@ -194,10 +218,10 @@ export function BillingPage() {
           return;
         }
         setActionErr("Checkout did not return a URL.");
-        setBusy(false);
+        setBusyPlan(null);
       } catch (e) {
         setActionErr(e instanceof Error ? e.message : "Checkout failed.");
-        setBusy(false);
+        setBusyPlan(null);
       }
     },
     [selectedTeamId, isOwner, subQuery, refreshMeAndTeams],
@@ -205,14 +229,14 @@ export function BillingPage() {
 
   const onPortal = useCallback(async () => {
     if (!selectedTeamId || !isOwner) return;
-    setBusy(true);
+    setBusyPlan("portal");
     setActionErr(null);
     try {
       const { url } = await postWebBillingPortal(selectedTeamId);
       window.location.href = url;
     } catch (e) {
       setActionErr(e instanceof Error ? e.message : "Could not open billing portal.");
-      setBusy(false);
+      setBusyPlan(null);
     }
   }, [selectedTeamId, isOwner]);
 
@@ -276,17 +300,12 @@ export function BillingPage() {
   const proCheckoutReady = checkoutCfg?.plans?.pro !== false && !!checkoutCfg?.configured;
   const operationsCheckoutReady = !!checkoutCfg?.plans?.operations;
   const canCheckoutPro =
-    isOwner &&
-    !!sub &&
-    !mobileManaged &&
-    currentPlanTier === "free" &&
-    proCheckoutReady;
+    isOwner && !!sub && !mobileManaged && currentPlanTier === "free" && proCheckoutReady;
   const canCheckoutOperations =
     isOwner &&
     !!sub &&
     !mobileManaged &&
     currentPlanTier !== "operations" &&
-    operationsCheckoutReady &&
     (currentPlanTier === "free" || stripeActive);
   const showCheckoutNotConfigured =
     !checkoutCfgLoading &&
@@ -297,318 +316,287 @@ export function BillingPage() {
     sub !== null &&
     currentPlanTier === "free";
 
-  const premiumCount = BILLING_COMPARE_FEATURES.filter((f) => f.pro && !f.free).length;
-  const subLine = !showPlanLoading && sub ? subscriptionLine(sub, stripeActive) : null;
+  const notice: NoticeState = useMemo(() => {
+    if (actionErr) {
+      return { title: "Couldn't complete checkout", message: actionErr, tone: "error", confirmLabel: "Close" };
+    }
+    if (subErr && !dismissedSubErr) {
+      return { title: "Couldn't load subscription", message: subErr, tone: "error", confirmLabel: "Close" };
+    }
+    if (!dismissedFlash && billingFlash === "success") {
+      return {
+        title: "Payment received",
+        message: "Thanks — your payment is processing. It may take a moment for your workspace plan to update.",
+        tone: "success",
+        confirmLabel: "Continue",
+      };
+    }
+    if (!dismissedFlash && billingFlash === "cancel") {
+      return {
+        title: "Checkout canceled",
+        message: "No charge was made. You can upgrade anytime when you're ready.",
+        tone: "info",
+        confirmLabel: "Back to billing",
+      };
+    }
+    if (configNoticeOpen) {
+      return {
+        title: "Checkout not configured",
+        message:
+          "Web checkout is not configured on this server yet. Add your Stripe keys on the backend to enable checkout.",
+        tone: "info",
+        confirmLabel: "Got it",
+      };
+    }
+    return null;
+  }, [actionErr, subErr, dismissedSubErr, billingFlash, dismissedFlash, configNoticeOpen]);
+
+  const closeNotice = useCallback(() => {
+    if (actionErr) {
+      setActionErr(null);
+      return;
+    }
+    if (subErr && !dismissedSubErr) {
+      setDismissedSubErr(true);
+      return;
+    }
+    if (!dismissedFlash && (billingFlash === "success" || billingFlash === "cancel")) {
+      clearBillingParam();
+      return;
+    }
+    if (configNoticeOpen) setConfigNoticeOpen(false);
+  }, [actionErr, subErr, dismissedSubErr, billingFlash, dismissedFlash, configNoticeOpen, clearBillingParam]);
 
   if (me === undefined) {
     return (
-      <div className="enterprise-tab-shell enterprise-tab-shell-billing">
+      <div className="enterprise-tab-shell billing-shell">
         <p className="enterprise-muted">Loading…</p>
       </div>
     );
   }
 
-  return (
-    <div className="enterprise-tab-shell enterprise-tab-shell-billing">
-      <div className="enterprise-billing-page">
-        <div className="enterprise-billing-alerts">
-          {billingFlash === "success" ? (
-            <div className="enterprise-billing-alert enterprise-billing-alert--info" role="status">
-              <p>Thanks — your payment is processing. It may take a moment for your plan to update.</p>
-              <button type="button" className="enterprise-inline-link" onClick={clearBillingParam}>
-                Dismiss
-              </button>
-            </div>
-          ) : null}
-          {billingFlash === "cancel" ? (
-            <div className="enterprise-billing-alert enterprise-billing-alert--info" role="status">
-              <p>Checkout was canceled. No charge was made.</p>
-              <button type="button" className="enterprise-inline-link" onClick={clearBillingParam}>
-                Dismiss
-              </button>
-            </div>
-          ) : null}
-          {actionErr ? (
-            <p className="enterprise-billing-alert enterprise-billing-alert--error" role="alert">
-              {actionErr}
-            </p>
-          ) : null}
-          {subErr ? (
-            <div className="enterprise-billing-alert enterprise-billing-alert--error" role="alert">
-              <p>{subErr}</p>
-              <button type="button" className="enterprise-inline-link" onClick={() => void subQuery.refetch()}>
-                Try again
-              </button>
-            </div>
-          ) : null}
-        </div>
+  const supportHref = `mailto:${LEGAL_CONTACT_EMAIL}?subject=${encodeURIComponent("Alenio billing support")}`;
+  const planIsPaid = currentPlanTier === "pro" || currentPlanTier === "operations";
 
-        <header className="enterprise-billing-header">
-          <div className="enterprise-billing-header-copy">
-            <h1>Billing</h1>
-            <p>
-              Simple pricing. No hidden fees. Cancel anytime. Subscriptions are per workspace — only the{" "}
-              <strong>owner</strong> can start checkout or open the billing portal.
-              {showPlanLoading ? " Loading plan…" : null}
-              {subLine ? <> {subLine}</> : null}
-            </p>
+  return (
+    <div className="enterprise-tab-shell billing-shell">
+      <div className="billing-page">
+        <header className="billing-hero">
+          <div className="billing-hero-copy">
+            <h1 className="billing-hero-title">Choose the right plan for your team</h1>
+            <p className="billing-hero-sub">Per workspace · Cancel anytime · Only the owner can checkout</p>
           </div>
+
+          <aside className="billing-sub-card" aria-label="Current subscription">
+            {showPlanLoading ? (
+              <p className="billing-muted">Loading…</p>
+            ) : sub && !subErr ? (
+              <>
+                <div className="billing-sub-grid">
+                  <div>
+                    <span className="billing-sub-k">Plan</span>
+                    <strong className={planIsPaid ? "billing-sub-plan-accent" : undefined}>
+                      {planLabel(sub.plan)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="billing-sub-k">Status</span>
+                    <strong className="billing-sub-status">
+                      <span
+                        className={`billing-sub-dot${
+                          ["active", "trialing"].includes(sub.status) ? "" : " billing-sub-dot--off"
+                        }`}
+                        aria-hidden
+                      />
+                      {sub.status.replace(/_/g, " ")}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="billing-sub-k">Renews</span>
+                    <strong>{formatRenewalDate(sub.currentPeriodEnd)}</strong>
+                  </div>
+                </div>
+                {isOwner && !mobileManaged ? (
+                  <button
+                    type="button"
+                    className="billing-sub-manage"
+                    disabled={busy || !canOpenStripePortal || showPlanLoading}
+                    onClick={() => void onPortal()}
+                  >
+                    {busyPlan === "portal" ? "Opening…" : "Manage plan"}
+                    <ExternalIcon />
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <p className="billing-muted">{isOwner ? "No subscription loaded." : "Only the owner can manage billing."}</p>
+            )}
+          </aside>
         </header>
 
-        <div className="enterprise-billing-main">
-          <div className="enterprise-billing-plans">
-            <article
-              className={`enterprise-billing-plan${currentPlanTier === "free" && sub && !showPlanLoading ? " enterprise-billing-plan--current" : ""}`}
-              aria-labelledby="billing-free-heading"
-            >
-              {currentPlanTier === "free" && sub && !showPlanLoading ? (
-                <span className="enterprise-billing-plan-badge">Current</span>
-              ) : null}
-              <div className="enterprise-billing-plan-head">
-                <h2 id="billing-free-heading" className="enterprise-billing-plan-name">
-                  Free
-                </h2>
-                <p className="enterprise-billing-plan-tagline">{FREE_BEST_FOR}</p>
-              </div>
-              <p className="enterprise-billing-plan-price">
-                $0
-                <span>forever</span>
-              </p>
-              <ul className="enterprise-billing-plan-highlights">
-                {FREE_INCLUDED.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
+        <div className="billing-plans">
+          <article
+            className={`billing-card${currentPlanTier === "free" ? " billing-card--current" : ""}`}
+            aria-labelledby="billing-free-heading"
+          >
+            <div className="billing-card-head">
+              <h2 id="billing-free-heading" className="billing-card-name">
+                Free
+              </h2>
+              <p className="billing-card-tag">Get started at no cost</p>
+            </div>
+            <p className="billing-card-price">
+              $0 <span>forever</span>
+            </p>
+            <ul className="billing-card-features">
+              {FREE_FEATURES.map((f) => (
+                <li key={f}>
+                  <CheckIcon />
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+            <button type="button" className="billing-cta billing-cta--outline" disabled>
+              {currentPlanTier === "free" ? "Current plan" : "Included in Pro"}
+            </button>
+          </article>
+
+          <article
+            className={`billing-card billing-card--pro${currentPlanTier === "pro" ? " billing-card--current" : ""}`}
+            aria-labelledby="billing-pro-heading"
+          >
+            <span className="billing-badge billing-badge--popular">Most popular</span>
+            <div className="billing-card-head">
+              <h2 id="billing-pro-heading" className="billing-card-name">
+                Pro
+              </h2>
+              <p className="billing-card-tag">Everything you need to lead</p>
+            </div>
+            <p className="billing-card-price">
+              $39.99
+              <span className="billing-card-price-period">/ workspace / month</span>
+            </p>
+            <ul className="billing-card-features">
+              {PRO_CARD_FEATURES.map((f) => (
+                <li key={f}>
+                  <CheckIcon />
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+            {currentPlanTier === "pro" ? (
+              <button type="button" className="billing-cta billing-cta--current" disabled>
+                Current plan
+              </button>
+            ) : currentPlanTier === "operations" ? (
+              <button type="button" className="billing-cta billing-cta--outline" disabled>
+                Included in Operations
+              </button>
+            ) : (
               <button
                 type="button"
-                className="enterprise-billing-plan-cta enterprise-billing-plan-cta--secondary"
-                disabled
+                className="billing-cta billing-cta--primary"
+                disabled={
+                  busy ||
+                  !!subErr ||
+                  checkoutCfgLoading ||
+                  showPlanLoading ||
+                  (!canCheckoutPro && !showCheckoutNotConfigured)
+                }
+                onClick={() => {
+                  if (showCheckoutNotConfigured || !proCheckoutReady) {
+                    setConfigNoticeOpen(true);
+                    return;
+                  }
+                  void onSubscribe("pro");
+                }}
               >
-                {currentPlanTier === "free" ? "Current plan" : "Included in Pro"}
+                {busyPlan === "pro" ? "Opening…" : "Upgrade to Pro"}
               </button>
-            </article>
+            )}
+          </article>
 
-            <article
-              className={`enterprise-billing-plan${currentPlanTier === "pro" && sub && !subLoading ? " enterprise-billing-plan--current" : ""}`}
-              aria-labelledby="billing-pro-heading"
-            >
-              {currentPlanTier === "pro" && sub && !showPlanLoading ? (
-                <span className="enterprise-billing-plan-badge">Current</span>
-              ) : (
-                <span className="enterprise-billing-plan-badge enterprise-billing-plan-badge--popular">Popular</span>
-              )}
-              <div className="enterprise-billing-plan-head">
-                <h2 id="billing-pro-heading" className="enterprise-billing-plan-name">
-                  Pro
-                </h2>
-                <p className="enterprise-billing-plan-tagline">{PRO_BEST_FOR}</p>
-              </div>
-              <p className="enterprise-billing-plan-price enterprise-billing-plan-price--accent">
-                {PRO_PRICE_AMOUNT}
-                <span>{PRO_PRICE_PERIOD}</span>
-              </p>
-              <ul className="enterprise-billing-plan-highlights">
-                <li>All Free features</li>
-                <li>{premiumCount} premium capabilities</li>
-              </ul>
-              {showCheckoutNotConfigured ? (
-                <div className="enterprise-billing-checkout-warn" role="status">
-                  <strong>Web checkout is not configured</strong> on this API server. Set{" "}
-                  {checkoutCfg?.missingKeys.join(", ")} on the backend (including{" "}
-                  <code>WEB_PUBLIC_URL</code> for your Vite URL).
-                </div>
-              ) : null}
-              {!showPlanLoading && sub && currentPlanTier === "pro" ? (
-                <button
-                  type="button"
-                  className="enterprise-billing-plan-cta enterprise-billing-plan-cta--current"
-                  disabled
-                >
-                  Current plan
-                </button>
-              ) : !showPlanLoading && sub && currentPlanTier === "operations" ? (
-                <button
-                  type="button"
-                  className="enterprise-billing-plan-cta enterprise-billing-plan-cta--secondary"
-                  disabled
-                >
-                  Included in Operations
-                </button>
-              ) : !showPlanLoading && sub ? (
-                <>
-                  <button
-                    type="button"
-                    className="enterprise-billing-plan-cta enterprise-billing-plan-cta--primary"
-                    disabled={
-                      busy ||
-                      !!subErr ||
-                      checkoutCfgLoading ||
-                      !canCheckoutPro ||
-                      (checkoutCfg !== null && !proCheckoutReady)
-                    }
-                    onClick={() => void onSubscribe("pro")}
-                  >
-                    {busy ? "Opening checkout…" : "Upgrade to Pro"}
-                  </button>
-                  <p className="enterprise-billing-plan-footnote">
-                    {isOwner ? "Cancel anytime · Secure checkout" : "Only the workspace owner can upgrade."}
-                  </p>
-                </>
-              ) : (
-                <p className="enterprise-billing-plan-footnote">{showPlanLoading ? "Loading…" : "—"}</p>
-              )}
-            </article>
-
-            <article
-              className={`enterprise-billing-plan${currentPlanTier === "operations" && sub && !showPlanLoading ? " enterprise-billing-plan--current" : ""}`}
-              aria-labelledby="billing-operations-heading"
-            >
-              {currentPlanTier === "operations" && sub && !showPlanLoading ? (
-                <span className="enterprise-billing-plan-badge">Current</span>
-              ) : null}
-              <div className="enterprise-billing-plan-head">
-                <h2 id="billing-operations-heading" className="enterprise-billing-plan-name">
+          <article
+            className={`billing-card${currentPlanTier === "operations" ? " billing-card--current" : ""}`}
+            aria-labelledby="billing-ops-heading"
+          >
+            <div className="billing-card-head">
+              <div className="billing-card-name-row">
+                <h2 id="billing-ops-heading" className="billing-card-name">
                   Operations
                 </h2>
-                <p className="enterprise-billing-plan-tagline">{OPERATIONS_BEST_FOR}</p>
+                <AlenioGoLogo variant="nav" className="billing-go-logo" />
+                <span className="billing-badge billing-badge--ops">Go</span>
               </div>
-              <p className="enterprise-billing-plan-price">
-                {OPERATIONS_PRICE_AMOUNT}
-                <span>{OPERATIONS_PRICE_PERIOD}</span>
-              </p>
-              <ul className="enterprise-billing-plan-highlights">
-                {OPERATIONS_FEATURES.slice(0, 3).map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-              {!showPlanLoading && sub && currentPlanTier === "operations" ? (
-                <button
-                  type="button"
-                  className="enterprise-billing-plan-cta enterprise-billing-plan-cta--current"
-                  disabled
-                >
-                  Current plan
-                </button>
-              ) : !showPlanLoading && sub ? (
-                <>
-                  <button
-                    type="button"
-                    className="enterprise-billing-plan-cta enterprise-billing-plan-cta--primary"
-                    disabled={
-                      busy ||
-                      !!subErr ||
-                      checkoutCfgLoading ||
-                      !canCheckoutOperations ||
-                      (checkoutCfg !== null && !operationsCheckoutReady)
-                    }
-                    onClick={() => void onSubscribe("operations")}
-                  >
-                    {busy
-                      ? currentPlanTier === "pro"
-                        ? "Upgrading…"
-                        : "Opening checkout…"
-                      : currentPlanTier === "pro"
-                        ? "Upgrade to Operations"
-                        : "Start Operations"}
-                  </button>
-                  <p className="enterprise-billing-plan-footnote">
-                    {operationsCheckoutReady
-                      ? "Includes Alenio Go · Secure checkout"
-                      : "Set STRIPE_OPERATIONS_PRICE_ID on the API to enable checkout."}
-                  </p>
-                </>
-              ) : (
-                <p className="enterprise-billing-plan-footnote">{showPlanLoading ? "Loading…" : "—"}</p>
-              )}
-            </article>
-          </div>
-
-          <aside className="enterprise-billing-sidebar">
-            <div className="enterprise-billing-subscription">
-              <h3 className="enterprise-billing-subscription-title">Subscription</h3>
-              {showPlanLoading ? (
-                <p className="enterprise-billing-plan-footnote">Loading subscription…</p>
-              ) : sub && !subErr ? (
-                <>
-                  <dl className="enterprise-billing-subscription-dl">
-                    <div className="enterprise-billing-subscription-row">
-                      <dt>Plan</dt>
-                      <dd>{planLabel(sub.plan)}</dd>
-                    </div>
-                    <div className="enterprise-billing-subscription-row">
-                      <dt>Status</dt>
-                      <dd>
-                        <span
-                          className={`enterprise-billing-subscription-status${
-                            ["active", "trialing"].includes(sub.status) ? "" : " enterprise-billing-subscription-status--inactive"
-                          }`}
-                        >
-                          <span className="enterprise-billing-subscription-status-dot" aria-hidden />
-                          <span style={{ textTransform: "capitalize" }}>{sub.status.replace(/_/g, " ")}</span>
-                        </span>
-                      </dd>
-                    </div>
-                    <div className="enterprise-billing-subscription-row">
-                      <dt>Renews or ends</dt>
-                      <dd>{formatRenewalDate(sub.currentPeriodEnd)}</dd>
-                    </div>
-                  </dl>
-                  {mobileManaged ? (
-                    <div className="enterprise-billing-mobile-notice">
-                      <p className="enterprise-billing-mobile-notice-title">Active Pro plan</p>
-                      <p>
-                        This workspace has an active Pro plan that is not managed through web Stripe billing. Cancel or
-                        change it in Plan & Access on mobile, or contact support if you need help.
-                      </p>
-                    </div>
-                  ) : null}
-                  {isOwner && !mobileManaged ? (
-                    <button
-                      type="button"
-                      className="enterprise-billing-manage-btn"
-                      disabled={busy || !canOpenStripePortal || !!subErr || showPlanLoading}
-                      onClick={onPortal}
-                    >
-                      {busy ? "Opening…" : "Manage billing"}
-                    </button>
-                  ) : !isOwner ? (
-                    <p className="enterprise-billing-plan-footnote">
-                      Ask a team owner to manage the subscription for this workspace.
-                    </p>
-                  ) : null}
-                </>
-              ) : !subErr ? (
-                <p className="enterprise-billing-plan-footnote">No subscription details loaded yet.</p>
-              ) : null}
+              <p className="billing-card-tag">Advanced tools for high performing teams</p>
             </div>
-          </aside>
-
-          <section className="enterprise-billing-compare" aria-label="Plan comparison">
-            <div className="enterprise-billing-compare-head">
-              <span>Feature</span>
-              <span>Free</span>
-              <span>Pro</span>
-              <span>Ops</span>
-            </div>
-            <div className="enterprise-billing-compare-body">
-              {BILLING_COMPARE_FEATURES.map((row) => (
-                <div key={row.name} className="enterprise-billing-compare-row">
-                  <span className="enterprise-billing-compare-feature">{row.name}</span>
-                  <span className="enterprise-billing-compare-cell">
-                    <CompareIcon included={row.free} />
-                  </span>
-                  <span className="enterprise-billing-compare-cell">
-                    <CompareIcon included={row.pro} />
-                  </span>
-                  <span className="enterprise-billing-compare-cell">
-                    <CompareIcon included={row.operations} />
-                  </span>
-                </div>
+            <p className="billing-card-price">
+              $69.99
+              <span className="billing-card-price-period">/ workspace / month</span>
+            </p>
+            <ul className="billing-card-features">
+              {OPS_CARD_FEATURES.map((f) => (
+                <li key={f}>
+                  <CheckIcon />
+                  <span>{f}</span>
+                </li>
               ))}
-            </div>
-          </section>
+            </ul>
+            {currentPlanTier === "operations" ? (
+              <button type="button" className="billing-cta billing-cta--current" disabled>
+                Current plan
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="billing-cta billing-cta--outline-dark"
+                disabled={busy || !!subErr || checkoutCfgLoading || showPlanLoading || !canCheckoutOperations}
+                onClick={() => {
+                  if (!operationsCheckoutReady) {
+                    setActionErr(
+                      "Operations checkout is not configured on this server yet. Add STRIPE_OPERATIONS_PRICE_ID on Railway (same service as STRIPE_TEAM_PRICE_ID), then redeploy.",
+                    );
+                    return;
+                  }
+                  void onSubscribe("operations");
+                }}
+              >
+                {busyPlan === "operations"
+                  ? currentPlanTier === "pro"
+                    ? "Upgrading…"
+                    : "Opening…"
+                  : currentPlanTier === "pro"
+                    ? "Upgrade to Operations"
+                    : "Start Operations"}
+              </button>
+            )}
+          </article>
+        </div>
+
+        <div className="billing-help">
+          <div className="billing-help-copy">
+            <span className="billing-help-icon" aria-hidden>
+              <ChatIcon />
+            </span>
+            <p>
+              <strong>Need help choosing a plan?</strong> Our team is here to help you find the perfect fit.
+            </p>
+          </div>
+          <a className="billing-help-cta" href={supportHref}>
+            Contact support
+            <ExternalIcon />
+          </a>
         </div>
       </div>
+
+      <AlenioNoticeModal
+        open={!!notice}
+        title={notice?.title ?? ""}
+        message={notice?.message ?? ""}
+        tone={notice?.tone ?? "info"}
+        confirmLabel={notice?.confirmLabel}
+        onClose={closeNotice}
+      />
     </div>
   );
 }
