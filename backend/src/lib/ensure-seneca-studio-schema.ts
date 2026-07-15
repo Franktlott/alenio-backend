@@ -3,7 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<void> {
   try {
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SenecaConfig" (
+      CREATE TABLE IF NOT EXISTS public."SenecaConfig" (
         "id" TEXT NOT NULL,
         "ownerType" TEXT NOT NULL,
         "ownerId" TEXT NOT NULL,
@@ -21,15 +21,15 @@ export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<vo
     `);
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "SenecaConfig_ownerType_ownerId_type_version_key"
-      ON "SenecaConfig"("ownerType", "ownerId", "type", "version");
+      ON public."SenecaConfig"("ownerType", "ownerId", "type", "version");
     `);
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "SenecaConfig_ownerType_ownerId_type_status_idx"
-      ON "SenecaConfig"("ownerType", "ownerId", "type", "status");
+      ON public."SenecaConfig"("ownerType", "ownerId", "type", "status");
     `);
 
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SenecaKnowledge" (
+      CREATE TABLE IF NOT EXISTS public."SenecaKnowledge" (
         "id" TEXT NOT NULL,
         "ownerType" TEXT NOT NULL,
         "ownerId" TEXT NOT NULL,
@@ -50,11 +50,11 @@ export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<vo
     `);
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "SenecaKnowledge_ownerType_ownerId_status_idx"
-      ON "SenecaKnowledge"("ownerType", "ownerId", "status");
+      ON public."SenecaKnowledge"("ownerType", "ownerId", "status");
     `);
 
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SenecaKnowledgeVersion" (
+      CREATE TABLE IF NOT EXISTS public."SenecaKnowledgeVersion" (
         "id" TEXT NOT NULL,
         "knowledgeId" TEXT NOT NULL,
         "version" INTEGER NOT NULL,
@@ -71,15 +71,15 @@ export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<vo
     `);
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "SenecaKnowledgeVersion_knowledgeId_version_key"
-      ON "SenecaKnowledgeVersion"("knowledgeId", "version");
+      ON public."SenecaKnowledgeVersion"("knowledgeId", "version");
     `);
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "SenecaKnowledgeVersion_knowledgeId_idx"
-      ON "SenecaKnowledgeVersion"("knowledgeId");
+      ON public."SenecaKnowledgeVersion"("knowledgeId");
     `);
 
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SenecaPromptTemplate" (
+      CREATE TABLE IF NOT EXISTS public."SenecaPromptTemplate" (
         "id" TEXT NOT NULL,
         "ownerType" TEXT NOT NULL,
         "ownerId" TEXT NOT NULL,
@@ -96,11 +96,11 @@ export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<vo
     `);
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "SenecaPromptTemplate_ownerType_ownerId_templateKey_key"
-      ON "SenecaPromptTemplate"("ownerType", "ownerId", "templateKey");
+      ON public."SenecaPromptTemplate"("ownerType", "ownerId", "templateKey");
     `);
 
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SenecaPromptVersion" (
+      CREATE TABLE IF NOT EXISTS public."SenecaPromptVersion" (
         "id" TEXT NOT NULL,
         "templateId" TEXT NOT NULL,
         "version" INTEGER NOT NULL,
@@ -112,11 +112,11 @@ export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<vo
     `);
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "SenecaPromptVersion_templateId_version_key"
-      ON "SenecaPromptVersion"("templateId", "version");
+      ON public."SenecaPromptVersion"("templateId", "version");
     `);
 
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SenecaGeneration" (
+      CREATE TABLE IF NOT EXISTS public."SenecaGeneration" (
         "id" TEXT NOT NULL,
         "ownerType" TEXT NOT NULL,
         "ownerId" TEXT NOT NULL,
@@ -138,11 +138,11 @@ export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<vo
     `);
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "SenecaGeneration_ownerType_ownerId_createdAt_idx"
-      ON "SenecaGeneration"("ownerType", "ownerId", "createdAt");
+      ON public."SenecaGeneration"("ownerType", "ownerId", "createdAt");
     `);
 
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "SenecaGenerationFeedback" (
+      CREATE TABLE IF NOT EXISTS public."SenecaGenerationFeedback" (
         "id" TEXT NOT NULL,
         "generationId" TEXT NOT NULL,
         "rating" TEXT NOT NULL,
@@ -154,7 +154,7 @@ export async function ensureSenecaStudioSchema(prisma: PrismaClient): Promise<vo
     `);
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "SenecaGenerationFeedback_generationId_key"
-      ON "SenecaGenerationFeedback"("generationId");
+      ON public."SenecaGenerationFeedback"("generationId");
     `);
   } catch (e) {
     console.warn("[ensureSenecaStudioSchema]", e instanceof Error ? e.message : e);
