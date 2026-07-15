@@ -155,24 +155,66 @@ export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
   app.get("/api/oauth/microsoft/start", (c) => startMicrosoftOAuth(c));
 
   /**
-   * Password reset request with real send logging.
-   * Better Auth's `/email-otp/send-verification-otp` returns `{success:true}` even when
-   * no user exists (and therefore no email is sent) — which looks like a silent failure.
+   * Password reset request with real send outcome.
+   * Unlike Better Auth's OTP endpoint, this returns an error when no Alenio account exists
+   * so clients do not advance to the code screen incorrectly.
    */
   app.post("/api/password-reset/request", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { email?: unknown } | null;
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
     if (!email) {
-      return c.json({ success: true });
+      return c.json(
+        {
+          success: false,
+          delivered: false,
+          error: { message: "Please enter your email address.", code: "INVALID_EMAIL" },
+        },
+        400,
+      );
     }
     try {
       const outcome = await authServer.sendForgetPasswordOtp(email);
       console.log("[password-reset/request]", email, outcome);
-      // Always generic success to the client (do not leak account existence).
-      return c.json({ success: true, delivered: outcome === "sent" });
+      if (outcome === "sent") {
+        return c.json({ success: true, delivered: true });
+      }
+      if (outcome === "no_user") {
+        return c.json(
+          {
+            success: false,
+            delivered: false,
+            error: {
+              message: "No Alenio account found for that email.",
+              code: "NO_ACCOUNT",
+            },
+          },
+          404,
+        );
+      }
+      return c.json(
+        {
+          success: false,
+          delivered: false,
+          error: {
+            message: "Could not send a reset email. Please try again shortly.",
+            code: "SEND_FAILED",
+          },
+        },
+        502,
+      );
     } catch (err) {
       console.error("[password-reset/request] failed:", err);
-      return c.json({ success: true, delivered: false });
+      return c.json(
+        {
+          success: false,
+          delivered: false,
+          error: {
+            message: "Could not send a reset email. Please try again shortly.",
+            code: "SEND_FAILED",
+          },
+        },
+        502,
+      );
     }
   });
 

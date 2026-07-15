@@ -55,7 +55,7 @@ export function ForgotPasswordPage() {
             <p className="auth-v2-eyebrow">Forgot password</p>
             <h2 className="auth-heading">Request a reset code</h2>
             <p className="auth-sub">
-              Enter the email for your Alenio password account. If that account exists, we email a code. Microsoft-only
+              Enter the email for your Alenio password account. We only continue if that account exists. Microsoft-only
               accounts should use Continue with Microsoft on the sign-in page instead.
             </p>
           </div>

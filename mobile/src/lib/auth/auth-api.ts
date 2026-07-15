@@ -116,7 +116,7 @@ export async function verifyEmailOtp(email: string, otp: string) {
 }
 
 export async function sendForgetPasswordOtp(email: string) {
-  // Alenio wrapper logs whether Resend actually ran (Better Auth always returns success).
+  // Alenio wrapper returns delivered=true only when an account exists and email was sent.
   const url = `${getBackendUrl()}/api/password-reset/request`;
   try {
     const res = await safeFetch(url, {
@@ -131,23 +131,40 @@ export async function sendForgetPasswordOtp(email: string) {
     } catch {
       data = null;
     }
+    const rec = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+    const delivered = rec.delivered === true;
     console.warn("[alenio-auth] password-reset/request", {
       status: res.status,
       ok: res.ok,
+      delivered,
       data,
     });
-    if (res.ok) {
+    if (res.ok && delivered) {
       return { ok: true, status: res.status, data, error: null as AuthApiError, authToken: null };
     }
+    return {
+      ok: false,
+      status: res.status,
+      data,
+      error: pickError(
+        data,
+        delivered
+          ? "Could not send a reset email. Please try again."
+          : "No Alenio account found for that email.",
+      ),
+      authToken: null,
+    };
   } catch (err) {
-    console.warn("[alenio-auth] password-reset/request failed, falling back", err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("[alenio-auth] password-reset/request failed", err);
+    return {
+      ok: false,
+      status: 0,
+      data: null,
+      error: { message: message || "Network request failed" },
+      authToken: null,
+    };
   }
-
-  // Fallback until the new backend route is deployed.
-  return postAuthApi("/email-otp/send-verification-otp", {
-    email,
-    type: "forget-password",
-  });
 }
 
 export async function checkForgetPasswordOtp(email: string, otp: string) {

@@ -76,11 +76,35 @@ export function getAuthPasswordFlowClient(): AuthPasswordFlowClient {
   return {
     forgetPassword: {
       emailOtp: async ({ email }) => {
-        const result = await client.emailOtp.sendVerificationOtp({
-          email,
-          type: "forget-password",
+        // Use Alenio wrapper so unknown emails error instead of opening the code screen.
+        const base = getWebApiBase();
+        const res = await fetch(`${base}/api/password-reset/request`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Origin: typeof window !== "undefined" ? window.location.origin : "https://alenio.com",
+          },
+          credentials: "omit",
+          body: JSON.stringify({ email }),
         });
-        return { error: result.error ? { message: result.error.message ?? "Could not send code." } : null };
+        const data = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          delivered?: boolean;
+          error?: { message?: string; code?: string };
+        } | null;
+        if (res.ok && data?.delivered === true) {
+          return { error: null };
+        }
+        return {
+          error: {
+            message:
+              data?.error?.message ??
+              (data?.delivered === false
+                ? "No Alenio account found for that email."
+                : "Could not send code."),
+          },
+        };
       },
     },
     emailOtp: {
