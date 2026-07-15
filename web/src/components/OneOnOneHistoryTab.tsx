@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AutoResizeTextarea } from "./AutoResizeTextarea";
 import {
@@ -28,7 +28,6 @@ import {
   LEADER_COMMENTS_NUDGE_TITLE,
 } from "../lib/check-in-leader-comments";
 import {
-  countOverdueFollowUpTasks,
   checkInEditMenuLabel,
   canPrintCheckIn,
   getOneOnOneMeetingStatusFromMeeting,
@@ -136,6 +135,14 @@ type Props = {
   leaderUserId: string | null;
   canCreate: boolean;
   canModify: boolean;
+  activeDevGoals?: number;
+  completedDevGoals?: number;
+  streak?: number;
+  daysSinceLastCheckIn?: number | null;
+  nextCheckInValue?: string;
+  nextCheckInHint?: string;
+  teamName?: string;
+  isSelf?: boolean;
 };
 
 type View = "list" | "pick" | "fill";
@@ -196,7 +203,7 @@ function assigneeDisplayName(
   userId: string | undefined,
   memberUserId: string,
   memberName: string,
-  leaderUserId: string | null,
+  _leaderUserId: string | null,
   leaderName: string | null,
 ): string {
   if (!userId || userId === memberUserId) return memberName;
@@ -273,6 +280,191 @@ function MeetingStatusBadge({ meeting }: { meeting: OneOnOneMeeting }) {
   );
 }
 
+/** Visual status for enterprise check-ins list (maps existing helpers → On track / Needs attention). */
+function CheckInListStatusBadge({ meeting }: { meeting: OneOnOneMeeting }) {
+  if (meeting.status === "draft") {
+    return (
+      <span className="enterprise-checkins-status enterprise-checkins-status--draft" title="Draft">
+        Draft
+      </span>
+    );
+  }
+  const status = getOneOnOneMeetingStatusFromMeeting(meeting);
+  const needsAttention = status === "open";
+  return (
+    <span
+      className={`enterprise-checkins-status${needsAttention ? " enterprise-checkins-status--attention" : " enterprise-checkins-status--on-track"}`}
+      title={oneOnOneMeetingStatusLabel(status)}
+    >
+      {needsAttention ? "Needs attention" : "On track"}
+    </span>
+  );
+}
+
+function formatRelativeDaysAgo(iso: string): string {
+  try {
+    const then = new Date(iso);
+    const now = new Date();
+    const startToday = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const startThen = Date.UTC(then.getFullYear(), then.getMonth(), then.getDate());
+    const days = Math.max(0, Math.floor((startToday - startThen) / 86_400_000));
+    if (days === 0) return "Today";
+    if (days === 1) return "1 day ago";
+    return `${days} days ago`;
+  } catch {
+    return "";
+  }
+}
+
+function goalsReviewedLabel(meeting: OneOnOneMeeting): string {
+  const title = meeting.templateTitle?.trim();
+  if (title) return title;
+  const section = meeting.templateFields?.find((f) => f.type === "section" && f.label?.trim());
+  return section?.label?.trim() || "Check-in";
+}
+
+function countCheckInStreak(meetings: OneOnOneMeeting[]): number {
+  const published = [...meetings]
+    .filter((m) => m.status !== "draft")
+    .sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a));
+  let streak = 0;
+  for (const meeting of published) {
+    if (meeting.status === "draft") break;
+    streak += 1;
+  }
+  return streak;
+}
+
+function countFeedbackThisMonth(meetings: OneOnOneMeeting[]): number {
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  return meetings.filter((m) => {
+    if (m.status === "draft") return false;
+    const feedback = m.responses?.[ASSOCIATE_FEEDBACK_FIELD_ID];
+    if (feedback == null || feedback === "" || feedback === 0) return false;
+    try {
+      const d = new Date(oneOnOneDisplayDate(m));
+      return d.getMonth() === month && d.getFullYear() === year;
+    } catch {
+      return false;
+    }
+  }).length;
+}
+
+function IconCheckinsHeader() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M8 3v4M16 3v4M4 10h16" />
+      <path d="m9 14 2 2 4-4" />
+    </svg>
+  );
+}
+
+function IconChevronRight() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
+function IconMetricCalendar() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M8 3v4M16 3v4M4 10h16" />
+    </svg>
+  );
+}
+
+function IconMetricTarget() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IconMetricFlame() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M12 3c2 3 1 5.5-.5 7C13 10 16 11.5 16 15a4 4 0 1 1-8 0c0-2.5 1.5-4 2.5-5.5C9 7.5 10 5 12 3Z" />
+    </svg>
+  );
+}
+
+function IconMetricChat() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M4 5h16v11H8l-4 4V5Z" />
+    </svg>
+  );
+}
+
+function IconExport() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M12 3v12" />
+      <path d="m8 11 4 4 4-4" />
+      <path d="M5 19h14" />
+    </svg>
+  );
+}
+
+function IconWhyStar() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 3.5 14.4 9l6 .5-4.6 4 1.4 5.8L12 16.8 6.8 19.3 8.2 13.5 3.6 9.5l6-.5L12 3.5Z" />
+    </svg>
+  );
+}
+
+function IconSummaryChart() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M4 19h16" />
+      <path d="M7 16V9M12 16V5M17 16v-4" />
+    </svg>
+  );
+}
+
+function IconSummaryClock() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4.5l3 1.5" />
+    </svg>
+  );
+}
+
+function IconSummaryPeople() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <circle cx="9" cy="8" r="3" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M3.5 19c1-3 2.8-4.5 5.5-4.5S13 16 14 19" />
+      <path d="M14.5 14.5c1.6 0 3 .7 4 2.2" />
+    </svg>
+  );
+}
+
+function IconHistoryCheck({ attention }: { attention?: boolean }) {
+  return (
+    <span
+      className={`enterprise-checkins-history-check${attention ? " is-attention" : ""}`}
+      aria-hidden
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25">
+        <path d="m6 12 4 4 8-8" />
+      </svg>
+    </span>
+  );
+}
+
 export function OneOnOneHistoryTab({
   teamId,
   memberUserId,
@@ -281,6 +473,14 @@ export function OneOnOneHistoryTab({
   leaderUserId,
   canCreate,
   canModify,
+  activeDevGoals,
+  completedDevGoals,
+  streak,
+  daysSinceLastCheckIn,
+  nextCheckInValue,
+  nextCheckInHint,
+  teamName,
+  isSelf = false,
 }: Props) {
   const [view, setView] = useState<View>("list");
   const [meetings, setMeetings] = useState<OneOnOneMeeting[]>([]);
@@ -318,11 +518,6 @@ export function OneOnOneHistoryTab({
   const [senecaPrepRequested, setSenecaPrepRequested] = useState(false);
   const compactCheckInLayout = useCompactCheckInLayout();
   const checkInFullscreen = compactCheckInLayout || userExpandedFullscreen;
-  const todayStart = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
 
   const resolveLeaderUserId = (meeting?: OneOnOneMeeting | null) =>
     leaderUserId ?? meeting?.createdById ?? null;
@@ -1373,28 +1568,139 @@ export function OneOnOneHistoryTab({
     );
   }
 
+  const publishedMeetings = meetings.filter((m) => m.status !== "draft");
+  const latestMeeting =
+    meetings.length === 0
+      ? null
+      : [...meetings].sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))[0] ?? null;
+  const latestExportable = publishedMeetings.find((m) => canPrintCheckIn(m)) ?? null;
+  const derivedStreak = streak ?? countCheckInStreak(meetings);
+  const derivedGoalsActive = activeDevGoals ?? 0;
+  const derivedGoalsCompleted = completedDevGoals ?? 0;
+  const feedbackReceived = countFeedbackThisMonth(meetings);
+  const lastCheckInPrimary = latestMeeting
+    ? formatRelativeDaysAgo(oneOnOneDisplayDate(latestMeeting))
+    : daysSinceLastCheckIn != null
+      ? formatRelativeDaysAgo(
+          new Date(Date.now() - daysSinceLastCheckIn * 86_400_000).toISOString(),
+        )
+      : "No check-in yet";
+  const lastCheckInHint = latestMeeting
+    ? formatMeetingDate(oneOnOneDisplayDate(latestMeeting))
+    : "—";
+  const nextDueDisplay = nextCheckInValue ?? "—";
+  const nextDueHint = nextCheckInHint?.trim() || "Based on workplace standards";
+  const streakPrimary =
+    derivedStreak <= 0 ? "0" : derivedStreak === 1 ? "1 in a row" : `${derivedStreak} in a row`;
+  const streakHint = derivedStreak > 0 ? "Keep it going!" : "Start your streak";
+  const feedbackPrimary = `${feedbackReceived} this month`;
+  const feedbackHint = feedbackReceived > 0 ? `+${feedbackReceived} this month` : "No feedback yet";
+  const nowForQuarter = new Date();
+  const quarterStart = new Date(
+    nowForQuarter.getFullYear(),
+    Math.floor(nowForQuarter.getMonth() / 3) * 3,
+    1,
+  );
+  const quarterCount = publishedMeetings.filter((m) => {
+    try {
+      return new Date(oneOnOneDisplayDate(m)) >= quarterStart;
+    } catch {
+      return false;
+    }
+  }).length;
+  const onTrackCount = publishedMeetings.filter((m) => getOneOnOneMeetingStatusFromMeeting(m) !== "open").length;
+  const onTimePct =
+    publishedMeetings.length === 0
+      ? 0
+      : Math.round((onTrackCount / publishedMeetings.length) * 100);
+  const topFocus =
+    publishedMeetings[0]?.templateTitle?.trim() ||
+    (teamName ? `Growing with ${teamName}` : "Team Development");
+
+  const onExportLatest = () => {
+    if (!latestExportable) return;
+    void onDownloadPdf(latestExportable);
+  };
+
   return (
-    <div className="enterprise-oneone-history enterprise-oneone-history--scrollable">
-      <div className="enterprise-dev-plan-head">
-        <div>
-          <h3 className="enterprise-team-profile-section-title">Check-in history</h3>
-          <p className="enterprise-muted enterprise-dev-plan-sub">
-            Recorded manager check-ins for this team member.
+    <div className="enterprise-oneone-history enterprise-oneone-history--scrollable enterprise-checkins-page">
+      <div className="enterprise-checkins-section-head">
+        <div className="enterprise-checkins-section-head-copy">
+          <div className="enterprise-checkins-section-title-row">
+            <span className="enterprise-checkins-section-icon" aria-hidden>
+              <IconCheckinsHeader />
+            </span>
+            <h3 className="enterprise-checkins-section-title">Check-ins</h3>
+          </div>
+          <p className="enterprise-checkins-section-sub">
+            Track your progress, stay consistent, and keep growing.
           </p>
         </div>
         {canCreate ? (
-          <div className="enterprise-dev-plan-head-actions">
-            <button
-              type="button"
-              className="enterprise-dev-plan-new-btn"
-              disabled={loadingTemplates}
-              onClick={() => void startCreate()}
-            >
-              {loadingTemplates ? "Loading…" : "New check-in"}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="enterprise-checkins-new-btn"
+            disabled={loadingTemplates}
+            onClick={() => void startCreate()}
+          >
+            {loadingTemplates ? "Loading…" : "+ New check-in"}
+            <span className="enterprise-checkins-new-btn-chevron" aria-hidden>
+              ▾
+            </span>
+          </button>
         ) : null}
       </div>
+
+      <div className="enterprise-checkins-metrics" aria-label="Check-in metrics">
+        <div className="enterprise-checkins-metric enterprise-checkins-metric--green">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricCalendar />
+          </span>
+          <span className="enterprise-checkins-metric-label">Last Check-in</span>
+          <strong className="enterprise-checkins-metric-value">{lastCheckInPrimary}</strong>
+          <span className="enterprise-checkins-metric-hint">{lastCheckInHint}</span>
+        </div>
+        <div className="enterprise-checkins-metric enterprise-checkins-metric--blue">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricTarget />
+          </span>
+          <span className="enterprise-checkins-metric-label">Goals</span>
+          <strong className="enterprise-checkins-metric-value">
+            {derivedGoalsActive}
+            <span className="enterprise-checkins-metric-suffix"> active</span>
+          </strong>
+          <span className="enterprise-checkins-metric-hint">
+            {derivedGoalsCompleted} completed
+          </span>
+        </div>
+        <div className="enterprise-checkins-metric enterprise-checkins-metric--purple">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricFlame />
+          </span>
+          <span className="enterprise-checkins-metric-label">Check-in Streak</span>
+          <strong className="enterprise-checkins-metric-value">{streakPrimary}</strong>
+          <span className="enterprise-checkins-metric-hint">{streakHint}</span>
+        </div>
+        <div className="enterprise-checkins-metric enterprise-checkins-metric--orange">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricCalendar />
+          </span>
+          <span className="enterprise-checkins-metric-label">Next Check-in Due</span>
+          <strong className="enterprise-checkins-metric-value">{nextDueDisplay}</strong>
+          <span className="enterprise-checkins-metric-hint">{nextDueHint}</span>
+        </div>
+        <div className="enterprise-checkins-metric enterprise-checkins-metric--blue">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricChat />
+          </span>
+          <span className="enterprise-checkins-metric-label">Feedback Received</span>
+          <strong className="enterprise-checkins-metric-value">{feedbackPrimary}</strong>
+          <span className="enterprise-checkins-metric-hint enterprise-checkins-metric-hint--positive">
+            {feedbackHint}
+          </span>
+        </div>
+      </div>
+
       {listNotice ? (
         <p className="enterprise-oneone-history-notice" role="status">
           {listNotice}
@@ -1404,134 +1710,225 @@ export function OneOnOneHistoryTab({
       {loadingMeetings && meetings.length === 0 ? (
         <p className="enterprise-muted enterprise-oneone-history-loading">Loading check-ins…</p>
       ) : null}
-      {!loadingMeetings && meetings.length === 0 ? (
-        <CheckInGrowCard
-          canCreate={canCreate}
-          loading={loadingTemplates}
-          onCreate={() => void startCreate()}
-        />
-      ) : null}
-      {meetings.length > 0 ? (
-        <div className="enterprise-oneone-history-table-wrap">
-          <div className="enterprise-oneone-history-table-head" aria-hidden>
-            <span>Check-in</span>
-            <span className="enterprise-oneone-history-table-actions-col">Actions</span>
-          </div>
-          <ul className="enterprise-oneone-history-list">
-            {meetings.map((meeting) => {
-              const overdueCount = countOverdueFollowUpTasks(meeting.followUpTasks, todayStart);
-              return (
-              <li
-                key={meeting.id}
-                className={`enterprise-oneone-history-item${
-                  menuMeetingId === meeting.id ? " enterprise-oneone-history-item--menu-open" : ""
-                }`}
+
+      <div className="enterprise-checkins-main-grid">
+        <div className="enterprise-checkins-history-card">
+          <div className="enterprise-checkins-history-card-head">
+            <div>
+              <h4 className="enterprise-checkins-history-title">Check-in history</h4>
+              <p className="enterprise-checkins-history-sub">
+                {isSelf
+                  ? "Your recorded check-ins with this team."
+                  : `Recorded check-ins with ${memberName}.`}
+              </p>
+            </div>
+            <div className="enterprise-checkins-history-controls">
+              <select className="enterprise-checkins-filter" aria-label="Filter check-ins" defaultValue="all">
+                <option value="all">All check-ins</option>
+              </select>
+              <button
+                type="button"
+                className="enterprise-checkins-export-btn"
+                disabled={!latestExportable || downloadingPdfId === latestExportable?.id}
+                onClick={onExportLatest}
               >
-                <div className="enterprise-oneone-history-row">
-                  <button
-                    type="button"
-                    className="enterprise-oneone-history-row-main"
-                    onClick={() => {
-                      setMenuMeetingId(null);
-                      setPreviewMeeting(meeting);
-                    }}
-                  >
-                    <span className="enterprise-oneone-history-item-title">{meeting.templateTitle}</span>
-                    {overdueCount > 0 ? (
-                      <span
-                        className="enterprise-team-roster-overdue enterprise-oneone-history-overdue"
-                        title={`${overdueCount} overdue task${overdueCount !== 1 ? "s" : ""}`}
-                      >
-                        {overdueCount} overdue
-                      </span>
-                    ) : null}
-                    <span className="enterprise-oneone-history-item-date">{formatMeetingDate(oneOnOneDisplayDate(meeting))}</span>
-                    <MeetingStatusBadge meeting={meeting} />
-                  </button>
-                  <div className="enterprise-oneone-history-row-menu-wrap">
+                <IconExport />
+                {downloadingPdfId && latestExportable && downloadingPdfId === latestExportable.id
+                  ? "Exporting…"
+                  : "Export"}
+              </button>
+            </div>
+          </div>
+
+          {!loadingMeetings && meetings.length === 0 ? (
+            <CheckInGrowCard
+              canCreate={canCreate}
+              loading={loadingTemplates}
+              onCreate={() => void startCreate()}
+            />
+          ) : null}
+
+          {meetings.length > 0 ? (
+            <ul className="enterprise-checkins-history-list">
+              {meetings.map((meeting) => {
+                const dateIso = oneOnOneDisplayDate(meeting);
+                const byName =
+                  meeting.createdBy?.name?.trim() ||
+                  managerName ||
+                  "Manager";
+                return (
+                  <li key={meeting.id} className="enterprise-checkins-history-row">
                     <button
                       type="button"
-                      className="enterprise-oneone-history-row-menu-btn"
-                      aria-label={`Actions for ${meeting.templateTitle}`}
-                      aria-expanded={menuMeetingId === meeting.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuMeetingId((current) => (current === meeting.id ? null : meeting.id));
+                      className="enterprise-checkins-history-row-main"
+                      onClick={() => {
+                        setMenuMeetingId(null);
+                        setPreviewMeeting(meeting);
                       }}
                     >
-                      Actions ▾
+                      <IconHistoryCheck
+                        attention={
+                          meeting.status !== "draft" &&
+                          getOneOnOneMeetingStatusFromMeeting(meeting) === "open"
+                        }
+                      />
+                      <div className="enterprise-checkins-history-row-primary">
+                        <span className="enterprise-checkins-history-date">{formatMeetingDate(dateIso)}</span>
+                        <span className="enterprise-checkins-history-relative">
+                          {formatRelativeDaysAgo(dateIso)}
+                        </span>
+                      </div>
+                      <div className="enterprise-checkins-history-row-secondary">
+                        <span className="enterprise-checkins-history-goals">
+                          {goalsReviewedLabel(meeting)}
+                        </span>
+                        <span className="enterprise-checkins-history-by">By {byName}</span>
+                      </div>
+                      <CheckInListStatusBadge meeting={meeting} />
+                      <span className="enterprise-checkins-history-chevron" aria-hidden>
+                        <IconChevronRight />
+                      </span>
                     </button>
-                    {menuMeetingId === meeting.id ? (
-                      <div className="enterprise-oneone-history-row-menu" role="menu">
-                        {canPrintCheckIn(meeting) ? (
-                          <>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuMeetingId(null);
-                                onPrint(meeting);
-                              }}
-                            >
-                              Print
-                            </button>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              disabled={downloadingPdfId === meeting.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void onDownloadPdf(meeting);
-                              }}
-                            >
-                              {downloadingPdfId === meeting.id ? "Downloading…" : "Download PDF"}
-                            </button>
-                          </>
-                        ) : null}
-                        {canModify ? (
-                          <>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEdit(meeting);
-                              }}
-                            >
-                              {checkInEditMenuLabel(meeting)}
-                            </button>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="enterprise-oneone-history-row-menu-danger"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuMeetingId(null);
-                                void onDelete(meeting);
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </>
+                    {canModify || canPrintCheckIn(meeting) ? (
+                      <div className="enterprise-checkins-history-row-menu-wrap">
+                        <button
+                          type="button"
+                          className="enterprise-checkins-history-row-menu-btn"
+                          aria-label={`Actions for ${meeting.templateTitle}`}
+                          aria-expanded={menuMeetingId === meeting.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuMeetingId((current) => (current === meeting.id ? null : meeting.id));
+                          }}
+                        >
+                          ⋯
+                        </button>
+                        {menuMeetingId === meeting.id ? (
+                          <div className="enterprise-checkins-history-row-menu" role="menu">
+                            {canPrintCheckIn(meeting) ? (
+                              <>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMenuMeetingId(null);
+                                    onPrint(meeting);
+                                  }}
+                                >
+                                  Print
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  disabled={downloadingPdfId === meeting.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void onDownloadPdf(meeting);
+                                  }}
+                                >
+                                  {downloadingPdfId === meeting.id ? "Downloading…" : "Download PDF"}
+                                </button>
+                              </>
+                            ) : null}
+                            {canModify ? (
+                              <>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEdit(meeting);
+                                  }}
+                                >
+                                  {checkInEditMenuLabel(meeting)}
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="enterprise-checkins-history-row-menu-danger"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMenuMeetingId(null);
+                                    void onDelete(meeting);
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
                     ) : null}
-                  </div>
-                </div>
-              </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+
+          {meetings.length > 0 ? (
+            <div className="enterprise-checkins-history-footer">
+              Showing {meetings.length} of {meetings.length} check-ins
+            </div>
+          ) : null}
         </div>
-      ) : null}
-      {!loadingMeetings && meetings.length > 0 && canCreate ? (
-        <CheckInGrowCard
-          canCreate
-          loading={loadingTemplates}
-          onCreate={() => void startCreate()}
-        />
-      ) : null}
+
+        <aside className="enterprise-checkins-aside">
+          <div className="enterprise-checkins-why">
+            <div className="enterprise-checkins-aside-title-row">
+              <span className="enterprise-checkins-aside-icon" aria-hidden>
+                <IconWhyStar />
+              </span>
+              <h4 className="enterprise-checkins-aside-title">Why check in?</h4>
+            </div>
+            <ul className="enterprise-checkins-why-list">
+              <li>Track progress on your goals</li>
+              <li>Celebrate wins and improve</li>
+              <li>Share feedback with your team</li>
+              <li>Build consistency and trust</li>
+            </ul>
+          </div>
+          <div className="enterprise-checkins-summary">
+            <div className="enterprise-checkins-aside-title-row">
+              <span className="enterprise-checkins-aside-icon enterprise-checkins-aside-icon--calendar" aria-hidden>
+                <IconCheckinsHeader />
+              </span>
+              <div>
+                <h4 className="enterprise-checkins-aside-title">Check-in summary</h4>
+                <p className="enterprise-checkins-summary-sub">Your consistency at a glance</p>
+              </div>
+            </div>
+            <ul className="enterprise-checkins-summary-list">
+              <li>
+                <span className="enterprise-checkins-summary-icon" aria-hidden>
+                  <IconSummaryChart />
+                </span>
+                <span>
+                  <strong>{quarterCount}</strong> Check-ins this quarter
+                </span>
+              </li>
+              <li>
+                <span className="enterprise-checkins-summary-icon" aria-hidden>
+                  <IconSummaryClock />
+                </span>
+                <span>
+                  <strong>{onTimePct}%</strong> Completed on time
+                </span>
+              </li>
+              <li>
+                <span className="enterprise-checkins-summary-icon" aria-hidden>
+                  <IconSummaryPeople />
+                </span>
+                <span>
+                  Top focus <strong>{topFocus}</strong>
+                </span>
+              </li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+
       {renderMeetingPreviewModal()}
       {senecaSummaryOpen && senecaSummaryPayload ? (
         <SenecaSummaryModal

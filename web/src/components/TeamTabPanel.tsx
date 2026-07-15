@@ -46,7 +46,7 @@ import {
 } from "../lib/workplace-standards";
 
 function roleLabel(role: string): string {
-  if (role === "owner") return "Owner";
+  if (role === "owner") return "Workspace owner";
   if (role === "team_leader") return "Team Leader";
   if (role === "admin") return "Admin";
   return "Member";
