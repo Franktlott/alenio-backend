@@ -145,12 +145,12 @@ function DevPlanActivityKey() {
 function GrowIllustration() {
   return (
     <svg width="40" height="40" viewBox="0 0 48 48" fill="none" aria-hidden>
-      <circle cx="24" cy="24" r="24" fill="#ede9fe" />
-      <path d="M24 14v16M24 30l-5-5M24 30l5-5" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M16 34h16" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="17" cy="18" r="1.5" fill="#c4b5fd" />
-      <circle cx="31" cy="16" r="1" fill="#c4b5fd" />
-      <circle cx="28" cy="22" r="1.25" fill="#ddd6fe" />
+      <circle cx="24" cy="24" r="24" fill="#eef2f6" />
+      <path d="M24 14v16M24 30l-5-5M24 30l5-5" stroke="#1e3a5f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 34h16" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="17" cy="18" r="1.5" fill="#94a3b8" />
+      <circle cx="31" cy="16" r="1" fill="#94a3b8" />
+      <circle cx="28" cy="22" r="1.25" fill="#cbd5e1" />
     </svg>
   );
 }
@@ -162,16 +162,143 @@ function DevPlanGrowCard({ canCreate, onCreate }: { canCreate: boolean; onCreate
       <p className="enterprise-dev-plan-grow-title">Keep growing</p>
       <p className="enterprise-dev-plan-grow-copy">
         {canCreate
-          ? "Add more goals to continue building your skills and reach your potential."
+          ? "Add goals to build skills, track action steps, and capture progress notes."
           : "Goals added by a manager will appear here."}
       </p>
       {canCreate ? (
         <button type="button" className="enterprise-dev-plan-grow-btn" onClick={onCreate}>
-          New developmental goal
+          + New developmental goal
         </button>
       ) : null}
     </div>
   );
+}
+
+function IconDevHeader() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M4 19h16" />
+      <path d="M7 19V9l5-4 5 4v10" />
+      <path d="M10 19v-5h4v5" />
+    </svg>
+  );
+}
+
+function IconMetricTarget() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IconMetricCheck() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <circle cx="12" cy="12" r="8" />
+      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+    </svg>
+  );
+}
+
+function IconMetricList() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M9 7h11M9 12h11M9 17h11" />
+      <path d="M4 7h.01M4 12h.01M4 17h.01" />
+    </svg>
+  );
+}
+
+function IconMetricNotes() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M6 4h9l3 3v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+      <path d="M15 4v3h3M8 12h8M8 16h6" />
+    </svg>
+  );
+}
+
+function IconMetricClock() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4.5l3 1.5" />
+    </svg>
+  );
+}
+
+function IconExport() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M12 3v12" />
+      <path d="m8 11 4 4 4-4" />
+      <path d="M5 19h14" />
+    </svg>
+  );
+}
+
+function IconWhyStar() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 3.5 14.4 9l6 .5-4.6 4 1.4 5.8L12 16.8 6.8 19.3 8.2 13.5 3.6 9.5l6-.5L12 3.5Z" />
+    </svg>
+  );
+}
+
+function IconSummaryChart() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M4 19h16" />
+      <path d="M7 16V9M12 16V5M17 16v-4" />
+    </svg>
+  );
+}
+
+function IconSummaryPeople() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <circle cx="9" cy="8" r="3" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M3.5 19c1-3 2.8-4.5 5.5-4.5S13 16 14 19" />
+      <path d="M14.5 14.5c1.6 0 3 .7 4 2.2" />
+    </svg>
+  );
+}
+
+function formatRelativeDaysAgo(iso: string): string {
+  try {
+    const then = new Date(iso);
+    const now = new Date();
+    const startToday = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const startThen = Date.UTC(then.getFullYear(), then.getMonth(), then.getDate());
+    const days = Math.max(0, Math.floor((startToday - startThen) / 86_400_000));
+    if (days === 0) return "Today";
+    if (days === 1) return "1 day ago";
+    return `${days} days ago`;
+  } catch {
+    return "—";
+  }
+}
+
+function countNotesThisMonth(goals: DevelopmentGoal[]): number {
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  let count = 0;
+  for (const goal of goals) {
+    for (const note of goal.notes) {
+      try {
+        const d = new Date(note.createdAt);
+        if (d.getMonth() === month && d.getFullYear() === year) count += 1;
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  return count;
 }
 
 type GoalFormFieldsProps = {
@@ -834,11 +961,31 @@ export function DevelopmentPlanTab({
   const [inactiveSectionOpen, setInactiveSectionOpen] = useState(false);
   const [senecaGoalOpen, setSenecaGoalOpen] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [goalFilter, setGoalFilter] = useState<"all" | "active" | "completed">("all");
   const canUpdate = canCreate || canAddNotes;
 
   const activeGoals = goals.filter((g) => g.status === "active");
   const inactiveGoals = goals.filter((g) => g.status === "inactive");
   const closedGoals = goals.filter((g) => g.status === "closed");
+  const openStepCount = activeGoals.reduce((sum, g) => sum + g.steps.length, 0);
+  const notesThisMonth = countNotesThisMonth(goals);
+  const latestGoalUpdate = goals.reduce<string | null>((latest, goal) => {
+    const at = lastUpdatedAt(goal);
+    if (!latest) return at;
+    return new Date(at) > new Date(latest) ? at : latest;
+  }, null);
+  const lastUpdatePrimary = latestGoalUpdate ? formatRelativeDaysAgo(latestGoalUpdate) : "No updates yet";
+  const lastUpdateHint = latestGoalUpdate ? formatDateOnly(latestGoalUpdate) : "—";
+  const topFocus = activeGoals[0]?.skill?.trim() || closedGoals[0]?.skill?.trim() || "Skill growth";
+  const completionPct =
+    goals.length === 0 ? 0 : Math.round((closedGoals.length / goals.length) * 100);
+  const showActiveList = goalFilter !== "completed" && activeGoals.length > 0;
+  const showInactiveList = goalFilter === "all" && inactiveGoals.length > 0;
+  const showClosedList = goalFilter !== "active" && closedGoals.length > 0;
+  const visibleGoalCount =
+    (goalFilter === "completed" ? 0 : activeGoals.length) +
+    (goalFilter === "all" ? inactiveGoals.length : 0) +
+    (goalFilter === "active" ? 0 : closedGoals.length);
 
   useEffect(() => {
     if (!menuGoalId) return;
@@ -1075,19 +1222,26 @@ export function DevelopmentPlanTab({
   };
 
   return (
-    <div className="enterprise-dev-plan" data-testid="development-plan-tab">
-      <div className="enterprise-dev-plan-head">
-        <div>
-          <h3 className="enterprise-team-profile-section-title">Development plan</h3>
-          <p className="enterprise-muted enterprise-dev-plan-sub">
+    <div
+      className="enterprise-dev-plan enterprise-checkins-page enterprise-oneone-history--scrollable"
+      data-testid="development-plan-tab"
+    >
+      <div className="enterprise-checkins-section-head">
+        <div className="enterprise-checkins-section-head-copy">
+          <div className="enterprise-checkins-section-title-row">
+            <span className="enterprise-checkins-section-icon" aria-hidden>
+              <IconDevHeader />
+            </span>
+            <h3 className="enterprise-checkins-section-title">Development</h3>
+          </div>
+          <p className="enterprise-checkins-section-sub">
             Skills to build, action steps, and progress notes over time.
           </p>
-          <DevPlanActivityKey />
         </div>
-        <div className="enterprise-dev-plan-head-actions">
+        <div className="enterprise-dev-page-head-actions">
           <button
             type="button"
-            className="enterprise-dev-plan-print-btn"
+            className="enterprise-checkins-export-btn"
             onClick={onPrint}
             disabled={loading || goals.length === 0}
           >
@@ -1095,146 +1249,287 @@ export function DevelopmentPlanTab({
           </button>
           <button
             type="button"
-            className="enterprise-dev-plan-print-btn"
+            className="enterprise-checkins-export-btn"
             onClick={() => void onDownloadPdf()}
             disabled={loading || downloadingPdf || goals.length === 0}
           >
-            {downloadingPdf ? "Downloading…" : "Download PDF"}
+            <IconExport />
+            {downloadingPdf ? "Downloading…" : "Export"}
           </button>
           {canCreate ? (
             <>
               <button
                 type="button"
-                className="seneca-dev-plan-trigger"
+                className="enterprise-checkins-export-btn enterprise-dev-page-seneca-btn"
                 onClick={() => setSenecaGoalOpen(true)}
               >
                 Generate with Seneca
               </button>
-              <button type="button" className="enterprise-dev-plan-new-btn" onClick={openCreate}>
-                New developmental goal
+              <button type="button" className="enterprise-checkins-new-btn" onClick={openCreate}>
+                + New goal
               </button>
             </>
           ) : null}
         </div>
       </div>
 
+      <div className="enterprise-checkins-metrics" aria-label="Development metrics">
+        <div className="enterprise-checkins-metric">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricTarget />
+          </span>
+          <span className="enterprise-checkins-metric-label">Active Goals</span>
+          <strong className="enterprise-checkins-metric-value">
+            {activeGoals.length}
+            <span className="enterprise-checkins-metric-suffix"> active</span>
+          </strong>
+          <span className="enterprise-checkins-metric-hint">
+            {inactiveGoals.length > 0 ? `${inactiveGoals.length} inactive` : "In progress"}
+          </span>
+        </div>
+        <div className="enterprise-checkins-metric">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricCheck />
+          </span>
+          <span className="enterprise-checkins-metric-label">Completed</span>
+          <strong className="enterprise-checkins-metric-value">
+            {closedGoals.length}
+            <span className="enterprise-checkins-metric-suffix"> closed</span>
+          </strong>
+          <span className="enterprise-checkins-metric-hint">{completionPct}% complete</span>
+        </div>
+        <div className="enterprise-checkins-metric">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricList />
+          </span>
+          <span className="enterprise-checkins-metric-label">Action Steps</span>
+          <strong className="enterprise-checkins-metric-value">{openStepCount}</strong>
+          <span className="enterprise-checkins-metric-hint">On active goals</span>
+        </div>
+        <div className="enterprise-checkins-metric">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricNotes />
+          </span>
+          <span className="enterprise-checkins-metric-label">Progress Notes</span>
+          <strong className="enterprise-checkins-metric-value">
+            {notesThisMonth}
+            <span className="enterprise-checkins-metric-suffix"> this month</span>
+          </strong>
+          <span className="enterprise-checkins-metric-hint">Keep notes current</span>
+        </div>
+        <div className="enterprise-checkins-metric">
+          <span className="enterprise-checkins-metric-icon" aria-hidden>
+            <IconMetricClock />
+          </span>
+          <span className="enterprise-checkins-metric-label">Last Update</span>
+          <strong className="enterprise-checkins-metric-value">{lastUpdatePrimary}</strong>
+          <span className="enterprise-checkins-metric-hint">{lastUpdateHint}</span>
+        </div>
+      </div>
+
       {err && !createOpen && !updateGoal ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
 
-      {loading ? (
-        <p className="enterprise-muted">Loading development plan…</p>
-      ) : goals.length === 0 ? (
-        <DevPlanGrowCard canCreate={canCreate} onCreate={openCreate} />
-      ) : (
-        <>
-          {activeGoals.length > 0 ? (
-            <ul className="enterprise-dev-plan-goals">
-              {activeGoals.map((goal) => (
-                <DevelopmentGoalCard
-                  key={goal.id}
-                  goal={goal}
-                  menuGoalId={menuGoalId}
-                  statusSavingId={statusSavingId}
-                  canUpdate={canUpdate}
-                  onOpenUpdate={openUpdate}
-                  onToggleMenu={(goalId, e) => {
-                    e.stopPropagation();
-                    setMenuGoalId((current) => (current === goalId ? null : goalId));
-                  }}
-                  onReopen={(g) => void onReopenGoal(g)}
-                  onDelete={(g) => void onDeleteGoal(g)}
-                  onMarkComplete={(g) => void onMarkComplete(g)}
-                />
-              ))}
+      <div className="enterprise-checkins-main-grid">
+        <div className="enterprise-checkins-history-card enterprise-dev-page-goals-card">
+          <div className="enterprise-checkins-history-card-head">
+            <div>
+              <h4 className="enterprise-checkins-history-title">Development goals</h4>
+              <p className="enterprise-checkins-history-sub">
+                Skills, action steps, and progress notes for {memberName}.
+              </p>
+            </div>
+            <div className="enterprise-checkins-history-controls">
+              <select
+                className="enterprise-checkins-filter"
+                aria-label="Filter goals"
+                value={goalFilter}
+                onChange={(e) => setGoalFilter(e.target.value as "all" | "active" | "completed")}
+              >
+                <option value="all">All goals</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+              </select>
+              <DevPlanActivityKey />
+            </div>
+          </div>
+
+          {loading ? (
+            <p className="enterprise-muted enterprise-dev-page-loading">Loading development plan…</p>
+          ) : goals.length === 0 ? (
+            <DevPlanGrowCard canCreate={canCreate} onCreate={openCreate} />
+          ) : (
+            <div className="enterprise-dev-page-goals-scroll">
+              {showActiveList ? (
+                <ul className="enterprise-dev-plan-goals">
+                  {activeGoals.map((goal) => (
+                    <DevelopmentGoalCard
+                      key={goal.id}
+                      goal={goal}
+                      menuGoalId={menuGoalId}
+                      statusSavingId={statusSavingId}
+                      canUpdate={canUpdate}
+                      onOpenUpdate={openUpdate}
+                      onToggleMenu={(goalId, e) => {
+                        e.stopPropagation();
+                        setMenuGoalId((current) => (current === goalId ? null : goalId));
+                      }}
+                      onReopen={(g) => void onReopenGoal(g)}
+                      onDelete={(g) => void onDeleteGoal(g)}
+                      onMarkComplete={(g) => void onMarkComplete(g)}
+                    />
+                  ))}
+                </ul>
+              ) : goalFilter !== "completed" && (closedGoals.length > 0 || inactiveGoals.length > 0) ? (
+                <p className="enterprise-muted enterprise-dev-plan-no-active">No active developmental goals.</p>
+              ) : null}
+
+              {showInactiveList ? (
+                <section className="enterprise-dev-plan-closed enterprise-dev-plan-inactive-section">
+                  <button
+                    type="button"
+                    className="enterprise-dev-plan-closed-toggle"
+                    aria-expanded={inactiveSectionOpen}
+                    onClick={() => setInactiveSectionOpen((open) => !open)}
+                  >
+                    <span className="enterprise-dev-plan-closed-toggle-label">
+                      Inactive goals
+                      <span className="enterprise-dev-plan-closed-count">{inactiveGoals.length}</span>
+                    </span>
+                    <span className="enterprise-dev-plan-closed-chevron" aria-hidden>
+                      {inactiveSectionOpen ? "▾" : "▸"}
+                    </span>
+                  </button>
+                  {inactiveSectionOpen ? (
+                    <ul className="enterprise-dev-plan-goals enterprise-dev-plan-goals--inactive">
+                      {inactiveGoals.map((goal) => (
+                        <DevelopmentGoalCard
+                          key={goal.id}
+                          goal={goal}
+                          menuGoalId={menuGoalId}
+                          statusSavingId={statusSavingId}
+                          canUpdate={canUpdate}
+                          onOpenUpdate={openUpdate}
+                          onToggleMenu={(goalId, e) => {
+                            e.stopPropagation();
+                            setMenuGoalId((current) => (current === goalId ? null : goalId));
+                          }}
+                          onReopen={(g) => void onReopenGoal(g)}
+                          onDelete={(g) => void onDeleteGoal(g)}
+                          onMarkComplete={(g) => void onMarkComplete(g)}
+                        />
+                      ))}
+                    </ul>
+                  ) : null}
+                </section>
+              ) : null}
+
+              {showClosedList ? (
+                <section className="enterprise-dev-plan-closed">
+                  <button
+                    type="button"
+                    className="enterprise-dev-plan-closed-toggle"
+                    aria-expanded={closedSectionOpen || goalFilter === "completed"}
+                    onClick={() => setClosedSectionOpen((open) => !open)}
+                  >
+                    <span className="enterprise-dev-plan-closed-toggle-label">
+                      Closed goals
+                      <span className="enterprise-dev-plan-closed-count">{closedGoals.length}</span>
+                    </span>
+                    <span className="enterprise-dev-plan-closed-chevron" aria-hidden>
+                      {closedSectionOpen || goalFilter === "completed" ? "▾" : "▸"}
+                    </span>
+                  </button>
+                  {closedSectionOpen || goalFilter === "completed" ? (
+                    <ul className="enterprise-dev-plan-goals enterprise-dev-plan-goals--closed">
+                      {closedGoals.map((goal) => (
+                        <DevelopmentGoalCard
+                          key={goal.id}
+                          goal={goal}
+                          menuGoalId={menuGoalId}
+                          statusSavingId={statusSavingId}
+                          canUpdate={canUpdate}
+                          onOpenUpdate={openUpdate}
+                          onToggleMenu={(goalId, e) => {
+                            e.stopPropagation();
+                            setMenuGoalId((current) => (current === goalId ? null : goalId));
+                          }}
+                          onReopen={(g) => void onReopenGoal(g)}
+                          onDelete={(g) => void onDeleteGoal(g)}
+                          onMarkComplete={(g) => void onMarkComplete(g)}
+                        />
+                      ))}
+                    </ul>
+                  ) : null}
+                </section>
+              ) : null}
+
+              {canCreate && goalFilter !== "completed" ? (
+                <DevPlanGrowCard canCreate onCreate={openCreate} />
+              ) : null}
+            </div>
+          )}
+
+          {!loading && goals.length > 0 ? (
+            <div className="enterprise-checkins-history-footer">
+              Showing {visibleGoalCount} of {goals.length} goals
+            </div>
+          ) : null}
+        </div>
+
+        <aside className="enterprise-checkins-aside">
+          <div className="enterprise-checkins-why">
+            <div className="enterprise-checkins-aside-title-row">
+              <span className="enterprise-checkins-aside-icon" aria-hidden>
+                <IconWhyStar />
+              </span>
+              <h4 className="enterprise-checkins-aside-title">Why develop?</h4>
+            </div>
+            <ul className="enterprise-checkins-why-list">
+              <li>Focus on one skill at a time</li>
+              <li>Turn growth into clear action steps</li>
+              <li>Capture progress with regular notes</li>
+              <li>Build consistency with your manager</li>
             </ul>
-          ) : closedGoals.length > 0 || inactiveGoals.length > 0 ? (
-            <p className="enterprise-muted enterprise-dev-plan-no-active">No active developmental goals.</p>
-          ) : null}
-
-          {inactiveGoals.length > 0 ? (
-            <section className="enterprise-dev-plan-closed enterprise-dev-plan-inactive-section">
-              <button
-                type="button"
-                className="enterprise-dev-plan-closed-toggle"
-                aria-expanded={inactiveSectionOpen}
-                onClick={() => setInactiveSectionOpen((open) => !open)}
-              >
-                <span className="enterprise-dev-plan-closed-toggle-label">
-                  Inactive goals
-                  <span className="enterprise-dev-plan-closed-count">{inactiveGoals.length}</span>
+          </div>
+          <div className="enterprise-checkins-summary">
+            <div className="enterprise-checkins-aside-title-row">
+              <span className="enterprise-checkins-aside-icon" aria-hidden>
+                <IconDevHeader />
+              </span>
+              <div>
+                <h4 className="enterprise-checkins-aside-title">Development summary</h4>
+                <p className="enterprise-checkins-summary-sub">Your growth at a glance</p>
+              </div>
+            </div>
+            <ul className="enterprise-checkins-summary-list">
+              <li>
+                <span className="enterprise-checkins-summary-icon" aria-hidden>
+                  <IconSummaryChart />
                 </span>
-                <span className="enterprise-dev-plan-closed-chevron" aria-hidden>
-                  {inactiveSectionOpen ? "▾" : "▸"}
+                <span>
+                  <strong>{activeGoals.length}</strong> Active goals
                 </span>
-              </button>
-              {inactiveSectionOpen ? (
-                <ul className="enterprise-dev-plan-goals enterprise-dev-plan-goals--inactive">
-                  {inactiveGoals.map((goal) => (
-                    <DevelopmentGoalCard
-                      key={goal.id}
-                      goal={goal}
-                      menuGoalId={menuGoalId}
-                      statusSavingId={statusSavingId}
-                      canUpdate={canUpdate}
-                      onOpenUpdate={openUpdate}
-                      onToggleMenu={(goalId, e) => {
-                        e.stopPropagation();
-                        setMenuGoalId((current) => (current === goalId ? null : goalId));
-                      }}
-                      onReopen={(g) => void onReopenGoal(g)}
-                      onDelete={(g) => void onDeleteGoal(g)}
-                      onMarkComplete={(g) => void onMarkComplete(g)}
-                    />
-                  ))}
-                </ul>
-              ) : null}
-            </section>
-          ) : null}
-
-          {canCreate ? (
-            <DevPlanGrowCard canCreate onCreate={openCreate} />
-          ) : null}
-
-          {closedGoals.length > 0 ? (
-            <section className="enterprise-dev-plan-closed">
-              <button
-                type="button"
-                className="enterprise-dev-plan-closed-toggle"
-                aria-expanded={closedSectionOpen}
-                onClick={() => setClosedSectionOpen((open) => !open)}
-              >
-                <span className="enterprise-dev-plan-closed-toggle-label">
-                  Closed goals
-                  <span className="enterprise-dev-plan-closed-count">{closedGoals.length}</span>
+              </li>
+              <li>
+                <span className="enterprise-checkins-summary-icon" aria-hidden>
+                  <IconMetricClock />
                 </span>
-                <span className="enterprise-dev-plan-closed-chevron" aria-hidden>
-                  {closedSectionOpen ? "▾" : "▸"}
+                <span>
+                  <strong>{completionPct}%</strong> Goals completed
                 </span>
-              </button>
-              {closedSectionOpen ? (
-                <ul className="enterprise-dev-plan-goals enterprise-dev-plan-goals--closed">
-                  {closedGoals.map((goal) => (
-                    <DevelopmentGoalCard
-                      key={goal.id}
-                      goal={goal}
-                      menuGoalId={menuGoalId}
-                      statusSavingId={statusSavingId}
-                      canUpdate={canUpdate}
-                      onOpenUpdate={openUpdate}
-                      onToggleMenu={(goalId, e) => {
-                        e.stopPropagation();
-                        setMenuGoalId((current) => (current === goalId ? null : goalId));
-                      }}
-                      onReopen={(g) => void onReopenGoal(g)}
-                      onDelete={(g) => void onDeleteGoal(g)}
-                      onMarkComplete={(g) => void onMarkComplete(g)}
-                    />
-                  ))}
-                </ul>
-              ) : null}
-            </section>
-          ) : null}
-        </>
-      )}
+              </li>
+              <li>
+                <span className="enterprise-checkins-summary-icon" aria-hidden>
+                  <IconSummaryPeople />
+                </span>
+                <span>
+                  Top focus <strong>{topFocus}</strong>
+                </span>
+              </li>
+            </ul>
+          </div>
+        </aside>
+      </div>
 
       {createOpen ? (
         <DevPlanGoalModal
@@ -1288,12 +1583,17 @@ export function DevelopmentPlanTab({
         </DevPlanGoalModal>
       ) : null}
 
-      <SenecaGoalModal
-        open={senecaGoalOpen}
-        onClose={() => setSenecaGoalOpen(false)}
-        memberContext={{ teamId, memberUserId, memberName, managerName }}
-        onSaved={() => void loadGoals()}
-      />
+      {senecaGoalOpen ? (
+        <SenecaGoalModal
+          open={senecaGoalOpen}
+          onClose={() => setSenecaGoalOpen(false)}
+          memberContext={{ teamId, memberUserId, memberName, managerName }}
+          onSaved={() => {
+            setSenecaGoalOpen(false);
+            void loadGoals();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

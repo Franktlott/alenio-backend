@@ -16,14 +16,13 @@ type ProfileSection =
   | "Overview"
   | "Check-ins"
   | "Development"
-  | "Goals"
   | "Recognition"
   | "Feedback"
   | "Timeline"
   | "Documents"
   | "Settings";
 
-const ACTIVE_SECTIONS: ProfileSection[] = ["Overview", "Check-ins", "Development", "Goals"];
+const ACTIVE_SECTIONS: ProfileSection[] = ["Overview", "Check-ins", "Development"];
 const COMING_SOON_SECTIONS: ProfileSection[] = ["Recognition", "Feedback", "Timeline", "Documents", "Settings"];
 const ALL_SECTIONS: ProfileSection[] = [...ACTIVE_SECTIONS, ...COMING_SOON_SECTIONS];
 
@@ -150,16 +149,6 @@ function IconNavDevelopment() {
   );
 }
 
-function IconNavGoals() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="5" />
-      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
 function IconNavRecognition() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
@@ -210,7 +199,6 @@ const SECTION_ICONS: Record<ProfileSection, ReactNode> = {
   Overview: <IconNavOverview />,
   "Check-ins": <IconNavCheckins />,
   Development: <IconNavDevelopment />,
-  Goals: <IconNavGoals />,
   Recognition: <IconNavRecognition />,
   Feedback: <IconNavFeedback />,
   Timeline: <IconNavTimeline />,
@@ -259,7 +247,7 @@ export function TeamMemberProfilePanel({
   );
 
   const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
-  const contentSection = section === "Goals" ? "Development" : section;
+  const contentSection = section;
   const statusLabel = isFormerMember ? "Former" : "Active";
   const reportsTo =
     managerName && member.role !== "owner" && !isFormerMember
@@ -271,9 +259,11 @@ export function TeamMemberProfilePanel({
   const headerSubtitle =
     contentSection === "Check-ins"
       ? "Stay consistent. Small check-ins lead to big impact."
-      : contentSection === "Overview"
-        ? "Review goals and what’s next for this teammate."
-        : "Track growth, goals, and progress over time.";
+      : contentSection === "Development"
+        ? "Build skills with clear goals, action steps, and progress notes."
+        : contentSection === "Overview"
+          ? "Review goals and what’s next for this teammate."
+          : "Track growth, goals, and progress over time.";
 
   const nextDueGreen =
     !isFormerMember &&
