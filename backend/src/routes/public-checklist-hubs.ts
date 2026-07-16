@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import {
   parseGoFrontendSettings,
   resolveGoHeroImage,
+  resolveGoQuickActions,
 } from "../lib/go-frontend-settings";
 import { resolveGoAlertSoundUrl } from "../lib/go-alert-sounds";
 import { findTeamByGoHubToken } from "../lib/go-hub";
@@ -38,6 +39,7 @@ publicChecklistHubsRouter.get("/:hubToken", async (c) => {
       team: { name: team.name, image: heroImage },
       checklists: [],
       alertSoundUrl,
+      quickActions: resolveGoQuickActions(goFrontendSettings),
     },
   });
 });
