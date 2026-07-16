@@ -13,11 +13,14 @@ export type GoFrontendQuickAction = {
 export type GoFrontendSettings = {
   /** Override kiosk hero/header image. Null uses the workspace photo. */
   heroImageUrl: string | null;
-  /** Floor-device quick actions (max 16). Null/empty uses product defaults. */
+  /** Floor-device quick actions (max 5, one row). Null or [] = none on floor. */
   quickActions: GoFrontendQuickAction[] | null;
 };
 
-export const MAX_GO_QUICK_ACTIONS = 16;
+export const MAX_GO_FLOOR_QUICK_ACTIONS = 5;
+
+/** @deprecated Use MAX_GO_FLOOR_QUICK_ACTIONS */
+export const MAX_GO_QUICK_ACTIONS = MAX_GO_FLOOR_QUICK_ACTIONS;
 
 export const DEFAULT_GO_QUICK_ACTIONS: GoFrontendQuickAction[] = [
   { id: "photo", label: "Add Photo", active: false, tone: "indigo", icon: "camera" },
@@ -67,7 +70,7 @@ export function normalizeGoQuickActions(
   if (value == null) return null;
   if (!Array.isArray(value)) return null;
   const out: GoFrontendQuickAction[] = [];
-  for (const raw of value.slice(0, MAX_GO_QUICK_ACTIONS)) {
+  for (const raw of value.slice(0, MAX_GO_FLOOR_QUICK_ACTIONS)) {
     if (!raw || typeof raw !== "object") continue;
     const row = raw as Partial<GoFrontendQuickAction>;
     const id = typeof row.id === "string" && row.id.trim() ? row.id.trim() : `qa-${out.length + 1}`;
@@ -86,13 +89,14 @@ export function normalizeGoQuickActions(
   return out.length > 0 ? out : [];
 }
 
+/** Floor-device actions. Null or empty settings → no actions on the floor display. */
 export function resolveGoQuickActions(
   settings: GoFrontendSettings | null | undefined,
 ): GoFrontendQuickAction[] {
-  if (settings?.quickActions && settings.quickActions.length > 0) {
-    return settings.quickActions.slice(0, MAX_GO_QUICK_ACTIONS);
+  if (!settings?.quickActions || settings.quickActions.length === 0) {
+    return [];
   }
-  return DEFAULT_GO_QUICK_ACTIONS.map((a) => ({ ...a }));
+  return settings.quickActions.slice(0, MAX_GO_FLOOR_QUICK_ACTIONS);
 }
 
 export function parseGoFrontendSettings(raw: string | null | undefined): GoFrontendSettings {
@@ -152,8 +156,8 @@ export function parseGoFrontendSettingsPatch(
     if (input.quickActions === null) {
       next.quickActions = null;
     } else if (Array.isArray(input.quickActions)) {
-      if (input.quickActions.length > MAX_GO_QUICK_ACTIONS) {
-        return { ok: false, message: `At most ${MAX_GO_QUICK_ACTIONS} quick actions are allowed` };
+      if (input.quickActions.length > MAX_GO_FLOOR_QUICK_ACTIONS) {
+        return { ok: false, message: `At most ${MAX_GO_FLOOR_QUICK_ACTIONS} quick actions are allowed` };
       }
       next.quickActions = normalizeGoQuickActions(input.quickActions) ?? [];
     } else {
