@@ -38,11 +38,26 @@ import {
   DEFAULT_MULTIPLE_CHOICE_CONFIG,
   DEFAULT_QUANTITY_CONFIG,
   DEFAULT_TEXT_CONFIG,
-  evaluateStubUnsupported,
+  evaluateInstruction,
+  evaluateMultipleChoice,
+  evaluateQuantity,
+  evaluateText,
   instructionConfigSchema,
+  instructionResponseSchema,
   multipleChoiceConfigSchema,
+  multipleChoiceResponseSchema,
   quantityConfigSchema,
+  quantityResponseSchema,
   textConfigSchema,
+  textResponseSchema,
+  type InstructionConfig,
+  type InstructionResponse,
+  type MultipleChoiceConfig,
+  type MultipleChoiceResponse,
+  type QuantityConfig,
+  type QuantityResponse,
+  type TextConfig,
+  type TextResponse,
 } from "./stubs";
 
 export type WalkItemTypeDefinition = {
@@ -128,51 +143,63 @@ export const WALK_ITEM_TYPE_REGISTRY: Record<WalkItemType, WalkItemTypeDefinitio
     type: "MULTIPLE_CHOICE",
     label: "Multiple Choice",
     description: "Choose from predefined options.",
-    fullySupported: false,
+    fullySupported: true,
     scorable: true,
     defaultConfig: { ...DEFAULT_MULTIPLE_CHOICE_CONFIG },
     configSchema: multipleChoiceConfigSchema,
-    responseSchema: zPassthroughResponse(),
-    evaluate: () => evaluateStubUnsupported(),
+    responseSchema: multipleChoiceResponseSchema,
+    evaluate: (config, response) => {
+      const c = parseConfig(multipleChoiceConfigSchema, config, DEFAULT_MULTIPLE_CHOICE_CONFIG);
+      const r = multipleChoiceResponseSchema.parse(response);
+      return evaluateMultipleChoice(c as MultipleChoiceConfig, r as MultipleChoiceResponse);
+    },
   },
   QUANTITY: {
     type: "QUANTITY",
     label: "Quantity Check",
     description: "Count or verify quantity.",
-    fullySupported: false,
+    fullySupported: true,
     scorable: true,
     defaultConfig: { ...DEFAULT_QUANTITY_CONFIG },
     configSchema: quantityConfigSchema,
-    responseSchema: zPassthroughResponse(),
-    evaluate: () => evaluateStubUnsupported(),
+    responseSchema: quantityResponseSchema,
+    evaluate: (config, response) => {
+      const c = parseConfig(quantityConfigSchema, config, DEFAULT_QUANTITY_CONFIG);
+      const r = quantityResponseSchema.parse(response);
+      return evaluateQuantity(c as QuantityConfig, r as QuantityResponse);
+    },
   },
   TEXT: {
     type: "TEXT",
     label: "Note / Text",
     description: "Add notes or comments.",
-    fullySupported: false,
+    fullySupported: true,
     scorable: true,
     defaultConfig: { ...DEFAULT_TEXT_CONFIG },
     configSchema: textConfigSchema,
-    responseSchema: zPassthroughResponse(),
-    evaluate: () => evaluateStubUnsupported(),
+    responseSchema: textResponseSchema,
+    evaluate: (config, response) => {
+      const c = parseConfig(textConfigSchema, config, DEFAULT_TEXT_CONFIG);
+      const r = textResponseSchema.parse(response);
+      return evaluateText(c as TextConfig, r as TextResponse);
+    },
   },
   INSTRUCTION: {
     type: "INSTRUCTION",
     label: "Instruction",
     description: "Guidance for associates (not scored).",
-    fullySupported: false,
+    fullySupported: true,
     scorable: false,
     defaultConfig: { ...DEFAULT_INSTRUCTION_CONFIG },
     configSchema: instructionConfigSchema,
-    responseSchema: zPassthroughResponse(),
-    evaluate: () => "NOT_APPLICABLE",
+    responseSchema: instructionResponseSchema,
+    evaluate: (config, response) => {
+      const c = parseConfig(instructionConfigSchema, config, DEFAULT_INSTRUCTION_CONFIG);
+      const r = instructionResponseSchema.parse(response);
+      return evaluateInstruction(c as InstructionConfig, r as InstructionResponse);
+    },
   },
 };
-
-function zPassthroughResponse(): ZodTypeAny {
-  return z.record(z.string(), z.unknown()).or(z.object({}).passthrough());
-}
 
 export function getWalkItemTypeDefinition(type: string): WalkItemTypeDefinition | null {
   if (!isWalkItemType(type)) return null;

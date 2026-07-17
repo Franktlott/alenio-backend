@@ -29,7 +29,7 @@ export const WALK_PALETTE_CARDS: WalkPaletteCard[] = [
     label: "Multiple Choice",
     description: "Choose from predefined options.",
     icon: "choice",
-    phase2: false,
+    phase2: true,
   },
   {
     type: "VISUAL_CHECK",
@@ -43,7 +43,7 @@ export const WALK_PALETTE_CARDS: WalkPaletteCard[] = [
     label: "Quantity Check",
     description: "Count or verify quantity.",
     icon: "quantity",
-    phase2: false,
+    phase2: true,
   },
   {
     type: "PHOTO",
@@ -57,7 +57,14 @@ export const WALK_PALETTE_CARDS: WalkPaletteCard[] = [
     label: "Note / Text",
     description: "Add notes or comments.",
     icon: "text",
-    phase2: false,
+    phase2: true,
+  },
+  {
+    type: "INSTRUCTION",
+    label: "Instruction",
+    description: "Guidance associates must acknowledge.",
+    icon: "text",
+    phase2: true,
   },
 ];
 

@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { ensureWalksLibrarySchema } from "./ensure-walks-library-schema";
 
 export type WalksSchemaEnsureResult = {
   ok: boolean;
@@ -411,6 +412,13 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
       walkTemplateCount = await prisma.walkTemplate.count();
     } catch (err) {
       countError = err instanceof Error ? err.message : String(err);
+    }
+
+    try {
+      await ensureWalksLibrarySchema(prisma);
+      steps.push("library_schema");
+    } catch (err) {
+      console.error("[startup] ensureWalksLibrarySchema failed:", err);
     }
 
     console.log("[startup] ensureWalksSchema ok", {

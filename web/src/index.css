@@ -44634,6 +44634,38 @@ button.enterprise-profile-legal-link {
   font-size: 0.75rem;
 }
 
+.wb-config {
+  margin: 0.85rem 0 0;
+  padding: 0.85rem 0.9rem 0.95rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.wb-config legend {
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.wb-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--wb-border, #cbd5e1);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 500;
+  color: #0f172a;
+}
+
 .wb-check {
   display: inline-flex;
   align-items: center;

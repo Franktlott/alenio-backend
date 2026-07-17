@@ -14,6 +14,14 @@ import {
   reorderWalkItems,
 } from "../../lib/walks/api";
 import { defaultTitleForType, WALK_PALETTE_CARDS } from "../../lib/walks/item-catalog";
+import {
+  addLibraryItemToWalk,
+  createDraftFromPublished,
+  fetchLibraryItems,
+  fetchOutdatedWalkItems,
+  publishWalk,
+  type WalkLibraryItem,
+} from "../../lib/walks/library-api";
 import { flattenWalkItems, isPhase2ItemType, type WalkItem, type WalkTemplate } from "../../lib/walks/types";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
@@ -81,6 +89,10 @@ export function WalkBuilderPage() {
   const [editingItem, setEditingItem] = useState<WalkItem | null>(null);
   const [dragItemId, setDragItemId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
+  const [libraryItems, setLibraryItems] = useState<WalkLibraryItem[]>([]);
+  const [outdated, setOutdated] = useState<
+    Array<{ placementId: string; title: string; pinnedVersion: number; currentVersion: number }>
+  >([]);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -90,14 +102,25 @@ export function WalkBuilderPage() {
   const loadTemplate = useCallback(
     async (id: string) => {
       if (!teamId) return;
-      const data = await fetchWalkTemplate(teamId, id);
+      const [data, outdatedRows] = await Promise.all([
+        fetchWalkTemplate(teamId, id),
+        fetchOutdatedWalkItems(teamId, id).catch(() => []),
+      ]);
       setTemplate(data);
       setNameDraft(data.name);
+      setOutdated(outdatedRows);
       const items = flattenWalkItems(data);
       setSelectedItemId((prev) => prev ?? items[0]?.id ?? null);
     },
     [teamId],
   );
+
+  useEffect(() => {
+    if (!teamId || paletteTab !== "library") return;
+    void fetchLibraryItems(teamId, { status: "ACTIVE" })
+      .then(setLibraryItems)
+      .catch(() => setLibraryItems([]));
+  }, [teamId, paletteTab]);
 
   useEffect(() => {
     if (!canManage || !teamId) return;
@@ -186,14 +209,14 @@ export function WalkBuilderPage() {
     });
   }
 
-  async function publishWalk() {
+  async function publishWalkAction() {
     await withBusy(async () => {
-      const updated = await patchWalkTemplate(teamId!, template!.id, {
-        name: nameDraft.trim() || template!.name,
-        status: "PUBLISHED",
-      });
-      setTemplate(updated);
-      showToast("Walk published");
+      if (nameDraft.trim() && nameDraft.trim() !== template!.name) {
+        await patchWalkTemplate(teamId!, template!.id, { name: nameDraft.trim() });
+      }
+      const result = await publishWalk(teamId!, template!.id);
+      setTemplate(result.template as WalkTemplate);
+      showToast(`Walk published (v${result.publishedVersion.version})`);
     });
   }
 
@@ -212,6 +235,25 @@ export function WalkBuilderPage() {
       await refresh();
       setSelectedItemId(created.id);
       setEditingItem(created);
+    });
+  }
+
+  async function addFromLibrary(libraryItemId: string) {
+    await withBusy(async () => {
+      await addLibraryItemToWalk(teamId!, template!.id, {
+        libraryItemId,
+        sectionId: defaultSectionId,
+      });
+      await refresh();
+      showToast("Item added from library");
+    });
+  }
+
+  async function updateOutdatedPlacement(placementId: string) {
+    await withBusy(async () => {
+      await patchWalkItem(teamId!, template!.id, placementId, { pinToCurrentVersion: true });
+      await refresh();
+      showToast("Pinned to latest library version");
     });
   }
 
@@ -260,7 +302,28 @@ export function WalkBuilderPage() {
           <button type="button" className="wb-btn wb-btn--ghost" disabled={busy} onClick={() => void saveDraft()}>
             Save Draft
           </button>
-          <button type="button" className="wb-btn wb-btn--primary" disabled={busy} onClick={() => void publishWalk()}>
+          {template.status === "PUBLISHED" ? (
+            <button
+              type="button"
+              className="wb-btn wb-btn--ghost"
+              disabled={busy}
+              onClick={() =>
+                void withBusy(async () => {
+                  const draft = await createDraftFromPublished(teamId!, template!.id);
+                  navigate(`/go/walks/builder/${draft.id}`);
+                  showToast("Draft created from published walk");
+                })
+              }
+            >
+              Create draft
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="wb-btn wb-btn--primary"
+            disabled={busy}
+            onClick={() => void publishWalkAction()}
+          >
             Publish Walk
           </button>
         </div>
@@ -268,6 +331,24 @@ export function WalkBuilderPage() {
 
       {error ? <p className="wb-error wb-error--banner">{error}</p> : null}
       {toast ? <p className="wb-toast">{toast}</p> : null}
+      {outdated.length > 0 ? (
+        <div className="wb-error wb-error--banner" style={{ background: "#fff7ed", color: "#9a3412" }}>
+          <strong>{outdated.length} library item(s)</strong> have newer versions.{" "}
+          {outdated.slice(0, 3).map((o) => (
+            <span key={o.placementId} style={{ display: "inline-flex", gap: 8, marginLeft: 8 }}>
+              {o.title} (v{o.pinnedVersion} → v{o.currentVersion})
+              <button
+                type="button"
+                className="wb-btn wb-btn--ghost"
+                style={{ padding: "0.15rem 0.5rem", fontSize: "0.75rem" }}
+                onClick={() => void updateOutdatedPlacement(o.placementId)}
+              >
+                Update
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <div className="wb-body">
         <aside className="wb-rail" aria-label="Builder steps">
@@ -365,7 +446,34 @@ export function WalkBuilderPage() {
                 <section className="wb-palette" aria-label="Add item">
                   <h3>Add Item</h3>
                   {paletteTab === "library" ? (
-                    <p className="wb-muted">Your saved item library will appear here in a later phase.</p>
+                    <div className="wb-palette-list">
+                      {libraryItems.length === 0 ? (
+                        <p className="wb-muted">
+                          No library items yet.{" "}
+                          <Link to="/go/walks/library">Open Item Library</Link> or create from All Items.
+                        </p>
+                      ) : (
+                        libraryItems.map((lib) => (
+                          <button
+                            key={lib.id}
+                            type="button"
+                            className="wb-palette-card"
+                            disabled={busy}
+                            onClick={() => void addFromLibrary(lib.id)}
+                          >
+                            <span className="wb-palette-icon">
+                              <WalkTypeIcon type={lib.type as WalkItem["type"]} />
+                            </span>
+                            <span>
+                              <strong>{lib.name}</strong>
+                              <em>
+                                {lib.category} · v{lib.currentVersion}
+                              </em>
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
                   ) : (
                     <div className="wb-palette-list">
                       {WALK_PALETTE_CARDS.map((card) => (
@@ -388,13 +496,9 @@ export function WalkBuilderPage() {
                       ))}
                     </div>
                   )}
-                  <button
-                    type="button"
-                    className="wb-linkish"
-                    onClick={() => showToast("Custom items coming in a later phase")}
-                  >
-                    + Add Custom Item
-                  </button>
+                  <Link to="/go/walks/library" className="wb-linkish">
+                    Manage Item Library →
+                  </Link>
                 </section>
 
                 <section className="wb-items" aria-label="Your walk items">
@@ -505,7 +609,12 @@ export function WalkBuilderPage() {
 
           <div className="wb-publish-cta">
             <p>Looks good? Publish this walk to make it available to your team.</p>
-            <button type="button" className="wb-btn wb-btn--primary" disabled={busy} onClick={() => void publishWalk()}>
+            <button
+              type="button"
+              className="wb-btn wb-btn--primary"
+              disabled={busy}
+              onClick={() => void publishWalkAction()}
+            >
               Publish Walk
             </button>
           </div>

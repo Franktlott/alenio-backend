@@ -211,13 +211,27 @@ export function AlenioGoModuleSettingsPage({ moduleKey }: Props) {
 
       {moduleKey === "walks" ? (
         <section className="go-backend-module-panel go-backend-panel-card go-mod-section" aria-labelledby="go-mod-builder">
-          <h2 id="go-mod-builder" className="go-mod-section-title">Walk Builder</h2>
+          <h2 id="go-mod-builder" className="go-mod-section-title">Walk tools</h2>
           <p className="enterprise-muted">
-            Create operational walks with temperature checks, yes/no questions, visual checks, and photo items.
+            Build walks from reusable library items, schedule windows, and review history.
           </p>
-          <Link to="/go/walks/builder" className="go-mod-btn go-mod-btn--primary" data-testid="open-walk-builder">
-            Open Walk Builder
-          </Link>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+            <Link to="/go/walks/builder" className="go-mod-btn go-mod-btn--primary" data-testid="open-walk-builder">
+              Open Walk Builder
+            </Link>
+            <Link to="/go/walks/library" className="go-mod-btn">
+              Item Library
+            </Link>
+            <Link to="/go/walks/schedules" className="go-mod-btn">
+              Schedules
+            </Link>
+            <Link to="/go/walks/history" className="go-mod-btn">
+              History
+            </Link>
+            <Link to="/go/walks/reporting" className="go-mod-btn">
+              Reporting
+            </Link>
+          </div>
         </section>
       ) : null}
 

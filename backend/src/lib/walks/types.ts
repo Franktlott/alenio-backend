@@ -13,9 +13,37 @@ export const WALK_ITEM_TYPES = [
 ] as const;
 export type WalkItemType = (typeof WALK_ITEM_TYPES)[number];
 
-/** Fully supported in Phase 1–2. */
-export const PHASE1_WALK_ITEM_TYPES = ["TEMPERATURE", "YES_NO", "VISUAL_CHECK", "PHOTO"] as const;
+/** Fully supported item types (Phase E — all types). */
+export const PHASE1_WALK_ITEM_TYPES = [...WALK_ITEM_TYPES] as const;
 export type Phase1WalkItemType = (typeof PHASE1_WALK_ITEM_TYPES)[number];
+
+export const WALK_LIBRARY_CATEGORIES = [
+  "Food Safety",
+  "Cleanliness",
+  "Equipment",
+  "Product Quality",
+  "Opening",
+  "Closing",
+  "Receiving",
+  "Cooler",
+  "Freezer",
+  "Custom",
+] as const;
+export type WalkLibraryCategory = (typeof WALK_LIBRARY_CATEGORIES)[number];
+
+export const WALK_LIBRARY_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
+export type WalkLibraryStatus = (typeof WALK_LIBRARY_STATUSES)[number];
+
+export const WALK_OCCURRENCE_STATUSES = [
+  "UPCOMING",
+  "AVAILABLE",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "COMPLETED_LATE",
+  "MISSED",
+  "CANCELLED",
+] as const;
+export type WalkOccurrenceStatus = (typeof WALK_OCCURRENCE_STATUSES)[number];
 
 export const WALK_ITEM_RESPONSE_STATUSES = [
   "NOT_STARTED",

@@ -1,23 +1,36 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../prisma";
 import { getWalkItemTypeDefinition, parseItemConfig } from "./item-types/registry";
-import { serializeWalkTemplate } from "./serialize";
+import { createLibraryItem, updateLibraryItem } from "./library-service";
+import { serializePlacement, serializeWalkItem, serializeWalkTemplate } from "./serialize";
 import { isWalkItemType, type WalkItemType, type WalkTemplateStatus } from "./types";
 
-const templateInclude = {
+const placementInclude = {
+  libraryItem: true,
+  libraryItemVersion: {
+    include: { correctiveActions: { orderBy: { position: "asc" as const } } },
+  },
+};
+
+export const templateInclude = {
   sections: {
     orderBy: { sortOrder: "asc" as const },
     include: {
-      items: {
+      items: { orderBy: { sortOrder: "asc" as const } },
+      placements: {
         orderBy: { sortOrder: "asc" as const },
-        include: { correctiveActions: { orderBy: { position: "asc" as const } } },
+        include: placementInclude,
       },
     },
   },
   items: {
     where: { sectionId: null },
     orderBy: { sortOrder: "asc" as const },
-    include: { correctiveActions: { orderBy: { position: "asc" as const } } },
+  },
+  placements: {
+    where: { sectionId: null },
+    orderBy: { sortOrder: "asc" as const },
+    include: placementInclude,
   },
 };
 
@@ -137,7 +150,8 @@ export async function createWalkSection(
       sortOrder: (max._max.sortOrder ?? -1) + 1,
     },
     include: {
-      items: { orderBy: { sortOrder: "asc" }, include: { correctiveActions: true } },
+      items: { orderBy: { sortOrder: "asc" } },
+      placements: { orderBy: { sortOrder: "asc" }, include: placementInclude },
     },
   });
   return section;
@@ -160,7 +174,8 @@ export async function updateWalkSection(
       ...(patch.description !== undefined ? { description: patch.description?.trim() || null } : {}),
     },
     include: {
-      items: { orderBy: { sortOrder: "asc" }, include: { correctiveActions: true } },
+      items: { orderBy: { sortOrder: "asc" } },
+      placements: { orderBy: { sortOrder: "asc" }, include: placementInclude },
     },
   });
 }
@@ -201,6 +216,7 @@ export async function reorderWalkSections(
   return getWalkTemplate(teamId, templateId);
 }
 
+/** Create a reusable library item and pin it on the walk (preferred path). */
 export async function createWalkItem(
   teamId: string,
   templateId: string,
@@ -213,6 +229,8 @@ export async function createWalkItem(
     required?: boolean;
     failureBehavior?: string | null;
     config?: unknown;
+    category?: string;
+    userId: string;
   },
 ) {
   const template = await prisma.walkTemplate.findFirst({ where: { id: templateId, teamId } });
@@ -221,8 +239,76 @@ export async function createWalkItem(
   if (!isWalkItemType(input.type)) {
     return { error: "INVALID_TYPE" as const, message: "Unknown walk item type" };
   }
-  const type = input.type as WalkItemType;
-  const def = getWalkItemTypeDefinition(type)!;
+  if (input.sectionId) {
+    const section = await prisma.walkTemplateSection.findFirst({
+      where: { id: input.sectionId, templateId },
+    });
+    if (!section) return { error: "INVALID_SECTION" as const, message: "Section not found" };
+  }
+
+  const lib = await createLibraryItem({
+    teamId,
+    userId: input.userId,
+    name: input.title,
+    description: input.description,
+    category: input.category ?? "Custom",
+    type: input.type,
+    instructions: input.instructions,
+    requiredDefault: input.required ?? true,
+    config: input.config,
+  });
+  if ("error" in lib) {
+    return { error: lib.error, message: lib.message };
+  }
+
+  const maxP = await prisma.walkTemplatePlacement.aggregate({
+    where: { templateId, sectionId: input.sectionId ?? null },
+    _max: { sortOrder: true },
+  });
+
+  const placement = await prisma.walkTemplatePlacement.create({
+    data: {
+      templateId,
+      sectionId: input.sectionId ?? null,
+      libraryItemId: lib.item.id,
+      libraryItemVersionId: lib.item.current!.id,
+      sortOrder: (maxP._max.sortOrder ?? -1) + 1,
+      requiredOverride: input.required ?? null,
+      instructionsOverride: null,
+      titleOverride: null,
+    },
+    include: placementInclude,
+  });
+
+  return { ok: true as const, item: serializePlacement(placement) };
+}
+
+export async function addLibraryItemToWalk(
+  teamId: string,
+  templateId: string,
+  input: {
+    libraryItemId: string;
+    libraryItemVersionId?: string | null;
+    sectionId?: string | null;
+    requiredOverride?: boolean | null;
+    instructionsOverride?: string | null;
+    titleOverride?: string | null;
+  },
+) {
+  const template = await prisma.walkTemplate.findFirst({ where: { id: templateId, teamId } });
+  if (!template) return { error: "NOT_FOUND" as const };
+
+  const lib = await prisma.walkLibraryItem.findFirst({
+    where: { id: input.libraryItemId, teamId, status: "ACTIVE" },
+    include: { versions: true },
+  });
+  if (!lib) return { error: "LIBRARY_NOT_FOUND" as const, message: "Library item not found" };
+
+  const version =
+    (input.libraryItemVersionId
+      ? lib.versions.find((v) => v.id === input.libraryItemVersionId)
+      : lib.versions.find((v) => v.version === lib.currentVersion)) ?? null;
+  if (!version) return { error: "VERSION_NOT_FOUND" as const, message: "Library item version not found" };
 
   if (input.sectionId) {
     const section = await prisma.walkTemplateSection.findFirst({
@@ -231,30 +317,26 @@ export async function createWalkItem(
     if (!section) return { error: "INVALID_SECTION" as const, message: "Section not found" };
   }
 
-  const configResult = parseItemConfig(type, input.config ?? def.defaultConfig);
-  if (!configResult.ok) return { error: "INVALID_CONFIG" as const, message: configResult.message };
-
-  const max = await prisma.walkTemplateItem.aggregate({
+  const maxP = await prisma.walkTemplatePlacement.aggregate({
     where: { templateId, sectionId: input.sectionId ?? null },
     _max: { sortOrder: true },
   });
 
-  const item = await prisma.walkTemplateItem.create({
+  const placement = await prisma.walkTemplatePlacement.create({
     data: {
       templateId,
       sectionId: input.sectionId ?? null,
-      type,
-      label: input.title.trim(),
-      description: input.description?.trim() || null,
-      instructions: input.instructions?.trim() || null,
-      required: input.required ?? true,
-      failureBehavior: input.failureBehavior ?? null,
-      config: configResult.value as Prisma.InputJsonValue,
-      sortOrder: (max._max.sortOrder ?? -1) + 1,
+      libraryItemId: lib.id,
+      libraryItemVersionId: version.id,
+      sortOrder: (maxP._max.sortOrder ?? -1) + 1,
+      requiredOverride: input.requiredOverride ?? null,
+      instructionsOverride: input.instructionsOverride ?? null,
+      titleOverride: input.titleOverride ?? null,
     },
-    include: { correctiveActions: true },
+    include: placementInclude,
   });
-  return { ok: true as const, item };
+
+  return { ok: true as const, item: serializePlacement(placement) };
 }
 
 export async function updateWalkItem(
@@ -270,8 +352,101 @@ export async function updateWalkItem(
     sectionId?: string | null;
     config?: unknown;
     type?: string;
+    libraryItemVersionId?: string;
+    /** When true, retarget placement to the library item's current version. */
+    pinToCurrentVersion?: boolean;
   },
+  userId?: string,
 ) {
+  const placement = await prisma.walkTemplatePlacement.findFirst({
+    where: { id: itemId, templateId, template: { teamId } },
+    include: placementInclude,
+  });
+
+  if (placement) {
+    if (patch.sectionId) {
+      const section = await prisma.walkTemplateSection.findFirst({
+        where: { id: patch.sectionId, templateId },
+      });
+      if (!section) return { error: "INVALID_SECTION" as const, message: "Section not found" };
+    }
+
+    let nextVersionId = patch.libraryItemVersionId;
+
+    if (patch.pinToCurrentVersion) {
+      const lib = await prisma.walkLibraryItem.findFirst({
+        where: { id: placement.libraryItemId, teamId },
+        include: { versions: true },
+      });
+      if (!lib) return { error: "LIBRARY_NOT_FOUND" as const, message: "Library item not found" };
+      const current = lib.versions.find((v) => v.version === lib.currentVersion);
+      if (!current) return { error: "VERSION_NOT_FOUND" as const, message: "Current version missing" };
+      nextVersionId = current.id;
+    }
+
+    const touchesLibraryContent =
+      patch.title !== undefined ||
+      patch.description !== undefined ||
+      patch.instructions !== undefined ||
+      patch.required !== undefined ||
+      patch.config !== undefined;
+
+    if (touchesLibraryContent && userId) {
+      const libUpdate = await updateLibraryItem(teamId, placement.libraryItemId, userId, {
+        name: patch.title,
+        description: patch.description,
+        instructions: patch.instructions,
+        requiredDefault: patch.required,
+        config: patch.config,
+      });
+      if ("error" in libUpdate) {
+        return { error: libUpdate.error, message: libUpdate.message };
+      }
+      nextVersionId = libUpdate.item.current?.id ?? nextVersionId;
+    } else if (touchesLibraryContent && !userId) {
+      // Walk-local overrides only when no user context for library versioning.
+      const updated = await prisma.walkTemplatePlacement.update({
+        where: { id: itemId },
+        data: {
+          ...(patch.sectionId !== undefined ? { sectionId: patch.sectionId } : {}),
+          ...(patch.required !== undefined ? { requiredOverride: patch.required } : {}),
+          ...(patch.instructions !== undefined
+            ? { instructionsOverride: patch.instructions?.trim() || null }
+            : {}),
+          ...(patch.title !== undefined ? { titleOverride: patch.title.trim() || null } : {}),
+        },
+        include: placementInclude,
+      });
+      return { ok: true as const, item: serializePlacement(updated) };
+    }
+
+    if (nextVersionId) {
+      const ver = await prisma.walkLibraryItemVersion.findFirst({
+        where: {
+          id: nextVersionId,
+          libraryItemId: placement.libraryItemId,
+          libraryItem: { teamId },
+        },
+      });
+      if (!ver) return { error: "VERSION_NOT_FOUND" as const, message: "Version not found" };
+    }
+
+    const updated = await prisma.walkTemplatePlacement.update({
+      where: { id: itemId },
+      data: {
+        ...(patch.sectionId !== undefined ? { sectionId: patch.sectionId } : {}),
+        ...(nextVersionId ? { libraryItemVersionId: nextVersionId } : {}),
+        // Clear overrides when content was written into a new library version.
+        ...(touchesLibraryContent && userId
+          ? { titleOverride: null, instructionsOverride: null, requiredOverride: null }
+          : {}),
+      },
+      include: placementInclude,
+    });
+    return { ok: true as const, item: serializePlacement(updated) };
+  }
+
+  // Legacy embedded item fallback
   const item = await prisma.walkTemplateItem.findFirst({
     where: { id: itemId, templateId, template: { teamId } },
   });
@@ -311,12 +486,18 @@ export async function updateWalkItem(
       ...(patch.type !== undefined ? { type: nextType } : {}),
       ...(nextConfig !== undefined ? { config: nextConfig } : {}),
     },
-    include: { correctiveActions: true },
   });
-  return { ok: true as const, item: updated };
+  return { ok: true as const, item: serializeWalkItem(updated) };
 }
 
 export async function deleteWalkItem(teamId: string, templateId: string, itemId: string) {
+  const placement = await prisma.walkTemplatePlacement.findFirst({
+    where: { id: itemId, templateId, template: { teamId } },
+  });
+  if (placement) {
+    await prisma.walkTemplatePlacement.delete({ where: { id: itemId } });
+    return true;
+  }
   const item = await prisma.walkTemplateItem.findFirst({
     where: { id: itemId, templateId, template: { teamId } },
   });
@@ -334,10 +515,39 @@ export async function reorderWalkItems(
   const template = await prisma.walkTemplate.findFirst({ where: { id: templateId, teamId } });
   if (!template) return null;
 
+  const placements = await prisma.walkTemplatePlacement.findMany({
+    where: {
+      templateId,
+      ...(sectionId === undefined ? {} : { sectionId }),
+    },
+  });
+
+  if (placements.length > 0) {
+    if (sectionId !== undefined && placements.length !== orderedIds.length) {
+      throw new Error("REORDER_MISMATCH");
+    }
+    const idSet = new Set(placements.map((p) => p.id));
+    for (const id of orderedIds) {
+      if (!idSet.has(id)) throw new Error("REORDER_UNKNOWN_ID");
+    }
+    await prisma.$transaction(
+      orderedIds.map((id, index) =>
+        prisma.walkTemplatePlacement.update({
+          where: { id },
+          data: {
+            sortOrder: index,
+            ...(sectionId !== undefined ? { sectionId } : {}),
+          },
+        }),
+      ),
+    );
+    return getWalkTemplate(teamId, templateId);
+  }
+
   const items = await prisma.walkTemplateItem.findMany({
     where: {
       templateId,
-      ...(sectionId === undefined ? {} : { sectionId: sectionId }),
+      ...(sectionId === undefined ? {} : { sectionId }),
     },
   });
 
@@ -367,4 +577,41 @@ export async function reorderWalkItems(
     ),
   );
   return getWalkTemplate(teamId, templateId);
+}
+
+export async function listOutdatedPlacements(teamId: string, templateId: string) {
+  const template = await getWalkTemplate(teamId, templateId);
+  if (!template) return null;
+  type OutdatedCandidate = {
+    id: string;
+    title: string;
+    source?: string;
+    libraryItemId?: string | null;
+    libraryItemVersion?: number | null;
+    libraryItemCurrentVersion?: number | null;
+  };
+  const items: OutdatedCandidate[] = [];
+  for (const section of template.sections) {
+    for (const item of section.items) {
+      items.push(item as OutdatedCandidate);
+    }
+  }
+  for (const item of template.unsectionedItems ?? []) {
+    items.push(item as OutdatedCandidate);
+  }
+  return items
+    .filter(
+      (i) =>
+        i.source === "placement" &&
+        i.libraryItemVersion != null &&
+        i.libraryItemCurrentVersion != null &&
+        i.libraryItemCurrentVersion > i.libraryItemVersion,
+    )
+    .map((i) => ({
+      placementId: i.id,
+      libraryItemId: i.libraryItemId,
+      title: i.title,
+      pinnedVersion: i.libraryItemVersion,
+      currentVersion: i.libraryItemCurrentVersion,
+    }));
 }

@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  completePublicCorrectiveAction,
   completePublicWalkRun,
   fetchPublicPublishedWalks,
+  startPublicOccurrenceRun,
   startPublicWalkRun,
   submitPublicWalkItemResponse,
   uploadPublicWalkPhoto,
 } from "../../lib/walks/api";
 import { getTemperatureProbeAdapter } from "../../lib/walks/temperature-probe";
-import type { WalkRun, WalkRunSnapshotItem, WalkTemplate } from "../../lib/walks/types";
+import type {
+  WalkOccurrenceListItem,
+  WalkRun,
+  WalkRunSnapshotItem,
+  WalkTemplate,
+} from "../../lib/walks/types";
 import { flattenWalkItems } from "../../lib/walks/types";
 import { handleGoDeviceSessionError } from "../../lib/go-session";
 import { getGoDeviceId } from "../../lib/go-device";
@@ -57,6 +64,7 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
   const deviceId = getGoDeviceId();
   const [screen, setScreen] = useState<Screen>({ kind: "list" });
   const [templates, setTemplates] = useState<WalkTemplate[]>([]);
+  const [occurrences, setOccurrences] = useState<WalkOccurrenceListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,8 +74,11 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
     setLoading(true);
     setError(null);
     void fetchPublicPublishedWalks(hubToken, deviceId)
-      .then((rows) => {
-        if (!cancelled) setTemplates(rows);
+      .then((payload) => {
+        if (!cancelled) {
+          setTemplates(payload.templates);
+          setOccurrences(payload.occurrences);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -94,6 +105,23 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
     } catch (err) {
       if (handleGoDeviceSessionError(err)) return;
       setError(err instanceof Error ? err.message : "Could not start walk");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleStartOccurrence(occurrenceId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const run = await startPublicOccurrenceRun(hubToken, deviceId, occurrenceId, {
+        startedByName: "Floor associate",
+        isTest: Boolean(isTesting),
+      });
+      setScreen({ kind: "run", run, index: 0 });
+    } catch (err) {
+      if (handleGoDeviceSessionError(err)) return;
+      setError(err instanceof Error ? err.message : "Could not start scheduled walk");
     } finally {
       setBusy(false);
     }
@@ -136,6 +164,27 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
     }
   }
 
+  async function handleCompleteCorrective(itemId: string, actionId: string) {
+    if (screen.kind !== "run") return;
+    setBusy(true);
+    setError(null);
+    try {
+      const run = await completePublicCorrectiveAction(
+        hubToken,
+        deviceId,
+        screen.run.id,
+        itemId,
+        actionId,
+      );
+      setScreen({ kind: "run", run, index: screen.index });
+    } catch (err) {
+      if (handleGoDeviceSessionError(err)) return;
+      setError(err instanceof Error ? err.message : "Could not complete corrective action");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="go-walks-kiosk go-module-open-overlay" data-testid="go-walk-runner">
       {isTesting ? <GoTestingModeBanner /> : null}
@@ -168,17 +217,41 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
           <div>
             <div className="go-briefings-kiosk-intro">
               <h1>{moduleTitle}</h1>
-              <p>Choose a published walk to run on this device.</p>
+              <p>
+                {occurrences.length > 0
+                  ? "Complete scheduled walk windows first. Ad-hoc published walks are listed below."
+                  : "Choose a published walk to run on this device."}
+              </p>
             </div>
             {loading ? (
               <p className="enterprise-muted">Loading walks…</p>
-            ) : templates.length === 0 ? (
+            ) : occurrences.length === 0 && templates.length === 0 ? (
               <div className="go-kiosk-walks-empty">
-                <p>No published walks yet.</p>
-                <span className="enterprise-muted">Publish a walk in Walk Builder first.</span>
+                <p>No walks available right now.</p>
+                <span className="enterprise-muted">Publish a walk or wait for a scheduled window.</span>
               </div>
             ) : (
               <ul className="go-kiosk-walks-list">
+                {occurrences.map((occ) => (
+                  <li key={occ.id}>
+                    <button
+                      type="button"
+                      className="go-kiosk-walks-card"
+                      style={{ width: "100%", textAlign: "left", cursor: busy ? "wait" : "pointer" }}
+                      disabled={busy}
+                      onClick={() => void handleStartOccurrence(occ.id)}
+                    >
+                      <strong>{occ.template?.name ?? "Scheduled walk"}</strong>
+                      <span>
+                        Due {new Date(occ.dueAt).toLocaleString()} · {occ.status.replace(/_/g, " ")}
+                      </span>
+                      <div className="go-kiosk-walks-card-meta">
+                        <span>{occ.schedule?.name ?? "Scheduled window"}</span>
+                      </div>
+                      <span className="go-kiosk-walks-card-cta">Start window</span>
+                    </button>
+                  </li>
+                ))}
                 {templates.map((tpl) => {
                   const count = flattenWalkItems(tpl).length;
                   return (
@@ -216,6 +289,7 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
             onSelectIndex={(index) => setScreen({ kind: "run", run: screen.run, index })}
             onSubmit={(itemId, response, photoUrls) => void handleSubmit(itemId, response, photoUrls)}
             onComplete={() => void handleComplete()}
+            onCompleteCorrective={(itemId, actionId) => void handleCompleteCorrective(itemId, actionId)}
             hubToken={hubToken}
             deviceId={deviceId}
             onUploadError={(message) => setError(message)}
@@ -260,6 +334,7 @@ function WalkRunActive({
   onSelectIndex,
   onSubmit,
   onComplete,
+  onCompleteCorrective,
   hubToken,
   deviceId,
   onUploadError,
@@ -270,6 +345,7 @@ function WalkRunActive({
   onSelectIndex: (index: number) => void;
   onSubmit: (itemId: string, response: unknown, photoUrls?: string[]) => void;
   onComplete: () => void;
+  onCompleteCorrective: (itemId: string, actionId: string) => void;
   hubToken: string;
   deviceId: string;
   onUploadError: (message: string) => void;
@@ -307,6 +383,7 @@ function WalkRunActive({
               hubToken={hubToken}
               deviceId={deviceId}
               onSubmit={onSubmit}
+              onCompleteCorrective={onCompleteCorrective}
               onUploadError={onUploadError}
             />
           ) : (
@@ -397,6 +474,7 @@ function WalkItemPanel({
   hubToken,
   deviceId,
   onSubmit,
+  onCompleteCorrective,
   onUploadError,
 }: {
   item: WalkRunSnapshotItem;
@@ -404,10 +482,12 @@ function WalkItemPanel({
   hubToken: string;
   deviceId: string;
   onSubmit: (itemId: string, response: unknown, photoUrls?: string[]) => void;
+  onCompleteCorrective: (itemId: string, actionId: string) => void;
   onUploadError: (message: string) => void;
 }) {
   const config = item.config ?? {};
   const answered = item.response && item.response.status !== "NOT_STARTED";
+  const corrective = item.response?.correctiveActions ?? [];
 
   return (
     <div className="go-kiosk-walks-form-panel">
@@ -424,6 +504,34 @@ function WalkItemPanel({
         <p style={{ marginTop: "0.75rem", fontWeight: 700, color: "#047857" }}>
           Saved — {statusLabel(item.response?.status)}
         </p>
+      ) : null}
+
+      {corrective.length > 0 ? (
+        <div style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #fecaca", borderRadius: 8 }}>
+          <p style={{ margin: "0 0 0.5rem", fontWeight: 700, color: "#b91c1c" }}>Corrective actions</p>
+          {corrective.map((action) => (
+            <div key={action.id} style={{ marginBottom: "0.5rem" }}>
+              <strong>{action.title}</strong>
+              {action.instructions ? (
+                <p className="enterprise-muted" style={{ margin: "0.25rem 0" }}>
+                  {action.instructions}
+                </p>
+              ) : null}
+              {action.status === "COMPLETED" ? (
+                <span style={{ color: "#047857", fontWeight: 600 }}>Done</span>
+              ) : (
+                <button
+                  type="button"
+                  className="go-testcode-btn"
+                  disabled={busy}
+                  onClick={() => onCompleteCorrective(item.id, action.id)}
+                >
+                  Mark complete
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       ) : null}
 
       <div style={{ marginTop: "1.25rem" }}>
@@ -457,7 +565,29 @@ function WalkItemPanel({
             onSubmit={(response, photoUrls) => onSubmit(item.id, response, photoUrls)}
           />
         ) : null}
-        {!["TEMPERATURE", "YES_NO", "VISUAL_CHECK", "PHOTO"].includes(String(item.type)) ? (
+        {item.type === "MULTIPLE_CHOICE" ? (
+          <MultipleChoiceControl
+            config={config}
+            busy={busy}
+            onSubmit={(response) => onSubmit(item.id, response)}
+          />
+        ) : null}
+        {item.type === "QUANTITY" ? (
+          <QuantityControl config={config} busy={busy} onSubmit={(response) => onSubmit(item.id, response)} />
+        ) : null}
+        {item.type === "TEXT" ? (
+          <TextControl config={config} busy={busy} onSubmit={(response) => onSubmit(item.id, response)} />
+        ) : null}
+        {item.type === "INSTRUCTION" ? (
+          <InstructionControl
+            config={config}
+            busy={busy}
+            onSubmit={(response) => onSubmit(item.id, response)}
+          />
+        ) : null}
+        {!["TEMPERATURE", "YES_NO", "VISUAL_CHECK", "PHOTO", "MULTIPLE_CHOICE", "QUANTITY", "TEXT", "INSTRUCTION"].includes(
+          String(item.type),
+        ) ? (
           <p className="enterprise-muted">This item type is not runnable yet.</p>
         ) : null}
       </div>
@@ -688,6 +818,156 @@ function PhotoControl({
           Save photos
         </button>
       </div>
+    </div>
+  );
+}
+
+function MultipleChoiceControl({
+  config,
+  busy,
+  onSubmit,
+}: {
+  config: Record<string, unknown>;
+  busy: boolean;
+  onSubmit: (response: { selected: string[] }) => void;
+}) {
+  const options = Array.isArray(config.options)
+    ? config.options.filter((o): o is string => typeof o === "string")
+    : [];
+  const allowMultiple = Boolean(config.allowMultiple);
+  const [selected, setSelected] = useState<string[]>([]);
+
+  function toggle(opt: string) {
+    if (allowMultiple) {
+      setSelected((prev) => (prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]));
+      return;
+    }
+    setSelected([opt]);
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "0.75rem" }}>
+        {options.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            className={selected.includes(opt) ? "go-testcode-btn" : "go-testcode-btn go-testcode-btn--ghost"}
+            disabled={busy}
+            onClick={() => toggle(opt)}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="go-testcode-btn"
+        disabled={busy || selected.length === 0}
+        onClick={() => onSubmit({ selected })}
+      >
+        Save selection
+      </button>
+    </div>
+  );
+}
+
+function QuantityControl({
+  config,
+  busy,
+  onSubmit,
+}: {
+  config: Record<string, unknown>;
+  busy: boolean;
+  onSubmit: (response: { value: number }) => void;
+}) {
+  const [value, setValue] = useState("");
+  const unit = typeof config.unitLabel === "string" ? config.unitLabel : "";
+  return (
+    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+      <input
+        type="number"
+        inputMode="decimal"
+        className="walk-run-page-manager-input"
+        style={{ maxWidth: 140 }}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        disabled={busy}
+      />
+      {unit ? <span className="enterprise-muted">{unit}</span> : null}
+      <button
+        type="button"
+        className="go-testcode-btn"
+        disabled={busy || value.trim() === "" || Number.isNaN(Number(value))}
+        onClick={() => onSubmit({ value: Number(value) })}
+      >
+        Save quantity
+      </button>
+    </div>
+  );
+}
+
+function TextControl({
+  config,
+  busy,
+  onSubmit,
+}: {
+  config: Record<string, unknown>;
+  busy: boolean;
+  onSubmit: (response: { text: string }) => void;
+}) {
+  const [text, setText] = useState("");
+  const placeholder = typeof config.placeholder === "string" ? config.placeholder : "Enter notes…";
+  return (
+    <div>
+      <textarea
+        className="walk-run-page-manager-input"
+        style={{ width: "100%", minHeight: 96 }}
+        placeholder={placeholder}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        disabled={busy}
+      />
+      <button
+        type="button"
+        className="go-testcode-btn"
+        style={{ marginTop: "0.75rem" }}
+        disabled={busy || (config.requireNonEmpty !== false && !text.trim())}
+        onClick={() => onSubmit({ text })}
+      >
+        Save note
+      </button>
+    </div>
+  );
+}
+
+function InstructionControl({
+  config,
+  busy,
+  onSubmit,
+}: {
+  config: Record<string, unknown>;
+  busy: boolean;
+  onSubmit: (response: { acknowledged: boolean }) => void;
+}) {
+  const body = typeof config.body === "string" ? config.body : "";
+  return (
+    <div>
+      {body ? (
+        <p style={{ whiteSpace: "pre-wrap", marginBottom: "1rem", color: "#334155" }}>{body}</p>
+      ) : (
+        <p className="enterprise-muted" style={{ marginBottom: "1rem" }}>
+          Read the instructions above, then continue.
+        </p>
+      )}
+      <button
+        type="button"
+        className="go-testcode-btn"
+        disabled={busy}
+        onClick={() => onSubmit({ acknowledged: true })}
+      >
+        {config.acknowledgeRequired ? "I acknowledge" : "Continue"}
+      </button>
     </div>
   );
 }

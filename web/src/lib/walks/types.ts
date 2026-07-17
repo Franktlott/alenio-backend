@@ -35,6 +35,11 @@ export type WalkItem = {
   failureBehavior: string | null;
   config: Record<string, unknown>;
   correctiveActions: WalkCorrectiveAction[];
+  libraryItemId?: string | null;
+  libraryItemVersionId?: string | null;
+  libraryItemVersion?: number | null;
+  libraryItemCurrentVersion?: number | null;
+  source?: "placement" | "legacy";
   createdAt: string;
   updatedAt: string;
 };
@@ -88,6 +93,16 @@ export type WalkItemResponseStatus =
   | "RESOLVED"
   | "NOT_APPLICABLE";
 
+export type WalkRunCorrectiveAction = {
+  id: string;
+  title: string;
+  actionType: string;
+  instructions: string | null;
+  blocksCompletion: boolean;
+  status: string;
+  completedAt: string | null;
+};
+
 export type WalkRunItemResponse = {
   id: string;
   status: WalkItemResponseStatus | string;
@@ -97,6 +112,7 @@ export type WalkRunItemResponse = {
   photoUrls: unknown;
   completedBy: string | null;
   completedAt: string | null;
+  correctiveActions?: WalkRunCorrectiveAction[];
 };
 
 export type WalkRunSnapshotItem = {
@@ -152,11 +168,31 @@ export type WalkRun = {
   };
 };
 
-export const PHASE2_ITEM_TYPES: WalkItemType[] = ["TEMPERATURE", "YES_NO", "VISUAL_CHECK", "PHOTO"];
+export const PHASE2_ITEM_TYPES: WalkItemType[] = [
+  "TEMPERATURE",
+  "YES_NO",
+  "MULTIPLE_CHOICE",
+  "VISUAL_CHECK",
+  "QUANTITY",
+  "PHOTO",
+  "TEXT",
+  "INSTRUCTION",
+];
 
 export function isPhase2ItemType(type: string): boolean {
   return (PHASE2_ITEM_TYPES as string[]).includes(type);
 }
+
+export type WalkOccurrenceListItem = {
+  id: string;
+  templateId: string;
+  status: string;
+  windowStart: string;
+  dueAt: string;
+  graceEndsAt?: string | null;
+  template?: { id: string; name: string; description?: string | null };
+  schedule?: { id: string; name: string | null };
+};
 
 export function flattenWalkItems(template: WalkTemplate): WalkItem[] {
   const fromSections = [...template.sections]

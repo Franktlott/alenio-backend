@@ -12,22 +12,7 @@ import {
   type WalkItemType,
 } from "./types";
 
-const templateInclude = {
-  sections: {
-    orderBy: { sortOrder: "asc" as const },
-    include: {
-      items: {
-        orderBy: { sortOrder: "asc" as const },
-        include: { correctiveActions: { orderBy: { position: "asc" as const } } },
-      },
-    },
-  },
-  items: {
-    where: { sectionId: null },
-    orderBy: { sortOrder: "asc" as const },
-    include: { correctiveActions: { orderBy: { position: "asc" as const } } },
-  },
-};
+import { templateInclude } from "./walk-template-service";
 
 type SnapshotItem = {
   id: string;
@@ -39,7 +24,24 @@ type SnapshotItem = {
   position: number;
   required: boolean;
   config: Record<string, unknown>;
+  libraryItemId?: string | null;
+  libraryItemVersionId?: string | null;
+  correctiveActions?: Array<{
+    id: string;
+    actionType: string;
+    title: string;
+    instructions?: string | null;
+    required: boolean;
+    blocksCompletion?: boolean;
+    position: number;
+  }>;
 };
+
+const runResponseInclude = {
+  responses: {
+    include: { correctiveActionResults: true },
+  },
+} as const;
 
 type SnapshotSection = {
   id: string;
@@ -83,6 +85,10 @@ function asSnapshot(template: ReturnType<typeof serializeWalkTemplate>): Templat
         position: i.position,
         required: i.required,
         config: i.config,
+        libraryItemId: "libraryItemId" in i ? (i.libraryItemId ?? null) : null,
+        libraryItemVersionId:
+          "libraryItemVersionId" in i ? (i.libraryItemVersionId ?? null) : null,
+        correctiveActions: "correctiveActions" in i ? (i.correctiveActions ?? []) : [],
       })),
     })),
     unsectionedItems: (template.unsectionedItems ?? []).map((i) => ({
@@ -95,6 +101,10 @@ function asSnapshot(template: ReturnType<typeof serializeWalkTemplate>): Templat
       position: i.position,
       required: i.required,
       config: i.config,
+      libraryItemId: "libraryItemId" in i ? (i.libraryItemId ?? null) : null,
+      libraryItemVersionId:
+        "libraryItemVersionId" in i ? (i.libraryItemVersionId ?? null) : null,
+      correctiveActions: "correctiveActions" in i ? (i.correctiveActions ?? []) : [],
     })),
   };
 }
@@ -142,6 +152,12 @@ export function serializeWalkRun(run: {
     completedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
+    correctiveActionResults?: Array<{
+      id: string;
+      correctiveActionId: string;
+      status: string;
+      completedAt: Date | null;
+    }>;
   }>;
 }) {
   const snapshot = parseSnapshot(run.templateSnapshot);
@@ -168,8 +184,11 @@ export function serializeWalkRun(run: {
     template: snapshot,
     items: items.map((item) => {
       const resp = byItem.get(item.id);
+      const caDefs = item.correctiveActions ?? [];
+      const caResults = resp?.correctiveActionResults ?? [];
       return {
         ...item,
+        correctiveActions: caDefs,
         response: resp
           ? {
               id: resp.id,
@@ -180,6 +199,20 @@ export function serializeWalkRun(run: {
               photoUrls: resp.photoUrls,
               completedBy: resp.completedBy,
               completedAt: resp.completedAt?.toISOString() ?? null,
+              correctiveActions: caDefs.map((action) => {
+                const result = caResults.find((r) => r.correctiveActionId === action.id);
+                return {
+                  id: action.id,
+                  title: action.title,
+                  actionType: action.actionType,
+                  instructions: action.instructions ?? null,
+                  blocksCompletion: Boolean(
+                    action.blocksCompletion || action.actionType === "BLOCK_COMPLETION",
+                  ),
+                  status: result?.status ?? "PENDING",
+                  completedAt: result?.completedAt?.toISOString() ?? null,
+                };
+              }),
             }
           : null,
       };
@@ -213,45 +246,109 @@ export async function startWalkRun(input: {
   deviceId?: string | null;
   isTest?: boolean;
   testSessionId?: string | null;
+  occurrenceId?: string | null;
 }) {
+  let occurrence: {
+    id: string;
+    templateId: string;
+    templateVersionId: string;
+    status: string;
+    runId: string | null;
+  } | null = null;
+
+  if (input.occurrenceId) {
+    occurrence = await prisma.walkOccurrence.findFirst({
+      where: { id: input.occurrenceId, teamId: input.teamId },
+    });
+    if (!occurrence) return { error: "NOT_FOUND" as const, message: "Occurrence not found" };
+    if (occurrence.runId) {
+      const existing = await getWalkRun(input.teamId, occurrence.runId);
+      if (existing) return { ok: true as const, run: existing };
+    }
+    if (!["AVAILABLE", "IN_PROGRESS", "UPCOMING"].includes(occurrence.status)) {
+      return { error: "OCCURRENCE_CLOSED" as const, message: "This walk window is not available" };
+    }
+  }
+
+  const templateId = occurrence?.templateId ?? input.templateId;
   const template = await prisma.walkTemplate.findFirst({
-    where: { id: input.templateId, teamId: input.teamId },
+    where: { id: templateId, teamId: input.teamId },
     include: templateInclude,
   });
   if (!template) return { error: "NOT_FOUND" as const };
-  if (template.status !== "PUBLISHED") {
+  if (template.status !== "PUBLISHED" && !input.isTest) {
     return { error: "NOT_PUBLISHED" as const, message: "Only published walks can be started" };
   }
 
-  const serialized = serializeWalkTemplate(template, { includeItemsLoose: true });
-  const snapshot = asSnapshot(serialized);
+  let snapshot: TemplateSnapshot;
+  let templateVersion = template.version;
+
+  if (occurrence?.templateVersionId) {
+    const published = await prisma.walkTemplateVersion.findFirst({
+      where: { id: occurrence.templateVersionId },
+    });
+    if (published) {
+      snapshot = parseSnapshot(published.snapshot);
+      templateVersion = published.version;
+    } else {
+      snapshot = asSnapshot(serializeWalkTemplate(template, { includeItemsLoose: true }));
+    }
+  } else {
+    const published = await prisma.walkTemplateVersion.findFirst({
+      where: { templateId: template.id },
+      orderBy: { version: "desc" },
+    });
+    if (published) {
+      snapshot = parseSnapshot(published.snapshot);
+      templateVersion = published.version;
+    } else {
+      snapshot = asSnapshot(serializeWalkTemplate(template, { includeItemsLoose: true }));
+    }
+  }
+
   const items = flattenSnapshotItems(snapshot);
   if (items.length === 0) {
     return { error: "EMPTY_WALK" as const, message: "This walk has no items yet" };
   }
 
-  const run = await prisma.walkRun.create({
-    data: {
-      teamId: input.teamId,
-      templateId: template.id,
-      templateVersion: template.version,
-      templateSnapshot: snapshot as unknown as Prisma.InputJsonValue,
-      status: "IN_PROGRESS",
-      startedByUserId: input.startedByUserId ?? null,
-      startedByName: input.startedByName ?? null,
-      deviceId: input.deviceId ?? null,
-      isTest: input.isTest ?? false,
-      testSessionId: input.testSessionId ?? null,
-      responses: {
-        create: items.map((item) => ({
-          itemId: item.id,
-          itemType: item.type,
-          status: "NOT_STARTED",
-          failed: false,
-        })),
+  const run = await prisma.$transaction(async (tx) => {
+    const created = await tx.walkRun.create({
+      data: {
+        teamId: input.teamId,
+        templateId: template.id,
+        templateVersion,
+        templateSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+        status: "IN_PROGRESS",
+        startedByUserId: input.startedByUserId ?? null,
+        startedByName: input.startedByName ?? null,
+        deviceId: input.deviceId ?? null,
+        isTest: input.isTest ?? false,
+        testSessionId: input.testSessionId ?? null,
+        responses: {
+          create: items.map((item) => ({
+            itemId: item.id,
+            itemType: item.type,
+            status: "NOT_STARTED",
+            failed: false,
+          })),
+        },
       },
-    },
-    include: { responses: true },
+      include: runResponseInclude,
+    });
+
+    if (occurrence) {
+      await tx.walkOccurrence.update({
+        where: { id: occurrence.id },
+        data: {
+          status: "IN_PROGRESS",
+          runId: created.id,
+          startedByUserId: input.startedByUserId ?? null,
+          startedAt: new Date(),
+        },
+      });
+    }
+
+    return created;
   });
 
   return { ok: true as const, run: serializeWalkRun(run) };
@@ -260,10 +357,23 @@ export async function startWalkRun(input: {
 export async function getWalkRun(teamId: string, runId: string) {
   const run = await prisma.walkRun.findFirst({
     where: { id: runId, teamId },
-    include: { responses: true },
+    include: runResponseInclude,
   });
   if (!run) return null;
   return serializeWalkRun(run);
+}
+
+export async function listWalkRuns(teamId: string, limit = 50) {
+  const rows = await prisma.walkRun.findMany({
+    where: { teamId },
+    orderBy: { startedAt: "desc" },
+    take: limit,
+    include: { responses: true, template: { select: { name: true } } },
+  });
+  return rows.map((run) => ({
+    ...serializeWalkRun(run),
+    templateName: run.template.name,
+  }));
 }
 
 export async function submitWalkItemResponse(input: {
@@ -323,26 +433,93 @@ export async function submitWalkItemResponse(input: {
       : null);
 
   const existing = run.responses.find((r) => r.itemId === input.itemId);
+  const failed = status === "FAIL" || status === "NEEDS_ACTION";
   const data = {
     itemType: item.type,
-    status,
+    status: failed && (item.correctiveActions?.length ?? 0) > 0 ? ("NEEDS_ACTION" as const) : status,
     response: parsedResponse.data as Prisma.InputJsonValue,
-    failed: status === "FAIL" || status === "NEEDS_ACTION",
+    failed,
     notes: input.notes ?? null,
     photoUrls: (photoUrls ?? undefined) as Prisma.InputJsonValue | undefined,
     completedBy: input.completedBy ?? null,
     completedAt: new Date(),
   };
 
-  if (existing) {
-    await prisma.walkItemResponse.update({ where: { id: existing.id }, data });
-  } else {
-    await prisma.walkItemResponse.create({
-      data: {
-        runId: run.id,
-        itemId: item.id,
-        ...data,
-      },
+  const itemResponseId = existing
+    ? (
+        await prisma.walkItemResponse.update({ where: { id: existing.id }, data })
+      ).id
+    : (
+        await prisma.walkItemResponse.create({
+          data: {
+            runId: run.id,
+            itemId: item.id,
+            ...data,
+          },
+        })
+      ).id;
+
+  if (failed && item.correctiveActions?.length) {
+    for (const action of item.correctiveActions) {
+      await prisma.walkCorrectiveActionResult.upsert({
+        where: {
+          itemResponseId_correctiveActionId: {
+            itemResponseId,
+            correctiveActionId: action.id,
+          },
+        },
+        create: {
+          itemResponseId,
+          correctiveActionId: action.id,
+          status: "PENDING",
+        },
+        update: {},
+      });
+    }
+  }
+
+  const updated = await getWalkRun(input.teamId, input.runId);
+  return { ok: true as const, run: updated };
+}
+
+export async function completeCorrectiveAction(input: {
+  teamId: string;
+  runId: string;
+  itemId: string;
+  correctiveActionId: string;
+  response?: unknown;
+  completedBy?: string | null;
+}) {
+  const run = await prisma.walkRun.findFirst({
+    where: { id: input.runId, teamId: input.teamId },
+    include: { responses: { include: { correctiveActionResults: true } } },
+  });
+  if (!run) return { error: "NOT_FOUND" as const };
+  const itemResponse = run.responses.find((r) => r.itemId === input.itemId);
+  if (!itemResponse) return { error: "ITEM_NOT_FOUND" as const };
+
+  const result = itemResponse.correctiveActionResults.find(
+    (r) => r.correctiveActionId === input.correctiveActionId,
+  );
+  if (!result) return { error: "ACTION_NOT_FOUND" as const };
+
+  await prisma.walkCorrectiveActionResult.update({
+    where: { id: result.id },
+    data: {
+      status: "COMPLETED",
+      response: (input.response ?? undefined) as Prisma.InputJsonValue | undefined,
+      completedBy: input.completedBy ?? null,
+      completedAt: new Date(),
+    },
+  });
+
+  const pending = await prisma.walkCorrectiveActionResult.count({
+    where: { itemResponseId: itemResponse.id, status: "PENDING" },
+  });
+  if (pending === 0) {
+    await prisma.walkItemResponse.update({
+      where: { id: itemResponse.id },
+      data: { status: "RESOLVED", failed: false },
     });
   }
 
@@ -400,16 +577,56 @@ export async function completeWalkRun(teamId: string, runId: string) {
     };
   }
 
-  const score = scoreWalkRun(items, run.responses);
-
-  const updated = await prisma.walkRun.update({
-    where: { id: runId },
-    data: {
-      status: "COMPLETED",
-      completedAt: new Date(),
-      score,
+  const responsesWithCa = await prisma.walkItemResponse.findMany({
+    where: { runId },
+    include: {
+      correctiveActionResults: {
+        include: { correctiveAction: true },
+      },
     },
-    include: { responses: true },
+  });
+  for (const resp of responsesWithCa) {
+    for (const ca of resp.correctiveActionResults) {
+      if (
+        ca.status === "PENDING" &&
+        (ca.correctiveAction.blocksCompletion || ca.correctiveAction.actionType === "BLOCK_COMPLETION")
+      ) {
+        return {
+          error: "CORRECTIVE_BLOCKED" as const,
+          message: `Complete corrective action: ${ca.correctiveAction.title}`,
+        };
+      }
+    }
+  }
+
+  const score = scoreWalkRun(items, run.responses);
+  const completedAt = new Date();
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const runRow = await tx.walkRun.update({
+      where: { id: runId },
+      data: {
+        status: "COMPLETED",
+        completedAt,
+        score,
+      },
+      include: { ...runResponseInclude, occurrence: true },
+    });
+
+    if (runRow.occurrence) {
+      const late = completedAt > runRow.occurrence.dueAt;
+      await tx.walkOccurrence.update({
+        where: { id: runRow.occurrence.id },
+        data: {
+          status: late ? "COMPLETED_LATE" : "COMPLETED",
+          completedAt,
+          score,
+          completedByUserId: run.startedByUserId,
+        },
+      });
+    }
+
+    return runRow;
   });
 
   return { ok: true as const, run: serializeWalkRun(updated) };

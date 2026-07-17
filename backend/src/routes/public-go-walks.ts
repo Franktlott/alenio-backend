@@ -7,6 +7,7 @@ import {
   GO_DEVICE_UNLINKED_MESSAGE,
 } from "../lib/workplace-alerts";
 import * as walkRunService from "../lib/walks/walk-run-service";
+import * as scheduleService from "../lib/walks/schedule-service";
 import { prismaRouteError } from "../lib/prisma-errors";
 import {
   isFirebaseStorageConfigured,
@@ -136,12 +137,63 @@ publicGoWalksRouter.get("/", zValidator("query", hubQuerySchema), async (c) => {
     return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
   }
   try {
-    const data = await walkRunService.listPublishedWalkTemplates(resolved.team.id);
-    return c.json({ data });
+    const [templates, occurrences] = await Promise.all([
+      walkRunService.listPublishedWalkTemplates(resolved.team.id),
+      scheduleService.listAvailableOccurrences(resolved.team.id),
+    ]);
+    return c.json({ data: templates, occurrences });
   } catch (err) {
     return prismaRouteError(c, err, "Failed to list walks");
   }
 });
+
+// POST /api/public/go/walks/occurrences/:occurrenceId/runs
+publicGoWalksRouter.post(
+  "/occurrences/:occurrenceId/runs",
+  zValidator(
+    "json",
+    z.object({
+      hubToken: z.string().min(1),
+      deviceId: z.string().min(8).max(128),
+      startedByName: z.string().max(120).optional().nullable(),
+      isTest: z.boolean().optional(),
+    }),
+  ),
+  async (c) => {
+    const occurrenceId = c.req.param("occurrenceId")!;
+    const body = c.req.valid("json");
+    const resolved = await resolveHubTeam(body.hubToken, body.deviceId);
+    if ("error" in resolved) {
+      if (resolved.error === "DEVICE_UNLINKED") {
+        return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      }
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    try {
+      const occ = await scheduleService.listOccurrences(resolved.team.id);
+      const match = occ.find((o) => o.id === occurrenceId);
+      if (!match) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+      const result = await walkRunService.startWalkRun({
+        teamId: resolved.team.id,
+        templateId: match.templateId,
+        occurrenceId,
+        startedByName: body.startedByName ?? "Floor associate",
+        deviceId: body.deviceId,
+        isTest: body.isTest ?? false,
+      });
+      if ("error" in result) {
+        const status = result.error === "NOT_FOUND" ? 404 : 400;
+        return c.json(
+          { error: { message: result.message ?? result.error, code: result.error } },
+          status,
+        );
+      }
+      return c.json({ data: result.run }, 201);
+    } catch (err) {
+      return prismaRouteError(c, err, "Failed to start occurrence");
+    }
+  },
+);
 
 // POST /api/public/go/walks/:templateId/runs
 publicGoWalksRouter.post(
@@ -234,6 +286,56 @@ publicGoWalksRouter.patch(
       return c.json({ data: result.run });
     } catch (err) {
       return prismaRouteError(c, err, "Failed to submit response");
+    }
+  },
+);
+
+// POST /api/public/go/walks/runs/:runId/items/:itemId/corrective-actions/:actionId/complete
+publicGoWalksRouter.post(
+  "/runs/:runId/items/:itemId/corrective-actions/:actionId/complete",
+  zValidator(
+    "json",
+    z.object({
+      hubToken: z.string().min(1),
+      deviceId: z.string().min(8).max(128),
+      response: z.unknown().optional(),
+      completedBy: z.string().max(120).optional().nullable(),
+    }),
+  ),
+  async (c) => {
+    const runId = c.req.param("runId")!;
+    const itemId = c.req.param("itemId")!;
+    const actionId = c.req.param("actionId")!;
+    const body = c.req.valid("json");
+    const resolved = await resolveHubTeam(body.hubToken, body.deviceId);
+    if ("error" in resolved) {
+      if (resolved.error === "DEVICE_UNLINKED") {
+        return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      }
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    try {
+      const result = await walkRunService.completeCorrectiveAction({
+        teamId: resolved.team.id,
+        runId,
+        itemId,
+        correctiveActionId: actionId,
+        response: body.response,
+        completedBy: body.completedBy ?? "Floor associate",
+      });
+      if ("error" in result) {
+        return c.json(
+          { error: { message: result.error, code: result.error } },
+          result.error === "NOT_FOUND" ||
+            result.error === "ITEM_NOT_FOUND" ||
+            result.error === "ACTION_NOT_FOUND"
+            ? 404
+            : 400,
+        );
+      }
+      return c.json({ data: result.run });
+    } catch (err) {
+      return prismaRouteError(c, err, "Failed to complete corrective action");
     }
   },
 );

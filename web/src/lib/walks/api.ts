@@ -4,6 +4,7 @@ import type {
   WalkItem,
   WalkItemType,
   WalkItemTypeCatalogEntry,
+  WalkOccurrenceListItem,
   WalkRun,
   WalkSection,
   WalkTemplate,
@@ -106,6 +107,8 @@ export function patchWalkItem(
     instructions: string | null;
     required: boolean;
     config: Record<string, unknown>;
+    libraryItemVersionId: string;
+    pinToCurrentVersion: boolean;
   }>,
 ) {
   return apiPatchJson<{ data: WalkItem }>(
@@ -139,8 +142,25 @@ function publicWalksQs(hubToken: string, deviceId: string) {
 }
 
 export function fetchPublicPublishedWalks(hubToken: string, deviceId: string) {
-  return apiGetJson<{ data: WalkTemplate[] }>(
+  return apiGetJson<{ data: WalkTemplate[]; occurrences?: WalkOccurrenceListItem[] }>(
     `/api/public/go/walks?${publicWalksQs(hubToken, deviceId)}`,
+  ).then((r) => ({ templates: r.data, occurrences: r.occurrences ?? [] }));
+}
+
+export function startPublicOccurrenceRun(
+  hubToken: string,
+  deviceId: string,
+  occurrenceId: string,
+  opts?: { startedByName?: string | null; isTest?: boolean },
+) {
+  return apiPostJson<{ data: WalkRun }>(
+    `/api/public/go/walks/occurrences/${encodeURIComponent(occurrenceId)}/runs`,
+    {
+      hubToken,
+      deviceId,
+      startedByName: opts?.startedByName,
+      isTest: opts?.isTest,
+    },
   ).then((r) => r.data);
 }
 
@@ -189,6 +209,19 @@ export function completePublicWalkRun(hubToken: string, deviceId: string, runId:
   return apiPostJson<{ data: WalkRun }>(
     `/api/public/go/walks/runs/${encodeURIComponent(runId)}/complete`,
     { hubToken, deviceId },
+  ).then((r) => r.data);
+}
+
+export function completePublicCorrectiveAction(
+  hubToken: string,
+  deviceId: string,
+  runId: string,
+  itemId: string,
+  actionId: string,
+) {
+  return apiPostJson<{ data: WalkRun }>(
+    `/api/public/go/walks/runs/${encodeURIComponent(runId)}/items/${encodeURIComponent(itemId)}/corrective-actions/${encodeURIComponent(actionId)}/complete`,
+    { hubToken, deviceId, completedBy: "Floor associate" },
   ).then((r) => r.data);
 }
 
