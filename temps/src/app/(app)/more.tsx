@@ -33,6 +33,13 @@ export default function MoreScreen() {
         <Text style={{ fontWeight: "600", color: colors.ink, marginTop: 4 }}>{teamId ?? "—"}</Text>
       </View>
 
+      {__DEV__ ? (
+        <PrimaryButton
+          label="Probe lab (dev)"
+          onPress={() => router.push("./probe-lab")}
+        />
+      ) : null}
+
       <PrimaryButton
         label="Switch workspace"
         onPress={() => {

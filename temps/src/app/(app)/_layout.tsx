@@ -41,7 +41,21 @@ export default function AppLayout() {
       />
       <Tabs.Screen
         name="check/[occurrenceId]"
-        options={{ href: null, title: "Take check", headerShown: true }}
+        options={{
+          href: null,
+          title: "Take check",
+          headerShown: true,
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerShadowVisible: false,
+        }}
+      />
+      <Tabs.Screen
+        name="probe-lab"
+        options={{
+          href: null,
+          title: "Probe Lab",
+          headerShown: true,
+        }}
       />
     </Tabs>
   );
