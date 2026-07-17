@@ -10,7 +10,9 @@
     "railway:set-openai": "bun run scripts/railway-set-openai.ts",
     "db:push": "bun run sync-env && bunx prisma db push",
     "studio": "bunx prisma studio",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src/lib/walks",
+    "seed:cooler-walk": "bun run scripts/seed-cooler-walk.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

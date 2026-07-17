@@ -66,6 +66,7 @@ import { ensureTopicImageSchema } from "./lib/ensure-topic-image-schema";
 import { ensureNotificationPreferencesSchema } from "./lib/ensure-notification-preferences-schema";
 import { ensurePinnedMessageSchema } from "./lib/ensure-pinned-message-schema";
 import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
+import { ensureWalksSchema } from "./lib/ensure-walks-schema";
 import { ensureBetterAuthSchema } from "./lib/ensure-better-auth-schema";
 import { ensureOrganizationSchema } from "./lib/ensure-organization-schema";
 import { ensureSenecaStudioSchema } from "./lib/ensure-seneca-studio-schema";
@@ -78,6 +79,7 @@ import { senecaStudioRouter } from "./routes/seneca-studio";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
 import { publicGoLinkRouter } from "./routes/public-go-link";
+import { walksRouter } from "./routes/walks";
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
 
@@ -94,7 +96,7 @@ const startupSchemaReady = Promise.all([
   ensureOrganizationSchema(prisma),
   ensureSenecaStudioSchema(prisma),
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureTaskArchiveSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureTaskArchiveSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -110,6 +112,7 @@ const startupSchemaReady = Promise.all([
         ensureGoFrontendSettingsSchema(prisma),
         ensureGoLeaderPinSchema(prisma),
         ensureWorkspaceModulesSchema(prisma),
+        ensureWalksSchema(prisma),
         ensureSubscriptionCancelSchema(prisma),
         ensureConversationTeamSchema(prisma),
         ensureGroupParticipantRolesSchema(prisma),
@@ -1219,6 +1222,7 @@ app.route("/api/users", usersRouter);
 app.route("/api/check-in-template-library", checkInTemplateLibraryRouter);
 app.route("/api/teams/:teamId/members/me", goLeaderPinRouter);
 app.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRouter);
+app.route("/api/teams/:teamId/walks", walksRouter);
 app.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
 app.route("/api/teams/:teamId/members", developmentGoalsRouter);
 app.route("/api/teams/:teamId/members", senecaRouter);

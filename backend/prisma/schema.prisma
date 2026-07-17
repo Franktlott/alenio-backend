@@ -222,6 +222,7 @@ model Team {
   briefings Briefing[]
   walkTemplates WalkTemplate[]
   walkCompletions WalkCompletion[]
+  walkRuns WalkRun[]
   conversations Conversation[]
   workspaceModules WorkspaceModule[]
   moduleTestSessions ModuleTestSession[]
@@ -826,49 +827,76 @@ model BriefingCompletion {
   @@index([teamId, completedAt])
 }
 
+/// Walk Builder template. status: DRAFT | PUBLISHED | ARCHIVED
 model WalkTemplate {
-  id              String   @id @default(cuid())
-  teamId          String
-  name            String
-  workplace       String
-  scoringEnabled  Boolean  @default(true)
-  isActive        Boolean  @default(true)
-  createdByUserId String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                       String    @id @default(cuid())
+  teamId                   String
+  name                     String
+  description              String?
+  workplace                String    @default("")
+  scoringEnabled           Boolean   @default(true)
+  /// Kept in sync with status !== ARCHIVED for legacy indexes.
+  isActive                 Boolean   @default(true)
+  status                   String    @default("DRAFT")
+  version                  Int       @default(1)
+  estimatedDurationMinutes Int?
+  publishedAt              DateTime?
+  publishedByUserId        String?
+  parentTemplateId         String?
+  createdByUserId          String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  team        Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team        Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   sections    WalkTemplateSection[]
   items       WalkTemplateItem[]
   completions WalkCompletion[]
+  runs        WalkRun[]
 
   @@index([teamId, isActive])
+  @@index([teamId, status])
 }
 
 model WalkTemplateSection {
-  id         String             @id @default(cuid())
-  templateId String
-  title      String
-  sortOrder  Int                @default(0)
-  template   WalkTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  items      WalkTemplateItem[]
+  id          String             @id @default(cuid())
+  templateId  String
+  title       String
+  description String?
+  sortOrder   Int                @default(0)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  template    WalkTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  items       WalkTemplateItem[]
 
   @@index([templateId])
 }
 
+/// type: TEMPERATURE | YES_NO | MULTIPLE_CHOICE | VISUAL_CHECK | QUANTITY | PHOTO | TEXT | INSTRUCTION
+/// label is the display title (API exposes as title).
 model WalkTemplateItem {
-  id         String               @id @default(cuid())
-  templateId String
-  sectionId  String?
-  label      String
-  sortOrder  Int                  @default(0)
-  template   WalkTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  section    WalkTemplateSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  id              String                  @id @default(cuid())
+  templateId      String
+  sectionId       String?
+  type            String                  @default("YES_NO")
+  label           String
+  description     String?
+  instructions    String?
+  sortOrder       Int                     @default(0)
+  required        Boolean                 @default(true)
+  failureBehavior String?
+  /// Typed JSON validated by WalkItemTypeRegistry.
+  config          Json                    @default("{}")
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  template        WalkTemplate            @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  section         WalkTemplateSection?    @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  correctiveActions WalkCorrectiveAction[]
 
   @@index([templateId])
   @@index([sectionId])
 }
 
+/// Legacy flat completion — unused by Walk Builder; prefer WalkRun.
 model WalkCompletion {
   id                  String   @id @default(cuid())
   teamId              String
@@ -893,6 +921,94 @@ model WalkCompletion {
 
   @@index([teamId, completedAt])
   @@index([templateId, completedAt])
+}
+
+/// status: IN_PROGRESS | COMPLETED | ABANDONED
+model WalkRun {
+  id                String    @id @default(cuid())
+  teamId            String
+  templateId        String
+  templateVersion   Int
+  /// Frozen template snapshot at run start.
+  templateSnapshot  Json
+  status            String    @default("IN_PROGRESS")
+  startedByUserId   String?
+  startedByName     String?
+  deviceId          String?
+  isTest            Boolean   @default(false)
+  testSessionId     String?
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  score             Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  team      Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  template  WalkTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  responses WalkItemResponse[]
+
+  @@index([teamId, startedAt])
+  @@index([templateId, startedAt])
+}
+
+/// status: NOT_STARTED | PASS | FAIL | NEEDS_ACTION | RESOLVED | NOT_APPLICABLE
+model WalkItemResponse {
+  id          String   @id @default(cuid())
+  runId       String
+  itemId      String
+  itemType    String
+  status      String   @default("NOT_STARTED")
+  response    Json?
+  failed      Boolean  @default(false)
+  notes       String?
+  photoUrls   Json?
+  completedBy String?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  run                    WalkRun                      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  correctiveActionResults WalkCorrectiveActionResult[]
+
+  @@unique([runId, itemId])
+  @@index([runId])
+}
+
+model WalkCorrectiveAction {
+  id           String   @id @default(cuid())
+  itemId       String
+  trigger      String   @default("ON_FAIL")
+  actionType   String
+  title        String
+  instructions String?
+  position     Int      @default(0)
+  required     Boolean  @default(true)
+  config       Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  item    WalkTemplateItem             @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  results WalkCorrectiveActionResult[]
+
+  @@index([itemId])
+}
+
+model WalkCorrectiveActionResult {
+  id                 String    @id @default(cuid())
+  itemResponseId     String
+  correctiveActionId String
+  status             String    @default("PENDING")
+  response           Json?
+  completedBy        String?
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  itemResponse     WalkItemResponse     @relation(fields: [itemResponseId], references: [id], onDelete: Cascade)
+  correctiveAction WalkCorrectiveAction @relation(fields: [correctiveActionId], references: [id], onDelete: Cascade)
+
+  @@unique([itemResponseId, correctiveActionId])
+  @@index([itemResponseId])
 }
 
 model TeamInvite {

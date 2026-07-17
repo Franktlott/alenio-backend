@@ -80,6 +80,14 @@ export async function deleteWorkspaceCompletely(teamId: string): Promise<void> {
       await tx.briefingCompletion.deleteMany({ where: { teamId } });
       await tx.briefing.deleteMany({ where: { teamId } });
 
+      await tx.walkCorrectiveActionResult.deleteMany({
+        where: { itemResponse: { run: { teamId } } },
+      });
+      await tx.walkItemResponse.deleteMany({ where: { run: { teamId } } });
+      await tx.walkRun.deleteMany({ where: { teamId } });
+      await tx.walkCorrectiveAction.deleteMany({
+        where: { item: { template: { teamId } } },
+      });
       await tx.walkCompletion.deleteMany({ where: { teamId } });
       await tx.walkTemplateItem.deleteMany({ where: { template: { teamId } } });
       await tx.walkTemplateSection.deleteMany({ where: { template: { teamId } } });
