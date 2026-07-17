@@ -15,7 +15,7 @@ function localDateParts(date: Date, timeZone: string) {
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    hourCycle: "h23",
   });
   const parts = Object.fromEntries(fmt.formatToParts(date).map((p) => [p.type, p.value]));
   const weekdayMap: Record<string, number> = {
@@ -35,7 +35,16 @@ function localDateParts(date: Date, timeZone: string) {
   };
 }
 
-/** Approximate zoned local midnight + minutes → UTC Date. */
+/** Local calendar day (in `timeZone`) at 00:00 as a UTC Date. */
+function startOfZonedDay(date: Date, timeZone: string): Date {
+  const parts = localDateParts(date, timeZone);
+  return zonedLocalToUtc(parts.year, parts.month, parts.day, 0, timeZone);
+}
+
+/**
+ * Convert a wall-clock local time in `timeZone` to a real UTC Date.
+ * Iteratively corrects zone offset (handles DST; does not rely on GMT± labels).
+ */
 function zonedLocalToUtc(
   year: number,
   month: number,
@@ -43,23 +52,49 @@ function zonedLocalToUtc(
   minutes: number,
   timeZone: string,
 ): Date {
-  const probe = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-  const fmt = new Intl.DateTimeFormat("en-US", {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone,
-    timeZoneName: "shortOffset",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    second: "2-digit",
+    hourCycle: "h23",
   });
-  const tzPart = fmt.formatToParts(probe).find((p) => p.type === "timeZoneName")?.value ?? "GMT";
-  const match = tzPart.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/);
-  let offsetMin = 0;
-  if (match) {
-    const sign = match[1] === "-" ? -1 : 1;
-    offsetMin = sign * (Number(match[2]) * 60 + Number(match[3] ?? 0));
+
+  const read = (ms: number) => {
+    const parts = Object.fromEntries(dtf.formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+    return {
+      year: Number(parts.year),
+      month: Number(parts.month),
+      day: Number(parts.day),
+      hour: Number(parts.hour),
+      minute: Number(parts.minute),
+      second: Number(parts.second),
+    };
+  };
+
+  // Initial guess: treat wall time as UTC, then nudge until TZ wall matches.
+  let guess = Date.UTC(year, month - 1, day, hour, minute, 0);
+  for (let i = 0; i < 4; i++) {
+    const actual = read(guess);
+    const desiredAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
+    const actualAsUtc = Date.UTC(
+      actual.year,
+      actual.month - 1,
+      actual.day,
+      actual.hour,
+      actual.minute,
+      actual.second,
+    );
+    const delta = desiredAsUtc - actualAsUtc;
+    if (delta === 0) break;
+    guess += delta;
   }
-  const utcMs = Date.UTC(year, month - 1, day, 0, 0, 0) + minutes * 60_000 - offsetMin * 60_000;
-  return new Date(utcMs);
+  return new Date(guess);
 }
 
 export async function listSchedules(teamId: string, templateId?: string) {
@@ -120,15 +155,17 @@ export async function createSchedule(input: {
     orderBy: { version: "desc" },
   });
 
+  const timezone = input.timezone ?? "America/New_York";
   const schedule = await prisma.walkSchedule.create({
     data: {
       templateId: template.id,
       templateVersionId: latestVersion?.id ?? null,
       name: input.name?.trim() || null,
-      timezone: input.timezone ?? "America/New_York",
+      timezone,
       recurrence: input.recurrence ?? "DAILY",
       daysOfWeek: (input.daysOfWeek ?? undefined) as Prisma.InputJsonValue | undefined,
-      effectiveFrom: input.effectiveFrom ?? new Date(),
+      // Start of local day so creating a schedule mid-window still opens today's check.
+      effectiveFrom: input.effectiveFrom ?? startOfZonedDay(new Date(), timezone),
       effectiveTo: input.effectiveTo ?? null,
       assignScope: input.assignScope ?? "WORKSPACE",
       assignRole: input.assignRole ?? null,
@@ -179,9 +216,21 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
   const now = new Date();
   let created = 0;
 
+  // Rebuild open occurrences in range so timezone fixes replace stale UTC rows.
+  const rangeStart = startOfZonedDay(now, schedule.timezone);
+  const rangeEnd = new Date(rangeStart.getTime() + (daysAhead + 2) * 86_400_000);
+  await prisma.walkOccurrence.deleteMany({
+    where: {
+      scheduleId,
+      runId: null,
+      windowStart: { gte: rangeStart, lte: rangeEnd },
+    },
+  });
+
   for (let offset = 0; offset <= daysAhead; offset++) {
-    const dayUtc = new Date(now.getTime() + offset * 86_400_000);
-    const parts = localDateParts(dayUtc, schedule.timezone);
+    // Step by calendar day in the schedule timezone (not raw UTC+24h).
+    const dayProbe = new Date(rangeStart.getTime() + offset * 86_400_000 + 12 * 3_600_000);
+    const parts = localDateParts(dayProbe, schedule.timezone);
     if (schedule.recurrence === "WEEKLY" && days && !days.includes(parts.weekday)) continue;
     if (schedule.recurrence === "ONCE" && offset > 0) continue;
 
@@ -193,17 +242,23 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
         window.startMinutes,
         schedule.timezone,
       );
-      if (windowStart < schedule.effectiveFrom) continue;
-      if (schedule.effectiveTo && windowStart > schedule.effectiveTo) continue;
-
-      const dueAt = zonedLocalToUtc(
+      let dueAt = zonedLocalToUtc(
         parts.year,
         parts.month,
         parts.day,
         window.dueMinutes,
         schedule.timezone,
       );
+      // Overnight windows (e.g. 11:30 PM → 1:00 AM).
+      if (dueAt <= windowStart) {
+        dueAt = new Date(dueAt.getTime() + 86_400_000);
+      }
       const graceEndsAt = new Date(dueAt.getTime() + window.graceMinutes * 60_000);
+
+      // Skip only if the whole window ended before the schedule became effective.
+      if (graceEndsAt < schedule.effectiveFrom) continue;
+      if (schedule.effectiveTo && windowStart > schedule.effectiveTo) continue;
+
       const status = now < windowStart ? "UPCOMING" : now <= graceEndsAt ? "AVAILABLE" : "MISSED";
 
       try {
@@ -217,15 +272,15 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
             windowStart,
             dueAt,
             graceEndsAt,
-            status: status === "MISSED" && now < windowStart ? "UPCOMING" : status,
+            status,
             assignScope: schedule.assignScope,
             assignRole: schedule.assignRole,
             assignUserIds: schedule.assignUserIds ?? undefined,
           },
         });
         created += 1;
-      } catch {
-        // unique constraint — already materialized
+      } catch (err) {
+        console.warn("walk occurrence create skipped", scheduleId, err);
       }
     }
   }
@@ -325,6 +380,12 @@ export async function listOccurrences(
     await refreshOccurrenceStatuses(teamId);
   } catch (err) {
     console.error("refreshOccurrenceStatuses failed", err);
+  }
+  // Ensure today's windows exist (Temps Today uses this path).
+  try {
+    await materializeAllActiveSchedules(7, teamId);
+  } catch (err) {
+    console.error("materializeAllActiveSchedules failed", err);
   }
   const rows = await prisma.walkOccurrence.findMany({
     where: {
