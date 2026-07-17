@@ -172,6 +172,16 @@ const BACKEND_BUILD_MARKER = env.BACKEND_BUILD_MARKER;
 // Fast health for Railway — must not wait on schema/auth startup work.
 app.get("/health", (c) => c.json(buildHealthPayload()));
 
+/** Diagnostics + force-sync for Walk Builder tables (public schema). */
+app.get("/api/walks-schema-check", async (c) => {
+  await startupSchemaReady;
+  const ensure = await ensureWalksSchema(prisma);
+  return c.json({
+    buildMarker: env.BACKEND_BUILD_MARKER,
+    ensure,
+  });
+});
+
 /** Diagnostics: neon_auth schema tables readable for Better Auth? */
 app.get("/api/auth-schema-check", async (c) => {
   const ensure = await ensureBetterAuthSchema(prisma);

@@ -24,7 +24,7 @@ const envSchema = z.object({
   /** Comma-separated browser origins allowed for CORS (e.g. Firebase Hosting https://your-app.web.app). Localhost is always allowed. */
   CORS_ALLOWED_ORIGINS: z.string().optional(),
   // Build marker for quick deploy verification
-  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-16-walk-tables-create"),
+  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-16-walk-tables-public"),
   // Admin Dashboard
   ADMIN_PASSWORD: z.string().optional().default("admin123"),
   // Email (Resend)

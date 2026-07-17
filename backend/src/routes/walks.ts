@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
-import { prismaRouteError } from "../lib/prisma-errors";
+import { healWalksSchemaIfNeeded, prismaRouteError } from "../lib/prisma-errors";
 import { listWalkItemTypeCatalog } from "../lib/walks/item-types/registry";
 import { assertCanManageWalks, assertCanViewWalks } from "../lib/walks/permissions";
 import { serializeWalkItem, serializeWalkSection } from "../lib/walks/serialize";
@@ -23,6 +23,16 @@ function userId(c: { get: (k: "user" | "session") => unknown }): string | null {
   const user = c.get("user") as { id?: string } | null;
   const session = c.get("session") as { user?: { id?: string } } | null;
   return user?.id || session?.user?.id || null;
+}
+
+async function withWalksSchemaRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const healed = await healWalksSchemaIfNeeded(err);
+    if (!healed) throw err;
+    return await fn();
+  }
 }
 
 const createTemplateSchema = z.object({
@@ -96,7 +106,7 @@ walksRouter.get("/templates", async (c) => {
   const gate = await assertCanViewWalks(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
-    const data = await walkService.listWalkTemplates(teamId);
+    const data = await withWalksSchemaRetry(() => walkService.listWalkTemplates(teamId));
     return c.json({ data });
   } catch (err) {
     return prismaRouteError(c, err, "Failed to list walk templates");
@@ -112,14 +122,16 @@ walksRouter.post("/templates", zValidator("json", createTemplateSchema), async (
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   const body = c.req.valid("json");
   try {
-    const data = await walkService.createWalkTemplate({
-      teamId,
-      userId: uid,
-      name: body.name,
-      description: body.description,
-      workplace: body.workplace,
-      estimatedDurationMinutes: body.estimatedDurationMinutes,
-    });
+    const data = await withWalksSchemaRetry(() =>
+      walkService.createWalkTemplate({
+        teamId,
+        userId: uid,
+        name: body.name,
+        description: body.description,
+        workplace: body.workplace,
+        estimatedDurationMinutes: body.estimatedDurationMinutes,
+      }),
+    );
     return c.json({ data }, 201);
   } catch (err) {
     return prismaRouteError(c, err, "Failed to create walk template");
@@ -135,7 +147,7 @@ walksRouter.get("/templates/:templateId", async (c) => {
   const gate = await assertCanViewWalks(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
-    const data = await walkService.getWalkTemplate(teamId, templateId);
+    const data = await withWalksSchemaRetry(() => walkService.getWalkTemplate(teamId, templateId));
     if (!data) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
     return c.json({ data });
   } catch (err) {
@@ -152,7 +164,9 @@ walksRouter.patch("/templates/:templateId", zValidator("json", patchTemplateSche
   const gate = await assertCanManageWalks(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
-    const data = await walkService.updateWalkTemplate(teamId, templateId, c.req.valid("json"));
+    const data = await withWalksSchemaRetry(() =>
+      walkService.updateWalkTemplate(teamId, templateId, c.req.valid("json")),
+    );
     if (!data) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
     return c.json({ data });
   } catch (err) {
@@ -279,7 +293,9 @@ walksRouter.post(
     const gate = await assertCanManageWalks(teamId, uid);
     if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
     try {
-      const result = await walkService.createWalkItem(teamId, templateId, c.req.valid("json"));
+      const result = await withWalksSchemaRetry(() =>
+        walkService.createWalkItem(teamId, templateId, c.req.valid("json")),
+      );
       if ("error" in result) {
         if (result.error === "NOT_FOUND") {
           return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
