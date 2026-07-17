@@ -58,6 +58,16 @@ function IconLibrary() {
   );
 }
 
+function IconWalks() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <path d="M9 12h6M9 16h4" />
+    </svg>
+  );
+}
+
 function IconSettings() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
@@ -172,7 +182,7 @@ export function TempsModuleLayout() {
             <NavItem to="/go/temp-checks/today" icon={<IconChecks />} soon>
               Today&apos;s Checks
             </NavItem>
-            <NavItem to="/go/temp-checks/schedule" icon={<IconSchedule />} soon>
+            <NavItem to="/go/temp-checks/schedule" icon={<IconSchedule />}>
               Schedule
             </NavItem>
             <NavItem to="/go/temp-checks/results" icon={<IconResults />} soon>
@@ -187,6 +197,9 @@ export function TempsModuleLayout() {
             <p className="temps-nav-section-label">Items</p>
             <NavItem to="/go/temp-checks/library" end icon={<IconLibrary />}>
               Item Library
+            </NavItem>
+            <NavItem to="/go/temp-checks/walks" icon={<IconWalks />}>
+              Walks
             </NavItem>
             <div className="temps-nav-sub">
               <NavItem to="/go/temp-checks/categories" sub soon>

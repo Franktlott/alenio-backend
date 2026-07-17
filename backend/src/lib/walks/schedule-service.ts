@@ -68,7 +68,10 @@ export async function listSchedules(teamId: string, templateId?: string) {
       template: { teamId },
       ...(templateId ? { templateId } : {}),
     },
-    include: { windows: { orderBy: { sortOrder: "asc" } } },
+    include: {
+      windows: { orderBy: { sortOrder: "asc" } },
+      template: { select: { id: true, name: true, status: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -218,15 +221,22 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
   return { created };
 }
 
-export async function materializeAllActiveSchedules(daysAhead = 14) {
+export async function materializeAllActiveSchedules(daysAhead = 14, teamId?: string) {
   const schedules = await prisma.walkSchedule.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(teamId ? { template: { teamId } } : {}),
+    },
     select: { id: true },
   });
   let created = 0;
   for (const s of schedules) {
-    const r = await materializeOccurrencesForSchedule(s.id, daysAhead);
-    created += r.created;
+    try {
+      const r = await materializeOccurrencesForSchedule(s.id, daysAhead);
+      created += r.created;
+    } catch (err) {
+      console.error("materializeOccurrencesForSchedule failed", s.id, err);
+    }
   }
   return { schedules: schedules.length, created };
 }
@@ -257,7 +267,11 @@ export async function listOccurrences(
   teamId: string,
   opts?: { from?: Date; to?: Date; status?: string; templateId?: string },
 ) {
-  await refreshOccurrenceStatuses(teamId);
+  try {
+    await refreshOccurrenceStatuses(teamId);
+  } catch (err) {
+    console.error("refreshOccurrenceStatuses failed", err);
+  }
   return prisma.walkOccurrence.findMany({
     where: {
       teamId,
@@ -283,7 +297,7 @@ export async function listOccurrences(
 
 export async function listAvailableOccurrences(teamId: string) {
   await refreshOccurrenceStatuses(teamId);
-  await materializeAllActiveSchedules(7);
+  await materializeAllActiveSchedules(7, teamId);
   return prisma.walkOccurrence.findMany({
     where: {
       teamId,

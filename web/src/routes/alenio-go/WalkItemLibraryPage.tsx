@@ -629,8 +629,14 @@ export function WalkItemLibraryPage() {
                     <ul className="wil-used-list">
                       {selectedUsage.walks.map((w) => (
                         <li key={w.templateId}>
-                          <span>{w.name}</span>
-                          <IconChevronRight />
+                          <button
+                            type="button"
+                            className="wil-used-link"
+                            onClick={() => navigate(`/go/temp-checks/walks/builder/${w.templateId}`)}
+                          >
+                            <span>{w.name}</span>
+                            <IconChevronRight />
+                          </button>
                         </li>
                       ))}
                     </ul>

@@ -187,24 +187,73 @@ export function fetchWalkReporting(teamId: string) {
   );
 }
 
+export type WalkScheduleWindow = {
+  id: string;
+  startMinutes: number;
+  dueMinutes: number;
+  graceMinutes: number;
+  sortOrder: number;
+};
+
+export type WalkSchedule = {
+  id: string;
+  templateId: string;
+  name: string | null;
+  timezone: string;
+  recurrence: string;
+  daysOfWeek: number[] | null;
+  assignScope: string;
+  assignRole: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  windows: WalkScheduleWindow[];
+  template?: { id: string; name: string; status: string };
+};
+
+export type WalkOccurrenceRow = {
+  id: string;
+  scheduleId: string;
+  templateId: string;
+  status: string;
+  windowStart: string;
+  dueAt: string;
+  template?: { id: string; name: string };
+  schedule?: { id: string; name: string | null; timezone?: string };
+};
+
 export function fetchWalkSchedules(teamId: string, templateId?: string) {
   const q = templateId ? `?templateId=${encodeURIComponent(templateId)}` : "";
-  return apiGetJson<{ data: unknown[] }>(`${base(teamId)}/schedules${q}`).then((r) => r.data);
+  return apiGetJson<{ data: WalkSchedule[] }>(`${base(teamId)}/schedules${q}`).then((r) => r.data);
 }
 
 export function createWalkSchedule(
   teamId: string,
   body: {
     templateId: string;
-    name?: string;
-    recurrence?: string;
+    name?: string | null;
+    recurrence?: "ONCE" | "DAILY" | "WEEKLY";
+    daysOfWeek?: number[] | null;
     timezone?: string;
+    assignScope?: "WORKSPACE" | "ROLE" | "TEAM" | "MEMBER" | "ANY";
+    assignRole?: string | null;
     windows: Array<{ startMinutes: number; dueMinutes: number; graceMinutes?: number }>;
   },
 ) {
-  return apiPostJson<{ data: unknown }>(`${base(teamId)}/schedules`, body).then((r) => r.data);
+  return apiPostJson<{ data: WalkSchedule }>(`${base(teamId)}/schedules`, body).then((r) => r.data);
 }
 
-export function fetchWalkOccurrences(teamId: string) {
-  return apiGetJson<{ data: unknown[] }>(`${base(teamId)}/occurrences`).then((r) => r.data);
+export function fetchWalkOccurrences(
+  teamId: string,
+  filters?: { from?: string; to?: string; status?: string; templateId?: string },
+) {
+  const qs = new URLSearchParams();
+  if (filters?.from) qs.set("from", filters.from);
+  if (filters?.to) qs.set("to", filters.to);
+  if (filters?.status) qs.set("status", filters.status);
+  if (filters?.templateId) qs.set("templateId", filters.templateId);
+  const q = qs.toString();
+  return apiGetJson<{ data: WalkOccurrenceRow[] }>(
+    `${base(teamId)}/occurrences${q ? `?${q}` : ""}`,
+  ).then((r) => r.data);
 }

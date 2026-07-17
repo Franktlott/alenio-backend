@@ -26,9 +26,23 @@ export default function TodayScreen() {
     if (!teamId) return;
     setError(null);
     try {
-      const [a, d] = await Promise.all([listAvailableChecks(teamId), listChecksForDay(teamId)]);
-      setAvailable(a);
-      setToday(d);
+      // Prefer today's full list; available is best-effort (materializes windows).
+      const dayResult = await listChecksForDay(teamId).then(
+        (d) => ({ ok: true as const, d }),
+        (err) => ({ ok: false as const, err }),
+      );
+      if (!dayResult.ok) {
+        setToday([]);
+        setAvailable([]);
+        setError(dayResult.err instanceof Error ? dayResult.err.message : "Failed to load checks");
+        return;
+      }
+      setToday(dayResult.d);
+      try {
+        setAvailable(await listAvailableChecks(teamId));
+      } catch {
+        setAvailable(dayResult.d.filter((o) => o.status === "AVAILABLE" || o.status === "IN_PROGRESS"));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load checks");
     } finally {

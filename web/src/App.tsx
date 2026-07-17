@@ -10,6 +10,9 @@ import { AlenioGoLinkedDevicesRoutes } from "./routes/alenio-go/AlenioGoLinkedDe
 import { AlenioGoModuleSettingsPage } from "./routes/alenio-go/AlenioGoModuleSettingsPage";
 import { WalkItemCreatePage } from "./routes/alenio-go/WalkItemCreatePage";
 import { WalkItemLibraryPage } from "./routes/alenio-go/WalkItemLibraryPage";
+import { WalkBuilderPage } from "./routes/alenio-go/WalkBuilderPage";
+import { WalksListPage } from "./routes/alenio-go/WalksListPage";
+import { WalkSchedulesPage } from "./routes/alenio-go/WalkSchedulesPage";
 import { TempsModuleLayout } from "./routes/alenio-go/TempsModuleLayout";
 import { ActivityPage } from "./routes/ActivityPage";
 import { AdminPage } from "./routes/AdminPage";
@@ -156,6 +159,10 @@ export default function App() {
               <Route index element={<Navigate to="library" replace />} />
               <Route path="library" element={<WalkItemLibraryPage />} />
               <Route path="library/new" element={<WalkItemCreatePage />} />
+              <Route path="walks" element={<WalksListPage />} />
+              <Route path="walks/builder" element={<WalkBuilderPage />} />
+              <Route path="walks/builder/:templateId" element={<WalkBuilderPage />} />
+              <Route path="schedule" element={<WalkSchedulesPage />} />
               <Route path="settings" element={<AlenioGoModuleSettingsPage moduleKey="temp-checks" />} />
             </Route>
             <Route path="briefings/*" element={<AlenioGoModuleSettingsPage moduleKey="briefings" />} />

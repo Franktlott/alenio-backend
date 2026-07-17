@@ -45670,6 +45670,26 @@ a.go-mod-btn {
   color: #cbd5e1;
 }
 
+.wil-used-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wil-used-link:hover {
+  color: #6d28d9;
+}
+
 .wil-preview-actions {
   display: flex;
   gap: 0.5rem;
@@ -46410,4 +46430,347 @@ a.go-mod-btn {
     grid-template-columns: 1fr;
     gap: 0.2rem;
   }
+}
+
+/* Temps walks list */
+.walks-empty {
+  margin-top: 2rem;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  border: 1px dashed #d4d4d8;
+  border-radius: 1rem;
+  background: #fafafa;
+}
+
+.walks-empty h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #18181b;
+}
+
+.walks-empty p {
+  margin: 0.5rem 0 1.25rem;
+  color: #71717a;
+  font-size: 0.92rem;
+}
+
+.walks-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.walks-status--draft {
+  background: #f4f4f5;
+  color: #52525b;
+}
+
+.walks-status--published {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.walks-status--archived {
+  background: #f4f4f5;
+  color: #a1a1aa;
+}
+
+/* Builder takes the full Temps content area (nav hidden → single grid track). */
+.temps-module:has(.wb-shell) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.temps-module:has(.wb-shell) .temps-nav {
+  display: none;
+}
+
+.temps-module-main:has(.wb-shell) {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.temps-module-main:has(.wb-shell) .wb-shell {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* ── Walk Schedules (Temps) ──────────────────────────────────────────────── */
+.wsch-shell .wil-page {
+  max-width: 1180px;
+}
+
+.wsch-tabs {
+  display: flex;
+  gap: 1.25rem;
+  margin: 0.15rem 0 1.1rem;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.wsch-tab {
+  position: relative;
+  border: 0;
+  background: transparent;
+  padding: 0.65rem 0.1rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #71717a;
+  cursor: pointer;
+}
+
+.wsch-tab.is-active {
+  color: #6d28d9;
+}
+
+.wsch-tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: #7c3aed;
+}
+
+.wsch-table-card {
+  margin-bottom: 1.25rem;
+}
+
+.wsch-table th:last-child,
+.wsch-table td:last-child {
+  width: 2.5rem;
+}
+
+.wsch-walk-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #18181b;
+}
+
+.wsch-window-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.wsch-window-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #5b21b6;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.wsch-status {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.wsch-status--active {
+  color: #16a34a;
+}
+
+.wsch-status--paused {
+  color: #a1a1aa;
+}
+
+.wsch-day-card {
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.9rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+}
+
+.wsch-day-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.wsch-day-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: #18181b;
+}
+
+.wsch-day-head p {
+  margin: 0.25rem 0 0;
+  color: #71717a;
+  font-size: 0.875rem;
+}
+
+.wsch-day-walk {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #6d28d9;
+  background: #f5f3ff;
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+}
+
+.wsch-timeline-track {
+  position: relative;
+  height: 3.25rem;
+  border-radius: 0.65rem;
+  background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%);
+  border: 1px solid #e4e4e7;
+  overflow: hidden;
+}
+
+.wsch-timeline-block {
+  position: absolute;
+  top: 0.45rem;
+  bottom: 0.45rem;
+  border-radius: 0.45rem;
+  background: #7c3aed;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.35rem;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(91, 33, 182, 0.25);
+}
+
+.wsch-timeline-block span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.wsch-timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.55rem;
+  color: #a1a1aa;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.wsch-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.wsch-modal {
+  width: min(560px, 100%);
+  max-height: min(90vh, 760px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 1rem;
+  padding: 1.25rem 1.35rem 1.1rem;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+
+.wsch-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.wsch-modal-head h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 750;
+}
+
+.wsch-form {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.wsch-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #52525b;
+}
+
+.wsch-form input,
+.wsch-form select {
+  border: 1px solid #e4e4e7;
+  border-radius: 0.65rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.92rem;
+  color: #18181b;
+  background: #fff;
+}
+
+.wsch-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.wsch-day {
+  border: 1px solid #e4e4e7;
+  background: #fff;
+  color: #52525b;
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wsch-day.is-on {
+  background: #ede9fe;
+  border-color: #c4b5fd;
+  color: #5b21b6;
+}
+
+.wsch-windows-edit {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.wsch-windows-edit-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wsch-window-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wsch-window-row input[type="time"] {
+  flex: 1;
+}
+
+.wsch-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1.25rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #f4f4f5;
 }
