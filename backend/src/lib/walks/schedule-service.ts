@@ -215,17 +215,9 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
   const days = parseDays(schedule.daysOfWeek);
   const now = new Date();
   let created = 0;
-
-  // Rebuild open occurrences in range so timezone fixes replace stale UTC rows.
   const rangeStart = startOfZonedDay(now, schedule.timezone);
   const rangeEnd = new Date(rangeStart.getTime() + (daysAhead + 2) * 86_400_000);
-  await prisma.walkOccurrence.deleteMany({
-    where: {
-      scheduleId,
-      runId: null,
-      windowStart: { gte: rangeStart, lte: rangeEnd },
-    },
-  });
+  const expectedStarts: Date[] = [];
 
   for (let offset = 0; offset <= daysAhead; offset++) {
     // Step by calendar day in the schedule timezone (not raw UTC+24h).
@@ -259,7 +251,32 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
       if (graceEndsAt < schedule.effectiveFrom) continue;
       if (schedule.effectiveTo && windowStart > schedule.effectiveTo) continue;
 
+      expectedStarts.push(windowStart);
       const status = now < windowStart ? "UPCOMING" : now <= graceEndsAt ? "AVAILABLE" : "MISSED";
+
+      const existing = await prisma.walkOccurrence.findUnique({
+        where: {
+          scheduleId_windowStart: { scheduleId, windowStart },
+        },
+      });
+
+      if (existing) {
+        if (!existing.runId) {
+          await prisma.walkOccurrence.update({
+            where: { id: existing.id },
+            data: {
+              dueAt,
+              graceEndsAt,
+              status,
+              scheduleWindowId: window.id,
+              templateVersionId,
+              assignScope: schedule.assignScope,
+              assignRole: schedule.assignRole,
+            },
+          });
+        }
+        continue;
+      }
 
       try {
         await prisma.walkOccurrence.create({
@@ -284,7 +301,25 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
       }
     }
   }
+
+  // Remove stale open rows (e.g. old wrong-timezone starts) without touching IDs still in use.
+  if (expectedStarts.length) {
+    await prisma.walkOccurrence.deleteMany({
+      where: {
+        scheduleId,
+        runId: null,
+        windowStart: { gte: rangeStart, lte: rangeEnd, notIn: expectedStarts },
+      },
+    });
+  }
+
   return { created };
+}
+
+export async function getOccurrenceForTeam(teamId: string, occurrenceId: string) {
+  return prisma.walkOccurrence.findFirst({
+    where: { id: occurrenceId, teamId },
+  });
 }
 
 export async function materializeAllActiveSchedules(daysAhead = 14, teamId?: string) {

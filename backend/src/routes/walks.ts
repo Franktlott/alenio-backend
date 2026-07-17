@@ -1052,8 +1052,8 @@ walksRouter.post(
     if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
     try {
       const user = c.get("user") as { name?: string | null } | null;
-      const occ = await scheduleService.listOccurrences(teamId);
-      const match = occ.find((o) => o.id === occurrenceId);
+      // Look up by id directly — do not rematerialize via listOccurrences (that churns IDs).
+      const match = await scheduleService.getOccurrenceForTeam(teamId, occurrenceId);
       if (!match) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
       const result = await walkRunService.startWalkRun({
         teamId,
