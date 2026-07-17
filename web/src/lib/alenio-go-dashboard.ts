@@ -20,7 +20,7 @@ export type GoDashQuickAction = {
   label: string;
   active: boolean;
   tone: "indigo" | "emerald" | "violet" | "amber" | "slate";
-  icon: "camera" | "note" | "temp" | "history" | "more";
+  icon: "camera" | "note" | "temp" | "history" | "more" | "check" | "alert";
   href?: string;
 };
 

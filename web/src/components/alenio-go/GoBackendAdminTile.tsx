@@ -10,6 +10,38 @@ function AdminTileIcon({ name }: { name: Tile["icon"] }) {
       </svg>
     );
   }
+  if (name === "checklists") {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+      </svg>
+    );
+  }
+  if (name === "briefings") {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+        <path d="M16 13H8M16 17H8M10 9H8" />
+      </svg>
+    );
+  }
+  if (name === "walks") {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+        <circle cx="12" cy="5" r="2" />
+        <path d="M10 22l2-6 2 2 3 4M8 10l4 2 3-4" />
+      </svg>
+    );
+  }
+  if (name === "temp") {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+        <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
+      </svg>
+    );
+  }
   return (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
       <rect x="4" y="2" width="16" height="20" rx="2" />

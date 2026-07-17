@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import {
@@ -208,6 +208,18 @@ export function AlenioGoModuleSettingsPage({ moduleKey }: Props) {
           <div><dt>Live since</dt><dd>{module.liveStartedAt ? new Date(module.liveStartedAt).toLocaleDateString() : "—"}</dd></div>
         </dl>
       </section>
+
+      {moduleKey === "walks" ? (
+        <section className="go-backend-module-panel go-backend-panel-card go-mod-section" aria-labelledby="go-mod-builder">
+          <h2 id="go-mod-builder" className="go-mod-section-title">Walk Builder</h2>
+          <p className="enterprise-muted">
+            Create operational walks with temperature checks, yes/no questions, visual checks, and photo items.
+          </p>
+          <Link to="/go/walks/builder" className="go-mod-btn go-mod-btn--primary" data-testid="open-walk-builder">
+            Open Walk Builder
+          </Link>
+        </section>
+      ) : null}
 
       {/* Operating Mode */}
       <section className="go-backend-module-panel go-backend-panel-card go-mod-section" aria-labelledby="go-mod-mode">

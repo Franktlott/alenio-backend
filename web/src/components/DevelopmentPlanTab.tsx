@@ -30,6 +30,7 @@ import {
   normalizeDevelopmentGoalStatus,
 } from "../lib/development-goal-activity";
 import { SenecaGoalModal } from "./seneca/SenecaGoalModal";
+import { EnterprisePageLoading } from "./EnterprisePageLoading";
 
 type Props = {
   teamId: string;
@@ -1009,6 +1010,7 @@ export function DevelopmentPlanTab({
   }, [teamId, memberUserId]);
 
   useEffect(() => {
+    setGoals([]);
     void loadGoals();
   }, [loadGoals]);
 
@@ -1353,8 +1355,12 @@ export function DevelopmentPlanTab({
             </div>
           </div>
 
-          {loading ? (
-            <p className="enterprise-muted enterprise-dev-page-loading">Loading development plan…</p>
+          {loading && goals.length === 0 ? (
+            <EnterprisePageLoading
+              label="Loading development"
+              className="enterprise-profile-section-loading"
+              testId="development-loading"
+            />
           ) : goals.length === 0 ? (
             <DevPlanGrowCard canCreate={canCreate} onCreate={openCreate} />
           ) : (
@@ -1469,7 +1475,7 @@ export function DevelopmentPlanTab({
             </div>
           )}
 
-          {!loading && goals.length > 0 ? (
+          {goals.length > 0 ? (
             <div className="enterprise-checkins-history-footer">
               Showing {visibleGoalCount} of {goals.length} goals
             </div>

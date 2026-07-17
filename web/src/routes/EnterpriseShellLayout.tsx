@@ -12,6 +12,7 @@ import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle, enterpriseTeamNavTitle } from "../lib/enterprise-nav";
 import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
+import { greetingForHour } from "../lib/alenio-go-dashboard";
 
 export type EnterpriseRouteHandle = {
   enterpriseContentClassName?: string;
@@ -178,6 +179,9 @@ export function EnterpriseShellLayout() {
 
   useEffect(() => {
     if (!teams?.length) return;
+    // Chat's teamId identifies the conversation being viewed, not the user's
+    // globally selected workspace.
+    if (location.pathname.startsWith("/chat")) return;
     const teamIdFromUrl = new URLSearchParams(location.search).get("teamId")?.trim() ?? "";
     if (!teamIdFromUrl) return;
     const resolved = resolveEnterpriseTeamId(teams, { teamIdFromUrl }, selectedTeamId);
@@ -185,7 +189,7 @@ export function EnterpriseShellLayout() {
       setSelectedTeamId(resolved);
       setPersistedEnterpriseTeamId(resolved);
     }
-  }, [teams, location.search, selectedTeamId]);
+  }, [teams, location.pathname, location.search, selectedTeamId]);
 
   /** Resolve workspace before passive effects run pickEnterpriseTeamId — layout effects need this or owners get misclassified briefly. */
   const effectiveTeamId = useMemo(() => {
@@ -200,7 +204,14 @@ export function EnterpriseShellLayout() {
   const workspaceRole =
     teams !== null && effectiveTeamId ? teams.find((t) => t.id === effectiveTeamId)?.role : undefined;
   const teamNavLabel = enterpriseTeamNavTitle(workspaceRole);
-  const topBarPageTitle = activeNav === "team" ? teamNavLabel : enterpriseNavTitle(activeNav);
+  const viewerName = (me?.name ?? me?.email ?? "there").trim().split(/\s+/)[0] || "there";
+  const topBarPageTitle = `${greetingForHour(new Date().getHours())}, ${viewerName} 👋`;
+  const topBarPageSubtitle =
+    activeNav === "team"
+      ? "Review goals and what’s next for this teammate."
+      : activeNav === "chat"
+        ? teams?.find((team) => team.id === effectiveTeamId)?.name ?? "Messages"
+      : enterpriseNavTitle(activeNav);
   const hasNoTeams = teams !== null && teams.length === 0;
   const isSettingsRoute =
     location.pathname.startsWith("/settings") || location.pathname.startsWith("/profile");
@@ -297,6 +308,7 @@ export function EnterpriseShellLayout() {
           <DashboardTopBar
             user={me ?? null}
             pageTitle={topBarPageTitle}
+            pageSubtitle={topBarPageSubtitle}
             selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
           />
         }

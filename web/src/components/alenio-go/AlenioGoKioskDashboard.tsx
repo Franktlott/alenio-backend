@@ -11,10 +11,11 @@ import {
 import { ALENIO_ALERT_SOUND_PATH, resolveWorkplaceAlertSoundUrl } from "../../lib/go-alert-sounds";
 import { stopGoAlertSoundLoop, setGoAlertSoundWorkspaceUrl } from "../../lib/go-alert-sound";
 import {
-  GO_DASH_QUICK_ACTIONS,
   greetingForHour,
   type GoDashModule,
+  type GoDashQuickAction,
 } from "../../lib/alenio-go-dashboard";
+import { MAX_GO_FLOOR_QUICK_ACTIONS, type GoFrontendQuickAction } from "../../lib/go-frontend-settings";
 import { clearGoLinkedWorkspace, getGoDeviceId, saveGoLinkedWorkspace } from "../../lib/go-device";
 import { probeImageUrl } from "../../lib/image-probe";
 import { handleGoDeviceSessionError } from "../../lib/go-session";
@@ -26,6 +27,7 @@ import {
 } from "./go-dash-parts";
 import { GoKioskAlertModal, GoAlertSoundUnlockBanner } from "./GoKioskWorkplaceAlerts";
 import { GoKioskModuleTestCodeScreen, GoTestingModeBanner } from "./GoKioskModuleGate";
+import { GoWalkRunner } from "./GoWalkRunner";
 import { EnterprisePageLoading } from "../EnterprisePageLoading";
 
 type Props = {
@@ -69,6 +71,18 @@ async function resolveDisplayHeroImage(url: string | null | undefined): Promise<
   return (await probeImageUrl(trimmed)) ? trimmed : null;
 }
 
+function mapHubQuickActions(rows: GoFrontendQuickAction[] | undefined): GoDashQuickAction[] {
+  if (!rows || rows.length === 0) return [];
+  return rows.slice(0, MAX_GO_FLOOR_QUICK_ACTIONS).map((row) => ({
+    id: row.id,
+    label: row.label,
+    active: row.active,
+    tone: row.tone,
+    icon: row.icon,
+    href: row.href,
+  }));
+}
+
 export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -82,6 +96,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const hubRequestRef = useRef(0);
 
   const [kioskModules, setKioskModules] = useState<GoDashModule[]>([]);
+  const [quickActions, setQuickActions] = useState<GoDashQuickAction[]>([]);
   const [openModule, setOpenModule] = useState<GoDashModule | null>(null);
   const [pendingTestModule, setPendingTestModule] = useState<GoDashModule | null>(null);
 
@@ -186,6 +201,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
           setTeamName(data.team.name);
           setHeroImage(resolvedHero);
+          setQuickActions(mapHubQuickActions(data.quickActions));
           setGoAlertSoundWorkspaceUrl(ALENIO_ALERT_SOUND_PATH);
           saveGoLinkedWorkspace(hubToken, data.team.name, resolvedHero);
         })
@@ -339,7 +355,14 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
         />
       ) : null}
 
-      {openModule ? (
+      {openModule?.id === "walks" ? (
+        <GoWalkRunner
+          hubToken={hubToken}
+          moduleTitle={openModule.title}
+          isTesting={openModule.operatingMode === "testing"}
+          onClose={() => setOpenModule(null)}
+        />
+      ) : openModule ? (
         <div className="go-module-open-overlay" data-testid="go-module-open-overlay">
           {openModule.operatingMode === "testing" ? <GoTestingModeBanner /> : null}
           <div className="go-module-open-body">
@@ -357,12 +380,14 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
       ) : null}
 
       <div className="go-dash-bottom-dock go-dash-bottom-dock--store">
-        <section className="go-dash-quick go-dash-quick--dock" aria-labelledby="go-kiosk-quick-title">
-          <h2 id="go-kiosk-quick-title" className="go-dash-quick-title">
-            Quick actions
-          </h2>
-          <GoDashQuickActionsGrid actions={GO_DASH_QUICK_ACTIONS} />
-        </section>
+        {quickActions.length > 0 ? (
+          <section className="go-dash-quick go-dash-quick--dock" aria-labelledby="go-kiosk-quick-title">
+            <h2 id="go-kiosk-quick-title" className="go-dash-quick-title">
+              Quick actions
+            </h2>
+            <GoDashQuickActionsGrid actions={quickActions} />
+          </section>
+        ) : null}
         <GoDashFooter onEndSession={endSession} endLabel="Disconnect device" showAlertSoundStatus />
       </div>
     </div>

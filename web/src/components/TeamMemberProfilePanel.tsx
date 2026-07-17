@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { WebTeamMemberRow } from "../lib/api";
-import { greetingForHour } from "../lib/alenio-go-dashboard";
 import {
   frequencyToDays,
   type MemberStandardsCompliance,
@@ -75,12 +74,6 @@ function nextCheckInLabel(
   return { value: `${remaining} days`, hint: dueHint, remaining };
 }
 
-function firstNameFrom(displayName: string): string {
-  const trimmed = displayName.trim();
-  if (!trimmed) return "there";
-  return trimmed.split(/\s+/)[0] ?? trimmed;
-}
-
 function IconCamera() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -94,26 +87,6 @@ function IconCrown() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M3 17.5 5.5 8l4 4.5L12 6l2.5 6.5L18.5 8 21 17.5H3Zm1.5 1.5h15V21H4.5v-2Z" />
-    </svg>
-  );
-}
-
-function IconMetaManager() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <circle cx="12" cy="8" r="3.5" />
-      <path d="M5 19.5c1.2-3.2 3.4-4.8 7-4.8s5.8 1.6 7 4.8" />
-    </svg>
-  );
-}
-
-function IconMetaTeam() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <circle cx="9" cy="8" r="3" />
-      <circle cx="17" cy="9" r="2.5" />
-      <path d="M3.5 19c1-3 2.8-4.5 5.5-4.5S13 16 14 19" />
-      <path d="M14.5 14.5c1.6 0 3 .7 4 2.2" />
     </svg>
   );
 }
@@ -235,7 +208,6 @@ export function TeamMemberProfilePanel({
 }: Props) {
   const [section, setSection] = useState<ProfileSection>("Overview");
   const displayName = member.user.name ?? member.user.email ?? "Member";
-  const firstName = firstNameFrom(displayName);
 
   useEffect(() => {
     setSection(isFormerMember ? "Check-ins" : "Overview");
@@ -246,31 +218,7 @@ export function TeamMemberProfilePanel({
     [workplaceStandards, daysSinceLastCheckIn, standardsCompliance],
   );
 
-  const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
   const contentSection = section;
-  const statusLabel = isFormerMember ? "Former" : "Active";
-  const reportsTo =
-    managerName && member.role !== "owner" && !isFormerMember
-      ? managerName
-      : member.role === "owner" && !isFormerMember
-        ? "Workspace owner"
-        : "—";
-
-  const headerSubtitle =
-    contentSection === "Check-ins"
-      ? "Stay consistent. Small check-ins lead to big impact."
-      : contentSection === "Development"
-        ? "Build skills with clear goals, action steps, and progress notes."
-        : contentSection === "Overview"
-          ? "Review goals and what’s next for this teammate."
-          : "Track growth, goals, and progress over time.";
-
-  const nextDueGreen =
-    !isFormerMember &&
-    nextCheckIn.remaining != null &&
-    nextCheckIn.remaining > 0 &&
-    nextCheckIn.value !== "Overdue" &&
-    nextCheckIn.value !== "Not required";
 
   return (
     <div className="enterprise-team-profile enterprise-team-profile--wd" data-testid="team-member-profile">
@@ -345,54 +293,6 @@ export function TeamMemberProfilePanel({
         </aside>
 
         <div className="enterprise-team-profile-wd-main">
-          <section className="enterprise-team-profile-wd-summary" aria-label="Member summary">
-            <div className="enterprise-team-profile-wd-greeting">
-              <h2 className="enterprise-team-profile-wd-greeting-title">
-                {greeting}, {firstName} 👋
-              </h2>
-              <p className="enterprise-team-profile-wd-greeting-sub">{headerSubtitle}</p>
-            </div>
-            <div className="enterprise-team-profile-wd-meta">
-              <div className="enterprise-team-profile-wd-meta-item">
-                <span className="enterprise-team-profile-wd-summary-label">Manager</span>
-                <span className="enterprise-team-profile-wd-meta-value enterprise-team-profile-wd-meta-value--manager">
-                  <span className="enterprise-team-profile-wd-meta-icon" aria-hidden>
-                    <IconMetaManager />
-                  </span>
-                  <span className={reportsTo !== "—" ? "enterprise-team-profile-wd-linkish" : undefined}>{reportsTo}</span>
-                </span>
-              </div>
-              <div className="enterprise-team-profile-wd-meta-item">
-                <span className="enterprise-team-profile-wd-summary-label">Team</span>
-                <span className="enterprise-team-profile-wd-meta-value enterprise-team-profile-wd-meta-value--team">
-                  <span className="enterprise-team-profile-wd-meta-icon" aria-hidden>
-                    <IconMetaTeam />
-                  </span>
-                  <span className="enterprise-team-profile-wd-linkish">{teamName || "—"}</span>
-                </span>
-              </div>
-              <div className="enterprise-team-profile-wd-meta-item">
-                <span className="enterprise-team-profile-wd-summary-label">Status</span>
-                <div className="enterprise-team-profile-wd-meta-status">
-                  <span
-                    className={`enterprise-team-profile-wd-status-pill${isFormerMember ? " is-former" : " is-active"}`}
-                  >
-                    {statusLabel}
-                  </span>
-                  {!isFormerMember && nextDueGreen ? (
-                    <span className="enterprise-team-profile-wd-next-due">
-                      Next check-in due in {nextCheckIn.value}
-                    </span>
-                  ) : !isFormerMember ? (
-                    <span className="enterprise-team-profile-wd-summary-muted">
-                      Next check-in {nextCheckIn.value}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </section>
-
           <div className="enterprise-team-profile-wd-body">
             {contentSection === "Overview" ? (
               <ProfileOverviewTab

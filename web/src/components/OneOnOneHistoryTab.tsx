@@ -39,6 +39,7 @@ import { SenecaCheckInPanel, type SenecaFollowUpSuggestion } from "./seneca/Sene
 import { SenecaSummaryModal } from "./seneca/SenecaSummaryModal";
 import { DevelopmentPlanGenerator } from "./seneca/DevelopmentPlanGenerator";
 import { fetchSenecaPrep, type SenecaDevelopmentGoalDraft, type SenecaPrep } from "../lib/seneca-api";
+import { EnterprisePageLoading } from "./EnterprisePageLoading";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   section: "Section",
@@ -559,6 +560,7 @@ export function OneOnOneHistoryTab({
   }, [loadMeetings]);
 
   useEffect(() => {
+    setMeetings([]);
     setView("list");
     setSelectedTemplate(null);
     setEditingMeeting(null);
@@ -1707,9 +1709,6 @@ export function OneOnOneHistoryTab({
         </p>
       ) : null}
       {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
-      {loadingMeetings && meetings.length === 0 ? (
-        <p className="enterprise-muted enterprise-oneone-history-loading">Loading check-ins…</p>
-      ) : null}
 
       <div className="enterprise-checkins-main-grid">
         <div className="enterprise-checkins-history-card">
@@ -1740,7 +1739,13 @@ export function OneOnOneHistoryTab({
             </div>
           </div>
 
-          {!loadingMeetings && meetings.length === 0 ? (
+          {loadingMeetings && meetings.length === 0 ? (
+            <EnterprisePageLoading
+              label="Loading check-ins"
+              className="enterprise-profile-section-loading"
+              testId="check-ins-loading"
+            />
+          ) : meetings.length === 0 ? (
             <CheckInGrowCard
               canCreate={canCreate}
               loading={loadingTemplates}

@@ -576,6 +576,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [memberSearch, setMemberSearch] = useState("");
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const memberPickerRef = useRef<HTMLDivElement>(null);
+  const consumedMemberMeParamRef = useRef(false);
   const [roleFilter, setRoleFilter] = useState<"all" | "owner" | "team_leader" | "admin" | "member">("all");
   const [oneOneTemplatesOpen, setOneOneTemplatesOpen] = useState(false);
   const [workplaceStandardsOpen, setWorkplaceStandardsOpen] = useState(false);
@@ -666,8 +667,13 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   useEffect(() => {
     if (!paneActive) return;
     const member = searchParams.get("member")?.trim().toLowerCase();
-    if (member !== "me" || !myId) return;
+    if (member !== "me") {
+      consumedMemberMeParamRef.current = false;
+      return;
+    }
+    if (consumedMemberMeParamRef.current || !myId) return;
     if (!sortedMembers.some((m) => m.userId === myId)) return;
+    consumedMemberMeParamRef.current = true;
     setSelectedMemberId(myId);
     const next = new URLSearchParams(searchParams);
     next.delete("member");
@@ -805,7 +811,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const canManageOneOneTemplates = myRole === "owner";
   const showOwnerManageRow = canManageOneOneTemplates;
   const isRegularMember = myRole === "member";
-  const showTeamRosterChrome = !isRegularMember;
 
   if (!selectedTeamId) {
     return (
@@ -839,8 +844,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </p>
       ) : null}
 
-      <div className={`enterprise-team-split${isRegularMember ? " enterprise-team-split--member-self" : ""}`}>
-        {showTeamRosterChrome ? (
+      <div className="enterprise-team-split">
         <aside className="enterprise-team-split-list">
           <header className="enterprise-team-list-header">
             <div className="enterprise-team-list-toolbar">
@@ -1309,7 +1313,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
             </div>
           </div>
         </aside>
-        ) : null}
 
         <main className="enterprise-team-split-detail">
           {profileMember &&

@@ -8,6 +8,7 @@ import { listWalkItemTypeCatalog } from "../lib/walks/item-types/registry";
 import { assertCanManageWalks, assertCanViewWalks } from "../lib/walks/permissions";
 import { serializeWalkItem, serializeWalkSection } from "../lib/walks/serialize";
 import { WALK_ITEM_TYPES, WALK_TEMPLATE_STATUSES } from "../lib/walks/types";
+import * as walkRunService from "../lib/walks/walk-run-service";
 import * as walkService from "../lib/walks/walk-template-service";
 
 type Variables = {
@@ -374,5 +375,141 @@ walksRouter.post(
     }
   },
 );
+
+const startRunSchema = z.object({
+  isTest: z.boolean().optional(),
+  testSessionId: z.string().optional().nullable(),
+});
+
+const submitResponseSchema = z.object({
+  response: z.unknown(),
+  notes: z.string().max(4000).optional().nullable(),
+  photoUrls: z.array(z.string().url()).max(20).optional().nullable(),
+});
+
+// GET published templates (any member can list for running)
+walksRouter.get("/published", async (c) => {
+  const teamId = c.req.param("teamId")!;
+  const uid = userId(c);
+  if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const gate = await assertCanViewWalks(teamId, uid);
+  if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+  try {
+    const data = await walkRunService.listPublishedWalkTemplates(teamId);
+    return c.json({ data });
+  } catch (err) {
+    return prismaRouteError(c, err, "Failed to list published walks");
+  }
+});
+
+walksRouter.post(
+  "/templates/:templateId/runs",
+  zValidator("json", startRunSchema),
+  async (c) => {
+    const teamId = c.req.param("teamId")!;
+    const templateId = c.req.param("templateId")!;
+    const uid = userId(c);
+    if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+    const gate = await assertCanViewWalks(teamId, uid);
+    if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+    const body = c.req.valid("json");
+    try {
+      const user = c.get("user") as { name?: string | null } | null;
+      const result = await walkRunService.startWalkRun({
+        teamId,
+        templateId,
+        startedByUserId: uid,
+        startedByName: user?.name ?? null,
+        isTest: body.isTest,
+        testSessionId: body.testSessionId,
+      });
+      if ("error" in result) {
+        const status = result.error === "NOT_FOUND" ? 404 : 400;
+        return c.json(
+          { error: { message: result.message ?? result.error, code: result.error } },
+          status,
+        );
+      }
+      return c.json({ data: result.run }, 201);
+    } catch (err) {
+      return prismaRouteError(c, err, "Failed to start walk");
+    }
+  },
+);
+
+walksRouter.get("/runs/:runId", async (c) => {
+  const teamId = c.req.param("teamId")!;
+  const runId = c.req.param("runId")!;
+  const uid = userId(c);
+  if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const gate = await assertCanViewWalks(teamId, uid);
+  if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+  try {
+    const data = await walkRunService.getWalkRun(teamId, runId);
+    if (!data) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ data });
+  } catch (err) {
+    return prismaRouteError(c, err, "Failed to load walk run");
+  }
+});
+
+walksRouter.patch(
+  "/runs/:runId/items/:itemId",
+  zValidator("json", submitResponseSchema),
+  async (c) => {
+    const teamId = c.req.param("teamId")!;
+    const runId = c.req.param("runId")!;
+    const itemId = c.req.param("itemId")!;
+    const uid = userId(c);
+    if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+    const gate = await assertCanViewWalks(teamId, uid);
+    if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+    const body = c.req.valid("json");
+    try {
+      const user = c.get("user") as { name?: string | null } | null;
+      const result = await walkRunService.submitWalkItemResponse({
+        teamId,
+        runId,
+        itemId,
+        response: body.response,
+        notes: body.notes,
+        photoUrls: body.photoUrls,
+        completedBy: user?.name ?? uid,
+      });
+      if ("error" in result) {
+        const status = result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND" ? 404 : 400;
+        return c.json(
+          { error: { message: result.message ?? result.error, code: result.error } },
+          status,
+        );
+      }
+      return c.json({ data: result.run });
+    } catch (err) {
+      return prismaRouteError(c, err, "Failed to submit walk response");
+    }
+  },
+);
+
+walksRouter.post("/runs/:runId/complete", async (c) => {
+  const teamId = c.req.param("teamId")!;
+  const runId = c.req.param("runId")!;
+  const uid = userId(c);
+  if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const gate = await assertCanViewWalks(teamId, uid);
+  if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+  try {
+    const result = await walkRunService.completeWalkRun(teamId, runId);
+    if ("error" in result) {
+      const status = result.error === "NOT_FOUND" ? 404 : 400;
+      return c.json(
+        { error: { message: result.message ?? result.error, code: result.error } },
+        status,
+      );
+    }
+    return c.json({ data: result.run });
+  } catch (err) {
+    return prismaRouteError(c, err, "Failed to complete walk");
+  }
+});
 
 export { walksRouter };

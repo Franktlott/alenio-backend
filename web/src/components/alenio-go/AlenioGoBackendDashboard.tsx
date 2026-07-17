@@ -5,10 +5,11 @@ import { fetchTeamGoDevices, fetchWebTeam, fetchWorkspaceModules, type Workspace
 import { defaultModulesByKey, mergeWorkspaceModules } from "../../lib/workspace-modules";
 import { resolveGoHeroImage } from "../../lib/go-frontend-settings";
 import { probeImageUrl } from "../../lib/image-probe";
-import { goBackendAdminTiles, goBackendGreeting, goBackendQuickActions } from "../../lib/alenio-go-backend";
+import { goBackendAdminTiles, goBackendQuickActions } from "../../lib/alenio-go-backend";
 import { formatGoDashClock } from "../../lib/alenio-go-dashboard";
 import type { usePendingApprovals } from "../../hooks/usePendingApprovals";
 import { GoBackendAdminTile } from "./GoBackendAdminTile";
+import { GoDeviceQuickActionsManagePanel } from "./GoDeviceQuickActionsManagePanel";
 import { GoWorkspaceModulesPanel, GoWorkspaceModulesTab } from "./GoWorkspaceModulesPanel";
 
 const WSM_PANEL_KEY = "alenio.go.wsmPanelOpen";
@@ -28,10 +29,7 @@ type Props = {
 
 export function AlenioGoBackendDashboard({
   teamId,
-  teamName,
-  teamImage,
   inviteCode,
-  userName,
   roleLabel,
   canManage,
   approvals,
@@ -49,6 +47,7 @@ export function AlenioGoBackendDashboard({
   const [heroImage, setHeroImage] = useState<string | null>(null);
   const [clock, setClock] = useState(() => formatGoDashClock());
   const [copyOk, setCopyOk] = useState(false);
+  const [manageQuickActionsOpen, setManageQuickActionsOpen] = useState(false);
   const heroRequestRef = useRef(0);
 
   useEffect(() => {
@@ -129,15 +128,14 @@ export function AlenioGoBackendDashboard({
     };
   }, [canManage, teamId, location.pathname]);
 
-  const firstName = userName?.trim().split(/\s+/)[0] ?? "there";
-  const greeting = goBackendGreeting();
   const tiles = useMemo(
     () =>
       goBackendAdminTiles({
         canManage,
         pendingCount: approvals.total,
+        modulesByKey,
       }),
-    [canManage, approvals.total],
+    [canManage, approvals.total, modulesByKey],
   );
   const quickActions = goBackendQuickActions({
     inviteCode,
@@ -193,16 +191,6 @@ export function AlenioGoBackendDashboard({
             </div>
           </div>
 
-          <div className="go-dash-hero-copy go-backend-hero-copy">
-            <h1>
-              {greeting}, {firstName}
-            </h1>
-            <p>
-              Manage Alenio Go for <strong>{teamName || "your workspace"}</strong> — devices, alerts, and frontline
-              access.
-            </p>
-          </div>
-
           <div className="go-dash-stats-bar go-backend-stats">
             <div className="go-dash-stat-col go-backend-stat-main">
               <span className="go-dash-stat-value go-dash-stat-value--indigo">{linkedDeviceCount}</span>
@@ -245,35 +233,59 @@ export function AlenioGoBackendDashboard({
               ))}
             </div>
           </section>
+        </div>
+        </div>
 
-          <section className="go-backend-quick" aria-labelledby="go-backend-quick-title">
+        <div className="go-dash-bottom-dock go-backend-quick-dock">
+          <section className="go-dash-quick go-dash-quick--dock go-backend-quick" aria-labelledby="go-backend-quick-title">
             <h2 id="go-backend-quick-title" className="go-dash-quick-title">
               Quick actions
             </h2>
             <div className="go-dash-quick-grid go-backend-quick-grid">
-              {quickActions.map((action) =>
-                action.copyValue ? (
-                  <button
-                    key={action.id}
-                    type="button"
-                    className={`go-dash-quick-card go-dash-quick-card--${action.tone}${action.active ? "" : " go-dash-quick-card--inactive"}`}
-                    onClick={() => void copyWorkspaceCode()}
-                    disabled={!action.active}
-                  >
-                    <span className="go-dash-quick-icon" aria-hidden>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" />
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                      </svg>
-                    </span>
-                    {copyOk ? "Copied!" : action.label}
-                  </button>
-                ) : (
-                  <Link
-                    key={action.id}
-                    to={action.href ?? "/go"}
-                    className={`go-dash-quick-card go-dash-quick-card--${action.tone}${action.active ? "" : " go-dash-quick-card--inactive"}`}
-                  >
+              {quickActions.map((action) => {
+                const className = `go-dash-quick-card go-dash-quick-card--${action.tone}${action.active ? "" : " go-dash-quick-card--inactive"}`;
+                if (action.copyValue) {
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      className={className}
+                      onClick={() => void copyWorkspaceCode()}
+                      disabled={!action.active}
+                    >
+                      <span className="go-dash-quick-icon" aria-hidden>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="9" y="9" width="13" height="13" rx="2" />
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
+                      </span>
+                      {copyOk ? "Copied!" : action.label}
+                    </button>
+                  );
+                }
+                if (action.manageDeviceActions) {
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      className={className}
+                      onClick={() => setManageQuickActionsOpen(true)}
+                      disabled={!action.active}
+                    >
+                      <span className="go-dash-quick-icon" aria-hidden>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="3" width="7" height="7" rx="1" />
+                          <rect x="14" y="3" width="7" height="7" rx="1" />
+                          <rect x="3" y="14" width="7" height="7" rx="1" />
+                          <rect x="14" y="14" width="7" height="7" rx="1" />
+                        </svg>
+                      </span>
+                      {action.label}
+                    </button>
+                  );
+                }
+                return (
+                  <Link key={action.id} to={action.href ?? "/go"} className={className}>
                     <span className="go-dash-quick-icon" aria-hidden>
                       {action.id === "link" ? (
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -290,11 +302,10 @@ export function AlenioGoBackendDashboard({
                     </span>
                     {action.label}
                   </Link>
-                ),
-              )}
+                );
+              })}
             </div>
           </section>
-        </div>
         </div>
       </div>
 
@@ -314,6 +325,11 @@ export function AlenioGoBackendDashboard({
             teamId={teamId}
             modulesByKey={modulesByKey}
             onModulesChange={setModulesByKey}
+          />
+          <GoDeviceQuickActionsManagePanel
+            open={manageQuickActionsOpen}
+            onClose={() => setManageQuickActionsOpen(false)}
+            teamId={teamId}
           />
         </>
       ) : null}

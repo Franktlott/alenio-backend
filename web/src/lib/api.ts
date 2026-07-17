@@ -1345,6 +1345,7 @@ export type ApiPoll = {
   topicId: string | null;
   question: string;
   endsAt: string;
+  createdAt: string;
   createdById: string;
   allowLeaderDelete: boolean;
   createdBy: { id: string; name: string | null; image: string | null };
@@ -2276,6 +2277,7 @@ export type PublicChecklistHubPayload = {
   team: { name: string; image: string | null };
   checklists: [];
   alertSoundUrl?: string;
+  quickActions?: import("./go-frontend-settings").GoFrontendQuickAction[];
 };
 
 export function fetchPublicChecklistHub(hubToken: string, deviceId?: string) {

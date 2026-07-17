@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ClipboardEvent,
   type KeyboardEvent,
@@ -27,7 +27,6 @@ import {
 import { ChatMessageMedia } from "../components/ChatMessageMedia";
 import { linkifyText } from "../lib/linkify";
 import { normalizeMessageList } from "../lib/chat-message-pagination";
-import { isRecentFooterEnterpriseWorkspaceSelect } from "../lib/enterprise-selected-team";
 import {
   createGroupDm,
   createTeamPoll,
@@ -159,6 +158,15 @@ function IconPlus() {
   );
 }
 
+function IconCompose() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4L16.5 3.5Z" />
+    </svg>
+  );
+}
+
 function IconGear() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -239,6 +247,14 @@ function IconGroup() {
   );
 }
 
+function IconPoll() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M5 20V10M12 20V4M19 20v-7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function conversationRecencyMs(c: DmConversation): number {
   const last = c.lastMessage?.createdAt;
   if (last) {
@@ -252,7 +268,7 @@ function conversationRecencyMs(c: DmConversation): number {
 export function ChatPage() {
   const queryClient = useQueryClient();
   const paneActive = useEnterprisePaneActive();
-  const { me, teams, selectedTeamId, setSelectedTeamId, refreshMeAndTeams } = useEnterpriseShell();
+  const { me, teams, selectedTeamId: workspaceTeamId, refreshMeAndTeams } = useEnterpriseShell();
   const [params, setParams] = useSearchParams();
   const liveTeamId = params.get("teamId")?.trim() ?? "";
   const liveTopicId = params.get("topicId")?.trim() ?? "";
@@ -262,6 +278,15 @@ export function ChatPage() {
     topicId: liveTopicId,
     conversationId: liveConversationId,
   });
+  const teamIdFromUrl = paneActive ? liveTeamId : frozenChatUrl.current.teamId;
+  const topicIdFromUrl = paneActive ? liveTopicId : frozenChatUrl.current.topicId;
+  const conversationIdFromUrl = paneActive ? liveConversationId : frozenChatUrl.current.conversationId;
+  // Chat can browse any location without changing the app-wide workspace.
+  const selectedTeamId =
+    teamIdFromUrl && teams?.some((team) => team.id === teamIdFromUrl)
+      ? teamIdFromUrl
+      : workspaceTeamId;
+
   useEffect(() => {
     if (!paneActive) return;
     // Sidebar links to bare `/chat` — restore the last channel/DM instead of wiping it.
@@ -290,9 +315,6 @@ export function ChatPage() {
       conversationId: liveConversationId,
     };
   }, [paneActive, liveTeamId, liveTopicId, liveConversationId, selectedTeamId, setParams]);
-  const teamIdFromUrl = paneActive ? liveTeamId : frozenChatUrl.current.teamId;
-  const topicIdFromUrl = paneActive ? liveTopicId : frozenChatUrl.current.topicId;
-  const conversationIdFromUrl = paneActive ? liveConversationId : frozenChatUrl.current.conversationId;
 
   const [sendErr, setSendErr] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -329,6 +351,7 @@ export function ChatPage() {
   const [editDraft, setEditDraft] = useState("");
   const [deleteMessageTarget, setDeleteMessageTarget] = useState<ChatMessageLike | null>(null);
   const [messageActionSaving, setMessageActionSaving] = useState(false);
+  const [conversationFilter, setConversationFilter] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -347,9 +370,44 @@ export function ChatPage() {
   const conversationsQuery = useQuery({
     queryKey: queryKeys.chatConversations,
     queryFn: () => fetchDmConversations(),
-    staleTime: 60_000,
+    staleTime: MESSAGE_REFRESH_MS,
+    refetchInterval: paneActive ? MESSAGE_REFRESH_MS : false,
     refetchOnMount: false,
   });
+
+  const workspaceRecencyQueries = useQueries({
+    queries: (teams ?? []).map((team) => ({
+      queryKey: ["chat-workspace-recency", team.id],
+      queryFn: () => fetchTeamMessages(team.id, "general"),
+      enabled: paneActive,
+      staleTime: MESSAGE_REFRESH_MS,
+      refetchInterval: paneActive ? MESSAGE_REFRESH_MS : false,
+      refetchOnMount: false,
+    })),
+  });
+
+  const workspaceRecencyByTeamId = useMemo(() => {
+    const recency = new Map<string, number>();
+    (teams ?? []).forEach((team, index) => {
+      const messages = normalizeMessageList<TeamChatMessage>(workspaceRecencyQueries[index]?.data);
+      const latest = messages.reduce((max, message) => {
+        const timestamp = new Date(message.createdAt).getTime();
+        return Number.isNaN(timestamp) ? max : Math.max(max, timestamp);
+      }, 0);
+      recency.set(team.id, latest);
+    });
+    return recency;
+  }, [teams, workspaceRecencyQueries]);
+
+  const orderedTeams = useMemo(
+    () =>
+      [...(teams ?? [])].sort((a, b) => {
+        const activityDiff = (workspaceRecencyByTeamId.get(b.id) ?? 0) - (workspaceRecencyByTeamId.get(a.id) ?? 0);
+        if (activityDiff !== 0) return activityDiff;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }),
+    [teams, workspaceRecencyByTeamId],
+  );
 
   const topicsQuery = useQuery({
     queryKey: queryKeys.chatTopics(selectedTeamId),
@@ -420,19 +478,6 @@ export function ChatPage() {
       queryKey: queryKeys.chatThread(isDmMode ? "dm" : "team", threadId),
     });
   }, [queryClient, isDmMode, threadId]);
-
-  useEffect(() => {
-    if (!paneActive) return;
-    if (!teams?.length) return;
-    if (
-      teamIdFromUrl &&
-      teams.some((t) => t.id === teamIdFromUrl) &&
-      teamIdFromUrl !== selectedTeamId &&
-      !isRecentFooterEnterpriseWorkspaceSelect()
-    ) {
-      setSelectedTeamId(teamIdFromUrl);
-    }
-  }, [paneActive, teams, teamIdFromUrl, selectedTeamId, setSelectedTeamId]);
 
   useEffect(() => {
     if (!paneActive) return;
@@ -571,6 +616,7 @@ export function ChatPage() {
 
   useLayoutEffect(() => {
     stickToBottomRef.current = true;
+    setPollModalOpen(false);
   }, [threadKey]);
 
   const handleMessagesScroll = useCallback(() => {
@@ -601,7 +647,6 @@ export function ChatPage() {
   }, [threadKey, snapMessagesToBottom]);
 
   const onTeamChange = (id: string) => {
-    setSelectedTeamId(id);
     setParams({ teamId: id, topicId: "general" });
     setSendErr(null);
   };
@@ -774,6 +819,37 @@ export function ChatPage() {
     () => conversations.filter((c) => c.isGroup).sort((a, b) => conversationRecencyMs(b) - conversationRecencyMs(a)),
     [conversations],
   );
+  const normalizedConversationFilter = conversationFilter.trim().toLowerCase();
+  const visibleTopics = useMemo(
+    () =>
+      topics.filter(
+        (topic) =>
+          !normalizedConversationFilter ||
+          topic.name.toLowerCase().includes(normalizedConversationFilter) ||
+          topic.description?.toLowerCase().includes(normalizedConversationFilter),
+      ),
+    [topics, normalizedConversationFilter],
+  );
+  const visibleDirectConversations = useMemo(
+    () =>
+      directConversations.filter((conversation) => {
+        if (!normalizedConversationFilter) return true;
+        const user = conversation.recipient ?? conversation.participants[0];
+        return `${user?.name ?? ""} ${user?.email ?? ""}`.toLowerCase().includes(normalizedConversationFilter);
+      }),
+    [directConversations, normalizedConversationFilter],
+  );
+  const visibleGroupConversations = useMemo(
+    () =>
+      groupConversations.filter((conversation) =>
+        !normalizedConversationFilter
+          ? true
+          : `${conversation.name ?? ""} ${conversation.workspaceContext?.label ?? ""}`
+              .toLowerCase()
+              .includes(normalizedConversationFilter),
+      ),
+    [groupConversations, normalizedConversationFilter],
+  );
   const activeConversation = selectedConversationId ? conversations.find((c) => c.id === selectedConversationId) : null;
   const isLastGroupMember =
     Boolean(activeConversation?.isGroup) && (activeConversation?.participants.length ?? 0) <= 1;
@@ -877,28 +953,45 @@ export function ChatPage() {
         ? `${activeConversation.workspaceContext.label} · ${activeConversation.participants.length} members`
         : `${activeConversation.participants.length} members`
       : "Private conversation"
-    : activeTopic?.description?.trim() ||
-      (selectedTopicId === "general" ? "General team conversations and updates." : `Messages in ${activeTopic?.name ?? "this channel"}.`);
+    : selectedTopicId === "general"
+      ? ""
+      : activeTopic?.description?.trim() || `Messages in ${activeTopic?.name ?? "this channel"}.`;
   const memberCount = isDmMode
     ? activeConversation?.participants.length ?? 0
     : teams?.find((t) => t.id === selectedTeamId)?._count?.members ?? 0;
 
-  const messageBlocks = useMemo(() => {
+  const timelineBlocks = useMemo(() => {
     const blocks: Array<
       | { kind: "date"; label: string; key: string }
       | { kind: "message"; message: TeamChatMessage | DirectChatMessage; grouped: boolean }
+      | { kind: "poll"; poll: ApiPoll; key: string }
     > = [];
     let lastDate = "";
     let prevSenderId: string | null = null;
     let prevCreatedAt: string | null = null;
-    for (const m of messages) {
-      const key = dateKey(m.createdAt);
+    const entries: Array<
+      | { kind: "message"; createdAt: string; message: TeamChatMessage | DirectChatMessage }
+      | { kind: "poll"; createdAt: string; poll: ApiPoll }
+    > = [
+      ...messages.map((message) => ({ kind: "message" as const, createdAt: message.createdAt, message })),
+      ...polls.map((poll) => ({ kind: "poll" as const, createdAt: poll.createdAt, poll })),
+    ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    for (const entry of entries) {
+      const key = dateKey(entry.createdAt);
       if (key !== lastDate) {
-        blocks.push({ kind: "date", label: formatDateSeparator(m.createdAt), key: `d-${key}` });
+        blocks.push({ kind: "date", label: formatDateSeparator(entry.createdAt), key: `d-${key}` });
         lastDate = key;
         prevSenderId = null;
         prevCreatedAt = null;
       }
+      if (entry.kind === "poll") {
+        blocks.push({ kind: "poll", poll: entry.poll, key: `p-${entry.poll.id}` });
+        prevSenderId = null;
+        prevCreatedAt = null;
+        continue;
+      }
+      const m = entry.message;
       const senderId = m.senderId ?? m.sender.id;
       const grouped =
         prevSenderId === senderId &&
@@ -909,7 +1002,7 @@ export function ChatPage() {
       prevCreatedAt = m.createdAt;
     }
     return blocks;
-  }, [messages]);
+  }, [messages, polls]);
 
   const composerPlaceholder = isDmMode
     ? `Message ${conversationLabel ?? "…"}`
@@ -1007,81 +1100,134 @@ export function ChatPage() {
       <div className="chat-app-body chat-app-body-enterprise" data-testid="chat-screen">
             <aside className="chat-sidebar" aria-label="Channels">
               <div className="chat-sidebar-card">
-                <h2 className="chat-sidebar-title">Chat</h2>
-
-                <div className="chat-sidebar-section">
-                  <div className="chat-sidebar-section-head">
-                    <span className="chat-channels-label">Channels</span>
-                    {canCreateChannel ? (
-                      <button
-                        type="button"
-                        className="chat-sidebar-add-btn"
-                        aria-label="Add channel"
-                        onClick={() => {
-                          setCreateErr(null);
-                          setCreateChannelOpen(true);
-                        }}
-                        data-testid="chat-add-channel"
-                      >
-                        <IconPlus />
-                      </button>
-                    ) : null}
-                  </div>
-                  <ul className="chat-channel-list">
-                    <li
-                      className={`chat-channel-item ${!isDmMode && selectedTopicId === "general" ? "chat-channel-item-active" : ""}`}
-                      onClick={() => onTopicChange("general")}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onTopicChange("general");
-                        }
-                      }}
-                    >
-                      <span className="chat-channel-item-label">
-                        <span className="chat-channel-hash">#</span> Team chat
-                      </span>
-                    </li>
-                    {topics.map((topic) => (
-                      <li
-                        key={topic.id}
-                        className={`chat-channel-item ${!isDmMode && selectedTopicId === topic.id ? "chat-channel-item-active" : ""}`}
-                        onClick={() => onTopicChange(topic.id)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onTopicChange(topic.id);
-                          }
-                        }}
-                      >
-                        <span className="chat-channel-item-label">
-                          <span className="chat-channel-hash">#</span> {topic.name}
-                        </span>
-                        {!isDmMode && selectedTopicId === topic.id && canCreateChannel ? (
-                          <button
-                            type="button"
-                            className="chat-channel-settings-btn"
-                            aria-label={`Delete ${topic.name}`}
-                            title="Delete channel"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openDeleteChannel(topic);
-                            }}
-                            data-testid={`chat-delete-channel-${topic.id}`}
-                          >
-                            <IconGear />
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
+                <div className="chat-sidebar-top">
+                  <h2 className="chat-sidebar-title">Messages</h2>
+                  <button
+                    type="button"
+                    className="chat-sidebar-compose-btn"
+                    aria-label="Compose a new message"
+                    title="New message"
+                    onClick={() => {
+                      setCreateErr(null);
+                      setNewDmOpen(true);
+                    }}
+                  >
+                    <IconCompose />
+                  </button>
                 </div>
 
-                <div className="chat-sidebar-section">
+                <label className="chat-sidebar-filter">
+                  <span className="chat-sidebar-filter-icon" aria-hidden>
+                    <IconSearch />
+                  </span>
+                  <input
+                    type="search"
+                    value={conversationFilter}
+                    onChange={(event) => setConversationFilter(event.target.value)}
+                    placeholder="Filter conversations"
+                    aria-label="Filter conversations"
+                  />
+                </label>
+
+                <div className="chat-sidebar-section chat-sidebar-workspaces">
+                  <div className="chat-sidebar-section-head">
+                    <span className="chat-channels-label">Workspaces</span>
+                  </div>
+                  <div className="chat-workspace-list">
+                    {orderedTeams.map((team, index) => {
+                      const selected = team.id === selectedTeamId;
+                      const workspaceMatches =
+                        !normalizedConversationFilter || team.name.toLowerCase().includes(normalizedConversationFilter);
+                      const showGeneral = workspaceMatches || selected;
+                      return (
+                        <section key={team.id} className={`chat-workspace-group${selected ? " is-selected" : ""}`}>
+                          <button
+                            type="button"
+                            className="chat-workspace-row"
+                            onClick={() => onTeamChange(team.id)}
+                          >
+                            <span className={`chat-workspace-mark chat-workspace-mark--${(index % 3) + 1}`} aria-hidden>
+                              {team.name.trim().slice(0, 1).toUpperCase()}
+                            </span>
+                            <span className="chat-workspace-name">{team.name}</span>
+                            <span className="chat-workspace-chevron" aria-hidden>{selected ? "⌄" : "›"}</span>
+                          </button>
+                          {showGeneral ? (
+                            <ul className="chat-channel-list chat-workspace-channels">
+                              <li
+                                className={`chat-channel-item ${selected && !isDmMode && selectedTopicId === "general" ? "chat-channel-item-active" : ""}`}
+                                onClick={() => {
+                                  if (selected) onTopicChange("general");
+                                  else onTeamChange(team.id);
+                                }}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                <span className="chat-channel-item-label">
+                                  <span className="chat-channel-hash">#</span> Team chat
+                                </span>
+                                {selected && !isDmMode && selectedTopicId === "general" ? (
+                                  <span className="chat-channel-unread-dot" aria-hidden />
+                                ) : null}
+                              </li>
+                              {selected
+                                ? visibleTopics.map((topic) => (
+                                    <li
+                                      key={topic.id}
+                                      className={`chat-channel-item ${!isDmMode && selectedTopicId === topic.id ? "chat-channel-item-active" : ""}`}
+                                      onClick={() => onTopicChange(topic.id)}
+                                      role="button"
+                                      tabIndex={0}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                          e.preventDefault();
+                                          onTopicChange(topic.id);
+                                        }
+                                      }}
+                                    >
+                                      <span className="chat-channel-item-label">
+                                        <span className="chat-channel-hash">#</span> {topic.name}
+                                      </span>
+                                      {!isDmMode && selectedTopicId === topic.id && canCreateChannel ? (
+                                        <button
+                                          type="button"
+                                          className="chat-channel-settings-btn"
+                                          aria-label={`Delete ${topic.name}`}
+                                          title="Delete channel"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openDeleteChannel(topic);
+                                          }}
+                                          data-testid={`chat-delete-channel-${topic.id}`}
+                                        >
+                                          <IconGear />
+                                        </button>
+                                      ) : null}
+                                    </li>
+                                  ))
+                                : null}
+                            </ul>
+                          ) : null}
+                          {selected && canCreateChannel ? (
+                            <button
+                              type="button"
+                              className="chat-workspace-add-channel"
+                              onClick={() => {
+                                setCreateErr(null);
+                                setCreateChannelOpen(true);
+                              }}
+                              data-testid="chat-add-channel"
+                            >
+                              <IconPlus /> Add channel
+                            </button>
+                          ) : null}
+                        </section>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="chat-sidebar-section chat-sidebar-directs">
                   <div className="chat-sidebar-section-head">
                     <span className="chat-channels-label">Direct messages</span>
                     <button
@@ -1098,10 +1244,10 @@ export function ChatPage() {
                     </button>
                   </div>
                   <ul className="chat-channel-list">
-                    {directConversations.length === 0 ? (
+                    {visibleDirectConversations.length === 0 ? (
                       <li className="chat-sidebar-empty">No direct messages yet</li>
                     ) : null}
-                    {directConversations.map((conv) => {
+                    {visibleDirectConversations.map((conv) => {
                       const user = conv.recipient ?? conv.participants[0];
                       const label = user?.name ?? user?.email ?? "Direct message";
                       return (
@@ -1119,7 +1265,17 @@ export function ChatPage() {
                           }}
                         >
                           {user ? <ChatAvatar user={user} size="sm" /> : null}
-                          <span className="chat-dm-item-name">{label}</span>
+                          <span className="chat-dm-item-copy">
+                            <span className="chat-dm-item-name">{label}</span>
+                            <span className="chat-dm-item-preview">
+                              {conv.lastMessage?.content || "Start a conversation"}
+                            </span>
+                          </span>
+                          {conv.lastMessage?.createdAt ? (
+                            <time className="chat-dm-item-time" dateTime={conv.lastMessage.createdAt}>
+                              {formatMessageTime(conv.lastMessage.createdAt)}
+                            </time>
+                          ) : null}
                           <span className="chat-dm-status chat-dm-status--offline" aria-hidden />
                         </li>
                       );
@@ -1127,9 +1283,9 @@ export function ChatPage() {
                   </ul>
                 </div>
 
-                <div className="chat-sidebar-section">
+                <div className="chat-sidebar-section chat-sidebar-groups">
                   <div className="chat-sidebar-section-head">
-                    <span className="chat-channels-label">Group messages</span>
+                    <span className="chat-channels-label">Groups</span>
                     <button
                       type="button"
                       className="chat-sidebar-add-btn"
@@ -1144,10 +1300,10 @@ export function ChatPage() {
                     </button>
                   </div>
                   <ul className="chat-channel-list">
-                    {groupConversations.length === 0 ? (
+                    {visibleGroupConversations.length === 0 ? (
                       <li className="chat-sidebar-empty">No group messages yet</li>
                     ) : null}
-                    {groupConversations.map((conv) => (
+                    {visibleGroupConversations.map((conv, index) => (
                       <li
                         key={conv.id}
                         className={`chat-channel-item chat-group-item ${selectedConversationId === conv.id ? "chat-channel-item-active" : ""}`}
@@ -1161,7 +1317,7 @@ export function ChatPage() {
                           }
                         }}
                       >
-                        <span className="chat-group-icon" aria-hidden>
+                        <span className={`chat-group-icon chat-group-icon--${(index % 3) + 1}`} aria-hidden>
                           <IconGroup />
                         </span>
                         <span className="chat-group-item-copy">
@@ -1187,11 +1343,11 @@ export function ChatPage() {
                         {channelHeaderHash ? <span className="chat-channel-hash">#</span> : null}
                         {channelHeaderTitle}
                       </h1>
-                      <span className="chat-channel-header-chevron" aria-hidden>
-                        ▾
-                      </span>
+                      <button type="button" className="chat-channel-favorite" aria-label="Favorite conversation" title="Favorite">
+                        ☆
+                      </button>
                     </div>
-                    <p className="chat-channel-header-desc">{channelDescription}</p>
+                    {channelDescription ? <p className="chat-channel-header-desc">{channelDescription}</p> : null}
                   </div>
                   <div className="chat-channel-header-actions">
                     {memberCount > 0 ? (
@@ -1247,20 +1403,6 @@ export function ChatPage() {
                                 data-testid="chat-start-meeting"
                               >
                                 {videoLoading ? "Starting meeting…" : "Start virtual meeting"}
-                              </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="chat-header-more-item"
-                                disabled={!selectedTeamId}
-                                onClick={() => {
-                                  setMoreMenuOpen(false);
-                                  setActionErr(null);
-                                  setPollModalOpen(true);
-                                }}
-                                data-testid="chat-create-poll"
-                              >
-                                Create poll
                               </button>
                               {canDeleteCurrentChannel && activeTopic ? (
                                 <button
@@ -1324,53 +1466,13 @@ export function ChatPage() {
                 ) : null}
 
                 <div className="chat-panel chat-panel-embedded">
-                  {!isDmMode && polls.length > 0 ? (
-                    <div className="chat-polls-strip" aria-label="Polls for this channel">
-                      {polls.map((poll) => {
-                        const ended = new Date(poll.endsAt).getTime() < Date.now();
-                        const total = pollTotalVotes(poll);
-                        const myVote = me?.id ? poll.votes.find((v) => v.userId === me.id)?.optionId : undefined;
-                        return (
-                          <div key={poll.id} className="chat-poll-card">
-                            <div className="chat-poll-card-head">
-                              <span className="chat-poll-question">{poll.question}</span>
-                              <span className="chat-poll-meta">
-                                {poll.createdBy.name ?? "Member"} · {pollEndsLabel(poll.endsAt)}
-                              </span>
-                            </div>
-                            <ul className="chat-poll-options">
-                              {poll.options.map((opt) => {
-                                const c = opt.votes.length;
-                                const pct = total > 0 ? Math.round((c / total) * 100) : 0;
-                                const isMine = myVote === opt.id;
-                                return (
-                                  <li key={opt.id}>
-                                    <button
-                                      type="button"
-                                      className={`chat-poll-option ${isMine ? "chat-poll-option-mine" : ""} ${ended ? "chat-poll-option-ended" : ""}`}
-                                      disabled={ended || pollVoteId === poll.id}
-                                      onClick={() => void onVotePoll(poll.id, opt.id)}
-                                    >
-                                      <span className="chat-poll-option-bar" style={{ width: `${pct}%` }} aria-hidden />
-                                      <span className="chat-poll-option-label">{opt.text}</span>
-                                      <span className="chat-poll-option-count">{c}</span>
-                                    </button>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : null}
                   <div
                     ref={messagesContainerRef}
                     className="chat-messages"
                     data-testid="chat-message-list"
                     onScroll={handleMessagesScroll}
                   >
-                    {messages.length === 0 ? (
+                    {messages.length === 0 && polls.length === 0 ? (
                       <div className="chat-messages-empty" data-testid="chat-messages-empty">
                         <div className="chat-messages-empty-card">
                           <span className="chat-messages-empty-icon" aria-hidden>
@@ -1387,12 +1489,64 @@ export function ChatPage() {
                         </div>
                       </div>
                     ) : (
-                      messageBlocks.map((block) => {
+                      timelineBlocks.map((block) => {
                         if (block.kind === "date") {
                           return (
                             <div key={block.key} className="chat-date-divider">
                               <span className="chat-date-divider-label">{block.label}</span>
                             </div>
+                          );
+                        }
+                        if (block.kind === "poll") {
+                          const poll = block.poll;
+                          const ended = new Date(poll.endsAt).getTime() < Date.now();
+                          const total = pollTotalVotes(poll);
+                          const myVote = me?.id ? poll.votes.find((vote) => vote.userId === me.id)?.optionId : undefined;
+                          return (
+                            <article key={block.key} className="chat-message-row chat-poll-message-row">
+                              <div className="chat-message-gutter">
+                                <ChatAvatar
+                                  user={{ name: poll.createdBy.name, email: null, image: poll.createdBy.image }}
+                                  size="md"
+                                />
+                              </div>
+                              <div className="chat-message-body">
+                                <div className="chat-message-head">
+                                  <strong className="chat-message-author">{poll.createdBy.name ?? "Member"}</strong>
+                                  <span className="chat-message-role">POLL</span>
+                                  <time className="chat-message-time" dateTime={poll.createdAt}>
+                                    {formatMessageTime(poll.createdAt)}
+                                  </time>
+                                </div>
+                                <div className="chat-poll-card">
+                                  <div className="chat-poll-card-head">
+                                    <span className="chat-poll-question">{poll.question}</span>
+                                    <span className="chat-poll-meta">{pollEndsLabel(poll.endsAt)}</span>
+                                  </div>
+                                  <ul className="chat-poll-options">
+                                    {poll.options.map((option) => {
+                                      const count = option.votes.length;
+                                      const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+                                      const isMine = myVote === option.id;
+                                      return (
+                                        <li key={option.id}>
+                                          <button
+                                            type="button"
+                                            className={`chat-poll-option ${isMine ? "chat-poll-option-mine" : ""} ${ended ? "chat-poll-option-ended" : ""}`}
+                                            disabled={ended || pollVoteId === poll.id}
+                                            onClick={() => void onVotePoll(poll.id, option.id)}
+                                          >
+                                            <span className="chat-poll-option-bar" style={{ width: `${percentage}%` }} aria-hidden />
+                                            <span className="chat-poll-option-label">{option.text}</span>
+                                            <span className="chat-poll-option-count">{count}</span>
+                                          </button>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                </div>
+                              </div>
+                            </article>
                           );
                         }
                         const m = block.message;
@@ -1403,28 +1557,36 @@ export function ChatPage() {
                         const displayName = isMine
                           ? me?.name ?? me?.email ?? "You"
                           : senderName;
+                        const senderRole = teamDetail?.members.find(
+                          (member) => member.userId === (m.senderId ?? m.sender.id),
+                        )?.role;
+                        const senderRoleLabel =
+                          senderRole === "owner"
+                            ? "OW"
+                            : senderRole === "team_leader"
+                              ? "TL"
+                              : senderRole === "admin"
+                                ? "AD"
+                                : null;
                         return (
                           <article
                             key={m.id}
                             className={`chat-message-row ${isMine ? "chat-message-row--mine" : "chat-message-row--other"}${grouped ? " chat-message-row--grouped" : ""}`}
                           >
-                            {!isMine ? (
-                              <div className="chat-message-gutter">
-                                {grouped ? (
-                                  <time className="chat-message-gutter-time" dateTime={m.createdAt}>
-                                    {formatMessageTime(m.createdAt)}
-                                  </time>
-                                ) : (
-                                  <ChatAvatar user={m.sender} size="md" />
-                                )}
-                              </div>
-                            ) : (
-                              <div className="chat-message-gutter chat-message-gutter--mirror" aria-hidden />
-                            )}
+                            <div className="chat-message-gutter">
+                              {grouped ? (
+                                <time className="chat-message-gutter-time" dateTime={m.createdAt}>
+                                  {formatMessageTime(m.createdAt)}
+                                </time>
+                              ) : (
+                                <ChatAvatar user={displayUser} size="md" />
+                              )}
+                            </div>
                             <ChatMessageBodyInteractive onLongPress={() => openMessageActions(m)}>
                               {!grouped ? (
-                                <div className={`chat-message-head${isMine ? " chat-message-head--mine" : ""}`}>
+                                <div className="chat-message-head">
                                   <strong className="chat-message-author">{displayName}</strong>
+                                  {senderRoleLabel ? <span className="chat-message-role">{senderRoleLabel}</span> : null}
                                   <time className="chat-message-time" dateTime={m.createdAt}>
                                     {formatMessageTime(m.createdAt)}
                                   </time>
@@ -1441,19 +1603,6 @@ export function ChatPage() {
                                 onOpen={() => openMessageActions(m)}
                               />
                             </ChatMessageBodyInteractive>
-                            {isMine ? (
-                              <div className="chat-message-gutter">
-                                {grouped ? (
-                                  <time className="chat-message-gutter-time chat-message-gutter-time--mine" dateTime={m.createdAt}>
-                                    {formatMessageTime(m.createdAt)}
-                                  </time>
-                                ) : (
-                                  <ChatAvatar user={displayUser} size="md" />
-                                )}
-                              </div>
-                            ) : (
-                              <div className="chat-message-gutter chat-message-gutter--mirror" aria-hidden />
-                            )}
                           </article>
                         );
                       })
@@ -1461,6 +1610,113 @@ export function ChatPage() {
                     <div ref={messagesEndRef} />
                   </div>
                   <div className="chat-composer chat-composer-v2">
+                    {pollModalOpen ? (
+                      <div className="chat-poll-popover" role="dialog" aria-modal="false" aria-label="Create poll">
+                        <div className="chat-poll-popover-head">
+                          <div>
+                            <strong>Create a poll</strong>
+                            <span>Post to {channelLabel}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="chat-poll-popover-close"
+                            onClick={() => {
+                              setPollModalOpen(false);
+                              setActionErr(null);
+                            }}
+                            aria-label="Close poll composer"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="chat-poll-popover-body">
+                          <label className="chat-poll-field">
+                            <span>Question</span>
+                            <input
+                              value={pollQuestion}
+                              onChange={(event) => setPollQuestion(event.target.value)}
+                              placeholder="What do you want to ask?"
+                              maxLength={500}
+                              autoFocus
+                            />
+                          </label>
+                          <div className="chat-poll-field">
+                            <span>Options</span>
+                            <div className="chat-poll-popover-options">
+                              {pollOptionDrafts.map((option, index) => (
+                                <input
+                                  key={index}
+                                  value={option}
+                                  onChange={(event) =>
+                                    setPollOptionDrafts((rows) =>
+                                      rows.map((row, rowIndex) => (rowIndex === index ? event.target.value : row)),
+                                    )
+                                  }
+                                  placeholder={`Option ${index + 1}`}
+                                  maxLength={200}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="chat-poll-popover-controls">
+                            <div>
+                              {pollOptionDrafts.length < 6 ? (
+                                <button
+                                  type="button"
+                                  className="chat-poll-text-btn"
+                                  onClick={() => setPollOptionDrafts((rows) => [...rows, ""])}
+                                >
+                                  + Add option
+                                </button>
+                              ) : null}
+                              {pollOptionDrafts.length > 2 ? (
+                                <button
+                                  type="button"
+                                  className="chat-poll-text-btn"
+                                  onClick={() => setPollOptionDrafts((rows) => rows.slice(0, -1))}
+                                >
+                                  Remove
+                                </button>
+                              ) : null}
+                            </div>
+                            <label className="chat-poll-duration">
+                              <span>Duration</span>
+                              <select
+                                value={pollDurationHours}
+                                onChange={(event) => setPollDurationHours(Number(event.target.value))}
+                              >
+                                {POLL_DURATION_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                          {actionErr ? <p className="chat-poll-popover-error">{actionErr}</p> : null}
+                        </div>
+                        <div className="chat-poll-popover-footer">
+                          <button
+                            type="button"
+                            className="chat-poll-cancel-btn"
+                            onClick={() => {
+                              setPollModalOpen(false);
+                              setActionErr(null);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="chat-poll-post-btn"
+                            disabled={pollSaving}
+                            onClick={() => void submitPoll()}
+                          >
+                            {pollSaving ? "Posting…" : "Post poll"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -1524,6 +1780,27 @@ export function ChatPage() {
                           >
                             <IconAttach />
                           </button>
+                          <button type="button" className="chat-composer-tool" aria-label="Emoji picker" title="Emoji picker">
+                            ☺
+                          </button>
+                          <button type="button" className="chat-composer-tool chat-composer-tool--gif" aria-label="GIF picker" title="GIF picker">
+                            GIF
+                          </button>
+                          {!isDmMode ? (
+                            <button
+                              type="button"
+                              className={`chat-composer-tool${pollModalOpen ? " is-active" : ""}`}
+                              aria-label="Create poll"
+                              title="Create poll"
+                              onClick={() => {
+                                setActionErr(null);
+                                setPollModalOpen((open) => !open);
+                              }}
+                              data-testid="chat-create-poll"
+                            >
+                              <IconPoll />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="chat-composer-tool"
@@ -1567,7 +1844,6 @@ export function ChatPage() {
                 </p>
               ) : null}
             </div>
-
             <TeamActivityPanel teamId={selectedTeamId} currentUserId={me?.id} />
       </div>
 
@@ -1771,111 +2047,9 @@ export function ChatPage() {
         </div>
       ) : null}
 
-      {pollModalOpen ? (
-        <div
-          className="enterprise-task-modal-backdrop"
-          role="presentation"
-          onClick={() => {
-            setPollModalOpen(false);
-            setActionErr(null);
-          }}
-        >
-          <div className="enterprise-task-modal chat-poll-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="enterprise-task-modal-close"
-              onClick={() => {
-                setPollModalOpen(false);
-                setActionErr(null);
-              }}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <header className="enterprise-task-modal-head">
-              <h3 className="enterprise-task-modal-title">Create poll</h3>
-              <p className="enterprise-muted">Posted to {channelLabel}. Team members get a notification.</p>
-            </header>
-            <div className="chat-poll-modal-body">
-              <label className="auth-label">Question</label>
-              <input
-                className="auth-input"
-                value={pollQuestion}
-                onChange={(e) => setPollQuestion(e.target.value)}
-                placeholder="What do you want to ask?"
-                maxLength={500}
-              />
-              <span className="auth-label">Options (2–6)</span>
-              {pollOptionDrafts.map((opt, i) => (
-                <input
-                  key={i}
-                  className="auth-input chat-poll-option-input"
-                  value={opt}
-                  onChange={(e) => setPollOptionDrafts((rows) => rows.map((r, j) => (j === i ? e.target.value : r)))}
-                  placeholder={`Option ${i + 1}`}
-                  maxLength={200}
-                />
-              ))}
-              <div className="chat-poll-modal-row">
-                {pollOptionDrafts.length < 6 ? (
-                  <button
-                    type="button"
-                    className="auth-btn-secondary"
-                    onClick={() => setPollOptionDrafts((rows) => [...rows, ""])}
-                  >
-                    + Add option
-                  </button>
-                ) : null}
-                {pollOptionDrafts.length > 2 ? (
-                  <button
-                    type="button"
-                    className="auth-btn-secondary"
-                    onClick={() => setPollOptionDrafts((rows) => rows.slice(0, -1))}
-                  >
-                    Remove last
-                  </button>
-                ) : null}
-              </div>
-              <label className="auth-label">Duration</label>
-              <select
-                className="auth-input"
-                value={pollDurationHours}
-                onChange={(e) => setPollDurationHours(Number(e.target.value))}
-              >
-                {POLL_DURATION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <div className="enterprise-task-modal-footer">
-                <button
-                  type="button"
-                  className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
-                  onClick={() => {
-                    setPollModalOpen(false);
-                    setActionErr(null);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
-                  disabled={pollSaving}
-                  onClick={() => void submitPoll()}
-                >
-                  {pollSaving ? "Posting…" : "Post poll"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {videoUrl ? (
-        <div className="enterprise-task-modal-backdrop" role="presentation" onClick={() => setVideoUrl(null)}>
-          <div className="enterprise-video-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="enterprise-task-modal-backdrop" role="presentation">
+          <div className="enterprise-video-modal" role="dialog" aria-modal="true">
             <button type="button" className="enterprise-task-modal-close" onClick={() => setVideoUrl(null)} aria-label="Close video call">
               ×
             </button>

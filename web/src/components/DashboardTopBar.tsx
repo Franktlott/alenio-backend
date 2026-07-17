@@ -7,6 +7,7 @@ import { UserAvatar } from "./UserAvatar";
 type Props = {
   user: WebMeUser | null;
   pageTitle: string;
+  pageSubtitle?: string;
   selectedTeamId?: string;
   /** Optional extra count shown on the bell badge (join requests are included automatically). */
   notificationCount?: number;
@@ -28,9 +29,19 @@ function roleChevron() {
   );
 }
 
+function searchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m16.5 16.5 4 4" />
+    </svg>
+  );
+}
+
 export function DashboardTopBar({
   user,
   pageTitle,
+  pageSubtitle,
   selectedTeamId = "",
   notificationCount = 0,
   brandHeader,
@@ -41,7 +52,10 @@ export function DashboardTopBar({
   const isGo = variant === "go";
 
   return (
-    <header className={`enterprise-topbar${isGo ? " enterprise-topbar--go" : ""}`} data-testid="dashboard-topbar">
+    <header
+      className={`enterprise-topbar${isGo ? " enterprise-topbar--go" : ""}${pageSubtitle ? " enterprise-topbar--with-subtitle" : ""}`}
+      data-testid="dashboard-topbar"
+    >
       <div className="enterprise-topbar-context" data-testid="topbar-context">
         {brandHeader ? (
           <>
@@ -49,9 +63,28 @@ export function DashboardTopBar({
             <h1 className="sr-only">{pageTitle}</h1>
           </>
         ) : (
-          <h1 className="enterprise-topbar-title">{pageTitle}</h1>
+          <div className="enterprise-topbar-context-copy">
+            <h1 className="enterprise-topbar-title">{pageTitle}</h1>
+            {pageSubtitle ? <p className="enterprise-topbar-subtitle">{pageSubtitle}</p> : null}
+          </div>
         )}
       </div>
+
+      {!isGo ? (
+        <div className="enterprise-topbar-search" aria-label="Search coming soon">
+          <span className="enterprise-topbar-search-icon" aria-hidden>
+            {searchIcon()}
+          </span>
+          <input
+            type="search"
+            placeholder="Search Alenio"
+            aria-label="Search Alenio (coming soon)"
+            readOnly
+            tabIndex={-1}
+          />
+          <kbd className="enterprise-topbar-search-shortcut">⌘ K</kbd>
+        </div>
+      ) : null}
 
       <div className="enterprise-topbar-actions">
         {!isGo ? <VideoMeetingTopBarJoin selectedTeamId={selectedTeamId} user={user} /> : null}
