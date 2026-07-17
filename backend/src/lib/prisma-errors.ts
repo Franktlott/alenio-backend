@@ -38,5 +38,21 @@ export function prismaRouteError(c: Context, err: unknown, logLabel: string) {
     );
   }
   console.error(logLabel, err);
-  return c.json({ error: { message: "Could not complete request.", code: "INTERNAL" } }, 500);
+  const prismaCode =
+    err && typeof err === "object" && "code" in err ? String((err as { code: unknown }).code) : "";
+  const detail =
+    err instanceof Error && err.message.trim()
+      ? err.message.trim().slice(0, 240)
+      : null;
+  return c.json(
+    {
+      error: {
+        message: detail
+          ? `Could not complete request. (${detail})`
+          : "Could not complete request.",
+        code: prismaCode || "INTERNAL",
+      },
+    },
+    500,
+  );
 }

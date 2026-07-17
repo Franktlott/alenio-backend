@@ -926,7 +926,9 @@ walksRouter.get("/schedules", async (c) => {
   const gate = await assertCanManageWalks(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
-    const data = await scheduleService.listSchedules(teamId, c.req.query("templateId") ?? undefined);
+    const data = await withWalksSchemaRetry(() =>
+      scheduleService.listSchedules(teamId, c.req.query("templateId") ?? undefined),
+    );
     return c.json({ data });
   } catch (err) {
     return prismaRouteError(c, err, "Failed to list schedules");
@@ -973,12 +975,14 @@ walksRouter.post(
     if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
     const body = c.req.valid("json");
     try {
-      const result = await scheduleService.createSchedule({
-        teamId,
-        ...body,
-        effectiveFrom: body.effectiveFrom ? new Date(body.effectiveFrom) : undefined,
-        effectiveTo: body.effectiveTo ? new Date(body.effectiveTo) : null,
-      });
+      const result = await withWalksSchemaRetry(() =>
+        scheduleService.createSchedule({
+          teamId,
+          ...body,
+          effectiveFrom: body.effectiveFrom ? new Date(body.effectiveFrom) : undefined,
+          effectiveTo: body.effectiveTo ? new Date(body.effectiveTo) : null,
+        }),
+      );
       if ("error" in result) {
         return c.json(
           { error: { message: result.message ?? result.error, code: result.error } },
@@ -999,12 +1003,18 @@ walksRouter.get("/occurrences", async (c) => {
   const gate = await assertCanViewWalks(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
-    const data = await scheduleService.listOccurrences(teamId, {
-      templateId: c.req.query("templateId") ?? undefined,
-      status: c.req.query("status") ?? undefined,
-      from: c.req.query("from") ? new Date(c.req.query("from")!) : undefined,
-      to: c.req.query("to") ? new Date(c.req.query("to")!) : undefined,
-    });
+    const fromRaw = c.req.query("from");
+    const toRaw = c.req.query("to");
+    const from = fromRaw ? new Date(fromRaw) : undefined;
+    const to = toRaw ? new Date(toRaw) : undefined;
+    const data = await withWalksSchemaRetry(() =>
+      scheduleService.listOccurrences(teamId, {
+        templateId: c.req.query("templateId") ?? undefined,
+        status: c.req.query("status") ?? undefined,
+        from: from && !Number.isNaN(from.getTime()) ? from : undefined,
+        to: to && !Number.isNaN(to.getTime()) ? to : undefined,
+      }),
+    );
     return c.json({ data });
   } catch (err) {
     return prismaRouteError(c, err, "Failed to list occurrences");
@@ -1018,7 +1028,7 @@ walksRouter.get("/occurrences/available", async (c) => {
   const gate = await assertCanViewWalks(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
-    const data = await scheduleService.listAvailableOccurrences(teamId);
+    const data = await withWalksSchemaRetry(() => scheduleService.listAvailableOccurrences(teamId));
     return c.json({ data });
   } catch (err) {
     return prismaRouteError(c, err, "Failed to list available occurrences");

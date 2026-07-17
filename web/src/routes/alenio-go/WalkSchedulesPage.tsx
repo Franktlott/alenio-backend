@@ -186,15 +186,49 @@ export function WalkSchedulesPage() {
     const to = new Date();
     to.setDate(to.getDate() + 14);
     to.setHours(23, 59, 59, 999);
-    const [s, o, t] = await Promise.all([
-      fetchWalkSchedules(teamId),
+
+    // Schedules are required; occurrences/templates are best-effort for next-run + create form.
+    const scheduleResult = await fetchWalkSchedules(teamId).then(
+      (s) => ({ ok: true as const, s }),
+      (err) => ({ ok: false as const, err }),
+    );
+    if (!scheduleResult.ok) {
+      setSchedules([]);
+      setOccurrences([]);
+      setTemplates([]);
+      throw scheduleResult.err instanceof Error
+        ? scheduleResult.err
+        : new Error("Could not load schedules.");
+    }
+    setSchedules(scheduleResult.s);
+    setSelectedId(
+      (prev) =>
+        prev ??
+        scheduleResult.s.find((row) => row.isActive)?.id ??
+        scheduleResult.s[0]?.id ??
+        null,
+    );
+
+    const [occResult, templateResult] = await Promise.allSettled([
       fetchWalkOccurrences(teamId, { from: from.toISOString(), to: to.toISOString() }),
       fetchWalkTemplates(teamId),
     ]);
-    setSchedules(s);
-    setOccurrences(o);
-    setTemplates(t.filter((x) => x.status === "PUBLISHED"));
-    setSelectedId((prev) => prev ?? s.find((row) => row.isActive)?.id ?? s[0]?.id ?? null);
+    setOccurrences(occResult.status === "fulfilled" ? occResult.value : []);
+    setTemplates(
+      templateResult.status === "fulfilled"
+        ? templateResult.value.filter((x) => x.status === "PUBLISHED")
+        : [],
+    );
+    if (occResult.status === "rejected" || templateResult.status === "rejected") {
+      const detail =
+        (occResult.status === "rejected" && occResult.reason instanceof Error
+          ? occResult.reason.message
+          : null) ||
+        (templateResult.status === "rejected" && templateResult.reason instanceof Error
+          ? templateResult.reason.message
+          : null);
+      if (detail) setError(detail);
+    }
   }, [teamId]);
 
   useEffect(() => {

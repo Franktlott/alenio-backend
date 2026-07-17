@@ -63,17 +63,28 @@ function zonedLocalToUtc(
 }
 
 export async function listSchedules(teamId: string, templateId?: string) {
-  return prisma.walkSchedule.findMany({
+  const schedules = await prisma.walkSchedule.findMany({
     where: {
       template: { teamId },
       ...(templateId ? { templateId } : {}),
     },
     include: {
       windows: { orderBy: { sortOrder: "asc" } },
-      template: { select: { id: true, name: true, status: true } },
     },
     orderBy: { createdAt: "desc" },
   });
+  const templateIds = [...new Set(schedules.map((s) => s.templateId))];
+  const templates = templateIds.length
+    ? await prisma.walkTemplate.findMany({
+        where: { teamId, id: { in: templateIds } },
+        select: { id: true, name: true, status: true },
+      })
+    : [];
+  const byId = new Map(templates.map((t) => [t.id, t]));
+  return schedules.map((s) => ({
+    ...s,
+    template: byId.get(s.templateId) ?? { id: s.templateId, name: s.name ?? "Walk", status: "PUBLISHED" },
+  }));
 }
 
 export async function createSchedule(input: {
