@@ -1,8 +1,84 @@
 import type { PrismaClient } from "@prisma/client";
 
-/** Additive Walk Builder columns/tables (idempotent). */
+/** Additive Walk Builder columns/tables (idempotent). Creates base tables if missing. */
 export async function ensureWalksSchema(prisma: PrismaClient): Promise<void> {
   try {
+    // Base template tables may never have been pushed to prod — create first, then evolve.
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "WalkTemplate" (
+        "id" TEXT NOT NULL,
+        "teamId" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "description" TEXT,
+        "workplace" TEXT NOT NULL DEFAULT '',
+        "scoringEnabled" BOOLEAN NOT NULL DEFAULT true,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "status" TEXT NOT NULL DEFAULT 'DRAFT',
+        "version" INTEGER NOT NULL DEFAULT 1,
+        "estimatedDurationMinutes" INTEGER,
+        "publishedAt" TIMESTAMP(3),
+        "publishedByUserId" TEXT,
+        "parentTemplateId" TEXT,
+        "createdByUserId" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "WalkTemplate_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "WalkTemplate_teamId_isActive_idx"
+      ON "WalkTemplate"("teamId", "isActive");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "WalkTemplate_teamId_status_idx"
+      ON "WalkTemplate"("teamId", "status");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "WalkTemplateSection" (
+        "id" TEXT NOT NULL,
+        "templateId" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "description" TEXT,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "WalkTemplateSection_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "WalkTemplateSection_templateId_idx"
+      ON "WalkTemplateSection"("templateId");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "WalkTemplateItem" (
+        "id" TEXT NOT NULL,
+        "templateId" TEXT NOT NULL,
+        "sectionId" TEXT,
+        "type" TEXT NOT NULL DEFAULT 'YES_NO',
+        "label" TEXT NOT NULL,
+        "description" TEXT,
+        "instructions" TEXT,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        "required" BOOLEAN NOT NULL DEFAULT true,
+        "failureBehavior" TEXT,
+        "config" JSONB NOT NULL DEFAULT '{}'::jsonb,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "WalkTemplateItem_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "WalkTemplateItem_templateId_idx"
+      ON "WalkTemplateItem"("templateId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "WalkTemplateItem_sectionId_idx"
+      ON "WalkTemplateItem"("sectionId");
+    `);
+
+    // Evolve older / partial tables that predate Walk Builder columns.
     await prisma.$executeRawUnsafe(`
       ALTER TABLE "WalkTemplate" ADD COLUMN IF NOT EXISTS "description" TEXT;
     `);
@@ -162,6 +238,38 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<void> {
 
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
+        ALTER TABLE "WalkTemplate"
+          ADD CONSTRAINT "WalkTemplate_teamId_fkey"
+          FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "WalkTemplateSection"
+          ADD CONSTRAINT "WalkTemplateSection_templateId_fkey"
+          FOREIGN KEY ("templateId") REFERENCES "WalkTemplate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "WalkTemplateItem"
+          ADD CONSTRAINT "WalkTemplateItem_templateId_fkey"
+          FOREIGN KEY ("templateId") REFERENCES "WalkTemplate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "WalkTemplateItem"
+          ADD CONSTRAINT "WalkTemplateItem_sectionId_fkey"
+          FOREIGN KEY ("sectionId") REFERENCES "WalkTemplateSection"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
         ALTER TABLE "WalkRun"
           ADD CONSTRAINT "WalkRun_teamId_fkey"
           FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -208,6 +316,8 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<void> {
       EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);
+
+    console.log("[startup] ensureWalksSchema ok");
   } catch (err) {
     console.error("[startup] ensureWalksSchema failed:", err);
   }
