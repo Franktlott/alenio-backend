@@ -37,7 +37,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   {
     moduleKey: "temp-checks",
     moduleName: "Temperature Checks",
-    description: "Food safety temperature logs on the floor.",
+    description: "Configure in Go; associates take checks in the Alenio Temps app.",
     icon: "temp",
     tone: "emerald",
     baseHref: "/go/temp-checks",

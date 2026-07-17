@@ -3,9 +3,19 @@
 This workspace contains a mobile app and backend server.
 
 <projects>
-  mobile/   — Expo React Native app (port 8081)
+  mobile/   — Expo React Native app (main Alenio — chat/tasks; port 8081)
+  temps/    — Expo React Native app (Alenio Temps — floor temperature checks)
+  go-kiosk/ — Expo WebView shell (Alenio Go tablets)
+  web/      — Enterprise / Alenio Go admin (Vite)
   backend/  — Hono API server (port 3000)
 </projects>
+
+<product_split_temps>
+  Alenio Temps (temps/) is where associates take scheduled temperature checks.
+  Alenio Go web (/go/temp-checks) is for Item Library, settings, manual entry when needed, and reviewing the day’s results — not primary floor capture.
+  Temps data uses the backend walks APIs (TEMPERATURE items, schedules, occurrences, runs).
+</product_split_temps>
+
 
 <environment_variables>
   IMPORTANT: Use the correct env vars for each platform to avoid deployment failures.
@@ -15,7 +25,7 @@ This workspace contains a mobile app and backend server.
   - Always set `baseURL: env.BACKEND_URL` in Better Auth config (required for crossSubDomainCookies, harmless otherwise)
   - NEVER use `process.env.EXPO_PUBLIC_*` in backend code
 
-  Mobile (in mobile/src/*.ts):
+  Mobile (in mobile/src/*.ts and temps/src/*.ts):
   - Use `process.env.EXPO_PUBLIC_BACKEND_URL` for API calls
   - EXPO_PUBLIC_* vars are bundled at build time
 

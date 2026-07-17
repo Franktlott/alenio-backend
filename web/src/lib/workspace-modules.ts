@@ -123,10 +123,10 @@ export function defaultWorkspaceModules(): WorkspaceModule[] {
     {
       moduleKey: "temp-checks",
       moduleName: "Temperature Checks",
-      description: "Food safety temperature logs on the floor.",
+      description: "Configure temps in Go; associates take checks in the Alenio Temps app.",
       icon: "temp",
       tone: "emerald",
-      baseHref: "/go/temp-checks",
+      baseHref: "/go/temp-checks/library",
       status: "inactive",
       operatingMode: null,
       setupProgressPercent: 0,

@@ -209,29 +209,19 @@ export function AlenioGoModuleSettingsPage({ moduleKey }: Props) {
         </dl>
       </section>
 
-      {moduleKey === "walks" ? (
-        <section className="go-backend-module-panel go-backend-panel-card go-mod-section" aria-labelledby="go-mod-builder">
-          <h2 id="go-mod-builder" className="go-mod-section-title">Walk tools</h2>
+      {moduleKey === "temp-checks" ? (
+        <section className="go-backend-module-panel go-backend-panel-card go-mod-section" aria-labelledby="go-mod-temps-library">
+          <h2 id="go-mod-temps-library" className="go-mod-section-title">Item Library</h2>
           <p className="enterprise-muted">
-            Build walks from reusable library items, schedule windows, and review history.
+            Create, manage, and reuse inspection items for temperature checks.
           </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
-            <Link to="/go/walks/builder" className="go-mod-btn go-mod-btn--primary" data-testid="open-walk-builder">
-              Open Walk Builder
-            </Link>
-            <Link to="/go/walks/library" className="go-mod-btn">
-              Item Library
-            </Link>
-            <Link to="/go/walks/schedules" className="go-mod-btn">
-              Schedules
-            </Link>
-            <Link to="/go/walks/history" className="go-mod-btn">
-              History
-            </Link>
-            <Link to="/go/walks/reporting" className="go-mod-btn">
-              Reporting
-            </Link>
-          </div>
+          <Link
+            to="/go/temp-checks/library"
+            className="go-mod-btn go-mod-btn--primary"
+            data-testid="open-temps-item-library"
+          >
+            Open Item Library
+          </Link>
         </section>
       ) : null}
 

@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Alenio Temps",
+    "slug": "alenio-temps",
+    "scheme": "aleniotemps",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lotttechnologies.aleniotemps",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.lotttechnologies.aleniotemps",
+      "edgeToEdgeEnabled": false
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "icon": "../mobile/icon.png",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

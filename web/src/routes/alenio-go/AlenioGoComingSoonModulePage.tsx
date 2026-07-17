@@ -23,9 +23,10 @@ const MODULE_COPY: Record<string, { title: string; subtitle: string; tone: GoBac
   },
   "temp-checks": {
     title: "Temp checks",
-    subtitle: "Food safety temperature logs on the floor.",
+    subtitle: "Food safety temperature logs — managed here, taken in Alenio Temps.",
     tone: "emerald",
-    blurb: "Associates will log cooler, freezer, and hot-holding temps from Alenio Go tablets with clear pass/fail guidance.",
+    blurb:
+      "Associates take cooler, freezer, and hot-holding checks in the Alenio Temps app. Use Alenio Go to configure the Item Library, enter temps manually when needed, and review the day’s results.",
   },
 };
 
