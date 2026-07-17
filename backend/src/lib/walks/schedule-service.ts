@@ -274,6 +274,49 @@ export async function refreshOccurrenceStatuses(teamId?: string) {
   });
 }
 
+/** Attach template/schedule without Prisma required-relation includes (orphans break those). */
+async function attachOccurrenceRelations<T extends { templateId: string; scheduleId: string }>(
+  rows: T[],
+  opts?: { includeTemplateDescription?: boolean },
+) {
+  if (!rows.length) return [];
+  const templateIds = [...new Set(rows.map((r) => r.templateId))];
+  const scheduleIds = [...new Set(rows.map((r) => r.scheduleId))];
+  const [templates, schedules] = await Promise.all([
+    prisma.walkTemplate.findMany({
+      where: { id: { in: templateIds } },
+      select: opts?.includeTemplateDescription
+        ? { id: true, name: true, description: true }
+        : { id: true, name: true },
+    }),
+    prisma.walkSchedule.findMany({
+      where: { id: { in: scheduleIds } },
+      select: { id: true, name: true, timezone: true },
+    }),
+  ]);
+  const templateById = new Map(templates.map((t) => [t.id, t]));
+  const scheduleById = new Map(schedules.map((s) => [s.id, s]));
+
+  // Drop orphan occurrences whose walk/schedule was deleted (keeps Temps/Schedule pages healthy).
+  const orphanIds = rows
+    .filter((r) => !templateById.has(r.templateId) || !scheduleById.has(r.scheduleId))
+    .map((r) => (r as T & { id?: string }).id)
+    .filter((id): id is string => typeof id === "string");
+  if (orphanIds.length) {
+    await prisma.walkOccurrence.deleteMany({ where: { id: { in: orphanIds } } }).catch((err) => {
+      console.warn("Failed to delete orphan WalkOccurrence rows", err);
+    });
+  }
+
+  return rows
+    .filter((r) => templateById.has(r.templateId) && scheduleById.has(r.scheduleId))
+    .map((r) => ({
+      ...r,
+      template: templateById.get(r.templateId)!,
+      schedule: scheduleById.get(r.scheduleId)!,
+    }));
+}
+
 export async function listOccurrences(
   teamId: string,
   opts?: { from?: Date; to?: Date; status?: string; templateId?: string },
@@ -283,7 +326,7 @@ export async function listOccurrences(
   } catch (err) {
     console.error("refreshOccurrenceStatuses failed", err);
   }
-  return prisma.walkOccurrence.findMany({
+  const rows = await prisma.walkOccurrence.findMany({
     where: {
       teamId,
       ...(opts?.templateId ? { templateId: opts.templateId } : {}),
@@ -297,28 +340,26 @@ export async function listOccurrences(
           }
         : {}),
     },
-    include: {
-      template: { select: { id: true, name: true } },
-      schedule: { select: { id: true, name: true, timezone: true } },
-    },
     orderBy: { windowStart: "asc" },
     take: 200,
   });
+  return attachOccurrenceRelations(rows);
 }
 
 export async function listAvailableOccurrences(teamId: string) {
-  await refreshOccurrenceStatuses(teamId);
+  try {
+    await refreshOccurrenceStatuses(teamId);
+  } catch (err) {
+    console.error("refreshOccurrenceStatuses failed", err);
+  }
   await materializeAllActiveSchedules(7, teamId);
-  return prisma.walkOccurrence.findMany({
+  const rows = await prisma.walkOccurrence.findMany({
     where: {
       teamId,
       status: { in: ["AVAILABLE", "IN_PROGRESS"] },
     },
-    include: {
-      template: { select: { id: true, name: true, description: true } },
-      schedule: { select: { id: true, name: true } },
-    },
     orderBy: { dueAt: "asc" },
     take: 50,
   });
+  return attachOccurrenceRelations(rows, { includeTemplateDescription: true });
 }
