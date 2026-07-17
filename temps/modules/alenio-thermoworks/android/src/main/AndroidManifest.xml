@@ -1,0 +1,3 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- App-level Bluetooth permissions are injected by the Expo config plugin. -->
+</manifest>

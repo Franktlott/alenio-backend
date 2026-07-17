@@ -1,5 +1,5 @@
 import { Redirect } from "expo-router";
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -9,6 +9,12 @@ import {
 } from "react-native";
 import { Muted, PrimaryButton, Screen, Title } from "../../components/ui";
 import { colors } from "../../lib/theme";
+import {
+  getDiagnostics,
+  initialize as initializeThermoworks,
+  isAvailable as isThermoworksAvailable,
+  type ThermoworksDiagnostics,
+} from "../../probe/adapters/thermoworks/ThermoworksNative";
 import { SCENARIOS, type MockScenarioName } from "../../probe/mock";
 import { ProbeProvider, useProbe } from "../../probe/react";
 
@@ -43,6 +49,17 @@ function ProbeLabScreen() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [scenarioName, setScenarioName] = useState<MockScenarioName>(getScenarioName());
+  const [twDiag, setTwDiag] = useState<ThermoworksDiagnostics | null>(null);
+  const [twBusy, setTwBusy] = useState(false);
+
+  const refreshThermoworks = useCallback(async () => {
+    const diag = await getDiagnostics();
+    setTwDiag(diag);
+  }, []);
+
+  useEffect(() => {
+    void refreshThermoworks();
+  }, [refreshThermoworks]);
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(true);
@@ -72,6 +89,49 @@ function ProbeLabScreen() {
       <ScrollView contentContainerStyle={styles.content} testID="probe-lab-screen">
         <Title>Probe Lab</Title>
         <Muted>Dev-only mock probe harness. Canonical values are Celsius.</Muted>
+
+        <Section label="ThermoWorks native (Phase 2)">
+          <Muted>
+            Diagnostics only — no scan/connect. Requires a dev-client build with vendored
+            ThermaLib binaries.
+          </Muted>
+          <KV k="js isAvailable()" v={isThermoworksAvailable() ? "yes" : "no"} />
+          <KV k="native available" v={twDiag ? (twDiag.available ? "yes" : "no") : "…"} />
+          <KV k="initialized" v={twDiag ? (twDiag.initialized ? "yes" : "no") : "…"} />
+          <KV k="sdkVersion" v={twDiag?.sdkVersion ?? "—"} />
+          <KV
+            k="bluetoothAvailable"
+            v={twDiag ? (twDiag.bluetoothAvailable ? "yes" : "no") : "…"}
+          />
+          <KV k="platform" v={twDiag?.platform ?? "—"} />
+          <KV k="error" v={twDiag?.error ?? "—"} />
+          <PrimaryButton
+            label="Initialize ThermaLib"
+            disabled={twBusy}
+            loading={twBusy}
+            onPress={() => {
+              setTwBusy(true);
+              void initializeThermoworks()
+                .then(async (result) => {
+                  setMessage(
+                    result.ok
+                      ? `ThermaLib initialized (${result.sdkVersion})`
+                      : result.error ?? "Initialize failed",
+                  );
+                  await refreshThermoworks();
+                })
+                .finally(() => setTwBusy(false));
+            }}
+          />
+          <PrimaryButton
+            label="Refresh diagnostics"
+            disabled={twBusy}
+            onPress={() => {
+              setTwBusy(true);
+              void refreshThermoworks().finally(() => setTwBusy(false));
+            }}
+          />
+        </Section>
 
         <Section label="Scenario">
           <View style={styles.chipRow}>

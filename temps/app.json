@@ -11,14 +11,32 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.lotttechnologies.aleniotemps",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSBluetoothAlwaysUsageDescription": "Alenio Temps uses Bluetooth to communicate with ThermoWorks temperature probes.",
+        "NSBluetoothPeripheralUsageDescription": "Alenio Temps uses Bluetooth to communicate with ThermoWorks temperature probes."
       }
     },
     "android": {
       "package": "com.lotttechnologies.aleniotemps",
       "edgeToEdgeEnabled": false
     },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.4"
+          },
+          "android": {
+            "minSdkVersion": 24
+          }
+        }
+      ],
+      "alenio-thermoworks"
+    ],
     "icon": "../mobile/icon.png",
     "experiments": {
       "typedRoutes": true
