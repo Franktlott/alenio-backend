@@ -1,9 +1,16 @@
 import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Card, Muted, Screen, Title } from "../../components/ui";
 import { useSession } from "../../lib/session-context";
-import { listAvailableChecks, listChecksForDay } from "../../lib/temps-api";
+import { listChecksForDay } from "../../lib/temps-api";
 import type { WalkOccurrence } from "../../lib/types";
 import { colors } from "../../lib/theme";
 
@@ -15,47 +22,43 @@ function formatWindow(iso: string) {
   }
 }
 
+function isReady(item: WalkOccurrence) {
+  return item.status === "AVAILABLE" || item.status === "IN_PROGRESS";
+}
+
 export default function TodayScreen() {
   const { teamId } = useSession();
-  const [available, setAvailable] = useState<WalkOccurrence[]>([]);
   const [today, setToday] = useState<WalkOccurrence[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!teamId) return;
-    setError(null);
-    try {
-      // Prefer today's full list; available is best-effort (materializes windows).
-      const dayResult = await listChecksForDay(teamId).then(
-        (d) => ({ ok: true as const, d }),
-        (err) => ({ ok: false as const, err }),
-      );
-      if (!dayResult.ok) {
-        setToday([]);
-        setAvailable([]);
-        setError(dayResult.err instanceof Error ? dayResult.err.message : "Failed to load checks");
-        return;
-      }
-      setToday(dayResult.d);
+  const load = useCallback(
+    async (mode: "initial" | "refresh" = "initial") => {
+      if (!teamId) return;
+      setError(null);
+      if (mode === "initial") setLoading(true);
+      else setRefreshing(true);
       try {
-        setAvailable(await listAvailableChecks(teamId));
-      } catch {
-        setAvailable(dayResult.d.filter((o) => o.status === "AVAILABLE" || o.status === "IN_PROGRESS"));
+        // Single day list — available rows are derived client-side (no second materialize).
+        const day = await listChecksForDay(teamId);
+        setToday(day);
+      } catch (err) {
+        setToday([]);
+        setError(err instanceof Error ? err.message : "Failed to load checks");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load checks");
-    } finally {
-      setLoading(false);
-    }
-  }, [teamId]);
+    },
+    [teamId],
+  );
 
   useEffect(() => {
-    setLoading(true);
-    void load();
+    void load("initial");
   }, [load]);
 
-  const availableIds = new Set(available.map((o) => o.id));
+  const availableCount = today.filter(isReady).length;
 
   return (
     <Screen style={{ paddingHorizontal: 0 }}>
@@ -67,34 +70,50 @@ export default function TodayScreen() {
         <Muted>Open a check to record temperatures. Results sync to Alenio Go.</Muted>
       </View>
 
-      {loading && available.length === 0 ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color={colors.brand} />
+      {loading ? (
+        <View style={styles.loadingBox} accessibilityLabel="Loading today's checks">
+          <ActivityIndicator size="large" color={colors.brand} />
+          <Text style={styles.loadingTitle}>Loading today’s checks…</Text>
+          <Text style={styles.loadingHint}>Pulling open windows for your store</Text>
+        </View>
       ) : (
         <FlatList
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
-          data={today.length ? today : available}
+          data={today}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void load("refresh")}
+              tintColor={colors.brand}
+            />
+          }
           ListHeaderComponent={
             error ? (
               <Text style={{ color: colors.fail, marginBottom: 12 }}>{error}</Text>
-            ) : available.length > 0 ? (
+            ) : availableCount > 0 ? (
               <Text style={{ marginBottom: 12, fontWeight: "700", color: colors.ink }}>
-                {available.length} available now
+                {availableCount} available now
               </Text>
             ) : (
-              <Muted>No checks in today’s window yet.</Muted>
+              <View style={{ marginBottom: 12 }}>
+                <Muted>No checks in today’s window yet.</Muted>
+              </View>
             )
           }
+          ListEmptyComponent={
+            !error ? (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyTitle}>Nothing scheduled for today</Text>
+                <Muted>When a walk window opens, it will show up here.</Muted>
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => {
-            const ready = availableIds.has(item.id) || item.status === "AVAILABLE" || item.status === "IN_PROGRESS";
+            const ready = isReady(item);
             return (
               <Card
-                onPress={
-                  ready
-                    ? () => router.push(`/(app)/check/${item.id}`)
-                    : undefined
-                }
+                onPress={ready ? () => router.push(`/(app)/check/${item.id}`) : undefined}
               >
                 <Text style={{ fontSize: 17, fontWeight: "700", color: colors.ink }}>
                   {item.template?.name ?? "Temperature check"}
@@ -121,3 +140,36 @@ export default function TodayScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingBox: {
+    marginTop: 48,
+    paddingHorizontal: 28,
+    alignItems: "center",
+    gap: 10,
+  },
+  loadingTitle: {
+    marginTop: 8,
+    fontSize: 17,
+    fontWeight: "800",
+    color: colors.ink,
+    textAlign: "center",
+  },
+  loadingHint: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: colors.muted,
+    textAlign: "center",
+  },
+  emptyBox: {
+    marginTop: 28,
+    paddingVertical: 20,
+    alignItems: "center",
+    gap: 6,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.ink,
+  },
+});

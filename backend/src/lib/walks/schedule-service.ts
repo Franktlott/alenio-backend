@@ -455,16 +455,46 @@ export async function materializeAllActiveSchedules(daysAhead = 14, teamId?: str
     },
     select: { id: true },
   });
-  let created = 0;
-  for (const s of schedules) {
-    try {
-      const r = await materializeOccurrencesForSchedule(s.id, daysAhead);
-      created += r.created;
-    } catch (err) {
-      console.error("materializeOccurrencesForSchedule failed", s.id, err);
-    }
-  }
+  const results = await Promise.all(
+    schedules.map(async (s) => {
+      try {
+        return await materializeOccurrencesForSchedule(s.id, daysAhead);
+      } catch (err) {
+        console.error("materializeOccurrencesForSchedule failed", s.id, err);
+        return { created: 0 };
+      }
+    }),
+  );
+  const created = results.reduce((sum, r) => sum + r.created, 0);
   return { schedules: schedules.length, created };
+}
+
+/** In-process throttle so list endpoints don't rematerialize on every Temps/Go open. */
+const ENSURE_TTL_MS = 3 * 60 * 1000;
+const lastEnsureByTeam = new Map<string, number>();
+
+/**
+ * Lazily create today's / near-term windows at most once per TTL per team.
+ * Schedule create/update still materializes immediately.
+ */
+export async function ensureOccurrencesForTeam(
+  teamId: string,
+  daysAhead = 2,
+  opts?: { force?: boolean },
+) {
+  const now = Date.now();
+  const last = lastEnsureByTeam.get(teamId) ?? 0;
+  if (!opts?.force && now - last < ENSURE_TTL_MS) {
+    return { skipped: true as const, schedules: 0, created: 0 };
+  }
+  lastEnsureByTeam.set(teamId, now);
+  try {
+    const result = await materializeAllActiveSchedules(daysAhead, teamId);
+    return { skipped: false as const, ...result };
+  } catch (err) {
+    lastEnsureByTeam.delete(teamId);
+    throw err;
+  }
 }
 
 export async function refreshOccurrenceStatuses(teamId?: string) {
@@ -541,11 +571,11 @@ export async function listOccurrences(
   } catch (err) {
     console.error("refreshOccurrenceStatuses failed", err);
   }
-  // Ensure today's windows exist (Temps Today uses this path).
+  // Throttled ensure — not a full rematerialize on every Temps/Go open.
   try {
-    await materializeAllActiveSchedules(7, teamId);
+    await ensureOccurrencesForTeam(teamId, 2);
   } catch (err) {
-    console.error("materializeAllActiveSchedules failed", err);
+    console.error("ensureOccurrencesForTeam failed", err);
   }
   const rows = await prisma.walkOccurrence.findMany({
     where: {
@@ -573,7 +603,12 @@ export async function listAvailableOccurrences(teamId: string) {
   } catch (err) {
     console.error("refreshOccurrenceStatuses failed", err);
   }
-  await materializeAllActiveSchedules(7, teamId);
+  // Reuse the same throttle — do not run a second full materialize after listOccurrences.
+  try {
+    await ensureOccurrencesForTeam(teamId, 2);
+  } catch (err) {
+    console.error("ensureOccurrencesForTeam failed", err);
+  }
   const rows = await prisma.walkOccurrence.findMany({
     where: {
       teamId,
