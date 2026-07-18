@@ -1,4 +1,4 @@
-import { apiGetJson, apiPatchJson, apiPostJson, apiPutJson } from "../api";
+import { apiDeleteJson, apiGetJson, apiPatchJson, apiPostJson, apiPutJson } from "../api";
 import type { WalkItemType } from "./types";
 
 export type WalkLibraryItem = {
@@ -227,20 +227,43 @@ export function fetchWalkSchedules(teamId: string, templateId?: string) {
   return apiGetJson<{ data: WalkSchedule[] }>(`${base(teamId)}/schedules${q}`).then((r) => r.data);
 }
 
+export type WalkScheduleWriteBody = {
+  templateId?: string;
+  name?: string | null;
+  recurrence?: "ONCE" | "DAILY" | "WEEKLY";
+  daysOfWeek?: number[] | null;
+  timezone?: string;
+  assignScope?: "WORKSPACE" | "ROLE" | "TEAM" | "MEMBER" | "ANY";
+  assignRole?: string | null;
+  isActive?: boolean;
+  windows?: Array<{ startMinutes: number; dueMinutes: number; graceMinutes?: number }>;
+};
+
 export function createWalkSchedule(
   teamId: string,
-  body: {
+  body: WalkScheduleWriteBody & {
     templateId: string;
-    name?: string | null;
-    recurrence?: "ONCE" | "DAILY" | "WEEKLY";
-    daysOfWeek?: number[] | null;
-    timezone?: string;
-    assignScope?: "WORKSPACE" | "ROLE" | "TEAM" | "MEMBER" | "ANY";
-    assignRole?: string | null;
     windows: Array<{ startMinutes: number; dueMinutes: number; graceMinutes?: number }>;
   },
 ) {
   return apiPostJson<{ data: WalkSchedule }>(`${base(teamId)}/schedules`, body).then((r) => r.data);
+}
+
+export function updateWalkSchedule(
+  teamId: string,
+  scheduleId: string,
+  body: WalkScheduleWriteBody,
+) {
+  return apiPatchJson<{ data: WalkSchedule }>(
+    `${base(teamId)}/schedules/${encodeURIComponent(scheduleId)}`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function deleteWalkSchedule(teamId: string, scheduleId: string) {
+  return apiDeleteJson<{ data: { ok: boolean } }>(
+    `${base(teamId)}/schedules/${encodeURIComponent(scheduleId)}`,
+  ).then((r) => r.data);
 }
 
 export function fetchWalkOccurrences(

@@ -192,6 +192,131 @@ export async function createSchedule(input: {
   return { ok: true as const, schedule };
 }
 
+async function getOwnedSchedule(teamId: string, scheduleId: string) {
+  return prisma.walkSchedule.findFirst({
+    where: { id: scheduleId, template: { teamId } },
+    include: { windows: { orderBy: { sortOrder: "asc" } } },
+  });
+}
+
+export async function updateSchedule(
+  teamId: string,
+  scheduleId: string,
+  input: {
+    name?: string | null;
+    timezone?: string;
+    recurrence?: string;
+    daysOfWeek?: number[] | null;
+    effectiveFrom?: Date;
+    effectiveTo?: Date | null;
+    assignScope?: string;
+    assignRole?: string | null;
+    assignUserIds?: string[] | null;
+    completionMode?: string;
+    claimMode?: string;
+    managerApprovalRequired?: boolean;
+    requiredCompletionCount?: number;
+    missedBehavior?: string;
+    notifyEnabled?: boolean;
+    isActive?: boolean;
+    windows?: Array<{ startMinutes: number; dueMinutes: number; graceMinutes?: number }>;
+  },
+) {
+  const existing = await getOwnedSchedule(teamId, scheduleId);
+  if (!existing) return { error: "NOT_FOUND" as const, message: "Schedule not found" };
+
+  if (input.windows && !input.windows.length) {
+    return { error: "VALIDATION" as const, message: "Add at least one time window" };
+  }
+
+  const schedule = await prisma.$transaction(async (tx) => {
+    if (input.windows) {
+      await tx.walkScheduleWindow.deleteMany({ where: { scheduleId } });
+    }
+    return tx.walkSchedule.update({
+      where: { id: scheduleId },
+      data: {
+        ...(input.name !== undefined ? { name: input.name?.trim() || null } : {}),
+        ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
+        ...(input.recurrence !== undefined ? { recurrence: input.recurrence } : {}),
+        ...(input.daysOfWeek !== undefined
+          ? { daysOfWeek: (input.daysOfWeek ?? undefined) as Prisma.InputJsonValue | undefined }
+          : {}),
+        ...(input.effectiveFrom !== undefined ? { effectiveFrom: input.effectiveFrom } : {}),
+        ...(input.effectiveTo !== undefined ? { effectiveTo: input.effectiveTo } : {}),
+        ...(input.assignScope !== undefined ? { assignScope: input.assignScope } : {}),
+        ...(input.assignRole !== undefined ? { assignRole: input.assignRole } : {}),
+        ...(input.assignUserIds !== undefined
+          ? {
+              assignUserIds: (input.assignUserIds ?? undefined) as
+                | Prisma.InputJsonValue
+                | undefined,
+            }
+          : {}),
+        ...(input.completionMode !== undefined ? { completionMode: input.completionMode } : {}),
+        ...(input.claimMode !== undefined ? { claimMode: input.claimMode } : {}),
+        ...(input.managerApprovalRequired !== undefined
+          ? { managerApprovalRequired: input.managerApprovalRequired }
+          : {}),
+        ...(input.requiredCompletionCount !== undefined
+          ? { requiredCompletionCount: input.requiredCompletionCount }
+          : {}),
+        ...(input.missedBehavior !== undefined ? { missedBehavior: input.missedBehavior } : {}),
+        ...(input.notifyEnabled !== undefined ? { notifyEnabled: input.notifyEnabled } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        ...(input.windows
+          ? {
+              windows: {
+                create: input.windows.map((w, index) => ({
+                  startMinutes: w.startMinutes,
+                  dueMinutes: w.dueMinutes,
+                  graceMinutes: w.graceMinutes ?? 0,
+                  sortOrder: index,
+                })),
+              },
+            }
+          : {}),
+      },
+      include: { windows: { orderBy: { sortOrder: "asc" } } },
+    });
+  });
+
+  if (schedule.isActive) {
+    await materializeOccurrencesForSchedule(schedule.id, 14);
+  } else {
+    // Pause: cancel future open occurrences so Temps stops offering them.
+    await prisma.walkOccurrence.updateMany({
+      where: {
+        scheduleId: schedule.id,
+        runId: null,
+        status: { in: ["UPCOMING", "AVAILABLE"] },
+      },
+      data: { status: "CANCELLED" },
+    });
+  }
+
+  const template = await prisma.walkTemplate.findFirst({
+    where: { id: schedule.templateId, teamId },
+    select: { id: true, name: true, status: true },
+  });
+
+  return {
+    ok: true as const,
+    schedule: {
+      ...schedule,
+      template: template ?? { id: schedule.templateId, name: schedule.name ?? "Walk", status: "PUBLISHED" },
+    },
+  };
+}
+
+export async function deleteSchedule(teamId: string, scheduleId: string) {
+  const existing = await getOwnedSchedule(teamId, scheduleId);
+  if (!existing) return { error: "NOT_FOUND" as const, message: "Schedule not found" };
+
+  await prisma.walkSchedule.delete({ where: { id: scheduleId } });
+  return { ok: true as const };
+}
+
 export async function materializeOccurrencesForSchedule(scheduleId: string, daysAhead = 14) {
   const schedule = await prisma.walkSchedule.findFirst({
     where: { id: scheduleId, isActive: true },

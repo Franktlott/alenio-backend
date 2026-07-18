@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import { fetchWalkTemplates } from "../../lib/walks/api";
 import {
   createWalkSchedule,
+  deleteWalkSchedule,
   fetchWalkOccurrences,
   fetchWalkSchedules,
+  updateWalkSchedule,
   type WalkOccurrenceRow,
   type WalkSchedule,
   type WalkScheduleWindow,
@@ -13,7 +15,8 @@ import {
 import type { WalkTemplate } from "../../lib/walks/types";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
-type TabId = "all" | "active" | "draft" | "paused";
+type TabId = "all" | "active" | "paused";
+type ModalMode = "create" | "edit";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
@@ -27,7 +30,7 @@ function minutesToLabel(minutes: number) {
 }
 
 function windowLabel(w: Pick<WalkScheduleWindow, "startMinutes" | "dueMinutes">) {
-  return `${minutesToLabel(w.startMinutes)} - ${minutesToLabel(w.dueMinutes)}`;
+  return `${minutesToLabel(w.startMinutes)} – ${minutesToLabel(w.dueMinutes)}`;
 }
 
 function frequencyLabel(schedule: WalkSchedule) {
@@ -55,12 +58,8 @@ function assignLabel(schedule: WalkSchedule) {
     case "ANY":
       return "Anyone";
     default:
-      return "All Associates";
+      return "All associates";
   }
-}
-
-function statusLabel(schedule: WalkSchedule): "Active" | "Paused" {
-  return schedule.isActive ? "Active" : "Paused";
 }
 
 function nextRunLabel(schedule: WalkSchedule, occurrences: WalkOccurrenceRow[]) {
@@ -106,7 +105,6 @@ function DayTimeline({ windows }: { windows: WalkScheduleWindow[] }) {
         {windows.map((w) => {
           const start = w.startMinutes;
           let end = w.dueMinutes;
-          // Overnight windows: draw to end of day for the day chart.
           if (end <= start) end = 24 * 60;
           const left = (start / (24 * 60)) * 100;
           const width = Math.max(2.5, ((end - start) / (24 * 60)) * 100);
@@ -150,6 +148,17 @@ function minutesToTimeInput(minutes: number) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+function parseWindows(formWindows: WindowDraft[]) {
+  return formWindows
+    .map((w) => {
+      const startMinutes = timeInputToMinutes(w.start);
+      const dueMinutes = timeInputToMinutes(w.due);
+      if (startMinutes == null || dueMinutes == null) return null;
+      return { startMinutes, dueMinutes, graceMinutes: 30 };
+    })
+    .filter((w): w is { startMinutes: number; dueMinutes: number; graceMinutes: number } => !!w);
+}
+
 export function WalkSchedulesPage() {
   const { canManage, teamId } = useAlenioGoShell();
   const [tab, setTab] = useState<TabId>("active");
@@ -160,8 +169,12 @@ export function WalkSchedulesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<ModalMode | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const [formTemplateId, setFormTemplateId] = useState("");
   const [formName, setFormName] = useState("");
@@ -187,7 +200,6 @@ export function WalkSchedulesPage() {
     to.setDate(to.getDate() + 14);
     to.setHours(23, 59, 59, 999);
 
-    // Schedules are required; occurrences/templates are best-effort for next-run + create form.
     const scheduleResult = await fetchWalkSchedules(teamId).then(
       (s) => ({ ok: true as const, s }),
       (err) => ({ ok: false as const, err }),
@@ -201,13 +213,10 @@ export function WalkSchedulesPage() {
         : new Error("Could not load schedules.");
     }
     setSchedules(scheduleResult.s);
-    setSelectedId(
-      (prev) =>
-        prev ??
-        scheduleResult.s.find((row) => row.isActive)?.id ??
-        scheduleResult.s[0]?.id ??
-        null,
-    );
+    setSelectedId((prev) => {
+      if (prev && scheduleResult.s.some((row) => row.id === prev)) return prev;
+      return scheduleResult.s.find((row) => row.isActive)?.id ?? scheduleResult.s[0]?.id ?? null;
+    });
 
     const [occResult, templateResult] = await Promise.allSettled([
       fetchWalkOccurrences(teamId, { from: from.toISOString(), to: to.toISOString() }),
@@ -219,16 +228,6 @@ export function WalkSchedulesPage() {
         ? templateResult.value.filter((x) => x.status === "PUBLISHED")
         : [],
     );
-    if (occResult.status === "rejected" || templateResult.status === "rejected") {
-      const detail =
-        (occResult.status === "rejected" && occResult.reason instanceof Error
-          ? occResult.reason.message
-          : null) ||
-        (templateResult.status === "rejected" && templateResult.reason instanceof Error
-          ? templateResult.reason.message
-          : null);
-      if (detail) setError(detail);
-    }
   }, [teamId]);
 
   useEffect(() => {
@@ -247,12 +246,30 @@ export function WalkSchedulesPage() {
     };
   }, [canManage, teamId, load]);
 
+  useEffect(() => {
+    if (!menuId) return;
+    function onDoc(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuId(null);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [menuId]);
+
+  const counts = useMemo(
+    () => ({
+      all: schedules.length,
+      active: schedules.filter((s) => s.isActive).length,
+      paused: schedules.filter((s) => !s.isActive).length,
+    }),
+    [schedules],
+  );
+
   const filtered = useMemo(() => {
     if (tab === "all") return schedules;
     if (tab === "active") return schedules.filter((s) => s.isActive);
-    if (tab === "paused") return schedules.filter((s) => !s.isActive);
-    // Draft not modeled yet — keep tab for mock parity.
-    return [];
+    return schedules.filter((s) => !s.isActive);
   }, [schedules, tab]);
 
   const selected = useMemo(
@@ -260,24 +277,64 @@ export function WalkSchedulesPage() {
     [filtered, selectedId],
   );
 
+  const confirmDeleteSchedule = useMemo(
+    () => schedules.find((s) => s.id === confirmDeleteId) ?? null,
+    [schedules, confirmDeleteId],
+  );
+
   if (!canManage || !teamId) {
     return <Navigate to="/go" replace />;
   }
 
-  async function submitCreate() {
-    if (!teamId || !formTemplateId) {
-      setError("Select a published walk.");
-      return;
-    }
-    const windows = formWindows
-      .map((w) => {
-        const startMinutes = timeInputToMinutes(w.start);
-        const dueMinutes = timeInputToMinutes(w.due);
-        if (startMinutes == null || dueMinutes == null) return null;
-        return { startMinutes, dueMinutes, graceMinutes: 30 };
-      })
-      .filter((w): w is { startMinutes: number; dueMinutes: number; graceMinutes: number } => !!w);
+  function resetFormDefaults() {
+    setFormName("");
+    setFormRecurrence("DAILY");
+    setFormDays([1, 3, 5]);
+    setFormWindows([
+      { start: "06:00", due: "08:00" },
+      { start: "13:00", due: "15:00" },
+      { start: "20:00", due: "22:00" },
+    ]);
+    setFormTemplateId(templates[0]?.id ?? "");
+  }
 
+  function openCreate() {
+    resetFormDefaults();
+    setEditingId(null);
+    setModalMode("create");
+    setMenuId(null);
+  }
+
+  function openEdit(schedule: WalkSchedule) {
+    setEditingId(schedule.id);
+    setFormTemplateId(schedule.templateId);
+    setFormName(schedule.name ?? "");
+    setFormRecurrence(schedule.recurrence === "WEEKLY" ? "WEEKLY" : "DAILY");
+    setFormDays(
+      Array.isArray(schedule.daysOfWeek) && schedule.daysOfWeek.length
+        ? schedule.daysOfWeek
+        : [1, 3, 5],
+    );
+    setFormWindows(
+      schedule.windows.length
+        ? schedule.windows.map((w) => ({
+            start: minutesToTimeInput(w.startMinutes),
+            due: minutesToTimeInput(w.dueMinutes),
+          }))
+        : [{ start: "06:00", due: "08:00" }],
+    );
+    setModalMode("edit");
+    setMenuId(null);
+  }
+
+  function closeModal() {
+    setModalMode(null);
+    setEditingId(null);
+  }
+
+  async function submitModal() {
+    if (!teamId) return;
+    const windows = parseWindows(formWindows);
     if (!windows.length) {
       setError("Add at least one valid time window.");
       return;
@@ -286,21 +343,79 @@ export function WalkSchedulesPage() {
     setBusy(true);
     setError(null);
     try {
-      const created = await createWalkSchedule(teamId, {
-        templateId: formTemplateId,
+      if (modalMode === "create") {
+        if (!formTemplateId) {
+          setError("Select a published walk.");
+          return;
+        }
+        const created = await createWalkSchedule(teamId, {
+          templateId: formTemplateId,
+          name: formName.trim() || null,
+          recurrence: formRecurrence,
+          daysOfWeek: formRecurrence === "WEEKLY" ? formDays : null,
+          windows,
+        });
+        closeModal();
+        await load();
+        setSelectedId(created.id);
+        setTab("active");
+        showToast("Schedule created");
+        return;
+      }
+
+      if (!editingId) return;
+      const updated = await updateWalkSchedule(teamId, editingId, {
         name: formName.trim() || null,
         recurrence: formRecurrence,
         daysOfWeek: formRecurrence === "WEEKLY" ? formDays : null,
         windows,
       });
-      setCreateOpen(false);
-      setFormName("");
+      closeModal();
       await load();
-      setSelectedId(created.id);
-      setTab("active");
-      showToast("Schedule created");
+      setSelectedId(updated.id);
+      showToast("Schedule updated");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create schedule.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : modalMode === "edit"
+            ? "Could not update schedule."
+            : "Could not create schedule.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleActive(schedule: WalkSchedule) {
+    if (!teamId) return;
+    setMenuId(null);
+    setBusy(true);
+    setError(null);
+    try {
+      await updateWalkSchedule(teamId, schedule.id, { isActive: !schedule.isActive });
+      await load();
+      showToast(schedule.isActive ? "Schedule paused" : "Schedule resumed");
+      if (schedule.isActive) setTab("paused");
+      else setTab("active");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update schedule.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!teamId || !confirmDeleteId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteWalkSchedule(teamId, confirmDeleteId);
+      setConfirmDeleteId(null);
+      await load();
+      showToast("Schedule deleted");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete schedule.");
     } finally {
       setBusy(false);
     }
@@ -309,45 +424,43 @@ export function WalkSchedulesPage() {
   return (
     <div className="wil-shell wsch-shell" data-testid="walk-schedules-page">
       <div className="wil-page">
-        <header className="wil-header">
+        <header className="wil-header wsch-header">
           <div>
-            <h1 className="wil-title">Walk Schedules</h1>
-            <p className="wil-subtitle">Schedule when walks should be completed.</p>
+            <p className="wsch-kicker">Operations</p>
+            <h1 className="wil-title">Walk schedules</h1>
+            <p className="wil-subtitle">
+              Define when published walks open for associates, and manage active windows.
+            </p>
           </div>
           <div className="wil-header-actions">
-            <button
-              type="button"
-              className="wil-btn wil-btn--primary"
-              onClick={() => {
-                setCreateOpen(true);
-                setFormTemplateId(templates[0]?.id ?? "");
-              }}
-            >
-              + Create Schedule
+            <button type="button" className="wil-btn wil-btn--primary" onClick={openCreate}>
+              Create schedule
             </button>
           </div>
         </header>
 
-        <div className="wsch-tabs" role="tablist" aria-label="Schedule filters">
-          {(
-            [
-              ["all", "All Schedules"],
-              ["active", "Active"],
-              ["draft", "Draft"],
-              ["paused", "Paused"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              className={`wsch-tab${tab === id ? " is-active" : ""}`}
-              onClick={() => setTab(id)}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="wsch-toolbar">
+          <div className="wsch-tabs" role="tablist" aria-label="Schedule filters">
+            {(
+              [
+                ["all", "All", counts.all],
+                ["active", "Active", counts.active],
+                ["paused", "Paused", counts.paused],
+              ] as const
+            ).map(([id, label, count]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                className={`wsch-tab${tab === id ? " is-active" : ""}`}
+                onClick={() => setTab(id)}
+              >
+                {label}
+                <span className="wsch-tab-count">{count}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {toast ? <p className="wil-toast">{toast}</p> : null}
@@ -364,20 +477,22 @@ export function WalkSchedulesPage() {
                     <tr>
                       <th>Walk</th>
                       <th>Frequency</th>
-                      <th>Time Windows</th>
-                      <th>Assigned To</th>
-                      <th>Next Run</th>
+                      <th>Time windows</th>
+                      <th>Assigned to</th>
+                      <th>Next run</th>
                       <th>Status</th>
-                      <th />
+                      <th className="wsch-actions-col">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="wil-empty">
-                          {tab === "draft"
-                            ? "Draft schedules are not used yet — create an active schedule from a published walk."
-                            : "No schedules in this view. Create a schedule to open windows for associates."}
+                          {tab === "paused"
+                            ? "No paused schedules. Pause an active schedule to stop new windows."
+                            : "No schedules yet. Create a schedule from a published walk."}
                         </td>
                       </tr>
                     ) : (
@@ -392,9 +507,17 @@ export function WalkSchedulesPage() {
                             onClick={() => setSelectedId(schedule.id)}
                           >
                             <td>
-                              <strong className="wsch-walk-name">{walkName}</strong>
+                              <div className="wsch-walk-cell">
+                                <strong className="wsch-walk-name">{walkName}</strong>
+                                {schedule.name?.trim() &&
+                                schedule.name.trim() !== walkName ? (
+                                  <span className="wsch-walk-alias">{schedule.name}</span>
+                                ) : null}
+                              </div>
                             </td>
-                            <td>{frequencyLabel(schedule)}</td>
+                            <td>
+                              <span className="wsch-meta">{frequencyLabel(schedule)}</span>
+                            </td>
                             <td>
                               <div className="wsch-window-pills">
                                 {schedule.windows.map((w) => (
@@ -404,29 +527,68 @@ export function WalkSchedulesPage() {
                                 ))}
                               </div>
                             </td>
-                            <td>{assignLabel(schedule)}</td>
-                            <td>{nextRunLabel(schedule, occurrences)}</td>
+                            <td>
+                              <span className="wsch-meta">{assignLabel(schedule)}</span>
+                            </td>
+                            <td>
+                              <span className="wsch-meta">{nextRunLabel(schedule, occurrences)}</span>
+                            </td>
                             <td>
                               <span
                                 className={`wsch-status ${
                                   schedule.isActive ? "wsch-status--active" : "wsch-status--paused"
                                 }`}
                               >
-                                {statusLabel(schedule)}
+                                {schedule.isActive ? "Active" : "Paused"}
                               </span>
                             </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="wil-row-menu"
-                                aria-label={`Actions for ${walkName}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  showToast("Schedule actions — next");
-                                }}
+                            <td className="wsch-actions-col" onClick={(e) => e.stopPropagation()}>
+                              <div
+                                className="wsch-menu-wrap"
+                                ref={menuId === schedule.id ? menuRef : undefined}
                               >
-                                <IconDots />
-                              </button>
+                                <button
+                                  type="button"
+                                  className="wil-row-menu"
+                                  aria-label={`Actions for ${walkName}`}
+                                  aria-expanded={menuId === schedule.id}
+                                  disabled={busy}
+                                  onClick={() =>
+                                    setMenuId((prev) => (prev === schedule.id ? null : schedule.id))
+                                  }
+                                >
+                                  <IconDots />
+                                </button>
+                                {menuId === schedule.id ? (
+                                  <div className="wsch-row-menu" role="menu">
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => openEdit(schedule)}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => void toggleActive(schedule)}
+                                    >
+                                      {schedule.isActive ? "Pause" : "Resume"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      className="wsch-row-menu-danger"
+                                      onClick={() => {
+                                        setMenuId(null);
+                                        setConfirmDeleteId(schedule.id);
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -440,8 +602,8 @@ export function WalkSchedulesPage() {
             <section className="wsch-day-card">
               <header className="wsch-day-head">
                 <div>
-                  <h2>Time Windows per Day</h2>
-                  <p>Each time window creates a separate required occurrence.</p>
+                  <h2>Daily time windows</h2>
+                  <p>Each window creates a separate required occurrence for associates.</p>
                 </div>
                 {selected ? (
                   <span className="wsch-day-walk">
@@ -459,35 +621,52 @@ export function WalkSchedulesPage() {
         )}
       </div>
 
-      {createOpen ? (
-        <div className="wsch-modal-backdrop" role="presentation" onClick={() => setCreateOpen(false)}>
+      {modalMode ? (
+        <div className="wsch-modal-backdrop" role="presentation" onClick={closeModal}>
           <div
             className="wsch-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="wsch-create-title"
+            aria-labelledby="wsch-modal-title"
             onClick={(e) => e.stopPropagation()}
           >
             <header className="wsch-modal-head">
-              <h2 id="wsch-create-title">Create Schedule</h2>
-              <button type="button" className="wil-row-menu" onClick={() => setCreateOpen(false)} aria-label="Close">
+              <h2 id="wsch-modal-title">
+                {modalMode === "edit" ? "Edit schedule" : "Create schedule"}
+              </h2>
+              <button type="button" className="wil-row-menu" onClick={closeModal} aria-label="Close">
                 ✕
               </button>
             </header>
-            <p className="wil-subtitle">Pick a published walk and the daily windows associates must complete.</p>
+            <p className="wil-subtitle">
+              {modalMode === "edit"
+                ? "Update frequency and time windows. Future open occurrences will be refreshed."
+                : "Pick a published walk and the daily windows associates must complete."}
+            </p>
 
-            {templates.length === 0 ? (
+            {templates.length === 0 && modalMode === "create" ? (
               <p className="wil-error">Publish a walk in Walk Builder before creating a schedule.</p>
             ) : (
               <div className="wsch-form">
                 <label>
                   Walk
-                  <select value={formTemplateId} onChange={(e) => setFormTemplateId(e.target.value)}>
+                  <select
+                    value={formTemplateId}
+                    disabled={modalMode === "edit"}
+                    onChange={(e) => setFormTemplateId(e.target.value)}
+                  >
                     {templates.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name}
                       </option>
                     ))}
+                    {modalMode === "edit" &&
+                    formTemplateId &&
+                    !templates.some((t) => t.id === formTemplateId) ? (
+                      <option value={formTemplateId}>
+                        {schedules.find((s) => s.id === editingId)?.template?.name ?? "Walk"}
+                      </option>
+                    ) : null}
                   </select>
                 </label>
                 <label>
@@ -549,7 +728,9 @@ export function WalkSchedulesPage() {
                         value={w.start}
                         onChange={(e) =>
                           setFormWindows((prev) =>
-                            prev.map((row, i) => (i === index ? { ...row, start: e.target.value } : row)),
+                            prev.map((row, i) =>
+                              i === index ? { ...row, start: e.target.value } : row,
+                            ),
                           )
                         }
                       />
@@ -559,7 +740,9 @@ export function WalkSchedulesPage() {
                         value={w.due}
                         onChange={(e) =>
                           setFormWindows((prev) =>
-                            prev.map((row, i) => (i === index ? { ...row, due: e.target.value } : row)),
+                            prev.map((row, i) =>
+                              i === index ? { ...row, due: e.target.value } : row,
+                            ),
                           )
                         }
                       />
@@ -574,34 +757,73 @@ export function WalkSchedulesPage() {
                       </button>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    className="wb-linkish"
-                    onClick={() =>
-                      setFormWindows([
-                        { start: minutesToTimeInput(6 * 60), due: minutesToTimeInput(8 * 60) },
-                        { start: minutesToTimeInput(13 * 60), due: minutesToTimeInput(15 * 60) },
-                        { start: minutesToTimeInput(20 * 60), due: minutesToTimeInput(22 * 60) },
-                      ])
-                    }
-                  >
-                    Use 6–8am, 1–3pm, 8–10pm
-                  </button>
                 </div>
               </div>
             )}
 
             <footer className="wsch-modal-foot">
-              <button type="button" className="wil-btn wil-btn--secondary" onClick={() => setCreateOpen(false)}>
+              <button type="button" className="wil-btn wil-btn--secondary" onClick={closeModal}>
                 Cancel
               </button>
               <button
                 type="button"
                 className="wil-btn wil-btn--primary"
-                disabled={busy || templates.length === 0}
-                onClick={() => void submitCreate()}
+                disabled={busy || (modalMode === "create" && templates.length === 0)}
+                onClick={() => void submitModal()}
               >
-                {busy ? "Creating…" : "Create Schedule"}
+                {busy
+                  ? modalMode === "edit"
+                    ? "Saving…"
+                    : "Creating…"
+                  : modalMode === "edit"
+                    ? "Save changes"
+                    : "Create schedule"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmDeleteSchedule ? (
+        <div
+          className="wsch-modal-backdrop"
+          role="presentation"
+          onClick={() => setConfirmDeleteId(null)}
+        >
+          <div
+            className="wsch-modal wsch-modal--confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wsch-delete-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="wsch-modal-head">
+              <h2 id="wsch-delete-title">Delete schedule?</h2>
+            </header>
+            <p className="wil-subtitle">
+              This removes{" "}
+              <strong>
+                {confirmDeleteSchedule.template?.name ??
+                  confirmDeleteSchedule.name ??
+                  "this schedule"}
+              </strong>{" "}
+              and its upcoming open occurrences. Completed history on past runs is kept.
+            </p>
+            <footer className="wsch-modal-foot">
+              <button
+                type="button"
+                className="wil-btn wil-btn--secondary"
+                onClick={() => setConfirmDeleteId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="wil-btn wsch-btn-danger"
+                disabled={busy}
+                onClick={() => void confirmDelete()}
+              >
+                {busy ? "Deleting…" : "Delete schedule"}
               </button>
             </footer>
           </div>

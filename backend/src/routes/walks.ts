@@ -996,6 +996,88 @@ walksRouter.post(
   },
 );
 
+const scheduleWindowSchema = z.object({
+  startMinutes: z.number().int().min(0).max(1439),
+  dueMinutes: z.number().int().min(0).max(1439),
+  graceMinutes: z.number().int().min(0).max(24 * 60).optional(),
+});
+
+walksRouter.patch(
+  "/schedules/:scheduleId",
+  zValidator(
+    "json",
+    z.object({
+      name: z.string().max(120).optional().nullable(),
+      timezone: z.string().max(80).optional(),
+      recurrence: z.enum(["ONCE", "DAILY", "WEEKLY"]).optional(),
+      daysOfWeek: z.array(z.number().int().min(0).max(6)).optional().nullable(),
+      effectiveFrom: z.string().datetime().optional(),
+      effectiveTo: z.string().datetime().optional().nullable(),
+      assignScope: z.enum(["WORKSPACE", "ROLE", "TEAM", "MEMBER", "ANY"]).optional(),
+      assignRole: z.string().optional().nullable(),
+      assignUserIds: z.array(z.string()).optional().nullable(),
+      completionMode: z.enum(["ANY_ONE", "EVERY_ASSIGNEE"]).optional(),
+      claimMode: z.enum(["FIRST_START_OWNS", "SHARED_RESUME"]).optional(),
+      managerApprovalRequired: z.boolean().optional(),
+      requiredCompletionCount: z.number().int().min(1).optional(),
+      missedBehavior: z.enum(["MARK_MISSED", "CARRY_OPEN"]).optional(),
+      notifyEnabled: z.boolean().optional(),
+      isActive: z.boolean().optional(),
+      windows: z.array(scheduleWindowSchema).min(1).optional(),
+    }),
+  ),
+  async (c) => {
+    const teamId = c.req.param("teamId")!;
+    const scheduleId = c.req.param("scheduleId")!;
+    const uid = userId(c);
+    if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+    const gate = await assertCanManageWalks(teamId, uid);
+    if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+    const body = c.req.valid("json");
+    try {
+      const result = await withWalksSchemaRetry(() =>
+        scheduleService.updateSchedule(teamId, scheduleId, {
+          ...body,
+          effectiveFrom: body.effectiveFrom ? new Date(body.effectiveFrom) : undefined,
+          effectiveTo: body.effectiveTo === undefined ? undefined : body.effectiveTo ? new Date(body.effectiveTo) : null,
+        }),
+      );
+      if ("error" in result) {
+        return c.json(
+          { error: { message: result.message ?? result.error, code: result.error } },
+          result.error === "NOT_FOUND" ? 404 : 400,
+        );
+      }
+      return c.json({ data: result.schedule });
+    } catch (err) {
+      return prismaRouteError(c, err, "Failed to update schedule");
+    }
+  },
+);
+
+walksRouter.delete("/schedules/:scheduleId", async (c) => {
+  const teamId = c.req.param("teamId")!;
+  const scheduleId = c.req.param("scheduleId")!;
+  const uid = userId(c);
+  if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const gate = await assertCanManageWalks(teamId, uid);
+  if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+  try {
+    const result = await withWalksSchemaRetry(() =>
+      scheduleService.deleteSchedule(teamId, scheduleId),
+    );
+    if ("error" in result) {
+      return c.json(
+        { error: { message: result.message ?? result.error, code: result.error } },
+        404,
+      );
+    }
+    return c.json({ data: { ok: true } });
+  } catch (err) {
+    return prismaRouteError(c, err, "Failed to delete schedule");
+  }
+});
+
 walksRouter.get("/occurrences", async (c) => {
   const teamId = c.req.param("teamId")!;
   const uid = userId(c);
