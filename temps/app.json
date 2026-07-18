@@ -10,10 +10,22 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.lotttechnologies.aleniotemps",
+      "deploymentTarget": "16.4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSBluetoothAlwaysUsageDescription": "Alenio Temps uses Bluetooth to communicate with ThermoWorks temperature probes.",
-        "NSBluetoothPeripheralUsageDescription": "Alenio Temps uses Bluetooth to communicate with ThermoWorks temperature probes."
+        "NSBluetoothPeripheralUsageDescription": "Alenio Temps uses Bluetooth to communicate with ThermoWorks temperature probes.",
+        "UIApplicationSceneManifest": {
+          "UIApplicationSupportsMultipleScenes": false,
+          "UISceneConfigurations": {
+            "UIWindowSceneSessionRoleApplication": [
+              {
+                "UISceneConfigurationName": "Default Configuration",
+                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).SceneDelegate"
+              }
+            ]
+          }
+        }
       }
     },
     "android": {
@@ -28,13 +40,16 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "16.4"
+            "deploymentTarget": "16.4",
+            "usePrecompiledModules": false,
+            "buildReactNativeFromSource": true
           },
           "android": {
             "minSdkVersion": 24
           }
         }
       ],
+      "./plugins/withIosSceneLifecycle",
       "alenio-thermoworks"
     ],
     "icon": "../mobile/icon.png",
