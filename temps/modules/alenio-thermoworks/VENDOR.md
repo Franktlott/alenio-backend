@@ -34,6 +34,21 @@ Vendor binaries (`.aar`, `.a`, and headers under `ios/Vendor/`) are **gitignored
 
 Developers must copy the files locally from the approved SDK drop before native builds.
 
+## Phase 3A/3B — Discovery + Connection API (Temps module)
+
+Native module `AlenioThermoworks` (readings deferred to 3C):
+
+| Method / event | Notes |
+|----------------|-------|
+| `startScan()` / `stopScan()` | BLE scan; Android timeout 10s |
+| `connect(deviceId)` / `disconnect()` | Wait for ThermaLib `ready` before `connected`; iOS uses `disconectFromDevice:` |
+| `onDevices` | Filtered: Thermapen Blue (`PEN_BLUE` / `TLDeviceTypeThermaPenBlue`); provisional UNKNOWN + `/thermapen/i` |
+| `onConnection` | `connecting` / `connected` / `disconnecting` / `disconnected` + reason |
+| `onError` | Non-fatal scan/connect/permission errors |
+| Logs | Tag `AlenioThermoworks` — scan, filter, connect, disconnect, reasons |
+
+Device ids are session-scoped: `tw:{transportIdentifier}`. Manual disconnect is flagged so ProbeSession suppresses reconnect.
+
 ## License / redistribution
 
 Do not redistribute these binaries outside Alenio without ThermoWorks authorization.

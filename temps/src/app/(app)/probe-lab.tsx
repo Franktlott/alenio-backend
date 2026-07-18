@@ -1,5 +1,5 @@
 import { Redirect } from "expo-router";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -11,12 +11,11 @@ import { Muted, PrimaryButton, Screen, Title } from "../../components/ui";
 import { colors } from "../../lib/theme";
 import {
   getDiagnostics,
-  initialize as initializeThermoworks,
   isAvailable as isThermoworksAvailable,
   type ThermoworksDiagnostics,
 } from "../../probe/adapters/thermoworks/ThermoworksNative";
 import { SCENARIOS, type MockScenarioName } from "../../probe/mock";
-import { ProbeProvider, useProbe } from "../../probe/react";
+import { ProbeProvider, useProbe, type ProbeSource } from "../../probe/react";
 
 /**
  * Development-only harness for the vendor-neutral probe system.
@@ -28,7 +27,7 @@ export default function ProbeLabRoute() {
   }
 
   return (
-    <ProbeProvider>
+    <ProbeProvider initialSource="thermoworks">
       <ProbeLabScreen />
     </ProbeProvider>
   );
@@ -36,6 +35,8 @@ export default function ProbeLabRoute() {
 
 function ProbeLabScreen() {
   const {
+    source,
+    setSource,
     snapshot,
     scenarios,
     startScan,
@@ -50,16 +51,16 @@ function ProbeLabScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [scenarioName, setScenarioName] = useState<MockScenarioName>(getScenarioName());
   const [twDiag, setTwDiag] = useState<ThermoworksDiagnostics | null>(null);
-  const [twBusy, setTwBusy] = useState(false);
-
-  const refreshThermoworks = useCallback(async () => {
-    const diag = await getDiagnostics();
-    setTwDiag(diag);
-  }, []);
 
   useEffect(() => {
-    void refreshThermoworks();
-  }, [refreshThermoworks]);
+    void getDiagnostics().then(setTwDiag);
+  }, [source, snapshot.connectionState, snapshot.discovered.length]);
+
+  useEffect(() => {
+    setSelectedId(null);
+    setMessage(`Source: ${source}`);
+    setScenarioName(getScenarioName());
+  }, [source, getScenarioName]);
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(true);
@@ -82,77 +83,79 @@ function ProbeLabScreen() {
     void startScan().catch(() => undefined);
   }
 
-  const reading = snapshot.latestReading;
+  function onSource(next: ProbeSource) {
+    setSource(next);
+  }
 
   return (
     <Screen style={styles.flex}>
       <ScrollView contentContainerStyle={styles.content} testID="probe-lab-screen">
         <Title>Probe Lab</Title>
-        <Muted>Dev-only mock probe harness. Canonical values are Celsius.</Muted>
+        <Muted>
+          Phase 3B: ThermoWorks scan + connect/disconnect via ProbeSession. No live readings yet.
+          Manual disconnect suppresses reconnect.
+        </Muted>
 
-        <Section label="ThermoWorks native (Phase 2)">
-          <Muted>
-            Diagnostics only — no scan/connect. Requires a dev-client build with vendored
-            ThermaLib binaries.
-          </Muted>
-          <KV k="js isAvailable()" v={isThermoworksAvailable() ? "yes" : "no"} />
-          <KV k="native available" v={twDiag ? (twDiag.available ? "yes" : "no") : "…"} />
-          <KV k="initialized" v={twDiag ? (twDiag.initialized ? "yes" : "no") : "…"} />
-          <KV k="sdkVersion" v={twDiag?.sdkVersion ?? "—"} />
-          <KV
-            k="bluetoothAvailable"
-            v={twDiag ? (twDiag.bluetoothAvailable ? "yes" : "no") : "…"}
-          />
-          <KV k="platform" v={twDiag?.platform ?? "—"} />
-          <KV k="error" v={twDiag?.error ?? "—"} />
-          <PrimaryButton
-            label="Initialize ThermaLib"
-            disabled={twBusy}
-            loading={twBusy}
-            onPress={() => {
-              setTwBusy(true);
-              void initializeThermoworks()
-                .then(async (result) => {
-                  setMessage(
-                    result.ok
-                      ? `ThermaLib initialized (${result.sdkVersion})`
-                      : result.error ?? "Initialize failed",
-                  );
-                  await refreshThermoworks();
-                })
-                .finally(() => setTwBusy(false));
-            }}
-          />
-          <PrimaryButton
-            label="Refresh diagnostics"
-            disabled={twBusy}
-            onPress={() => {
-              setTwBusy(true);
-              void refreshThermoworks().finally(() => setTwBusy(false));
-            }}
-          />
-        </Section>
-
-        <Section label="Scenario">
+        <Section label="Source">
           <View style={styles.chipRow}>
-            {scenarios.map((name) => {
-              const active = name === scenarioName;
+            {(["thermoworks", "mock"] as const).map((name) => {
+              const active = source === name;
               return (
                 <Pressable
                   key={name}
-                  testID={`scenario-${name}`}
-                  onPress={() => onScenario(name)}
+                  testID={`source-${name}`}
+                  onPress={() => onSource(name)}
                   style={[styles.chip, active && styles.chipActive]}
                 >
                   <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                    {SCENARIOS[name].label}
+                    {name === "thermoworks" ? "ThermoWorks" : "Mock"}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
-          <Text style={styles.hint}>{SCENARIOS[scenarioName].description}</Text>
         </Section>
+
+        {source === "thermoworks" ? (
+          <Section label="ThermoWorks native">
+            <Muted>
+              Power on Thermapen ONE Blue, Start scan, select device, Connect. Check Xcode for
+              [AlenioThermoworks] logs.
+            </Muted>
+            <KV k="js isAvailable()" v={isThermoworksAvailable() ? "yes" : "no"} />
+            <KV k="native available" v={twDiag ? (twDiag.available ? "yes" : "no") : "…"} />
+            <KV k="initialized" v={twDiag ? (twDiag.initialized ? "yes" : "no") : "…"} />
+            <KV k="sdkVersion" v={twDiag?.sdkVersion ?? "—"} />
+            <KV
+              k="bluetoothAvailable"
+              v={twDiag ? (twDiag.bluetoothAvailable ? "yes" : "no") : "…"}
+            />
+            <KV k="native connectedDeviceId" v={twDiag?.connectedDeviceId ?? "—"} />
+            <KV k="platform" v={twDiag?.platform ?? "—"} />
+            <KV k="error" v={twDiag?.error ?? "—"} />
+          </Section>
+        ) : (
+          <Section label="Mock scenario">
+            <View style={styles.chipRow}>
+              {scenarios.map((name) => {
+                const active = name === scenarioName;
+                return (
+                  <Pressable
+                    key={name}
+                    testID={`scenario-${name}`}
+                    onPress={() => onScenario(name)}
+                    style={[styles.chip, active && styles.chipActive]}
+                  >
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                      {SCENARIOS[name].label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.hint}>{SCENARIOS[scenarioName].description}</Text>
+          </Section>
+        )}
 
         <Section label="Actions">
           <PrimaryButton
@@ -168,9 +171,7 @@ function ProbeLabScreen() {
           <PrimaryButton
             label="Connect selected"
             disabled={busy || !selectedId}
-            onPress={() =>
-              void run("Connected", () => connect(selectedId!))
-            }
+            onPress={() => void run("Connect requested", () => connect(selectedId!))}
           />
           <PrimaryButton
             label="Manual disconnect"
@@ -181,7 +182,7 @@ function ProbeLabScreen() {
 
         <Section label="Discovered">
           {snapshot.discovered.length === 0 ? (
-            <Text style={styles.hint}>No probes (scan or pick a scenario).</Text>
+            <Text style={styles.hint}>No probes yet. Start scan (and power on the Thermapen).</Text>
           ) : (
             snapshot.discovered.map((probe) => {
               const selected = selectedId === probe.id;
@@ -194,15 +195,19 @@ function ProbeLabScreen() {
                 >
                   <Text style={styles.probeName}>{probe.name}</Text>
                   <Text style={styles.hint}>{probe.id}</Text>
+                  {probe.rssi != null ? (
+                    <Text style={styles.hint}>rssi={probe.rssi}</Text>
+                  ) : null}
                 </Pressable>
               );
             })
           )}
         </Section>
 
-        <Section label="State">
+        <Section label="Connection status">
           <KV k="connection" v={snapshot.connectionState} />
           <KV k="connectedProbeId" v={snapshot.connectedProbeId ?? "—"} />
+          <KV k="selectedId" v={selectedId ?? "—"} />
           <KV k="reconnectAttempt" v={String(snapshot.reconnectAttempt)} />
           <KV
             k="reconnectSuppressed"
@@ -219,21 +224,31 @@ function ProbeLabScreen() {
           {message ? <KV k="lastAction" v={message} /> : null}
         </Section>
 
-        <Section label="Latest reading (°C)">
-          {reading ? (
-            <>
-              <KV k="status" v={reading.status} />
-              <KV
-                k="celsius"
-                v={reading.celsius == null ? "null" : String(reading.celsius)}
-              />
-              <KV k="measuredAt" v={new Date(reading.measuredAt).toISOString()} />
-              <KV k="sequence" v={String(reading.sequence ?? "—")} />
-            </>
-          ) : (
-            <Text style={styles.hint}>No reading yet.</Text>
-          )}
-        </Section>
+        {source === "mock" ? (
+          <Section label="Mock latest reading (°C)">
+            {snapshot.latestReading ? (
+              <>
+                <KV k="status" v={snapshot.latestReading.status} />
+                <KV
+                  k="celsius"
+                  v={
+                    snapshot.latestReading.celsius == null
+                      ? "null"
+                      : String(snapshot.latestReading.celsius)
+                  }
+                />
+              </>
+            ) : (
+              <Text style={styles.hint}>No reading yet.</Text>
+            )}
+          </Section>
+        ) : (
+          <Section label="Readings">
+            <Text style={styles.hint}>
+              Live temperatures arrive in Phase 3C. Connection-only in 3B.
+            </Text>
+          </Section>
+        )}
       </ScrollView>
     </Screen>
   );
