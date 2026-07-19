@@ -46,7 +46,34 @@ export async function publishWalkTemplate(teamId: string, templateId: string, us
     return { error: "ARCHIVED" as const, message: "Archived walks cannot be published" };
   }
 
-  const serialized = serializeWalkTemplate(row, { includeItemsLoose: true });
+  // Pin placements to current library versions so failure procedures / config are current.
+  const placements = await prisma.walkTemplatePlacement.findMany({
+    where: { templateId },
+    select: {
+      id: true,
+      libraryItemVersionId: true,
+      libraryItem: { select: { id: true, currentVersion: true, versions: { select: { id: true, version: true } } } },
+    },
+  });
+  for (const placement of placements) {
+    const current = placement.libraryItem.versions.find(
+      (v) => v.version === placement.libraryItem.currentVersion,
+    );
+    if (current && current.id !== placement.libraryItemVersionId) {
+      await prisma.walkTemplatePlacement.update({
+        where: { id: placement.id },
+        data: { libraryItemVersionId: current.id },
+      });
+    }
+  }
+
+  const fresh = await prisma.walkTemplate.findFirst({
+    where: { id: templateId, teamId },
+    include: templateInclude,
+  });
+  if (!fresh) return { error: "NOT_FOUND" as const };
+
+  const serialized = serializeWalkTemplate(fresh, { includeItemsLoose: true });
   type AnyItem = Parameters<typeof asSnapshotItem>[0];
   const flat: AnyItem[] = [];
   for (const section of serialized.sections) {
@@ -61,7 +88,8 @@ export async function publishWalkTemplate(teamId: string, templateId: string, us
     return { error: "EMPTY_WALK" as const, message: "Add at least one item before publishing" };
   }
 
-  const nextVersion = row.status === "PUBLISHED" ? row.version + 1 : Math.max(1, row.version);
+  const nextVersion =
+    fresh.status === "PUBLISHED" ? fresh.version + 1 : Math.max(1, fresh.version);
 
   const snapshot = {
     id: serialized.id,

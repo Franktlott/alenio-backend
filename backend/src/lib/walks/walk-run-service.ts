@@ -54,6 +54,58 @@ function isAssociateCorrectiveAction(action: {
   return correctiveBranch(action) !== "if_pass";
 }
 
+function isFirstFailureAction(action: { config?: Record<string, unknown> | null }): boolean {
+  const branch = correctiveBranch(action);
+  return branch === "first_failure" || branch == null;
+}
+
+function isIfFailAction(action: { config?: Record<string, unknown> | null }): boolean {
+  return correctiveBranch(action) === "if_fail";
+}
+
+function responseRetestCount(response: unknown): number {
+  if (!response || typeof response !== "object") return 0;
+  const count = (response as { retestCount?: unknown }).retestCount;
+  return typeof count === "number" && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+}
+
+async function upsertPendingCorrectiveResults(
+  itemResponseId: string,
+  actions: NonNullable<SnapshotItem["correctiveActions"]>,
+) {
+  for (const action of actions) {
+    await prisma.walkCorrectiveActionResult.upsert({
+      where: {
+        itemResponseId_correctiveActionId: {
+          itemResponseId,
+          correctiveActionId: action.id,
+        },
+      },
+      create: {
+        itemResponseId,
+        correctiveActionId: action.id,
+        status: "PENDING",
+      },
+      update: {},
+    });
+  }
+}
+
+async function skipPendingCorrectiveResults(
+  itemResponseId: string,
+  actionIds: string[],
+) {
+  if (actionIds.length === 0) return;
+  await prisma.walkCorrectiveActionResult.updateMany({
+    where: {
+      itemResponseId,
+      correctiveActionId: { in: actionIds },
+      status: "PENDING",
+    },
+    data: { status: "SKIPPED", completedAt: new Date() },
+  });
+}
+
 const runResponseInclude = {
   responses: {
     include: { correctiveActionResults: true },
@@ -225,6 +277,11 @@ export function serializeWalkRun(run: {
                       action.blocksCompletion ||
                       action.actionType === "BLOCK_COMPLETION",
                   );
+                  const branch = correctiveBranch(action);
+                  // Outcome steps stay locked until the backend opens that phase.
+                  const status =
+                    result?.status ??
+                    (branch === "if_fail" ? "LOCKED" : "PENDING");
                   return {
                     id: action.id,
                     title: action.title,
@@ -236,9 +293,9 @@ export function serializeWalkRun(run: {
                         action.actionType === "BLOCK_COMPLETION" ||
                         required,
                     ),
-                    branch: correctiveBranch(action),
+                    branch,
                     config: action.config ?? null,
-                    status: result?.status ?? "PENDING",
+                    status,
                     completedAt: result?.completedAt?.toISOString() ?? null,
                   };
                 }),
@@ -462,10 +519,37 @@ export async function submitWalkItemResponse(input: {
       : null);
 
   const existing = run.responses.find((r) => r.itemId === input.itemId);
-  const failed = status === "FAIL" || status === "NEEDS_ACTION";
+  const actions = item.correctiveActions ?? [];
+  const firstFailureActions = actions.filter(isFirstFailureAction);
+  const ifFailActions = actions.filter(isIfFailAction);
+  const hasProcedure = firstFailureActions.length > 0 || ifFailActions.length > 0;
+  const requireRetest = Boolean(
+    item.config && (item.config as { requireRetestOnFailure?: unknown }).requireRetestOnFailure,
+  );
+  const retestCount = responseRetestCount(parsedResponse.data);
+  const isRetest = retestCount >= 1;
+
+  let nextStatus: WalkItemResponseStatus = status;
+  let failed = status === "FAIL" || status === "NEEDS_ACTION";
+
+  if (failed && hasProcedure && !isRetest) {
+    // First failure → open 1st-failure steps only.
+    nextStatus = "NEEDS_ACTION";
+  } else if (isRetest && status === "PASS") {
+    // Retemp passed → procedure complete; skip unused if-fail steps.
+    nextStatus = "RESOLVED";
+    failed = false;
+  } else if (isRetest && status === "FAIL" && ifFailActions.length > 0) {
+    // Retemp failed → open 2nd-failure steps.
+    nextStatus = "NEEDS_ACTION";
+    failed = true;
+  } else if (failed && hasProcedure) {
+    nextStatus = "NEEDS_ACTION";
+  }
+
   const data = {
     itemType: item.type,
-    status: failed && (item.correctiveActions?.length ?? 0) > 0 ? ("NEEDS_ACTION" as const) : status,
+    status: nextStatus,
     response: parsedResponse.data as Prisma.InputJsonValue,
     failed,
     notes: input.notes ?? null,
@@ -488,24 +572,18 @@ export async function submitWalkItemResponse(input: {
         })
       ).id;
 
-  if (failed && item.correctiveActions?.length) {
-    for (const action of item.correctiveActions) {
-      if (!isAssociateCorrectiveAction(action)) continue;
-      await prisma.walkCorrectiveActionResult.upsert({
-        where: {
-          itemResponseId_correctiveActionId: {
-            itemResponseId,
-            correctiveActionId: action.id,
-          },
-        },
-        create: {
-          itemResponseId,
-          correctiveActionId: action.id,
-          status: "PENDING",
-        },
-        update: {},
-      });
-    }
+  if (!isRetest && status === "FAIL" && firstFailureActions.length > 0) {
+    await upsertPendingCorrectiveResults(itemResponseId, firstFailureActions);
+  } else if (isRetest && status === "FAIL" && ifFailActions.length > 0) {
+    await upsertPendingCorrectiveResults(itemResponseId, ifFailActions);
+  } else if (isRetest && status === "PASS") {
+    await skipPendingCorrectiveResults(
+      itemResponseId,
+      ifFailActions.map((a) => a.id),
+    );
+  } else if (!requireRetest && status === "FAIL" && firstFailureActions.length === 0 && ifFailActions.length > 0) {
+    // Legacy / misconfigured: only if_fail steps exist and retest is off.
+    await upsertPendingCorrectiveResults(itemResponseId, ifFailActions);
   }
 
   const updated = await getWalkRun(input.teamId, input.runId);
@@ -547,10 +625,22 @@ export async function completeCorrectiveAction(input: {
     where: { itemResponseId: itemResponse.id, status: "PENDING" },
   });
   if (pending === 0) {
-    await prisma.walkItemResponse.update({
-      where: { id: itemResponse.id },
-      data: { status: "RESOLVED", failed: false },
-    });
+    const snapshot = parseSnapshot(run.templateSnapshot);
+    const item = flattenSnapshotItems(snapshot).find((i) => i.id === input.itemId);
+    const requireRetest = Boolean(
+      item?.config &&
+        (item.config as { requireRetestOnFailure?: unknown }).requireRetestOnFailure,
+    );
+    const retestCount = responseRetestCount(itemResponse.response);
+    const awaitingRetemp = requireRetest && retestCount < 1;
+
+    if (!awaitingRetemp) {
+      await prisma.walkItemResponse.update({
+        where: { id: itemResponse.id },
+        data: { status: "RESOLVED", failed: false },
+      });
+    }
+    // If retemp is still required, keep NEEDS_ACTION so the associate must retest.
   }
 
   const updated = await getWalkRun(input.teamId, input.runId);
@@ -626,6 +716,12 @@ export async function completeWalkRun(teamId: string, runId: string) {
           message: `Complete corrective action: ${ca.correctiveAction.title}`,
         };
       }
+    }
+    if (resp.status === "NEEDS_ACTION") {
+      return {
+        error: "CORRECTIVE_BLOCKED" as const,
+        message: "Finish the failure procedure (including retemp if required) before completing the walk",
+      };
     }
   }
 

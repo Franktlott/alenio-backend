@@ -141,8 +141,12 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
         { response, photoUrls: photoUrls ?? null, completedBy: "Floor associate" },
       );
       const saved = run.items.find((i) => i.id === itemId);
-      // Stay on the item until all failure-procedure steps are finished.
-      if (saved?.response?.status === "NEEDS_ACTION") {
+      const actions = saved?.response?.correctiveActions ?? [];
+      const procedureOpen =
+        saved?.response?.status === "NEEDS_ACTION" ||
+        actions.some((a) => a.status === "PENDING");
+      // Stay on the item until failure-procedure steps / retemp are finished.
+      if (procedureOpen) {
         setScreen({ kind: "run", run, index: screen.index });
         return;
       }
@@ -185,11 +189,21 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
       );
       const saved = run.items.find((i) => i.id === itemId);
       const actions = saved?.response?.correctiveActions ?? [];
+      const pendingLeft = actions.some((a) => a.status === "PENDING");
+      const stillNeedsRetemp =
+        saved?.response?.status === "NEEDS_ACTION" &&
+        Boolean(saved.config?.requireRetestOnFailure) &&
+        !pendingLeft;
       const allDone =
-        saved?.response?.status === "RESOLVED" ||
-        (actions.length > 0 && actions.every((a) => a.status === "COMPLETED"));
+        !pendingLeft &&
+        !stillNeedsRetemp &&
+        (saved?.response?.status === "RESOLVED" ||
+          saved?.response?.status === "PASS" ||
+          (actions.length > 0 &&
+            actions
+              .filter((a) => a.status !== "LOCKED" && a.status !== "SKIPPED")
+              .every((a) => a.status === "COMPLETED")));
       if (allDone) {
-        // After 1st + 2nd failure steps are complete, advance to the next item.
         const nextIndex = Math.min(screen.index + 1, Math.max(run.items.length - 1, 0));
         setScreen({ kind: "run", run, index: nextIndex });
         return;
@@ -515,7 +529,10 @@ function CorrectivePhaseCard({
   lockedHint?: string;
   onComplete: (actionId: string) => void;
 }) {
-  const remaining = actions.filter((a) => a.status !== "COMPLETED").length;
+  const actionable = actions.filter(
+    (a) => a.status !== "LOCKED" && a.status !== "SKIPPED",
+  );
+  const remaining = actionable.filter((a) => a.status === "PENDING").length;
   return (
     <div
       style={{
@@ -536,7 +553,11 @@ function CorrectivePhaseCard({
       >
         <p style={{ margin: 0, fontWeight: 750, color: "#b91c1c" }}>{title}</p>
         <span style={{ fontSize: "0.75rem", fontWeight: 650, color: "#64748b" }}>
-          {remaining === 0 ? "All done" : `${remaining} left`}
+          {!unlocked
+            ? "Locked"
+            : remaining === 0
+              ? "All done"
+              : `${remaining} left`}
         </span>
       </div>
       {!unlocked && lockedHint ? (
@@ -544,11 +565,11 @@ function CorrectivePhaseCard({
           {lockedHint}
         </p>
       ) : null}
-      {actions.map((action, index) => (
+      {(unlocked ? actionable : actions).map((action, index) => (
         <div
           key={action.id}
           style={{
-            marginBottom: index === actions.length - 1 ? 0 : "0.65rem",
+            marginBottom: index === (unlocked ? actionable : actions).length - 1 ? 0 : "0.65rem",
             paddingTop: index === 0 ? 0 : "0.55rem",
             borderTop: index === 0 ? undefined : "1px solid #fee2e2",
           }}
@@ -563,6 +584,10 @@ function CorrectivePhaseCard({
           ) : null}
           {action.status === "COMPLETED" ? (
             <span style={{ color: "#047857", fontWeight: 650 }}>Done</span>
+          ) : action.status === "LOCKED" || action.status === "SKIPPED" ? (
+            <span style={{ color: "#94a3b8", fontWeight: 650 }}>
+              {action.status === "SKIPPED" ? "Skipped" : "Locked"}
+            </span>
           ) : (
             <button
               type="button"
@@ -605,7 +630,8 @@ function WalkItemPanel({
   );
   const secondFailure = corrective.filter((a) => a.branch === "if_fail");
   const firstFailureDone =
-    firstFailure.length === 0 || firstFailure.every((a) => a.status === "COMPLETED");
+    firstFailure.length === 0 ||
+    firstFailure.every((a) => a.status === "COMPLETED" || a.status === "SKIPPED");
   const requireRetest = Boolean(config.requireRetestOnFailure);
   const retestGuidance =
     typeof config.retestGuidance === "string" ? config.retestGuidance.trim() : "";
@@ -616,16 +642,23 @@ function WalkItemPanel({
   const retestCount =
     typeof responsePayload?.retestCount === "number" ? responsePayload.retestCount : 0;
   const retempDone = !requireRetest || retestCount >= 1;
+  const retempFailed =
+    retempDone &&
+    (item.response?.status === "NEEDS_ACTION" || item.response?.failed === true) &&
+    secondFailure.some((a) => a.status === "PENDING" || a.status === "COMPLETED");
   const showRetemp =
     Boolean(requireRetest) &&
     firstFailureDone &&
-    (item.response?.status === "NEEDS_ACTION" ||
-      corrective.some((a) => a.status !== "COMPLETED")) &&
+    item.response?.status === "NEEDS_ACTION" &&
     !retempDone;
-  const showSecondFailure = secondFailure.length > 0 && firstFailureDone && retempDone;
+  const showSecondFailure =
+    secondFailure.length > 0 &&
+    firstFailureDone &&
+    retempDone &&
+    (retempFailed || secondFailure.some((a) => a.status === "PENDING" || a.status === "COMPLETED"));
   const needsFailureProcedure =
     item.response?.status === "NEEDS_ACTION" ||
-    corrective.some((a) => a.status !== "COMPLETED");
+    corrective.some((a) => a.status === "PENDING");
 
   return (
     <div className="go-kiosk-walks-form-panel">
@@ -680,16 +713,19 @@ function WalkItemPanel({
               />
             </div>
           ) : null}
-          {secondFailure.length > 0 ? (
+          {secondFailure.some((a) => a.status !== "LOCKED" && a.status !== "SKIPPED") ||
+          (requireRetest && secondFailure.length > 0) ? (
             <CorrectivePhaseCard
               title="2nd Failure — complete all steps"
-              actions={secondFailure}
+              actions={secondFailure.filter((a) => a.status !== "SKIPPED")}
               busy={busy}
               unlocked={showSecondFailure}
               lockedHint={
                 requireRetest && !retempDone
                   ? "Complete the retemp above before these unlock."
-                  : "Finish every 1st failure step before these unlock."
+                  : requireRetest && retempDone && !retempFailed
+                    ? "Only needed if the retemp fails."
+                    : "Finish every 1st failure step before these unlock."
               }
               onComplete={(actionId) => onCompleteCorrective(item.id, actionId)}
             />
