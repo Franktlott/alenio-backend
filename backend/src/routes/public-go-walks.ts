@@ -325,7 +325,12 @@ publicGoWalksRouter.post(
       });
       if ("error" in result) {
         return c.json(
-          { error: { message: result.error, code: result.error } },
+          {
+            error: {
+              message: ("message" in result && result.message) || result.error,
+              code: result.error,
+            },
+          },
           result.error === "NOT_FOUND" ||
             result.error === "ITEM_NOT_FOUND" ||
             result.error === "ACTION_NOT_FOUND"
@@ -336,6 +341,51 @@ publicGoWalksRouter.post(
       return c.json({ data: result.run });
     } catch (err) {
       return prismaRouteError(c, err, "Failed to complete corrective action");
+    }
+  },
+);
+
+// POST /api/public/go/walks/runs/:runId/items/:itemId/reset
+publicGoWalksRouter.post(
+  "/runs/:runId/items/:itemId/reset",
+  zValidator(
+    "json",
+    z.object({
+      hubToken: z.string().min(1),
+      deviceId: z.string().min(8).max(128),
+    }),
+  ),
+  async (c) => {
+    const runId = c.req.param("runId")!;
+    const itemId = c.req.param("itemId")!;
+    const body = c.req.valid("json");
+    const resolved = await resolveHubTeam(body.hubToken, body.deviceId);
+    if ("error" in resolved) {
+      if (resolved.error === "DEVICE_UNLINKED") {
+        return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      }
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    try {
+      const result = await walkRunService.resetWalkItemResponse({
+        teamId: resolved.team.id,
+        runId,
+        itemId,
+      });
+      if ("error" in result) {
+        return c.json(
+          {
+            error: {
+              message: ("message" in result && result.message) || result.error,
+              code: result.error,
+            },
+          },
+          result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND" ? 404 : 400,
+        );
+      }
+      return c.json({ data: result.run });
+    } catch (err) {
+      return prismaRouteError(c, err, "Failed to reset walk item");
     }
   },
 );

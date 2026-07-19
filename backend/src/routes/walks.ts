@@ -565,8 +565,15 @@ walksRouter.post(
       });
       if ("error" in result) {
         return c.json(
-          { error: { message: result.error, code: result.error } },
-          result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND" || result.error === "ACTION_NOT_FOUND"
+          {
+            error: {
+              message: ("message" in result && result.message) || result.error,
+              code: result.error,
+            },
+          },
+          result.error === "NOT_FOUND" ||
+            result.error === "ITEM_NOT_FOUND" ||
+            result.error === "ACTION_NOT_FOUND"
             ? 404
             : 400,
         );
@@ -577,6 +584,33 @@ walksRouter.post(
     }
   },
 );
+
+walksRouter.post("/runs/:runId/items/:itemId/reset", async (c) => {
+  const teamId = c.req.param("teamId")!;
+  const runId = c.req.param("runId")!;
+  const itemId = c.req.param("itemId")!;
+  const uid = userId(c);
+  if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const gate = await assertCanViewWalks(teamId, uid);
+  if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+  try {
+    const result = await walkRunService.resetWalkItemResponse({ teamId, runId, itemId });
+    if ("error" in result) {
+      return c.json(
+        {
+          error: {
+            message: ("message" in result && result.message) || result.error,
+            code: result.error,
+          },
+        },
+        result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND" ? 404 : 400,
+      );
+    }
+    return c.json({ data: result.run });
+  } catch (err) {
+    return prismaRouteError(c, err, "Failed to reset walk item");
+  }
+});
 
 // ── Item Library ────────────────────────────────────────────────────────────
 

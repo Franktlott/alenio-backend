@@ -532,7 +532,12 @@ function CorrectivePhaseCard({
   const actionable = actions.filter(
     (a) => a.status !== "LOCKED" && a.status !== "SKIPPED",
   );
-  const remaining = actionable.filter((a) => a.status === "PENDING").length;
+  const completedCount = actionable.filter((a) => a.status === "COMPLETED").length;
+  const current = actionable.find((a) => a.status === "PENDING") ?? null;
+  const currentIndex = current ? actionable.findIndex((a) => a.id === current.id) : -1;
+  const total = actionable.length;
+  if (total === 0) return null;
+
   return (
     <div
       style={{
@@ -555,9 +560,9 @@ function CorrectivePhaseCard({
         <span style={{ fontSize: "0.75rem", fontWeight: 650, color: "#64748b" }}>
           {!unlocked
             ? "Locked"
-            : remaining === 0
+            : completedCount >= total
               ? "All done"
-              : `${remaining} left`}
+              : `Step ${Math.max(currentIndex + 1, 1)} of ${total}`}
         </span>
       </div>
       {!unlocked && lockedHint ? (
@@ -565,42 +570,41 @@ function CorrectivePhaseCard({
           {lockedHint}
         </p>
       ) : null}
-      {(unlocked ? actionable : actions).map((action, index) => (
-        <div
-          key={action.id}
-          style={{
-            marginBottom: index === (unlocked ? actionable : actions).length - 1 ? 0 : "0.65rem",
-            paddingTop: index === 0 ? 0 : "0.55rem",
-            borderTop: index === 0 ? undefined : "1px solid #fee2e2",
-          }}
-        >
-          <strong>
-            {index + 1}. {action.title}
-          </strong>
-          {action.instructions && action.instructions !== action.title ? (
-            <p className="enterprise-muted" style={{ margin: "0.25rem 0" }}>
-              {action.instructions}
+      {unlocked && current ? (
+        <div>
+          <p
+            style={{
+              margin: "0 0 0.25rem",
+              fontSize: "0.7rem",
+              fontWeight: 750,
+              letterSpacing: "0.04em",
+              color: "#0f766e",
+            }}
+          >
+            STEP {currentIndex + 1} OF {total}
+          </p>
+          <strong style={{ fontSize: "1.05rem" }}>{current.title}</strong>
+          {current.instructions && current.instructions !== current.title ? (
+            <p className="enterprise-muted" style={{ margin: "0.35rem 0 0" }}>
+              {current.instructions}
             </p>
           ) : null}
-          {action.status === "COMPLETED" ? (
-            <span style={{ color: "#047857", fontWeight: 650 }}>Done</span>
-          ) : action.status === "LOCKED" || action.status === "SKIPPED" ? (
-            <span style={{ color: "#94a3b8", fontWeight: 650 }}>
-              {action.status === "SKIPPED" ? "Skipped" : "Locked"}
-            </span>
-          ) : (
-            <button
-              type="button"
-              className="go-testcode-btn"
-              disabled={busy || !unlocked}
-              onClick={() => onComplete(action.id)}
-              style={{ marginTop: "0.35rem" }}
-            >
-              Mark complete
-            </button>
-          )}
+          <button
+            type="button"
+            className="go-testcode-btn"
+            disabled={busy}
+            onClick={() => onComplete(current.id)}
+            style={{ marginTop: "0.75rem" }}
+          >
+            Mark complete
+          </button>
         </div>
-      ))}
+      ) : null}
+      {unlocked && !current && completedCount >= total ? (
+        <p style={{ margin: 0, color: "#047857", fontWeight: 650 }}>
+          All steps in this phase are complete.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -656,6 +660,8 @@ function WalkItemPanel({
     firstFailureDone &&
     retempDone &&
     (retempFailed || secondFailure.some((a) => a.status === "PENDING" || a.status === "COMPLETED"));
+  const showFirstFailurePhase =
+    Boolean(firstFailure.length) && !firstFailureDone;
   const needsFailureProcedure =
     item.response?.status === "NEEDS_ACTION" ||
     corrective.some((a) => a.status === "PENDING");
@@ -679,13 +685,15 @@ function WalkItemPanel({
 
       {needsFailureProcedure && corrective.length > 0 ? (
         <div style={{ marginTop: "1rem", display: "grid", gap: "0.75rem" }}>
-          <CorrectivePhaseCard
-            title="1st Failure — complete all steps"
-            actions={firstFailure.length ? firstFailure : corrective}
-            busy={busy}
-            unlocked
-            onComplete={(actionId) => onCompleteCorrective(item.id, actionId)}
-          />
+          {showFirstFailurePhase ? (
+            <CorrectivePhaseCard
+              title="1st Failure"
+              actions={firstFailure.length ? firstFailure : corrective}
+              busy={busy}
+              unlocked
+              onComplete={(actionId) => onCompleteCorrective(item.id, actionId)}
+            />
+          ) : null}
           {showRetemp && item.type === "TEMPERATURE" ? (
             <div
               style={{
@@ -713,25 +721,17 @@ function WalkItemPanel({
               />
             </div>
           ) : null}
-          {secondFailure.some((a) => a.status !== "LOCKED" && a.status !== "SKIPPED") ||
-          (requireRetest && secondFailure.length > 0) ? (
+          {showSecondFailure ? (
             <CorrectivePhaseCard
-              title="2nd Failure — complete all steps"
+              title="2nd Failure"
               actions={secondFailure.filter((a) => a.status !== "SKIPPED")}
               busy={busy}
-              unlocked={showSecondFailure}
-              lockedHint={
-                requireRetest && !retempDone
-                  ? "Complete the retemp above before these unlock."
-                  : requireRetest && retempDone && !retempFailed
-                    ? "Only needed if the retemp fails."
-                    : "Finish every 1st failure step before these unlock."
-              }
+              unlocked
               onComplete={(actionId) => onCompleteCorrective(item.id, actionId)}
             />
           ) : null}
           <p className="enterprise-muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-            Complete every step above to continue to the next item.
+            Complete one step at a time, in order, to continue.
           </p>
         </div>
       ) : null}

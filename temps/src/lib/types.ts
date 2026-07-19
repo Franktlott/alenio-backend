@@ -21,6 +21,22 @@ export type TemperatureConfig = {
   unit?: "F" | "C";
   allowManualEntry?: boolean;
   allowBluetoothProbe?: boolean;
+  requireRetestOnFailure?: boolean;
+  retestGuidance?: string | null;
+  maximumRetests?: number;
+};
+
+export type WalkRunCorrectiveAction = {
+  id: string;
+  title: string;
+  actionType: string;
+  instructions: string | null;
+  required?: boolean;
+  blocksCompletion: boolean;
+  branch?: "first_failure" | "if_pass" | "if_fail" | null;
+  config?: Record<string, unknown> | null;
+  status: string;
+  completedAt: string | null;
 };
 
 export type WalkRunItem = {
@@ -38,6 +54,7 @@ export type WalkRunItem = {
     response: unknown;
     failed: boolean;
     notes: string | null;
+    correctiveActions?: WalkRunCorrectiveAction[];
   } | null;
 };
 

@@ -39,18 +39,46 @@ export function fetchRun(teamId: string, runId: string) {
   ).then((r) => r.data);
 }
 
+export type TemperatureSource = "manual" | "bluetooth";
+
 export function submitTemperature(
   teamId: string,
   runId: string,
   itemId: string,
   value: number,
   unit: "F" | "C" = "F",
+  source: TemperatureSource = "manual",
+  retestCount = 0,
 ) {
   return apiPatch<{ data: WalkRun }>(
     `${walks(teamId)}/runs/${encodeURIComponent(runId)}/items/${encodeURIComponent(itemId)}`,
     {
-      response: { value, unit, source: "manual" as const },
+      response: {
+        value,
+        unit,
+        source,
+        ...(retestCount > 0 ? { retestCount } : {}),
+      },
     },
+  ).then((r) => r.data);
+}
+
+export function completeCorrectiveAction(
+  teamId: string,
+  runId: string,
+  itemId: string,
+  actionId: string,
+) {
+  return apiPost<{ data: WalkRun }>(
+    `${walks(teamId)}/runs/${encodeURIComponent(runId)}/items/${encodeURIComponent(itemId)}/corrective-actions/${encodeURIComponent(actionId)}/complete`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function resetItemCheck(teamId: string, runId: string, itemId: string) {
+  return apiPost<{ data: WalkRun }>(
+    `${walks(teamId)}/runs/${encodeURIComponent(runId)}/items/${encodeURIComponent(itemId)}/reset`,
+    {},
   ).then((r) => r.data);
 }
 
@@ -63,4 +91,17 @@ export function completeRun(teamId: string, runId: string) {
 
 export function flattenRunItems(run: WalkRun) {
   return [...run.items].sort((a, b) => a.position - b.position);
+}
+
+export function itemNeedsProcedure(item: WalkRun["items"][number]): boolean {
+  if (!item.response) return false;
+  if (item.response.status === "NEEDS_ACTION") return true;
+  const actions = item.response.correctiveActions ?? [];
+  return actions.some((a) => a.status === "PENDING");
+}
+
+export function isOpenTempItem(item: WalkRun["items"][number]): boolean {
+  if (item.type !== "TEMPERATURE") return false;
+  if (!item.response || item.response.status === "NOT_STARTED") return true;
+  return itemNeedsProcedure(item);
 }

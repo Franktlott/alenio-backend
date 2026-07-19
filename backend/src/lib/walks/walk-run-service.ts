@@ -603,6 +603,9 @@ export async function completeCorrectiveAction(input: {
     include: { responses: { include: { correctiveActionResults: true } } },
   });
   if (!run) return { error: "NOT_FOUND" as const };
+  if (run.status !== "IN_PROGRESS") {
+    return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
+  }
   const itemResponse = run.responses.find((r) => r.itemId === input.itemId);
   if (!itemResponse) return { error: "ITEM_NOT_FOUND" as const };
 
@@ -610,6 +613,35 @@ export async function completeCorrectiveAction(input: {
     (r) => r.correctiveActionId === input.correctiveActionId,
   );
   if (!result) return { error: "ACTION_NOT_FOUND" as const };
+  if (result.status === "COMPLETED" || result.status === "SKIPPED") {
+    const updated = await getWalkRun(input.teamId, input.runId);
+    return { ok: true as const, run: updated };
+  }
+
+  const snapshot = parseSnapshot(run.templateSnapshot);
+  const item = flattenSnapshotItems(snapshot).find((i) => i.id === input.itemId);
+  const actions = (item?.correctiveActions ?? []).filter(isAssociateCorrectiveAction);
+  const target = actions.find((a) => a.id === input.correctiveActionId);
+  if (!target) return { error: "ACTION_NOT_FOUND" as const };
+
+  const sameBranch = actions.filter((a) => {
+    if (isFirstFailureAction(target)) return isFirstFailureAction(a);
+    if (isIfFailAction(target)) return isIfFailAction(a);
+    return correctiveBranch(a) === correctiveBranch(target);
+  });
+  const targetIndex = sameBranch.findIndex((a) => a.id === input.correctiveActionId);
+  for (let i = 0; i < targetIndex; i++) {
+    const prior = sameBranch[i];
+    const priorResult = itemResponse.correctiveActionResults.find(
+      (r) => r.correctiveActionId === prior.id,
+    );
+    if (!priorResult || priorResult.status === "PENDING") {
+      return {
+        error: "OUT_OF_ORDER" as const,
+        message: `Complete step ${i + 1} before this step`,
+      };
+    }
+  }
 
   await prisma.walkCorrectiveActionResult.update({
     where: { id: result.id },
@@ -625,8 +657,6 @@ export async function completeCorrectiveAction(input: {
     where: { itemResponseId: itemResponse.id, status: "PENDING" },
   });
   if (pending === 0) {
-    const snapshot = parseSnapshot(run.templateSnapshot);
-    const item = flattenSnapshotItems(snapshot).find((i) => i.id === input.itemId);
     const requireRetest = Boolean(
       item?.config &&
         (item.config as { requireRetestOnFailure?: unknown }).requireRetestOnFailure,
@@ -641,6 +671,37 @@ export async function completeCorrectiveAction(input: {
       });
     }
     // If retemp is still required, keep NEEDS_ACTION so the associate must retest.
+  }
+
+  const updated = await getWalkRun(input.teamId, input.runId);
+  return { ok: true as const, run: updated };
+}
+
+/** Clears a saved item response + failure-procedure progress so the associate can restart. */
+export async function resetWalkItemResponse(input: {
+  teamId: string;
+  runId: string;
+  itemId: string;
+}) {
+  const run = await prisma.walkRun.findFirst({
+    where: { id: input.runId, teamId: input.teamId },
+    include: { responses: { include: { correctiveActionResults: true } } },
+  });
+  if (!run) return { error: "NOT_FOUND" as const };
+  if (run.status !== "IN_PROGRESS") {
+    return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
+  }
+
+  const snapshot = parseSnapshot(run.templateSnapshot);
+  const item = flattenSnapshotItems(snapshot).find((i) => i.id === input.itemId);
+  if (!item) return { error: "ITEM_NOT_FOUND" as const, message: "Item not found on this walk" };
+
+  const existing = run.responses.find((r) => r.itemId === input.itemId);
+  if (existing) {
+    await prisma.walkCorrectiveActionResult.deleteMany({
+      where: { itemResponseId: existing.id },
+    });
+    await prisma.walkItemResponse.delete({ where: { id: existing.id } });
   }
 
   const updated = await getWalkRun(input.teamId, input.runId);
