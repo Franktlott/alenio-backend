@@ -37,11 +37,24 @@ export const DEFAULT_TEMPERATURE_CONFIG: TemperatureConfig = {
   retestGuidance: null,
 };
 
+/** Convert a reading into the config's comparison unit. */
+export function toConfigUnit(
+  value: number,
+  fromUnit: "F" | "C",
+  toUnit: "F" | "C",
+): number {
+  if (fromUnit === toUnit) return value;
+  if (fromUnit === "C" && toUnit === "F") return (value * 9) / 5 + 32;
+  return ((value - 32) * 5) / 9;
+}
+
 export function evaluateTemperature(
   config: TemperatureConfig,
   response: TemperatureResponse,
 ): WalkItemResponseStatus {
-  const value = response.value;
+  const configUnit = config.unit ?? "F";
+  const responseUnit = response.unit ?? configUnit;
+  const value = toConfigUnit(response.value, responseUnit, configUnit);
   const { comparisonType, minimumTemperature, maximumTemperature } = config;
 
   let pass = false;

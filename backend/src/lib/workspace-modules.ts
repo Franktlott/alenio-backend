@@ -40,7 +40,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     description: "Configure in Go; associates take checks in the Alenio Temps app.",
     icon: "temp",
     tone: "emerald",
-    baseHref: "/go/temp-checks",
+    baseHref: "/go/temp-checks/module",
     validationChecks: [
       { key: "equipment", label: "Equipment configured" },
       { key: "standards", label: "Temperature standards configured" },

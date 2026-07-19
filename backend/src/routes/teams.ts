@@ -1116,6 +1116,34 @@ teamsRouter.get("/:teamId/modules/:moduleKey", async (c) => {
   return c.json({ data: { module } });
 });
 
+/**
+ * Floor-safe module status for Alenio Temps associates (any team member).
+ * Returns only operating mode + status — no test codes or access lists.
+ */
+teamsRouter.get("/:teamId/modules/:moduleKey/floor-status", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  if (!getModuleDefinition(moduleKey)) {
+    return c.json({ error: { message: "Unknown module", code: "NOT_FOUND" } }, 404);
+  }
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+  const module = await getWorkspaceModule(teamId, moduleKey);
+  if (!module) return c.json({ error: { message: "Unknown module", code: "NOT_FOUND" } }, 404);
+  return c.json({
+    data: {
+      moduleKey: module.moduleKey,
+      moduleName: module.moduleName,
+      status: module.status,
+      operatingMode: module.operatingMode,
+    },
+  });
+});
+
 // PATCH /api/teams/:teamId/modules/:moduleKey/status
 teamsRouter.patch("/:teamId/modules/:moduleKey/status", zValidator("json", moduleStatusSchema), async (c) => {
   const user = c.get("user")!;

@@ -126,7 +126,7 @@ export function defaultWorkspaceModules(): WorkspaceModule[] {
       description: "Configure temps in Go; associates take checks in the Alenio Temps app.",
       icon: "temp",
       tone: "emerald",
-      baseHref: "/go/temp-checks/library",
+      baseHref: "/go/temp-checks/module",
       status: "inactive",
       operatingMode: null,
       setupProgressPercent: 0,
@@ -265,20 +265,20 @@ export function writeCachedLinkedDeviceCount(teamId: string, count: number) {
 
 export function splitWorkspaceModuleLists(modulesByKey: Record<string, WorkspaceModule>): {
   enabled: WorkspaceModuleRow[];
+  disabled: WorkspaceModuleRow[];
   available: WorkspaceModuleRow[];
 } {
   const enabled: WorkspaceModuleRow[] = [...INFRASTRUCTURE_MODULE_ROWS];
-  const available: WorkspaceModuleRow[] = [];
+  const disabled: WorkspaceModuleRow[] = [];
 
   for (const key of LIFECYCLE_MODULE_KEYS) {
     const mod = modulesByKey[key] ?? defaultModulesByKey()[key];
     if (mod.status === "active") {
       enabled.push(lifecycleRowFromModule(mod));
     } else {
-      available.push(lifecycleRowFromModule(mod));
+      disabled.push(lifecycleRowFromModule(mod));
     }
   }
 
-  available.push(...CATALOG_MODULE_ROWS);
-  return { enabled, available };
+  return { enabled, disabled, available: [...CATALOG_MODULE_ROWS] };
 }

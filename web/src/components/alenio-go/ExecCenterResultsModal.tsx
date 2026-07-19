@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchWalkRun } from "../../lib/walks/library-api";
+import {
+  completeWalkCorrectiveAction,
+  fetchWalkRun,
+} from "../../lib/walks/library-api";
 import type { WalkRun, WalkRunSnapshotItem } from "../../lib/walks/types";
 
 type OccurrenceSummary = {
@@ -15,6 +18,7 @@ type Props = {
   occurrence: OccurrenceSummary;
   statusLabel: string;
   onClose: () => void;
+  onUpdated?: () => void;
 };
 
 function formatTime(iso: string) {
@@ -34,6 +38,14 @@ function readingLabel(item: WalkRunSnapshotItem): string {
   if (payload && typeof payload.answer === "string") return payload.answer;
   if (payload && typeof payload.selected === "string") return payload.selected;
   return "—";
+}
+
+function hasAdminOverride(item: WalkRunSnapshotItem): boolean {
+  const payload =
+    item.response?.response && typeof item.response.response === "object"
+      ? (item.response.response as Record<string, unknown>)
+      : null;
+  return payload?.adminOverride === true;
 }
 
 function statusTone(status: string | undefined): string {
@@ -64,10 +76,12 @@ export function ExecCenterResultsModal({
   occurrence,
   statusLabel: rowStatusLabel,
   onClose,
+  onUpdated,
 }: Props) {
   const [run, setRun] = useState<WalkRun | null>(null);
   const [loading, setLoading] = useState(Boolean(occurrence.runId));
   const [error, setError] = useState<string | null>(null);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -110,6 +124,24 @@ export function ExecCenterResultsModal({
   }, [run]);
 
   const title = occurrence.template?.name ?? run?.template?.name ?? "Checklist results";
+  const canResolveCas = Boolean(run && (run.status === "IN_PROGRESS" || run.status === "COMPLETED"));
+
+  async function resolveCa(itemId: string, actionId: string) {
+    if (!run || resolvingId) return;
+    setResolvingId(actionId);
+    setError(null);
+    try {
+      const next = await completeWalkCorrectiveAction(teamId, run.id, itemId, actionId, {
+        managerResolve: true,
+      });
+      setRun(next);
+      onUpdated?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not resolve corrective action");
+    } finally {
+      setResolvingId(null);
+    }
+  }
 
   return (
     <div className="exec-results-backdrop" role="presentation" onClick={onClose}>
@@ -153,6 +185,7 @@ export function ExecCenterResultsModal({
                 const cas = item.response?.correctiveActions ?? [];
                 const completedCas = cas.filter((c) => c.status === "COMPLETED");
                 const pendingCas = cas.filter((c) => c.status === "PENDING");
+                const override = hasAdminOverride(item);
                 return (
                   <li key={item.id} className="exec-results-item">
                     <div className="exec-results-item-main">
@@ -164,6 +197,9 @@ export function ExecCenterResultsModal({
                         {statusLabelFor(item.response?.status)}
                       </span>
                     </div>
+                    {override ? (
+                      <p className="exec-results-override">Admin override — procedure skipped</p>
+                    ) : null}
                     {item.response?.notes?.trim() ? (
                       <p className="exec-results-note">{item.response.notes.trim()}</p>
                     ) : null}
@@ -175,8 +211,20 @@ export function ExecCenterResultsModal({
                           </span>
                         ))}
                         {pendingCas.map((ca) => (
-                          <span key={ca.id} className="exec-results-ca-chip">
-                            {ca.title || "Open corrective action"}
+                          <span key={ca.id} className="exec-results-ca-row">
+                            <span className="exec-results-ca-chip">
+                              {ca.title || "Open corrective action"}
+                            </span>
+                            {canResolveCas ? (
+                              <button
+                                type="button"
+                                className="exec-results-ca-resolve"
+                                disabled={resolvingId === ca.id}
+                                onClick={() => void resolveCa(item.id, ca.id)}
+                              >
+                                {resolvingId === ca.id ? "Resolving…" : "Mark resolved"}
+                              </button>
+                            ) : null}
                           </span>
                         ))}
                       </div>

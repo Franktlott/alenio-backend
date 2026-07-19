@@ -26,18 +26,26 @@ function boundNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Same pass/fail rules as backend `evaluateTemperature`. */
+function toConfigUnit(value: number, fromUnit: "F" | "C", toUnit: "F" | "C"): number {
+  if (fromUnit === toUnit) return value;
+  if (fromUnit === "C" && toUnit === "F") return (value * 9) / 5 + 32;
+  return ((value - 32) * 5) / 9;
+}
+
+/** Same pass/fail rules as backend `evaluateTemperature` (including unit conversion). */
 export function evaluateTemp(
   value: number,
   config: TemperatureConfig,
+  responseUnit?: "F" | "C",
 ): { pass: boolean; detail: string } | null {
   if (!Number.isFinite(value)) return null;
   const unit = config.unit ?? "F";
+  const compareValue = toConfigUnit(value, responseUnit ?? unit, unit);
   const min = boundNumber(config.minimumTemperature);
   const max = boundNumber(config.maximumTemperature);
   if (config.comparisonType === "BETWEEN") {
     if (min == null || max == null) return null;
-    const ok = value >= min && value <= max;
+    const ok = compareValue >= min && compareValue <= max;
     return {
       pass: ok,
       detail: ok ? `Within ${min}–${max}°${unit}` : `Outside ${min}–${max}°${unit}`,
@@ -45,14 +53,14 @@ export function evaluateTemp(
   }
   if (config.comparisonType === "BELOW") {
     if (max == null) return null;
-    const ok = value <= max;
+    const ok = compareValue <= max;
     return {
       pass: ok,
       detail: ok ? `At or below ${max}°${unit}` : `Above required ${max}°${unit}`,
     };
   }
   if (min == null) return null;
-  const ok = value >= min;
+  const ok = compareValue >= min;
   return {
     pass: ok,
     detail: ok ? `Above required ${min}°${unit}` : `Below required ${min}°${unit}`,

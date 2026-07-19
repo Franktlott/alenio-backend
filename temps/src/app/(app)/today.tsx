@@ -13,13 +13,26 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppTabHeader } from "../../components/AppTabHeader";
 import { HomeMenu } from "../../components/HomeMenu";
 import { listPendingSyncDrafts } from "../../lib/check-draft-store";
-import { loadDayOccurrences, saveCachedRun, saveDayOccurrences } from "../../lib/day-cache";
+import {
+  loadDayOccurrences,
+  saveCachedRun,
+  saveDayOccurrences,
+} from "../../lib/day-cache";
+import { flushPendingSyncDrafts } from "../../lib/pending-sync";
 import { useSession } from "../../lib/session-context";
-import { listChecksForDay, startCheckRun } from "../../lib/temps-api";
+import {
+  fetchRun,
+  fetchTempsFloorStatus,
+  listChecksForDay,
+  prepareCheckRun,
+} from "../../lib/temps-api";
 import type { WalkOccurrence } from "../../lib/types";
 import { colors } from "../../lib/theme";
 
-/** Prefetch run snapshots so associates can open ready checks offline. */
+/**
+ * Warm run snapshots for offline open without claiming FIRST_START_OWNS.
+ * Prefers an existing runId (read-only); otherwise prepareOnly start.
+ */
 async function prefetchReadyRuns(teamId: string, day: WalkOccurrence[]) {
   const ready = day
     .filter(
@@ -36,7 +49,9 @@ async function prefetchReadyRuns(teamId: string, day: WalkOccurrence[]) {
 
   for (const item of ready) {
     try {
-      const run = await startCheckRun(teamId, item.id);
+      const run = item.runId
+        ? await fetchRun(teamId, item.runId)
+        : await prepareCheckRun(teamId, item.id);
       await saveCachedRun(teamId, item.id, run);
     } catch {
       // Ignore — network/claim errors shouldn't block Today.
@@ -75,18 +90,32 @@ function isReady(item: WalkOccurrence) {
   );
 }
 
+/** Not started yet — window opens later today. */
+function isQueued(item: WalkOccurrence) {
+  if (isCompleted(item) || item.status === "IN_PROGRESS") return false;
+  if (item.status === "MISSED" || windowHasEnded(item)) return false;
+  return item.status === "UPCOMING" || !isWithinWindow(item);
+}
+
 function windowLabel(item: WalkOccurrence) {
   return `${formatTime(item.windowStart)} – ${formatTime(item.dueAt)}`;
 }
 
+function rowSubtitle(item: WalkOccurrence, ready: boolean) {
+  if (isQueued(item)) return `Starts ${formatTime(item.windowStart)}`;
+  if (ready) return `${windowLabel(item)}  ·  Due ${formatTime(item.dueAt)}`;
+  return windowLabel(item);
+}
+
 type FilterKey = "open" | "in_progress" | "overdue" | "completed";
 
-type BadgeTone = "pass" | "fail" | "pending" | "progress" | "sync" | "overdue";
+type BadgeTone = "pass" | "fail" | "pending" | "progress" | "sync" | "overdue" | "queued";
 
 function bucketFor(item: WalkOccurrence): FilterKey {
   if (isCompleted(item)) return "completed";
   if (item.status === "MISSED" || windowHasEnded(item)) return "overdue";
   if (item.status === "IN_PROGRESS") return "in_progress";
+  // Open + queued (coming up later today) share the Up next card.
   return "open";
 }
 
@@ -110,12 +139,12 @@ function badgeFor(
   if (bucket === "completed") return { label: completerLabel(item), tone: "pass" };
   if (bucket === "overdue") return { label: "OVERDUE", tone: "overdue" };
   if (bucket === "in_progress") return { label: "IN PROGRESS", tone: "progress" };
-  if (item.status === "UPCOMING") return { label: "UPCOMING", tone: "pending" };
-  return { label: "OPEN", tone: "pending" };
+  if (isQueued(item)) return { label: "COMING UP", tone: "queued" };
+  return { label: "READY", tone: "pending" };
 }
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
-  { key: "open", label: "Open" },
+  { key: "open", label: "Up next" },
   { key: "in_progress", label: "In progress" },
   { key: "overdue", label: "Overdue" },
   { key: "completed", label: "Completed" },
@@ -132,6 +161,7 @@ export default function TodayScreen() {
   const [filter, setFilter] = useState<FilterKey>("open");
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set());
+  const [testingMode, setTestingMode] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
@@ -152,6 +182,22 @@ export default function TodayScreen() {
         ),
       );
       try {
+        void fetchTempsFloorStatus(teamId)
+          .then((mod) => {
+            setTestingMode(mod.status === "active" && mod.operatingMode === "testing");
+          })
+          .catch(() => setTestingMode(false));
+        // Auto-retry finished drafts when Today loads / reconnects.
+        void flushPendingSyncDrafts(teamId).then(async () => {
+          const remaining = await listPendingSyncDrafts();
+          setPendingSyncIds(
+            new Set(
+              remaining
+                .filter((d) => d.teamId === teamId)
+                .map((d) => d.occurrenceId),
+            ),
+          );
+        });
         const day = await listChecksForDay(teamId);
         setToday(day);
         await saveDayOccurrences(teamId, day);
@@ -207,6 +253,20 @@ export default function TodayScreen() {
     );
   }, [today, filter]);
 
+  const openSections = useMemo(() => {
+    if (filter !== "open") return null;
+    const readyNow = list
+      .filter((item) => !isQueued(item))
+      .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+    const comingUp = list
+      .filter((item) => isQueued(item))
+      .sort(
+        (a, b) =>
+          new Date(a.windowStart).getTime() - new Date(b.windowStart).getTime(),
+      );
+    return { readyNow, comingUp };
+  }, [filter, list]);
+
   function openCheck(item: WalkOccurrence) {
     const pendingSync = pendingSyncIds.has(item.id);
     if (!pendingSync && !isReady(item)) return;
@@ -216,6 +276,7 @@ export default function TodayScreen() {
   function renderRow(item: WalkOccurrence) {
     const pendingSync = pendingSyncIds.has(item.id);
     const ready = isReady(item) || pendingSync;
+    const queued = isQueued(item);
     const badge = badgeFor(item, pendingSyncIds);
     const badgeStyle =
       badge.tone === "pass"
@@ -226,7 +287,9 @@ export default function TodayScreen() {
             ? styles.badgeSync
             : badge.tone === "progress"
               ? styles.badgeProgress
-              : styles.badgePending;
+              : badge.tone === "queued"
+                ? styles.badgeQueued
+                : styles.badgePending;
     const badgeTextStyle =
       badge.tone === "pass"
         ? styles.badgeTextPass
@@ -236,7 +299,9 @@ export default function TodayScreen() {
             ? styles.badgeTextSync
             : badge.tone === "progress"
               ? styles.badgeTextProgress
-              : styles.badgeTextPending;
+              : badge.tone === "queued"
+                ? styles.badgeTextQueued
+                : styles.badgeTextPending;
 
     return (
       <Pressable
@@ -244,6 +309,7 @@ export default function TodayScreen() {
         style={({ pressed }) => [
           styles.rowCard,
           pendingSync && styles.pendingSyncCard,
+          queued && styles.queuedCard,
           pressed && ready && styles.pressed,
         ]}
         onPress={() => openCheck(item)}
@@ -256,7 +322,9 @@ export default function TodayScreen() {
               ? { backgroundColor: colors.passSoft }
               : badge.tone === "overdue" || badge.tone === "fail"
                 ? { backgroundColor: colors.failSoft }
-                : { backgroundColor: colors.brandSoft },
+                : badge.tone === "queued"
+                  ? { backgroundColor: "#EEF2F7" }
+                  : { backgroundColor: colors.brandSoft },
           ]}
         >
           <Text
@@ -268,20 +336,27 @@ export default function TodayScreen() {
                     ? colors.pass
                     : badge.tone === "overdue" || badge.tone === "fail"
                       ? colors.fail
-                      : colors.brand,
+                      : badge.tone === "queued"
+                        ? colors.muted
+                        : colors.brand,
               },
             ]}
           >
-            {badge.tone === "pass" ? "✓" : badge.tone === "overdue" || badge.tone === "fail" ? "!" : "◷"}
+            {badge.tone === "pass"
+              ? "✓"
+              : badge.tone === "overdue" || badge.tone === "fail"
+                ? "!"
+                : badge.tone === "queued"
+                  ? "◦"
+                  : "◷"}
           </Text>
         </View>
         <View style={styles.rowCopy}>
-          <Text style={styles.rowTitle} numberOfLines={1}>
+          <Text style={[styles.rowTitle, queued && styles.rowTitleQueued]} numberOfLines={1}>
             {item.template?.name ?? "Temperature check"}
           </Text>
           <Text style={styles.rowSub} numberOfLines={1}>
-            {windowLabel(item)}
-            {ready ? `  ·  Due ${formatTime(item.dueAt)}` : ""}
+            {rowSubtitle(item, ready)}
           </Text>
         </View>
         <View style={[styles.badge, badgeStyle, badge.tone === "pass" && styles.badgePerson]}>
@@ -299,8 +374,8 @@ export default function TodayScreen() {
 
   const emptyCopy: Record<FilterKey, { title: string; sub: string }> = {
     open: {
-      title: "No open checks",
-      sub: "When a check window opens and hasn’t been started, it shows up here.",
+      title: "Nothing up next",
+      sub: "Ready checks and walks coming up later today will show here.",
     },
     in_progress: {
       title: "Nothing in progress",
@@ -392,6 +467,16 @@ export default function TodayScreen() {
           >
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
+            {testingMode ? (
+              <View style={styles.testingBanner}>
+                <Text style={styles.testingBannerTitle}>Testing mode</Text>
+                <Text style={styles.testingBannerBody}>
+                  This workspace’s Temps module is in Testing — results may not count as live
+                  compliance. Managers switch to Live in Alenio Go → Admin modules → Temp checks.
+                </Text>
+              </View>
+            ) : null}
+
             {pendingSyncIds.size > 0 ? (
               <View style={styles.pendingSyncBanner}>
                 <Text style={styles.pendingSyncBannerTitle}>Pending sync</Text>
@@ -403,17 +488,33 @@ export default function TodayScreen() {
               </View>
             ) : null}
 
-            <Text style={styles.sectionLabel}>
-              {FILTERS.find((f) => f.key === filter)?.label ?? "Checks"}
-            </Text>
-
             {list.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyTitle}>{emptyCopy[filter].title}</Text>
                 <Text style={styles.emptySub}>{emptyCopy[filter].sub}</Text>
               </View>
+            ) : openSections ? (
+              <View style={styles.listGap}>
+                {openSections.readyNow.length > 0 ? (
+                  <View style={styles.listGap}>
+                    <Text style={styles.sectionLabel}>Ready now</Text>
+                    {openSections.readyNow.map((item) => renderRow(item))}
+                  </View>
+                ) : null}
+                {openSections.comingUp.length > 0 ? (
+                  <View style={[styles.listGap, openSections.readyNow.length > 0 && styles.sectionBlock]}>
+                    <Text style={styles.sectionLabel}>Coming up</Text>
+                    {openSections.comingUp.map((item) => renderRow(item))}
+                  </View>
+                ) : null}
+              </View>
             ) : (
-              <View style={styles.listGap}>{list.map((item) => renderRow(item))}</View>
+              <View style={styles.listGap}>
+                <Text style={styles.sectionLabel}>
+                  {FILTERS.find((f) => f.key === filter)?.label ?? "Checks"}
+                </Text>
+                {list.map((item) => renderRow(item))}
+              </View>
             )}
           </ScrollView>
         </>
@@ -552,7 +653,10 @@ const styles = StyleSheet.create({
     color: colors.mutedOnDark,
     textTransform: "uppercase",
     letterSpacing: 0.4,
-    marginBottom: 8,
+    marginBottom: 2,
+  },
+  sectionBlock: {
+    marginTop: 8,
   },
   listGap: {
     gap: 10,
@@ -565,6 +669,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 12,
+  },
+  queuedCard: {
+    backgroundColor: colors.surfaceElevated,
+    opacity: 0.92,
   },
   rowIcon: {
     width: 40,
@@ -586,6 +694,9 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.ink,
   },
+  rowTitleQueued: {
+    color: colors.inkOnDark,
+  },
   rowSub: {
     marginTop: 2,
     fontSize: 12,
@@ -601,6 +712,7 @@ const styles = StyleSheet.create({
   badgeFail: { backgroundColor: colors.failSoft },
   badgeProgress: { backgroundColor: colors.brandSoft },
   badgePending: { backgroundColor: "#F1F4F9" },
+  badgeQueued: { backgroundColor: "#E8EDF4" },
   badgeSync: { backgroundColor: colors.warnSoft },
   badgePerson: {
     maxWidth: 96,
@@ -614,6 +726,7 @@ const styles = StyleSheet.create({
   badgeTextFail: { color: colors.fail },
   badgeTextProgress: { color: colors.brandDark },
   badgeTextPending: { color: colors.muted },
+  badgeTextQueued: { color: "#64748B" },
   badgeTextSync: { color: "#B45309" },
   badgeTextPerson: {
     textTransform: "none",
@@ -622,6 +735,25 @@ const styles = StyleSheet.create({
   },
   pendingSyncCard: {
     borderColor: colors.warn,
+  },
+  testingBanner: {
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+    backgroundColor: "rgba(245,158,11,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.35)",
+  },
+  testingBannerTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#fcd34d",
+  },
+  testingBannerBody: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.mutedOnDark,
+    lineHeight: 17,
   },
   pendingSyncBanner: {
     backgroundColor: colors.warnSoft,

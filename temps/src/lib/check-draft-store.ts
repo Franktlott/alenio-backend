@@ -19,6 +19,8 @@ export type SyncDraftItem = {
     source: "manual" | "bluetooth";
     retestCount?: number;
   };
+  /** Optional associate note from corrective-action flow. */
+  notes?: string | null;
   correctiveActionIdsCompleted: string[];
   localPhotos: LocalPhoto[];
   photoUrls: string[];
@@ -66,6 +68,7 @@ function normalizeDraft(raw: CheckDraft): CheckDraft {
     lastSyncErrorCode: raw.lastSyncErrorCode ?? null,
     syncItems: (raw.syncItems ?? []).map((item) => ({
       ...item,
+      notes: item.notes ?? null,
       localPhotos: item.localPhotos ?? [],
       photoUrls: item.photoUrls ?? [],
       correctiveActionIdsCompleted: item.correctiveActionIdsCompleted ?? [],

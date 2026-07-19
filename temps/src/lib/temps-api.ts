@@ -19,6 +19,15 @@ export function listChecksForDay(teamId: string, day = new Date()) {
   start.setHours(0, 0, 0, 0);
   const end = new Date(day);
   end.setHours(23, 59, 59, 999);
+  return listChecksInRange(teamId, start, end);
+}
+
+/** Inclusive local date range for history. */
+export function listChecksInRange(teamId: string, from: Date, to: Date) {
+  const start = new Date(from);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(to);
+  end.setHours(23, 59, 59, 999);
   const qs = new URLSearchParams({
     from: start.toISOString(),
     to: end.toISOString(),
@@ -26,11 +35,33 @@ export function listChecksForDay(teamId: string, day = new Date()) {
   return apiGet<{ data: WalkOccurrence[] }>(`${walks(teamId)}/occurrences?${qs}`).then((r) => r.data);
 }
 
-export function startCheckRun(teamId: string, occurrenceId: string) {
+export function fetchTempsFloorStatus(teamId: string) {
+  return apiGet<{
+    data: {
+      moduleKey: string;
+      moduleName: string;
+      status: string;
+      operatingMode: "testing" | "live" | null;
+    };
+  }>(`/api/teams/${encodeURIComponent(teamId)}/modules/temp-checks/floor-status`).then(
+    (r) => r.data,
+  );
+}
+
+export function startCheckRun(
+  teamId: string,
+  occurrenceId: string,
+  opts?: { prepareOnly?: boolean },
+) {
   return apiPost<{ data: WalkRun }>(
     `${walks(teamId)}/occurrences/${encodeURIComponent(occurrenceId)}/runs`,
-    {},
+    opts?.prepareOnly ? { prepareOnly: true } : {},
   ).then((r) => r.data);
+}
+
+/** Warm run snapshot for offline open without claiming FIRST_START_OWNS. */
+export function prepareCheckRun(teamId: string, occurrenceId: string) {
+  return startCheckRun(teamId, occurrenceId, { prepareOnly: true });
 }
 
 export function fetchRun(teamId: string, runId: string) {

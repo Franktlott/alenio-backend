@@ -2,6 +2,7 @@ import { Redirect, Tabs } from "expo-router";
 import { AppTabHeader } from "../../components/AppTabHeader";
 import { useSession } from "../../lib/session-context";
 import { colors } from "../../lib/theme";
+import { ProbeProvider } from "../../probe/react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function AppLayout() {
@@ -11,62 +12,64 @@ export default function AppLayout() {
   if (!teamId) return <Redirect href="/select-team" />;
 
   return (
-    <Tabs
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.bg },
-        headerShadowVisible: false,
-        tabBarStyle: { display: "none" },
-        tabBarShowLabel: false,
-      }}
-    >
-      <Tabs.Screen
-        name="today"
-        options={{
-          title: "Checks",
-          headerShown: false,
+    <ProbeProvider initialSource="thermoworks">
+      <Tabs
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.bg },
+          headerShadowVisible: false,
+          tabBarStyle: { display: "none" },
+          tabBarShowLabel: false,
         }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          href: null,
-          title: "History",
-          headerShown: false,
-        }}
-      />
-      <Tabs.Screen
-        name="equipment"
-        options={{
-          href: null,
-          title: "Equipment",
-          headerShown: false,
-        }}
-      />
-      <Tabs.Screen
-        name="more"
-        options={{
-          href: null,
-          title: "More",
-          headerShown: false,
-        }}
-      />
-      <Tabs.Screen
-        name="check/[occurrenceId]"
-        options={{
-          href: null,
-          title: "",
-          headerShown: true,
-        }}
-      />
-      <Tabs.Screen
-        name="probe-lab"
-        options={{
-          href: null,
-          title: "Probe Lab",
-          headerShown: true,
-          header: () => <AppTabHeader topInset={insets.top} compact />,
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="today"
+          options={{
+            title: "Checks",
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="history"
+          options={{
+            href: null,
+            title: "History",
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="equipment"
+          options={{
+            href: null,
+            title: "Equipment",
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="more"
+          options={{
+            href: null,
+            title: "More",
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="check/[occurrenceId]"
+          options={{
+            href: null,
+            title: "",
+            headerShown: true,
+          }}
+        />
+        <Tabs.Screen
+          name="probe-lab"
+          options={{
+            href: null,
+            title: "Probe Lab",
+            headerShown: true,
+            header: () => <AppTabHeader topInset={insets.top} compact />,
+          }}
+        />
+      </Tabs>
+    </ProbeProvider>
   );
 }

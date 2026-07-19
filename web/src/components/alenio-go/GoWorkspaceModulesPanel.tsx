@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { setWorkspaceModuleStatus, type WorkspaceModule } from "../../lib/api";
 import {
@@ -102,9 +102,19 @@ function ModuleRowIcon({ name }: { name: WorkspaceModuleRowIcon }) {
   );
 }
 
-function EnabledModuleRow({ row }: { row: WorkspaceModuleRow }) {
+function EnabledModuleRow({
+  row,
+  busy,
+  onRequestDisable,
+}: {
+  row: WorkspaceModuleRow;
+  busy: boolean;
+  onRequestDisable: () => void;
+}) {
   return (
-    <div className="go-wsm-row go-wsm-row--enabled">
+    <div
+      className={`go-wsm-row go-wsm-row--enabled${row.enableable ? " go-wsm-row--toggleable" : ""}`}
+    >
       <span className="go-wsm-row-icon">
         <ModuleRowIcon name={row.icon} />
       </span>
@@ -112,23 +122,66 @@ function EnabledModuleRow({ row }: { row: WorkspaceModuleRow }) {
         <strong>{row.moduleName}</strong>
         <span>{row.description}</span>
       </div>
-      <span className="go-wsm-row-check" aria-hidden>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      </span>
+      {!row.enableable ? (
+        <span className="go-wsm-row-check" aria-hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </span>
+      ) : null}
       {row.configureHref ? (
         <Link to={row.configureHref} className="go-wsm-row-configure">
           Configure
         </Link>
       ) : null}
-      {row.configureHref ? (
+      {row.enableable ? (
+        <button
+          type="button"
+          className="go-wsm-row-disable"
+          disabled={busy}
+          onClick={onRequestDisable}
+        >
+          Disable
+        </button>
+      ) : null}
+      {row.configureHref && !row.enableable ? (
         <Link to={row.configureHref} className="go-wsm-row-go" aria-label={`Open ${row.moduleName}`}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </Link>
       ) : null}
+    </div>
+  );
+}
+
+function DisabledModuleRow({
+  row,
+  busy,
+  onEnable,
+}: {
+  row: WorkspaceModuleRow;
+  busy: boolean;
+  onEnable: () => void;
+}) {
+  return (
+    <div className="go-wsm-row go-wsm-row--disabled">
+      <span className="go-wsm-row-icon">
+        <ModuleRowIcon name={row.icon} />
+      </span>
+      <div className="go-wsm-row-copy">
+        <strong>{row.moduleName}</strong>
+        <span>{row.description}</span>
+      </div>
+      <button
+        type="button"
+        className="go-wsm-row-enable"
+        disabled={busy || !row.enableable}
+        onClick={onEnable}
+        title={row.enableable ? undefined : "Coming soon"}
+      >
+        Enable
+      </button>
     </div>
   );
 }
@@ -167,8 +220,21 @@ function AvailableModuleRow({
 export function GoWorkspaceModulesPanel({ open, onClose, teamId, modulesByKey, onModulesChange }: Props) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDisable, setConfirmDisable] = useState<WorkspaceModuleRow | null>(null);
 
-  const { enabled, available } = useMemo(() => splitWorkspaceModuleLists(modulesByKey), [modulesByKey]);
+  const { enabled, disabled, available } = useMemo(
+    () => splitWorkspaceModuleLists(modulesByKey),
+    [modulesByKey],
+  );
+
+  useEffect(() => {
+    if (!confirmDisable) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && busyKey == null) setConfirmDisable(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmDisable, busyKey]);
 
   async function enableModule(moduleKey: string) {
     setBusyKey(moduleKey);
@@ -178,6 +244,22 @@ export function GoWorkspaceModulesPanel({ open, onClose, teamId, modulesByKey, o
       onModulesChange({ ...modulesByKey, [moduleKey]: updated });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not enable module.");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function confirmDisableModule() {
+    if (!confirmDisable) return;
+    const moduleKey = confirmDisable.moduleKey;
+    setBusyKey(moduleKey);
+    setError(null);
+    try {
+      const updated = await setWorkspaceModuleStatus(teamId, moduleKey, "inactive");
+      onModulesChange({ ...modulesByKey, [moduleKey]: updated });
+      setConfirmDisable(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not disable module.");
     } finally {
       setBusyKey(null);
     }
@@ -213,9 +295,35 @@ export function GoWorkspaceModulesPanel({ open, onClose, teamId, modulesByKey, o
         </div>
         <div className="go-wsm-list">
           {enabled.map((row) => (
-            <EnabledModuleRow key={row.moduleKey} row={row} />
+            <EnabledModuleRow
+              key={row.moduleKey}
+              row={row}
+              busy={busyKey === row.moduleKey}
+              onRequestDisable={() => setConfirmDisable(row)}
+            />
           ))}
         </div>
+      </section>
+
+      <section className="go-wsm-section" aria-labelledby="go-wsm-disabled-title">
+        <div className="go-wsm-section-head">
+          <h3 id="go-wsm-disabled-title">Disabled modules</h3>
+          <span className="go-wsm-count">{disabled.length}</span>
+        </div>
+        {disabled.length === 0 ? (
+          <p className="go-wsm-empty">No disabled modules.</p>
+        ) : (
+          <div className="go-wsm-list">
+            {disabled.map((row) => (
+              <DisabledModuleRow
+                key={row.moduleKey}
+                row={row}
+                busy={busyKey === row.moduleKey}
+                onEnable={() => void enableModule(row.moduleKey)}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="go-wsm-section" aria-labelledby="go-wsm-available-title">
@@ -245,6 +353,48 @@ export function GoWorkspaceModulesPanel({ open, onClose, teamId, modulesByKey, o
           </svg>
         </a>
       </footer>
+
+      {confirmDisable ? (
+        <div
+          className="go-wsm-confirm-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (busyKey == null) setConfirmDisable(null);
+          }}
+        >
+          <div
+            className="go-wsm-confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="go-wsm-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 id="go-wsm-confirm-title">Disable {confirmDisable.moduleName}?</h4>
+            <p>
+              This turns the module off for this workspace. It will move to Disabled, and related
+              navigation and floor access stay hidden until you enable it again.
+            </p>
+            <div className="go-wsm-confirm-actions">
+              <button
+                type="button"
+                className="go-wsm-confirm-cancel"
+                disabled={busyKey === confirmDisable.moduleKey}
+                onClick={() => setConfirmDisable(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="go-wsm-confirm-disable"
+                disabled={busyKey === confirmDisable.moduleKey}
+                onClick={() => void confirmDisableModule()}
+              >
+                {busyKey === confirmDisable.moduleKey ? "Disabling…" : "Disable module"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </aside>
   );
 }

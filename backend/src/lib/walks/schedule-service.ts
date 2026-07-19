@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../prisma";
+import { filterOccurrencesForViewer } from "./assign-filter";
 
 function parseDays(raw: unknown): number[] | null {
   if (!Array.isArray(raw)) return null;
@@ -234,7 +235,9 @@ export async function createSchedule(input: {
       claimMode: input.claimMode ?? "FIRST_START_OWNS",
       managerApprovalRequired: input.managerApprovalRequired ?? false,
       requiredCompletionCount: input.requiredCompletionCount ?? 1,
-      missedBehavior: input.missedBehavior ?? "MARK_MISSED",
+      // CARRY_OPEN is not implemented — always mark missed after grace.
+      missedBehavior: "MARK_MISSED",
+      // Reserved for future push/email; not read by materialization yet.
       notifyEnabled: input.notifyEnabled ?? true,
       windows: {
         create: input.windows.map((w, index) => ({
@@ -331,7 +334,7 @@ export async function updateSchedule(
         ...(input.requiredCompletionCount !== undefined
           ? { requiredCompletionCount: input.requiredCompletionCount }
           : {}),
-        ...(input.missedBehavior !== undefined ? { missedBehavior: input.missedBehavior } : {}),
+        ...(input.missedBehavior !== undefined ? { missedBehavior: "MARK_MISSED" } : {}),
         ...(input.notifyEnabled !== undefined ? { notifyEnabled: input.notifyEnabled } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
         ...(input.windows
@@ -622,6 +625,48 @@ export async function ensureOccurrencesForTeam(
   }
 }
 
+/**
+ * Mark IN_PROGRESS runs past grace as ABANDONED and their occurrences MISSED.
+ * Keeps the run link for audit so managers can still review partial results.
+ */
+export async function abandonStuckRuns(teamId?: string) {
+  const now = new Date();
+  const stuck = await prisma.walkOccurrence.findMany({
+    where: {
+      ...(teamId ? { teamId } : {}),
+      status: "IN_PROGRESS",
+      graceEndsAt: { lt: now },
+      runId: { not: null },
+    },
+    select: { id: true, runId: true },
+    take: 200,
+  });
+  for (const occ of stuck) {
+    if (!occ.runId) continue;
+    try {
+      await prisma.$transaction(async (tx) => {
+        const run = await tx.walkRun.findFirst({
+          where: { id: occ.runId!, status: "IN_PROGRESS" },
+          select: { id: true },
+        });
+        if (run) {
+          await tx.walkRun.update({
+            where: { id: run.id },
+            data: { status: "ABANDONED", completedAt: now },
+          });
+        }
+        await tx.walkOccurrence.update({
+          where: { id: occ.id },
+          data: { status: "MISSED" },
+        });
+      });
+    } catch (err) {
+      console.warn("abandonStuckRuns failed for occurrence", occ.id, err);
+    }
+  }
+  return { abandoned: stuck.length };
+}
+
 export async function refreshOccurrenceStatuses(teamId?: string) {
   const now = new Date();
   await prisma.walkOccurrence.updateMany({
@@ -642,6 +687,11 @@ export async function refreshOccurrenceStatuses(teamId?: string) {
     },
     data: { status: "MISSED" },
   });
+  try {
+    await abandonStuckRuns(teamId);
+  } catch (err) {
+    console.error("abandonStuckRuns failed", err);
+  }
 }
 
 /** Attach template/schedule without Prisma required-relation includes (orphans break those). */
@@ -736,7 +786,14 @@ async function attachOccurrenceRelations<
 
 export async function listOccurrences(
   teamId: string,
-  opts?: { from?: Date; to?: Date; status?: string; templateId?: string },
+  opts?: {
+    from?: Date;
+    to?: Date;
+    status?: string;
+    templateId?: string;
+    /** When set, filter USER/ROLE assignments (managers still see all). */
+    viewer?: { userId: string; role: string };
+  },
 ) {
   try {
     await refreshOccurrenceStatuses(teamId);
@@ -766,10 +823,15 @@ export async function listOccurrences(
     orderBy: { windowStart: "asc" },
     take: 200,
   });
-  return attachOccurrenceRelations(rows);
+  const attached = await attachOccurrenceRelations(rows);
+  if (!opts?.viewer) return attached;
+  return filterOccurrencesForViewer(attached, opts.viewer);
 }
 
-export async function listAvailableOccurrences(teamId: string) {
+export async function listAvailableOccurrences(
+  teamId: string,
+  opts?: { viewer?: { userId: string; role: string } },
+) {
   try {
     await refreshOccurrenceStatuses(teamId);
   } catch (err) {
@@ -789,5 +851,7 @@ export async function listAvailableOccurrences(teamId: string) {
     orderBy: { dueAt: "asc" },
     take: 50,
   });
-  return attachOccurrenceRelations(rows, { includeTemplateDescription: true });
+  const attached = await attachOccurrenceRelations(rows, { includeTemplateDescription: true });
+  if (!opts?.viewer) return attached;
+  return filterOccurrencesForViewer(attached, opts.viewer);
 }

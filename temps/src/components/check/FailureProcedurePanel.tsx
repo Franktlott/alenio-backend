@@ -23,7 +23,7 @@ type Props = {
   photosByActionId?: Record<string, string[]>;
   onCapturePhoto?: (actionId: string) => void;
   /** Called once every pending step is checked — parent completes them in order. */
-  onCompleteAll: () => void;
+  onCompleteAll: (comment: string) => void;
 };
 
 function isTakePhotoAction(action: WalkRunCorrectiveAction): boolean {
@@ -196,7 +196,7 @@ export function FailureProcedurePanel({
         <Pressable
           style={[styles.btn, !canMarkComplete && styles.btnDisabled]}
           disabled={!canMarkComplete}
-          onPress={onCompleteAll}
+          onPress={() => onCompleteAll(comment.trim())}
         >
           {busy ? (
             <ActivityIndicator color="#fff" />

@@ -1,5 +1,5 @@
 import { getBackendUrl } from "./backend-url";
-import { getAccessToken } from "./session";
+import { clearSession, getAccessToken } from "./session";
 
 type ApiErrorBody = { error?: { message?: string; code?: string } };
 
@@ -18,6 +18,28 @@ export class ApiError extends Error {
 export function getErrorCode(err: unknown): string | null {
   if (err instanceof ApiError) return err.code;
   return null;
+}
+
+type UnauthorizedListener = () => void;
+const unauthorizedListeners = new Set<UnauthorizedListener>();
+
+/** Register a callback when the API returns 401 (session cleared). */
+export function onUnauthorized(listener: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(listener);
+  return () => {
+    unauthorizedListeners.delete(listener);
+  };
+}
+
+async function handleUnauthorized() {
+  await clearSession();
+  for (const listener of unauthorizedListeners) {
+    try {
+      listener();
+    } catch {
+      /* ignore listener errors */
+    }
+  }
 }
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -44,6 +66,14 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
 
   const body = (await res.json().catch(() => null)) as (T & ApiErrorBody) | null;
   if (!res.ok) {
+    if (res.status === 401) {
+      await handleUnauthorized();
+      throw new ApiError(
+        body?.error?.message ?? "Session expired. Sign in again.",
+        body?.error?.code ?? "UNAUTHORIZED",
+        401,
+      );
+    }
     throw new ApiError(
       body?.error?.message ?? `Request failed (${res.status})`,
       body?.error?.code ?? "REQUEST_FAILED",

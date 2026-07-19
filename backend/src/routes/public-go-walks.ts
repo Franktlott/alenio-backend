@@ -277,6 +277,8 @@ publicGoWalksRouter.patch(
         completedBy: body.completedBy ?? "Floor associate",
         // Failure procedures run in Alenio Temps — Go saves pass/fail only.
         skipFailureProcedure: true,
+        adminOverride: true,
+        adminOverrideReason: "Alenio Go kiosk manual entry",
       });
       if ("error" in result) {
         const status = result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND" ? 404 : 400;

@@ -15,6 +15,7 @@ import { WalkDetailsPage } from "./routes/alenio-go/WalkDetailsPage";
 import { WalksListPage } from "./routes/alenio-go/WalksListPage";
 import { TempsModuleLayout } from "./routes/alenio-go/TempsModuleLayout";
 import { TempsDashboardPage } from "./routes/alenio-go/TempsDashboardPage";
+import { TempsReportsPage } from "./routes/alenio-go/TempsReportsPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { AdminPage } from "./routes/AdminPage";
 import { BillingPage } from "./routes/BillingPage";
@@ -156,6 +157,12 @@ export default function App() {
             <Route path="setup" element={<Navigate to="/go/devices" replace />} />
             <Route path="frontend" element={<Navigate to="/go/devices/display" replace />} />
             <Route path="checklists" element={<AlenioGoModuleSettingsPage moduleKey="checklists" />} />
+            {/* Module lifecycle (Testing/Live) lives on Go Admin — not inside Temps product chrome */}
+            <Route
+              path="temp-checks/module"
+              element={<AlenioGoModuleSettingsPage moduleKey="temp-checks" />}
+            />
+            <Route path="temp-checks/settings" element={<Navigate to="/go/temp-checks/module" replace />} />
             <Route path="temp-checks" element={<TempsModuleLayout />}>
               <Route index element={<Navigate to="overview" replace />} />
               <Route path="overview" element={<TempsDashboardPage />} />
@@ -168,7 +175,7 @@ export default function App() {
             <Route path="walks/:templateId" element={<WalkDetailsPage />} />
             <Route path="walks" element={<WalksListPage />} />
               <Route path="schedule" element={<Navigate to="/go/temp-checks/walks" replace />} />
-              <Route path="settings" element={<AlenioGoModuleSettingsPage moduleKey="temp-checks" />} />
+              <Route path="reports" element={<TempsReportsPage />} />
             </Route>
             <Route path="briefings/*" element={<AlenioGoModuleSettingsPage moduleKey="briefings" />} />
             <Route path="walks" element={<AlenioGoModuleSettingsPage moduleKey="walks" />} />

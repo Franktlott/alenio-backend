@@ -38,24 +38,6 @@ function IconReports() {
   );
 }
 
-function IconTrends() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M3 17 9 11l4 4 8-8" />
-      <path d="M14 7h7v7" />
-    </svg>
-  );
-}
-
-function IconCompliance() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      <path d="m9 12 2 2 4-4" />
-    </svg>
-  );
-}
-
 function IconLocations() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
@@ -197,14 +179,8 @@ export function TempsModuleLayout() {
 
           <div className="temps-nav-section">
             <p className="temps-nav-section-label">Insights</p>
-            <NavItem to="/go/temp-checks/reports" icon={<IconReports />} soon>
+            <NavItem to="/go/temp-checks/reports" icon={<IconReports />}>
               Reports
-            </NavItem>
-            <NavItem to="/go/temp-checks/trends" icon={<IconTrends />} soon>
-              Trends
-            </NavItem>
-            <NavItem to="/go/temp-checks/compliance" icon={<IconCompliance />} soon>
-              Compliance
             </NavItem>
           </div>
         </nav>

@@ -15,7 +15,7 @@ import {
   type ThermoworksDiagnostics,
 } from "../../probe/adapters/thermoworks/ThermoworksNative";
 import { SCENARIOS, type MockScenarioName } from "../../probe/mock";
-import { ProbeProvider, useProbe, type ProbeSource } from "../../probe/react";
+import { useProbe, type ProbeSource } from "../../probe/react";
 
 /**
  * Development-only harness for the vendor-neutral probe system.
@@ -26,11 +26,7 @@ export default function ProbeLabRoute() {
     return <Redirect href="/(app)/today" />;
   }
 
-  return (
-    <ProbeProvider initialSource="thermoworks">
-      <ProbeLabScreen />
-    </ProbeProvider>
-  );
+  return <ProbeLabScreen />;
 }
 
 function ProbeLabScreen() {

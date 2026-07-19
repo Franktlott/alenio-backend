@@ -57,6 +57,23 @@ describe("temperature evaluation", () => {
     expect(evaluateTemperature(config, { value: 38.2, source: "manual" })).toBe("PASS");
     expect(evaluateTemperature(config, { value: 41, source: "manual" })).toBe("FAIL");
   });
+
+  test("converts response unit to config unit before compare", () => {
+    const config = {
+      comparisonType: "BELOW" as const,
+      minimumTemperature: null,
+      maximumTemperature: 41,
+      unit: "F" as const,
+      allowManualEntry: true,
+      allowBluetoothProbe: false,
+      requireRetestOnFailure: false,
+      maximumRetests: 1,
+    };
+    // 5°C ≈ 41°F — at the limit, should PASS for BELOW (≤ 41)
+    expect(evaluateTemperature(config, { value: 5, unit: "C", source: "manual" })).toBe("PASS");
+    // 10°C ≈ 50°F — FAIL
+    expect(evaluateTemperature(config, { value: 10, unit: "C", source: "manual" })).toBe("FAIL");
+  });
 });
 
 describe("yes/no evaluation", () => {

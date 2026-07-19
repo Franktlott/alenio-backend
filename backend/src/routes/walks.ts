@@ -411,6 +411,11 @@ const submitResponseSchema = z.object({
   photoUrls: z.array(z.string().url()).max(20).optional().nullable(),
   /** Alenio Go / admin manual entry — save pass/fail without failure-procedure gating. */
   skipFailureProcedure: z.boolean().optional(),
+  /** Required when skipFailureProcedure is true — audits the override. */
+  adminOverride: z.boolean().optional(),
+  adminOverrideReason: z.string().max(500).optional().nullable(),
+  /** Manager late entry after grace — requires manage permission. */
+  lateEntryOverride: z.boolean().optional(),
 });
 
 const syncRunSchema = z.object({
@@ -506,6 +511,12 @@ walksRouter.patch(
     const gate = await assertCanViewWalks(teamId, uid);
     if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
     const body = c.req.valid("json");
+    if (body.lateEntryOverride) {
+      const manage = await assertCanManageWalks(teamId, uid);
+      if (!manage.ok) {
+        return c.json({ error: { message: manage.message, code: "FORBIDDEN" } }, manage.status);
+      }
+    }
     try {
       const user = c.get("user") as { name?: string | null } | null;
       const result = await walkRunService.submitWalkItemResponse({
@@ -516,10 +527,19 @@ walksRouter.patch(
         notes: body.notes,
         photoUrls: body.photoUrls,
         completedBy: user?.name ?? uid,
+        actorUserId: uid,
         skipFailureProcedure: body.skipFailureProcedure,
+        adminOverride: body.adminOverride,
+        adminOverrideReason: body.adminOverrideReason,
+        lateEntryOverride: body.lateEntryOverride,
       });
       if ("error" in result) {
-        const status = result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND" ? 404 : 400;
+        const status =
+          result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND"
+            ? 404
+            : result.error === "RUN_OWNED_BY_OTHER"
+              ? 409
+              : 400;
         return c.json(
           { error: { message: result.message ?? result.error, code: result.error } },
           status,
@@ -532,27 +552,49 @@ walksRouter.patch(
   },
 );
 
-walksRouter.post("/runs/:runId/complete", async (c) => {
-  const teamId = c.req.param("teamId")!;
-  const runId = c.req.param("runId")!;
-  const uid = userId(c);
-  if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-  const gate = await assertCanViewWalks(teamId, uid);
-  if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
-  try {
-    const result = await walkRunService.completeWalkRun(teamId, runId);
-    if ("error" in result) {
-      const status = result.error === "NOT_FOUND" ? 404 : 400;
-      return c.json(
-        { error: { message: result.message ?? result.error, code: result.error } },
-        status,
-      );
+walksRouter.post(
+  "/runs/:runId/complete",
+  zValidator(
+    "json",
+    z.object({
+      lateEntryOverride: z.boolean().optional(),
+    }),
+  ),
+  async (c) => {
+    const teamId = c.req.param("teamId")!;
+    const runId = c.req.param("runId")!;
+    const uid = userId(c);
+    if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+    const body = c.req.valid("json");
+    const gate = body.lateEntryOverride
+      ? await assertCanManageWalks(teamId, uid)
+      : await assertCanViewWalks(teamId, uid);
+    if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+    try {
+      const user = c.get("user") as { name?: string | null } | null;
+      const result = await walkRunService.completeWalkRun(teamId, runId, {
+        actorUserId: uid,
+        completedBy: user?.name ?? uid,
+        lateEntryOverride: body.lateEntryOverride,
+      });
+      if ("error" in result) {
+        const status =
+          result.error === "NOT_FOUND"
+            ? 404
+            : result.error === "RUN_OWNED_BY_OTHER"
+              ? 409
+              : 400;
+        return c.json(
+          { error: { message: result.message ?? result.error, code: result.error } },
+          status,
+        );
+      }
+      return c.json({ data: result.run });
+    } catch (err) {
+      return prismaRouteError(c, err, "Failed to complete walk");
     }
-    return c.json({ data: result.run });
-  } catch (err) {
-    return prismaRouteError(c, err, "Failed to complete walk");
-  }
-});
+  },
+);
 
 walksRouter.post(
   "/runs/:runId/sync",
@@ -602,6 +644,8 @@ walksRouter.post(
     "json",
     z.object({
       response: z.unknown().optional(),
+      /** Manager resolve from Execution Center (manage gate + bypass window). */
+      managerResolve: z.boolean().optional(),
     }),
   ),
   async (c) => {
@@ -611,7 +655,10 @@ walksRouter.post(
     const actionId = c.req.param("actionId")!;
     const uid = userId(c);
     if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-    const gate = await assertCanViewWalks(teamId, uid);
+    const body = c.req.valid("json");
+    const gate = body.managerResolve
+      ? await assertCanManageWalks(teamId, uid)
+      : await assertCanViewWalks(teamId, uid);
     if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
     try {
       const user = c.get("user") as { name?: string | null } | null;
@@ -620,8 +667,10 @@ walksRouter.post(
         runId,
         itemId,
         correctiveActionId: actionId,
-        response: c.req.valid("json").response,
+        response: body.response,
         completedBy: user?.name ?? uid,
+        actorUserId: uid,
+        managerResolve: body.managerResolve,
       });
       if ("error" in result) {
         return c.json(
@@ -635,7 +684,9 @@ walksRouter.post(
             result.error === "ITEM_NOT_FOUND" ||
             result.error === "ACTION_NOT_FOUND"
             ? 404
-            : 400,
+            : result.error === "RUN_OWNED_BY_OTHER"
+              ? 409
+              : 400,
         );
       }
       return c.json({ data: result.run });
@@ -654,7 +705,12 @@ walksRouter.post("/runs/:runId/items/:itemId/reset", async (c) => {
   const gate = await assertCanViewWalks(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
-    const result = await walkRunService.resetWalkItemResponse({ teamId, runId, itemId });
+    const result = await walkRunService.resetWalkItemResponse({
+      teamId,
+      runId,
+      itemId,
+      actorUserId: uid,
+    });
     if ("error" in result) {
       return c.json(
         {
@@ -663,7 +719,11 @@ walksRouter.post("/runs/:runId/items/:itemId/reset", async (c) => {
             code: result.error,
           },
         },
-        result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND" ? 404 : 400,
+        result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND"
+          ? 404
+          : result.error === "RUN_OWNED_BY_OTHER"
+            ? 409
+            : 400,
       );
     }
     return c.json({ data: result.run });
@@ -1230,6 +1290,7 @@ walksRouter.get("/occurrences", async (c) => {
         status: c.req.query("status") ?? undefined,
         from: from && !Number.isNaN(from.getTime()) ? from : undefined,
         to: to && !Number.isNaN(to.getTime()) ? to : undefined,
+        viewer: { userId: uid, role: gate.membership.role },
       }),
     );
     return c.json({ data });
@@ -1245,7 +1306,11 @@ walksRouter.get("/occurrences/available", async (c) => {
   const gate = await assertCanViewWalks(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
-    const data = await withWalksSchemaRetry(() => scheduleService.listAvailableOccurrences(teamId));
+    const data = await withWalksSchemaRetry(() =>
+      scheduleService.listAvailableOccurrences(teamId, {
+        viewer: { userId: uid, role: gate.membership.role },
+      }),
+    );
     return c.json({ data });
   } catch (err) {
     return prismaRouteError(c, err, "Failed to list available occurrences");
@@ -1258,6 +1323,10 @@ walksRouter.post(
     "json",
     z.object({
       isTest: z.boolean().optional(),
+      /** Warm run for offline cache without claiming FIRST_START_OWNS. */
+      prepareOnly: z.boolean().optional(),
+      /** Manager late entry after grace — requires manage permission. */
+      lateEntryOverride: z.boolean().optional(),
     }),
   ),
   async (c) => {
@@ -1265,7 +1334,10 @@ walksRouter.post(
     const occurrenceId = c.req.param("occurrenceId")!;
     const uid = userId(c);
     if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-    const gate = await assertCanViewWalks(teamId, uid);
+    const body = c.req.valid("json");
+    const gate = body.lateEntryOverride
+      ? await assertCanManageWalks(teamId, uid)
+      : await assertCanViewWalks(teamId, uid);
     if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
     try {
       const user = c.get("user") as { name?: string | null } | null;
@@ -1278,7 +1350,9 @@ walksRouter.post(
         occurrenceId,
         startedByUserId: uid,
         startedByName: user?.name ?? null,
-        isTest: c.req.valid("json").isTest,
+        isTest: body.isTest,
+        prepareOnly: body.prepareOnly,
+        lateEntryOverride: body.lateEntryOverride,
       });
       if ("error" in result) {
         const status =

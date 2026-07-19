@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { signOut } from "../lib/auth";
 import { useSession } from "../lib/session-context";
 import { colors } from "../lib/theme";
-import { ProbeProvider, useProbe, type ProbeSource } from "../probe/react";
+import { useProbe, type ProbeSource } from "../probe/react";
 
 type Props = {
   visible: boolean;
@@ -37,9 +37,7 @@ export function HomeMenu({ visible, onClose }: Props) {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-            <ProbeProvider initialSource="thermoworks">
-              <ProbeSettingsSection />
-            </ProbeProvider>
+            <ProbeSettingsSection />
 
             <Text style={styles.sectionLabel}>App</Text>
             <MenuRow label="History" onPress={() => { onClose(); router.push("/(app)/history"); }} />

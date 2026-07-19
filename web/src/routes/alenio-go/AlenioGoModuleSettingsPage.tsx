@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
-import { TempsButton, TempsPageHeader, TempsPageShell } from "../../components/temps";
 import {
   fetchWorkspaceModule,
   fetchWorkspaceModuleTestSessions,
@@ -170,7 +169,6 @@ export function AlenioGoModuleSettingsPage({ moduleKey }: Props) {
 
   const isActive = module.status === "active";
   const mode = module.operatingMode;
-  const isTempsSettings = moduleKey === "temp-checks";
 
   const statusActions = (
     <>
@@ -497,35 +495,6 @@ export function AlenioGoModuleSettingsPage({ moduleKey }: Props) {
       ) : null}
     </>
   );
-
-  if (isTempsSettings) {
-    return (
-      <TempsPageShell testId="temps-settings-page" wide>
-        <TempsPageHeader
-          title="Settings"
-          description={module.description}
-          badges={
-            <>
-              <StatusBadge status={module.status} />
-              <OperatingModeBadge mode={mode} />
-            </>
-          }
-          actions={
-            isActive ? (
-              <TempsButton variant="ghost" disabled={busy} onClick={() => void deactivate()}>
-                Deactivate
-              </TempsButton>
-            ) : (
-              <TempsButton variant="primary" disabled={busy} onClick={() => void activate()}>
-                Activate module
-              </TempsButton>
-            )
-          }
-        />
-        {body}
-      </TempsPageShell>
-    );
-  }
 
   return (
     <GoBackendModuleShell

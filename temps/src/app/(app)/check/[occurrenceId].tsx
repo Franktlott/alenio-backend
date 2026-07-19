@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import {
   ActivityIndicator,
@@ -64,8 +63,6 @@ import type {
   WalkRunItem,
 } from "../../../lib/types";
 import { colors } from "../../../lib/theme";
-import { ProbeProvider } from "../../../probe/react";
-
 function IconBackspace() {
   return <Text style={styles.keyText}>⌫</Text>;
 }
@@ -76,11 +73,6 @@ function runAllowsBluetoothProbe(run: WalkRun): boolean {
       item.type === "TEMPERATURE" &&
       (item.config as TemperatureConfig | undefined)?.allowBluetoothProbe === true,
   );
-}
-
-function MaybeProbeProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
-  if (!enabled) return <>{children}</>;
-  return <ProbeProvider initialSource="thermoworks">{children}</ProbeProvider>;
 }
 
 export default function TakeCheckScreen() {
@@ -267,6 +259,7 @@ export default function TakeCheckScreen() {
         withPhotos.map((item) => ({
           itemId: item.itemId,
           response: item.response,
+          notes: item.notes,
           photoUrls: item.photoUrls.length > 0 ? item.photoUrls : undefined,
           correctiveActionIdsCompleted: item.correctiveActionIdsCompleted,
         })),
@@ -457,7 +450,10 @@ export default function TakeCheckScreen() {
     }
   }
 
-  async function markAllCorrectiveComplete(phaseActions: WalkRunCorrectiveAction[]) {
+  async function markAllCorrectiveComplete(
+    phaseActions: WalkRunCorrectiveAction[],
+    comment = "",
+  ) {
     if (!teamId || !run || !current) return;
     if (saving || syncing) return;
     const pending = phaseActions.filter((a) => a.status === "PENDING");
@@ -468,10 +464,12 @@ export default function TakeCheckScreen() {
       const next = applyLocalCorrectiveCompletions(run, current.id, actionIds);
       const draft = draftRef.current;
       const syncItems = [...(draft?.syncItems ?? [])];
+      const note = comment.trim() || null;
       for (let i = syncItems.length - 1; i >= 0; i--) {
         if (syncItems[i]!.itemId === current.id) {
           syncItems[i] = {
             ...syncItems[i]!,
+            notes: note ?? syncItems[i]!.notes ?? null,
             correctiveActionIdsCompleted: [
               ...syncItems[i]!.correctiveActionIdsCompleted,
               ...actionIds,
@@ -663,7 +661,7 @@ export default function TakeCheckScreen() {
   }
 
   const allowManual = config.allowManualEntry !== false;
-  const allowProbe = config.allowBluetoothProbe === true;
+  const allowProbe = probeEnabledForRun && config.allowBluetoothProbe === true;
   const showKeypad = allowManual && (!allowProbe || manualMode);
   const corrective = current.response?.correctiveActions ?? [];
   const firstFailure = corrective.filter(
@@ -725,7 +723,6 @@ export default function TakeCheckScreen() {
   };
 
   return (
-    <MaybeProbeProvider enabled={probeEnabledForRun}>
       <View style={styles.screen}>
         <ScrollView
           style={styles.scrollFlex}
@@ -769,7 +766,7 @@ export default function TakeCheckScreen() {
               failSummary={failSummary}
               photosByActionId={photosByActionIdForCurrent()}
               onCapturePhoto={(actionId) => void capturePhotoForAction(actionId)}
-              onCompleteAll={() => void markAllCorrectiveComplete(firstFailure)}
+              onCompleteAll={(comment) => void markAllCorrectiveComplete(firstFailure, comment)}
             />
           ) : null}
 
@@ -791,7 +788,7 @@ export default function TakeCheckScreen() {
               failSummary={failSummary}
               photosByActionId={photosByActionIdForCurrent()}
               onCapturePhoto={(actionId) => void capturePhotoForAction(actionId)}
-              onCompleteAll={() => void markAllCorrectiveComplete(secondFailure)}
+              onCompleteAll={(comment) => void markAllCorrectiveComplete(secondFailure, comment)}
             />
           ) : null}
 
@@ -972,7 +969,6 @@ export default function TakeCheckScreen() {
           }}
         />
       </View>
-    </MaybeProbeProvider>
   );
 }
 

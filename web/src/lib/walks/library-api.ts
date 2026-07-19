@@ -252,10 +252,14 @@ export function fetchWalkRun(teamId: string, runId: string) {
   ).then((r) => r.data);
 }
 
-export function startOccurrenceRun(teamId: string, occurrenceId: string) {
+export function startOccurrenceRun(
+  teamId: string,
+  occurrenceId: string,
+  opts?: { lateEntryOverride?: boolean },
+) {
   return apiPostJson<{ data: WalkRun }>(
     `${base(teamId)}/occurrences/${encodeURIComponent(occurrenceId)}/runs`,
-    {},
+    opts?.lateEntryOverride ? { lateEntryOverride: true } : {},
   ).then((r) => r.data);
 }
 
@@ -268,6 +272,9 @@ export function submitWalkItemResponse(
     notes?: string | null;
     photoUrls?: string[] | null;
     skipFailureProcedure?: boolean;
+    adminOverride?: boolean;
+    adminOverrideReason?: string | null;
+    lateEntryOverride?: boolean;
   },
 ) {
   return apiPatchJson<{ data: WalkRun }>(
@@ -276,10 +283,28 @@ export function submitWalkItemResponse(
   ).then((r) => r.data);
 }
 
-export function completeWalkRun(teamId: string, runId: string) {
+export function completeWalkRun(
+  teamId: string,
+  runId: string,
+  opts?: { lateEntryOverride?: boolean },
+) {
   return apiPostJson<{ data: WalkRun }>(
     `${base(teamId)}/runs/${encodeURIComponent(runId)}/complete`,
-    {},
+    opts?.lateEntryOverride ? { lateEntryOverride: true } : {},
+  ).then((r) => r.data);
+}
+
+/** Manager resolve for open corrective actions (Execution Center). */
+export function completeWalkCorrectiveAction(
+  teamId: string,
+  runId: string,
+  itemId: string,
+  actionId: string,
+  opts?: { managerResolve?: boolean },
+) {
+  return apiPostJson<{ data: WalkRun }>(
+    `${base(teamId)}/runs/${encodeURIComponent(runId)}/items/${encodeURIComponent(itemId)}/corrective-actions/${encodeURIComponent(actionId)}/complete`,
+    { managerResolve: opts?.managerResolve ?? true },
   ).then((r) => r.data);
 }
 
