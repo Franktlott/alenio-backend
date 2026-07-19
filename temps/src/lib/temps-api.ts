@@ -93,11 +93,21 @@ export function flattenRunItems(run: WalkRun) {
   return [...run.items].sort((a, b) => a.position - b.position);
 }
 
+/** Procedure UI only when the server still requires corrective action — not on PASS. */
 export function itemNeedsProcedure(item: WalkRun["items"][number]): boolean {
   if (!item.response) return false;
-  if (item.response.status === "NEEDS_ACTION") return true;
+  if (item.response.status !== "NEEDS_ACTION") return false;
   const actions = item.response.correctiveActions ?? [];
+  // If status says NEEDS_ACTION but every step is done, treat as done (stale status).
+  if (actions.length === 0) return true;
   return actions.some((a) => a.status === "PENDING");
+}
+
+/** True when a fail was saved but no procedure step has been completed yet. */
+export function itemHasUnstartedProcedure(item: WalkRun["items"][number]): boolean {
+  if (!itemNeedsProcedure(item)) return false;
+  const actions = item.response?.correctiveActions ?? [];
+  return !actions.some((a) => a.status === "COMPLETED");
 }
 
 export function isOpenTempItem(item: WalkRun["items"][number]): boolean {

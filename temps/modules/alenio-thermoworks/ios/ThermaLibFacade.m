@@ -1,6 +1,8 @@
 #import "ThermaLibFacade.h"
 #import "ThermaLib/ThermaLib.h"
 #import "ThermaLib/TLDevice.h"
+#import "ThermaLib/TLSensor.h"
+#import "ThermaLib/TLConstants.h"
 
 @implementation ThermaLibFacade
 
@@ -11,11 +13,15 @@ static BOOL _manualDisconnect = NO;
 static ThermaLibFacadeDevicesBlock _devicesBlock = nil;
 static ThermaLibFacadeErrorBlock _errorBlock = nil;
 static ThermaLibFacadeConnectionBlock _connectionBlock = nil;
+static ThermaLibFacadeReadingBlock _readingBlock = nil;
+static ThermaLibFacadeButtonPressBlock _buttonPressBlock = nil;
 static NSMutableDictionary<NSString *, NSDictionary<NSString *, id> *> *_emitted = nil;
 static NSMutableDictionary<NSString *, NSNumber *> *_pending = nil;
 static NSMutableDictionary<NSString *, id<TLDevice>> *_devicesById = nil;
 static NSString *_connectedDeviceId = nil;
 static NSString *_connectingDeviceId = nil;
+static NSInteger _readingSequence = 0;
+static NSNumber *_lastBatteryPercent = nil;
 
 static NSString *const kLogTag = @"AlenioThermoworks";
 
@@ -110,6 +116,16 @@ static NSString *const kLogTag = @"AlenioThermoworks";
   [self log:@"setConnectionBlock %@", block ? @"installed" : @"cleared"];
 }
 
++ (void)setReadingHandler:(ThermaLibFacadeReadingBlock)handler {
+  _readingBlock = [handler copy];
+  [self log:@"setReadingHandler %@", handler ? @"installed" : @"cleared"];
+}
+
++ (void)setButtonPressHandler:(ThermaLibFacadeButtonPressBlock)handler {
+  _buttonPressBlock = [handler copy];
+  [self log:@"setButtonPressHandler %@", handler ? @"installed" : @"cleared"];
+}
+
 + (void)emitErrorCode:(NSString *)code message:(NSString *)message {
   [self log:@"error code=%@ message=%@", code, message];
   if (_errorBlock) {
@@ -187,22 +203,32 @@ static NSString *const kLogTag = @"AlenioThermoworks";
   if (type == TLDeviceTypeThermaPenBlue) {
     return @"PEN_BLUE";
   }
+  if (type == TLDeviceTypeTempTestBlue) {
+    return @"TEMPTEST_BLUE";
+  }
   if (type == TLDeviceTypeUnknown) {
     return @"UNKNOWN";
   }
   return @"OTHER";
 }
 
-+ (BOOL)nameLooksLikeThermapen:(NSString *)name {
++ (BOOL)isSupportedDeviceType:(NSString *)classified {
+  return [classified isEqualToString:@"PEN_BLUE"] || [classified isEqualToString:@"TEMPTEST_BLUE"];
+}
+
++ (BOOL)nameLooksLikeSupportedProbe:(NSString *)name {
   if (name.length == 0) {
     return NO;
   }
-  return [name rangeOfString:@"thermapen" options:NSCaseInsensitiveSearch].location != NSNotFound;
+  if ([name rangeOfString:@"thermapen" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+    return YES;
+  }
+  return [name rangeOfString:@"temptest" options:NSCaseInsensitiveSearch].location != NSNotFound;
 }
 
 + (NSDictionary<NSString *, id> *)payloadForDevice:(id<TLDevice>)device {
   NSString *deviceId = [self deviceIdForDevice:device];
-  NSString *name = device.deviceName.length > 0 ? device.deviceName : (device.deviceTypeName ?: @"Thermapen");
+  NSString *name = device.deviceName.length > 0 ? device.deviceName : (device.deviceTypeName ?: @"ThermoWorks probe");
   NSMutableDictionary *payload = [@{
     @"deviceId": deviceId,
     @"name": name,
@@ -239,14 +265,14 @@ static NSString *const kLogTag = @"AlenioThermoworks";
     return changed;
   }
 
-  if ([classified isEqualToString:@"PEN_BLUE"]) {
+  if ([self isSupportedDeviceType:classified]) {
     [_pending removeObjectForKey:deviceId];
     _emitted[deviceId] = [self payloadForDevice:device];
-    [self log:@"filter KEEP (PEN_BLUE) id=%@", deviceId];
+    [self log:@"filter KEEP (%@) id=%@", classified, deviceId];
     return YES;
   }
 
-  BOOL provisional = [self nameLooksLikeThermapen:name];
+  BOOL provisional = [self nameLooksLikeSupportedProbe:name];
   if (provisional) {
     _pending[deviceId] = @YES;
     _emitted[deviceId] = [self payloadForDevice:device];
@@ -298,6 +324,102 @@ static NSString *const kLogTag = @"AlenioThermoworks";
   }
 }
 
++ (void)emitReadingPayload:(NSDictionary<NSString *, id> *)payload {
+  [self log:@"reading deviceId=%@ celsius=%@ status=%@ seq=%@ battery=%@",
+            payload[@"deviceId"],
+            payload[@"temperatureC"] ?: @"null",
+            payload[@"status"],
+            payload[@"sequence"] ?: @"—",
+            payload[@"battery"] ?: @"—"];
+  if (_readingBlock) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (_readingBlock) {
+        _readingBlock(payload);
+      }
+    });
+  }
+}
+
++ (void)emitButtonPressForDeviceId:(NSString *)deviceId {
+  NSTimeInterval ms = [[NSDate date] timeIntervalSince1970] * 1000.0;
+  NSDictionary *payload = @{
+    @"type": @"buttonPress",
+    @"deviceId": deviceId,
+    @"timestamp": @((long long)ms),
+  };
+  [self log:@"buttonPress deviceId=%@", deviceId];
+  if (_buttonPressBlock) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (_buttonPressBlock) {
+        _buttonPressBlock(payload);
+      }
+    });
+  }
+}
+
++ (void)emitReadingFromDevice:(id<TLDevice>)device source:(NSString *)source {
+  if (device == nil || !device.ready) {
+    return;
+  }
+  NSString *deviceId = [self deviceIdForDevice:device];
+  if (_connectedDeviceId == nil || ![_connectedDeviceId isEqualToString:deviceId]) {
+    return;
+  }
+
+  id<TLSensor> sensor = nil;
+  @try {
+    sensor = [device sensorAtIndex:1];
+  } @catch (__unused NSException *exception) {
+    sensor = nil;
+  }
+  if (sensor == nil && device.sensors.count > 0) {
+    sensor = device.sensors.firstObject;
+  }
+  if (sensor == nil) {
+    [self log:@"reading skip source=%@ id=%@ (no sensor)", source, deviceId];
+    return;
+  }
+
+  float raw = sensor.reading;
+  float noValue = TLConstants.NO_VALUE;
+  BOOL isNoValue = isnan(raw) || fabsf(raw - noValue) < 0.0001f;
+  BOOL fault = sensor.fault;
+  NSString *status = fault ? @"fault" : (isNoValue ? @"unavailable" : @"ok");
+  _readingSequence += 1;
+
+  NSTimeInterval ts = sensor.readingTimestamp != nil
+    ? [sensor.readingTimestamp timeIntervalSince1970] * 1000.0
+    : ([[NSDate date] timeIntervalSince1970] * 1000.0);
+
+  NSMutableDictionary *payload = [@{
+    @"type": @"reading",
+    @"deviceId": deviceId,
+    @"sensorId": [NSString stringWithFormat:@"%lu", (unsigned long)sensor.index],
+    @"timestamp": @((long long)ts),
+    @"sequence": @(_readingSequence),
+    @"status": status,
+    @"raw": @{
+      @"isReady": @(device.ready),
+      @"isFault": @(fault),
+      @"source": source,
+    },
+  } mutableCopy];
+
+  if (!isNoValue && !fault) {
+    payload[@"temperatureC"] = @(raw);
+  } else {
+    payload[@"temperatureC"] = [NSNull null];
+  }
+  if (_lastBatteryPercent != nil) {
+    payload[@"battery"] = _lastBatteryPercent;
+  } else {
+    payload[@"battery"] = @(device.batteryLevel);
+    _lastBatteryPercent = payload[@"battery"];
+  }
+
+  [self emitReadingPayload:payload];
+}
+
 + (void)registerObserversIfNeeded {
   if (_observersRegistered) {
     return;
@@ -307,8 +429,14 @@ static NSString *const kLogTag = @"AlenioThermoworks";
   [center addObserver:self selector:@selector(handleDeviceUpdated:) name:ThermaLibDeviceUpdatedNotificationName object:nil];
   [center addObserver:self selector:@selector(handleScanCompleted:) name:ThermaLibScanCompletedNotificationName object:nil];
   [center addObserver:self selector:@selector(handleDisconnection:) name:ThermaLibDeviceDisconnectionNotificationName object:nil];
+  [center addObserver:self selector:@selector(handleSensorUpdated:) name:ThermaLibSensorUpdatedNotificationName object:nil];
+  [center addObserver:self selector:@selector(handleBatteryLevel:) name:ThermaLibBatteryLevelNotificationName object:nil];
+  [center addObserver:self
+             selector:@selector(handleDeviceNotification:)
+                 name:ThermaLibNotificationReceivedNotificationName
+               object:nil];
   _observersRegistered = YES;
-  [self log:@"NSNotification observers registered (incl. disconnection)"];
+  [self log:@"NSNotification observers registered (incl. sensor/battery/button)"];
 }
 
 + (void)handleNewDevice:(NSNotification *)notification {
@@ -345,24 +473,81 @@ static NSString *const kLogTag = @"AlenioThermoworks";
   // Connected only when ThermaLib reports ready (settings loaded).
   if ([_connectingDeviceId isEqualToString:deviceId] && device.ready) {
     NSString *classified = [self classifyDeviceType:device];
-    if (![classified isEqualToString:@"PEN_BLUE"] && ![classified isEqualToString:@"UNKNOWN"]) {
+    if (![self isSupportedDeviceType:classified] && ![classified isEqualToString:@"UNKNOWN"]) {
       [self log:@"connect rejected after ready: type=%@", classified];
       _connectingDeviceId = nil;
-      [self emitErrorCode:@"CONNECT_FAILED" message:@"Device is not a Thermapen ONE Blue"];
-      [self emitConnectionState:@"disconnected" deviceId:deviceId reason:@"failed" message:@"Not PEN_BLUE"];
+      [self emitErrorCode:@"CONNECT_FAILED" message:@"Device is not a supported ThermoWorks probe"];
+      [self emitConnectionState:@"disconnected" deviceId:deviceId reason:@"failed" message:@"Unsupported type"];
       return;
     }
-    // Prefer confirming PEN_BLUE; allow ready provisional if type still UNKNOWN but name matched.
-    if ([classified isEqualToString:@"UNKNOWN"] && ![self nameLooksLikeThermapen:device.deviceName ?: @""]) {
+    // Prefer confirming supported type; allow ready provisional if type still UNKNOWN but name matched.
+    if ([classified isEqualToString:@"UNKNOWN"] && ![self nameLooksLikeSupportedProbe:device.deviceName ?: @""]) {
       [self log:@"connect waiting: ready but type still UNKNOWN id=%@", deviceId];
       return;
     }
     _connectingDeviceId = nil;
     _connectedDeviceId = deviceId;
     _manualDisconnect = NO;
+    _readingSequence = 0;
+    _lastBatteryPercent = nil;
     [self log:@"device ready → connected id=%@", deviceId];
     [self emitConnectionState:@"connected" deviceId:deviceId reason:nil message:nil];
+    [self emitReadingFromDevice:device source:@"ready"];
+  } else if ([_connectedDeviceId isEqualToString:deviceId] && device.ready) {
+    [self emitReadingFromDevice:device source:@"DeviceUpdated"];
   }
+}
+
++ (void)handleSensorUpdated:(NSNotification *)notification {
+  id object = notification.object;
+  if (![object conformsToProtocol:@protocol(TLSensor)]) {
+    return;
+  }
+  id<TLSensor> sensor = (id<TLSensor>)object;
+  id<TLDevice> device = sensor.device;
+  if (device == nil) {
+    return;
+  }
+  [self emitReadingFromDevice:device source:@"SensorUpdated"];
+}
+
++ (void)handleBatteryLevel:(NSNotification *)notification {
+  id object = notification.object;
+  if (![object conformsToProtocol:@protocol(TLDevice)]) {
+    return;
+  }
+  id<TLDevice> device = (id<TLDevice>)object;
+  NSString *deviceId = [self deviceIdForDevice:device];
+  if (_connectedDeviceId == nil || ![_connectedDeviceId isEqualToString:deviceId]) {
+    return;
+  }
+  _lastBatteryPercent = @(device.batteryLevel);
+  [self log:@"battery id=%@ level=%ld", deviceId, (long)device.batteryLevel];
+  [self emitReadingFromDevice:device source:@"BatteryLevel"];
+}
+
++ (void)handleDeviceNotification:(NSNotification *)notification {
+  id object = notification.object;
+  if (![object conformsToProtocol:@protocol(TLDevice)]) {
+    return;
+  }
+  id<TLDevice> device = (id<TLDevice>)object;
+  NSString *deviceId = [self deviceIdForDevice:device];
+  NSNumber *typeNum = notification.userInfo[ThermaLibNotificationReceivedNotificationTypeKey];
+  TLDeviceNotificationType type = typeNum != nil
+    ? (TLDeviceNotificationType)typeNum.integerValue
+    : TLDeviceNotificationTypeNone;
+  [self log:@"deviceNotification id=%@ type=%ld", deviceId, (long)type];
+  if (type != TLDeviceNotificationTypeButtonPressed) {
+    return;
+  }
+  if (_connectedDeviceId == nil || ![_connectedDeviceId isEqualToString:deviceId]) {
+    [self log:@"buttonPress ignored (not connected device) id=%@", deviceId];
+    return;
+  }
+  // Button often accompanies a fresh sample — emit reading first, then capture signal.
+  [self emitReadingFromDevice:device source:@"ButtonPressed"];
+  [self emitButtonPressForDeviceId:deviceId];
 }
 
 + (void)handleScanCompleted:(NSNotification *)notification {
@@ -395,6 +580,8 @@ static NSString *const kLogTag = @"AlenioThermoworks";
 
   _connectedDeviceId = nil;
   _connectingDeviceId = nil;
+  _readingSequence = 0;
+  _lastBatteryPercent = nil;
   BOOL wasManual = _manualDisconnect || [reason isEqualToString:@"manual"];
   _manualDisconnect = NO;
   NSString *finalReason = wasManual ? @"manual" : reason;
@@ -477,7 +664,7 @@ static NSString *const kLogTag = @"AlenioThermoworks";
 
   NSString *classified = [self classifyDeviceType:device];
   if ([classified isEqualToString:@"OTHER"]) {
-    NSString *error = @"Device is not a Thermapen ONE Blue";
+    NSString *error = @"Device is not a supported ThermoWorks probe";
     [self emitErrorCode:@"CONNECT_FAILED" message:error];
     return @{ @"ok": @NO, @"error": error };
   }
@@ -497,8 +684,11 @@ static NSString *const kLogTag = @"AlenioThermoworks";
     if (device.ready) {
       _connectingDeviceId = nil;
       _connectedDeviceId = deviceId;
+      _readingSequence = 0;
+      _lastBatteryPercent = nil;
       [self log:@"connect: already ready id=%@", deviceId];
       [self emitConnectionState:@"connected" deviceId:deviceId reason:nil message:nil];
+      [self emitReadingFromDevice:device source:@"connectAlreadyReady"];
       return @{ @"ok": @YES };
     }
 
@@ -565,6 +755,8 @@ static NSString *const kLogTag = @"AlenioThermoworks";
   _connectedDeviceId = nil;
   _connectingDeviceId = nil;
   _manualDisconnect = NO;
+  _readingSequence = 0;
+  _lastBatteryPercent = nil;
   if (_observersRegistered) {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     _observersRegistered = NO;
@@ -575,6 +767,8 @@ static NSString *const kLogTag = @"AlenioThermoworks";
   _devicesBlock = nil;
   _errorBlock = nil;
   _connectionBlock = nil;
+  _readingBlock = nil;
+  _buttonPressBlock = nil;
 }
 
 @end

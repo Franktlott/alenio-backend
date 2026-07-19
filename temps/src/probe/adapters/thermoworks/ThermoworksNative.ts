@@ -1,6 +1,6 @@
 /**
  * Thin JS wrapper around the alenio-thermoworks Expo module.
- * Phase 3B: diagnostics + discovery + connect/disconnect. No readings yet.
+ * Phase 3C: diagnostics + discovery + connect/disconnect + live °C readings.
  */
 export {
   connect,
@@ -12,9 +12,12 @@ export {
   isAvailable,
   startScan,
   stopScan,
+  subscribeToButtonPress,
   subscribeToConnectionState,
   subscribeToDevices,
   subscribeToErrors,
+  subscribeToReadings,
+  type ThermoworksButtonPressEvent,
   type ThermoworksConnectionEvent,
   type ThermoworksConnectionReason,
   type ThermoworksConnectionState,
@@ -23,5 +26,7 @@ export {
   type ThermoworksDevicesEvent,
   type ThermoworksErrorEvent,
   type ThermoworksInitResult,
+  type ThermoworksReadingEvent,
+  type ThermoworksReadingStatus,
   type ThermoworksScanResult,
 } from "alenio-thermoworks";

@@ -11,7 +11,9 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import uk.co.etiltd.thermalib.Device
 import uk.co.etiltd.thermalib.DeviceType
+import uk.co.etiltd.thermalib.Sensor
 import uk.co.etiltd.thermalib.ThermaLib
+import kotlin.math.abs
 
 class AlenioThermoworksModule : Module() {
   @Volatile
@@ -32,6 +34,9 @@ class AlenioThermoworksModule : Module() {
   private var callbackHandle: Any? = null
   private var connectedDeviceId: String? = null
   private var connectingDeviceId: String? = null
+  private var readingSequence = 0
+  private var lastBatteryPercent: Int? = null
+  private var lastEmittedReadingKey: String? = null
 
   private val emitted = linkedMapOf<String, Map<String, Any?>>()
   private val pending = mutableSetOf<String>()
@@ -61,6 +66,9 @@ class AlenioThermoworksModule : Module() {
         emitDevices()
       }
       maybeEmitConnectedIfReady(device)
+      if (connectedDeviceId == id && device.isReady) {
+        emitReadingFromDevice(device, "onDeviceUpdated")
+      }
     }
 
     override fun onDeviceReady(device: Device, timestamp: Long) {
@@ -68,6 +76,34 @@ class AlenioThermoworksModule : Module() {
       devicesById[deviceIdFor(device)] = device
       processDevice(device, "onDeviceReady")
       maybeEmitConnectedIfReady(device)
+      if (connectedDeviceId == deviceIdFor(device) && device.isReady) {
+        emitReadingFromDevice(device, "onDeviceReady")
+      }
+    }
+
+    override fun onBatteryLevelReceived(device: Device, level: Int, timestamp: Long) {
+      val id = deviceIdFor(device)
+      if (connectedDeviceId != id) return
+      lastBatteryPercent = level
+      log("battery id=$id level=$level")
+      emitReadingFromDevice(device, "onBatteryLevelReceived")
+    }
+
+    override fun onDeviceNotificationReceived(
+      device: Device,
+      notificationType: Int,
+      payload: ByteArray,
+      timestamp: Long
+    ) {
+      val id = deviceIdFor(device)
+      log("onDeviceNotificationReceived id=$id type=$notificationType")
+      if (notificationType != Device.NotificationType.BUTTON_PRESSED) return
+      if (connectedDeviceId != id) {
+        log("buttonPress ignored (not connected device) id=$id")
+        return
+      }
+      emitReadingFromDevice(device, "ButtonPressed")
+      emitButtonPress(id, timestamp)
     }
 
     override fun onDeviceConnectionStateChanged(
@@ -123,7 +159,7 @@ class AlenioThermoworksModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("AlenioThermoworks")
 
-    Events("onDevices", "onError", "onConnection")
+    Events("onDevices", "onError", "onConnection", "onReading", "onButtonPress")
 
     OnDestroy {
       shutdownDiscovery()
@@ -358,7 +394,7 @@ class AlenioThermoworksModule : Module() {
 
     val classified = classify(device)
     if (classified == "OTHER") {
-      val error = "Device is not a Thermapen ONE Blue"
+      val error = "Device is not a supported ThermoWorks probe"
       emitError("CONNECT_FAILED", error)
       return mapOf("ok" to false, "error" to error)
     }
@@ -380,8 +416,12 @@ class AlenioThermoworksModule : Module() {
       if (device.isReady) {
         connectingDeviceId = null
         connectedDeviceId = deviceId
+        readingSequence = 0
+        lastBatteryPercent = null
+        lastEmittedReadingKey = null
         log("connect: already ready id=$deviceId")
         emitConnection("connected", deviceId, null, null)
+        emitReadingFromDevice(device, "connectAlreadyReady")
         return mapOf("ok" to true, "error" to null)
       }
 
@@ -433,11 +473,11 @@ class AlenioThermoworksModule : Module() {
     val classified = classify(device)
     if (classified == "OTHER") {
       connectingDeviceId = null
-      emitError("CONNECT_FAILED", "Device is not a Thermapen ONE Blue")
-      emitConnection("disconnected", deviceId, "failed", "Not PEN_BLUE")
+      emitError("CONNECT_FAILED", "Device is not a supported ThermoWorks probe")
+      emitConnection("disconnected", deviceId, "failed", "Unsupported type")
       return
     }
-    if (classified == "UNKNOWN" && !nameLooksLikeThermapen(device.deviceName)) {
+    if (classified == "UNKNOWN" && !nameLooksLikeSupportedProbe(device.deviceName)) {
       log("connect waiting: ready but type still UNKNOWN id=$deviceId")
       return
     }
@@ -445,8 +485,12 @@ class AlenioThermoworksModule : Module() {
     connectingDeviceId = null
     connectedDeviceId = deviceId
     manualDisconnect = false
+    readingSequence = 0
+    lastBatteryPercent = null
+    lastEmittedReadingKey = null
     log("device ready → connected id=$deviceId")
     emitConnection("connected", deviceId, null, null)
+    emitReadingFromDevice(device, "ready")
   }
 
   private fun handleDisconnection(
@@ -469,6 +513,9 @@ class AlenioThermoworksModule : Module() {
 
     connectedDeviceId = null
     connectingDeviceId = null
+    readingSequence = 0
+    lastBatteryPercent = null
+    lastEmittedReadingKey = null
     val wasManual = manualDisconnect || mapped == "manual"
     manualDisconnect = false
     emitConnection(
@@ -535,6 +582,9 @@ class AlenioThermoworksModule : Module() {
     connectedDeviceId = null
     connectingDeviceId = null
     manualDisconnect = false
+    readingSequence = 0
+    lastBatteryPercent = null
+    lastEmittedReadingKey = null
     callbackHandle = null
     emitted.clear()
     pending.clear()
@@ -546,17 +596,24 @@ class AlenioThermoworksModule : Module() {
   private fun classify(device: Device): String {
     return when (device.deviceType) {
       DeviceType.PEN_BLUE -> "PEN_BLUE"
+      DeviceType.TEMPTEST_BLUE -> "TEMPTEST_BLUE"
       DeviceType.UNKNOWN -> "UNKNOWN"
       else -> "OTHER"
     }
   }
 
-  private fun nameLooksLikeThermapen(name: String?): Boolean {
-    return !name.isNullOrBlank() && name.contains("thermapen", ignoreCase = true)
+  private fun isSupportedDeviceType(classified: String): Boolean {
+    return classified == "PEN_BLUE" || classified == "TEMPTEST_BLUE"
+  }
+
+  private fun nameLooksLikeSupportedProbe(name: String?): Boolean {
+    if (name.isNullOrBlank()) return false
+    return name.contains("thermapen", ignoreCase = true) ||
+      name.contains("temptest", ignoreCase = true)
   }
 
   private fun payloadFor(device: Device): Map<String, Any?> {
-    val name = device.deviceName?.takeIf { it.isNotBlank() } ?: "Thermapen"
+    val name = device.deviceName?.takeIf { it.isNotBlank() } ?: "ThermoWorks probe"
     return buildMap {
       put("deviceId", deviceIdFor(device))
       put("name", name)
@@ -578,19 +635,22 @@ class AlenioThermoworksModule : Module() {
       return changed
     }
 
-    if (classified == "PEN_BLUE") {
+    if (isSupportedDeviceType(classified)) {
       pending.remove(deviceId)
       emitted[deviceId] = payloadFor(device)
+      log("filter KEEP ($classified) id=$deviceId")
       return true
     }
 
-    if (nameLooksLikeThermapen(name)) {
+    if (nameLooksLikeSupportedProbe(name)) {
       pending.add(deviceId)
       emitted[deviceId] = payloadFor(device)
+      log("filter KEEP provisional (UNKNOWN+name) id=$deviceId")
       return true
     }
 
     pending.add(deviceId)
+    log("filter PENDING (UNKNOWN) id=$deviceId")
     return false
   }
 
@@ -625,6 +685,93 @@ class AlenioThermoworksModule : Module() {
         if (reason != null) put("reason", reason)
         if (message != null) put("message", message)
       }
+    )
+  }
+
+  private fun emitReadingFromDevice(device: Device, source: String) {
+    val deviceId = deviceIdFor(device)
+    if (connectedDeviceId != deviceId || !device.isReady) return
+
+    val sensors = try {
+      device.sensors
+    } catch (_: Throwable) {
+      emptyList()
+    }
+    val sensor = sensors.firstOrNull() ?: try {
+      device.getSensor(0)
+    } catch (_: Throwable) {
+      null
+    }
+    if (sensor == null) {
+      log("reading skip source=$source id=$deviceId (no sensor)")
+      return
+    }
+
+    val raw = sensor.reading
+    val isNoValue = raw.isNaN() || abs(raw - Sensor.NO_VALUE) < 0.0001f
+    val fault = sensor.isFault
+    val status = when {
+      fault -> "fault"
+      isNoValue -> "unavailable"
+      else -> "ok"
+    }
+    val timestamp = try {
+      sensor.readingTimestamp?.time ?: System.currentTimeMillis()
+    } catch (_: Throwable) {
+      System.currentTimeMillis()
+    }
+
+    val celsius = if (!isNoValue && !fault) raw else null
+    val dedupeKey = "$deviceId|$celsius|$status|$timestamp"
+    if (dedupeKey == lastEmittedReadingKey && source == "onDeviceUpdated") {
+      return
+    }
+    lastEmittedReadingKey = dedupeKey
+    readingSequence += 1
+
+    val battery = lastBatteryPercent ?: try {
+      device.batteryLevel
+    } catch (_: Throwable) {
+      null
+    }
+    if (battery != null) {
+      lastBatteryPercent = battery
+    }
+
+    val payload = buildMap<String, Any?> {
+      put("type", "reading")
+      put("deviceId", deviceId)
+      put("sensorId", "0")
+      put("temperatureC", celsius)
+      put("timestamp", timestamp)
+      put("sequence", readingSequence)
+      put("status", status)
+      if (battery != null) put("battery", battery)
+      put(
+        "raw",
+        mapOf(
+          "isReady" to device.isReady,
+          "isFault" to fault,
+          "source" to source
+        )
+      )
+    }
+    log(
+      "reading deviceId=$deviceId celsius=${celsius ?: "null"} status=$status seq=$readingSequence battery=${battery ?: "—"} source=$source"
+    )
+    sendEvent("onReading", payload)
+  }
+
+  private fun emitButtonPress(deviceId: String, timestamp: Long) {
+    val ms = if (timestamp > 0L) timestamp else System.currentTimeMillis()
+    log("buttonPress deviceId=$deviceId")
+    sendEvent(
+      "onButtonPress",
+      mapOf(
+        "type" to "buttonPress",
+        "deviceId" to deviceId,
+        "timestamp" to ms
+      )
     )
   }
 

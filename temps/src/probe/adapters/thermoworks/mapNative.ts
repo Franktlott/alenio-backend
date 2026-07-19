@@ -3,10 +3,12 @@ import type {
   DiscoveredProbe,
   ProbeError,
   ProbeErrorCode,
+  TemperatureReading,
 } from "../../core/types";
 import type {
   ThermoworksConnectionReason,
   ThermoworksDiscoveredDevice,
+  ThermoworksReadingEvent,
 } from "./ThermoworksNative";
 
 export function mapDiscoveredDevices(
@@ -53,5 +55,36 @@ export function mapNativeError(
     code: mapped,
     message,
     probeId: deviceId,
+  };
+}
+
+/**
+ * Map native ThermaLib reading events to canonical ProbeSession readings.
+ * `temperatureC` is already Celsius from the SDK (never convert from display strings).
+ */
+export function mapReadingEvent(event: ThermoworksReadingEvent): TemperatureReading {
+  const temperature =
+    event.temperatureC == null || Number.isNaN(event.temperatureC)
+      ? null
+      : event.temperatureC;
+
+  const status =
+    event.status === "fault"
+      ? "fault"
+      : event.status === "unavailable" || temperature == null
+        ? "unavailable"
+        : "ok";
+
+  return {
+    probeId: event.deviceId,
+    celsius: status === "fault" || status === "unavailable" ? null : temperature,
+    status,
+    measuredAt: event.timestamp || Date.now(),
+    sequence: event.sequence,
+    sensorId: event.sensorId,
+    batteryPercent:
+      typeof event.battery === "number" && Number.isFinite(event.battery)
+        ? event.battery
+        : undefined,
   };
 }

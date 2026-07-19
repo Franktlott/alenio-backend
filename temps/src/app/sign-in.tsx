@@ -1,13 +1,16 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
-import { Field, Muted, PrimaryButton, Screen, Title } from "../components/ui";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppTabHeader } from "../components/AppTabHeader";
+import { Field, Muted, PrimaryButton, Screen } from "../components/ui";
 import { signInWithEmail } from "../lib/auth";
 import { useSession } from "../lib/session-context";
 import { colors } from "../lib/theme";
 
 export default function SignInScreen() {
   const { refresh } = useSession();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,42 +33,61 @@ export default function SignInScreen() {
   }
 
   return (
-    <Screen>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <View style={styles.hero}>
-          <Text style={styles.brand}>Alenio Temps</Text>
-          <Title>Take checks on the floor</Title>
-          <Muted>Sign in with your Alenio account. Managers review results in Alenio Go.</Muted>
-        </View>
-        <Field
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <Field
-          placeholder="Password"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-          onSubmitEditing={() => void onSubmit()}
-        />
-        <PrimaryButton label="Sign in" onPress={() => void onSubmit()} loading={loading} />
-      </KeyboardAvoidingView>
-    </Screen>
+    <View style={styles.shell}>
+      <AppTabHeader topInset={insets.top} testID="temps-sign-in-header" />
+      <Screen style={styles.body}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.hero}>
+            <Text style={styles.title}>Sign in</Text>
+            <Muted>Use your Alenio account. Managers review results in Alenio Go.</Muted>
+          </View>
+          <View style={styles.card}>
+            <Field
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <Field
+              placeholder="Password"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              onSubmitEditing={() => void onSubmit()}
+            />
+            <PrimaryButton label="Sign in" onPress={() => void onSubmit()} loading={loading} />
+          </View>
+        </KeyboardAvoidingView>
+      </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: { marginBottom: 8, marginTop: 24 },
-  brand: {
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    color: colors.brandDark,
-    marginBottom: 8,
+  shell: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  body: {
+    paddingTop: 16,
+  },
+  hero: { marginBottom: 20, marginTop: 8 },
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: colors.inkOnDark,
+  },
+  card: {
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+    padding: 14,
+    paddingTop: 2,
   },
 });

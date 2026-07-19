@@ -35,6 +35,14 @@ describe("ProbeStore", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it("bumpCaptureRequest increments captureRequestSeq", () => {
+    const store = new ProbeStore();
+    expect(store.getSnapshot().captureRequestSeq).toBe(0);
+    store.bumpCaptureRequest();
+    store.bumpCaptureRequest();
+    expect(store.getSnapshot().captureRequestSeq).toBe(2);
+  });
+
   it("resetForConnect clears suppress + error + reading", () => {
     const store = new ProbeStore();
     store.setReconnectSuppressed(true);

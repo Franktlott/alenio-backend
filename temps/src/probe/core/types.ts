@@ -24,7 +24,11 @@ export type TemperatureReading = {
   /** Epoch milliseconds when the sample was measured. */
   measuredAt: number;
   sequence?: number;
-};
+  /** Vendor sensor index/id when available (e.g. ThermaLib 1-based index). */
+  sensorId?: string;
+  /** Battery percent 0–100 when the transport reports it. */
+  batteryPercent?: number;
+}
 
 export type DiscoveredProbe = {
   id: ProbeId;
@@ -57,5 +61,10 @@ export type ProbeSnapshot = {
   reconnectAttempt: number;
   /** True after an explicit manual disconnect until the next connect(). */
   reconnectSuppressed: boolean;
+  /**
+   * Monotonic counter bumped when the probe requests a capture
+   * (e.g. Thermapen measure/transfer button). UI watches this to Save.
+   */
+  captureRequestSeq: number;
   disposed: boolean;
 };

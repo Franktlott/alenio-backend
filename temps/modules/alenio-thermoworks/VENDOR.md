@@ -11,7 +11,9 @@ Alenio copies only the minimum artifacts required to link ThermaLib into the Tem
 | Android | LE Android SDK Files | **3.0.2.1** |
 | iOS | LE iOS SDK Files | **3.0.1** |
 
-First supported device target: **Thermapen ONE Blue** (SDK device type: Thermapen Blue / `PEN_BLUE` / `TLDeviceTypeThermaPenBlue`).
+Supported device targets:
+- **Thermapen ONE Blue** — SDK: Thermapen Blue / `PEN_BLUE` / `TLDeviceTypeThermaPenBlue`
+- **TempTest Blue** — SDK: `TEMPTEST_BLUE` / `TLDeviceTypeTempTestBlue`
 
 ## Original source locations (reference drop)
 
@@ -34,20 +36,22 @@ Vendor binaries (`.aar`, `.a`, and headers under `ios/Vendor/`) are **gitignored
 
 Developers must copy the files locally from the approved SDK drop before native builds.
 
-## Phase 3A/3B — Discovery + Connection API (Temps module)
+## Phase 3A–3C — Discovery + Connection + Readings API (Temps module)
 
-Native module `AlenioThermoworks` (readings deferred to 3C):
+Native module `AlenioThermoworks`:
 
 | Method / event | Notes |
 |----------------|-------|
 | `startScan()` / `stopScan()` | BLE scan; Android timeout 10s |
 | `connect(deviceId)` / `disconnect()` | Wait for ThermaLib `ready` before `connected`; iOS uses `disconectFromDevice:` |
-| `onDevices` | Filtered: Thermapen Blue (`PEN_BLUE` / `TLDeviceTypeThermaPenBlue`); provisional UNKNOWN + `/thermapen/i` |
+| `onDevices` | Filtered: `PEN_BLUE` + `TEMPTEST_BLUE`; provisional UNKNOWN + `/thermapen|temptest/i` |
+| `onButtonPress` | ThermaLib button / measure-transfer → capture request for Save Reading |
 | `onConnection` | `connecting` / `connected` / `disconnecting` / `disconnected` + reason |
+| `onReading` | Canonical °C from `TLSensor.reading` / `Sensor.getReading()`; `NO_VALUE` → null; includes battery/sequence when known |
 | `onError` | Non-fatal scan/connect/permission errors |
-| Logs | Tag `AlenioThermoworks` — scan, filter, connect, disconnect, reasons |
+| Logs | Tag `AlenioThermoworks` — scan, filter, connect, disconnect, readings |
 
-Device ids are session-scoped: `tw:{transportIdentifier}`. Manual disconnect is flagged so ProbeSession suppresses reconnect.
+Device ids are session-scoped: `tw:{transportIdentifier}`. Manual disconnect is flagged so ProbeSession suppresses reconnect. Sensor index: iOS 1-based, Android 0-based (normalized in payloads).
 
 ## License / redistribution
 

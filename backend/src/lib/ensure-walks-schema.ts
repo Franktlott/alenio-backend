@@ -418,15 +418,8 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
         EXCEPTION WHEN duplicate_object THEN NULL;
         END $$;`,
       ],
-      [
-        "fk_WalkCorrectiveActionResult_action",
-        `DO $$ BEGIN
-          ALTER TABLE public."WalkCorrectiveActionResult"
-            ADD CONSTRAINT "WalkCorrectiveActionResult_correctiveActionId_fkey"
-            FOREIGN KEY ("correctiveActionId") REFERENCES public."WalkCorrectiveAction"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$;`,
-      ],
+      // Intentionally no FK from result.correctiveActionId → WalkCorrectiveAction:
+      // run snapshots own the action ids; library rows may be replaced later.
     ];
     for (const [label, sql] of fks) {
       try {
@@ -434,6 +427,17 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
       } catch (err) {
         console.warn(`[startup] ensureWalksSchema fk skipped (${label}):`, err);
       }
+    }
+    try {
+      await execStep(
+        prisma,
+        steps,
+        "drop_fk_WalkCorrectiveActionResult_action",
+        `ALTER TABLE public."WalkCorrectiveActionResult"
+         DROP CONSTRAINT IF EXISTS "WalkCorrectiveActionResult_correctiveActionId_fkey"`,
+      );
+    } catch (err) {
+      console.warn("[startup] ensureWalksSchema drop result→action fk skipped:", err);
     }
 
     const tablesPublic = await prisma.$queryRawUnsafe<Array<{ table_name: string }>>(`

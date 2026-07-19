@@ -1,15 +1,19 @@
 import { Redirect } from "expo-router";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppTabHeader } from "../components/AppTabHeader";
 import { useSession } from "../lib/session-context";
 import { colors } from "../lib/theme";
 
 export default function Index() {
   const { ready, token, teamId } = useSession();
+  const insets = useSafeAreaInsets();
 
   if (!ready) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}>
-        <ActivityIndicator color={colors.brand} />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <AppTabHeader topInset={insets.top} />
+        <View style={{ flex: 1 }} />
       </View>
     );
   }

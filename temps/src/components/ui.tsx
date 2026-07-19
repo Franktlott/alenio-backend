@@ -36,23 +36,43 @@ export function PrimaryButton({
   onPress,
   disabled,
   loading,
+  variant = "primary",
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
+  variant?: "primary" | "secondary" | "danger";
 }) {
+  const tone =
+    variant === "danger"
+      ? styles.primaryBtnDanger
+      : variant === "secondary"
+        ? styles.primaryBtnSecondary
+        : null;
+  const labelTone =
+    variant === "secondary"
+      ? styles.primaryBtnTextSecondary
+      : variant === "danger"
+        ? styles.primaryBtnTextDanger
+        : styles.primaryBtnText;
+
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.primaryBtn,
+        tone,
         (disabled || loading) && styles.btnDisabled,
         pressed && !disabled && styles.btnPressed,
       ]}
     >
-      {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>{label}</Text>}
+      {loading ? (
+        <ActivityIndicator color={variant === "secondary" ? colors.brand : "#fff"} />
+      ) : (
+        <Text style={labelTone}>{label}</Text>
+      )}
     </Pressable>
   );
 }
@@ -76,16 +96,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: colors.ink,
-    letterSpacing: -0.4,
+    fontSize: 26,
+    fontWeight: "800",
+    color: colors.inkOnDark,
+    letterSpacing: -0.3,
   },
   muted: {
     marginTop: 6,
     fontSize: 15,
     lineHeight: 21,
-    color: colors.muted,
+    color: colors.mutedOnDark,
+    fontWeight: "500",
   },
   input: {
     marginTop: 12,
@@ -102,22 +123,40 @@ const styles = StyleSheet.create({
     marginTop: 16,
     backgroundColor: colors.brand,
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 15,
     alignItems: "center",
+  },
+  primaryBtnSecondary: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  primaryBtnDanger: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   primaryBtnText: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: "800",
+  },
+  primaryBtnTextSecondary: {
+    color: colors.ink,
+    fontSize: 16,
     fontWeight: "700",
   },
-  btnDisabled: { opacity: 0.5 },
+  primaryBtnTextDanger: {
+    color: colors.fail,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  btnDisabled: { opacity: 0.45 },
   btnPressed: { opacity: 0.88 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: 16,
-    marginBottom: 10,
+    marginBottom: 12,
   },
 });

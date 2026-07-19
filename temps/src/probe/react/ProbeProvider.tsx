@@ -87,8 +87,8 @@ function buildSystem(
 }
 
 /**
- * Owns a probe system for the Probe Lab screen only.
- * Do not mount at the app root.
+ * Owns a probe system for Probe Lab or the take-check screen.
+ * Do not mount at the app root — mount per screen so dispose runs on leave.
  */
 export function ProbeProvider({
   children,

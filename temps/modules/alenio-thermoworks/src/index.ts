@@ -6,10 +6,13 @@ import {
   type ThermoworksDevicesEvent,
   type ThermoworksErrorEvent,
   type ThermoworksInitResult,
+  type ThermoworksButtonPressEvent,
+  type ThermoworksReadingEvent,
   type ThermoworksScanResult,
 } from "./AlenioThermoworksModule";
 
 export type {
+  ThermoworksButtonPressEvent,
   ThermoworksConnectionEvent,
   ThermoworksConnectionReason,
   ThermoworksConnectionState,
@@ -18,6 +21,8 @@ export type {
   ThermoworksDevicesEvent,
   ThermoworksErrorEvent,
   ThermoworksInitResult,
+  ThermoworksReadingEvent,
+  ThermoworksReadingStatus,
   ThermoworksScanResult,
   ThermoworksDeviceType,
 } from "./AlenioThermoworksModule";
@@ -173,6 +178,44 @@ export function subscribeToErrors(
   const sub = native.addListener("onError", (event: ThermoworksErrorEvent) => {
     if (__DEV__) {
       console.debug("[AlenioThermoworks] onError", event.code, event.message);
+    }
+    listener(event);
+  });
+  return () => sub.remove();
+}
+
+export function subscribeToReadings(
+  listener: (event: ThermoworksReadingEvent) => void,
+): () => void {
+  const native = getNativeOrNull();
+  if (!native) return () => undefined;
+  const sub = native.addListener("onReading", (event: ThermoworksReadingEvent) => {
+    if (__DEV__) {
+      console.debug(
+        "[AlenioThermoworks] onReading",
+        event.deviceId,
+        event.temperatureC,
+        event.status,
+        event.sequence ?? "",
+      );
+    }
+    listener(event);
+  });
+  return () => sub.remove();
+}
+
+export function subscribeToButtonPress(
+  listener: (event: ThermoworksButtonPressEvent) => void,
+): () => void {
+  const native = getNativeOrNull();
+  if (!native) return () => undefined;
+  const sub = native.addListener("onButtonPress", (event: ThermoworksButtonPressEvent) => {
+    if (__DEV__) {
+      console.debug(
+        "[AlenioThermoworks] onButtonPress",
+        event.deviceId,
+        event.timestamp,
+      );
     }
     listener(event);
   });

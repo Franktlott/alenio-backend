@@ -69,12 +69,57 @@ function responseRetestCount(response: unknown): number {
   return typeof count === "number" && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
 }
 
+type DbClient = Pick<
+  typeof prisma,
+  "walkCorrectiveActionResult" | "walkItemResponse"
+>;
+
+type OccurrenceWindow = {
+  windowStart: Date;
+  graceEndsAt: Date;
+  status?: string;
+};
+
+/** Scheduled Temps checks may only be worked during windowStart → graceEndsAt. */
+function assertOccurrenceInWindow(
+  occurrence: OccurrenceWindow,
+  now = new Date(),
+): { ok: true } | { error: "OUTSIDE_WINDOW"; message: string } {
+  if (now < occurrence.windowStart) {
+    return {
+      error: "OUTSIDE_WINDOW" as const,
+      message: "This check hasn’t opened yet",
+    };
+  }
+  if (now > occurrence.graceEndsAt) {
+    return {
+      error: "OUTSIDE_WINDOW" as const,
+      message: "This check window has closed",
+    };
+  }
+  return { ok: true as const };
+}
+
+/** Ad-hoc runs (no occurrence) are unrestricted; scheduled runs must be in window. */
+async function assertRunOccurrenceInWindow(
+  teamId: string,
+  runId: string,
+): Promise<{ ok: true } | { error: "OUTSIDE_WINDOW"; message: string }> {
+  const occurrence = await prisma.walkOccurrence.findFirst({
+    where: { teamId, runId },
+    select: { windowStart: true, graceEndsAt: true, status: true },
+  });
+  if (!occurrence) return { ok: true as const };
+  return assertOccurrenceInWindow(occurrence);
+}
+
 async function upsertPendingCorrectiveResults(
+  db: DbClient,
   itemResponseId: string,
   actions: NonNullable<SnapshotItem["correctiveActions"]>,
 ) {
   for (const action of actions) {
-    await prisma.walkCorrectiveActionResult.upsert({
+    await db.walkCorrectiveActionResult.upsert({
       where: {
         itemResponseId_correctiveActionId: {
           itemResponseId,
@@ -92,11 +137,12 @@ async function upsertPendingCorrectiveResults(
 }
 
 async function skipPendingCorrectiveResults(
+  db: DbClient,
   itemResponseId: string,
   actionIds: string[],
 ) {
   if (actionIds.length === 0) return;
-  await prisma.walkCorrectiveActionResult.updateMany({
+  await db.walkCorrectiveActionResult.updateMany({
     where: {
       itemResponseId,
       correctiveActionId: { in: actionIds },
@@ -278,10 +324,15 @@ export function serializeWalkRun(run: {
                       action.actionType === "BLOCK_COMPLETION",
                   );
                   const branch = correctiveBranch(action);
-                  // Outcome steps stay locked until the backend opens that phase.
+                  // Only treat a step as completable when a result row exists (or
+                  // NEEDS_ACTION opened first-failure and rows are about to be healed).
                   const status =
                     result?.status ??
-                    (branch === "if_fail" ? "LOCKED" : "PENDING");
+                    (branch === "if_fail"
+                      ? "LOCKED"
+                      : resp.status === "NEEDS_ACTION"
+                        ? "PENDING"
+                        : "LOCKED");
                   return {
                     id: action.id,
                     title: action.title,
@@ -340,6 +391,8 @@ export async function startWalkRun(input: {
     templateVersionId: string;
     status: string;
     runId: string | null;
+    windowStart: Date;
+    graceEndsAt: Date;
   } | null = null;
 
   if (input.occurrenceId) {
@@ -347,11 +400,14 @@ export async function startWalkRun(input: {
       where: { id: input.occurrenceId, teamId: input.teamId },
     });
     if (!occurrence) return { error: "NOT_FOUND" as const, message: "Occurrence not found" };
+    const windowCheck = assertOccurrenceInWindow(occurrence);
+    if (windowCheck.error) return windowCheck;
     if (occurrence.runId) {
       const existing = await getWalkRun(input.teamId, occurrence.runId);
       if (existing) return { ok: true as const, run: existing };
     }
-    if (!["AVAILABLE", "IN_PROGRESS", "UPCOMING"].includes(occurrence.status)) {
+    // UPCOMING is blocked by the clock check above; closed statuses stay blocked.
+    if (!["AVAILABLE", "IN_PROGRESS"].includes(occurrence.status)) {
       return { error: "OCCURRENCE_CLOSED" as const, message: "This walk window is not available" };
     }
   }
@@ -470,6 +526,8 @@ export async function submitWalkItemResponse(input: {
   notes?: string | null;
   photoUrls?: string[] | null;
   completedBy?: string | null;
+  /** When true (Alenio Go), save pass/fail only — no failure-procedure gating. */
+  skipFailureProcedure?: boolean;
 }) {
   const run = await prisma.walkRun.findFirst({
     where: { id: input.runId, teamId: input.teamId },
@@ -479,6 +537,8 @@ export async function submitWalkItemResponse(input: {
   if (run.status !== "IN_PROGRESS") {
     return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
   }
+  const windowCheck = await assertRunOccurrenceInWindow(input.teamId, input.runId);
+  if (windowCheck.error) return windowCheck;
 
   const snapshot = parseSnapshot(run.templateSnapshot);
   const item = flattenSnapshotItems(snapshot).find((i) => i.id === input.itemId);
@@ -531,19 +591,20 @@ export async function submitWalkItemResponse(input: {
 
   let nextStatus: WalkItemResponseStatus = status;
   let failed = status === "FAIL" || status === "NEEDS_ACTION";
+  const runProcedure = hasProcedure && !input.skipFailureProcedure;
 
-  if (failed && hasProcedure && !isRetest) {
+  if (runProcedure && failed && !isRetest) {
     // First failure → open 1st-failure steps only.
     nextStatus = "NEEDS_ACTION";
-  } else if (isRetest && status === "PASS") {
+  } else if (runProcedure && isRetest && status === "PASS") {
     // Retemp passed → procedure complete; skip unused if-fail steps.
     nextStatus = "RESOLVED";
     failed = false;
-  } else if (isRetest && status === "FAIL" && ifFailActions.length > 0) {
+  } else if (runProcedure && isRetest && status === "FAIL" && ifFailActions.length > 0) {
     // Retemp failed → open 2nd-failure steps.
     nextStatus = "NEEDS_ACTION";
     failed = true;
-  } else if (failed && hasProcedure) {
+  } else if (runProcedure && failed) {
     nextStatus = "NEEDS_ACTION";
   }
 
@@ -558,33 +619,46 @@ export async function submitWalkItemResponse(input: {
     completedAt: new Date(),
   };
 
-  const itemResponseId = existing
-    ? (
-        await prisma.walkItemResponse.update({ where: { id: existing.id }, data })
-      ).id
-    : (
-        await prisma.walkItemResponse.create({
-          data: {
-            runId: run.id,
-            itemId: item.id,
-            ...data,
-          },
-        })
-      ).id;
+  // Persist response + procedure rows together so a failed upsert cannot leave
+  // NEEDS_ACTION with phantom PENDING steps and no result rows.
+  await prisma.$transaction(async (tx) => {
+    const itemResponseId = existing
+      ? (
+          await tx.walkItemResponse.update({ where: { id: existing.id }, data })
+        ).id
+      : (
+          await tx.walkItemResponse.create({
+            data: {
+              runId: run.id,
+              itemId: item.id,
+              ...data,
+            },
+          })
+        ).id;
 
-  if (!isRetest && status === "FAIL" && firstFailureActions.length > 0) {
-    await upsertPendingCorrectiveResults(itemResponseId, firstFailureActions);
-  } else if (isRetest && status === "FAIL" && ifFailActions.length > 0) {
-    await upsertPendingCorrectiveResults(itemResponseId, ifFailActions);
-  } else if (isRetest && status === "PASS") {
-    await skipPendingCorrectiveResults(
-      itemResponseId,
-      ifFailActions.map((a) => a.id),
-    );
-  } else if (!requireRetest && status === "FAIL" && firstFailureActions.length === 0 && ifFailActions.length > 0) {
-    // Legacy / misconfigured: only if_fail steps exist and retest is off.
-    await upsertPendingCorrectiveResults(itemResponseId, ifFailActions);
-  }
+    if (runProcedure) {
+      if (status === "PASS") {
+        // Passing reading must never keep leftover PENDING corrective steps.
+        await skipPendingCorrectiveResults(
+          tx,
+          itemResponseId,
+          actions.map((a) => a.id),
+        );
+      } else if (!isRetest && status === "FAIL" && firstFailureActions.length > 0) {
+        await upsertPendingCorrectiveResults(tx, itemResponseId, firstFailureActions);
+      } else if (isRetest && status === "FAIL" && ifFailActions.length > 0) {
+        await upsertPendingCorrectiveResults(tx, itemResponseId, ifFailActions);
+      } else if (
+        !requireRetest &&
+        status === "FAIL" &&
+        firstFailureActions.length === 0 &&
+        ifFailActions.length > 0
+      ) {
+        // Legacy / misconfigured: only if_fail steps exist and retest is off.
+        await upsertPendingCorrectiveResults(tx, itemResponseId, ifFailActions);
+      }
+    }
+  });
 
   const updated = await getWalkRun(input.teamId, input.runId);
   return { ok: true as const, run: updated };
@@ -606,23 +680,51 @@ export async function completeCorrectiveAction(input: {
   if (run.status !== "IN_PROGRESS") {
     return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
   }
+  const windowCheck = await assertRunOccurrenceInWindow(input.teamId, input.runId);
+  if (windowCheck.error) return windowCheck;
   const itemResponse = run.responses.find((r) => r.itemId === input.itemId);
   if (!itemResponse) return { error: "ITEM_NOT_FOUND" as const };
-
-  const result = itemResponse.correctiveActionResults.find(
-    (r) => r.correctiveActionId === input.correctiveActionId,
-  );
-  if (!result) return { error: "ACTION_NOT_FOUND" as const };
-  if (result.status === "COMPLETED" || result.status === "SKIPPED") {
-    const updated = await getWalkRun(input.teamId, input.runId);
-    return { ok: true as const, run: updated };
-  }
 
   const snapshot = parseSnapshot(run.templateSnapshot);
   const item = flattenSnapshotItems(snapshot).find((i) => i.id === input.itemId);
   const actions = (item?.correctiveActions ?? []).filter(isAssociateCorrectiveAction);
   const target = actions.find((a) => a.id === input.correctiveActionId);
   if (!target) return { error: "ACTION_NOT_FOUND" as const };
+
+  // Heal missing result rows (e.g. older fail saves left NEEDS_ACTION without results).
+  let result = itemResponse.correctiveActionResults.find(
+    (r) => r.correctiveActionId === input.correctiveActionId,
+  );
+  if (!result) {
+    if (itemResponse.status !== "NEEDS_ACTION") {
+      return { error: "ACTION_NOT_FOUND" as const };
+    }
+    const openActions = isIfFailAction(target)
+      ? actions.filter(isIfFailAction)
+      : actions.filter(isFirstFailureAction);
+    await upsertPendingCorrectiveResults(prisma, itemResponse.id, openActions);
+    const refreshed = await prisma.walkCorrectiveActionResult.findUnique({
+      where: {
+        itemResponseId_correctiveActionId: {
+          itemResponseId: itemResponse.id,
+          correctiveActionId: input.correctiveActionId,
+        },
+      },
+    });
+    if (!refreshed) return { error: "ACTION_NOT_FOUND" as const };
+    result = refreshed;
+    itemResponse.correctiveActionResults = [
+      ...itemResponse.correctiveActionResults.filter(
+        (r) => r.correctiveActionId !== refreshed.correctiveActionId,
+      ),
+      refreshed,
+    ];
+  }
+
+  if (result.status === "COMPLETED" || result.status === "SKIPPED") {
+    const updated = await getWalkRun(input.teamId, input.runId);
+    return { ok: true as const, run: updated };
+  }
 
   const sameBranch = actions.filter((a) => {
     if (isFirstFailureAction(target)) return isFirstFailureAction(a);
@@ -631,7 +733,7 @@ export async function completeCorrectiveAction(input: {
   });
   const targetIndex = sameBranch.findIndex((a) => a.id === input.correctiveActionId);
   for (let i = 0; i < targetIndex; i++) {
-    const prior = sameBranch[i];
+    const prior = sameBranch[i]!;
     const priorResult = itemResponse.correctiveActionResults.find(
       (r) => r.correctiveActionId === prior.id,
     );
@@ -691,6 +793,8 @@ export async function resetWalkItemResponse(input: {
   if (run.status !== "IN_PROGRESS") {
     return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
   }
+  const windowCheck = await assertRunOccurrenceInWindow(input.teamId, input.runId);
+  if (windowCheck.error) return windowCheck;
 
   const snapshot = parseSnapshot(run.templateSnapshot);
   const item = flattenSnapshotItems(snapshot).find((i) => i.id === input.itemId);
@@ -747,6 +851,8 @@ export async function completeWalkRun(teamId: string, runId: string) {
   if (run.status !== "IN_PROGRESS") {
     return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
   }
+  const windowCheck = await assertRunOccurrenceInWindow(teamId, runId);
+  if (windowCheck.error) return windowCheck;
 
   const snapshot = parseSnapshot(run.templateSnapshot);
   const items = flattenSnapshotItems(snapshot);
@@ -760,21 +866,24 @@ export async function completeWalkRun(teamId: string, runId: string) {
 
   const responsesWithCa = await prisma.walkItemResponse.findMany({
     where: { runId },
-    include: {
-      correctiveActionResults: {
-        include: { correctiveAction: true },
-      },
-    },
+    include: { correctiveActionResults: true },
   });
+  const snapshotByItemId = new Map(items.map((i) => [i.id, i]));
   for (const resp of responsesWithCa) {
+    const snapshotItem = snapshotByItemId.get(resp.itemId);
+    const actionById = new Map(
+      (snapshotItem?.correctiveActions ?? []).map((a) => [a.id, a]),
+    );
     for (const ca of resp.correctiveActionResults) {
+      const def = actionById.get(ca.correctiveActionId);
       if (
         ca.status === "PENDING" &&
-        (ca.correctiveAction.blocksCompletion || ca.correctiveAction.actionType === "BLOCK_COMPLETION")
+        def &&
+        (def.blocksCompletion || def.actionType === "BLOCK_COMPLETION" || def.required)
       ) {
         return {
           error: "CORRECTIVE_BLOCKED" as const,
-          message: `Complete corrective action: ${ca.correctiveAction.title}`,
+          message: `Complete corrective action: ${def.title}`,
         };
       }
     }

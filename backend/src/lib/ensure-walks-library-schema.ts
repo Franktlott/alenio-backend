@@ -232,6 +232,16 @@ export async function ensureWalksLibrarySchema(prisma: PrismaClient): Promise<vo
     );
   `);
 
+  // Result rows key off snapshot action ids — drop legacy FK to WalkCorrectiveAction if present.
+  try {
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE public."WalkCorrectiveActionResult"
+      DROP CONSTRAINT IF EXISTS "WalkCorrectiveActionResult_correctiveActionId_fkey";
+    `);
+  } catch (err) {
+    console.warn("[startup] ensureWalksLibrarySchema drop result→action fk skipped", err);
+  }
+
   const fks: string[] = [
     `DO $$ BEGIN ALTER TABLE public."WalkLibraryItem" ADD CONSTRAINT "WalkLibraryItem_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES public."Team"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
     `DO $$ BEGIN ALTER TABLE public."WalkLibraryItemVersion" ADD CONSTRAINT "WalkLibraryItemVersion_libraryItemId_fkey" FOREIGN KEY ("libraryItemId") REFERENCES public."WalkLibraryItem"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
@@ -239,6 +249,7 @@ export async function ensureWalksLibrarySchema(prisma: PrismaClient): Promise<vo
     `DO $$ BEGIN ALTER TABLE public."WalkTemplatePlacement" ADD CONSTRAINT "WalkTemplatePlacement_libraryItemId_fkey" FOREIGN KEY ("libraryItemId") REFERENCES public."WalkLibraryItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
     `DO $$ BEGIN ALTER TABLE public."WalkTemplatePlacement" ADD CONSTRAINT "WalkTemplatePlacement_libraryItemVersionId_fkey" FOREIGN KEY ("libraryItemVersionId") REFERENCES public."WalkLibraryItemVersion"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
     `DO $$ BEGIN ALTER TABLE public."WalkCorrectiveAction" ADD CONSTRAINT "WalkCorrectiveAction_libraryItemVersionId_fkey" FOREIGN KEY ("libraryItemVersionId") REFERENCES public."WalkLibraryItemVersion"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+    `DO $$ BEGIN ALTER TABLE public."WalkCorrectiveActionResult" ADD CONSTRAINT "WalkCorrectiveActionResult_itemResponseId_fkey" FOREIGN KEY ("itemResponseId") REFERENCES public."WalkItemResponse"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
   ];
   for (const sql of fks) {
     try {

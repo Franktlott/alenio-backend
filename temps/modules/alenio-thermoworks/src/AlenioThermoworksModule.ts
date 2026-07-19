@@ -24,7 +24,11 @@ export type ThermoworksDiagnostics = {
   error?: string;
 };
 
-export type ThermoworksDeviceType = "PEN_BLUE" | "UNKNOWN" | "OTHER";
+export type ThermoworksDeviceType =
+  | "PEN_BLUE"
+  | "TEMPTEST_BLUE"
+  | "UNKNOWN"
+  | "OTHER";
 
 export type ThermoworksDiscoveredDevice = {
   deviceId: string;
@@ -63,11 +67,36 @@ export type ThermoworksConnectionEvent = {
   message?: string;
 };
 
+export type ThermoworksReadingStatus = "ok" | "fault" | "unavailable";
+
+export type ThermoworksReadingEvent = {
+  type: "reading";
+  deviceId: string;
+  sensorId?: string;
+  temperatureC: number | null;
+  timestamp: number;
+  sequence?: number;
+  battery?: number;
+  status: ThermoworksReadingStatus;
+  raw?: {
+    isReady?: boolean;
+    isFault?: boolean;
+    source?: string;
+    notificationType?: string;
+  };
+};
+
 export type ThermoworksErrorEvent = {
   type: "error";
   code: string;
   message: string;
   deviceId?: string;
+};
+
+export type ThermoworksButtonPressEvent = {
+  type: "buttonPress";
+  deviceId: string;
+  timestamp: number;
 };
 
 export type ThermoworksScanResult = {
@@ -79,6 +108,8 @@ type ThermoworksEvents = {
   onDevices: (event: ThermoworksDevicesEvent) => void;
   onError: (event: ThermoworksErrorEvent) => void;
   onConnection: (event: ThermoworksConnectionEvent) => void;
+  onReading: (event: ThermoworksReadingEvent) => void;
+  onButtonPress: (event: ThermoworksButtonPressEvent) => void;
 };
 
 type AlenioThermoworksNativeModule = NativeModule<ThermoworksEvents> & {

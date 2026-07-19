@@ -11,7 +11,7 @@ export type UseProbeResult = ProbeContextValue & {
 export function useProbe(): UseProbeResult {
   const ctx = useContext(ProbeContext);
   if (!ctx) {
-    throw new Error("useProbe must be used within ProbeProvider (Probe Lab only)");
+    throw new Error("useProbe must be used within ProbeProvider");
   }
 
   const snapshot = useSyncExternalStore(

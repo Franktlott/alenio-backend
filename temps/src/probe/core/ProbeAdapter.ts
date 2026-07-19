@@ -12,6 +12,8 @@ export type ProbeAdapterListener = {
   onConnected?: (probeId: ProbeId) => void;
   onDisconnected?: (probeId: ProbeId, reason: DisconnectReason) => void;
   onReading?: (reading: TemperatureReading) => void;
+  /** Probe hardware asked to confirm/capture the current reading (button). */
+  onCaptureRequest?: (probeId: ProbeId) => void;
   onError?: (error: ProbeError) => void;
 };
 

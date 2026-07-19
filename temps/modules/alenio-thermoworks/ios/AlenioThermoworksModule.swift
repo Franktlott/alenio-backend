@@ -4,7 +4,7 @@ public class AlenioThermoworksModule: Module {
   public func definition() -> ModuleDefinition {
     Name("AlenioThermoworks")
 
-    Events("onDevices", "onError", "onConnection")
+    Events("onDevices", "onError", "onConnection", "onReading", "onButtonPress")
 
     OnCreate {
       ThermaLibFacade.setDevicesBlock { devices in
@@ -22,6 +22,12 @@ public class AlenioThermoworksModule: Module {
       }
       ThermaLibFacade.setConnectionBlock { event in
         self.sendEvent("onConnection", event)
+      }
+      ThermaLibFacade.setReadingHandler { event in
+        self.sendEvent("onReading", event)
+      }
+      ThermaLibFacade.setButtonPressHandler { event in
+        self.sendEvent("onButtonPress", event)
       }
     }
 

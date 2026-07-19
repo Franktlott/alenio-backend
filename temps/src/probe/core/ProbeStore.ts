@@ -16,6 +16,7 @@ const INITIAL: ProbeSnapshot = {
   lastError: null,
   reconnectAttempt: 0,
   reconnectSuppressed: false,
+  captureRequestSeq: 0,
   disposed: false,
 };
 
@@ -77,6 +78,11 @@ export class ProbeStore {
   setReconnectSuppressed(suppressed: boolean): void {
     if (this.snapshot.reconnectSuppressed === suppressed) return;
     this.patch({ reconnectSuppressed: suppressed });
+  }
+
+  /** Bump when the connected probe requests a capture (button press). */
+  bumpCaptureRequest(): void {
+    this.patch({ captureRequestSeq: this.snapshot.captureRequestSeq + 1 });
   }
 
   markDisposed(): void {

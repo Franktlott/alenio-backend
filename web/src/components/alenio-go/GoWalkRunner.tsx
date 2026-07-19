@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  completePublicCorrectiveAction,
   completePublicWalkRun,
   fetchPublicPublishedWalks,
   startPublicOccurrenceRun,
@@ -12,7 +11,6 @@ import { getTemperatureProbeAdapter } from "../../lib/walks/temperature-probe";
 import type {
   WalkOccurrenceListItem,
   WalkRun,
-  WalkRunCorrectiveAction,
   WalkRunSnapshotItem,
   WalkTemplate,
 } from "../../lib/walks/types";
@@ -140,16 +138,6 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
         itemId,
         { response, photoUrls: photoUrls ?? null, completedBy: "Floor associate" },
       );
-      const saved = run.items.find((i) => i.id === itemId);
-      const actions = saved?.response?.correctiveActions ?? [];
-      const procedureOpen =
-        saved?.response?.status === "NEEDS_ACTION" ||
-        actions.some((a) => a.status === "PENDING");
-      // Stay on the item until failure-procedure steps / retemp are finished.
-      if (procedureOpen) {
-        setScreen({ kind: "run", run, index: screen.index });
-        return;
-      }
       const nextIndex = Math.min(screen.index + 1, Math.max(run.items.length - 1, 0));
       setScreen({ kind: "run", run, index: nextIndex });
     } catch (err) {
@@ -170,48 +158,6 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
     } catch (err) {
       if (handleGoDeviceSessionError(err)) return;
       setError(err instanceof Error ? err.message : "Could not complete walk");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleCompleteCorrective(itemId: string, actionId: string) {
-    if (screen.kind !== "run") return;
-    setBusy(true);
-    setError(null);
-    try {
-      const run = await completePublicCorrectiveAction(
-        hubToken,
-        deviceId,
-        screen.run.id,
-        itemId,
-        actionId,
-      );
-      const saved = run.items.find((i) => i.id === itemId);
-      const actions = saved?.response?.correctiveActions ?? [];
-      const pendingLeft = actions.some((a) => a.status === "PENDING");
-      const stillNeedsRetemp =
-        saved?.response?.status === "NEEDS_ACTION" &&
-        Boolean(saved.config?.requireRetestOnFailure) &&
-        !pendingLeft;
-      const allDone =
-        !pendingLeft &&
-        !stillNeedsRetemp &&
-        (saved?.response?.status === "RESOLVED" ||
-          saved?.response?.status === "PASS" ||
-          (actions.length > 0 &&
-            actions
-              .filter((a) => a.status !== "LOCKED" && a.status !== "SKIPPED")
-              .every((a) => a.status === "COMPLETED")));
-      if (allDone) {
-        const nextIndex = Math.min(screen.index + 1, Math.max(run.items.length - 1, 0));
-        setScreen({ kind: "run", run, index: nextIndex });
-        return;
-      }
-      setScreen({ kind: "run", run, index: screen.index });
-    } catch (err) {
-      if (handleGoDeviceSessionError(err)) return;
-      setError(err instanceof Error ? err.message : "Could not complete corrective action");
     } finally {
       setBusy(false);
     }
@@ -321,7 +267,6 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
             onSelectIndex={(index) => setScreen({ kind: "run", run: screen.run, index })}
             onSubmit={(itemId, response, photoUrls) => void handleSubmit(itemId, response, photoUrls)}
             onComplete={() => void handleComplete()}
-            onCompleteCorrective={(itemId, actionId) => void handleCompleteCorrective(itemId, actionId)}
             hubToken={hubToken}
             deviceId={deviceId}
             onUploadError={(message) => setError(message)}
@@ -366,7 +311,6 @@ function WalkRunActive({
   onSelectIndex,
   onSubmit,
   onComplete,
-  onCompleteCorrective,
   hubToken,
   deviceId,
   onUploadError,
@@ -377,7 +321,6 @@ function WalkRunActive({
   onSelectIndex: (index: number) => void;
   onSubmit: (itemId: string, response: unknown, photoUrls?: string[]) => void;
   onComplete: () => void;
-  onCompleteCorrective: (itemId: string, actionId: string) => void;
   hubToken: string;
   deviceId: string;
   onUploadError: (message: string) => void;
@@ -386,11 +329,6 @@ function WalkRunActive({
   const item = items[index] ?? null;
   const pct = run.progress.total > 0 ? Math.round((run.progress.answered / run.progress.total) * 100) : 0;
   const canComplete = run.progress.requiredRemaining === 0 && run.status === "IN_PROGRESS";
-  const pendingCorrective = (item?.response?.correctiveActions ?? []).some(
-    (a) => a.status !== "COMPLETED" && (a.required !== false || a.blocksCompletion),
-  );
-  const mustFinishCorrective =
-    item?.response?.status === "NEEDS_ACTION" || pendingCorrective;
 
   return (
     <div className="walk-run-page" style={{ minHeight: "70dvh" }}>
@@ -420,7 +358,6 @@ function WalkRunActive({
               hubToken={hubToken}
               deviceId={deviceId}
               onSubmit={onSubmit}
-              onCompleteCorrective={onCompleteCorrective}
               onUploadError={onUploadError}
             />
           ) : (
@@ -439,13 +376,8 @@ function WalkRunActive({
             <button
               type="button"
               className="walk-run-page-actions-btn"
-              disabled={busy || index >= items.length - 1 || mustFinishCorrective}
+              disabled={busy || index >= items.length - 1}
               onClick={() => onSelectIndex(index + 1)}
-              title={
-                mustFinishCorrective
-                  ? "Complete all failure procedure steps before continuing"
-                  : undefined
-              }
             >
               Next
             </button>
@@ -491,11 +423,7 @@ function WalkRunActive({
                         cursor: "pointer",
                         textAlign: "left",
                       }}
-                      disabled={mustFinishCorrective && i !== index}
-                      onClick={() => {
-                        if (mustFinishCorrective && i !== index) return;
-                        onSelectIndex(i);
-                      }}
+                      onClick={() => onSelectIndex(i)}
                     >
                       <span className="walk-run-page-row-index">{i + 1}</span>
                       <span className="walk-run-page-row-label">{row.title}</span>
@@ -514,108 +442,12 @@ function WalkRunActive({
   );
 }
 
-function CorrectivePhaseCard({
-  title,
-  actions,
-  busy,
-  unlocked,
-  lockedHint,
-  onComplete,
-}: {
-  title: string;
-  actions: WalkRunCorrectiveAction[];
-  busy: boolean;
-  unlocked: boolean;
-  lockedHint?: string;
-  onComplete: (actionId: string) => void;
-}) {
-  const actionable = actions.filter(
-    (a) => a.status !== "LOCKED" && a.status !== "SKIPPED",
-  );
-  const completedCount = actionable.filter((a) => a.status === "COMPLETED").length;
-  const current = actionable.find((a) => a.status === "PENDING") ?? null;
-  const currentIndex = current ? actionable.findIndex((a) => a.id === current.id) : -1;
-  const total = actionable.length;
-  if (total === 0) return null;
-
-  return (
-    <div
-      style={{
-        padding: "0.85rem",
-        border: "1px solid #fecaca",
-        borderRadius: 8,
-        background: unlocked ? "#fff" : "#f8fafc",
-        opacity: unlocked ? 1 : 0.72,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: "0.75rem",
-          marginBottom: "0.55rem",
-        }}
-      >
-        <p style={{ margin: 0, fontWeight: 750, color: "#b91c1c" }}>{title}</p>
-        <span style={{ fontSize: "0.75rem", fontWeight: 650, color: "#64748b" }}>
-          {!unlocked
-            ? "Locked"
-            : completedCount >= total
-              ? "All done"
-              : `Step ${Math.max(currentIndex + 1, 1)} of ${total}`}
-        </span>
-      </div>
-      {!unlocked && lockedHint ? (
-        <p className="enterprise-muted" style={{ margin: "0 0 0.5rem" }}>
-          {lockedHint}
-        </p>
-      ) : null}
-      {unlocked && current ? (
-        <div>
-          <p
-            style={{
-              margin: "0 0 0.25rem",
-              fontSize: "0.7rem",
-              fontWeight: 750,
-              letterSpacing: "0.04em",
-              color: "#0f766e",
-            }}
-          >
-            STEP {currentIndex + 1} OF {total}
-          </p>
-          <strong style={{ fontSize: "1.05rem" }}>{current.title}</strong>
-          {current.instructions && current.instructions !== current.title ? (
-            <p className="enterprise-muted" style={{ margin: "0.35rem 0 0" }}>
-              {current.instructions}
-            </p>
-          ) : null}
-          <button
-            type="button"
-            className="go-testcode-btn"
-            disabled={busy}
-            onClick={() => onComplete(current.id)}
-            style={{ marginTop: "0.75rem" }}
-          >
-            Mark complete
-          </button>
-        </div>
-      ) : null}
-      {unlocked && !current && completedCount >= total ? (
-        <p style={{ margin: 0, color: "#047857", fontWeight: 650 }}>
-          All steps in this phase are complete.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 function WalkItemPanel({
   item,
   busy,
   hubToken,
   deviceId,
   onSubmit,
-  onCompleteCorrective,
   onUploadError,
 }: {
   item: WalkRunSnapshotItem;
@@ -623,48 +455,10 @@ function WalkItemPanel({
   hubToken: string;
   deviceId: string;
   onSubmit: (itemId: string, response: unknown, photoUrls?: string[]) => void;
-  onCompleteCorrective: (itemId: string, actionId: string) => void;
   onUploadError: (message: string) => void;
 }) {
   const config = item.config ?? {};
   const answered = item.response && item.response.status !== "NOT_STARTED";
-  const corrective = item.response?.correctiveActions ?? [];
-  const firstFailure = corrective.filter(
-    (a) => a.branch === "first_failure" || a.branch == null,
-  );
-  const secondFailure = corrective.filter((a) => a.branch === "if_fail");
-  const firstFailureDone =
-    firstFailure.length === 0 ||
-    firstFailure.every((a) => a.status === "COMPLETED" || a.status === "SKIPPED");
-  const requireRetest = Boolean(config.requireRetestOnFailure);
-  const retestGuidance =
-    typeof config.retestGuidance === "string" ? config.retestGuidance.trim() : "";
-  const responsePayload =
-    item.response?.response && typeof item.response.response === "object"
-      ? (item.response.response as Record<string, unknown>)
-      : null;
-  const retestCount =
-    typeof responsePayload?.retestCount === "number" ? responsePayload.retestCount : 0;
-  const retempDone = !requireRetest || retestCount >= 1;
-  const retempFailed =
-    retempDone &&
-    (item.response?.status === "NEEDS_ACTION" || item.response?.failed === true) &&
-    secondFailure.some((a) => a.status === "PENDING" || a.status === "COMPLETED");
-  const showRetemp =
-    Boolean(requireRetest) &&
-    firstFailureDone &&
-    item.response?.status === "NEEDS_ACTION" &&
-    !retempDone;
-  const showSecondFailure =
-    secondFailure.length > 0 &&
-    firstFailureDone &&
-    retempDone &&
-    (retempFailed || secondFailure.some((a) => a.status === "PENDING" || a.status === "COMPLETED"));
-  const showFirstFailurePhase =
-    Boolean(firstFailure.length) && !firstFailureDone;
-  const needsFailureProcedure =
-    item.response?.status === "NEEDS_ACTION" ||
-    corrective.some((a) => a.status === "PENDING");
 
   return (
     <div className="go-kiosk-walks-form-panel">
@@ -683,60 +477,7 @@ function WalkItemPanel({
         </p>
       ) : null}
 
-      {needsFailureProcedure && corrective.length > 0 ? (
-        <div style={{ marginTop: "1rem", display: "grid", gap: "0.75rem" }}>
-          {showFirstFailurePhase ? (
-            <CorrectivePhaseCard
-              title="1st Failure"
-              actions={firstFailure.length ? firstFailure : corrective}
-              busy={busy}
-              unlocked
-              onComplete={(actionId) => onCompleteCorrective(item.id, actionId)}
-            />
-          ) : null}
-          {showRetemp && item.type === "TEMPERATURE" ? (
-            <div
-              style={{
-                border: "1px solid #bfdbfe",
-                background: "#eff6ff",
-                borderRadius: "0.75rem",
-                padding: "0.85rem 0.95rem",
-              }}
-            >
-              <p style={{ margin: "0 0 0.35rem", fontWeight: 750, color: "#1d4ed8" }}>Retemp</p>
-              {retestGuidance ? (
-                <p style={{ margin: "0 0 0.75rem", fontSize: "0.9rem", color: "#1e3a8a", lineHeight: 1.45 }}>
-                  {retestGuidance}
-                </p>
-              ) : (
-                <p className="enterprise-muted" style={{ margin: "0 0 0.75rem", fontSize: "0.85rem" }}>
-                  Retake the temperature after completing the steps above.
-                </p>
-              )}
-              <TemperatureControl
-                config={config}
-                busy={busy}
-                retestCount={retestCount + 1}
-                onSubmit={(response) => onSubmit(item.id, response)}
-              />
-            </div>
-          ) : null}
-          {showSecondFailure ? (
-            <CorrectivePhaseCard
-              title="2nd Failure"
-              actions={secondFailure.filter((a) => a.status !== "SKIPPED")}
-              busy={busy}
-              unlocked
-              onComplete={(actionId) => onCompleteCorrective(item.id, actionId)}
-            />
-          ) : null}
-          <p className="enterprise-muted" style={{ margin: 0, fontSize: "0.8rem" }}>
-            Complete one step at a time, in order, to continue.
-          </p>
-        </div>
-      ) : null}
-
-      <div style={{ marginTop: "1.25rem", display: needsFailureProcedure ? "none" : undefined }}>
+      <div style={{ marginTop: "1.25rem" }}>
         {item.type === "TEMPERATURE" ? (
           <TemperatureControl
             config={config}

@@ -92,8 +92,8 @@ function ProbeLabScreen() {
       <ScrollView contentContainerStyle={styles.content} testID="probe-lab-screen">
         <Title>Probe Lab</Title>
         <Muted>
-          Phase 3B: ThermoWorks scan + connect/disconnect via ProbeSession. No live readings yet.
-          Manual disconnect suppresses reconnect.
+          Phase 3C: ThermoWorks scan, connect, and live Celsius readings via ProbeSession. Manual
+          disconnect suppresses reconnect. Thermapen / TempTest may need a button press to transmit.
         </Muted>
 
         <Section label="Source">
@@ -119,8 +119,8 @@ function ProbeLabScreen() {
         {source === "thermoworks" ? (
           <Section label="ThermoWorks native">
             <Muted>
-              Power on Thermapen ONE Blue, Start scan, select device, Connect. Check Xcode for
-              [AlenioThermoworks] logs.
+              Power on Thermapen ONE Blue or TempTest Blue, Start scan, select device, Connect.
+              Check Xcode for [AlenioThermoworks] logs.
             </Muted>
             <KV k="js isAvailable()" v={isThermoworksAvailable() ? "yes" : "no"} />
             <KV k="native available" v={twDiag ? (twDiag.available ? "yes" : "no") : "…"} />
@@ -182,7 +182,9 @@ function ProbeLabScreen() {
 
         <Section label="Discovered">
           {snapshot.discovered.length === 0 ? (
-            <Text style={styles.hint}>No probes yet. Start scan (and power on the Thermapen).</Text>
+            <Text style={styles.hint}>
+              No probes yet. Start scan (and power on the Thermapen or TempTest Blue).
+            </Text>
           ) : (
             snapshot.discovered.map((probe) => {
               const selected = selectedId === probe.id;
@@ -224,31 +226,41 @@ function ProbeLabScreen() {
           {message ? <KV k="lastAction" v={message} /> : null}
         </Section>
 
-        {source === "mock" ? (
-          <Section label="Mock latest reading (°C)">
-            {snapshot.latestReading ? (
-              <>
-                <KV k="status" v={snapshot.latestReading.status} />
-                <KV
-                  k="celsius"
-                  v={
-                    snapshot.latestReading.celsius == null
-                      ? "null"
-                      : String(snapshot.latestReading.celsius)
-                  }
-                />
-              </>
-            ) : (
-              <Text style={styles.hint}>No reading yet.</Text>
-            )}
-          </Section>
-        ) : (
-          <Section label="Readings">
+        <Section label="Latest reading (°C)">
+          {snapshot.latestReading ? (
+            <>
+              <KV k="status" v={snapshot.latestReading.status} />
+              <KV
+                k="celsius"
+                v={
+                  snapshot.latestReading.celsius == null
+                    ? "null"
+                    : String(snapshot.latestReading.celsius)
+                }
+              />
+              <KV
+                k="measuredAt"
+                v={new Date(snapshot.latestReading.measuredAt).toISOString()}
+              />
+              <KV k="sequence" v={String(snapshot.latestReading.sequence ?? "—")} />
+              <KV k="sensorId" v={snapshot.latestReading.sensorId ?? "—"} />
+              <KV
+                k="batteryPercent"
+                v={
+                  snapshot.latestReading.batteryPercent == null
+                    ? "—"
+                    : String(snapshot.latestReading.batteryPercent)
+                }
+              />
+            </>
+          ) : (
             <Text style={styles.hint}>
-              Live temperatures arrive in Phase 3C. Connection-only in 3B.
+              {source === "thermoworks"
+                ? "No reading yet. Stay connected; press the probe button if it only transmits on measure."
+                : "No reading yet."}
             </Text>
-          </Section>
-        )}
+          )}
+        </Section>
       </ScrollView>
     </Screen>
   );

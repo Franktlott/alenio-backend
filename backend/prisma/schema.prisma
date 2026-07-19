@@ -1168,12 +1168,14 @@ model WalkCorrectiveAction {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  libraryItemVersion WalkLibraryItemVersion       @relation(fields: [libraryItemVersionId], references: [id], onDelete: Cascade)
-  results            WalkCorrectiveActionResult[]
+  libraryItemVersion WalkLibraryItemVersion @relation(fields: [libraryItemVersionId], references: [id], onDelete: Cascade)
 
   @@index([libraryItemVersionId])
 }
 
+/// Progress for a failure-procedure step on a run item.
+/// `correctiveActionId` is the snapshot action id (not an FK) so published walks still work
+/// if the library action row was later replaced/deleted.
 model WalkCorrectiveActionResult {
   id                 String    @id @default(cuid())
   itemResponseId     String
@@ -1185,8 +1187,7 @@ model WalkCorrectiveActionResult {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  itemResponse     WalkItemResponse     @relation(fields: [itemResponseId], references: [id], onDelete: Cascade)
-  correctiveAction WalkCorrectiveAction @relation(fields: [correctiveActionId], references: [id], onDelete: Cascade)
+  itemResponse WalkItemResponse @relation(fields: [itemResponseId], references: [id], onDelete: Cascade)
 
   @@unique([itemResponseId, correctiveActionId])
   @@index([itemResponseId])

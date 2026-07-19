@@ -1,5 +1,13 @@
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppTabHeader } from "../../../components/AppTabHeader";
 import { CheckProbeBar } from "../../../components/check/CheckProbeBar";
 import { FailureProcedurePanel } from "../../../components/check/FailureProcedurePanel";
 import { useSession } from "../../../lib/session-context";
@@ -18,6 +27,7 @@ import {
   completeRun,
   flattenRunItems,
   isOpenTempItem,
+  itemHasUnstartedProcedure,
   itemNeedsProcedure,
   resetItemCheck,
   startCheckRun,
@@ -27,35 +37,23 @@ import type { TemperatureConfig, WalkRun, WalkRunItem } from "../../../lib/types
 import { colors } from "../../../lib/theme";
 import { ProbeProvider } from "../../../probe/react";
 
-function requiredParts(config: TemperatureConfig): { value: string; hint: string } {
-  const unit = config.unit ?? "F";
-  if (config.comparisonType === "BETWEEN") {
-    return {
-      value: `${config.minimumTemperature ?? "?"}–${config.maximumTemperature ?? "?"}°${unit}`,
-      hint: "in range",
-    };
-  }
-  if (config.comparisonType === "BELOW") {
-    return {
-      value: `${config.maximumTemperature ?? "?"}°${unit}`,
-      hint: "or below",
-    };
-  }
-  return {
-    value: `${config.minimumTemperature ?? "?"}°${unit}`,
-    hint: "or above",
-  };
+function boundNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
+/** Same pass/fail rules as backend `evaluateTemperature` — null bounds never become 0. */
 function evaluateTemp(
   value: number,
   config: TemperatureConfig,
 ): { pass: boolean; detail: string } | null {
   if (!Number.isFinite(value)) return null;
   const unit = config.unit ?? "F";
-  const min = Number(config.minimumTemperature);
-  const max = Number(config.maximumTemperature);
+  const min = boundNumber(config.minimumTemperature);
+  const max = boundNumber(config.maximumTemperature);
   if (config.comparisonType === "BETWEEN") {
+    if (min == null || max == null) return null;
     const ok = value >= min && value <= max;
     return {
       pass: ok,
@@ -63,44 +61,23 @@ function evaluateTemp(
     };
   }
   if (config.comparisonType === "BELOW") {
+    if (max == null) return null;
     const ok = value <= max;
     return {
       pass: ok,
       detail: ok ? `At or below ${max}°${unit}` : `Above required ${max}°${unit}`,
     };
   }
-  const threshold = Number.isFinite(min) ? min : max;
-  const ok = value >= threshold;
+  if (min == null) return null;
+  const ok = value >= min;
   return {
     pass: ok,
-    detail: ok ? `Above required ${threshold}°${unit}` : `Below required ${threshold}°${unit}`,
+    detail: ok ? `Above required ${min}°${unit}` : `Below required ${min}°${unit}`,
   };
-}
-
-function IconClock() {
-  return (
-    <View style={styles.iconClockOuter}>
-      <View style={styles.iconClockFace}>
-        <View style={styles.iconClockHand} />
-      </View>
-    </View>
-  );
-}
-
-function IconPot() {
-  return (
-    <View style={styles.iconPotWrap}>
-      <Text style={styles.iconPotGlyph}>♨</Text>
-    </View>
-  );
 }
 
 function IconBackspace() {
   return <Text style={styles.keyText}>⌫</Text>;
-}
-
-function IconShield() {
-  return <Text style={styles.saveIcon}>🛡</Text>;
 }
 
 function runAllowsBluetoothProbe(run: WalkRun): boolean {
@@ -131,31 +108,55 @@ export default function TakeCheckScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Only show failure-procedure UI after a saved fail (or explicit Continue). */
+  const [procedureActive, setProcedureActive] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: "Take check",
-      headerBackTitle: "Back",
-      headerStyle: { backgroundColor: colors.surface },
-      headerShadowVisible: false,
-      headerTintColor: colors.brand,
-      headerTitleStyle: { color: colors.ink, fontWeight: "700", fontSize: 17 },
+      header: () => (
+        <AppTabHeader
+          topInset={insets.top}
+          compact
+          logoLift={10}
+          testID="temps-check-header"
+          onClose={() => router.replace("/(app)/today")}
+        />
+      ),
     });
-  }, [navigation]);
+  }, [navigation, insets.top]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!teamId || !occurrenceId) return;
       try {
-        const started = await startCheckRun(teamId, occurrenceId);
+        let started = await startCheckRun(teamId, occurrenceId);
         if (cancelled) return;
+
+        // "Tap to take" should open temperature capture. If a prior fail never
+        // started its procedure (common after leaving mid-check), clear it.
+        for (const item of flattenRunItems(started)) {
+          if (item.type !== "TEMPERATURE" || !itemHasUnstartedProcedure(item)) continue;
+          started = await resetItemCheck(teamId, started.id, item.id);
+          if (cancelled) return;
+        }
+
         setRun(started);
         const flat = flattenRunItems(started);
-        const firstOpen = flat.findIndex((i) => isOpenTempItem(i));
+        const firstFresh = flat.findIndex(
+          (i) =>
+            i.type === "TEMPERATURE" &&
+            (!i.response || i.response.status === "NOT_STARTED"),
+        );
+        const firstOpen =
+          firstFresh >= 0 ? firstFresh : flat.findIndex((i) => isOpenTempItem(i));
         setItemIndex(firstOpen >= 0 ? firstOpen : 0);
+        setProcedureActive(false);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not start check");
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : "Could not start check";
+        setError(message);
+        if (isOutsideWindowError(message)) alertOutsideWindow(message);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -166,33 +167,29 @@ export default function TakeCheckScreen() {
   }, [teamId, occurrenceId]);
 
   const items = useMemo(() => (run ? flattenRunItems(run) : []), [run]);
-  const tempItems = useMemo(() => items.filter((i) => i.type === "TEMPERATURE"), [items]);
   const current = items[itemIndex] as WalkRunItem | undefined;
   const config = (current?.config ?? {}) as TemperatureConfig;
   const unit = config.unit ?? "F";
-  const required = requiredParts(config);
   const value = digits === "" || digits === "." ? NaN : Number(digits);
   const verdict = evaluateTemp(value, config);
-  const answered = run?.progress.answered ?? 0;
-  const total = Math.max(run?.progress.total ?? tempItems.length, 1);
-  const progressPct = Math.round((answered / total) * 100);
-  const itemOrdinal =
-    current && current.type === "TEMPERATURE"
-      ? tempItems.findIndex((i) => i.id === current.id) + 1
-      : itemIndex + 1;
-  const itemCount = tempItems.length || items.length;
   const probeEnabledForRun = run ? runAllowsBluetoothProbe(run) : false;
 
   useEffect(() => {
     // Prefer live probe for each new item; associate can switch to keypad again.
     setManualMode(false);
     setEntrySource("manual");
+    setDigits("");
+    // Always land on the temperature page; procedure opens only after a saved fail.
+    setProcedureActive(false);
   }, [current?.id]);
 
   const onLiveDigits = useCallback((next: string) => {
     setDigits(next);
     setEntrySource("bluetooth");
   }, []);
+
+  /** Latest probe-button save path — ref avoids stale closures without resetting the capture timer. */
+  const onProbeCaptureRequestRef = useRef<(probeDigits: string) => void>(() => {});
 
   function pushDigit(d: string) {
     setEntrySource("manual");
@@ -209,25 +206,44 @@ export default function TakeCheckScreen() {
     setDigits((p) => p.slice(0, -1));
   }
 
+  function alertOutsideWindow(message: string) {
+    Alert.alert("Outside check window", message, [
+      { text: "OK", onPress: () => router.replace("/(app)/today") },
+    ]);
+  }
+
+  function isOutsideWindowError(message: string) {
+    return /window has closed|hasn’t opened|has not opened|not available/i.test(message);
+  }
+
   async function advanceAfterSave(next: WalkRun, currentItemId: string) {
     const flat = flattenRunItems(next);
     const saved = flat.find((i) => i.id === currentItemId);
-    if (saved && itemNeedsProcedure(saved)) {
+    // Only open corrective flow when the server marked NEEDS_ACTION (true fail path).
+    if (saved && saved.response?.status === "NEEDS_ACTION" && itemNeedsProcedure(saved)) {
       setRun(next);
       setDigits("");
       setEntrySource("manual");
+      setProcedureActive(true);
       const idx = flat.findIndex((i) => i.id === currentItemId);
       if (idx >= 0) setItemIndex(idx);
       return;
     }
+    setProcedureActive(false);
 
     const remaining = flat.filter((i) => isOpenTempItem(i));
     if (remaining.length === 0 && next.progress.requiredRemaining === 0) {
-      const completed = await completeRun(teamId!, next.id);
-      setRun(completed);
-      Alert.alert("Check complete", "Results are available in Alenio Go.", [
-        { text: "Done", onPress: () => router.back() },
-      ]);
+      try {
+        const completed = await completeRun(teamId!, next.id);
+        setRun(completed);
+        Alert.alert("Check complete", "Results are available in Alenio Go.", [
+          { text: "Done", onPress: () => router.back() },
+        ]);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Could not complete check";
+        if (isOutsideWindowError(message)) alertOutsideWindow(message);
+        else Alert.alert("Could not complete", message);
+      }
       return;
     }
 
@@ -273,7 +289,9 @@ export default function TakeCheckScreen() {
       );
       await advanceAfterSave(next, current.id);
     } catch (err) {
-      Alert.alert("Could not save", err instanceof Error ? err.message : "Try again.");
+      const message = err instanceof Error ? err.message : "Try again.";
+      if (isOutsideWindowError(message)) alertOutsideWindow(message);
+      else Alert.alert("Could not save", message);
     } finally {
       setSaving(false);
     }
@@ -314,7 +332,7 @@ export default function TakeCheckScreen() {
 
   async function restartItem() {
     if (!teamId || !run || !current) return;
-    if (saving) return;
+    // Always allow restart — even if a save is in flight (stuck spinner).
     setSaving(true);
     try {
       const next = await resetItemCheck(teamId, run.id, current.id);
@@ -322,6 +340,7 @@ export default function TakeCheckScreen() {
       setDigits("");
       setEntrySource("manual");
       setManualMode(false);
+      setProcedureActive(false);
       const flat = flattenRunItems(next);
       const idx = flat.findIndex((i) => i.id === current.id);
       if (idx >= 0) setItemIndex(idx);
@@ -377,7 +396,9 @@ export default function TakeCheckScreen() {
     retempDone &&
     (current.response?.status === "NEEDS_ACTION" || current.response?.failed === true) &&
     secondFailure.some((a) => a.status === "PENDING" || a.status === "COMPLETED");
-  const inProcedure = itemNeedsProcedure(current);
+  const hasPendingProcedure = itemNeedsProcedure(current);
+  const awaitingProcedureContinue = hasPendingProcedure && !procedureActive;
+  const inProcedure = hasPendingProcedure && procedureActive;
   const showRetemp =
     inProcedure &&
     Boolean(requireRetest) &&
@@ -392,72 +413,57 @@ export default function TakeCheckScreen() {
   const showFirstFailurePhase =
     inProcedure && firstFailure.length > 0 && !firstFailureDone;
   const showSecondFailurePhase = inProcedure && showSecondFailure;
-  const showCapture = !inProcedure || showRetemp;
+  // Temp capture first. Procedure only after a saved fail (or Continue).
+  const showCapture = !awaitingProcedureContinue && (!inProcedure || showRetemp);
   const canRestart =
     Boolean(current.response) && current.response?.status !== "NOT_STARTED";
+
+  const failSummary = failSummaryFromItem(current, unit, config);
+  const readingStable =
+    allowProbe && !manualMode && Number.isFinite(value) && entrySource === "bluetooth";
+  const showFailBanner = Boolean(verdict && !verdict.pass);
+
+  onProbeCaptureRequestRef.current = (probeDigits: string) => {
+    void submitCurrent({
+      fromProbeButton: true,
+      digitsOverride: probeDigits,
+      retestCount: showRetemp ? retestCount + 1 : 0,
+    });
+  };
 
   return (
     <MaybeProbeProvider enabled={probeEnabledForRun}>
       <View style={styles.screen}>
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: 24 + insets.bottom }]}
+          style={styles.scrollFlex}
+          contentContainerStyle={[
+            styles.scroll,
+            showCapture && styles.scrollGrow,
+            { paddingBottom: showCapture ? 16 : 24 + insets.bottom },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.progressCard}>
-            <IconClock />
-            <View style={styles.progressCopy}>
-              <Text style={styles.progressKicker} numberOfLines={1}>
-                {run.template.name.toUpperCase()}
-              </Text>
-              <Text style={styles.progressTitle}>
-                Item {itemOrdinal} of {itemCount}
-              </Text>
-              <View style={styles.progressRow}>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressFill, { width: `${Math.min(100, progressPct)}%` }]} />
-                </View>
-                <Text style={styles.progressPct}>{progressPct}%</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.itemCard}>
-            <IconPot />
-            <View style={styles.itemCopy}>
-              <Text style={styles.itemTitle} numberOfLines={2}>
-                {current.title}
-              </Text>
-              <Text style={styles.itemSub} numberOfLines={2}>
-                {current.description?.trim() || current.instructions?.trim() || "Temperature check"}
-              </Text>
-            </View>
-            <View style={styles.requiredCol}>
-              <Text style={styles.requiredLabel}>REQUIRED</Text>
-              <Text style={styles.requiredValue}>{required.value}</Text>
-              <Text style={styles.requiredHint}>{required.hint}</Text>
-            </View>
-            <Pressable
-              style={styles.infoBtn}
-              onPress={() =>
-                Alert.alert(
-                  current.title,
-                  [current.instructions, current.description].filter(Boolean).join("\n\n") ||
-                    criteriaDetail(config),
-                )
-              }
-              hitSlop={8}
-            >
-              <Text style={styles.infoBtnText}>i</Text>
-            </Pressable>
-          </View>
-
-          {inProcedure ? (
+          {awaitingProcedureContinue ? (
             <View style={styles.procedureBanner}>
-              <Text style={styles.procedureBannerTitle}>Failure procedure</Text>
+              <Text style={styles.procedureBannerTitle}>Previous reading failed</Text>
               <Text style={styles.procedureBannerBody}>
-                Complete one step at a time, in order, before continuing.
+                Finish the failure steps from last time, or start over with a new reading.
               </Text>
+              <Pressable
+                style={[styles.continueBtn, saving && styles.saveBtnDisabled]}
+                disabled={saving}
+                onPress={() => setProcedureActive(true)}
+              >
+                <Text style={styles.continueBtnText}>Continue failure procedure</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.restartFromBannerBtn, saving && styles.saveBtnDisabled]}
+                disabled={saving}
+                onPress={() => void restartItem()}
+              >
+                <Text style={styles.restartFromBannerBtnText}>Take a new reading</Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -467,6 +473,7 @@ export default function TakeCheckScreen() {
               actions={firstFailure}
               unlocked
               busy={saving}
+              failSummary={failSummary}
               onComplete={(actionId) => void markCorrectiveComplete(actionId)}
             />
           ) : null}
@@ -486,71 +493,94 @@ export default function TakeCheckScreen() {
               actions={secondFailure}
               unlocked
               busy={saving}
+              failSummary={failSummary}
               onComplete={(actionId) => void markCorrectiveComplete(actionId)}
             />
           ) : null}
 
           {showCapture ? (
-            <>
-              <Text style={styles.sectionLabel}>
-                {showRetemp ? "RETEMP READING" : "CURRENT TEMPERATURE"}
-              </Text>
-              <View style={styles.tempCard}>
-                <View style={styles.tempReading}>
-                  <Text style={styles.tempValue}>{digits || "—"}</Text>
-                  <Text style={styles.tempUnit}>°{unit}</Text>
+            <View style={styles.captureBlock}>
+              <View style={styles.itemHead}>
+                <View style={styles.itemIcon}>
+                  <Text style={styles.itemIconGlyph}>❄</Text>
                 </View>
-                {verdict ? (
-                  <View
-                    style={[styles.verdict, verdict.pass ? styles.verdictPass : styles.verdictFail]}
-                  >
-                    <Text
-                      style={[styles.verdictMark, verdict.pass ? styles.passText : styles.failText]}
-                    >
-                      {verdict.pass ? "✓" : "!"}
-                    </Text>
-                    <View>
-                      <Text
-                        style={[
-                          styles.verdictTitle,
-                          verdict.pass ? styles.passText : styles.failText,
-                        ]}
-                      >
-                        {verdict.pass ? "PASS" : "FAIL"}
-                      </Text>
-                      <Text style={styles.verdictDetail}>{verdict.detail}</Text>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.verdictPending}>
-                    <Text style={styles.verdictPendingText}>
-                      {allowProbe && !manualMode ? "Waiting for probe…" : "Enter a reading"}
-                    </Text>
-                  </View>
-                )}
+                <View style={styles.itemCopy}>
+                  <Text style={styles.itemTitle} numberOfLines={2}>
+                    {current.title}
+                  </Text>
+                  <Text style={styles.itemSub} numberOfLines={1}>
+                    {current.description?.trim() ||
+                      current.instructions?.trim() ||
+                      "Temperature check"}
+                  </Text>
+                </View>
               </View>
 
-              {allowProbe ? (
-                <CheckProbeBar
-                  unit={unit}
-                  liveDigitsEnabled={!manualMode}
-                  onLiveDigits={onLiveDigits}
-                  onCaptureRequest={(probeDigits) => {
-                    void submitCurrent({
-                      fromProbeButton: true,
-                      digitsOverride: probeDigits,
-                      retestCount: showRetemp ? retestCount + 1 : 0,
-                    });
-                  }}
-                />
-              ) : (
-                <View style={[styles.probeBar, styles.probeBarManual]}>
-                  <View style={styles.probeCopy}>
-                    <Text style={styles.probeTitle}>Manual entry</Text>
-                    <Text style={styles.probeHint}>Use the keypad to record this temperature</Text>
-                  </View>
+              <View style={styles.targetCard}>
+                <View style={styles.targetIcon}>
+                  <Text style={styles.targetSnowflake}>❄</Text>
                 </View>
-              )}
+                <View style={styles.targetCopy}>
+                  <Text style={styles.targetLabel}>Target Temperature</Text>
+                  <Text style={styles.targetValue}>{targetLabel(config)}</Text>
+                </View>
+                <Pressable
+                  style={styles.infoBtn}
+                  onPress={() =>
+                    Alert.alert(
+                      current.title,
+                      [current.instructions, current.description].filter(Boolean).join("\n\n") ||
+                        criteriaDetail(config),
+                    )
+                  }
+                  hitSlop={8}
+                >
+                  <Text style={styles.infoBtnText}>i</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.tempCenter}>
+                <View
+                  style={[
+                    styles.tempRing,
+                    showFailBanner && styles.tempRingFail,
+                    verdict?.pass && styles.tempRingPass,
+                    !verdict && styles.tempRingIdle,
+                  ]}
+                >
+                  <View style={styles.tempReading}>
+                    <Text
+                      style={[
+                        styles.tempValue,
+                        showFailBanner && styles.tempValueFail,
+                        verdict?.pass && styles.tempValuePass,
+                      ]}
+                    >
+                      {digits || "—"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.tempUnit,
+                        showFailBanner && styles.tempValueFail,
+                        verdict?.pass && styles.tempValuePass,
+                      ]}
+                    >
+                      °{unit}
+                    </Text>
+                  </View>
+
+                  {readingStable ? (
+                    <View style={styles.stablePill}>
+                      <View style={styles.stableDot} />
+                      <Text style={styles.stablePillText}>Reading is stable</Text>
+                    </View>
+                  ) : !verdict ? (
+                    <Text style={styles.waitingHint}>
+                      {allowProbe && !manualMode ? "Waiting for probe…" : "Enter a reading"}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
 
               {showKeypad ? (
                 <View style={styles.pad}>
@@ -573,12 +603,51 @@ export default function TakeCheckScreen() {
 
               {allowProbe && allowManual ? (
                 <Pressable onPress={() => setManualMode((v) => !v)} style={styles.manualLink}>
+                  <Text style={styles.manualIcon}>{manualMode ? "⌀" : "✎"}</Text>
                   <Text style={styles.manualLinkText}>
                     {manualMode ? "Use probe reading" : "Enter manually"}
                   </Text>
+                  {!manualMode ? (
+                    <Text style={styles.manualHint}>Manually input the temperature</Text>
+                  ) : null}
                 </Pressable>
               ) : null}
+            </View>
+          ) : null}
 
+          {canRestart && !awaitingProcedureContinue ? (
+            <Pressable
+              style={[styles.restartBtn, saving && styles.saveBtnDisabled]}
+              disabled={saving}
+              onPress={confirmRestartItem}
+            >
+              <Text style={styles.restartBtnText}>Restart this item</Text>
+            </Pressable>
+          ) : null}
+
+        </ScrollView>
+
+        {showCapture ? (
+          <View style={[styles.footerBlock, { paddingBottom: Math.max(14, insets.bottom + 6) }]}>
+            {allowProbe ? (
+              <View style={styles.probeRowWrap}>
+                <CheckProbeBar
+                  key={`${current.id}-${showRetemp ? "retemp" : "main"}`}
+                  unit={unit}
+                  liveDigitsEnabled={!manualMode && !saving}
+                  onLiveDigits={onLiveDigits}
+                  onCaptureRequest={
+                    saving
+                      ? undefined
+                      : (probeDigits) => onProbeCaptureRequestRef.current(probeDigits)
+                  }
+                />
+              </View>
+            ) : null}
+            <View style={styles.footerSticky}>
+              <Pressable style={[styles.skipBtn, styles.skipBtnDisabled]} disabled>
+                <Text style={styles.skipBtnText}>Skip</Text>
+              </Pressable>
               <Pressable
                 style={[styles.saveBtn, (!digits || saving) && styles.saveBtnDisabled]}
                 disabled={!digits || saving}
@@ -589,32 +658,14 @@ export default function TakeCheckScreen() {
                 {saving ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <>
-                    <IconShield />
-                    <Text style={styles.saveBtnText}>
-                      {showRetemp ? "Save Retemp" : "Save Reading"}
-                    </Text>
-                  </>
+                  <Text style={styles.saveBtnText}>
+                    {showRetemp ? "Save Retemp  ›" : "Save & Continue  ›"}
+                  </Text>
                 )}
               </Pressable>
-            </>
-          ) : null}
-
-          {canRestart ? (
-            <Pressable
-              style={[styles.restartBtn, saving && styles.saveBtnDisabled]}
-              disabled={saving}
-              onPress={confirmRestartItem}
-            >
-              <Text style={styles.restartBtnText}>Restart this item</Text>
-            </Pressable>
-          ) : null}
-
-          <View style={styles.syncRow}>
-            <Text style={styles.syncLock}>🔒</Text>
-            <Text style={styles.syncText}>Reading will sync to Alenio Go</Text>
+            </View>
           </View>
-        </ScrollView>
+        ) : null}
       </View>
     </MaybeProbeProvider>
   );
@@ -631,10 +682,45 @@ function criteriaDetail(config: TemperatureConfig) {
   return `Pass at or above ${config.minimumTemperature}°${unit}.`;
 }
 
+function targetLabel(config: TemperatureConfig): string {
+  const unit = config.unit ?? "F";
+  if (config.comparisonType === "BETWEEN") {
+    return `${config.minimumTemperature ?? "?"}–${config.maximumTemperature ?? "?"} °${unit}`;
+  }
+  if (config.comparisonType === "BELOW") {
+    return `≤ ${config.maximumTemperature ?? "?"} °${unit}`;
+  }
+  return `≥ ${config.minimumTemperature ?? "?"} °${unit}`;
+}
+
+function failSummaryFromItem(
+  item: WalkRunItem,
+  unit: string,
+  config: TemperatureConfig,
+): string | null {
+  if (!item.response || (item.response.status !== "NEEDS_ACTION" && !item.response.failed)) {
+    return null;
+  }
+  const payload =
+    item.response.response && typeof item.response.response === "object"
+      ? (item.response.response as Record<string, unknown>)
+      : null;
+  const value = typeof payload?.value === "number" ? payload.value : null;
+  const limit = targetLabel(config);
+  if (value == null) return `Reading is outside the limit (${limit})`;
+  if (config.comparisonType === "BELOW") {
+    return `${value} °${unit} is above the limit (${limit})`;
+  }
+  if (config.comparisonType === "ABOVE") {
+    return `${value} °${unit} is below the limit (${limit})`;
+  }
+  return `${value} °${unit} is outside the limit (${limit})`;
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: "#F4F7FB",
   },
   centered: {
     alignItems: "center",
@@ -642,7 +728,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    color: colors.muted,
+    color: colors.mutedOnDark,
     fontWeight: "600",
   },
   errorText: {
@@ -650,16 +736,204 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 16,
   },
+  scrollFlex: {
+    flex: 1,
+  },
   scroll: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+  },
+  scrollGrow: {
+    flexGrow: 1,
+  },
+  footerBlock: {
+    backgroundColor: "#F4F7FB",
+    paddingHorizontal: 18,
+    paddingTop: 8,
+  },
+  probeRowWrap: {
+    marginBottom: 12,
+  },
+  footerSticky: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  captureBlock: {
+    flex: 1,
+    marginBottom: 8,
+  },
+  itemHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  itemIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#EAF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemIconGlyph: {
+    fontSize: 20,
+    color: colors.brand,
+  },
+  itemCopy: { flex: 1, minWidth: 0 },
+  itemTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.ink,
+    letterSpacing: -0.4,
+  },
+  itemSub: {
+    marginTop: 2,
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.muted,
+  },
+  targetCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "#E8EEF5",
+    shadowColor: "#0B1F44",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+    marginBottom: 18,
+  },
+  targetIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#EAF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  targetSnowflake: {
+    fontSize: 16,
+    color: colors.brand,
+  },
+  targetCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  targetLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.muted,
+  },
+  targetValue: {
+    marginTop: 2,
+    fontSize: 20,
+    fontWeight: "800",
+    color: colors.ink,
+    letterSpacing: -0.3,
+  },
+  infoBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  infoBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#94A3B8",
+  },
+  tempCenter: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    minHeight: 220,
+    paddingVertical: 8,
+  },
+  tempRing: {
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    borderWidth: 10,
+    borderColor: "#FECACA",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
-    paddingTop: 12,
+  },
+  tempRingFail: {
+    borderColor: "#FECACA",
+  },
+  tempRingPass: {
+    borderColor: "#BBF7D0",
+  },
+  tempRingIdle: {
+    borderColor: "#E2E8F0",
+  },
+  tempReading: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    gap: 2,
+  },
+  tempValue: {
+    fontSize: 64,
+    fontWeight: "800",
+    color: colors.ink,
+    fontVariant: ["tabular-nums"],
+    letterSpacing: -1.5,
+    lineHeight: 70,
+  },
+  tempUnit: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: colors.muted,
+    marginTop: 12,
+  },
+  tempValueFail: { color: colors.fail },
+  tempValuePass: { color: colors.pass },
+  stablePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "center",
+    backgroundColor: colors.stablePill,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 10,
+  },
+  stableDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.stableText,
+  },
+  stablePillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.stableText,
+  },
+  waitingHint: {
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.muted,
+    marginTop: 10,
   },
   procedureBanner: {
     backgroundColor: colors.failSoft,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    padding: 12,
+    padding: 14,
     marginBottom: 12,
   },
   procedureBannerTitle: {
@@ -673,18 +947,42 @@ const styles = StyleSheet.create({
     color: "#7F1D1D",
     lineHeight: 18,
   },
-  retempCard: {
-    backgroundColor: "#EFF6FF",
-    borderRadius: 14,
+  continueBtn: {
+    marginTop: 12,
+    backgroundColor: colors.brand,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  continueBtnText: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  restartFromBannerBtn: {
+    marginTop: 8,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
-    padding: 12,
+    borderColor: colors.border,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  restartFromBannerBtnText: {
+    color: colors.brandDark,
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  retempCard: {
+    backgroundColor: colors.infoSoft,
+    borderRadius: 14,
+    padding: 14,
     marginBottom: 12,
   },
   retempTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#1D4ED8",
+    color: colors.info,
     marginBottom: 4,
   },
   retempBody: {
@@ -696,264 +994,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 12,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: colors.borderDark,
   },
   restartBtnText: {
-    color: colors.ink,
+    color: colors.inkOnDark,
     fontWeight: "700",
     fontSize: 14,
-  },
-  progressCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 12,
-  },
-  iconClockOuter: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.brandSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconClockFace: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.brand,
-    alignItems: "center",
-    justifyContent: "flex-start",
-    paddingTop: 4,
-  },
-  iconClockHand: {
-    width: 2,
-    height: 7,
-    backgroundColor: colors.brand,
-    borderRadius: 1,
-  },
-  progressCopy: { flex: 1, minWidth: 0 },
-  progressKicker: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    color: colors.brand,
-    marginBottom: 2,
-  },
-  progressTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.ink,
-    letterSpacing: -0.3,
-  },
-  progressRow: {
-    marginTop: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  progressTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: "#E2E8F0",
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: colors.brandMid,
-    borderRadius: 999,
-  },
-  progressPct: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.muted,
-    minWidth: 32,
-    textAlign: "right",
-  },
-  itemCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 18,
-  },
-  iconPotWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.brandSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconPotGlyph: {
-    fontSize: 20,
-    color: colors.brand,
-  },
-  itemCopy: { flex: 1, minWidth: 0 },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: colors.ink,
-  },
-  itemSub: {
-    marginTop: 2,
-    fontSize: 13,
-    fontWeight: "500",
-    color: colors.muted,
-  },
-  requiredCol: {
-    paddingLeft: 10,
-    borderLeftWidth: 1,
-    borderLeftColor: colors.border,
-    alignItems: "flex-end",
-    minWidth: 72,
-  },
-  requiredLabel: {
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    color: colors.muted,
-  },
-  requiredValue: {
-    marginTop: 2,
-    fontSize: 16,
-    fontWeight: "800",
-    color: colors.ink,
-  },
-  requiredHint: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: colors.muted,
-  },
-  infoBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: "#CBD5E1",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoBtnText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#94A3B8",
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.7,
-    color: colors.muted,
-    marginBottom: 8,
-  },
-  tempCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-    gap: 12,
-  },
-  tempReading: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  tempValue: {
-    fontSize: 48,
-    fontWeight: "800",
-    color: colors.ink,
-    fontVariant: ["tabular-nums"],
-    letterSpacing: -1,
-    lineHeight: 52,
-  },
-  tempUnit: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: colors.muted,
-    marginBottom: 6,
-  },
-  verdict: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    maxWidth: "48%",
-  },
-  verdictPass: { backgroundColor: colors.passSoft },
-  verdictFail: { backgroundColor: colors.failSoft },
-  verdictMark: {
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  verdictTitle: {
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: 0.3,
-  },
-  verdictDetail: {
-    marginTop: 1,
-    fontSize: 11,
-    fontWeight: "600",
-    color: colors.muted,
-  },
-  passText: { color: colors.pass },
-  failText: { color: colors.fail },
-  verdictPending: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  verdictPendingText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.muted,
-  },
-  probeBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.probeBg,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 14,
-  },
-  probeBarManual: {
-    backgroundColor: "#F1F5F9",
-  },
-  probeCopy: { flex: 1, minWidth: 0 },
-  probeTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.brandDark,
-  },
-  probeHint: {
-    marginTop: 1,
-    fontSize: 11,
-    fontWeight: "500",
-    color: colors.brand,
   },
   pad: {
     flexDirection: "row",
@@ -965,16 +1015,15 @@ const styles = StyleSheet.create({
   key: {
     width: "31.5%",
     aspectRatio: 1.55,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#E8EEF5",
     alignItems: "center",
     justifyContent: "center",
   },
   keyPressed: {
-    backgroundColor: "#F8FAFC",
-    opacity: 0.9,
+    backgroundColor: colors.brandSoft,
   },
   keyText: {
     fontSize: 26,
@@ -983,42 +1032,56 @@ const styles = StyleSheet.create({
   },
   manualLink: {
     alignItems: "center",
-    paddingVertical: 8,
-    marginBottom: 8,
+    paddingVertical: 10,
+    marginTop: 4,
+    marginBottom: 4,
+    gap: 4,
+  },
+  manualIcon: {
+    fontSize: 18,
+    color: colors.brand,
+    fontWeight: "700",
   },
   manualLinkText: {
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "800",
     color: colors.brand,
   },
+  manualHint: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.muted,
+  },
+  skipBtn: {
+    flex: 1,
+    minHeight: 54,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#D5DEEA",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  skipBtnDisabled: {
+    opacity: 0.45,
+  },
+  skipBtnText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.ink,
+  },
   saveBtn: {
-    marginTop: 4,
+    flex: 1.55,
     backgroundColor: colors.brand,
     borderRadius: 14,
     minHeight: 54,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
   },
   saveBtnDisabled: { opacity: 0.45 },
-  saveIcon: { fontSize: 16 },
   saveBtnText: {
     color: "#fff",
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "800",
-  },
-  syncRow: {
-    marginTop: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  syncLock: { fontSize: 11 },
-  syncText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.muted,
   },
 });

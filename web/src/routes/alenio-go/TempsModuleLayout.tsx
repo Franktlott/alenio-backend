@@ -180,7 +180,7 @@ export function TempsModuleLayout() {
           aria-label="Back to Alenio Go"
           onClick={() => navigate("/go")}
         >
-          <img src="/aleniotemps.png" alt="Alenio Temps" width={588} height={156} />
+          <img src="/AlenioTemp.png" alt="Alenio Temps" width={588} height={156} />
         </button>
 
         <nav className="temps-nav-scroll">

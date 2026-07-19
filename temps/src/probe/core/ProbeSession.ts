@@ -66,6 +66,10 @@ export class ProbeSession {
         if (this.disposed) return;
         this.applyReading(reading);
       },
+      onCaptureRequest: () => {
+        if (this.disposed) return;
+        this.store.bumpCaptureRequest();
+      },
       onError: (error) => {
         if (this.disposed) return;
         this.store.setLastError(error);

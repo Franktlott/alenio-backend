@@ -50,9 +50,23 @@
         }
       ],
       "./plugins/withIosSceneLifecycle",
-      "alenio-thermoworks"
+      "alenio-thermoworks",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/alenio-temp.png",
+          "imageWidth": 280,
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ]
     ],
     "icon": "../mobile/icon.png",
+    "splash": {
+      "image": "./assets/alenio-temp.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
     "experiments": {
       "typedRoutes": true
     }

@@ -1,20 +1,23 @@
-import { router } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { router, useNavigation } from "expo-router";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { Card, Muted, Screen, Title } from "../../components/ui";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppTabHeader } from "../../components/AppTabHeader";
+import { HomeMenu } from "../../components/HomeMenu";
 import { useSession } from "../../lib/session-context";
 import { listChecksForDay } from "../../lib/temps-api";
 import type { WalkOccurrence } from "../../lib/types";
 import { colors } from "../../lib/theme";
 
-function formatWindow(iso: string) {
+function formatTime(iso: string) {
   try {
     return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   } catch {
@@ -22,16 +25,66 @@ function formatWindow(iso: string) {
   }
 }
 
+function isCompleted(item: WalkOccurrence) {
+  return item.status === "COMPLETED" || item.status === "COMPLETED_LATE";
+}
+
+function isFailed(item: WalkOccurrence) {
+  return item.status === "MISSED";
+}
+
+function isInProgressTab(item: WalkOccurrence) {
+  return (
+    item.status === "AVAILABLE" ||
+    item.status === "IN_PROGRESS" ||
+    item.status === "UPCOMING"
+  );
+}
+
+function isWithinWindow(item: WalkOccurrence) {
+  const now = Date.now();
+  const start = new Date(item.windowStart).getTime();
+  const end = new Date(item.graceEndsAt ?? item.dueAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+  return now >= start && now <= end;
+}
+
 function isReady(item: WalkOccurrence) {
-  return item.status === "AVAILABLE" || item.status === "IN_PROGRESS";
+  return (
+    (item.status === "AVAILABLE" || item.status === "IN_PROGRESS") && isWithinWindow(item)
+  );
+}
+
+function windowLabel(item: WalkOccurrence) {
+  return `${formatTime(item.windowStart)} – ${formatTime(item.dueAt)}`;
+}
+
+type TabKey = "in_progress" | "completed";
+
+type BadgeTone = "pass" | "fail" | "pending" | "progress";
+
+function badgeFor(item: WalkOccurrence): { label: string; tone: BadgeTone } {
+  if (isCompleted(item)) return { label: "PASS", tone: "pass" };
+  if (isFailed(item)) return { label: "FAIL", tone: "fail" };
+  if (item.status === "IN_PROGRESS") return { label: "IN PROGRESS", tone: "progress" };
+  if (item.status === "UPCOMING") return { label: "UPCOMING", tone: "pending" };
+  return { label: "PENDING", tone: "pending" };
 }
 
 export default function TodayScreen() {
   const { teamId } = useSession();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [today, setToday] = useState<WalkOccurrence[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabKey>("in_progress");
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   const load = useCallback(
     async (mode: "initial" | "refresh" = "initial") => {
@@ -40,7 +93,6 @@ export default function TodayScreen() {
       if (mode === "initial") setLoading(true);
       else setRefreshing(true);
       try {
-        // Single day list — available rows are derived client-side (no second materialize).
         const day = await listChecksForDay(teamId);
         setToday(day);
       } catch (err) {
@@ -58,118 +110,422 @@ export default function TodayScreen() {
     void load("initial");
   }, [load]);
 
-  const availableCount = today.filter(isReady).length;
+  const stats = useMemo(() => {
+    const completed = today.filter(isCompleted).length;
+    return { completed, total: today.length };
+  }, [today]);
+
+  const progressPct =
+    stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
+  const inProgressList = useMemo(() => {
+    return today
+      .filter(isInProgressTab)
+      .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+  }, [today]);
+
+  const completedList = useMemo(() => {
+    return today
+      .filter((i) => isCompleted(i) || isFailed(i))
+      .sort((a, b) => new Date(b.dueAt).getTime() - new Date(a.dueAt).getTime());
+  }, [today]);
+
+  const list = tab === "in_progress" ? inProgressList : completedList;
+
+  const nextUp = useMemo(() => {
+    return inProgressList.find(isReady) ?? null;
+  }, [inProgressList]);
+
+  function openCheck(item: WalkOccurrence) {
+    if (!isReady(item)) return;
+    router.push(`/(app)/check/${item.id}`);
+  }
+
+  function renderRow(item: WalkOccurrence, opts?: { nextUp?: boolean }) {
+    const ready = isReady(item);
+    const badge = badgeFor(item);
+    const badgeStyle =
+      badge.tone === "pass"
+        ? styles.badgePass
+        : badge.tone === "fail"
+          ? styles.badgeFail
+          : badge.tone === "progress"
+            ? styles.badgeProgress
+            : styles.badgePending;
+    const badgeTextStyle =
+      badge.tone === "pass"
+        ? styles.badgeTextPass
+        : badge.tone === "fail"
+          ? styles.badgeTextFail
+          : badge.tone === "progress"
+            ? styles.badgeTextProgress
+            : styles.badgeTextPending;
+
+    return (
+      <Pressable
+        key={item.id}
+        style={({ pressed }) => [
+          styles.rowCard,
+          opts?.nextUp && styles.nextUpCard,
+          pressed && ready && styles.pressed,
+        ]}
+        onPress={() => openCheck(item)}
+        disabled={!ready}
+      >
+        <View
+          style={[
+            styles.rowIcon,
+            badge.tone === "pass"
+              ? { backgroundColor: colors.passSoft }
+              : badge.tone === "fail"
+                ? { backgroundColor: colors.failSoft }
+                : { backgroundColor: colors.brandSoft },
+          ]}
+        >
+          <Text
+            style={[
+              styles.rowIconGlyph,
+              {
+                color:
+                  badge.tone === "pass"
+                    ? colors.pass
+                    : badge.tone === "fail"
+                      ? colors.fail
+                      : colors.brand,
+              },
+            ]}
+          >
+            {badge.tone === "pass" ? "✓" : badge.tone === "fail" ? "!" : "◷"}
+          </Text>
+        </View>
+        <View style={styles.rowCopy}>
+          <Text style={styles.rowTitle} numberOfLines={1}>
+            {item.template?.name ?? "Temperature check"}
+          </Text>
+          <Text style={styles.rowSub} numberOfLines={1}>
+            {windowLabel(item)}
+            {ready ? `  ·  Due ${formatTime(item.dueAt)}` : ""}
+          </Text>
+        </View>
+        <View style={[styles.badge, badgeStyle]}>
+          <Text style={[styles.badgeText, badgeTextStyle]}>{badge.label}</Text>
+        </View>
+        {ready ? <Text style={styles.chevron}>›</Text> : null}
+      </Pressable>
+    );
+  }
 
   return (
-    <Screen style={{ paddingHorizontal: 0 }}>
-      <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
-        <Text style={{ fontSize: 13, fontWeight: "800", color: colors.brandDark, letterSpacing: 0.5 }}>
-          ALENIO TEMPS
-        </Text>
-        <Title>Today’s checks</Title>
-        <Muted>Open a check to record temperatures. Results sync to Alenio Go.</Muted>
-      </View>
-
+    <View style={styles.screen}>
+      <AppTabHeader
+        topInset={insets.top}
+        logoAlign="left"
+        onMenuPress={() => setMenuOpen(true)}
+        testID="temps-checks-header"
+      />
+      <HomeMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
       {loading ? (
-        <View style={styles.loadingBox} accessibilityLabel="Loading today's checks">
+        <View style={styles.loadingBox}>
           <ActivityIndicator size="large" color={colors.brand} />
-          <Text style={styles.loadingTitle}>Loading today’s checks…</Text>
-          <Text style={styles.loadingHint}>Pulling open windows for your store</Text>
+          <Text style={styles.loadingTitle}>Loading checks…</Text>
         </View>
       ) : (
-        <FlatList
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
-          data={today}
-          keyExtractor={(item) => item.id}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => void load("refresh")}
-              tintColor={colors.brand}
-            />
-          }
-          ListHeaderComponent={
-            error ? (
-              <Text style={{ color: colors.fail, marginBottom: 12 }}>{error}</Text>
-            ) : availableCount > 0 ? (
-              <Text style={{ marginBottom: 12, fontWeight: "700", color: colors.ink }}>
-                {availableCount} available now
-              </Text>
-            ) : (
-              <View style={{ marginBottom: 12 }}>
-                <Muted>No checks in today’s window yet.</Muted>
-              </View>
-            )
-          }
-          ListEmptyComponent={
-            !error ? (
-              <View style={styles.emptyBox}>
-                <Text style={styles.emptyTitle}>Nothing scheduled for today</Text>
-                <Muted>When a walk window opens, it will show up here.</Muted>
-              </View>
-            ) : null
-          }
-          renderItem={({ item }) => {
-            const ready = isReady(item);
-            return (
-              <Card
-                onPress={ready ? () => router.push(`/(app)/check/${item.id}`) : undefined}
+        <>
+          <View style={styles.topSticky}>
+            <View style={styles.titleRow}>
+              <Text style={styles.screenTitle}>Today’s Checks</Text>
+              <Text style={styles.calGlyph}>▦</Text>
+            </View>
+
+            <View style={styles.segment}>
+              <Pressable
+                style={[styles.segmentBtn, tab === "in_progress" && styles.segmentBtnOn]}
+                onPress={() => setTab("in_progress")}
               >
-                <Text style={{ fontSize: 17, fontWeight: "700", color: colors.ink }}>
-                  {item.template?.name ?? "Temperature check"}
-                </Text>
-                <Text style={{ marginTop: 4, color: colors.muted, fontSize: 14 }}>
-                  {formatWindow(item.windowStart)} – {formatWindow(item.dueAt)}
-                  {item.schedule?.name ? ` · ${item.schedule.name}` : ""}
-                </Text>
                 <Text
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: ready ? colors.brandDark : colors.muted,
-                  }}
+                  style={[styles.segmentText, tab === "in_progress" && styles.segmentTextOn]}
                 >
-                  {ready ? "TAP TO TAKE" : item.status}
+                  In Progress
                 </Text>
-              </Card>
-            );
-          }}
-        />
+              </Pressable>
+              <Pressable
+                style={[styles.segmentBtn, tab === "completed" && styles.segmentBtnOn]}
+                onPress={() => setTab("completed")}
+              >
+                <Text style={[styles.segmentText, tab === "completed" && styles.segmentTextOn]}>
+                  Completed {stats.completed}
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.progressBlock}>
+              <View style={styles.progressLabels}>
+                <Text style={styles.progressLabel}>Overall Progress</Text>
+                <Text style={styles.progressMeta}>
+                  {stats.completed} of {stats.total} completed
+                </Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
+              </View>
+            </View>
+          </View>
+
+          <ScrollView
+            style={styles.listScroll}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => void load("refresh")}
+                tintColor={colors.brand}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            {tab === "in_progress" && nextUp ? (
+              <>
+                <Text style={styles.sectionLabel}>Next Up</Text>
+                {renderRow(nextUp, { nextUp: true })}
+              </>
+            ) : null}
+
+            <Text style={[styles.sectionLabel, tab === "in_progress" && nextUp ? styles.sectionSpaced : null]}>
+              {tab === "in_progress" ? "In Progress" : "Completed"}
+            </Text>
+
+            {list.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyTitle}>
+                  {tab === "in_progress" ? "No open checks" : "No completed checks yet"}
+                </Text>
+                <Text style={styles.emptySub}>
+                  {tab === "in_progress"
+                    ? "When a check window opens, it will show up here."
+                    : "Finished walks will appear in this list."}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.listGap}>
+                {list
+                  .filter((item) => !(tab === "in_progress" && nextUp && item.id === nextUp.id))
+                  .map((item) => renderRow(item))}
+              </View>
+            )}
+          </ScrollView>
+        </>
       )}
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
   loadingBox: {
-    marginTop: 48,
-    paddingHorizontal: 28,
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     gap: 10,
   },
   loadingTitle: {
-    marginTop: 8,
-    fontSize: 17,
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.inkOnDark,
+  },
+  topSticky: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 12,
+    backgroundColor: colors.bg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderDark,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  screenTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: colors.inkOnDark,
+    letterSpacing: -0.4,
+  },
+  calGlyph: {
+    fontSize: 20,
+    color: colors.brand,
+  },
+  segment: {
+    flexDirection: "row",
+    gap: 4,
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderDark,
+  },
+  segmentBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginRight: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  segmentBtnOn: {
+    borderBottomColor: colors.brand,
+  },
+  segmentText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.mutedOnDark,
+  },
+  segmentTextOn: {
+    color: colors.inkOnDark,
+    fontWeight: "800",
+  },
+  progressBlock: {
+    gap: 8,
+  },
+  progressLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  progressLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.inkOnDark,
+  },
+  progressMeta: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.mutedOnDark,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceElevated,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: colors.brand,
+    borderRadius: 999,
+  },
+  listScroll: {
+    flex: 1,
+  },
+  listContent: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 24,
+  },
+  errorText: {
+    color: colors.fail,
+    marginBottom: 10,
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.mutedOnDark,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 8,
+  },
+  sectionSpaced: {
+    marginTop: 16,
+  },
+  listGap: {
+    gap: 10,
+  },
+  rowCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  nextUpCard: {
+    borderWidth: 1.5,
+    borderColor: colors.brand,
+  },
+  rowIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowIconGlyph: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  rowCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowTitle: {
+    fontSize: 15,
     fontWeight: "800",
     color: colors.ink,
-    textAlign: "center",
   },
-  loadingHint: {
-    fontSize: 14,
-    fontWeight: "500",
+  rowSub: {
+    marginTop: 2,
+    fontSize: 12,
     color: colors.muted,
-    textAlign: "center",
+    fontWeight: "500",
+  },
+  badge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  badgePass: { backgroundColor: colors.passSoft },
+  badgeFail: { backgroundColor: colors.failSoft },
+  badgeProgress: { backgroundColor: colors.brandSoft },
+  badgePending: { backgroundColor: "#F1F4F9" },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  badgeTextPass: { color: colors.pass },
+  badgeTextFail: { color: colors.fail },
+  badgeTextProgress: { color: colors.brandDark },
+  badgeTextPending: { color: colors.muted },
+  chevron: {
+    fontSize: 20,
+    color: "#A8B3C5",
+    fontWeight: "300",
   },
   emptyBox: {
-    marginTop: 28,
-    paddingVertical: 20,
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+    padding: 22,
     alignItems: "center",
-    gap: 6,
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.ink,
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.inkOnDark,
+  },
+  emptySub: {
+    marginTop: 6,
+    fontSize: 12,
+    color: colors.mutedOnDark,
+    textAlign: "center",
+  },
+  pressed: {
+    opacity: 0.88,
   },
 });

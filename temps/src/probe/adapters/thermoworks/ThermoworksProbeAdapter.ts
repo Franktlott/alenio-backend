@@ -7,19 +7,22 @@ import {
   isAvailable,
   startScan as nativeStartScan,
   stopScan as nativeStopScan,
+  subscribeToButtonPress,
   subscribeToConnectionState,
   subscribeToDevices,
   subscribeToErrors,
+  subscribeToReadings,
 } from "./ThermoworksNative";
 import {
   mapConnectionReason,
   mapDiscoveredDevices,
   mapNativeError,
+  mapReadingEvent,
 } from "./mapNative";
 
 /**
  * ThermoWorks ThermaLib transport implementing the vendor-neutral ProbeAdapter.
- * Phase 3B: discovery + connect/disconnect (no readings yet).
+ * Phase 3C: discovery + connect/disconnect + live Celsius readings.
  */
 export class ThermoworksProbeAdapter implements ProbeAdapter {
   readonly id = "thermoworks";
@@ -74,22 +77,16 @@ export class ThermoworksProbeAdapter implements ProbeAdapter {
       this.emitError(mapNativeError("CONNECT_FAILED", error.message, probeId));
       throw error;
     }
-    // onConnected is emitted asynchronously when ThermaLib reports ready.
   }
 
   async disconnect(probeId: ProbeId, reason: DisconnectReason): Promise<void> {
     this.assertAlive();
-    if (this.activeDeviceId && this.activeDeviceId !== probeId) {
-      // Still attempt native disconnect of current device.
-    }
     const result = await nativeDisconnect();
     if (!result.ok) {
       const error = new Error(result.error ?? "ThermoWorks disconnect failed");
       this.emitError(mapNativeError("ADAPTER_ERROR", error.message, probeId));
       throw error;
     }
-    // Native emits disconnected; also notify immediately for manual/disposed so
-    // ProbeSession reconnect suppression applies without waiting on BLE.
     if (reason === "manual" || reason === "disposed") {
       this.activeDeviceId = null;
       this.emitDisconnected(probeId, reason);
@@ -136,11 +133,30 @@ export class ThermoworksProbeAdapter implements ProbeAdapter {
         if (event.state === "disconnected" && event.deviceId) {
           const reason = mapConnectionReason(event.reason);
           this.activeDeviceId = null;
-          // Avoid double-emit when we already notified on manual disconnect().
           if (reason === "manual") {
             return;
           }
           this.emitDisconnected(event.deviceId, reason);
+        }
+      }),
+    );
+
+    this.unsubscribers.push(
+      subscribeToReadings((event) => {
+        if (this.disposed) return;
+        const reading = mapReadingEvent(event);
+        for (const listener of [...this.listeners]) {
+          listener.onReading?.(reading);
+        }
+      }),
+    );
+
+    this.unsubscribers.push(
+      subscribeToButtonPress((event) => {
+        if (this.disposed) return;
+        const probeId = event.deviceId;
+        for (const listener of [...this.listeners]) {
+          listener.onCaptureRequest?.(probeId);
         }
       }),
     );
