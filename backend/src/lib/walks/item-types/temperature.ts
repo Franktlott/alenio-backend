@@ -7,7 +7,7 @@ export const temperatureConfigSchema = z.object({
   maximumTemperature: z.number().optional().nullable(),
   unit: z.enum(["F", "C"]).default("F"),
   allowManualEntry: z.boolean().default(true),
-  allowBluetoothProbe: z.boolean().default(false),
+  allowBluetoothProbe: z.boolean().default(true),
   requireRetestOnFailure: z.boolean().default(false),
   maximumRetests: z.number().int().min(0).max(10).default(1),
   /** Optional guidance shown to associates during retemp (e.g. "Retemp 2 additional products"). */
@@ -31,7 +31,7 @@ export const DEFAULT_TEMPERATURE_CONFIG: TemperatureConfig = {
   maximumTemperature: null,
   unit: "F",
   allowManualEntry: true,
-  allowBluetoothProbe: false,
+  allowBluetoothProbe: true,
   requireRetestOnFailure: false,
   maximumRetests: 1,
   retestGuidance: null,

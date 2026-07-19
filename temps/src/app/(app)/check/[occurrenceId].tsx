@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppTabHeader } from "../../../components/AppTabHeader";
 import { CheckProbeBar } from "../../../components/check/CheckProbeBar";
+import { CheckCompleteModal } from "../../../components/check/CheckCompleteModal";
 import { FailureProcedurePanel } from "../../../components/check/FailureProcedurePanel";
 import { useSession } from "../../../lib/session-context";
 import {
@@ -33,7 +34,12 @@ import {
   startCheckRun,
   submitTemperature,
 } from "../../../lib/temps-api";
-import type { TemperatureConfig, WalkRun, WalkRunItem } from "../../../lib/types";
+import type {
+  TemperatureConfig,
+  WalkRun,
+  WalkRunCorrectiveAction,
+  WalkRunItem,
+} from "../../../lib/types";
 import { colors } from "../../../lib/theme";
 import { ProbeProvider } from "../../../probe/react";
 
@@ -110,6 +116,7 @@ export default function TakeCheckScreen() {
   const [error, setError] = useState<string | null>(null);
   /** Only show failure-procedure UI after a saved fail (or explicit Continue). */
   const [procedureActive, setProcedureActive] = useState(false);
+  const [completeModalVisible, setCompleteModalVisible] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -236,9 +243,7 @@ export default function TakeCheckScreen() {
       try {
         const completed = await completeRun(teamId!, next.id);
         setRun(completed);
-        Alert.alert("Check complete", "Results are available in Alenio Go.", [
-          { text: "Done", onPress: () => router.back() },
-        ]);
+        setCompleteModalVisible(true);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Could not complete check";
         if (isOutsideWindowError(message)) alertOutsideWindow(message);
@@ -297,16 +302,21 @@ export default function TakeCheckScreen() {
     }
   }
 
-  async function markCorrectiveComplete(actionId: string) {
+  async function markAllCorrectiveComplete(phaseActions: WalkRunCorrectiveAction[]) {
     if (!teamId || !run || !current) return;
     if (saving) return;
+    const pending = phaseActions.filter((a) => a.status === "PENDING");
+    if (pending.length === 0) return;
     setSaving(true);
     try {
-      const next = await completeCorrectiveAction(teamId, run.id, current.id, actionId);
+      let next = run;
+      for (const action of pending) {
+        next = await completeCorrectiveAction(teamId, next.id, current.id, action.id);
+      }
       await advanceAfterSave(next, current.id);
     } catch (err) {
       Alert.alert(
-        "Could not complete step",
+        "Could not complete steps",
         err instanceof Error ? err.message : "Try again.",
       );
     } finally {
@@ -474,7 +484,7 @@ export default function TakeCheckScreen() {
               unlocked
               busy={saving}
               failSummary={failSummary}
-              onComplete={(actionId) => void markCorrectiveComplete(actionId)}
+              onCompleteAll={() => void markAllCorrectiveComplete(firstFailure)}
             />
           ) : null}
 
@@ -494,7 +504,7 @@ export default function TakeCheckScreen() {
               unlocked
               busy={saving}
               failSummary={failSummary}
-              onComplete={(actionId) => void markCorrectiveComplete(actionId)}
+              onCompleteAll={() => void markAllCorrectiveComplete(secondFailure)}
             />
           ) : null}
 
@@ -666,6 +676,14 @@ export default function TakeCheckScreen() {
             </View>
           </View>
         ) : null}
+
+        <CheckCompleteModal
+          visible={completeModalVisible}
+          onDone={() => {
+            setCompleteModalVisible(false);
+            router.back();
+          }}
+        />
       </View>
     </MaybeProbeProvider>
   );

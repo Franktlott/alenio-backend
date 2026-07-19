@@ -12,9 +12,32 @@ import {
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 type DaypartKey = "breakfast" | "midday" | "afternoon" | "evening" | "overnight";
-type StatusFilter = "all" | "completed" | "in_progress" | "overdue";
+type StatusFilter = "all" | "completed" | "open" | "overdue";
 type ShiftFilter = "all" | DaypartKey;
-type RowStatus = "complete" | "not_started" | "due" | "overdue" | "in_progress";
+type RowStatus = "complete" | "not_started" | "open" | "overdue";
+
+const STATUS_KEY: Array<{ status: RowStatus; label: string; detail: string }> = [
+  {
+    status: "not_started",
+    label: "Not Started",
+    detail: "Checklist has not been started yet (before or during the window).",
+  },
+  {
+    status: "open",
+    label: "Open",
+    detail: "Started and still inside the completion window. Stays Open until the window ends.",
+  },
+  {
+    status: "overdue",
+    label: "Overdue",
+    detail: "The completion window ended without finishing the checklist.",
+  },
+  {
+    status: "complete",
+    label: "Complete",
+    detail: "Checklist was finished.",
+  },
+];
 
 type DashboardRow = {
   occurrence: WalkOccurrenceRow;
@@ -35,7 +58,7 @@ const DAYPARTS: Array<{
   startHour: number;
   endHour: number;
 }> = [
-  { key: "breakfast", label: "Breakfast", rangeLabel: "6:00 AM – 11:00 AM", startHour: 4, endHour: 11 },
+  { key: "breakfast", label: "Breakfast", rangeLabel: "6:00 AM – 11:00 AM", startHour: 6, endHour: 11 },
   { key: "midday", label: "Midday", rangeLabel: "11:00 AM – 3:00 PM", startHour: 11, endHour: 15 },
   { key: "afternoon", label: "Afternoon", rangeLabel: "3:00 PM – 5:00 PM", startHour: 15, endHour: 17 },
   { key: "evening", label: "Evening", rangeLabel: "5:00 PM – 9:00 PM", startHour: 17, endHour: 21 },
@@ -60,7 +83,7 @@ function addDays(d: Date, n: number) {
 
 function daypartFor(iso: string): DaypartKey {
   const hour = new Date(iso).getHours();
-  if (hour >= 4 && hour < 11) return "breakfast";
+  if (hour >= 6 && hour < 11) return "breakfast";
   if (hour >= 11 && hour < 15) return "midday";
   if (hour >= 15 && hour < 17) return "afternoon";
   if (hour >= 17 && hour < 21) return "evening";
@@ -131,28 +154,29 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-function mapRowStatus(occ: WalkOccurrenceRow, _run: WalkRunListItem | null, now: Date): {
+function windowHasEnded(occ: WalkOccurrenceRow, now: Date): boolean {
+  if (occ.graceEndsAt) return now > new Date(occ.graceEndsAt);
+  if (occ.dueAt) return now > new Date(occ.dueAt);
+  return false;
+}
+
+function mapRowStatus(occ: WalkOccurrenceRow, run: WalkRunListItem | null, now: Date): {
   status: RowStatus;
   statusLabel: string;
 } {
   if (occ.status === "COMPLETED" || occ.status === "COMPLETED_LATE") {
     return { status: "complete", statusLabel: "Complete" };
   }
-  if (occ.status === "MISSED") {
+  if (occ.status === "MISSED" || windowHasEnded(occ, now)) {
     return { status: "overdue", statusLabel: "Overdue" };
   }
-  const grace = occ.graceEndsAt ? new Date(occ.graceEndsAt) : null;
-  if (grace && now > grace && occ.status !== "COMPLETED" && occ.status !== "COMPLETED_LATE") {
-    return { status: "overdue", statusLabel: "Overdue" };
-  }
-  if (occ.status === "IN_PROGRESS") {
-    return { status: "in_progress", statusLabel: "In Progress" };
-  }
-  if (occ.status === "AVAILABLE") {
-    return { status: "due", statusLabel: "In Progress" };
-  }
-  if (occ.status === "UPCOMING") {
-    return { status: "not_started", statusLabel: "Not Started" };
+  const started =
+    occ.status === "IN_PROGRESS" ||
+    Boolean(occ.runId) ||
+    Boolean(occ.startedAt) ||
+    Boolean(run);
+  if (started) {
+    return { status: "open", statusLabel: "Open" };
   }
   return { status: "not_started", statusLabel: "Not Started" };
 }
@@ -167,12 +191,13 @@ function completionFor(occ: WalkOccurrenceRow, run: WalkRunListItem | null, now 
   if (run?.progress && run.progress.total > 0) {
     return Math.round((run.progress.answered / run.progress.total) * 100);
   }
-  const grace = occ.graceEndsAt ? new Date(occ.graceEndsAt) : null;
   const isOverdue =
     occ.status === "MISSED" ||
-    Boolean(grace && now > grace && occ.status !== "COMPLETED" && occ.status !== "COMPLETED_LATE");
+    (windowHasEnded(occ, now) &&
+      occ.status !== "COMPLETED" &&
+      occ.status !== "COMPLETED_LATE");
   if (isOverdue) return 0;
-  if (occ.status === "IN_PROGRESS") return 0;
+  if (occ.status === "IN_PROGRESS" || occ.runId || occ.startedAt) return 0;
   // Default (not started / available with no responses yet)
   return 100;
 }
@@ -289,9 +314,8 @@ function statusClass(status: RowStatus) {
       return "exec-center-badge--complete";
     case "overdue":
       return "exec-center-badge--overdue";
-    case "due":
-    case "in_progress":
-      return "exec-center-badge--in-progress";
+    case "open":
+      return "exec-center-badge--open";
     default:
       return "exec-center-badge--not-started";
   }
@@ -324,6 +348,7 @@ export function TempsDashboardPage() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(1);
+  const [statusKeyOpen, setStatusKeyOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!teamId) return;
@@ -412,12 +437,12 @@ export function TempsDashboardPage() {
           openCa: openCaFor(run),
           userName: run?.startedByName ?? null,
           hasNotes: hasNotes(run),
-          daypart: daypartFor(occurrence.windowStart),
+          daypart: daypartFor(occurrence.dueAt),
         };
       })
       .sort(
         (a, b) =>
-          new Date(a.occurrence.windowStart).getTime() - new Date(b.occurrence.windowStart).getTime(),
+          new Date(a.occurrence.dueAt).getTime() - new Date(b.occurrence.dueAt).getTime(),
       );
   }, [occurrences, runById]);
 
@@ -432,8 +457,8 @@ export function TempsDashboardPage() {
       switch (statusFilter) {
         case "completed":
           return row.status === "complete";
-        case "in_progress":
-          return row.status === "due" || row.status === "in_progress";
+        case "open":
+          return row.status === "open";
         case "overdue":
           return row.status === "overdue";
         default:
@@ -489,7 +514,7 @@ export function TempsDashboardPage() {
     ];
     const lines = filtered.map((row) =>
       [
-        formatTime(row.occurrence.windowStart),
+        formatTime(row.occurrence.dueAt),
         JSON.stringify(row.occurrence.template?.name ?? ""),
         row.statusLabel,
         `${row.completionPct}%`,
@@ -608,26 +633,69 @@ export function TempsDashboardPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
-        <div className="exec-center-segments" role="tablist" aria-label="Status filter">
-          {(
-            [
-              ["all", "All"],
-              ["completed", "Completed"],
-              ["in_progress", "In Progress"],
-              ["overdue", "Overdue"],
-            ] as const
-          ).map(([key, label]) => (
+        <div className="exec-center-status-tools">
+          <div className="exec-center-segments" role="tablist" aria-label="Status filter">
+            {(
+              [
+                ["all", "All"],
+                ["completed", "Completed"],
+                ["open", "Open"],
+                ["overdue", "Overdue"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === key}
+                className={statusFilter === key ? "is-active" : undefined}
+                onClick={() => setStatusFilter(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="exec-center-status-key">
             <button
-              key={key}
               type="button"
-              role="tab"
-              aria-selected={statusFilter === key}
-              className={statusFilter === key ? "is-active" : undefined}
-              onClick={() => setStatusFilter(key)}
+              className="exec-center-status-key-btn"
+              aria-label="Status key"
+              aria-expanded={statusKeyOpen}
+              aria-controls="exec-center-status-key-panel"
+              onClick={() => setStatusKeyOpen((open) => !open)}
             >
-              {label}
+              i
             </button>
-          ))}
+            {statusKeyOpen ? (
+              <div
+                id="exec-center-status-key-panel"
+                className="exec-center-status-key-panel"
+                role="note"
+              >
+                <div className="exec-center-status-key-head">
+                  <strong>Status key</strong>
+                  <button
+                    type="button"
+                    className="exec-center-status-key-close"
+                    aria-label="Close status key"
+                    onClick={() => setStatusKeyOpen(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <ul>
+                  {STATUS_KEY.map((item) => (
+                    <li key={item.status}>
+                      <span className={`exec-center-badge ${statusClass(item.status)}`}>
+                        {item.label}
+                      </span>
+                      <em>{item.detail}</em>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
         </div>
         <label className="exec-center-select">
           <span>Location</span>
@@ -778,7 +846,7 @@ function FragmentGroup({
                   aria-label={`Select ${row.occurrence.template?.name ?? "checklist"}`}
                 />
               </td>
-              <td className="exec-center-time">{formatTime(row.occurrence.windowStart)}</td>
+              <td className="exec-center-time">{formatTime(row.occurrence.dueAt)}</td>
               <td>
                 <button
                   type="button"

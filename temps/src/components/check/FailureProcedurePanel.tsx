@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -18,7 +18,8 @@ type Props = {
   busy?: boolean;
   /** Detail under FAIL, e.g. "61.47 °F is above the limit (≤ 41.0 °F)" */
   failSummary?: string | null;
-  onComplete: (actionId: string) => void;
+  /** Called once every pending step is checked — parent completes them in order. */
+  onCompleteAll: () => void;
 };
 
 function actionGlyph(title: string): string {
@@ -39,29 +40,48 @@ export function FailureProcedurePanel({
   lockedHint,
   busy,
   failSummary,
-  onComplete,
+  onCompleteAll,
 }: Props) {
-  const visible = actions.filter((a) => a.status !== "SKIPPED" && a.status !== "LOCKED");
+  const visible = useMemo(
+    () => actions.filter((a) => a.status !== "SKIPPED" && a.status !== "LOCKED"),
+    [actions],
+  );
+  const pending = useMemo(
+    () => visible.filter((a) => a.status === "PENDING"),
+    [visible],
+  );
   const completedCount = visible.filter((a) => a.status === "COMPLETED").length;
-  const current = visible.find((a) => a.status === "PENDING") ?? null;
   const total = visible.length;
-  const [checkedCurrent, setCheckedCurrent] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
   const [comment, setComment] = useState("");
 
+  const pendingKey = pending.map((a) => a.id).join("|");
+
   useEffect(() => {
-    setCheckedCurrent(false);
-  }, [current?.id]);
+    setCheckedIds(new Set());
+  }, [pendingKey]);
 
   if (total === 0) return null;
 
-  const canMarkComplete = Boolean(current) && checkedCurrent && !busy;
+  const allPendingChecked =
+    pending.length > 0 && pending.every((a) => checkedIds.has(a.id));
+  const canMarkComplete = unlocked && allPendingChecked && !busy;
+
+  function toggle(actionId: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(actionId)) next.delete(actionId);
+      else next.add(actionId);
+      return next;
+    });
+  }
 
   return (
     <View style={[styles.card, !unlocked && styles.cardLocked]}>
       {failSummary ? (
         <View style={styles.failBanner}>
           <View style={styles.failHead}>
-            <Text style={styles.failIcon}>▲</Text>
+            <Text style={styles.failIcon}>⚠</Text>
             <Text style={styles.failTitle}>FAIL</Text>
           </View>
           <Text style={styles.failDetail}>{failSummary.replace(/^FAIL:\s*/i, "")}</Text>
@@ -74,24 +94,22 @@ export function FailureProcedurePanel({
 
       {unlocked ? (
         <View style={styles.list}>
-          {visible.map((action, index) => {
+          {visible.map((action) => {
             const done = action.status === "COMPLETED";
-            const isCurrent = current?.id === action.id;
-            const locked = !done && !isCurrent;
-            const checked = done || (isCurrent && checkedCurrent);
+            const isPending = action.status === "PENDING";
+            const checked = done || checkedIds.has(action.id);
             const glyph = actionGlyph(action.title);
-            const isLast = index === visible.length - 1;
 
             return (
               <Pressable
                 key={action.id}
-                style={[styles.stepRow, !isLast && styles.stepRowBorder, locked && styles.stepRowLocked]}
-                disabled={!unlocked || busy || !isCurrent}
+                style={[styles.stepRow, done && styles.stepRowDone]}
+                disabled={!unlocked || busy || !isPending}
                 onPress={() => {
-                  if (isCurrent) setCheckedCurrent((v) => !v);
+                  if (isPending) toggle(action.id);
                 }}
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked, disabled: !isCurrent }}
+                accessibilityState={{ checked, disabled: !isPending }}
               >
                 <View style={styles.stepIcon}>
                   <Text style={styles.stepIconGlyph}>{glyph}</Text>
@@ -105,7 +123,7 @@ export function FailureProcedurePanel({
                   style={[
                     styles.checkbox,
                     checked && styles.checkboxOn,
-                    locked && !done && styles.checkboxLocked,
+                    done && styles.checkboxDone,
                   ]}
                 >
                   {checked ? <Text style={styles.checkMark}>✓</Text> : null}
@@ -131,11 +149,11 @@ export function FailureProcedurePanel({
         </View>
       ) : null}
 
-      {unlocked && current ? (
+      {unlocked && pending.length > 0 ? (
         <Pressable
           style={[styles.btn, !canMarkComplete && styles.btnDisabled]}
           disabled={!canMarkComplete}
-          onPress={() => onComplete(current.id)}
+          onPress={onCompleteAll}
         >
           {busy ? (
             <ActivityIndicator color="#fff" />
@@ -145,7 +163,7 @@ export function FailureProcedurePanel({
         </Pressable>
       ) : null}
 
-      {unlocked && !current && completedCount >= total ? (
+      {unlocked && pending.length === 0 && completedCount >= total ? (
         <Text style={styles.done}>All steps in this phase are complete.</Text>
       ) : null}
     </View>
@@ -178,7 +196,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   failIcon: {
-    fontSize: 12,
+    fontSize: 14,
     color: colors.fail,
     fontWeight: "900",
   },
@@ -204,7 +222,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: colors.ink,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   hint: {
     fontSize: 13,
@@ -213,27 +231,27 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   list: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    gap: 8,
   },
   stepRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  stepRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  stepRowLocked: {
-    opacity: 0.55,
+  stepRowDone: {
+    opacity: 0.7,
   },
   stepIcon: {
     width: 36,
     height: 36,
-    borderRadius: 9,
-    backgroundColor: "#F1F4F9",
+    borderRadius: 18,
+    backgroundColor: "#EEF2F7",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -256,9 +274,9 @@ const styles = StyleSheet.create({
     borderColor: colors.brand,
     backgroundColor: colors.brand,
   },
-  checkboxLocked: {
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+  checkboxDone: {
+    borderColor: colors.pass,
+    backgroundColor: colors.pass,
   },
   checkMark: {
     color: "#fff",

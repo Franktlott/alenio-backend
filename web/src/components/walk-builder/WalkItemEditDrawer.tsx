@@ -113,7 +113,7 @@ function readTempForm(config: Record<string, unknown>): TempForm {
     maximumTemperature:
       config.maximumTemperature == null ? "" : String(config.maximumTemperature),
     allowManualEntry: config.allowManualEntry !== false,
-    allowBluetoothProbe: Boolean(config.allowBluetoothProbe),
+    allowBluetoothProbe: config.allowBluetoothProbe !== false,
     requireRetestOnFailure: Boolean(config.requireRetestOnFailure),
     maximumRetests:
       typeof config.maximumRetests === "number" ? String(config.maximumRetests) : "1",

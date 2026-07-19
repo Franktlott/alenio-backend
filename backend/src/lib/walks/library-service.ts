@@ -22,7 +22,7 @@ const itemInclude = {
 
 function defaultDeviceMethods(type: WalkItemType): Record<string, unknown> {
   if (type === "TEMPERATURE") {
-    return { allowManualEntry: true, allowBluetoothProbe: false };
+    return { allowManualEntry: true, allowBluetoothProbe: true };
   }
   if (type === "PHOTO" || type === "VISUAL_CHECK") {
     return { allowPhotoCapture: true };

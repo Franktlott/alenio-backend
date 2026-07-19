@@ -114,7 +114,7 @@ export function WalkItemCreatePage() {
   const [minTemp, setMinTemp] = useState("0");
   const [maxTemp, setMaxTemp] = useState("41");
   const [allowManual, setAllowManual] = useState(true);
-  const [allowBluetooth, setAllowBluetooth] = useState(false);
+  const [allowBluetooth, setAllowBluetooth] = useState(true);
   const [requireRetest, setRequireRetest] = useState(false);
   const [maxRetests, setMaxRetests] = useState("1");
   const [passingAnswer, setPassingAnswer] = useState<"YES" | "NO">("YES");
@@ -208,7 +208,7 @@ export function WalkItemCreatePage() {
       setMinTemp(config.minimumTemperature != null ? String(config.minimumTemperature) : "0");
       setMaxTemp(config.maximumTemperature != null ? String(config.maximumTemperature) : "41");
       setAllowManual(config.allowManualEntry !== false);
-      setAllowBluetooth(config.allowBluetoothProbe === true);
+      setAllowBluetooth(config.allowBluetoothProbe !== false);
       setRequireRetest(config.requireRetestOnFailure === true);
       setMaxRetests(config.maximumRetests != null ? String(config.maximumRetests) : "1");
     } else if (itemType === "YES_NO") {
