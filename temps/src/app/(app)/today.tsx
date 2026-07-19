@@ -56,24 +56,17 @@ function isCompleted(item: WalkOccurrence) {
   return item.status === "COMPLETED" || item.status === "COMPLETED_LATE";
 }
 
-function isFailed(item: WalkOccurrence) {
-  return item.status === "MISSED";
-}
-
-function isInProgressTab(item: WalkOccurrence) {
-  return (
-    item.status === "AVAILABLE" ||
-    item.status === "IN_PROGRESS" ||
-    item.status === "UPCOMING"
-  );
-}
-
 function isWithinWindow(item: WalkOccurrence) {
   const now = Date.now();
   const start = new Date(item.windowStart).getTime();
   const end = new Date(item.graceEndsAt ?? item.dueAt).getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
   return now >= start && now <= end;
+}
+
+function windowHasEnded(item: WalkOccurrence) {
+  const end = new Date(item.graceEndsAt ?? item.dueAt).getTime();
+  return Number.isFinite(end) && Date.now() > end;
 }
 
 function isReady(item: WalkOccurrence) {
@@ -86,21 +79,47 @@ function windowLabel(item: WalkOccurrence) {
   return `${formatTime(item.windowStart)} – ${formatTime(item.dueAt)}`;
 }
 
-type TabKey = "in_progress" | "completed";
+type FilterKey = "open" | "in_progress" | "overdue" | "completed";
 
-type BadgeTone = "pass" | "fail" | "pending" | "progress" | "sync";
+type BadgeTone = "pass" | "fail" | "pending" | "progress" | "sync" | "overdue";
+
+function bucketFor(item: WalkOccurrence): FilterKey {
+  if (isCompleted(item)) return "completed";
+  if (item.status === "MISSED" || windowHasEnded(item)) return "overdue";
+  if (item.status === "IN_PROGRESS") return "in_progress";
+  return "open";
+}
+
+function completerLabel(item: WalkOccurrence): string {
+  const name = (item.completedByName ?? item.startedByName ?? "").trim();
+  if (!name) return "Completed";
+  // Prefer first + last initial when the full name is long for the badge.
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2 && name.length > 14) {
+    return `${parts[0]} ${parts[parts.length - 1]![0]}.`;
+  }
+  return name.length > 16 ? `${name.slice(0, 15)}…` : name;
+}
 
 function badgeFor(
   item: WalkOccurrence,
   pendingSyncIds: Set<string>,
 ): { label: string; tone: BadgeTone } {
   if (pendingSyncIds.has(item.id)) return { label: "PENDING SYNC", tone: "sync" };
-  if (isCompleted(item)) return { label: "PASS", tone: "pass" };
-  if (isFailed(item)) return { label: "FAIL", tone: "fail" };
-  if (item.status === "IN_PROGRESS") return { label: "IN PROGRESS", tone: "progress" };
+  const bucket = bucketFor(item);
+  if (bucket === "completed") return { label: completerLabel(item), tone: "pass" };
+  if (bucket === "overdue") return { label: "OVERDUE", tone: "overdue" };
+  if (bucket === "in_progress") return { label: "IN PROGRESS", tone: "progress" };
   if (item.status === "UPCOMING") return { label: "UPCOMING", tone: "pending" };
-  return { label: "PENDING", tone: "pending" };
+  return { label: "OPEN", tone: "pending" };
 }
+
+const FILTERS: Array<{ key: FilterKey; label: string }> = [
+  { key: "open", label: "Open" },
+  { key: "in_progress", label: "In progress" },
+  { key: "overdue", label: "Overdue" },
+  { key: "completed", label: "Completed" },
+];
 
 export default function TodayScreen() {
   const { teamId } = useSession();
@@ -110,7 +129,7 @@ export default function TodayScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabKey>("in_progress");
+  const [filter, setFilter] = useState<FilterKey>("open");
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set());
 
@@ -160,31 +179,33 @@ export default function TodayScreen() {
     }, [load]),
   );
 
-  const stats = useMemo(() => {
-    const completed = today.filter(isCompleted).length;
-    return { completed, total: today.length };
+  const counts = useMemo(() => {
+    const next: Record<FilterKey, number> = {
+      open: 0,
+      in_progress: 0,
+      overdue: 0,
+      completed: 0,
+    };
+    for (const item of today) next[bucketFor(item)] += 1;
+    return next;
   }, [today]);
+
+  const stats = useMemo(() => {
+    const completed = counts.completed;
+    return { completed, total: today.length };
+  }, [counts.completed, today.length]);
 
   const progressPct =
     stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
-  const inProgressList = useMemo(() => {
-    return today
-      .filter(isInProgressTab)
-      .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
-  }, [today]);
-
-  const completedList = useMemo(() => {
-    return today
-      .filter((i) => isCompleted(i) || isFailed(i))
-      .sort((a, b) => new Date(b.dueAt).getTime() - new Date(a.dueAt).getTime());
-  }, [today]);
-
-  const list = tab === "in_progress" ? inProgressList : completedList;
-
-  const nextUp = useMemo(() => {
-    return inProgressList.find(isReady) ?? null;
-  }, [inProgressList]);
+  const list = useMemo(() => {
+    const filtered = today.filter((item) => bucketFor(item) === filter);
+    const asc = filter === "completed" || filter === "overdue" ? -1 : 1;
+    return filtered.sort(
+      (a, b) =>
+        asc * (new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()),
+    );
+  }, [today, filter]);
 
   function openCheck(item: WalkOccurrence) {
     const pendingSync = pendingSyncIds.has(item.id);
@@ -192,14 +213,14 @@ export default function TodayScreen() {
     router.push(`/(app)/check/${item.id}`);
   }
 
-  function renderRow(item: WalkOccurrence, opts?: { nextUp?: boolean }) {
+  function renderRow(item: WalkOccurrence) {
     const pendingSync = pendingSyncIds.has(item.id);
     const ready = isReady(item) || pendingSync;
     const badge = badgeFor(item, pendingSyncIds);
     const badgeStyle =
       badge.tone === "pass"
         ? styles.badgePass
-        : badge.tone === "fail"
+        : badge.tone === "overdue" || badge.tone === "fail"
           ? styles.badgeFail
           : badge.tone === "sync"
             ? styles.badgeSync
@@ -209,7 +230,7 @@ export default function TodayScreen() {
     const badgeTextStyle =
       badge.tone === "pass"
         ? styles.badgeTextPass
-        : badge.tone === "fail"
+        : badge.tone === "overdue" || badge.tone === "fail"
           ? styles.badgeTextFail
           : badge.tone === "sync"
             ? styles.badgeTextSync
@@ -222,7 +243,6 @@ export default function TodayScreen() {
         key={item.id}
         style={({ pressed }) => [
           styles.rowCard,
-          opts?.nextUp && styles.nextUpCard,
           pendingSync && styles.pendingSyncCard,
           pressed && ready && styles.pressed,
         ]}
@@ -234,7 +254,7 @@ export default function TodayScreen() {
             styles.rowIcon,
             badge.tone === "pass"
               ? { backgroundColor: colors.passSoft }
-              : badge.tone === "fail"
+              : badge.tone === "overdue" || badge.tone === "fail"
                 ? { backgroundColor: colors.failSoft }
                 : { backgroundColor: colors.brandSoft },
           ]}
@@ -246,13 +266,13 @@ export default function TodayScreen() {
                 color:
                   badge.tone === "pass"
                     ? colors.pass
-                    : badge.tone === "fail"
+                    : badge.tone === "overdue" || badge.tone === "fail"
                       ? colors.fail
                       : colors.brand,
               },
             ]}
           >
-            {badge.tone === "pass" ? "✓" : badge.tone === "fail" ? "!" : "◷"}
+            {badge.tone === "pass" ? "✓" : badge.tone === "overdue" || badge.tone === "fail" ? "!" : "◷"}
           </Text>
         </View>
         <View style={styles.rowCopy}>
@@ -264,13 +284,37 @@ export default function TodayScreen() {
             {ready ? `  ·  Due ${formatTime(item.dueAt)}` : ""}
           </Text>
         </View>
-        <View style={[styles.badge, badgeStyle]}>
-          <Text style={[styles.badgeText, badgeTextStyle]}>{badge.label}</Text>
+        <View style={[styles.badge, badgeStyle, badge.tone === "pass" && styles.badgePerson]}>
+          <Text
+            style={[styles.badgeText, badgeTextStyle, badge.tone === "pass" && styles.badgeTextPerson]}
+            numberOfLines={1}
+          >
+            {badge.label}
+          </Text>
         </View>
         {ready ? <Text style={styles.chevron}>›</Text> : null}
       </Pressable>
     );
   }
+
+  const emptyCopy: Record<FilterKey, { title: string; sub: string }> = {
+    open: {
+      title: "No open checks",
+      sub: "When a check window opens and hasn’t been started, it shows up here.",
+    },
+    in_progress: {
+      title: "Nothing in progress",
+      sub: "Checks you’ve started will appear here until they’re finished.",
+    },
+    overdue: {
+      title: "No overdue checks",
+      sub: "Missed windows will show up in this list.",
+    },
+    completed: {
+      title: "No completed checks yet",
+      sub: "Finished walks will appear in this list.",
+    },
+  };
 
   return (
     <View style={styles.screen}>
@@ -294,25 +338,31 @@ export default function TodayScreen() {
               <Text style={styles.calGlyph}>▦</Text>
             </View>
 
-            <View style={styles.segment}>
-              <Pressable
-                style={[styles.segmentBtn, tab === "in_progress" && styles.segmentBtnOn]}
-                onPress={() => setTab("in_progress")}
-              >
-                <Text
-                  style={[styles.segmentText, tab === "in_progress" && styles.segmentTextOn]}
-                >
-                  In Progress
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.segmentBtn, tab === "completed" && styles.segmentBtnOn]}
-                onPress={() => setTab("completed")}
-              >
-                <Text style={[styles.segmentText, tab === "completed" && styles.segmentTextOn]}>
-                  Completed {stats.completed}
-                </Text>
-              </Pressable>
+            <View style={styles.filterGrid}>
+              {FILTERS.map((item) => {
+                const on = filter === item.key;
+                return (
+                  <Pressable
+                    key={item.key}
+                    style={({ pressed }) => [
+                      styles.filterCard,
+                      on && styles.filterCardOn,
+                      pressed && styles.filterCardPressed,
+                    ]}
+                    onPress={() => setFilter(item.key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    testID={`temps-filter-${item.key}`}
+                  >
+                    <Text style={[styles.filterCount, on && styles.filterCountOn]}>
+                      {counts[item.key]}
+                    </Text>
+                    <Text style={[styles.filterLabel, on && styles.filterLabelOn]}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <View style={styles.progressBlock}>
@@ -353,34 +403,17 @@ export default function TodayScreen() {
               </View>
             ) : null}
 
-            {tab === "in_progress" && nextUp ? (
-              <>
-                <Text style={styles.sectionLabel}>Next Up</Text>
-                {renderRow(nextUp, { nextUp: true })}
-              </>
-            ) : null}
-
-            <Text style={[styles.sectionLabel, tab === "in_progress" && nextUp ? styles.sectionSpaced : null]}>
-              {tab === "in_progress" ? "In Progress" : "Completed"}
+            <Text style={styles.sectionLabel}>
+              {FILTERS.find((f) => f.key === filter)?.label ?? "Checks"}
             </Text>
 
             {list.length === 0 ? (
               <View style={styles.emptyBox}>
-                <Text style={styles.emptyTitle}>
-                  {tab === "in_progress" ? "No open checks" : "No completed checks yet"}
-                </Text>
-                <Text style={styles.emptySub}>
-                  {tab === "in_progress"
-                    ? "When a check window opens, it will show up here."
-                    : "Finished walks will appear in this list."}
-                </Text>
+                <Text style={styles.emptyTitle}>{emptyCopy[filter].title}</Text>
+                <Text style={styles.emptySub}>{emptyCopy[filter].sub}</Text>
               </View>
             ) : (
-              <View style={styles.listGap}>
-                {list
-                  .filter((item) => !(tab === "in_progress" && nextUp && item.id === nextUp.id))
-                  .map((item) => renderRow(item))}
-              </View>
+              <View style={styles.listGap}>{list.map((item) => renderRow(item))}</View>
             )}
           </ScrollView>
         </>
@@ -429,31 +462,46 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: colors.brand,
   },
-  segment: {
+  filterGrid: {
     flexDirection: "row",
-    gap: 4,
+    gap: 6,
     marginBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderDark,
   },
-  segmentBtn: {
+  filterCard: {
+    flex: 1,
+    backgroundColor: colors.surfaceDark,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+    borderRadius: 12,
     paddingVertical: 10,
-    paddingHorizontal: 4,
-    marginRight: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
+    paddingHorizontal: 6,
+    alignItems: "center",
   },
-  segmentBtnOn: {
-    borderBottomColor: colors.brand,
+  filterCardOn: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand,
   },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.mutedOnDark,
+  filterCardPressed: {
+    opacity: 0.88,
   },
-  segmentTextOn: {
-    color: colors.inkOnDark,
+  filterCount: {
+    fontSize: 18,
     fontWeight: "800",
+    color: colors.inkOnDark,
+    letterSpacing: -0.3,
+  },
+  filterCountOn: {
+    color: colors.brandDark,
+  },
+  filterLabel: {
+    marginTop: 2,
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.mutedOnDark,
+    textAlign: "center",
+  },
+  filterLabelOn: {
+    color: colors.brandDark,
   },
   progressBlock: {
     gap: 8,
@@ -506,9 +554,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginBottom: 8,
   },
-  sectionSpaced: {
-    marginTop: 16,
-  },
   listGap: {
     gap: 10,
   },
@@ -520,10 +565,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 12,
-  },
-  nextUpCard: {
-    borderWidth: 1.5,
-    borderColor: colors.brand,
   },
   rowIcon: {
     width: 40,
@@ -561,6 +602,9 @@ const styles = StyleSheet.create({
   badgeProgress: { backgroundColor: colors.brandSoft },
   badgePending: { backgroundColor: "#F1F4F9" },
   badgeSync: { backgroundColor: colors.warnSoft },
+  badgePerson: {
+    maxWidth: 96,
+  },
   badgeText: {
     fontSize: 10,
     fontWeight: "800",
@@ -571,6 +615,11 @@ const styles = StyleSheet.create({
   badgeTextProgress: { color: colors.brandDark },
   badgeTextPending: { color: colors.muted },
   badgeTextSync: { color: "#B45309" },
+  badgeTextPerson: {
+    textTransform: "none",
+    letterSpacing: 0,
+    fontWeight: "700",
+  },
   pendingSyncCard: {
     borderColor: colors.warn,
   },

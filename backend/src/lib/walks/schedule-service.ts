@@ -645,14 +645,33 @@ export async function refreshOccurrenceStatuses(teamId?: string) {
 }
 
 /** Attach template/schedule without Prisma required-relation includes (orphans break those). */
-async function attachOccurrenceRelations<T extends { templateId: string; scheduleId: string }>(
-  rows: T[],
-  opts?: { includeTemplateDescription?: boolean },
-) {
+async function attachOccurrenceRelations<
+  T extends {
+    templateId: string;
+    scheduleId: string;
+    runId?: string | null;
+    startedByUserId?: string | null;
+    completedByUserId?: string | null;
+  },
+>(rows: T[], opts?: { includeTemplateDescription?: boolean }) {
   if (!rows.length) return [];
   const templateIds = [...new Set(rows.map((r) => r.templateId))];
   const scheduleIds = [...new Set(rows.map((r) => r.scheduleId))];
-  const [templates, schedules] = await Promise.all([
+  const runIds = [
+    ...new Set(
+      rows
+        .map((r) => r.runId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ];
+  const userIds = [
+    ...new Set(
+      rows
+        .flatMap((r) => [r.completedByUserId, r.startedByUserId])
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ];
+  const [templates, schedules, runs, users] = await Promise.all([
     prisma.walkTemplate.findMany({
       where: { id: { in: templateIds } },
       select: opts?.includeTemplateDescription
@@ -663,9 +682,23 @@ async function attachOccurrenceRelations<T extends { templateId: string; schedul
       where: { id: { in: scheduleIds } },
       select: { id: true, name: true, timezone: true },
     }),
+    runIds.length
+      ? prisma.walkRun.findMany({
+          where: { id: { in: runIds } },
+          select: { id: true, startedByName: true },
+        })
+      : Promise.resolve([]),
+    userIds.length
+      ? prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
   ]);
   const templateById = new Map(templates.map((t) => [t.id, t]));
   const scheduleById = new Map(schedules.map((s) => [s.id, s]));
+  const runById = new Map(runs.map((r) => [r.id, r]));
+  const userById = new Map(users.map((u) => [u.id, u]));
 
   // Drop orphan occurrences whose walk/schedule was deleted (keeps Temps/Schedule pages healthy).
   const orphanIds = rows
@@ -680,11 +713,25 @@ async function attachOccurrenceRelations<T extends { templateId: string; schedul
 
   return rows
     .filter((r) => templateById.has(r.templateId) && scheduleById.has(r.scheduleId))
-    .map((r) => ({
-      ...r,
-      template: templateById.get(r.templateId)!,
-      schedule: scheduleById.get(r.scheduleId)!,
-    }));
+    .map((r) => {
+      const run = r.runId ? runById.get(r.runId) : undefined;
+      const completedUser = r.completedByUserId
+        ? userById.get(r.completedByUserId)
+        : undefined;
+      const startedUser = r.startedByUserId ? userById.get(r.startedByUserId) : undefined;
+      const completedByName =
+        completedUser?.name?.trim() ||
+        run?.startedByName?.trim() ||
+        startedUser?.name?.trim() ||
+        null;
+      return {
+        ...r,
+        template: templateById.get(r.templateId)!,
+        schedule: scheduleById.get(r.scheduleId)!,
+        completedByName,
+        startedByName: run?.startedByName?.trim() || startedUser?.name?.trim() || null,
+      };
+    });
 }
 
 export async function listOccurrences(

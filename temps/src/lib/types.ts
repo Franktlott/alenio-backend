@@ -10,6 +10,8 @@ export type WalkOccurrence = {
   windowStart: string;
   dueAt: string;
   graceEndsAt?: string | null;
+  completedByName?: string | null;
+  startedByName?: string | null;
   template?: { id: string; name: string; description?: string | null };
   schedule?: { id: string; name: string | null };
 };
