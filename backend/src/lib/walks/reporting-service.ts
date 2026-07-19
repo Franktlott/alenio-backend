@@ -14,7 +14,7 @@ export async function getWalkReportingSummary(
   const from = opts?.from ?? new Date(Date.now() - 30 * 86_400_000);
   const to = opts?.to ?? new Date();
 
-  const [occurrences, runs, responses] = await Promise.all([
+  const [occurrences, runs, responses, openCorrectiveActions] = await Promise.all([
     prisma.walkOccurrence.findMany({
       where: { teamId, windowStart: { gte: from, lte: to } },
       select: {
@@ -56,6 +56,12 @@ export async function getWalkReportingSummary(
         notes: true,
         runId: true,
         run: { select: { templateId: true, templateSnapshot: true, startedAt: true } },
+      },
+    }),
+    prisma.walkCorrectiveActionResult.count({
+      where: {
+        status: "PENDING",
+        itemResponse: { run: { teamId } },
       },
     }),
   ]);
@@ -179,10 +185,11 @@ export async function getWalkReportingSummary(
       onTime,
       late,
       missed,
-      completionRate: occTotal > 0 ? Math.round((completed / occTotal) * 100) : null,
+      completionRate: occTotal > 0 ? Math.round((completed / occTotal) * 100) : 100,
       onTimeRate: completed > 0 ? Math.round((onTime / completed) * 100) : null,
       runsCompleted: runs.length,
     },
+    openCorrectiveActions,
     byItem: [...byItem.values()].map((i) => ({
       libraryItemId: i.libraryItemId,
       title: i.title,

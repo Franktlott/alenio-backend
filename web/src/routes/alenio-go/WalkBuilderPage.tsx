@@ -15,6 +15,8 @@ import {
 import { WalkItemEditDrawer } from "../../components/walk-builder/WalkItemEditDrawer";
 import {
   defaultScheduleFormValue,
+  findDraftWindowOverlapError,
+  parseIntervalWindow,
   parseWindows,
   scheduleToFormValue,
   WalkScheduleForm,
@@ -85,10 +87,17 @@ function getPublishValidation(name: string, itemCount: number, schedules: WalkSc
   return { errors, warnings, canPublish: errors.length === 0 };
 }
 
-function scheduleWriteBody(form: WalkScheduleFormValue) {
-  const windows = parseWindows(form.windows, form.graceMinutes);
+function scheduleWriteBody(form: WalkScheduleFormValue, checklistName: string) {
+  const windows =
+    form.recurrence === "INTERVAL"
+      ? parseIntervalWindow(
+          form.intervalDayStart,
+          form.windows[0]?.due ?? "22:00",
+          form.windows[0]?.afterMinutes ?? 0,
+        )
+      : parseWindows(form.windows);
   return {
-    name: form.name.trim() || null,
+    name: checklistName.trim() || null,
     recurrence: form.recurrence,
     daysOfWeek: form.recurrence === "WEEKLY" ? form.daysOfWeek : null,
     intervalMinutes: form.recurrence === "INTERVAL" ? form.intervalMinutes : null,
@@ -355,7 +364,7 @@ export function WalkBuilderPage() {
       setTemplate(published);
       syncDraftsFromTemplate(published);
       showToast(`Walk published (v${result.publishedVersion.version})`);
-      navigate(`/go/temp-checks/walks/${published.id}`);
+      navigate("/go/temp-checks/walks");
     });
   }
 
@@ -420,11 +429,24 @@ export function WalkBuilderPage() {
   }
 
   async function submitScheduleModal() {
-    const body = scheduleWriteBody(scheduleFormValue);
+    const checklistName = nameDraft.trim() || template?.name || "";
+    const body = scheduleWriteBody(scheduleFormValue, checklistName);
     if (!body.windows.length) {
       showNotice({
-        title: "Time window required",
-        message: "Add at least one valid time window before saving this schedule.",
+        title: "Due time required",
+        message: "Add at least one valid due time and completion window before saving.",
+        tone: "warning",
+      });
+      return;
+    }
+    const overlapError =
+      scheduleFormValue.recurrence === "INTERVAL"
+        ? null
+        : findDraftWindowOverlapError(scheduleFormValue.windows);
+    if (overlapError) {
+      showNotice({
+        title: "Overlapping due times",
+        message: overlapError,
         tone: "warning",
       });
       return;
@@ -465,7 +487,8 @@ export function WalkBuilderPage() {
 
   async function saveAssignment() {
     if (!assignmentSchedule) return;
-    const body = scheduleWriteBody(assignmentFormValue);
+    const checklistName = nameDraft.trim() || template?.name || "";
+    const body = scheduleWriteBody(assignmentFormValue, checklistName);
     if (!body.windows.length) {
       setError("Schedule windows are invalid.");
       return;
@@ -645,62 +668,6 @@ export function WalkBuilderPage() {
                 </label>
               </TempsSectionCard>
 
-              <TempsSectionCard
-                title="Operational settings"
-                description="Where this walk applies and how long it usually takes."
-              >
-                <div className="wb-form-row wb-form-row--details">
-                  <label className="temps-field">
-                    <span>Category or operational area</span>
-                    <input
-                      value={workplaceDraft}
-                      onChange={(e) => setWorkplaceDraft(e.target.value)}
-                      onBlur={() => {
-                        const next = workplaceDraft.trim() || teamName;
-                        if (next !== template.workplace) {
-                          void withBusy(async () => {
-                            await saveDetailsPatch({ workplace: next });
-                          });
-                        }
-                      }}
-                      placeholder={teamName}
-                    />
-                  </label>
-                  <label className="temps-field">
-                    <span>Estimated duration (minutes)</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={480}
-                      value={estimatedDurationDraft}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setEstimatedDurationDraft(raw === "" ? "" : Number(raw));
-                      }}
-                      onBlur={() => {
-                        const next =
-                          estimatedDurationDraft === ""
-                            ? null
-                            : Number(estimatedDurationDraft) || null;
-                        if (next !== template.estimatedDurationMinutes) {
-                          void withBusy(async () => {
-                            await saveDetailsPatch({ estimatedDurationMinutes: next });
-                          });
-                        }
-                      }}
-                    />
-                  </label>
-                </div>
-              </TempsSectionCard>
-
-              <TempsSectionCard title="Associate experience">
-                <div className="temps-callout">
-                  <strong>Item-level instructions</strong>
-                  Associate step-by-step instructions live on each item in the Item Library. Customize
-                  them on the Items step.
-                </div>
-              </TempsSectionCard>
-
               <StepFooter />
             </div>
           ) : null}
@@ -839,18 +806,32 @@ export function WalkBuilderPage() {
 
           {step === "schedule" ? (
             <section className="wb-panel">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "1rem" }}>
-                <p className="wb-muted" style={{ margin: 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "1rem",
+                  gap: "1rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <p className="wb-muted" style={{ margin: 0, flex: "1 1 16rem" }}>
                   Define when this walk becomes due. You can schedule drafts now — checks open after publish.
                 </p>
-                <button type="button" className="wb-btn wb-btn--primary" disabled={busy} onClick={openCreateSchedule}>
+                <TempsButton variant="primary" disabled={busy} onClick={openCreateSchedule}>
                   Add schedule
-                </button>
+                </TempsButton>
               </div>
               {schedules.length === 0 ? (
                 <div className="wb-empty-state">
                   <strong>Not scheduled yet</strong>
                   <p className="wb-muted">Add a daily, weekly, interval, or one-time schedule for associates.</p>
+                  <div style={{ marginTop: "0.85rem" }}>
+                    <TempsButton variant="primary" disabled={busy} onClick={openCreateSchedule}>
+                      Add schedule
+                    </TempsButton>
+                  </div>
                 </div>
               ) : (
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.75rem" }}>
@@ -861,7 +842,7 @@ export function WalkBuilderPage() {
                       style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}
                     >
                       <div>
-                        <strong>{schedule.name?.trim() || "Untitled schedule"}</strong>
+                        <strong>{nameDraft.trim() || template.name}</strong>
                         <p className="wb-muted" style={{ margin: "0.25rem 0 0" }}>
                           {formatScheduleSummary(schedule)}
                         </p>
@@ -873,30 +854,23 @@ export function WalkBuilderPage() {
                         </span>
                       </div>
                       <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          className="wb-btn wb-btn--ghost"
+                        <TempsButton
+                          variant="ghost"
                           disabled={busy}
                           onClick={() => void toggleScheduleActive(schedule)}
                         >
                           {schedule.isActive ? "Pause" : "Resume"}
-                        </button>
-                        <button
-                          type="button"
-                          className="wb-btn wb-btn--ghost"
-                          disabled={busy}
-                          onClick={() => openEditSchedule(schedule)}
-                        >
+                        </TempsButton>
+                        <TempsButton variant="ghost" disabled={busy} onClick={() => openEditSchedule(schedule)}>
                           Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="wb-btn wb-btn--ghost wb-btn--danger"
+                        </TempsButton>
+                        <TempsButton
+                          variant="destructive"
                           disabled={busy}
                           onClick={() => setConfirmDeleteScheduleId(schedule.id)}
                         >
                           Delete
-                        </button>
+                        </TempsButton>
                       </div>
                     </li>
                   ))}
@@ -914,9 +888,9 @@ export function WalkBuilderPage() {
                     <strong>Add a schedule first</strong>
                     <p className="wb-muted">Assignment is configured on each schedule — who should complete the check.</p>
                   </div>
-                  <button type="button" className="wb-btn wb-btn--primary" onClick={() => setStep("schedule")}>
+                  <TempsButton variant="primary" onClick={() => setStep("schedule")}>
                     Go to Schedule
-                  </button>
+                  </TempsButton>
                 </>
               ) : (
                 <>
@@ -940,16 +914,16 @@ export function WalkBuilderPage() {
                     onChange={setAssignmentFormValue}
                     showAssignment
                     disabled={busy}
+                    checklistName={nameDraft.trim() || template.name}
                   />
                   <div style={{ marginTop: "1rem" }}>
-                    <button
-                      type="button"
-                      className="wb-btn wb-btn--primary"
+                    <TempsButton
+                      variant="primary"
                       disabled={busy || !assignmentSchedule}
                       onClick={() => void saveAssignment()}
                     >
                       Save assignment
-                    </button>
+                    </TempsButton>
                   </div>
                 </>
               )}
@@ -1055,14 +1029,27 @@ export function WalkBuilderPage() {
                 ✕
               </button>
             </header>
-            <WalkScheduleForm value={scheduleFormValue} onChange={setScheduleFormValue} disabled={busy} />
+            <WalkScheduleForm
+              value={scheduleFormValue}
+              onChange={setScheduleFormValue}
+              disabled={busy}
+              checklistName={nameDraft.trim() || template?.name}
+            />
             <footer className="wsch-modal-foot">
-              <button type="button" className="wb-btn wb-btn--ghost" onClick={closeScheduleModal}>
+              <TempsButton variant="ghost" onClick={closeScheduleModal}>
                 Cancel
-              </button>
-              <button type="button" className="wb-btn wb-btn--primary" disabled={busy} onClick={() => void submitScheduleModal()}>
+              </TempsButton>
+              <TempsButton
+                variant="primary"
+                disabled={
+                  busy ||
+                  (scheduleFormValue.recurrence !== "INTERVAL" &&
+                    !!findDraftWindowOverlapError(scheduleFormValue.windows))
+                }
+                onClick={() => void submitScheduleModal()}
+              >
                 {scheduleModalMode === "edit" ? "Save schedule" : "Create schedule"}
-              </button>
+              </TempsButton>
             </footer>
           </div>
         </div>
@@ -1081,12 +1068,12 @@ export function WalkBuilderPage() {
             </header>
             <p className="wil-subtitle">Future occurrences for this schedule will be removed.</p>
             <footer className="wsch-modal-foot">
-              <button type="button" className="wb-btn wb-btn--ghost" onClick={() => setConfirmDeleteScheduleId(null)}>
+              <TempsButton variant="ghost" onClick={() => setConfirmDeleteScheduleId(null)}>
                 Cancel
-              </button>
-              <button type="button" className="wb-btn wb-btn--danger" disabled={busy} onClick={() => void confirmDeleteSchedule()}>
+              </TempsButton>
+              <TempsButton variant="destructive" disabled={busy} onClick={() => void confirmDeleteSchedule()}>
                 Delete
-              </button>
+              </TempsButton>
             </footer>
           </div>
         </div>

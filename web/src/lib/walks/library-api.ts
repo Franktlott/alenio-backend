@@ -214,16 +214,75 @@ export function fetchOutdatedWalkItems(teamId: string, templateId: string) {
   );
 }
 
+export type WalkRunListItem = {
+  id: string;
+  teamId: string;
+  templateId: string;
+  status: string;
+  startedByUserId: string | null;
+  startedByName: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  score: number | null;
+  templateName?: string;
+  progress?: { total: number; answered: number; requiredRemaining: number };
+  items?: Array<{
+    id: string;
+    type: string;
+    title: string;
+    response: {
+      id: string;
+      status: string;
+      failed: boolean;
+      notes: string | null;
+      correctiveActions?: Array<{ id: string; status: string }>;
+    } | null;
+  }>;
+};
+
 export function fetchWalkRuns(teamId: string) {
-  return apiGetJson<{ data: Array<Record<string, unknown>> }>(`${base(teamId)}/runs`).then(
-    (r) => r.data,
-  );
+  return apiGetJson<{ data: WalkRunListItem[] }>(`${base(teamId)}/runs`).then((r) => r.data);
 }
 
-export function fetchWalkReporting(teamId: string) {
-  return apiGetJson<{ data: Record<string, unknown> }>(`${base(teamId)}/reporting/summary`).then(
-    (r) => r.data,
-  );
+export type WalkReportingSummary = {
+  range: { from: string; to: string };
+  completion: {
+    occurrenceTotal: number;
+    completed: number;
+    onTime: number;
+    late: number;
+    missed: number;
+    completionRate: number | null;
+    onTimeRate: number | null;
+    runsCompleted: number;
+  };
+  openCorrectiveActions: number;
+  byItem: Array<{
+    libraryItemId: string | null;
+    title: string;
+    type: string;
+    total: number;
+    failed: number;
+    pass: number;
+    failRate: number;
+    walkCount: number;
+  }>;
+  byPerson: Array<{ userId: string | null; name: string; completed: number }>;
+  temperatureTrends: unknown[];
+  photoNoteHistory: unknown[];
+};
+
+export function fetchWalkReporting(
+  teamId: string,
+  range?: { from?: string; to?: string },
+) {
+  const qs = new URLSearchParams();
+  if (range?.from) qs.set("from", range.from);
+  if (range?.to) qs.set("to", range.to);
+  const q = qs.toString();
+  return apiGetJson<{ data: WalkReportingSummary }>(
+    `${base(teamId)}/reporting/summary${q ? `?${q}` : ""}`,
+  ).then((r) => r.data);
 }
 
 export type WalkScheduleWindow = {
@@ -260,6 +319,13 @@ export type WalkOccurrenceRow = {
   status: string;
   windowStart: string;
   dueAt: string;
+  graceEndsAt?: string;
+  score?: number | null;
+  completedAt?: string | null;
+  startedAt?: string | null;
+  runId?: string | null;
+  startedByUserId?: string | null;
+  completedByUserId?: string | null;
   template?: { id: string; name: string };
   schedule?: { id: string; name: string | null; timezone?: string };
 };

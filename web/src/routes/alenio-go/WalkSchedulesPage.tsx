@@ -10,8 +10,11 @@ import {
 } from "../../components/temps";
 import { fetchWalkTemplates } from "../../lib/walks/api";
 import {
+  CompletionWindowSelect,
+  findDraftWindowOverlapError,
   parseWindows,
   minutesToTimeInput,
+  snapCompletionWindowMinutes,
   type WindowDraft,
 } from "../../components/walk-builder/WalkScheduleForm";
 import {
@@ -101,9 +104,9 @@ export function WalkSchedulesPage() {
   const [formRecurrence, setFormRecurrence] = useState<"DAILY" | "WEEKLY">("DAILY");
   const [formDays, setFormDays] = useState<number[]>([1, 3, 5]);
   const [formWindows, setFormWindows] = useState<WindowDraft[]>([
-    { start: "06:00", due: "08:00" },
-    { start: "13:00", due: "15:00" },
-    { start: "20:00", due: "22:00" },
+    { due: "08:00", beforeMinutes: 120, afterMinutes: 30 },
+    { due: "15:00", beforeMinutes: 120, afterMinutes: 30 },
+    { due: "22:00", beforeMinutes: 120, afterMinutes: 30 },
   ]);
 
   const showToast = useCallback((message: string) => {
@@ -211,9 +214,9 @@ export function WalkSchedulesPage() {
     setFormRecurrence("DAILY");
     setFormDays([1, 3, 5]);
     setFormWindows([
-      { start: "06:00", due: "08:00" },
-      { start: "13:00", due: "15:00" },
-      { start: "20:00", due: "22:00" },
+      { due: "08:00", beforeMinutes: 120, afterMinutes: 30 },
+      { due: "15:00", beforeMinutes: 120, afterMinutes: 30 },
+      { due: "22:00", beforeMinutes: 120, afterMinutes: 30 },
     ]);
     setFormTemplateId(templates[0]?.id ?? "");
   }
@@ -238,10 +241,11 @@ export function WalkSchedulesPage() {
     setFormWindows(
       schedule.windows.length
         ? schedule.windows.map((w) => ({
-            start: minutesToTimeInput(w.startMinutes),
             due: minutesToTimeInput(w.dueMinutes),
+            beforeMinutes: snapCompletionWindowMinutes(w.dueMinutes - w.startMinutes),
+            afterMinutes: snapCompletionWindowMinutes(w.graceMinutes ?? 0),
           }))
-        : [{ start: "06:00", due: "08:00" }],
+        : [{ due: "08:00", beforeMinutes: 120, afterMinutes: 30 }],
     );
     setModalMode("edit");
     setMenuId(null);
@@ -259,6 +263,11 @@ export function WalkSchedulesPage() {
       setError("Add at least one valid time window.");
       return;
     }
+    const overlapError = findDraftWindowOverlapError(formWindows);
+    if (overlapError) {
+      setError(overlapError);
+      return;
+    }
 
     setBusy(true);
     setError(null);
@@ -268,9 +277,11 @@ export function WalkSchedulesPage() {
           setError("Select a published walk.");
           return;
         }
+        const checklistName =
+          templates.find((t) => t.id === formTemplateId)?.name?.trim() || formName.trim() || null;
         const created = await createWalkSchedule(teamId, {
           templateId: formTemplateId,
-          name: formName.trim() || null,
+          name: checklistName,
           recurrence: formRecurrence,
           daysOfWeek: formRecurrence === "WEEKLY" ? formDays : null,
           windows,
@@ -284,8 +295,13 @@ export function WalkSchedulesPage() {
       }
 
       if (!editingId) return;
+      const checklistName =
+        templates.find((t) => t.id === formTemplateId)?.name?.trim() ||
+        schedules.find((s) => s.id === editingId)?.template?.name?.trim() ||
+        formName.trim() ||
+        null;
       const updated = await updateWalkSchedule(teamId, editingId, {
-        name: formName.trim() || null,
+        name: checklistName,
         recurrence: formRecurrence,
         daysOfWeek: formRecurrence === "WEEKLY" ? formDays : null,
         windows,
@@ -575,14 +591,6 @@ export function WalkSchedulesPage() {
                   </select>
                 </label>
                 <label>
-                  Schedule name (optional)
-                  <input
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="Daily cooler checks"
-                  />
-                </label>
-                <label>
                   Frequency
                   <select
                     value={formRecurrence}
@@ -615,53 +623,78 @@ export function WalkSchedulesPage() {
                 ) : null}
                 <div className="wsch-windows-edit">
                   <div className="wsch-windows-edit-head">
-                    <strong>Time windows</strong>
+                    <strong>Due times</strong>
                     <button
                       type="button"
                       className="wb-linkish"
                       onClick={() =>
-                        setFormWindows((prev) => [...prev, { start: "09:00", due: "11:00" }])
+                        setFormWindows((prev) => [
+                          ...prev,
+                          { due: "12:00", beforeMinutes: 60, afterMinutes: 30 },
+                        ])
                       }
                     >
-                      + Add window
+                      + Add
                     </button>
                   </div>
-                  {formWindows.map((w, index) => (
-                    <div key={index} className="wsch-window-row">
-                      <input
-                        type="time"
-                        value={w.start}
-                        onChange={(e) =>
-                          setFormWindows((prev) =>
-                            prev.map((row, i) =>
-                              i === index ? { ...row, start: e.target.value } : row,
-                            ),
-                          )
-                        }
-                      />
-                      <span>to</span>
-                      <input
-                        type="time"
-                        value={w.due}
-                        onChange={(e) =>
-                          setFormWindows((prev) =>
-                            prev.map((row, i) =>
-                              i === index ? { ...row, due: e.target.value } : row,
-                            ),
-                          )
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="wil-row-menu"
-                        disabled={formWindows.length <= 1}
-                        onClick={() => setFormWindows((prev) => prev.filter((_, i) => i !== index))}
-                        aria-label="Remove window"
-                      >
-                        ✕
-                      </button>
+                  <div className="wsch-due-table" role="table" aria-label="Due times">
+                    <div className="wsch-due-table-head" role="row">
+                      <span role="columnheader">Due</span>
+                      <span role="columnheader">Before</span>
+                      <span role="columnheader">After</span>
+                      <span className="sr-only" role="columnheader">
+                        Remove
+                      </span>
                     </div>
-                  ))}
+                    {formWindows.map((w, index) => (
+                      <div key={index} className="wsch-due-row" role="row">
+                        <input
+                          type="time"
+                          role="cell"
+                          value={w.due}
+                          aria-label={`Due time ${index + 1}`}
+                          onChange={(e) =>
+                            setFormWindows((prev) =>
+                              prev.map((row, i) =>
+                                i === index ? { ...row, due: e.target.value } : row,
+                              ),
+                            )
+                          }
+                        />
+                        <CompletionWindowSelect
+                          aria-label={`Minutes before due ${index + 1}`}
+                          value={w.beforeMinutes}
+                          onChange={(beforeMinutes) =>
+                            setFormWindows((prev) =>
+                              prev.map((row, i) =>
+                                i === index ? { ...row, beforeMinutes } : row,
+                              ),
+                            )
+                          }
+                        />
+                        <CompletionWindowSelect
+                          aria-label={`Minutes after due ${index + 1}`}
+                          value={w.afterMinutes}
+                          onChange={(afterMinutes) =>
+                            setFormWindows((prev) =>
+                              prev.map((row, i) =>
+                                i === index ? { ...row, afterMinutes } : row,
+                              ),
+                            )
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="wsch-due-remove"
+                          disabled={formWindows.length <= 1}
+                          onClick={() => setFormWindows((prev) => prev.filter((_, i) => i !== index))}
+                          aria-label={`Remove due time ${index + 1}`}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -673,7 +706,11 @@ export function WalkSchedulesPage() {
               <button
                 type="button"
                 className="wil-btn wil-btn--primary"
-                disabled={busy || (modalMode === "create" && templates.length === 0)}
+                disabled={
+                  busy ||
+                  (modalMode === "create" && templates.length === 0) ||
+                  !!findDraftWindowOverlapError(formWindows)
+                }
                 onClick={() => void submitModal()}
               >
                 {busy

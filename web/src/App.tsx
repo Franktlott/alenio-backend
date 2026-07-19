@@ -13,8 +13,8 @@ import { WalkItemLibraryPage } from "./routes/alenio-go/WalkItemLibraryPage";
 import { WalkBuilderPage } from "./routes/alenio-go/WalkBuilderPage";
 import { WalkDetailsPage } from "./routes/alenio-go/WalkDetailsPage";
 import { WalksListPage } from "./routes/alenio-go/WalksListPage";
-import { WalkSchedulesPage } from "./routes/alenio-go/WalkSchedulesPage";
 import { TempsModuleLayout } from "./routes/alenio-go/TempsModuleLayout";
+import { TempsDashboardPage } from "./routes/alenio-go/TempsDashboardPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { AdminPage } from "./routes/AdminPage";
 import { BillingPage } from "./routes/BillingPage";
@@ -157,7 +157,8 @@ export default function App() {
             <Route path="frontend" element={<Navigate to="/go/devices/display" replace />} />
             <Route path="checklists" element={<AlenioGoModuleSettingsPage moduleKey="checklists" />} />
             <Route path="temp-checks" element={<TempsModuleLayout />}>
-              <Route index element={<Navigate to="library" replace />} />
+              <Route index element={<Navigate to="overview" replace />} />
+              <Route path="overview" element={<TempsDashboardPage />} />
               <Route path="library" element={<WalkItemLibraryPage />} />
               <Route path="library/new" element={<WalkItemCreatePage />} />
               <Route path="library/:itemId/edit" element={<WalkItemCreatePage />} />
@@ -166,7 +167,7 @@ export default function App() {
             <Route path="walks/builder" element={<WalkBuilderPage />} />
             <Route path="walks/:templateId" element={<WalkDetailsPage />} />
             <Route path="walks" element={<WalksListPage />} />
-              <Route path="schedule" element={<WalkSchedulesPage />} />
+              <Route path="schedule" element={<Navigate to="/go/temp-checks/walks" replace />} />
               <Route path="settings" element={<AlenioGoModuleSettingsPage moduleKey="temp-checks" />} />
             </Route>
             <Route path="briefings/*" element={<AlenioGoModuleSettingsPage moduleKey="briefings" />} />

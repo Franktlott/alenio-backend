@@ -12,8 +12,14 @@ export function minutesToLabel(minutes: number) {
   return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
-export function windowLabel(w: Pick<WalkScheduleWindow, "startMinutes" | "dueMinutes">) {
-  return `${minutesToLabel(w.startMinutes)} – ${minutesToLabel(w.dueMinutes)}`;
+export function windowLabel(
+  w: Pick<WalkScheduleWindow, "startMinutes" | "dueMinutes"> & { graceMinutes?: number },
+) {
+  const after = w.graceMinutes ?? 0;
+  if (after > 0) {
+    return `Due ${minutesToLabel(w.dueMinutes)} (${minutesToLabel(w.startMinutes)}–${minutesToLabel(w.dueMinutes + after)})`;
+  }
+  return `Due ${minutesToLabel(w.dueMinutes)} (opens ${minutesToLabel(w.startMinutes)})`;
 }
 
 function formatDayRange(days: number[]) {
@@ -44,26 +50,26 @@ export function formatScheduleSummary(schedule: WalkSchedule): string {
 function formatScheduleSummaryActive(schedule: WalkSchedule): string {
   const times = [...(schedule.windows ?? [])]
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((w) => minutesToLabel(w.startMinutes));
+    .map((w) => minutesToLabel(w.dueMinutes));
 
   if (schedule.recurrence === "INTERVAL") {
     return intervalLabel(schedule.intervalMinutes);
   }
 
   if (schedule.recurrence === "ONCE") {
-    const t = times[0] ? ` · ${times[0]}` : "";
+    const t = times[0] ? ` · due ${times[0]}` : "";
     return `One-time${t}`;
   }
 
   if (schedule.recurrence === "WEEKLY") {
     const days = Array.isArray(schedule.daysOfWeek) ? schedule.daysOfWeek : [];
     const dayPart = days.length ? formatDayRange(days) : "Weekly";
-    const timePart = times.length ? ` · ${times.join(", ")}` : "";
+    const timePart = times.length ? ` · due ${times.join(", ")}` : "";
     return `${dayPart}${timePart}`;
   }
 
   // DAILY default
-  const timePart = times.length ? ` · ${times.join(", ")}` : "";
+  const timePart = times.length ? ` · due ${times.join(", ")}` : "";
   return `Daily${timePart}`;
 }
 
@@ -74,29 +80,29 @@ export function formatSchedulePreview(input: {
   intervalMinutes?: number | null;
   windows: Array<{ startMinutes: number; dueMinutes: number }>;
 }): string {
-  const times = input.windows.map((w) => minutesToLabel(w.startMinutes));
+  const times = input.windows.map((w) => minutesToLabel(w.dueMinutes));
   if (input.recurrence === "INTERVAL") {
-    return `Runs ${intervalLabel(input.intervalMinutes).toLowerCase()}.`;
+    return `Due ${intervalLabel(input.intervalMinutes).toLowerCase()}.`;
   }
   if (input.recurrence === "ONCE") {
     return times[0]
-      ? `Runs once at ${times[0]}.`
-      : "Runs once on the effective start date.";
+      ? `Due once at ${times[0]}.`
+      : "Due once on the effective start date.";
   }
   if (input.recurrence === "WEEKLY") {
     const days = Array.isArray(input.daysOfWeek) ? input.daysOfWeek : [];
     const dayPart = days.length ? formatDayRange(days) : "selected days";
-    if (!times.length) return `Runs on ${dayPart}.`;
-    if (times.length === 1) return `Runs ${dayPart} at ${times[0]}.`;
+    if (!times.length) return `Due on ${dayPart}.`;
+    if (times.length === 1) return `Due ${dayPart} at ${times[0]}.`;
     const last = times[times.length - 1];
     const rest = times.slice(0, -1).join(", ");
-    return `Runs ${dayPart} at ${rest}, and ${last}.`;
+    return `Due ${dayPart} at ${rest}, and ${last}.`;
   }
-  if (!times.length) return "Runs every day.";
-  if (times.length === 1) return `Runs every day at ${times[0]}.`;
+  if (!times.length) return "Due every day.";
+  if (times.length === 1) return `Due every day at ${times[0]}.`;
   const last = times[times.length - 1];
   const rest = times.slice(0, -1).join(", ");
-  return `Runs every day at ${rest}, and ${last}.`;
+  return `Due every day at ${rest}, and ${last}.`;
 }
 
 /** Aggregate summary for a walk's schedules (list page). */

@@ -41,7 +41,8 @@ function relativeTime(iso: string) {
   return new Date(iso).toLocaleDateString();
 }
 
-function walkPath(walk: WalkTemplate) {
+function walkPath(walk: WalkTemplate, tab?: "schedule") {
+  if (tab === "schedule") return `/go/temp-checks/walks/${walk.id}?tab=schedule`;
   return `/go/temp-checks/walks/${walk.id}`;
 }
 
@@ -288,11 +289,11 @@ export function WalksListPage() {
   return (
     <TempsPageShell testId="walks-list-page" wide className="temps-page--fill">
       <TempsPageHeader
-        title="Walks"
+        title="Checklists"
         description="Build reusable checks, schedule them, and publish them to Alenio Temps."
         actions={
           <TempsButton variant="primary" disabled={busy} onClick={() => void createWalk()}>
-            + Create Walk
+            + Create checklist
           </TempsButton>
         }
       />
@@ -454,14 +455,21 @@ export function WalksListPage() {
                       <td>
                         {count} item{count === 1 ? "" : "s"}
                       </td>
-                      <td>
-                        {scheduleSummary.status === "scheduled" ? (
-                          <TempsStatusBadge tone="active">{scheduleSummary.label}</TempsStatusBadge>
-                        ) : scheduleSummary.status === "paused" ? (
-                          <TempsStatusBadge tone="paused">{scheduleSummary.label}</TempsStatusBadge>
-                        ) : (
-                          <span className="temps-muted-status">{scheduleSummary.label}</span>
-                        )}
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="wb-linkish"
+                          title="Manage schedule"
+                          onClick={() => navigate(walkPath(walk, "schedule"))}
+                        >
+                          {scheduleSummary.status === "scheduled" ? (
+                            <TempsStatusBadge tone="active">{scheduleSummary.label}</TempsStatusBadge>
+                          ) : scheduleSummary.status === "paused" ? (
+                            <TempsStatusBadge tone="paused">{scheduleSummary.label}</TempsStatusBadge>
+                          ) : (
+                            <span className="temps-muted-status">{scheduleSummary.label}</span>
+                          )}
+                        </button>
                       </td>
                       <td className="wil-updated">{walk.workplace || "—"}</td>
                       <td>v{walk.version}</td>
@@ -493,6 +501,17 @@ export function WalksListPage() {
                             </button>
                             {menuId === walk.id ? (
                               <div className="wsch-row-menu" role="menu">
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  disabled={busy || walk.status === "ARCHIVED"}
+                                  onClick={() => {
+                                    setMenuId(null);
+                                    navigate(walkPath(walk, "schedule"));
+                                  }}
+                                >
+                                  Manage schedule
+                                </button>
                                 <button
                                   type="button"
                                   role="menuitem"

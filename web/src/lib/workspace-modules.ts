@@ -205,6 +205,64 @@ export function mergeWorkspaceModules(apiModules: WorkspaceModule[]): Record<str
   return merged;
 }
 
+const MODULES_CACHE_PREFIX = "alenio.go.modules.v1.";
+const LINKED_COUNT_CACHE_PREFIX = "alenio.go.linkedCount.v1.";
+
+/** Stable signature so UI can skip re-renders when nothing meaningful changed. */
+export function workspaceModulesSignature(modulesByKey: Record<string, WorkspaceModule>): string {
+  return LIFECYCLE_MODULE_KEYS.map((key) => {
+    const mod = modulesByKey[key];
+    if (!mod) return `${key}:missing`;
+    return `${key}:${mod.status}:${mod.operatingMode ?? ""}:${mod.updatedAt}:${mod.baseHref ?? ""}`;
+  }).join("|");
+}
+
+export function readCachedModulesByKey(teamId: string): Record<string, WorkspaceModule> | null {
+  if (!teamId) return null;
+  try {
+    const raw = localStorage.getItem(`${MODULES_CACHE_PREFIX}${teamId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    return mergeWorkspaceModules(parsed as WorkspaceModule[]);
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedModulesByKey(teamId: string, modulesByKey: Record<string, WorkspaceModule>) {
+  if (!teamId) return;
+  try {
+    const list = LIFECYCLE_MODULE_KEYS.map((key) => modulesByKey[key]).filter(
+      (mod): mod is WorkspaceModule => !!mod,
+    );
+    localStorage.setItem(`${MODULES_CACHE_PREFIX}${teamId}`, JSON.stringify(list));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function readCachedLinkedDeviceCount(teamId: string): number | null {
+  if (!teamId) return null;
+  try {
+    const raw = localStorage.getItem(`${LINKED_COUNT_CACHE_PREFIX}${teamId}`);
+    if (raw == null) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedLinkedDeviceCount(teamId: string, count: number) {
+  if (!teamId) return;
+  try {
+    localStorage.setItem(`${LINKED_COUNT_CACHE_PREFIX}${teamId}`, String(count));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function splitWorkspaceModuleLists(modulesByKey: Record<string, WorkspaceModule>): {
   enabled: WorkspaceModuleRow[];
   available: WorkspaceModuleRow[];

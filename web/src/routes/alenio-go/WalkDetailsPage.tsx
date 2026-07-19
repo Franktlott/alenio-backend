@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import {
   TempsButton,
@@ -14,6 +14,8 @@ import { WalkTypeIcon } from "../../components/walk-builder/WalkItemIcons";
 import {
   WalkScheduleForm,
   defaultScheduleFormValue,
+  findDraftWindowOverlapError,
+  parseIntervalWindow,
   parseWindows,
   scheduleToFormValue,
   type WalkScheduleFormValue,
@@ -86,10 +88,17 @@ function IconMore({ size = 16 }: { size?: number }) {
   );
 }
 
-function scheduleWriteBody(value: WalkScheduleFormValue) {
-  const windows = parseWindows(value.windows, value.graceMinutes);
+function scheduleWriteBody(value: WalkScheduleFormValue, checklistName: string) {
+  const windows =
+    value.recurrence === "INTERVAL"
+      ? parseIntervalWindow(
+          value.intervalDayStart,
+          value.windows[0]?.due ?? "22:00",
+          value.windows[0]?.afterMinutes ?? 0,
+        )
+      : parseWindows(value.windows);
   return {
-    name: value.name.trim() || null,
+    name: checklistName.trim() || null,
     recurrence: value.recurrence,
     daysOfWeek: value.recurrence === "WEEKLY" ? value.daysOfWeek : null,
     intervalMinutes: value.recurrence === "INTERVAL" ? value.intervalMinutes : null,
@@ -101,9 +110,23 @@ function scheduleWriteBody(value: WalkScheduleFormValue) {
   };
 }
 
+function tabFromSearch(value: string | null): TabId {
+  if (
+    value === "overview" ||
+    value === "items" ||
+    value === "schedule" ||
+    value === "assignment" ||
+    value === "history"
+  ) {
+    return value;
+  }
+  return "overview";
+}
+
 export function WalkDetailsPage() {
   const { templateId = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { canManage, teamId } = useAlenioGoShell();
 
   const [template, setTemplate] = useState<WalkTemplate | null>(null);
@@ -117,8 +140,21 @@ export function WalkDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const { showNotice, noticeDialog } = useTempsNotice();
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useState<TabId>(() => tabFromSearch(searchParams.get("tab")));
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setTab(tabFromSearch(searchParams.get("tab")));
+  }, [searchParams]);
+
+  function selectTab(next: TabId) {
+    setTab(next);
+    if (next === "overview") {
+      setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ tab: next }, { replace: true });
+    }
+  }
   const [scheduleModal, setScheduleModal] = useState<ScheduleModalMode>(null);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState<WalkScheduleFormValue>(defaultScheduleFormValue());
@@ -234,11 +270,23 @@ export function WalkDetailsPage() {
 
   async function submitScheduleModal() {
     if (!teamId || !template) return;
-    const body = scheduleWriteBody(scheduleForm);
+    const body = scheduleWriteBody(scheduleForm, template.name);
     if (!body.windows.length) {
       showNotice({
-        title: "Time window required",
-        message: "Add at least one valid time window before saving this schedule.",
+        title: "Due time required",
+        message: "Add at least one valid due time and completion window before saving.",
+        tone: "warning",
+      });
+      return;
+    }
+    const overlapError =
+      scheduleForm.recurrence === "INTERVAL"
+        ? null
+        : findDraftWindowOverlapError(scheduleForm.windows);
+    if (overlapError) {
+      showNotice({
+        title: "Overlapping due times",
+        message: overlapError,
         tone: "warning",
       });
       return;
@@ -260,7 +308,7 @@ export function WalkDetailsPage() {
       }
       closeScheduleModal();
       await load();
-      setTab("schedule");
+      selectTab("schedule");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save schedule.");
     } finally {
@@ -513,7 +561,7 @@ export function WalkDetailsPage() {
                   role="tab"
                   aria-selected={tab === id}
                   className={`temps-builder-tab${tab === id ? " is-active" : ""}`}
-                  onClick={() => setTab(id)}
+                  onClick={() => selectTab(id)}
                 >
                   <span>{label}</span>
                 </button>
@@ -621,8 +669,8 @@ export function WalkDetailsPage() {
                     <table className="wil-table wsch-table">
                       <thead>
                         <tr>
-                          <th>Name</th>
-                          <th>Summary</th>
+                          <th>Checklist</th>
+                          <th>Due times</th>
                           <th>Status</th>
                           <th className="wsch-actions-col">
                             <span className="sr-only">Actions</span>
@@ -639,7 +687,7 @@ export function WalkDetailsPage() {
                         ) : (
                           schedules.map((schedule) => (
                             <tr key={schedule.id}>
-                              <td>{schedule.name?.trim() || template.name}</td>
+                              <td>{template.name}</td>
                               <td>
                                 <span className="wsch-meta">{formatScheduleSummary(schedule)}</span>
                               </td>
@@ -695,7 +743,7 @@ export function WalkDetailsPage() {
                 {schedules.length === 0 ? (
                   <p className="wil-muted">
                     Add a schedule to assign who must complete it.{" "}
-                    <button type="button" className="wb-linkish" onClick={() => setTab("schedule")}>
+                    <button type="button" className="wb-linkish" onClick={() => selectTab("schedule")}>
                       Go to Schedule
                     </button>
                   </p>
@@ -721,6 +769,7 @@ export function WalkDetailsPage() {
                       onChange={setAssignmentForm}
                       showAssignment
                       disabled={busy}
+                      checklistName={template.name}
                     />
                     <footer style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
                       <button
@@ -795,7 +844,12 @@ export function WalkDetailsPage() {
                 ? "Update when associates must complete this walk."
                 : "Set when this walk opens for associates in Alenio Temps."}
             </p>
-            <WalkScheduleForm value={scheduleForm} onChange={setScheduleForm} disabled={busy} />
+            <WalkScheduleForm
+              value={scheduleForm}
+              onChange={setScheduleForm}
+              disabled={busy}
+              checklistName={template?.name}
+            />
             <footer className="wsch-modal-foot">
               <button type="button" className="wil-btn wil-btn--secondary" onClick={closeScheduleModal}>
                 Cancel
@@ -803,7 +857,11 @@ export function WalkDetailsPage() {
               <button
                 type="button"
                 className="wil-btn wil-btn--primary"
-                disabled={busy}
+                disabled={
+                  busy ||
+                  (scheduleForm.recurrence !== "INTERVAL" &&
+                    !!findDraftWindowOverlapError(scheduleForm.windows))
+                }
                 onClick={() => void submitScheduleModal()}
               >
                 {busy ? "Saving…" : scheduleModal === "edit" ? "Save changes" : "Create schedule"}

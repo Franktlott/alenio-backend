@@ -505,12 +505,15 @@ export async function getWalkRun(teamId: string, runId: string) {
   return serializeWalkRun(run);
 }
 
-export async function listWalkRuns(teamId: string, limit = 50) {
+export async function listWalkRuns(teamId: string, limit = 200) {
   const rows = await prisma.walkRun.findMany({
     where: { teamId },
     orderBy: { startedAt: "desc" },
     take: limit,
-    include: { responses: true, template: { select: { name: true } } },
+    include: {
+      responses: { include: { correctiveActionResults: true } },
+      template: { select: { name: true } },
+    },
   });
   return rows.map((run) => ({
     ...serializeWalkRun(run),

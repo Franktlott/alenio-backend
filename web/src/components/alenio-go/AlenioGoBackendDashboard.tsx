@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
 import { fetchTeamGoDevices, fetchWebTeam, fetchWorkspaceModules, type WorkspaceModule } from "../../lib/api";
-import { defaultModulesByKey, mergeWorkspaceModules } from "../../lib/workspace-modules";
+import {
+  defaultModulesByKey,
+  mergeWorkspaceModules,
+  readCachedLinkedDeviceCount,
+  readCachedModulesByKey,
+  workspaceModulesSignature,
+  writeCachedLinkedDeviceCount,
+  writeCachedModulesByKey,
+} from "../../lib/workspace-modules";
 import { resolveGoHeroImage } from "../../lib/go-frontend-settings";
 import { probeImageUrl } from "../../lib/image-probe";
 import { goBackendAdminTiles, goBackendQuickActions } from "../../lib/alenio-go-backend";
@@ -27,6 +35,16 @@ type Props = {
   approvals: ApprovalsState;
 };
 
+function initialModulesByKey(teamId: string | undefined): Record<string, WorkspaceModule> {
+  if (!teamId) return defaultModulesByKey();
+  return readCachedModulesByKey(teamId) ?? defaultModulesByKey();
+}
+
+function initialLinkedDeviceCount(teamId: string | undefined): number {
+  if (!teamId) return 0;
+  return readCachedLinkedDeviceCount(teamId) ?? 0;
+}
+
 export function AlenioGoBackendDashboard({
   teamId,
   inviteCode,
@@ -35,8 +53,10 @@ export function AlenioGoBackendDashboard({
   approvals,
 }: Props) {
   const location = useLocation();
-  const [linkedDeviceCount, setLinkedDeviceCount] = useState(0);
-  const [modulesByKey, setModulesByKey] = useState<Record<string, WorkspaceModule>>(() => defaultModulesByKey());
+  const [linkedDeviceCount, setLinkedDeviceCount] = useState(() => initialLinkedDeviceCount(teamId));
+  const [modulesByKey, setModulesByKey] = useState<Record<string, WorkspaceModule>>(() =>
+    initialModulesByKey(teamId),
+  );
   const [wsmOpen, setWsmOpen] = useState(() => {
     try {
       return sessionStorage.getItem(WSM_PANEL_KEY) !== "0";
@@ -83,23 +103,38 @@ export function AlenioGoBackendDashboard({
   }, [teamId, location.pathname]);
 
   useEffect(() => {
+    setLinkedDeviceCount((prev) => {
+      const next = initialLinkedDeviceCount(teamId);
+      return prev === next ? prev : next;
+    });
+    setModulesByKey((prev) => {
+      const next = initialModulesByKey(teamId);
+      return workspaceModulesSignature(prev) === workspaceModulesSignature(next) ? prev : next;
+    });
+  }, [teamId]);
+
+  useEffect(() => {
     if (!canManage || !teamId) {
       setLinkedDeviceCount(0);
       return;
     }
     let cancelled = false;
+    const applyCount = (count: number) => {
+      if (cancelled) return;
+      setLinkedDeviceCount((prev) => {
+        if (prev === count) return prev;
+        writeCachedLinkedDeviceCount(teamId, count);
+        return count;
+      });
+    };
     void fetchTeamGoDevices(teamId)
-      .then((rows) => {
-        if (!cancelled) setLinkedDeviceCount(rows.length);
-      })
+      .then((rows) => applyCount(rows.length))
       .catch(() => {
-        if (!cancelled) setLinkedDeviceCount(0);
+        /* Keep cached count on transient failures. */
       });
     const id = window.setInterval(() => {
       void fetchTeamGoDevices(teamId)
-        .then((rows) => {
-          if (!cancelled) setLinkedDeviceCount(rows.length);
-        })
+        .then((rows) => applyCount(rows.length))
         .catch(() => undefined);
     }, 30_000);
     return () => {
@@ -117,16 +152,24 @@ export function AlenioGoBackendDashboard({
     void fetchWorkspaceModules(teamId)
       .then((mods) => {
         if (cancelled) return;
-        setModulesByKey(mergeWorkspaceModules(mods));
+        const next = mergeWorkspaceModules(mods);
+        writeCachedModulesByKey(teamId, next);
+        setModulesByKey((prev) =>
+          workspaceModulesSignature(prev) === workspaceModulesSignature(next) ? prev : next,
+        );
       })
       .catch(() => {
-        // Keep default inactive modules visible when API is unavailable (e.g. backend not deployed yet).
-        if (!cancelled) setModulesByKey(defaultModulesByKey());
+        // Keep cached / default modules when API is unavailable — don't wipe the tile strip.
       });
     return () => {
       cancelled = true;
     };
   }, [canManage, teamId, location.pathname]);
+
+  function applyModulesByKey(next: Record<string, WorkspaceModule>) {
+    setModulesByKey(next);
+    if (teamId) writeCachedModulesByKey(teamId, next);
+  }
 
   const tiles = useMemo(
     () =>
@@ -324,7 +367,7 @@ export function AlenioGoBackendDashboard({
             }}
             teamId={teamId}
             modulesByKey={modulesByKey}
-            onModulesChange={setModulesByKey}
+            onModulesChange={applyModulesByKey}
           />
           <GoDeviceQuickActionsManagePanel
             open={manageQuickActionsOpen}

@@ -6,6 +6,34 @@ function parseDays(raw: unknown): number[] | null {
   return raw.filter((d): d is number => typeof d === "number" && d >= 0 && d <= 6);
 }
 
+const DAY_MINUTES = 24 * 60;
+
+/** Reject overlapping completion windows (open → due + grace). Adjacent endpoints are allowed. */
+function validateWindowsDoNotOverlap(
+  windows: Array<{ startMinutes: number; dueMinutes: number; graceMinutes?: number }>,
+): string | null {
+  if (windows.length < 2) return null;
+  const ranges = windows
+    .map((w) => {
+      const open = Math.max(0, Math.min(DAY_MINUTES, w.startMinutes));
+      const close = Math.max(
+        open,
+        Math.min(DAY_MINUTES, w.dueMinutes + (w.graceMinutes ?? 0)),
+      );
+      return { open, close, dueMinutes: w.dueMinutes };
+    })
+    .sort((a, b) => a.open - b.open || a.close - b.close);
+
+  for (let i = 0; i < ranges.length - 1; i += 1) {
+    const current = ranges[i]!;
+    const next = ranges[i + 1]!;
+    if (current.open < next.close && next.open < current.close) {
+      return "Completion windows overlap. Adjust due times or before/after windows so they do not overlap.";
+    }
+  }
+  return null;
+}
+
 function localDateParts(date: Date, timeZone: string) {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -166,6 +194,10 @@ export async function createSchedule(input: {
   if (!input.windows.length) {
     return { error: "VALIDATION" as const, message: "Add at least one time window" };
   }
+  const overlapMessage = validateWindowsDoNotOverlap(input.windows);
+  if (overlapMessage) {
+    return { error: "VALIDATION" as const, message: overlapMessage };
+  }
   if (
     input.recurrence === "INTERVAL" &&
     input.intervalMinutes != null &&
@@ -258,6 +290,12 @@ export async function updateSchedule(
 
   if (input.windows && !input.windows.length) {
     return { error: "VALIDATION" as const, message: "Add at least one time window" };
+  }
+  if (input.windows) {
+    const overlapMessage = validateWindowsDoNotOverlap(input.windows);
+    if (overlapMessage) {
+      return { error: "VALIDATION" as const, message: overlapMessage };
+    }
   }
 
   const schedule = await prisma.$transaction(async (tx) => {

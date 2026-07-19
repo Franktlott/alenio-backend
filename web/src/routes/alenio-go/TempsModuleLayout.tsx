@@ -2,45 +2,15 @@ import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
-function IconOverview() {
+function IconDashboard() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z" />
     </svg>
   );
 }
 
-function IconChecks() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M9 11l3 3L22 4" />
-      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-    </svg>
-  );
-}
-
-function IconResults() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M4 19V5M4 19h16" />
-      <path d="M8 15v-4M12 15V8M16 15v-6" />
-    </svg>
-  );
-}
-
-function IconDevices() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <rect x="5" y="2" width="14" height="20" rx="2" />
-      <path d="M12 18h.01" />
-    </svg>
-  );
-}
-
-function IconLibrary() {
+function IconItems() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -49,7 +19,7 @@ function IconLibrary() {
   );
 }
 
-function IconWalks() {
+function IconChecklists() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
       <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
@@ -59,45 +29,77 @@ function IconWalks() {
   );
 }
 
-function IconSchedule() {
+function IconReports() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
+      <path d="M4 19V5M4 19h16" />
+      <path d="M8 15v-4M12 15V8M16 15v-6" />
     </svg>
   );
 }
 
-function IconSettings() {
+function IconTrends() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+      <path d="M3 17 9 11l4 4 8-8" />
+      <path d="M14 7h7v7" />
     </svg>
   );
 }
 
-function IconAudit() {
+function IconCompliance() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   );
 }
 
-function IconChat() {
+function IconLocations() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <path d="M12 21s7-4.5 7-11a7 7 0 1 0-14 0c0 6.5 7 11 7 11z" />
+      <circle cx="12" cy="10" r="2.5" />
     </svg>
   );
 }
 
-function IconSwitch() {
+function IconUser() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M16 3h5v5M8 21H3v-5M21 3l-7 7M3 21l7-7" />
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
+  );
+}
+
+function IconChevronRight() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function TempsBrandMark() {
+  return (
+    <span className="temps-nav-brand">
+      <svg className="temps-nav-brand-icon" viewBox="0 0 32 48" fill="none" aria-hidden>
+        <path
+          d="M16 3c-2.4 0-4.4 1.9-4.4 4.3v22.2a7.4 7.4 0 1 0 8.8 0V7.3C20.4 4.9 18.4 3 16 3Z"
+          stroke="#5EC8F0"
+          strokeWidth="2.4"
+          strokeLinejoin="round"
+        />
+        <path d="M16 10v18.5" stroke="#F8FAFC" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="16" cy="36.5" r="5.2" fill="#2EB7F0" />
+      </svg>
+      <span className="temps-nav-brand-copy">
+        <strong>TEMPS</strong>
+        <small>Food Safety</small>
+      </span>
+    </span>
   );
 }
 
@@ -114,7 +116,6 @@ function NavItem({
   icon?: ReactNode;
   children: ReactNode;
   soon?: boolean;
-  /** Highlight for nested routes (e.g. walks detail/builder) */
   matchPrefix?: string;
 }) {
   const location = useLocation();
@@ -122,7 +123,7 @@ function NavItem({
   const body = (
     <>
       {icon ? <span className="temps-nav-ico">{icon}</span> : null}
-      <span>{children}</span>
+      <span className="temps-nav-label">{children}</span>
     </>
   );
   if (soon) {
@@ -144,12 +145,6 @@ function NavItem({
       {body}
     </NavLink>
   );
-}
-
-function initials(name: string | null | undefined) {
-  const parts = (name ?? "A").trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return `${parts[0]![0]!}${parts[1]![0]!}`.toUpperCase();
-  return (parts[0] ?? "A").slice(0, 2).toUpperCase();
 }
 
 export function TempsModuleLayout() {
@@ -180,84 +175,63 @@ export function TempsModuleLayout() {
           aria-label="Back to Alenio Go"
           onClick={() => navigate("/go")}
         >
-          <img src="/AlenioTemp.png" alt="Alenio Temps" width={588} height={156} />
+          <TempsBrandMark />
         </button>
 
         <nav className="temps-nav-scroll">
           <div className="temps-nav-section">
-            <p className="temps-nav-section-label">Overview</p>
-            <NavItem to="/go/temp-checks/overview" icon={<IconOverview />} soon>
+            <NavItem to="/go/temp-checks/overview" end icon={<IconDashboard />}>
               Dashboard
-            </NavItem>
-            <NavItem to="/go/temp-checks/today" icon={<IconChecks />} soon>
-              Today&apos;s Checks
             </NavItem>
           </div>
 
           <div className="temps-nav-section">
             <p className="temps-nav-section-label">Build</p>
-            <NavItem to="/go/temp-checks/library" matchPrefix="/go/temp-checks/library" icon={<IconLibrary />}>
+            <NavItem to="/go/temp-checks/library" matchPrefix="/go/temp-checks/library" icon={<IconItems />}>
               Item Library
             </NavItem>
-            <NavItem to="/go/temp-checks/walks" matchPrefix="/go/temp-checks/walks" icon={<IconWalks />}>
-              Walks
-            </NavItem>
-            <NavItem to="/go/temp-checks/schedule" icon={<IconSchedule />}>
-              Schedules
+            <NavItem to="/go/temp-checks/walks" matchPrefix="/go/temp-checks/walks" icon={<IconChecklists />}>
+              Checklists
             </NavItem>
           </div>
 
           <div className="temps-nav-section">
-            <p className="temps-nav-section-label">Monitor</p>
-            <NavItem to="/go/temp-checks/results" icon={<IconResults />} soon>
-              Results
+            <p className="temps-nav-section-label">Insights</p>
+            <NavItem to="/go/temp-checks/reports" icon={<IconReports />} soon>
+              Reports
             </NavItem>
-          </div>
-
-          <div className="temps-nav-section">
-            <p className="temps-nav-section-label">Hardware</p>
-            <NavItem to="/go/devices" icon={<IconDevices />}>
-              Devices
+            <NavItem to="/go/temp-checks/trends" icon={<IconTrends />} soon>
+              Trends
             </NavItem>
-          </div>
-
-          <div className="temps-nav-section">
-            <p className="temps-nav-section-label">Admin</p>
-            <NavItem to="/go/temp-checks/settings" icon={<IconSettings />}>
-              Settings
-            </NavItem>
-            <NavItem to="/go/temp-checks/audit" icon={<IconAudit />} soon>
-              Audit Log
+            <NavItem to="/go/temp-checks/compliance" icon={<IconCompliance />} soon>
+              Compliance
             </NavItem>
           </div>
         </nav>
 
         <div className="temps-nav-footer">
-          <div className="temps-nav-help">
-            <div className="temps-nav-help-top">
-              <p>Need help?</p>
-              <small>Our AI support assistant</small>
-            </div>
-            <button type="button" className="temps-nav-seneca">
-              <IconChat />
-              Ask Seneca
-            </button>
-          </div>
           <button
             type="button"
-            className="temps-nav-user"
+            className="temps-nav-workspace"
             onClick={() => navigate("/go")}
-            aria-label="Switch product or workspace"
+            aria-label="Switch workspace"
           >
-            <span className="temps-nav-avatar" aria-hidden>
-              {initials(goShell.userName)}
+            <span className="temps-nav-workspace-rows">
+              <span className="temps-nav-workspace-row">
+                <span className="temps-nav-workspace-ico" aria-hidden>
+                  <IconLocations />
+                </span>
+                <strong>{goShell.teamName}</strong>
+              </span>
+              <span className="temps-nav-workspace-row">
+                <span className="temps-nav-workspace-ico" aria-hidden>
+                  <IconUser />
+                </span>
+                <strong>{goShell.userName ?? "Leader"}</strong>
+              </span>
             </span>
-            <span className="temps-nav-user-copy">
-              <strong>{goShell.userName ?? "Leader"}</strong>
-              <small>{goShell.teamName}</small>
-            </span>
-            <span className="temps-nav-user-switch" aria-hidden>
-              <IconSwitch />
+            <span className="temps-nav-workspace-chevron" aria-hidden>
+              <IconChevronRight />
             </span>
           </button>
         </div>
