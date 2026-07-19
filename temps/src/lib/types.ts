@@ -48,6 +48,8 @@ export type WalkRunItem = {
   position: number;
   required: boolean;
   config: Record<string, unknown>;
+  /** Snapshot CA definitions from the server (present even before a response). */
+  correctiveActions?: WalkRunCorrectiveAction[];
   response: {
     id: string;
     status: string;

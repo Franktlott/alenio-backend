@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -18,9 +19,16 @@ type Props = {
   busy?: boolean;
   /** Detail under FAIL, e.g. "61.47 °F is above the limit (≤ 41.0 °F)" */
   failSummary?: string | null;
+  /** Local photo URIs keyed by corrective action id (TAKE_PHOTO steps). */
+  photosByActionId?: Record<string, string[]>;
+  onCapturePhoto?: (actionId: string) => void;
   /** Called once every pending step is checked — parent completes them in order. */
   onCompleteAll: () => void;
 };
+
+function isTakePhotoAction(action: WalkRunCorrectiveAction): boolean {
+  return action.actionType === "TAKE_PHOTO";
+}
 
 function actionGlyph(title: string): string {
   const t = title.toLowerCase();
@@ -40,6 +48,8 @@ export function FailureProcedurePanel({
   lockedHint,
   busy,
   failSummary,
+  photosByActionId = {},
+  onCapturePhoto,
   onCompleteAll,
 }: Props) {
   const visible = useMemo(
@@ -65,7 +75,11 @@ export function FailureProcedurePanel({
 
   const allPendingChecked =
     pending.length > 0 && pending.every((a) => checkedIds.has(a.id));
-  const canMarkComplete = unlocked && allPendingChecked && !busy;
+  const photoStepsReady = pending.every((a) => {
+    if (!isTakePhotoAction(a)) return true;
+    return (photosByActionId[a.id]?.length ?? 0) > 0;
+  });
+  const canMarkComplete = unlocked && allPendingChecked && photoStepsReady && !busy;
 
   function toggle(actionId: string) {
     setCheckedIds((prev) => {
@@ -100,35 +114,64 @@ export function FailureProcedurePanel({
             const checked = done || checkedIds.has(action.id);
             const glyph = actionGlyph(action.title);
 
+            const photos = photosByActionId[action.id] ?? [];
+            const needsPhoto = isTakePhotoAction(action);
+
             return (
-              <Pressable
-                key={action.id}
-                style={[styles.stepRow, done && styles.stepRowDone]}
-                disabled={!unlocked || busy || !isPending}
-                onPress={() => {
-                  if (isPending) toggle(action.id);
-                }}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked, disabled: !isPending }}
-              >
-                <View style={styles.stepIcon}>
-                  <Text style={styles.stepIconGlyph}>{glyph}</Text>
-                </View>
-                <View style={styles.stepCopy}>
-                  <Text style={[styles.stepTitle, done && styles.stepTitleDone]}>
-                    {action.title}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.checkbox,
-                    checked && styles.checkboxOn,
-                    done && styles.checkboxDone,
-                  ]}
+              <View key={action.id} style={styles.stepBlock}>
+                <Pressable
+                  style={[styles.stepRow, done && styles.stepRowDone]}
+                  disabled={!unlocked || busy || !isPending}
+                  onPress={() => {
+                    if (isPending) toggle(action.id);
+                  }}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked, disabled: !isPending }}
                 >
-                  {checked ? <Text style={styles.checkMark}>✓</Text> : null}
-                </View>
-              </Pressable>
+                  <View style={styles.stepIcon}>
+                    <Text style={styles.stepIconGlyph}>
+                      {needsPhoto ? "▣" : glyph}
+                    </Text>
+                  </View>
+                  <View style={styles.stepCopy}>
+                    <Text style={[styles.stepTitle, done && styles.stepTitleDone]}>
+                      {action.title}
+                    </Text>
+                    {needsPhoto && isPending ? (
+                      <Text style={styles.photoHint}>
+                        {photos.length > 0
+                          ? `${photos.length} photo${photos.length === 1 ? "" : "s"} attached`
+                          : "Photo required"}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View
+                    style={[
+                      styles.checkbox,
+                      checked && styles.checkboxOn,
+                      done && styles.checkboxDone,
+                    ]}
+                  >
+                    {checked ? <Text style={styles.checkMark}>✓</Text> : null}
+                  </View>
+                </Pressable>
+                {needsPhoto && isPending && unlocked ? (
+                  <View style={styles.photoRow}>
+                    {photos.map((uri) => (
+                      <Image key={uri} source={{ uri }} style={styles.photoThumb} />
+                    ))}
+                    <Pressable
+                      style={[styles.photoBtn, busy && styles.btnDisabled]}
+                      disabled={busy}
+                      onPress={() => onCapturePhoto?.(action.id)}
+                    >
+                      <Text style={styles.photoBtnText}>
+                        {photos.length > 0 ? "Add photo" : "Take photo"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
             );
           })}
         </View>
@@ -232,6 +275,41 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 8,
+  },
+  stepBlock: {
+    gap: 8,
+  },
+  photoHint: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.muted,
+  },
+  photoRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    paddingLeft: 4,
+  },
+  photoThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    backgroundColor: "#EEF2F7",
+  },
+  photoBtn: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.brand,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.brandSoft,
+  },
+  photoBtnText: {
+    color: colors.brandDark,
+    fontWeight: "800",
+    fontSize: 13,
   },
   stepRow: {
     flexDirection: "row",

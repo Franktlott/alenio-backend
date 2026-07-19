@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "./api";
-import type { Team, WalkOccurrence, WalkRun } from "./types";
+import type { TemperatureConfig, Team, WalkOccurrence, WalkRun } from "./types";
 
 const walks = (teamId: string) => `/api/teams/${encodeURIComponent(teamId)}/walks`;
 
@@ -89,6 +89,27 @@ export function completeRun(teamId: string, runId: string) {
   ).then((r) => r.data);
 }
 
+export type SyncRunItem = {
+  itemId: string;
+  response: unknown;
+  notes?: string | null;
+  photoUrls?: string[] | null;
+  correctiveActionIdsCompleted?: string[];
+};
+
+/** Batch-apply item responses + corrective completions, optionally complete the run. */
+export function syncRun(
+  teamId: string,
+  runId: string,
+  items: SyncRunItem[],
+  complete = false,
+) {
+  return apiPost<{ data: WalkRun }>(
+    `${walks(teamId)}/runs/${encodeURIComponent(runId)}/sync`,
+    { items, complete },
+  ).then((r) => r.data);
+}
+
 export function flattenRunItems(run: WalkRun) {
   return [...run.items].sort((a, b) => a.position - b.position);
 }
@@ -103,6 +124,47 @@ export function itemNeedsProcedure(item: WalkRun["items"][number]): boolean {
   return actions.some((a) => a.status === "PENDING");
 }
 
+/**
+ * First-failure steps are done and a retemp is still required before the item
+ * can advance (no PENDING CA rows remain, so itemNeedsProcedure is false).
+ */
+export function itemAwaitingRetemp(item: WalkRun["items"][number]): boolean {
+  if (item.type !== "TEMPERATURE" || !item.response) return false;
+  if (item.response.status !== "NEEDS_ACTION") return false;
+  const config = (item.config ?? {}) as TemperatureConfig;
+  if (!config.requireRetestOnFailure) return false;
+
+  const payload =
+    item.response.response && typeof item.response.response === "object"
+      ? (item.response.response as Record<string, unknown>)
+      : null;
+  const retestCount =
+    typeof payload?.retestCount === "number" ? payload.retestCount : 0;
+  const maxRetests =
+    typeof config.maximumRetests === "number" && Number.isFinite(config.maximumRetests)
+      ? Math.max(1, Math.floor(config.maximumRetests))
+      : 1;
+  if (retestCount >= maxRetests) return false;
+
+  const actions = item.response.correctiveActions ?? [];
+  if (actions.some((a) => a.status === "PENDING")) return false;
+
+  const firstFailure = actions.filter(
+    (a) => a.branch === "first_failure" || a.branch == null,
+  );
+  const ifFailOpened = actions.some(
+    (a) =>
+      a.branch === "if_fail" &&
+      (a.status === "PENDING" || a.status === "COMPLETED"),
+  );
+  if (ifFailOpened) return false;
+
+  return (
+    firstFailure.length === 0 ||
+    firstFailure.every((a) => a.status === "COMPLETED" || a.status === "SKIPPED")
+  );
+}
+
 /** True when a fail was saved but no procedure step has been completed yet. */
 export function itemHasUnstartedProcedure(item: WalkRun["items"][number]): boolean {
   if (!itemNeedsProcedure(item)) return false;
@@ -113,5 +175,5 @@ export function itemHasUnstartedProcedure(item: WalkRun["items"][number]): boole
 export function isOpenTempItem(item: WalkRun["items"][number]): boolean {
   if (item.type !== "TEMPERATURE") return false;
   if (!item.response || item.response.status === "NOT_STARTED") return true;
-  return itemNeedsProcedure(item);
+  return itemNeedsProcedure(item) || itemAwaitingRetemp(item);
 }

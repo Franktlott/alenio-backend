@@ -1,5 +1,5 @@
-import { router, useNavigation } from "expo-router";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { router, useFocusEffect, useNavigation } from "expo-router";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -12,10 +12,37 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppTabHeader } from "../../components/AppTabHeader";
 import { HomeMenu } from "../../components/HomeMenu";
+import { listPendingSyncDrafts } from "../../lib/check-draft-store";
+import { loadDayOccurrences, saveCachedRun, saveDayOccurrences } from "../../lib/day-cache";
 import { useSession } from "../../lib/session-context";
-import { listChecksForDay } from "../../lib/temps-api";
+import { listChecksForDay, startCheckRun } from "../../lib/temps-api";
 import type { WalkOccurrence } from "../../lib/types";
 import { colors } from "../../lib/theme";
+
+/** Prefetch run snapshots so associates can open ready checks offline. */
+async function prefetchReadyRuns(teamId: string, day: WalkOccurrence[]) {
+  const ready = day
+    .filter(
+      (item) =>
+        (item.status === "AVAILABLE" || item.status === "IN_PROGRESS") &&
+        (() => {
+          const now = Date.now();
+          const start = new Date(item.windowStart).getTime();
+          const end = new Date(item.graceEndsAt ?? item.dueAt).getTime();
+          return Number.isFinite(start) && Number.isFinite(end) && now >= start && now <= end;
+        })(),
+    )
+    .slice(0, 8);
+
+  for (const item of ready) {
+    try {
+      const run = await startCheckRun(teamId, item.id);
+      await saveCachedRun(teamId, item.id, run);
+    } catch {
+      // Ignore — network/claim errors shouldn't block Today.
+    }
+  }
+}
 
 function formatTime(iso: string) {
   try {
@@ -61,9 +88,13 @@ function windowLabel(item: WalkOccurrence) {
 
 type TabKey = "in_progress" | "completed";
 
-type BadgeTone = "pass" | "fail" | "pending" | "progress";
+type BadgeTone = "pass" | "fail" | "pending" | "progress" | "sync";
 
-function badgeFor(item: WalkOccurrence): { label: string; tone: BadgeTone } {
+function badgeFor(
+  item: WalkOccurrence,
+  pendingSyncIds: Set<string>,
+): { label: string; tone: BadgeTone } {
+  if (pendingSyncIds.has(item.id)) return { label: "PENDING SYNC", tone: "sync" };
   if (isCompleted(item)) return { label: "PASS", tone: "pass" };
   if (isFailed(item)) return { label: "FAIL", tone: "fail" };
   if (item.status === "IN_PROGRESS") return { label: "IN PROGRESS", tone: "progress" };
@@ -81,6 +112,7 @@ export default function TodayScreen() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("in_progress");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pendingSyncIds, setPendingSyncIds] = useState<Set<string>>(new Set());
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
@@ -92,12 +124,28 @@ export default function TodayScreen() {
       setError(null);
       if (mode === "initial") setLoading(true);
       else setRefreshing(true);
+      const pendingDrafts = await listPendingSyncDrafts();
+      setPendingSyncIds(
+        new Set(
+          pendingDrafts
+            .filter((d) => d.teamId === teamId)
+            .map((d) => d.occurrenceId),
+        ),
+      );
       try {
         const day = await listChecksForDay(teamId);
         setToday(day);
+        await saveDayOccurrences(teamId, day);
+        void prefetchReadyRuns(teamId, day);
       } catch (err) {
-        setToday([]);
-        setError(err instanceof Error ? err.message : "Failed to load checks");
+        const cached = await loadDayOccurrences(teamId);
+        if (cached && cached.length > 0) {
+          setToday(cached);
+          setError("Showing saved checks — reconnect to refresh");
+        } else {
+          setToday([]);
+          setError(err instanceof Error ? err.message : "Failed to load checks");
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -106,9 +154,11 @@ export default function TodayScreen() {
     [teamId],
   );
 
-  useEffect(() => {
-    void load("initial");
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load("initial");
+    }, [load]),
+  );
 
   const stats = useMemo(() => {
     const completed = today.filter(isCompleted).length;
@@ -137,29 +187,35 @@ export default function TodayScreen() {
   }, [inProgressList]);
 
   function openCheck(item: WalkOccurrence) {
-    if (!isReady(item)) return;
+    const pendingSync = pendingSyncIds.has(item.id);
+    if (!pendingSync && !isReady(item)) return;
     router.push(`/(app)/check/${item.id}`);
   }
 
   function renderRow(item: WalkOccurrence, opts?: { nextUp?: boolean }) {
-    const ready = isReady(item);
-    const badge = badgeFor(item);
+    const pendingSync = pendingSyncIds.has(item.id);
+    const ready = isReady(item) || pendingSync;
+    const badge = badgeFor(item, pendingSyncIds);
     const badgeStyle =
       badge.tone === "pass"
         ? styles.badgePass
         : badge.tone === "fail"
           ? styles.badgeFail
-          : badge.tone === "progress"
-            ? styles.badgeProgress
-            : styles.badgePending;
+          : badge.tone === "sync"
+            ? styles.badgeSync
+            : badge.tone === "progress"
+              ? styles.badgeProgress
+              : styles.badgePending;
     const badgeTextStyle =
       badge.tone === "pass"
         ? styles.badgeTextPass
         : badge.tone === "fail"
           ? styles.badgeTextFail
-          : badge.tone === "progress"
-            ? styles.badgeTextProgress
-            : styles.badgeTextPending;
+          : badge.tone === "sync"
+            ? styles.badgeTextSync
+            : badge.tone === "progress"
+              ? styles.badgeTextProgress
+              : styles.badgeTextPending;
 
     return (
       <Pressable
@@ -167,6 +223,7 @@ export default function TodayScreen() {
         style={({ pressed }) => [
           styles.rowCard,
           opts?.nextUp && styles.nextUpCard,
+          pendingSync && styles.pendingSyncCard,
           pressed && ready && styles.pressed,
         ]}
         onPress={() => openCheck(item)}
@@ -284,6 +341,17 @@ export default function TodayScreen() {
             showsVerticalScrollIndicator={false}
           >
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            {pendingSyncIds.size > 0 ? (
+              <View style={styles.pendingSyncBanner}>
+                <Text style={styles.pendingSyncBannerTitle}>Pending sync</Text>
+                <Text style={styles.pendingSyncBannerBody}>
+                  {pendingSyncIds.size === 1
+                    ? "1 check finished on this device but hasn’t uploaded yet. Tap it to retry."
+                    : `${pendingSyncIds.size} checks finished on this device but haven’t uploaded yet. Tap one to retry.`}
+                </Text>
+              </View>
+            ) : null}
 
             {tab === "in_progress" && nextUp ? (
               <>
@@ -492,6 +560,7 @@ const styles = StyleSheet.create({
   badgeFail: { backgroundColor: colors.failSoft },
   badgeProgress: { backgroundColor: colors.brandSoft },
   badgePending: { backgroundColor: "#F1F4F9" },
+  badgeSync: { backgroundColor: colors.warnSoft },
   badgeText: {
     fontSize: 10,
     fontWeight: "800",
@@ -501,6 +570,30 @@ const styles = StyleSheet.create({
   badgeTextFail: { color: colors.fail },
   badgeTextProgress: { color: colors.brandDark },
   badgeTextPending: { color: colors.muted },
+  badgeTextSync: { color: "#B45309" },
+  pendingSyncCard: {
+    borderColor: colors.warn,
+  },
+  pendingSyncBanner: {
+    backgroundColor: colors.warnSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F6D59A",
+    padding: 12,
+    marginBottom: 14,
+    gap: 4,
+  },
+  pendingSyncBannerTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#B45309",
+  },
+  pendingSyncBannerBody: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.ink,
+    lineHeight: 17,
+  },
   chevron: {
     fontSize: 20,
     color: "#A8B3C5",

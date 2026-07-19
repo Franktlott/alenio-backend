@@ -411,6 +411,21 @@ const submitResponseSchema = z.object({
   photoUrls: z.array(z.string().url()).max(20).optional().nullable(),
 });
 
+const syncRunSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        itemId: z.string().min(1),
+        response: z.unknown(),
+        notes: z.string().max(4000).optional().nullable(),
+        photoUrls: z.array(z.string().url()).max(20).optional().nullable(),
+        correctiveActionIdsCompleted: z.array(z.string().min(1)).max(50).optional(),
+      }),
+    )
+    .max(200),
+  complete: z.boolean().optional(),
+});
+
 // GET published templates (any member can list for running)
 walksRouter.get("/published", async (c) => {
   const teamId = c.req.param("teamId")!;
@@ -535,6 +550,48 @@ walksRouter.post("/runs/:runId/complete", async (c) => {
     return prismaRouteError(c, err, "Failed to complete walk");
   }
 });
+
+walksRouter.post(
+  "/runs/:runId/sync",
+  zValidator("json", syncRunSchema),
+  async (c) => {
+    const teamId = c.req.param("teamId")!;
+    const runId = c.req.param("runId")!;
+    const uid = userId(c);
+    if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+    const gate = await assertCanViewWalks(teamId, uid);
+    if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+    const body = c.req.valid("json");
+    try {
+      const user = c.get("user") as { name?: string | null } | null;
+      const result = await walkRunService.syncWalkRun({
+        teamId,
+        runId,
+        items: body.items,
+        complete: body.complete,
+        completedBy: user?.name ?? uid,
+        actorUserId: uid,
+      });
+      if ("error" in result || !("run" in result)) {
+        const code = "error" in result ? result.error : "SYNC_FAILED";
+        const message =
+          "message" in result && typeof result.message === "string"
+            ? result.message
+            : "Failed to sync walk run";
+        const status =
+          code === "NOT_FOUND" || code === "ITEM_NOT_FOUND"
+            ? 404
+            : code === "RUN_OWNED_BY_OTHER"
+              ? 409
+              : 400;
+        return c.json({ error: { message, code } }, status);
+      }
+      return c.json({ data: result.run });
+    } catch (err) {
+      return prismaRouteError(c, err, "Failed to sync walk run");
+    }
+  },
+);
 
 walksRouter.post(
   "/runs/:runId/items/:itemId/corrective-actions/:actionId/complete",
@@ -1221,9 +1278,15 @@ walksRouter.post(
         isTest: c.req.valid("json").isTest,
       });
       if ("error" in result) {
+        const status =
+          result.error === "NOT_FOUND"
+            ? 404
+            : result.error === "RUN_OWNED_BY_OTHER"
+              ? 409
+              : 400;
         return c.json(
           { error: { message: result.message ?? result.error, code: result.error } },
-          result.error === "NOT_FOUND" ? 404 : 400,
+          status,
         );
       }
       return c.json({ data: result.run }, 201);

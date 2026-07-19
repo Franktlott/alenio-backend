@@ -37,6 +37,13 @@
       "expo-secure-store",
       "expo-dev-client",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Alenio Temps needs photo access for corrective-action evidence.",
+          "cameraPermission": "Alenio Temps needs the camera for corrective-action evidence."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "ios": {

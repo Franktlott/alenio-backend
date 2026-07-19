@@ -22,17 +22,40 @@ import { AppTabHeader } from "../../../components/AppTabHeader";
 import { CheckProbeBar } from "../../../components/check/CheckProbeBar";
 import { CheckCompleteModal } from "../../../components/check/CheckCompleteModal";
 import { FailureProcedurePanel } from "../../../components/check/FailureProcedurePanel";
-import { useSession } from "../../../lib/session-context";
+import * as ImagePicker from "expo-image-picker";
+import { getErrorCode } from "../../../lib/api";
 import {
-  completeCorrectiveAction,
-  completeRun,
+  clearCheckDraft,
+  createEmptyDraft,
+  getCheckDraft,
+  isConflictErrorCode,
+  saveCheckDraft,
+  type CheckDraft,
+  type LocalPhoto,
+  type SyncDraftItem,
+} from "../../../lib/check-draft-store";
+import {
+  clearCachedRun,
+  loadCachedRun,
+  saveCachedRun,
+} from "../../../lib/day-cache";
+import {
+  applyLocalCorrectiveCompletions,
+  applyLocalTemperature,
+  evaluateTemp,
+  resetLocalItem,
+} from "../../../lib/local-run";
+import { useSession } from "../../../lib/session-context";
+import { uploadPendingDraftPhotos } from "../../../lib/sync-photos";
+import {
   flattenRunItems,
   isOpenTempItem,
+  itemAwaitingRetemp,
   itemHasUnstartedProcedure,
   itemNeedsProcedure,
   resetItemCheck,
   startCheckRun,
-  submitTemperature,
+  syncRun,
 } from "../../../lib/temps-api";
 import type {
   TemperatureConfig,
@@ -42,45 +65,6 @@ import type {
 } from "../../../lib/types";
 import { colors } from "../../../lib/theme";
 import { ProbeProvider } from "../../../probe/react";
-
-function boundNumber(value: unknown): number | null {
-  if (value == null || value === "") return null;
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-/** Same pass/fail rules as backend `evaluateTemperature` — null bounds never become 0. */
-function evaluateTemp(
-  value: number,
-  config: TemperatureConfig,
-): { pass: boolean; detail: string } | null {
-  if (!Number.isFinite(value)) return null;
-  const unit = config.unit ?? "F";
-  const min = boundNumber(config.minimumTemperature);
-  const max = boundNumber(config.maximumTemperature);
-  if (config.comparisonType === "BETWEEN") {
-    if (min == null || max == null) return null;
-    const ok = value >= min && value <= max;
-    return {
-      pass: ok,
-      detail: ok ? `Within ${min}–${max}°${unit}` : `Outside ${min}–${max}°${unit}`,
-    };
-  }
-  if (config.comparisonType === "BELOW") {
-    if (max == null) return null;
-    const ok = value <= max;
-    return {
-      pass: ok,
-      detail: ok ? `At or below ${max}°${unit}` : `Above required ${max}°${unit}`,
-    };
-  }
-  if (min == null) return null;
-  const ok = value >= min;
-  return {
-    pass: ok,
-    detail: ok ? `Above required ${min}°${unit}` : `Below required ${min}°${unit}`,
-  };
-}
 
 function IconBackspace() {
   return <Text style={styles.keyText}>⌫</Text>;
@@ -117,6 +101,13 @@ export default function TakeCheckScreen() {
   /** Only show failure-procedure UI after a saved fail (or explicit Continue). */
   const [procedureActive, setProcedureActive] = useState(false);
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [awaitingSync, setAwaitingSync] = useState(false);
+  const [conflictMessage, setConflictMessage] = useState<string | null>(null);
+  const [draftVersion, setDraftVersion] = useState(0);
+  const draftRef = useRef<CheckDraft | null>(null);
+  const syncingRef = useRef(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -136,19 +127,8 @@ export default function TakeCheckScreen() {
     let cancelled = false;
     (async () => {
       if (!teamId || !occurrenceId) return;
-      try {
-        let started = await startCheckRun(teamId, occurrenceId);
-        if (cancelled) return;
 
-        // "Tap to take" should open temperature capture. If a prior fail never
-        // started its procedure (common after leaving mid-check), clear it.
-        for (const item of flattenRunItems(started)) {
-          if (item.type !== "TEMPERATURE" || !itemHasUnstartedProcedure(item)) continue;
-          started = await resetItemCheck(teamId, started.id, item.id);
-          if (cancelled) return;
-        }
-
-        setRun(started);
+      function firstOpenIndex(started: WalkRun) {
         const flat = flattenRunItems(started);
         const firstFresh = flat.findIndex(
           (i) =>
@@ -157,8 +137,91 @@ export default function TakeCheckScreen() {
         );
         const firstOpen =
           firstFresh >= 0 ? firstFresh : flat.findIndex((i) => isOpenTempItem(i));
-        setItemIndex(firstOpen >= 0 ? firstOpen : 0);
+        return firstOpen >= 0 ? firstOpen : 0;
+      }
+
+      async function beginWithRun(started: WalkRun, opts?: { skipServerReset?: boolean }) {
+        let nextRun = started;
+        if (!opts?.skipServerReset) {
+          for (const item of flattenRunItems(nextRun)) {
+            if (item.type !== "TEMPERATURE" || !itemHasUnstartedProcedure(item)) continue;
+            try {
+              nextRun = await resetItemCheck(teamId!, nextRun.id, item.id);
+            } catch {
+              break;
+            }
+            if (cancelled) return;
+          }
+        }
+        const startIndex = firstOpenIndex(nextRun);
+        const draft = createEmptyDraft({
+          occurrenceId: occurrenceId!,
+          teamId: teamId!,
+          run: nextRun,
+          itemIndex: startIndex,
+        });
+        draftRef.current = draft;
+        await saveCheckDraft(draft);
+        await saveCachedRun(teamId!, occurrenceId!, nextRun);
+        if (cancelled) return;
+        setRun(nextRun);
+        setItemIndex(startIndex);
         setProcedureActive(false);
+        setDraftVersion((v) => v + 1);
+      }
+
+      try {
+        const existingDraft = await getCheckDraft(occurrenceId);
+        const cachedRun = await loadCachedRun(teamId, occurrenceId);
+
+        // Resume local draft offline or online (mid-check / pending sync).
+        if (existingDraft && existingDraft.teamId === teamId && !existingDraft.syncedAt) {
+          draftRef.current = existingDraft;
+          setRun(existingDraft.run);
+          setItemIndex(existingDraft.itemIndex);
+          setProcedureActive(false);
+          setDraftVersion((v) => v + 1);
+          if (existingDraft.finishedLocally) {
+            setAwaitingSync(true);
+            setSyncError(existingDraft.lastSyncError);
+            void flushSync();
+          }
+          return;
+        }
+
+        if (existingDraft) await clearCheckDraft(occurrenceId);
+
+        try {
+          let started = await startCheckRun(teamId, occurrenceId);
+          if (cancelled) return;
+          await beginWithRun(started);
+        } catch (err) {
+          if (cancelled) return;
+          const code = getErrorCode(err);
+          const message = err instanceof Error ? err.message : "Could not start check";
+
+          if (isConflictErrorCode(code)) {
+            await clearCheckDraft(occurrenceId);
+            await clearCachedRun(teamId, occurrenceId);
+            setConflictMessage(message);
+            return;
+          }
+
+          if ((code === "NETWORK_ERROR" || code === null) && cachedRun) {
+            await beginWithRun(cachedRun, { skipServerReset: true });
+            return;
+          }
+
+          if (!cachedRun && (code === "NETWORK_ERROR" || /network|offline|fetch/i.test(message))) {
+            setError(
+              "Open this check once while online so it can work offline next time.",
+            );
+            return;
+          }
+
+          setError(message);
+          if (isOutsideWindowError(message)) alertOutsideWindow(message);
+        }
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : "Could not start check";
@@ -172,6 +235,76 @@ export default function TakeCheckScreen() {
       cancelled = true;
     };
   }, [teamId, occurrenceId]);
+
+  async function persistDraft(patch: Partial<CheckDraft> & { run?: WalkRun }) {
+    const prev = draftRef.current;
+    if (!prev) return;
+    const next: CheckDraft = {
+      ...prev,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    draftRef.current = next;
+    await saveCheckDraft(next);
+    setDraftVersion((v) => v + 1);
+  }
+
+  async function flushSync() {
+    const draft = draftRef.current;
+    if (!teamId || !draft) return;
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    setSyncing(true);
+    setAwaitingSync(true);
+    setSyncError(null);
+    setConflictMessage(null);
+    try {
+      const withPhotos = await uploadPendingDraftPhotos(draft);
+      await persistDraft({ syncItems: withPhotos });
+      const completed = await syncRun(
+        teamId,
+        draft.runId,
+        withPhotos.map((item) => ({
+          itemId: item.itemId,
+          response: item.response,
+          photoUrls: item.photoUrls.length > 0 ? item.photoUrls : undefined,
+          correctiveActionIdsCompleted: item.correctiveActionIdsCompleted,
+        })),
+        true,
+      );
+      await clearCheckDraft(draft.occurrenceId);
+      await clearCachedRun(teamId, draft.occurrenceId);
+      draftRef.current = null;
+      setRun(completed);
+      setSyncError(null);
+      setCompleteModalVisible(true);
+    } catch (err) {
+      const code = getErrorCode(err);
+      const message = err instanceof Error ? err.message : "Couldn’t sync results";
+
+      if (isConflictErrorCode(code)) {
+        await clearCheckDraft(draft.occurrenceId);
+        await clearCachedRun(teamId, draft.occurrenceId);
+        draftRef.current = null;
+        setConflictMessage(message);
+        setAwaitingSync(false);
+        return;
+      }
+
+      await persistDraft({
+        finishedLocally: true,
+        lastSyncError: message,
+        lastSyncErrorCode: code,
+        syncedAt: null,
+      });
+      setSyncError(message);
+      setAwaitingSync(true);
+      if (isOutsideWindowError(message)) alertOutsideWindow(message);
+    } finally {
+      syncingRef.current = false;
+      setSyncing(false);
+    }
+  }
 
   const items = useMemo(() => (run ? flattenRunItems(run) : []), [run]);
   const current = items[itemIndex] as WalkRunItem | undefined;
@@ -223,40 +356,47 @@ export default function TakeCheckScreen() {
     return /window has closed|hasn’t opened|has not opened|not available/i.test(message);
   }
 
-  async function advanceAfterSave(next: WalkRun, currentItemId: string) {
+  async function advanceAfterSave(next: WalkRun, currentItemId: string, nextIndex?: number) {
     const flat = flattenRunItems(next);
     const saved = flat.find((i) => i.id === currentItemId);
-    // Only open corrective flow when the server marked NEEDS_ACTION (true fail path).
-    if (saved && saved.response?.status === "NEEDS_ACTION" && itemNeedsProcedure(saved)) {
+    const stayOnProcedure =
+      saved &&
+      saved.response?.status === "NEEDS_ACTION" &&
+      (itemNeedsProcedure(saved) || itemAwaitingRetemp(saved));
+    if (stayOnProcedure) {
       setRun(next);
       setDigits("");
       setEntrySource("manual");
       setProcedureActive(true);
       const idx = flat.findIndex((i) => i.id === currentItemId);
-      if (idx >= 0) setItemIndex(idx);
+      const stayAt = idx >= 0 ? idx : itemIndex;
+      setItemIndex(stayAt);
+      await persistDraft({ run: next, itemIndex: stayAt });
       return;
     }
     setProcedureActive(false);
 
     const remaining = flat.filter((i) => isOpenTempItem(i));
     if (remaining.length === 0 && next.progress.requiredRemaining === 0) {
-      try {
-        const completed = await completeRun(teamId!, next.id);
-        setRun(completed);
-        setCompleteModalVisible(true);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Could not complete check";
-        if (isOutsideWindowError(message)) alertOutsideWindow(message);
-        else Alert.alert("Could not complete", message);
-      }
+      setRun(next);
+      await persistDraft({
+        run: next,
+        finishedLocally: true,
+        lastSyncError: null,
+      });
+      await flushSync();
       return;
     }
 
+    const nextIdx =
+      nextIndex ??
+      flat.findIndex((i) => isOpenTempItem(i));
+    const resolvedIndex = nextIdx >= 0 ? nextIdx : Math.min(itemIndex + 1, flat.length - 1);
     setRun(next);
     setDigits("");
     setEntrySource("manual");
-    const nextIdx = flat.findIndex((i) => isOpenTempItem(i));
-    setItemIndex(nextIdx >= 0 ? nextIdx : Math.min(itemIndex + 1, flat.length - 1));
+    setItemIndex(resolvedIndex);
+    await persistDraft({ run: next, itemIndex: resolvedIndex });
   }
 
   async function submitCurrent(options?: {
@@ -266,7 +406,7 @@ export default function TakeCheckScreen() {
     retestCount?: number;
   }) {
     if (!teamId || !run || !current) return;
-    if (saving) return;
+    if (saving || syncing) return;
     const digitsToSave = options?.digitsOverride ?? digits;
     const valueToSave =
       digitsToSave === "" || digitsToSave === "." ? NaN : Number(digitsToSave);
@@ -283,20 +423,35 @@ export default function TakeCheckScreen() {
     }
     setSaving(true);
     try {
-      const next = await submitTemperature(
-        teamId,
-        run.id,
-        current.id,
-        valueToSave,
+      const retestCount = options?.retestCount ?? 0;
+      const response: SyncDraftItem["response"] = {
+        value: valueToSave,
         unit,
-        sourceToSave,
-        options?.retestCount ?? 0,
-      );
+        source: sourceToSave,
+        ...(retestCount > 0 ? { retestCount } : {}),
+      };
+      const next = applyLocalTemperature(run, current.id, {
+        value: valueToSave,
+        unit,
+        source: sourceToSave,
+        retestCount,
+      });
+      const draft = draftRef.current;
+      const syncItems: SyncDraftItem[] = [
+        ...(draft?.syncItems ?? []),
+        {
+          itemId: current.id,
+          response,
+          correctiveActionIdsCompleted: [],
+          localPhotos: [],
+          photoUrls: [],
+          capturedAt: new Date().toISOString(),
+        },
+      ];
+      await persistDraft({ run: next, syncItems });
       await advanceAfterSave(next, current.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Try again.";
-      if (isOutsideWindowError(message)) alertOutsideWindow(message);
-      else Alert.alert("Could not save", message);
+      Alert.alert("Could not save", err instanceof Error ? err.message : "Try again.");
     } finally {
       setSaving(false);
     }
@@ -304,15 +459,28 @@ export default function TakeCheckScreen() {
 
   async function markAllCorrectiveComplete(phaseActions: WalkRunCorrectiveAction[]) {
     if (!teamId || !run || !current) return;
-    if (saving) return;
+    if (saving || syncing) return;
     const pending = phaseActions.filter((a) => a.status === "PENDING");
     if (pending.length === 0) return;
     setSaving(true);
     try {
-      let next = run;
-      for (const action of pending) {
-        next = await completeCorrectiveAction(teamId, next.id, current.id, action.id);
+      const actionIds = pending.map((a) => a.id);
+      const next = applyLocalCorrectiveCompletions(run, current.id, actionIds);
+      const draft = draftRef.current;
+      const syncItems = [...(draft?.syncItems ?? [])];
+      for (let i = syncItems.length - 1; i >= 0; i--) {
+        if (syncItems[i]!.itemId === current.id) {
+          syncItems[i] = {
+            ...syncItems[i]!,
+            correctiveActionIdsCompleted: [
+              ...syncItems[i]!.correctiveActionIdsCompleted,
+              ...actionIds,
+            ],
+          };
+          break;
+        }
       }
+      await persistDraft({ run: next, syncItems });
       await advanceAfterSave(next, current.id);
     } catch (err) {
       Alert.alert(
@@ -342,18 +510,21 @@ export default function TakeCheckScreen() {
 
   async function restartItem() {
     if (!teamId || !run || !current) return;
-    // Always allow restart — even if a save is in flight (stuck spinner).
     setSaving(true);
     try {
-      const next = await resetItemCheck(teamId, run.id, current.id);
+      const next = resetLocalItem(run, current.id);
+      const draft = draftRef.current;
+      const syncItems = (draft?.syncItems ?? []).filter((s) => s.itemId !== current.id);
+      const flat = flattenRunItems(next);
+      const idx = flat.findIndex((i) => i.id === current.id);
+      const stayAt = idx >= 0 ? idx : itemIndex;
+      await persistDraft({ run: next, syncItems, itemIndex: stayAt, finishedLocally: false });
       setRun(next);
       setDigits("");
       setEntrySource("manual");
       setManualMode(false);
       setProcedureActive(false);
-      const flat = flattenRunItems(next);
-      const idx = flat.findIndex((i) => i.id === current.id);
-      if (idx >= 0) setItemIndex(idx);
+      setItemIndex(stayAt);
     } catch (err) {
       Alert.alert("Could not restart", err instanceof Error ? err.message : "Try again.");
     } finally {
@@ -361,11 +532,121 @@ export default function TakeCheckScreen() {
     }
   }
 
+  async function capturePhotoForAction(actionId: string) {
+    if (!current) return;
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Camera needed", "Allow camera access to attach evidence photos.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.7,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+
+    const photo: LocalPhoto = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      uri: result.assets[0].uri,
+      correctiveActionId: actionId,
+      uploadedUrl: null,
+    };
+
+    const draft = draftRef.current;
+    const syncItems = [...(draft?.syncItems ?? [])];
+    for (let i = syncItems.length - 1; i >= 0; i--) {
+      if (syncItems[i]!.itemId === current.id) {
+        syncItems[i] = {
+          ...syncItems[i]!,
+          localPhotos: [...syncItems[i]!.localPhotos, photo],
+        };
+        break;
+      }
+    }
+    await persistDraft({ syncItems });
+  }
+
+  function photosByActionIdForCurrent(): Record<string, string[]> {
+    void draftVersion;
+    const draft = draftRef.current;
+    if (!draft || !current) return {};
+    const map: Record<string, string[]> = {};
+    for (const item of draft.syncItems) {
+      if (item.itemId !== current.id) continue;
+      for (const photo of item.localPhotos) {
+        if (!photo.correctiveActionId) continue;
+        const list = map[photo.correctiveActionId] ?? [];
+        list.push(photo.uri);
+        map[photo.correctiveActionId] = list;
+      }
+    }
+    return map;
+  }
+
   if (loading) {
     return (
       <View style={[styles.screen, styles.centered]}>
         <ActivityIndicator color={colors.brand} size="large" />
         <Text style={styles.loadingText}>Starting check…</Text>
+      </View>
+    );
+  }
+
+  if (conflictMessage) {
+    return (
+      <View style={[styles.screen, styles.centered, { padding: 24 }]}>
+        <Text style={styles.syncTitle}>Check already finished</Text>
+        <Text style={styles.syncBody}>{conflictMessage}</Text>
+        <Pressable
+          style={[styles.saveBtn, { marginTop: 16, alignSelf: "stretch" }]}
+          onPress={() => router.replace("/(app)/today")}
+        >
+          <Text style={styles.saveBtnText}>Back to Today</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (awaitingSync && run) {
+    return (
+      <View style={[styles.screen, styles.centered, { padding: 24 }]}>
+        {syncing || completeModalVisible ? (
+          <>
+            {!completeModalVisible ? (
+              <>
+                <ActivityIndicator color={colors.brand} size="large" />
+                <Text style={styles.loadingText}>Syncing results…</Text>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Text style={styles.syncTitle}>Couldn’t sync</Text>
+            <Text style={styles.syncBody}>
+              {syncError ?? "Your readings are saved on this device. Retry when you’re back online."}
+            </Text>
+            <Pressable
+              style={[styles.saveBtn, { marginTop: 16, alignSelf: "stretch" }]}
+              onPress={() => void flushSync()}
+            >
+              <Text style={styles.saveBtnText}>Retry sync</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.restartBtn, { marginTop: 12 }]}
+              onPress={() => router.replace("/(app)/today")}
+            >
+              <Text style={styles.restartBtnText}>Back to Today</Text>
+            </Pressable>
+          </>
+        )}
+        <CheckCompleteModal
+          visible={completeModalVisible}
+          onDone={() => {
+            setCompleteModalVisible(false);
+            router.back();
+          }}
+        />
       </View>
     );
   }
@@ -401,20 +682,22 @@ export default function TakeCheckScreen() {
       : null;
   const retestCount =
     typeof responsePayload?.retestCount === "number" ? responsePayload.retestCount : 0;
-  const retempDone = !requireRetest || retestCount >= 1;
+  const maxRetests =
+    typeof config.maximumRetests === "number" && Number.isFinite(config.maximumRetests)
+      ? Math.max(1, Math.floor(config.maximumRetests))
+      : 1;
+  const retempDone = !requireRetest || retestCount >= maxRetests;
+  const awaitingRetemp = itemAwaitingRetemp(current);
   const retempFailed =
     retempDone &&
     (current.response?.status === "NEEDS_ACTION" || current.response?.failed === true) &&
     secondFailure.some((a) => a.status === "PENDING" || a.status === "COMPLETED");
   const hasPendingProcedure = itemNeedsProcedure(current);
-  const awaitingProcedureContinue = hasPendingProcedure && !procedureActive;
-  const inProcedure = hasPendingProcedure && procedureActive;
-  const showRetemp =
-    inProcedure &&
-    Boolean(requireRetest) &&
-    firstFailureDone &&
-    current.response?.status === "NEEDS_ACTION" &&
-    !retempDone;
+  const awaitingProcedureContinue =
+    (hasPendingProcedure || awaitingRetemp) && !procedureActive;
+  const inProcedure =
+    ((hasPendingProcedure || awaitingRetemp) && procedureActive) || awaitingRetemp;
+  const showRetemp = awaitingRetemp && procedureActive;
   const showSecondFailure =
     firstFailureDone &&
     retempDone &&
@@ -484,6 +767,8 @@ export default function TakeCheckScreen() {
               unlocked
               busy={saving}
               failSummary={failSummary}
+              photosByActionId={photosByActionIdForCurrent()}
+              onCapturePhoto={(actionId) => void capturePhotoForAction(actionId)}
               onCompleteAll={() => void markAllCorrectiveComplete(firstFailure)}
             />
           ) : null}
@@ -504,6 +789,8 @@ export default function TakeCheckScreen() {
               unlocked
               busy={saving}
               failSummary={failSummary}
+              photosByActionId={photosByActionIdForCurrent()}
+              onCapturePhoto={(actionId) => void capturePhotoForAction(actionId)}
               onCompleteAll={() => void markAllCorrectiveComplete(secondFailure)}
             />
           ) : null}
@@ -748,6 +1035,20 @@ const styles = StyleSheet.create({
   loadingText: {
     color: colors.mutedOnDark,
     fontWeight: "600",
+  },
+  syncTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: colors.inkOnDark,
+    textAlign: "center",
+  },
+  syncBody: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: colors.mutedOnDark,
+    textAlign: "center",
+    lineHeight: 22,
+    marginTop: 4,
   },
   errorText: {
     color: colors.fail,

@@ -113,6 +113,36 @@ async function assertRunOccurrenceInWindow(
   return assertOccurrenceInWindow(occurrence);
 }
 
+/**
+ * When schedule claimMode is FIRST_START_OWNS, only the associate who started
+ * the run may continue / sync it. SHARED_RESUME allows any teammate.
+ */
+async function assertRunClaimAllowsUser(
+  teamId: string,
+  runId: string,
+  userId: string | null | undefined,
+): Promise<{ ok: true } | { error: "RUN_OWNED_BY_OTHER"; message: string }> {
+  if (!userId) return { ok: true as const };
+  const occurrence = await prisma.walkOccurrence.findFirst({
+    where: { teamId, runId },
+    select: {
+      startedByUserId: true,
+      schedule: { select: { claimMode: true } },
+    },
+  });
+  if (!occurrence) return { ok: true as const };
+  const claimMode = occurrence.schedule?.claimMode ?? "FIRST_START_OWNS";
+  if (claimMode !== "FIRST_START_OWNS") return { ok: true as const };
+  const ownerId = occurrence.startedByUserId;
+  if (ownerId && ownerId !== userId) {
+    return {
+      error: "RUN_OWNED_BY_OTHER" as const,
+      message: "Another associate already started this check on a different device",
+    };
+  }
+  return { ok: true as const };
+}
+
 async function upsertPendingCorrectiveResults(
   db: DbClient,
   itemResponseId: string,
@@ -401,14 +431,34 @@ export async function startWalkRun(input: {
     });
     if (!occurrence) return { error: "NOT_FOUND" as const, message: "Occurrence not found" };
     const windowCheck = assertOccurrenceInWindow(occurrence);
-    if (windowCheck.error) return windowCheck;
+    if ("error" in windowCheck) {
+      return { error: windowCheck.error, message: windowCheck.message };
+    }
     if (occurrence.runId) {
       const existing = await getWalkRun(input.teamId, occurrence.runId);
-      if (existing) return { ok: true as const, run: existing };
+      if (!existing) {
+        // Orphaned runId — fall through to create a new run if status allows.
+      } else if (existing.status !== "IN_PROGRESS") {
+        return {
+          error: "OCCURRENCE_CLOSED" as const,
+          message: "This check was already completed on another device",
+        };
+      } else {
+        const claim = await assertRunClaimAllowsUser(
+          input.teamId,
+          occurrence.runId,
+          input.startedByUserId,
+        );
+        if ("error" in claim) return claim;
+        return { ok: true as const, run: existing };
+      }
     }
     // UPCOMING is blocked by the clock check above; closed statuses stay blocked.
     if (!["AVAILABLE", "IN_PROGRESS"].includes(occurrence.status)) {
-      return { error: "OCCURRENCE_CLOSED" as const, message: "This walk window is not available" };
+      return {
+        error: "OCCURRENCE_CLOSED" as const,
+        message: "This check was already completed or is no longer available",
+      };
     }
   }
 
@@ -607,6 +657,10 @@ export async function submitWalkItemResponse(input: {
     // Retemp failed → open 2nd-failure steps.
     nextStatus = "NEEDS_ACTION";
     failed = true;
+  } else if (runProcedure && isRetest && status === "FAIL") {
+    // Retemp failed with no 2nd-failure steps — close procedure so the run can finish.
+    nextStatus = "RESOLVED";
+    failed = false;
   } else if (runProcedure && failed) {
     nextStatus = "NEEDS_ACTION";
   }
@@ -929,4 +983,110 @@ export async function completeWalkRun(teamId: string, runId: string) {
   });
 
   return { ok: true as const, run: serializeWalkRun(updated) };
+}
+
+export type SyncWalkRunItem = {
+  itemId: string;
+  response: unknown;
+  notes?: string | null;
+  photoUrls?: string[] | null;
+  correctiveActionIdsCompleted?: string[];
+};
+
+/**
+ * Apply a batch of item responses + corrective completions in order, then
+ * optionally complete the run. Used by Alenio Temps local-first floor sync.
+ * The same itemId may appear more than once (e.g. fail → retemp).
+ */
+export async function syncWalkRun(input: {
+  teamId: string;
+  runId: string;
+  items: SyncWalkRunItem[];
+  complete?: boolean;
+  completedBy?: string | null;
+  /** Authenticated user — used for FIRST_START_OWNS claim checks. */
+  actorUserId?: string | null;
+}) {
+  const run = await prisma.walkRun.findFirst({
+    where: { id: input.runId, teamId: input.teamId },
+    select: { id: true, status: true },
+  });
+  if (!run) return { error: "NOT_FOUND" as const, message: "Run not found" };
+  if (run.status !== "IN_PROGRESS") {
+    return {
+      error: "RUN_CLOSED" as const,
+      message: "This check was already completed on another device",
+    };
+  }
+  const claim = await assertRunClaimAllowsUser(
+    input.teamId,
+    input.runId,
+    input.actorUserId,
+  );
+  if ("error" in claim) return claim;
+  const windowCheck = await assertRunOccurrenceInWindow(input.teamId, input.runId);
+  if ("error" in windowCheck) {
+    return { error: windowCheck.error, message: windowCheck.message };
+  }
+
+  let latest = await getWalkRun(input.teamId, input.runId);
+  if (!latest) return { error: "NOT_FOUND" as const, message: "Run not found" };
+
+  for (const entry of input.items) {
+    const submitted = await submitWalkItemResponse({
+      teamId: input.teamId,
+      runId: input.runId,
+      itemId: entry.itemId,
+      response: entry.response,
+      notes: entry.notes,
+      photoUrls: entry.photoUrls,
+      completedBy: input.completedBy,
+    });
+    if (!("run" in submitted) || submitted.run == null) {
+      return {
+        error: "error" in submitted ? submitted.error : ("NOT_FOUND" as const),
+        message:
+          "message" in submitted && typeof submitted.message === "string"
+            ? submitted.message
+            : "Failed to sync item response",
+      };
+    }
+    latest = submitted.run;
+
+    for (const actionId of entry.correctiveActionIdsCompleted ?? []) {
+      const completed = await completeCorrectiveAction({
+        teamId: input.teamId,
+        runId: input.runId,
+        itemId: entry.itemId,
+        correctiveActionId: actionId,
+        completedBy: input.completedBy,
+      });
+      if (!("run" in completed) || completed.run == null) {
+        return {
+          error: "error" in completed ? completed.error : ("NOT_FOUND" as const),
+          message:
+            "message" in completed && typeof completed.message === "string"
+              ? completed.message
+              : "Failed to sync corrective action",
+        };
+      }
+      latest = completed.run;
+    }
+  }
+
+  if (input.complete) {
+    const finished = await completeWalkRun(input.teamId, input.runId);
+    if (!("run" in finished) || finished.run == null) {
+      return {
+        error: "error" in finished ? finished.error : ("NOT_FOUND" as const),
+        message:
+          "message" in finished && typeof finished.message === "string"
+            ? finished.message
+            : "Failed to complete run",
+      };
+    }
+    return { ok: true as const, run: finished.run };
+  }
+
+  return { ok: true as const, run: latest };
 }

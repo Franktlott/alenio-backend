@@ -1,7 +1,24 @@
 import { getBackendUrl } from "./backend-url";
 import { getAccessToken } from "./session";
 
-type ApiError = { error?: { message?: string; code?: string } };
+type ApiErrorBody = { error?: { message?: string; code?: string } };
+
+export class ApiError extends Error {
+  code: string;
+  status: number;
+
+  constructor(message: string, code: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export function getErrorCode(err: unknown): string | null {
+  if (err instanceof ApiError) return err.code;
+  return null;
+}
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAccessToken();
@@ -14,10 +31,24 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   }
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${getBackendUrl()}${path}`, { ...init, headers });
-  const body = (await res.json().catch(() => null)) as (T & ApiError) | null;
+  let res: Response;
+  try {
+    res = await fetch(`${getBackendUrl()}${path}`, { ...init, headers });
+  } catch {
+    throw new ApiError(
+      "You’re offline. Readings stay on this device until you reconnect.",
+      "NETWORK_ERROR",
+      0,
+    );
+  }
+
+  const body = (await res.json().catch(() => null)) as (T & ApiErrorBody) | null;
   if (!res.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${res.status})`);
+    throw new ApiError(
+      body?.error?.message ?? `Request failed (${res.status})`,
+      body?.error?.code ?? "REQUEST_FAILED",
+      res.status,
+    );
   }
   return body as T;
 }
