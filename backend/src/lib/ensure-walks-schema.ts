@@ -222,18 +222,45 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
       );
     `,
     );
-    await execStep(
-      prisma,
-      steps,
-      "WalkItemResponse_uq",
-      `CREATE UNIQUE INDEX IF NOT EXISTS "WalkItemResponse_runId_itemId_key" ON public."WalkItemResponse"("runId", "itemId")`,
-    );
-    await execStep(
-      prisma,
-      steps,
-      "WalkItemResponse_idx",
-      `CREATE INDEX IF NOT EXISTS "WalkItemResponse_runId_idx" ON public."WalkItemResponse"("runId")`,
-    );
+    // Older DBs may have WalkItemResponse without itemId — CREATE TABLE IF NOT EXISTS won't add it.
+    const responseAlters: Array<[string, string]> = [
+      ["WalkItemResponse.itemId", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "itemId" TEXT`],
+      ["WalkItemResponse.itemType", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "itemType" TEXT`],
+      ["WalkItemResponse.status", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'NOT_STARTED'`],
+      ["WalkItemResponse.response", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "response" JSONB`],
+      ["WalkItemResponse.failed", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "failed" BOOLEAN NOT NULL DEFAULT false`],
+      ["WalkItemResponse.notes", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "notes" TEXT`],
+      ["WalkItemResponse.photoUrls", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "photoUrls" JSONB`],
+      ["WalkItemResponse.completedBy", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "completedBy" TEXT`],
+      ["WalkItemResponse.completedAt", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3)`],
+    ];
+    for (const [label, sql] of responseAlters) {
+      try {
+        await execStep(prisma, steps, label, sql);
+      } catch (err) {
+        console.warn(`[startup] ensureWalksSchema alter skipped (${label}):`, err);
+      }
+    }
+    try {
+      await execStep(
+        prisma,
+        steps,
+        "WalkItemResponse_uq",
+        `CREATE UNIQUE INDEX IF NOT EXISTS "WalkItemResponse_runId_itemId_key" ON public."WalkItemResponse"("runId", "itemId")`,
+      );
+    } catch (err) {
+      console.warn("[startup] ensureWalksSchema index skipped (WalkItemResponse_uq):", err);
+    }
+    try {
+      await execStep(
+        prisma,
+        steps,
+        "WalkItemResponse_idx",
+        `CREATE INDEX IF NOT EXISTS "WalkItemResponse_runId_idx" ON public."WalkItemResponse"("runId")`,
+      );
+    } catch (err) {
+      console.warn("[startup] ensureWalksSchema index skipped (WalkItemResponse_idx):", err);
+    }
 
     await execStep(
       prisma,
@@ -256,12 +283,26 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
       );
     `,
     );
-    await execStep(
-      prisma,
-      steps,
-      "WalkCorrectiveAction_idx",
-      `CREATE INDEX IF NOT EXISTS "WalkCorrectiveAction_itemId_idx" ON public."WalkCorrectiveAction"("itemId")`,
-    );
+    // Only index legacy itemId when that column exists (library schema may already own this table).
+    try {
+      const caCols = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'WalkCorrectiveAction'
+      `);
+      const caNames = new Set(caCols.map((c) => c.column_name));
+      if (caNames.has("itemId")) {
+        await execStep(
+          prisma,
+          steps,
+          "WalkCorrectiveAction_idx",
+          `CREATE INDEX IF NOT EXISTS "WalkCorrectiveAction_itemId_idx" ON public."WalkCorrectiveAction"("itemId")`,
+        );
+      } else {
+        steps.push("WalkCorrectiveAction_idx_skipped");
+      }
+    } catch (err) {
+      console.warn("[startup] ensureWalksSchema index skipped (WalkCorrectiveAction_idx):", err);
+    }
 
     await execStep(
       prisma,

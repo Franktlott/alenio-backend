@@ -178,13 +178,16 @@ export async function ensureWalksLibrarySchema(prisma: PrismaClient): Promise<vo
     ADD COLUMN IF NOT EXISTS "intervalMinutes" INTEGER;
   `);
 
-  // Recreate corrective actions table for library-version ownership when still on legacy shape.
+  // Recreate corrective actions table for library-version ownership when still on legacy shape,
+  // or when the table exists but is missing libraryItemVersionId (partial/migrated DBs).
   const caCols = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(`
     SELECT column_name FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'WalkCorrectiveAction'
   `);
   const names = new Set(caCols.map((c) => c.column_name));
-  if (names.has("itemId") && !names.has("libraryItemVersionId")) {
+  const needsCorrectiveRebuild =
+    names.size > 0 && (names.has("itemId") || !names.has("libraryItemVersionId"));
+  if (needsCorrectiveRebuild && !names.has("libraryItemVersionId")) {
     await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS public."WalkCorrectiveActionResult" CASCADE`);
     await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS public."WalkCorrectiveAction" CASCADE`);
   }
@@ -205,6 +208,10 @@ export async function ensureWalksLibrarySchema(prisma: PrismaClient): Promise<vo
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "WalkCorrectiveAction_pkey" PRIMARY KEY ("id")
     );
+  `);
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE public."WalkCorrectiveAction"
+    ADD COLUMN IF NOT EXISTS "libraryItemVersionId" TEXT;
   `);
   await prisma.$executeRawUnsafe(`
     ALTER TABLE public."WalkCorrectiveAction"
