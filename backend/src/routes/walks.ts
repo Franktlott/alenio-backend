@@ -409,6 +409,8 @@ const submitResponseSchema = z.object({
   response: z.unknown(),
   notes: z.string().max(4000).optional().nullable(),
   photoUrls: z.array(z.string().url()).max(20).optional().nullable(),
+  /** Alenio Go / admin manual entry — save pass/fail without failure-procedure gating. */
+  skipFailureProcedure: z.boolean().optional(),
 });
 
 const syncRunSchema = z.object({
@@ -514,6 +516,7 @@ walksRouter.patch(
         notes: body.notes,
         photoUrls: body.photoUrls,
         completedBy: user?.name ?? uid,
+        skipFailureProcedure: body.skipFailureProcedure,
       });
       if ("error" in result) {
         const status = result.error === "NOT_FOUND" || result.error === "ITEM_NOT_FOUND" ? 404 : 400;

@@ -1,5 +1,5 @@
 import { apiDeleteJson, apiGetJson, apiPatchJson, apiPostJson, apiPutJson } from "../api";
-import type { WalkItemType } from "./types";
+import type { WalkItemType, WalkRun } from "./types";
 
 export type WalkLibraryItem = {
   id: string;
@@ -230,18 +230,57 @@ export type WalkRunListItem = {
     id: string;
     type: string;
     title: string;
+    position?: number;
     response: {
       id: string;
       status: string;
       failed: boolean;
       notes: string | null;
-      correctiveActions?: Array<{ id: string; status: string }>;
+      response?: unknown;
+      correctiveActions?: Array<{ id: string; title?: string; status: string }>;
     } | null;
   }>;
 };
 
 export function fetchWalkRuns(teamId: string) {
   return apiGetJson<{ data: WalkRunListItem[] }>(`${base(teamId)}/runs`).then((r) => r.data);
+}
+
+export function fetchWalkRun(teamId: string, runId: string) {
+  return apiGetJson<{ data: WalkRun }>(
+    `${base(teamId)}/runs/${encodeURIComponent(runId)}`,
+  ).then((r) => r.data);
+}
+
+export function startOccurrenceRun(teamId: string, occurrenceId: string) {
+  return apiPostJson<{ data: WalkRun }>(
+    `${base(teamId)}/occurrences/${encodeURIComponent(occurrenceId)}/runs`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function submitWalkItemResponse(
+  teamId: string,
+  runId: string,
+  itemId: string,
+  body: {
+    response: unknown;
+    notes?: string | null;
+    photoUrls?: string[] | null;
+    skipFailureProcedure?: boolean;
+  },
+) {
+  return apiPatchJson<{ data: WalkRun }>(
+    `${base(teamId)}/runs/${encodeURIComponent(runId)}/items/${encodeURIComponent(itemId)}`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function completeWalkRun(teamId: string, runId: string) {
+  return apiPostJson<{ data: WalkRun }>(
+    `${base(teamId)}/runs/${encodeURIComponent(runId)}/complete`,
+    {},
+  ).then((r) => r.data);
 }
 
 export type WalkReportingSummary = {

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import { ExecCenterCompleteModal } from "../../components/alenio-go/ExecCenterCompleteModal";
+import { ExecCenterResultsModal } from "../../components/alenio-go/ExecCenterResultsModal";
 import {
   fetchWalkOccurrences,
   fetchWalkReporting,
@@ -349,6 +351,18 @@ export function TempsDashboardPage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(1);
   const [statusKeyOpen, setStatusKeyOpen] = useState(false);
+  const [resultsRow, setResultsRow] = useState<DashboardRow | null>(null);
+  const [completeRow, setCompleteRow] = useState<DashboardRow | null>(null);
+
+  function openChecklistRow(row: DashboardRow) {
+    if (row.status === "complete") {
+      setCompleteRow(null);
+      setResultsRow(row);
+      return;
+    }
+    setResultsRow(null);
+    setCompleteRow(row);
+  }
 
   const load = useCallback(async () => {
     if (!teamId) return;
@@ -762,6 +776,7 @@ export function TempsDashboardPage() {
                       rows={group.rows}
                       selected={selected}
                       onToggleRow={toggleRow}
+                      onOpenChecklist={openChecklistRow}
                       onOpenWalk={(templateId) => navigate(`/go/temp-checks/walks/${templateId}`)}
                     />
                   );
@@ -770,6 +785,24 @@ export function TempsDashboardPage() {
             </tbody>
           </table>
         </div>
+        {resultsRow && teamId ? (
+          <ExecCenterResultsModal
+            teamId={teamId}
+            occurrence={resultsRow.occurrence}
+            statusLabel={resultsRow.statusLabel}
+            onClose={() => setResultsRow(null)}
+          />
+        ) : null}
+        {completeRow && teamId ? (
+          <ExecCenterCompleteModal
+            teamId={teamId}
+            occurrence={completeRow.occurrence}
+            onClose={() => setCompleteRow(null)}
+            onCompleted={() => {
+              void load();
+            }}
+          />
+        ) : null}
         <footer className="exec-center-pager">
           <span>
             Showing {showingFrom}–{showingTo} of {filtered.length} checklists
@@ -809,6 +842,7 @@ function FragmentGroup({
   rows,
   selected,
   onToggleRow,
+  onOpenChecklist,
   onOpenWalk,
 }: {
   groupKey: string;
@@ -820,6 +854,7 @@ function FragmentGroup({
   rows: DashboardRow[];
   selected: Record<string, boolean>;
   onToggleRow: (id: string) => void;
+  onOpenChecklist: (row: DashboardRow) => void;
   onOpenWalk: (templateId: string) => void;
 }) {
   return (
@@ -851,7 +886,7 @@ function FragmentGroup({
                 <button
                   type="button"
                   className="exec-center-checklist"
-                  onClick={() => onOpenWalk(row.occurrence.templateId)}
+                  onClick={() => onOpenChecklist(row)}
                 >
                   <span className="exec-center-checklist-ico" aria-hidden>
                     <IconChecklist />
@@ -884,9 +919,8 @@ function FragmentGroup({
                 <button
                   type="button"
                   className="exec-center-icon-btn"
-                  disabled={!row.run}
-                  aria-label="View results"
-                  onClick={() => onOpenWalk(row.occurrence.templateId)}
+                  aria-label={row.status === "complete" ? "View results" : "Complete checklist"}
+                  onClick={() => onOpenChecklist(row)}
                 >
                   <IconResults />
                 </button>
@@ -907,9 +941,10 @@ function FragmentGroup({
                 <button
                   type="button"
                   className="exec-center-icon-btn"
-                  disabled={!row.hasNotes}
+                  disabled={!row.hasNotes && row.status !== "complete"}
                   aria-label="Comments"
                   title={row.hasNotes ? "Has notes" : "No comments"}
+                  onClick={() => onOpenChecklist(row)}
                 >
                   <IconComment />
                 </button>
@@ -918,7 +953,7 @@ function FragmentGroup({
                 <button
                   type="button"
                   className="exec-center-icon-btn"
-                  aria-label="More actions"
+                  aria-label="Open checklist settings"
                   onClick={() => onOpenWalk(row.occurrence.templateId)}
                 >
                   <IconMore />
