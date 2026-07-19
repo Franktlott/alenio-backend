@@ -97,6 +97,22 @@ function zonedLocalToUtc(
   return new Date(guess);
 }
 
+/** Pure helper for INTERVAL materialization (unit-tested). */
+export function intervalStartMinutesForDay(input: {
+  intervalMinutes: number | null | undefined;
+  dayStartMinutes: number;
+  dayEndMinutes: number;
+}): number[] {
+  const intervalMinutes = Math.max(15, input.intervalMinutes ?? 240);
+  let endBound = input.dayEndMinutes;
+  if (endBound === input.dayStartMinutes) endBound = 1439;
+  const starts: number[] = [];
+  for (let startMin = input.dayStartMinutes; startMin < endBound; startMin += intervalMinutes) {
+    starts.push(startMin);
+  }
+  return starts;
+}
+
 export async function listSchedules(teamId: string, templateId?: string) {
   const schedules = await prisma.walkSchedule.findMany({
     where: {
@@ -129,6 +145,7 @@ export async function createSchedule(input: {
   timezone?: string;
   recurrence?: string;
   daysOfWeek?: number[] | null;
+  intervalMinutes?: number | null;
   effectiveFrom?: Date;
   effectiveTo?: Date | null;
   assignScope?: string;
@@ -143,17 +160,27 @@ export async function createSchedule(input: {
   windows: Array<{ startMinutes: number; dueMinutes: number; graceMinutes?: number }>;
 }) {
   const template = await prisma.walkTemplate.findFirst({
-    where: { id: input.templateId, teamId: input.teamId, status: "PUBLISHED" },
+    where: { id: input.templateId, teamId: input.teamId, status: { in: ["DRAFT", "PUBLISHED"] } },
   });
-  if (!template) return { error: "NOT_FOUND" as const, message: "Published walk required" };
+  if (!template) return { error: "NOT_FOUND" as const, message: "Walk not found" };
   if (!input.windows.length) {
     return { error: "VALIDATION" as const, message: "Add at least one time window" };
   }
+  if (
+    input.recurrence === "INTERVAL" &&
+    input.intervalMinutes != null &&
+    input.intervalMinutes < 15
+  ) {
+    return { error: "VALIDATION" as const, message: "intervalMinutes must be at least 15" };
+  }
 
-  const latestVersion = await prisma.walkTemplateVersion.findFirst({
-    where: { templateId: template.id },
-    orderBy: { version: "desc" },
-  });
+  const latestVersion =
+    template.status === "PUBLISHED"
+      ? await prisma.walkTemplateVersion.findFirst({
+          where: { templateId: template.id },
+          orderBy: { version: "desc" },
+        })
+      : null;
 
   const timezone = input.timezone ?? "America/New_York";
   const schedule = await prisma.walkSchedule.create({
@@ -164,6 +191,7 @@ export async function createSchedule(input: {
       timezone,
       recurrence: input.recurrence ?? "DAILY",
       daysOfWeek: (input.daysOfWeek ?? undefined) as Prisma.InputJsonValue | undefined,
+      intervalMinutes: input.intervalMinutes ?? null,
       // Start of local day so creating a schedule mid-window still opens today's check.
       effectiveFrom: input.effectiveFrom ?? startOfZonedDay(new Date(), timezone),
       effectiveTo: input.effectiveTo ?? null,
@@ -188,7 +216,9 @@ export async function createSchedule(input: {
     include: { windows: { orderBy: { sortOrder: "asc" } } },
   });
 
-  await materializeOccurrencesForSchedule(schedule.id, 14);
+  if (template.status === "PUBLISHED" && schedule.isActive) {
+    await materializeOccurrencesForSchedule(schedule.id, 14);
+  }
   return { ok: true as const, schedule };
 }
 
@@ -207,6 +237,7 @@ export async function updateSchedule(
     timezone?: string;
     recurrence?: string;
     daysOfWeek?: number[] | null;
+    intervalMinutes?: number | null;
     effectiveFrom?: Date;
     effectiveTo?: Date | null;
     assignScope?: string;
@@ -242,6 +273,7 @@ export async function updateSchedule(
         ...(input.daysOfWeek !== undefined
           ? { daysOfWeek: (input.daysOfWeek ?? undefined) as Prisma.InputJsonValue | undefined }
           : {}),
+        ...(input.intervalMinutes !== undefined ? { intervalMinutes: input.intervalMinutes } : {}),
         ...(input.effectiveFrom !== undefined ? { effectiveFrom: input.effectiveFrom } : {}),
         ...(input.effectiveTo !== undefined ? { effectiveTo: input.effectiveTo } : {}),
         ...(input.assignScope !== undefined ? { assignScope: input.assignScope } : {}),
@@ -281,9 +313,14 @@ export async function updateSchedule(
     });
   });
 
-  if (schedule.isActive) {
+  const template = await prisma.walkTemplate.findFirst({
+    where: { id: schedule.templateId, teamId },
+    select: { id: true, name: true, status: true },
+  });
+
+  if (schedule.isActive && template?.status === "PUBLISHED") {
     await materializeOccurrencesForSchedule(schedule.id, 14);
-  } else {
+  } else if (!schedule.isActive) {
     // Pause: cancel future open occurrences so Temps stops offering them.
     await prisma.walkOccurrence.updateMany({
       where: {
@@ -294,11 +331,6 @@ export async function updateSchedule(
       data: { status: "CANCELLED" },
     });
   }
-
-  const template = await prisma.walkTemplate.findFirst({
-    where: { id: schedule.templateId, teamId },
-    select: { id: true, name: true, status: true },
-  });
 
   return {
     ok: true as const,
@@ -322,10 +354,11 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
     where: { id: scheduleId, isActive: true },
     include: {
       windows: { orderBy: { sortOrder: "asc" } },
-      template: { select: { teamId: true, id: true } },
+      template: { select: { teamId: true, id: true, status: true } },
     },
   });
   if (!schedule || !schedule.windows.length) return { created: 0 };
+  if (schedule.template.status !== "PUBLISHED") return { created: 0 };
 
   let templateVersionId = schedule.templateVersionId;
   if (!templateVersionId) {
@@ -344,12 +377,109 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
   const rangeEnd = new Date(rangeStart.getTime() + (daysAhead + 2) * 86_400_000);
   const expectedStarts: Date[] = [];
 
+  const upsertOccurrence = async (opts: {
+    windowStart: Date;
+    dueAt: Date;
+    graceEndsAt: Date;
+    scheduleWindowId: string;
+  }) => {
+    const { windowStart, dueAt, graceEndsAt, scheduleWindowId } = opts;
+    if (graceEndsAt < schedule.effectiveFrom) return;
+    if (schedule.effectiveTo && windowStart > schedule.effectiveTo) return;
+
+    expectedStarts.push(windowStart);
+    const status = now < windowStart ? "UPCOMING" : now <= graceEndsAt ? "AVAILABLE" : "MISSED";
+
+    const existing = await prisma.walkOccurrence.findUnique({
+      where: {
+        scheduleId_windowStart: { scheduleId, windowStart },
+      },
+    });
+
+    if (existing) {
+      if (!existing.runId) {
+        await prisma.walkOccurrence.update({
+          where: { id: existing.id },
+          data: {
+            dueAt,
+            graceEndsAt,
+            status,
+            scheduleWindowId,
+            templateVersionId,
+            assignScope: schedule.assignScope,
+            assignRole: schedule.assignRole,
+          },
+        });
+      }
+      return;
+    }
+
+    try {
+      await prisma.walkOccurrence.create({
+        data: {
+          teamId: schedule.template.teamId,
+          scheduleId: schedule.id,
+          scheduleWindowId,
+          templateId: schedule.templateId,
+          templateVersionId,
+          windowStart,
+          dueAt,
+          graceEndsAt,
+          status,
+          assignScope: schedule.assignScope,
+          assignRole: schedule.assignRole,
+          assignUserIds: schedule.assignUserIds ?? undefined,
+        },
+      });
+      created += 1;
+    } catch (err) {
+      console.warn("walk occurrence create skipped", scheduleId, err);
+    }
+  };
+
   for (let offset = 0; offset <= daysAhead; offset++) {
     // Step by calendar day in the schedule timezone (not raw UTC+24h).
     const dayProbe = new Date(rangeStart.getTime() + offset * 86_400_000 + 12 * 3_600_000);
     const parts = localDateParts(dayProbe, schedule.timezone);
-    if (schedule.recurrence === "WEEKLY" && days && !days.includes(parts.weekday)) continue;
+    if (
+      (schedule.recurrence === "WEEKLY" || schedule.recurrence === "INTERVAL") &&
+      days &&
+      !days.includes(parts.weekday)
+    ) {
+      continue;
+    }
     if (schedule.recurrence === "ONCE" && offset > 0) continue;
+
+    if (schedule.recurrence === "INTERVAL") {
+      const intervalMinutes = Math.max(15, schedule.intervalMinutes ?? 240);
+      const window = schedule.windows[0]!;
+      const windowDuration = window.dueMinutes - window.startMinutes;
+      const dueSpanMinutes = windowDuration <= 0 ? intervalMinutes : windowDuration;
+      const starts = intervalStartMinutesForDay({
+        intervalMinutes: schedule.intervalMinutes,
+        dayStartMinutes: window.startMinutes,
+        dayEndMinutes: window.dueMinutes,
+      });
+
+      for (const startMin of starts) {
+        const windowStart = zonedLocalToUtc(
+          parts.year,
+          parts.month,
+          parts.day,
+          startMin,
+          schedule.timezone,
+        );
+        const dueAt = new Date(windowStart.getTime() + dueSpanMinutes * 60_000);
+        const graceEndsAt = new Date(dueAt.getTime() + window.graceMinutes * 60_000);
+        await upsertOccurrence({
+          windowStart,
+          dueAt,
+          graceEndsAt,
+          scheduleWindowId: window.id,
+        });
+      }
+      continue;
+    }
 
     for (const window of schedule.windows) {
       const windowStart = zonedLocalToUtc(
@@ -372,58 +502,12 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
       }
       const graceEndsAt = new Date(dueAt.getTime() + window.graceMinutes * 60_000);
 
-      // Skip only if the whole window ended before the schedule became effective.
-      if (graceEndsAt < schedule.effectiveFrom) continue;
-      if (schedule.effectiveTo && windowStart > schedule.effectiveTo) continue;
-
-      expectedStarts.push(windowStart);
-      const status = now < windowStart ? "UPCOMING" : now <= graceEndsAt ? "AVAILABLE" : "MISSED";
-
-      const existing = await prisma.walkOccurrence.findUnique({
-        where: {
-          scheduleId_windowStart: { scheduleId, windowStart },
-        },
+      await upsertOccurrence({
+        windowStart,
+        dueAt,
+        graceEndsAt,
+        scheduleWindowId: window.id,
       });
-
-      if (existing) {
-        if (!existing.runId) {
-          await prisma.walkOccurrence.update({
-            where: { id: existing.id },
-            data: {
-              dueAt,
-              graceEndsAt,
-              status,
-              scheduleWindowId: window.id,
-              templateVersionId,
-              assignScope: schedule.assignScope,
-              assignRole: schedule.assignRole,
-            },
-          });
-        }
-        continue;
-      }
-
-      try {
-        await prisma.walkOccurrence.create({
-          data: {
-            teamId: schedule.template.teamId,
-            scheduleId: schedule.id,
-            scheduleWindowId: window.id,
-            templateId: schedule.templateId,
-            templateVersionId,
-            windowStart,
-            dueAt,
-            graceEndsAt,
-            status,
-            assignScope: schedule.assignScope,
-            assignRole: schedule.assignRole,
-            assignUserIds: schedule.assignUserIds ?? undefined,
-          },
-        });
-        created += 1;
-      } catch (err) {
-        console.warn("walk occurrence create skipped", scheduleId, err);
-      }
     }
   }
 
@@ -451,7 +535,10 @@ export async function materializeAllActiveSchedules(daysAhead = 14, teamId?: str
   const schedules = await prisma.walkSchedule.findMany({
     where: {
       isActive: true,
-      ...(teamId ? { template: { teamId } } : {}),
+      template: {
+        status: "PUBLISHED",
+        ...(teamId ? { teamId } : {}),
+      },
     },
     select: { id: true },
   });

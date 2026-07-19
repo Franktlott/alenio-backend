@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 function IconOverview() {
@@ -18,15 +18,6 @@ function IconChecks() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
       <path d="M9 11l3 3L22 4" />
       <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-    </svg>
-  );
-}
-
-function IconSchedule() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
     </svg>
   );
 }
@@ -68,6 +59,15 @@ function IconWalks() {
   );
 }
 
+function IconSchedule() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  );
+}
+
 function IconSettings() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
@@ -85,14 +85,6 @@ function IconAudit() {
   );
 }
 
-function IconTemp() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
-    </svg>
-  );
-}
-
 function IconChat() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
@@ -101,10 +93,10 @@ function IconChat() {
   );
 }
 
-function IconCollapse() {
+function IconSwitch() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M15 18l-6-6 6-6" />
+      <path d="M16 3h5v5M8 21H3v-5M21 3l-7 7M3 21l7-7" />
     </svg>
   );
 }
@@ -115,16 +107,18 @@ function NavItem({
   icon,
   children,
   soon,
-  sub,
+  matchPrefix,
 }: {
   to: string;
   end?: boolean;
   icon?: ReactNode;
   children: ReactNode;
   soon?: boolean;
-  sub?: boolean;
+  /** Highlight for nested routes (e.g. walks detail/builder) */
+  matchPrefix?: string;
 }) {
-  const className = `temps-nav-link${sub ? " temps-nav-link--sub" : ""}${soon ? " temps-nav-link--soon" : ""}`;
+  const location = useLocation();
+  const className = `temps-nav-link${soon ? " temps-nav-link--soon" : ""}`;
   const body = (
     <>
       {icon ? <span className="temps-nav-ico">{icon}</span> : null}
@@ -138,77 +132,93 @@ function NavItem({
       </span>
     );
   }
+  const prefixed =
+    matchPrefix != null &&
+    (location.pathname === matchPrefix || location.pathname.startsWith(`${matchPrefix}/`));
   return (
     <NavLink
       to={to}
       end={end}
-      className={({ isActive }) => `${className}${isActive ? " is-active" : ""}`}
+      className={({ isActive }) => `${className}${isActive || prefixed ? " is-active" : ""}`}
     >
       {body}
     </NavLink>
   );
 }
 
+function initials(name: string | null | undefined) {
+  const parts = (name ?? "A").trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]![0]!}${parts[1]![0]!}`.toUpperCase();
+  return (parts[0] ?? "A").slice(0, 2).toUpperCase();
+}
+
 export function TempsModuleLayout() {
   const goShell = useAlenioGoShell();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [navOpen, setNavOpen] = useState(false);
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.pathname]);
 
   return (
-    <div className="temps-module" data-testid="temps-module-shell">
-      <aside className="temps-nav" aria-label="Alenio Temps navigation">
-        <div className="temps-nav-brand">
-          <img src="/icon.png" alt="" width={28} height={28} />
-          <strong>Alenio</strong>
-        </div>
+    <div className={`temps-module${navOpen ? " temps-module--nav-open" : ""}`} data-testid="temps-module-shell">
+      {navOpen ? (
+        <button
+          type="button"
+          className="temps-nav-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setNavOpen(false)}
+        />
+      ) : null}
 
-        <button type="button" className="temps-nav-product" aria-label="Product">
-          <span className="temps-nav-product-ico">
-            <IconTemp />
-          </span>
-          <span className="temps-nav-product-copy">
-            <em>Alenio Temps</em>
-            <small>{goShell.teamName}</small>
-          </span>
-          <span className="temps-nav-caret" aria-hidden>
-            ▾
-          </span>
+      <aside className="temps-nav" id="temps-nav-drawer" aria-label="Alenio Temps navigation">
+        <button
+          type="button"
+          className="temps-nav-logo"
+          aria-label="Back to Alenio Go"
+          onClick={() => navigate("/go")}
+        >
+          <img src="/aleniotemps.png" alt="Alenio Temps" width={588} height={156} />
         </button>
 
         <nav className="temps-nav-scroll">
-          <div className="temps-nav-group">
+          <div className="temps-nav-section">
+            <p className="temps-nav-section-label">Overview</p>
             <NavItem to="/go/temp-checks/overview" icon={<IconOverview />} soon>
-              Overview
+              Dashboard
             </NavItem>
             <NavItem to="/go/temp-checks/today" icon={<IconChecks />} soon>
               Today&apos;s Checks
             </NavItem>
+          </div>
+
+          <div className="temps-nav-section">
+            <p className="temps-nav-section-label">Build</p>
+            <NavItem to="/go/temp-checks/library" matchPrefix="/go/temp-checks/library" icon={<IconLibrary />}>
+              Item Library
+            </NavItem>
+            <NavItem to="/go/temp-checks/walks" matchPrefix="/go/temp-checks/walks" icon={<IconWalks />}>
+              Walks
+            </NavItem>
             <NavItem to="/go/temp-checks/schedule" icon={<IconSchedule />}>
-              Schedule
-            </NavItem>
-            <NavItem to="/go/temp-checks/results" icon={<IconResults />} soon>
-              Results
-            </NavItem>
-            <NavItem to="/go/devices" icon={<IconDevices />}>
-              Devices
+              Schedules
             </NavItem>
           </div>
 
           <div className="temps-nav-section">
-            <p className="temps-nav-section-label">Items</p>
-            <NavItem to="/go/temp-checks/library" end icon={<IconLibrary />}>
-              Item Library
+            <p className="temps-nav-section-label">Monitor</p>
+            <NavItem to="/go/temp-checks/results" icon={<IconResults />} soon>
+              Results
             </NavItem>
-            <NavItem to="/go/temp-checks/walks" icon={<IconWalks />}>
-              Walks
+          </div>
+
+          <div className="temps-nav-section">
+            <p className="temps-nav-section-label">Hardware</p>
+            <NavItem to="/go/devices" icon={<IconDevices />}>
+              Devices
             </NavItem>
-            <div className="temps-nav-sub">
-              <NavItem to="/go/temp-checks/categories" sub soon>
-                Categories
-              </NavItem>
-              <NavItem to="/go/temp-checks/tags" sub soon>
-                Tags
-              </NavItem>
-            </div>
           </div>
 
           <div className="temps-nav-section">
@@ -224,7 +234,10 @@ export function TempsModuleLayout() {
 
         <div className="temps-nav-footer">
           <div className="temps-nav-help">
-            <p>Need help?</p>
+            <div className="temps-nav-help-top">
+              <p>Need help?</p>
+              <small>Our AI support assistant</small>
+            </div>
             <button type="button" className="temps-nav-seneca">
               <IconChat />
               Ask Seneca
@@ -232,17 +245,39 @@ export function TempsModuleLayout() {
           </div>
           <button
             type="button"
-            className="temps-nav-collapse"
+            className="temps-nav-user"
             onClick={() => navigate("/go")}
-            aria-label="Back to Alenio Go"
+            aria-label="Switch product or workspace"
           >
-            <IconCollapse />
-            Back to Go
+            <span className="temps-nav-avatar" aria-hidden>
+              {initials(goShell.userName)}
+            </span>
+            <span className="temps-nav-user-copy">
+              <strong>{goShell.userName ?? "Leader"}</strong>
+              <small>{goShell.teamName}</small>
+            </span>
+            <span className="temps-nav-user-switch" aria-hidden>
+              <IconSwitch />
+            </span>
           </button>
         </div>
       </aside>
 
       <div className="temps-module-main">
+        <div className="temps-mobile-bar">
+          <button
+            type="button"
+            className="temps-mobile-menu"
+            aria-expanded={navOpen}
+            aria-controls="temps-nav-drawer"
+            onClick={() => setNavOpen((open) => !open)}
+          >
+            Menu
+          </button>
+          <span className="temps-mobile-bar-title">
+            Alenio <em>Temps</em>
+          </span>
+        </div>
         <Outlet context={goShell} />
       </div>
     </div>

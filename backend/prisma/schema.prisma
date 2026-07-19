@@ -1025,6 +1025,7 @@ model WalkSchedule {
   timezone                 String    @default("America/New_York")
   recurrence               String    @default("DAILY")
   daysOfWeek               Json?
+  intervalMinutes          Int?
   effectiveFrom            DateTime  @default(now())
   effectiveTo              DateTime?
   assignScope              String    @default("WORKSPACE")

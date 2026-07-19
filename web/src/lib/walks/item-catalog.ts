@@ -25,13 +25,6 @@ export const WALK_PALETTE_CARDS: WalkPaletteCard[] = [
     phase2: true,
   },
   {
-    type: "MULTIPLE_CHOICE",
-    label: "Multiple Choice",
-    description: "Choose from predefined options.",
-    icon: "choice",
-    phase2: true,
-  },
-  {
     type: "VISUAL_CHECK",
     label: "Visual Check",
     description: "Look and confirm condition.",

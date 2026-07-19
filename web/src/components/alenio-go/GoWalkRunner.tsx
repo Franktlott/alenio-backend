@@ -12,6 +12,7 @@ import { getTemperatureProbeAdapter } from "../../lib/walks/temperature-probe";
 import type {
   WalkOccurrenceListItem,
   WalkRun,
+  WalkRunCorrectiveAction,
   WalkRunSnapshotItem,
   WalkTemplate,
 } from "../../lib/walks/types";
@@ -139,6 +140,12 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
         itemId,
         { response, photoUrls: photoUrls ?? null, completedBy: "Floor associate" },
       );
+      const saved = run.items.find((i) => i.id === itemId);
+      // Stay on the item until all failure-procedure steps are finished.
+      if (saved?.response?.status === "NEEDS_ACTION") {
+        setScreen({ kind: "run", run, index: screen.index });
+        return;
+      }
       const nextIndex = Math.min(screen.index + 1, Math.max(run.items.length - 1, 0));
       setScreen({ kind: "run", run, index: nextIndex });
     } catch (err) {
@@ -176,6 +183,17 @@ export function GoWalkRunner({ hubToken, moduleTitle, isTesting, onClose }: Prop
         itemId,
         actionId,
       );
+      const saved = run.items.find((i) => i.id === itemId);
+      const actions = saved?.response?.correctiveActions ?? [];
+      const allDone =
+        saved?.response?.status === "RESOLVED" ||
+        (actions.length > 0 && actions.every((a) => a.status === "COMPLETED"));
+      if (allDone) {
+        // After 1st + 2nd failure steps are complete, advance to the next item.
+        const nextIndex = Math.min(screen.index + 1, Math.max(run.items.length - 1, 0));
+        setScreen({ kind: "run", run, index: nextIndex });
+        return;
+      }
       setScreen({ kind: "run", run, index: screen.index });
     } catch (err) {
       if (handleGoDeviceSessionError(err)) return;
@@ -354,6 +372,11 @@ function WalkRunActive({
   const item = items[index] ?? null;
   const pct = run.progress.total > 0 ? Math.round((run.progress.answered / run.progress.total) * 100) : 0;
   const canComplete = run.progress.requiredRemaining === 0 && run.status === "IN_PROGRESS";
+  const pendingCorrective = (item?.response?.correctiveActions ?? []).some(
+    (a) => a.status !== "COMPLETED" && (a.required !== false || a.blocksCompletion),
+  );
+  const mustFinishCorrective =
+    item?.response?.status === "NEEDS_ACTION" || pendingCorrective;
 
   return (
     <div className="walk-run-page" style={{ minHeight: "70dvh" }}>
@@ -402,8 +425,13 @@ function WalkRunActive({
             <button
               type="button"
               className="walk-run-page-actions-btn"
-              disabled={busy || index >= items.length - 1}
+              disabled={busy || index >= items.length - 1 || mustFinishCorrective}
               onClick={() => onSelectIndex(index + 1)}
+              title={
+                mustFinishCorrective
+                  ? "Complete all failure procedure steps before continuing"
+                  : undefined
+              }
             >
               Next
             </button>
@@ -449,7 +477,11 @@ function WalkRunActive({
                         cursor: "pointer",
                         textAlign: "left",
                       }}
-                      onClick={() => onSelectIndex(i)}
+                      disabled={mustFinishCorrective && i !== index}
+                      onClick={() => {
+                        if (mustFinishCorrective && i !== index) return;
+                        onSelectIndex(i);
+                      }}
                     >
                       <span className="walk-run-page-row-index">{i + 1}</span>
                       <span className="walk-run-page-row-label">{row.title}</span>
@@ -464,6 +496,86 @@ function WalkRunActive({
           </div>
         </aside>
       </div>
+    </div>
+  );
+}
+
+function CorrectivePhaseCard({
+  title,
+  actions,
+  busy,
+  unlocked,
+  lockedHint,
+  onComplete,
+}: {
+  title: string;
+  actions: WalkRunCorrectiveAction[];
+  busy: boolean;
+  unlocked: boolean;
+  lockedHint?: string;
+  onComplete: (actionId: string) => void;
+}) {
+  const remaining = actions.filter((a) => a.status !== "COMPLETED").length;
+  return (
+    <div
+      style={{
+        padding: "0.85rem",
+        border: "1px solid #fecaca",
+        borderRadius: 8,
+        background: unlocked ? "#fff" : "#f8fafc",
+        opacity: unlocked ? 1 : 0.72,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+          marginBottom: "0.55rem",
+        }}
+      >
+        <p style={{ margin: 0, fontWeight: 750, color: "#b91c1c" }}>{title}</p>
+        <span style={{ fontSize: "0.75rem", fontWeight: 650, color: "#64748b" }}>
+          {remaining === 0 ? "All done" : `${remaining} left`}
+        </span>
+      </div>
+      {!unlocked && lockedHint ? (
+        <p className="enterprise-muted" style={{ margin: "0 0 0.5rem" }}>
+          {lockedHint}
+        </p>
+      ) : null}
+      {actions.map((action, index) => (
+        <div
+          key={action.id}
+          style={{
+            marginBottom: index === actions.length - 1 ? 0 : "0.65rem",
+            paddingTop: index === 0 ? 0 : "0.55rem",
+            borderTop: index === 0 ? undefined : "1px solid #fee2e2",
+          }}
+        >
+          <strong>
+            {index + 1}. {action.title}
+          </strong>
+          {action.instructions && action.instructions !== action.title ? (
+            <p className="enterprise-muted" style={{ margin: "0.25rem 0" }}>
+              {action.instructions}
+            </p>
+          ) : null}
+          {action.status === "COMPLETED" ? (
+            <span style={{ color: "#047857", fontWeight: 650 }}>Done</span>
+          ) : (
+            <button
+              type="button"
+              className="go-testcode-btn"
+              disabled={busy || !unlocked}
+              onClick={() => onComplete(action.id)}
+              style={{ marginTop: "0.35rem" }}
+            >
+              Mark complete
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -488,6 +600,32 @@ function WalkItemPanel({
   const config = item.config ?? {};
   const answered = item.response && item.response.status !== "NOT_STARTED";
   const corrective = item.response?.correctiveActions ?? [];
+  const firstFailure = corrective.filter(
+    (a) => a.branch === "first_failure" || a.branch == null,
+  );
+  const secondFailure = corrective.filter((a) => a.branch === "if_fail");
+  const firstFailureDone =
+    firstFailure.length === 0 || firstFailure.every((a) => a.status === "COMPLETED");
+  const requireRetest = Boolean(config.requireRetestOnFailure);
+  const retestGuidance =
+    typeof config.retestGuidance === "string" ? config.retestGuidance.trim() : "";
+  const responsePayload =
+    item.response?.response && typeof item.response.response === "object"
+      ? (item.response.response as Record<string, unknown>)
+      : null;
+  const retestCount =
+    typeof responsePayload?.retestCount === "number" ? responsePayload.retestCount : 0;
+  const retempDone = !requireRetest || retestCount >= 1;
+  const showRetemp =
+    Boolean(requireRetest) &&
+    firstFailureDone &&
+    (item.response?.status === "NEEDS_ACTION" ||
+      corrective.some((a) => a.status !== "COMPLETED")) &&
+    !retempDone;
+  const showSecondFailure = secondFailure.length > 0 && firstFailureDone && retempDone;
+  const needsFailureProcedure =
+    item.response?.status === "NEEDS_ACTION" ||
+    corrective.some((a) => a.status !== "COMPLETED");
 
   return (
     <div className="go-kiosk-walks-form-panel">
@@ -506,35 +644,63 @@ function WalkItemPanel({
         </p>
       ) : null}
 
-      {corrective.length > 0 ? (
-        <div style={{ marginTop: "1rem", padding: "0.75rem", border: "1px solid #fecaca", borderRadius: 8 }}>
-          <p style={{ margin: "0 0 0.5rem", fontWeight: 700, color: "#b91c1c" }}>Corrective actions</p>
-          {corrective.map((action) => (
-            <div key={action.id} style={{ marginBottom: "0.5rem" }}>
-              <strong>{action.title}</strong>
-              {action.instructions ? (
-                <p className="enterprise-muted" style={{ margin: "0.25rem 0" }}>
-                  {action.instructions}
+      {needsFailureProcedure && corrective.length > 0 ? (
+        <div style={{ marginTop: "1rem", display: "grid", gap: "0.75rem" }}>
+          <CorrectivePhaseCard
+            title="1st Failure — complete all steps"
+            actions={firstFailure.length ? firstFailure : corrective}
+            busy={busy}
+            unlocked
+            onComplete={(actionId) => onCompleteCorrective(item.id, actionId)}
+          />
+          {showRetemp && item.type === "TEMPERATURE" ? (
+            <div
+              style={{
+                border: "1px solid #bfdbfe",
+                background: "#eff6ff",
+                borderRadius: "0.75rem",
+                padding: "0.85rem 0.95rem",
+              }}
+            >
+              <p style={{ margin: "0 0 0.35rem", fontWeight: 750, color: "#1d4ed8" }}>Retemp</p>
+              {retestGuidance ? (
+                <p style={{ margin: "0 0 0.75rem", fontSize: "0.9rem", color: "#1e3a8a", lineHeight: 1.45 }}>
+                  {retestGuidance}
                 </p>
-              ) : null}
-              {action.status === "COMPLETED" ? (
-                <span style={{ color: "#047857", fontWeight: 600 }}>Done</span>
               ) : (
-                <button
-                  type="button"
-                  className="go-testcode-btn"
-                  disabled={busy}
-                  onClick={() => onCompleteCorrective(item.id, action.id)}
-                >
-                  Mark complete
-                </button>
+                <p className="enterprise-muted" style={{ margin: "0 0 0.75rem", fontSize: "0.85rem" }}>
+                  Retake the temperature after completing the steps above.
+                </p>
               )}
+              <TemperatureControl
+                config={config}
+                busy={busy}
+                retestCount={retestCount + 1}
+                onSubmit={(response) => onSubmit(item.id, response)}
+              />
             </div>
-          ))}
+          ) : null}
+          {secondFailure.length > 0 ? (
+            <CorrectivePhaseCard
+              title="2nd Failure — complete all steps"
+              actions={secondFailure}
+              busy={busy}
+              unlocked={showSecondFailure}
+              lockedHint={
+                requireRetest && !retempDone
+                  ? "Complete the retemp above before these unlock."
+                  : "Finish every 1st failure step before these unlock."
+              }
+              onComplete={(actionId) => onCompleteCorrective(item.id, actionId)}
+            />
+          ) : null}
+          <p className="enterprise-muted" style={{ margin: 0, fontSize: "0.8rem" }}>
+            Complete every step above to continue to the next item.
+          </p>
         </div>
       ) : null}
 
-      <div style={{ marginTop: "1.25rem" }}>
+      <div style={{ marginTop: "1.25rem", display: needsFailureProcedure ? "none" : undefined }}>
         {item.type === "TEMPERATURE" ? (
           <TemperatureControl
             config={config}
@@ -598,11 +764,18 @@ function WalkItemPanel({
 function TemperatureControl({
   config,
   busy,
+  retestCount,
   onSubmit,
 }: {
   config: Record<string, unknown>;
   busy: boolean;
-  onSubmit: (response: { value: number; unit: "F" | "C"; source: "manual" }) => void;
+  retestCount?: number;
+  onSubmit: (response: {
+    value: number;
+    unit: "F" | "C";
+    source: "manual";
+    retestCount?: number;
+  }) => void;
 }) {
   const unit = (config.unit === "C" ? "C" : "F") as "F" | "C";
   const [value, setValue] = useState("");
@@ -630,7 +803,14 @@ function TemperatureControl({
           type="button"
           className="go-testcode-btn"
           disabled={busy || value.trim() === "" || Number.isNaN(Number(value))}
-          onClick={() => onSubmit({ value: Number(value), unit, source: "manual" })}
+          onClick={() =>
+            onSubmit({
+              value: Number(value),
+              unit,
+              source: "manual",
+              ...(retestCount != null ? { retestCount } : {}),
+            })
+          }
         >
           Save reading
         </button>

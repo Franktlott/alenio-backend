@@ -1,12 +1,23 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import {
+  TempsButton,
+  TempsDataTable,
+  TempsEmptyState,
+  TempsPageHeader,
+  TempsPageShell,
+  TempsToolbar,
+} from "../../components/temps";
 import { WalkTypeIcon } from "../../components/walk-builder/WalkItemIcons";
 import { WALK_PALETTE_CARDS } from "../../lib/walks/item-catalog";
 import {
+  archiveLibraryItem,
+  duplicateLibraryItem,
   fetchLibraryCategories,
   fetchLibraryItemUsage,
   fetchLibraryItems,
+  patchLibraryItem,
   type WalkLibraryItem,
 } from "../../lib/walks/library-api";
 import type { WalkItemType } from "../../lib/walks/types";
@@ -64,53 +75,11 @@ function relativeTime(iso: string) {
   return new Date(iso).toLocaleDateString();
 }
 
-function passingCriteriaParts(item: WalkLibraryItem): { before: string; highlight: string | null } | null {
-  const config = item.current?.config ?? {};
-  if (item.type === "TEMPERATURE") {
-    const unit = config.unit === "C" ? "°C" : "°F";
-    const comparison = String(config.comparisonType ?? "ABOVE");
-    const min = config.minimumTemperature;
-    const max = config.maximumTemperature;
-    if (comparison === "BELOW" && max != null) {
-      return { before: "Temperature at or below ", highlight: `${max}${unit}` };
-    }
-    if (comparison === "BETWEEN" && min != null && max != null) {
-      return { before: "Temperature between ", highlight: `${min}${unit} and ${max}${unit}` };
-    }
-    if (min != null) return { before: "Temperature at or above ", highlight: `${min}${unit}` };
-  }
-  if (item.type === "YES_NO") {
-    const answer = config.passingAnswer === "NO" ? "No" : "Yes";
-    return { before: "Passing answer: ", highlight: answer };
-  }
-  const instructions = item.current?.instructions?.trim();
-  if (instructions) return { before: instructions, highlight: null };
-  return null;
-}
-
 function IconSearch({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <circle cx="11" cy="11" r="7" />
       <path d="M20 20l-3.5-3.5" />
-    </svg>
-  );
-}
-
-function IconEye({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function IconInfo({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 10v6M12 7h.01" />
     </svg>
   );
 }
@@ -170,30 +139,6 @@ function IconMore({ size = 16 }: { size?: number }) {
   );
 }
 
-function IconPencil({ size = 15 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-    </svg>
-  );
-}
-
-function IconChevronRight({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" aria-hidden>
-      <path d="M9 6l6 6-6 6" />
-    </svg>
-  );
-}
-
-function caIcon(actionType: string): ReactNode {
-  if (actionType.includes("PHOTO")) return <WalkTypeIcon type="PHOTO" size={14} />;
-  if (actionType.includes("TEMP")) return <WalkTypeIcon type="TEMPERATURE" size={14} />;
-  if (actionType.includes("NOTIFY")) return <IconUsers size={14} />;
-  return <IconInfo size={14} />;
-}
-
 type UsageState = {
   walks: Array<{ templateId: string; name: string; status: string; pinnedVersions: number[] }>;
 };
@@ -201,6 +146,7 @@ type UsageState = {
 export function WalkItemLibraryPage() {
   const { canManage, teamId } = useAlenioGoShell();
   const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState<WalkLibraryItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -210,14 +156,39 @@ export function WalkItemLibraryPage() {
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("ACTIVE");
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [usageById, setUsageById] = useState<Record<string, UsageState>>({});
   const [toast, setToast] = useState<string | null>(null);
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
-  function showToast(message: string) {
+  const showToast = useCallback((message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(null), 2400);
-  }
+  }, []);
+
+  useEffect(() => {
+    const state = location.state as {
+      createdItemId?: string;
+      editedItemId?: string;
+    } | null;
+    if (!state?.createdItemId && !state?.editedItemId) return;
+    if (state.createdItemId) showToast("Item created");
+    else if (state.editedItemId) showToast("Item updated");
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate, showToast]);
+
+  useEffect(() => {
+    if (!menuId) return;
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (menuRef.current && !menuRef.current.contains(target)) setMenuId(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [menuId]);
 
   useEffect(() => {
     if (!canManage || !teamId) return;
@@ -238,10 +209,6 @@ export function WalkItemLibraryPage() {
         setItems(rows);
         setCategories(cats);
         setPage(1);
-        setSelectedId((prev) => {
-          if (prev && rows.some((r) => r.id === prev)) return prev;
-          return rows[0]?.id ?? null;
-        });
       })
       .catch((err) => {
         if (!cancelled) {
@@ -254,11 +221,61 @@ export function WalkItemLibraryPage() {
     return () => {
       cancelled = true;
     };
-  }, [canManage, teamId, q, type, category, status]);
+  }, [canManage, teamId, q, type, category, status, reloadKey]);
 
-  const selected = useMemo(
-    () => items.find((i) => i.id === selectedId) ?? null,
-    [items, selectedId],
+  function goEdit(itemId: string) {
+    setMenuId(null);
+    navigate(`/go/temp-checks/library/${itemId}/edit`);
+  }
+
+  async function handleDuplicate(item: WalkLibraryItem) {
+    if (!teamId) return;
+    setMenuId(null);
+    setBusy(true);
+    try {
+      await duplicateLibraryItem(teamId, item.id);
+      setReloadKey((k) => k + 1);
+      showToast(`Duplicated “${item.name}”`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not duplicate item");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRestore(item: WalkLibraryItem) {
+    if (!teamId) return;
+    setMenuId(null);
+    setBusy(true);
+    try {
+      await patchLibraryItem(teamId, item.id, { status: "ACTIVE" });
+      setReloadKey((k) => k + 1);
+      showToast(`Restored “${item.name}”`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not restore item");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmArchive() {
+    if (!teamId || !confirmArchiveId) return;
+    setBusy(true);
+    try {
+      const archived = await archiveLibraryItem(teamId, confirmArchiveId);
+      setConfirmArchiveId(null);
+      setReloadKey((k) => k + 1);
+      showToast(`Deleted “${archived.name}”`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete item");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const confirmArchiveItem = useMemo(
+    () => items.find((i) => i.id === confirmArchiveId) ?? null,
+    [items, confirmArchiveId],
   );
 
   useEffect(() => {
@@ -273,7 +290,7 @@ export function WalkItemLibraryPage() {
           const usage = await fetchLibraryItemUsage(teamId, id);
           return [id, usage] as const;
         } catch {
-          return [id, { walks: [] }] as const;
+          return [id, { walks: [] } satisfies UsageState] as const;
         }
       }),
     ).then((pairs) => {
@@ -298,97 +315,28 @@ export function WalkItemLibraryPage() {
   const safePage = Math.min(page, pageCount);
   const start = (safePage - 1) * PAGE_SIZE;
   const pageRows = items.slice(start, start + PAGE_SIZE);
-  const selectedUsage = selected ? usageById[selected.id] : undefined;
-  const criteria = selected ? passingCriteriaParts(selected) : null;
-  const corrective = selected?.current?.correctiveActions ?? [];
 
   return (
-    <div className="wil-shell" data-testid="walk-item-library-page">
-      <div className="wil-page">
-        <header className="wil-header">
-          <div>
-            <h1 className="wil-title">
-              Item Library
-              <span className="wil-title-info" title="Reusable inspection items for walks">
-                <IconInfo />
-              </span>
-            </h1>
-            <p className="wil-subtitle">Create, manage, and reuse inspection items across your walks.</p>
-          </div>
-          <div className="wil-header-actions">
-          <button
-            type="button"
-            className="wil-btn wil-btn--primary"
-            onClick={() => navigate("/go/temp-checks/library/new")}
-          >
-            <span>+ Create Item</span>
-            <IconChevronDown />
-          </button>
-            <button
-              type="button"
-              className="wil-btn wil-btn--secondary"
-              onClick={() => showToast("Associate preview — next")}
-            >
-              <IconEye />
-              Preview as Associate
-            </button>
-          </div>
-        </header>
+    <TempsPageShell testId="walk-item-library-page" wide className="temps-page--fill">
+      <TempsPageHeader
+        title="Item Library"
+        description="Create, manage, and reuse inspection items across your walks."
+        actions={
+          <TempsButton variant="primary" onClick={() => navigate("/go/temp-checks/library/new")}>
+            + Create Item
+          </TempsButton>
+        }
+      />
 
-        {toast ? <p className="wil-toast">{toast}</p> : null}
-        {error ? <p className="wil-error">{error}</p> : null}
+      {toast ? (
+        <p className="temps-toast temps-toast--float" role="status">
+          {toast}
+        </p>
+      ) : null}
+      {error ? <p className="temps-error">{error}</p> : null}
 
-        <div className="wil-toolbar">
-          <label className="wil-search">
-            <span className="wil-search-icon">
-              <IconSearch />
-            </span>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search items..."
-              aria-label="Search items"
-            />
-          </label>
-
-          <label className="wil-select-wrap">
-            <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
-              <option value="">All Categories</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            <IconChevronDown />
-          </label>
-
-          <label className="wil-select-wrap">
-            <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Type">
-              <option value="">All Types</option>
-              {WALK_PALETTE_CARDS.map((c) => (
-                <option key={c.type} value={c.type}>
-                  {shortTypeLabel(c.type)}
-                </option>
-              ))}
-            </select>
-            <IconChevronDown />
-          </label>
-
-          <label className="wil-select-wrap">
-            <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
-              <option value="ACTIVE">Active</option>
-              <option value="ARCHIVED">Archived</option>
-              <option value="">All statuses</option>
-            </select>
-            <IconChevronDown />
-          </label>
-
-          <button type="button" className="wil-btn wil-btn--secondary wil-btn--filters" disabled>
-            <IconFunnel />
-            Filters
-          </button>
-
+      <TempsToolbar
+        trailing={
           <div className="wil-view">
             <span>View</span>
             <div className="wil-view-toggle" role="group" aria-label="View">
@@ -406,18 +354,106 @@ export function WalkItemLibraryPage() {
               </button>
             </div>
           </div>
-        </div>
+        }
+      >
+        <label className="wil-search">
+          <span className="wil-search-icon">
+            <IconSearch />
+          </span>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search items..."
+            aria-label="Search items"
+          />
+        </label>
 
-        <div className="wil-body">
-          <section className="wil-table-card" aria-label="Library items">
-            {loading ? (
-              <div className="wil-loading">
-                <EnterprisePageLoading label="Loading Item Library…" />
+        <label className="wil-select-wrap">
+          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+            <option value="">All Categories</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <IconChevronDown />
+        </label>
+
+        <label className="wil-select-wrap">
+          <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Type">
+            <option value="">All Types</option>
+            {WALK_PALETTE_CARDS.map((c) => (
+              <option key={c.type} value={c.type}>
+                {shortTypeLabel(c.type)}
+              </option>
+            ))}
+          </select>
+          <IconChevronDown />
+        </label>
+
+        <label className="wil-select-wrap">
+          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
+            <option value="ACTIVE">Active</option>
+            <option value="ARCHIVED">Archived</option>
+            <option value="">All statuses</option>
+          </select>
+          <IconChevronDown />
+        </label>
+
+        <TempsButton variant="secondary" disabled>
+          <IconFunnel />
+          Filters
+        </TempsButton>
+      </TempsToolbar>
+
+      {loading ? (
+        <TempsDataTable label="Library items" minHeight="short">
+          <EnterprisePageLoading label="Loading Item Library…" />
+        </TempsDataTable>
+      ) : (
+        <TempsDataTable
+          label="Library items"
+          footer={
+            <>
+              <p style={{ margin: 0 }}>
+                Showing {total === 0 ? 0 : start + 1} to {Math.min(start + PAGE_SIZE, total)} of{" "}
+                {total} items
+              </p>
+              <div className="wil-pagination">
+                <button
+                  type="button"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                {Array.from({ length: pageCount }, (_, i) => i + 1)
+                  .slice(0, 5)
+                  .map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className={n === safePage ? "is-active" : undefined}
+                      onClick={() => setPage(n)}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                <button
+                  type="button"
+                  disabled={safePage >= pageCount}
+                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
               </div>
-            ) : (
-              <>
-                <div className="wil-table-wrap">
-                  <table className="wil-table">
+            </>
+          }
+        >
+                <table className="wil-table">
                     <thead>
                       <tr>
                         <th>Item Name</th>
@@ -435,12 +471,10 @@ export function WalkItemLibraryPage() {
                     <tbody>
                       {pageRows.map((item) => {
                         const usageCount = usageById[item.id]?.walks.length;
-                        const active = item.id === selectedId;
                         return (
                           <tr
                             key={item.id}
-                            className={active ? "is-selected" : undefined}
-                            onClick={() => setSelectedId(item.id)}
+                            onClick={() => goEdit(item.id)}
                           >
                             <td>
                               <div className="wil-item-cell">
@@ -487,185 +521,135 @@ export function WalkItemLibraryPage() {
                               </span>
                             </td>
                             <td className="wil-updated">{relativeTime(item.updatedAt)}</td>
-                            <td>
-                              <button
-                                type="button"
-                                className="wil-row-menu"
-                                aria-label={`Actions for ${item.name}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  showToast("Row actions — next");
-                                }}
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <div
+                                className="wsch-menu-wrap"
+                                ref={menuId === item.id ? menuRef : undefined}
                               >
-                                <IconMore />
-                              </button>
+                                <button
+                                  type="button"
+                                  className="wil-row-menu"
+                                  aria-label={`Actions for ${item.name}`}
+                                  aria-expanded={menuId === item.id}
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setMenuId((prev) => (prev === item.id ? null : item.id));
+                                  }}
+                                >
+                                  <IconMore />
+                                </button>
+                                {menuId === item.id ? (
+                                  <div className="wsch-row-menu" role="menu">
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => goEdit(item.id)}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      disabled={busy}
+                                      onClick={() => void handleDuplicate(item)}
+                                    >
+                                      Duplicate
+                                    </button>
+                                    {item.status === "ARCHIVED" ? (
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        disabled={busy}
+                                        onClick={() => void handleRestore(item)}
+                                      >
+                                        Restore
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="wsch-row-menu-danger"
+                                        onClick={() => {
+                                          setMenuId(null);
+                                          setConfirmArchiveId(item.id);
+                                        }}
+                                      >
+                                        Delete
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : null}
+                              </div>
                             </td>
                           </tr>
                         );
                       })}
                       {pageRows.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="wil-empty">
-                            No items yet. Create your first reusable inspection item.
+                          <td colSpan={8}>
+                            <TempsEmptyState
+                              compact
+                              title="No items yet"
+                              description="Create your first reusable inspection item."
+                              action={
+                                <TempsButton
+                                  variant="primary"
+                                  onClick={() => navigate("/go/temp-checks/library/new")}
+                                >
+                                  + Create Item
+                                </TempsButton>
+                              }
+                            />
                           </td>
                         </tr>
                       ) : null}
                     </tbody>
                   </table>
-                </div>
+        </TempsDataTable>
+      )}
 
-                <footer className="wil-table-footer">
-                  <p>
-                    Showing {total === 0 ? 0 : start + 1} to {Math.min(start + PAGE_SIZE, total)} of{" "}
-                    {total} items
-                  </p>
-                  <div className="wil-pagination">
-                    <button
-                      type="button"
-                      disabled={safePage <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      aria-label="Previous page"
-                    >
-                      ‹
-                    </button>
-                    {Array.from({ length: pageCount }, (_, i) => i + 1)
-                      .slice(0, 5)
-                      .map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          className={n === safePage ? "is-active" : undefined}
-                          onClick={() => setPage(n)}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    <button
-                      type="button"
-                      disabled={safePage >= pageCount}
-                      onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                      aria-label="Next page"
-                    >
-                      ›
-                    </button>
-                  </div>
-                </footer>
-              </>
-            )}
-          </section>
-
-          <aside className="wil-preview" aria-label="Item preview">
-            <div className="wil-preview-head">
-              <h2>Item Preview</h2>
-              {selected ? (
-                <span className="wil-badge wil-badge--version">
-                  Version {Number(selected.currentVersion).toFixed(1)}
-                </span>
-              ) : null}
-            </div>
-
-            {!selected ? (
-              <p className="wil-muted wil-preview-empty">Select an item to preview.</p>
-            ) : (
-              <>
-                <div className="wil-preview-hero">
-                  <span
-                    className={`wil-item-icon wil-item-icon--lg wil-item-icon--${typeTone(String(selected.type))}`}
-                  >
-                    <WalkTypeIcon type={selected.type as WalkItemType} size={26} />
-                  </span>
-                  <div>
-                    <h3>{selected.name}</h3>
-                    <span className="wil-chip">{shortTypeLabel(String(selected.type))}</span>
-                  </div>
-                </div>
-
-                <p className="wil-preview-desc">
-                  {selected.description ||
-                    selected.current?.description ||
-                    "No description for this item yet."}
-                </p>
-
-                {criteria ? (
-                  <section className="wil-preview-block">
-                    <h4>Passing Criteria</h4>
-                    <p>
-                      {criteria.before}
-                      {criteria.highlight ? (
-                        <strong className="wil-criteria-hi">{criteria.highlight}</strong>
-                      ) : null}
-                    </p>
-                  </section>
-                ) : null}
-
-                <section className="wil-preview-block">
-                  <h4>Corrective Actions</h4>
-                  {corrective.length === 0 ? (
-                    <p className="wil-muted">None configured yet.</p>
-                  ) : (
-                    <ul className="wil-ca-list">
-                      {corrective.slice(0, 3).map((action) => (
-                        <li key={action.id}>
-                          <span className="wil-ca-icon">{caIcon(action.actionType)}</span>
-                          <span>{action.title}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {corrective.length > 3 ? (
-                    <button type="button" className="wil-more-link">
-                      +{corrective.length - 3} more actions
-                    </button>
-                  ) : null}
-                </section>
-
-                <section className="wil-preview-block">
-                  <h4>Used In</h4>
-                  {!selectedUsage ? (
-                    <p className="wil-muted">Loading…</p>
-                  ) : selectedUsage.walks.length === 0 ? (
-                    <p className="wil-muted">Not used in any walks yet.</p>
-                  ) : (
-                    <ul className="wil-used-list">
-                      {selectedUsage.walks.map((w) => (
-                        <li key={w.templateId}>
-                          <button
-                            type="button"
-                            className="wil-used-link"
-                            onClick={() => navigate(`/go/temp-checks/walks/builder/${w.templateId}`)}
-                          >
-                            <span>{w.name}</span>
-                            <IconChevronRight />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <div className="wil-preview-actions">
-                  <button
-                    type="button"
-                    className="wil-btn wil-btn--edit"
-                    onClick={() => showToast("Edit Item — next")}
-                  >
-                    <IconPencil />
-                    Edit Item
-                  </button>
-                  <button
-                    type="button"
-                    className="wil-btn wil-btn--secondary wil-btn--square"
-                    aria-label="More actions"
-                    onClick={() => showToast("More actions — next")}
-                  >
-                    <IconMore />
-                  </button>
-                </div>
-              </>
-            )}
-          </aside>
+      {confirmArchiveItem ? (
+        <div
+          className="wsch-modal-backdrop"
+          role="presentation"
+          onClick={() => setConfirmArchiveId(null)}
+        >
+          <div
+            className="wsch-modal wsch-modal--confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wil-archive-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="wsch-modal-head">
+              <h2 id="wil-archive-title">Delete item?</h2>
+            </header>
+            <p className="wil-subtitle">
+              This removes <strong>{confirmArchiveItem.name}</strong> from the active library so it
+              can’t be added to new walks. Completed walk history stays intact, and walks that
+              already use it keep their pinned versions. You can restore it later from the Archived
+              filter.
+            </p>
+            <footer className="wsch-modal-foot">
+              <button
+                type="button"
+                className="wil-btn wil-btn--secondary"
+                onClick={() => setConfirmArchiveId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="wil-btn wsch-btn-danger"
+                disabled={busy}
+                onClick={() => void confirmArchive()}
+              >
+                {busy ? "Deleting…" : "Delete item"}
+              </button>
+            </footer>
+          </div>
         </div>
-      </div>
-    </div>
+      ) : null}
+    </TempsPageShell>
   );
 }

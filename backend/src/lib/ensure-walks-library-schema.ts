@@ -102,6 +102,7 @@ export async function ensureWalksLibrarySchema(prisma: PrismaClient): Promise<vo
       "timezone" TEXT NOT NULL DEFAULT 'America/New_York',
       "recurrence" TEXT NOT NULL DEFAULT 'DAILY',
       "daysOfWeek" JSONB,
+      "intervalMinutes" INTEGER,
       "effectiveFrom" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "effectiveTo" TIMESTAMP(3),
       "assignScope" TEXT NOT NULL DEFAULT 'WORKSPACE',
@@ -171,6 +172,10 @@ export async function ensureWalksLibrarySchema(prisma: PrismaClient): Promise<vo
   await prisma.$executeRawUnsafe(`
     ALTER TABLE public."WalkTemplateItem"
     ADD COLUMN IF NOT EXISTS "libraryItemId" TEXT;
+  `);
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE public."WalkSchedule"
+    ADD COLUMN IF NOT EXISTS "intervalMinutes" INTEGER;
   `);
 
   // Recreate corrective actions table for library-version ownership when still on legacy shape.

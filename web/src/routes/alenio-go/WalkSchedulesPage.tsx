@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import {
+  TempsButton,
+  TempsDataTable,
+  TempsEmptyState,
+  TempsPageHeader,
+  TempsPageShell,
+} from "../../components/temps";
 import { fetchWalkTemplates } from "../../lib/walks/api";
+import {
+  parseWindows,
+  minutesToTimeInput,
+  type WindowDraft,
+} from "../../components/walk-builder/WalkScheduleForm";
 import {
   createWalkSchedule,
   deleteWalkSchedule,
@@ -10,56 +22,25 @@ import {
   updateWalkSchedule,
   type WalkOccurrenceRow,
   type WalkSchedule,
-  type WalkScheduleWindow,
 } from "../../lib/walks/library-api";
+import {
+  DAY_LABELS,
+  assignScopeLabel,
+  formatScheduleSummary,
+  windowLabel,
+} from "../../lib/walks/schedule-summary";
 import type { WalkTemplate } from "../../lib/walks/types";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 type TabId = "all" | "active" | "paused";
 type ModalMode = "create" | "edit";
 
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-
-function minutesToLabel(minutes: number) {
-  const normalized = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60);
-  const h24 = Math.floor(normalized / 60);
-  const m = normalized % 60;
-  const period = h24 >= 12 ? "PM" : "AM";
-  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
-  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
-function windowLabel(w: Pick<WalkScheduleWindow, "startMinutes" | "dueMinutes">) {
-  return `${minutesToLabel(w.startMinutes)} – ${minutesToLabel(w.dueMinutes)}`;
-}
-
 function frequencyLabel(schedule: WalkSchedule) {
-  if (schedule.recurrence === "DAILY") return "Daily";
-  if (schedule.recurrence === "ONCE") return "Once";
-  const days = Array.isArray(schedule.daysOfWeek) ? schedule.daysOfWeek : [];
-  if (!days.length) return "Weekly";
-  if (days.length === 1) return DAY_LABELS[days[0]] ?? "Weekly";
-  return days
-    .slice()
-    .sort((a, b) => a - b)
-    .map((d) => DAY_LABELS[d])
-    .join(", ");
+  return formatScheduleSummary(schedule);
 }
 
 function assignLabel(schedule: WalkSchedule) {
-  if (schedule.assignRole?.trim()) return schedule.assignRole.trim();
-  switch (schedule.assignScope) {
-    case "ROLE":
-      return "Role assignees";
-    case "MEMBER":
-      return "Selected members";
-    case "TEAM":
-      return "Team";
-    case "ANY":
-      return "Anyone";
-    default:
-      return "All associates";
-  }
+  return assignScopeLabel(schedule);
 }
 
 function nextRunLabel(schedule: WalkSchedule, occurrences: WalkOccurrenceRow[]) {
@@ -96,67 +77,6 @@ function IconDots() {
       <circle cx="19" cy="12" r="1.75" />
     </svg>
   );
-}
-
-function DayTimeline({ windows }: { windows: WalkScheduleWindow[] }) {
-  return (
-    <div className="wsch-timeline" aria-label="Time windows per day">
-      <div className="wsch-timeline-track">
-        {windows.map((w) => {
-          const start = w.startMinutes;
-          let end = w.dueMinutes;
-          if (end <= start) end = 24 * 60;
-          const left = (start / (24 * 60)) * 100;
-          const width = Math.max(2.5, ((end - start) / (24 * 60)) * 100);
-          return (
-            <div
-              key={w.id}
-              className="wsch-timeline-block"
-              style={{ left: `${left}%`, width: `${width}%` }}
-              title={windowLabel(w)}
-            >
-              <span>{windowLabel(w)}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="wsch-timeline-labels">
-        <span>12 AM</span>
-        <span>6 AM</span>
-        <span>12 PM</span>
-        <span>6 PM</span>
-        <span>12 AM</span>
-      </div>
-    </div>
-  );
-}
-
-type WindowDraft = { start: string; due: string };
-
-function timeInputToMinutes(value: string): number | null {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(value);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
-  return h * 60 + min;
-}
-
-function minutesToTimeInput(minutes: number) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-function parseWindows(formWindows: WindowDraft[]) {
-  return formWindows
-    .map((w) => {
-      const startMinutes = timeInputToMinutes(w.start);
-      const dueMinutes = timeInputToMinutes(w.due);
-      if (startMinutes == null || dueMinutes == null) return null;
-      return { startMinutes, dueMinutes, graceMinutes: 30 };
-    })
-    .filter((w): w is { startMinutes: number; dueMinutes: number; graceMinutes: number } => !!w);
 }
 
 export function WalkSchedulesPage() {
@@ -422,204 +342,189 @@ export function WalkSchedulesPage() {
   }
 
   return (
-    <div className="wil-shell wsch-shell" data-testid="walk-schedules-page">
-      <div className="wil-page">
-        <header className="wil-header wsch-header">
-          <div>
-            <p className="wsch-kicker">Operations</p>
-            <h1 className="wil-title">Walk schedules</h1>
-            <p className="wil-subtitle">
-              Define when published walks open for associates, and manage active windows.
-            </p>
-          </div>
-          <div className="wil-header-actions">
-            <button type="button" className="wil-btn wil-btn--primary" onClick={openCreate}>
-              Create schedule
-            </button>
-          </div>
-        </header>
+    <TempsPageShell testId="walk-schedules-page" wide className="wsch-shell temps-page--fill">
+      <TempsPageHeader
+        title="Schedules"
+        description="Define when published walks open for associates, and manage active windows."
+        actions={
+          <TempsButton variant="primary" onClick={openCreate}>
+            Create schedule
+          </TempsButton>
+        }
+      />
 
-        <div className="wsch-toolbar">
-          <div className="wsch-tabs" role="tablist" aria-label="Schedule filters">
-            {(
-              [
-                ["all", "All", counts.all],
-                ["active", "Active", counts.active],
-                ["paused", "Paused", counts.paused],
-              ] as const
-            ).map(([id, label, count]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={tab === id}
-                className={`wsch-tab${tab === id ? " is-active" : ""}`}
-                onClick={() => setTab(id)}
-              >
-                {label}
-                <span className="wsch-tab-count">{count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {toast ? <p className="wil-toast">{toast}</p> : null}
-        {error ? <p className="wil-error">{error}</p> : null}
-
-        {loading ? (
-          <EnterprisePageLoading label="Loading schedules…" />
-        ) : (
-          <>
-            <section className="wil-table-card wsch-table-card" aria-label="Walk schedules">
-              <div className="wil-table-wrap">
-                <table className="wil-table wsch-table">
-                  <thead>
-                    <tr>
-                      <th>Walk</th>
-                      <th>Frequency</th>
-                      <th>Time windows</th>
-                      <th>Assigned to</th>
-                      <th>Next run</th>
-                      <th>Status</th>
-                      <th className="wsch-actions-col">
-                        <span className="sr-only">Actions</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="wil-empty">
-                          {tab === "paused"
-                            ? "No paused schedules. Pause an active schedule to stop new windows."
-                            : "No schedules yet. Create a schedule from a published walk."}
-                        </td>
-                      </tr>
-                    ) : (
-                      filtered.map((schedule) => {
-                        const walkName =
-                          schedule.template?.name ?? schedule.name ?? "Untitled walk";
-                        const active = selected?.id === schedule.id;
-                        return (
-                          <tr
-                            key={schedule.id}
-                            className={active ? "is-selected" : undefined}
-                            onClick={() => setSelectedId(schedule.id)}
-                          >
-                            <td>
-                              <div className="wsch-walk-cell">
-                                <strong className="wsch-walk-name">{walkName}</strong>
-                                {schedule.name?.trim() &&
-                                schedule.name.trim() !== walkName ? (
-                                  <span className="wsch-walk-alias">{schedule.name}</span>
-                                ) : null}
-                              </div>
-                            </td>
-                            <td>
-                              <span className="wsch-meta">{frequencyLabel(schedule)}</span>
-                            </td>
-                            <td>
-                              <div className="wsch-window-pills">
-                                {schedule.windows.map((w) => (
-                                  <span key={w.id} className="wsch-window-pill">
-                                    {windowLabel(w)}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td>
-                              <span className="wsch-meta">{assignLabel(schedule)}</span>
-                            </td>
-                            <td>
-                              <span className="wsch-meta">{nextRunLabel(schedule, occurrences)}</span>
-                            </td>
-                            <td>
-                              <span
-                                className={`wsch-status ${
-                                  schedule.isActive ? "wsch-status--active" : "wsch-status--paused"
-                                }`}
-                              >
-                                {schedule.isActive ? "Active" : "Paused"}
-                              </span>
-                            </td>
-                            <td className="wsch-actions-col" onClick={(e) => e.stopPropagation()}>
-                              <div
-                                className="wsch-menu-wrap"
-                                ref={menuId === schedule.id ? menuRef : undefined}
-                              >
-                                <button
-                                  type="button"
-                                  className="wil-row-menu"
-                                  aria-label={`Actions for ${walkName}`}
-                                  aria-expanded={menuId === schedule.id}
-                                  disabled={busy}
-                                  onClick={() =>
-                                    setMenuId((prev) => (prev === schedule.id ? null : schedule.id))
-                                  }
-                                >
-                                  <IconDots />
-                                </button>
-                                {menuId === schedule.id ? (
-                                  <div className="wsch-row-menu" role="menu">
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => openEdit(schedule)}
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => void toggleActive(schedule)}
-                                    >
-                                      {schedule.isActive ? "Pause" : "Resume"}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      className="wsch-row-menu-danger"
-                                      onClick={() => {
-                                        setMenuId(null);
-                                        setConfirmDeleteId(schedule.id);
-                                      }}
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="wsch-day-card">
-              <header className="wsch-day-head">
-                <div>
-                  <h2>Daily time windows</h2>
-                  <p>Each window creates a separate required occurrence for associates.</p>
-                </div>
-                {selected ? (
-                  <span className="wsch-day-walk">
-                    {selected.template?.name ?? selected.name ?? "Selected schedule"}
-                  </span>
-                ) : null}
-              </header>
-              {selected && selected.windows.length > 0 ? (
-                <DayTimeline windows={selected.windows} />
-              ) : (
-                <p className="wil-muted">Select a schedule to preview its daily windows.</p>
-              )}
-            </section>
-          </>
-        )}
+      <div className="temps-builder-tabs" role="tablist" aria-label="Schedule filters">
+        {(
+          [
+            ["all", "All", counts.all],
+            ["active", "Active", counts.active],
+            ["paused", "Paused", counts.paused],
+          ] as const
+        ).map(([id, label, count]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            className={`temps-builder-tab${tab === id ? " is-active" : ""}`}
+            onClick={() => setTab(id)}
+          >
+            {label}
+            <span className="wsch-tab-count">{count}</span>
+          </button>
+        ))}
       </div>
+
+      {toast ? (
+        <p className="temps-toast temps-toast--float" role="status">
+          {toast}
+        </p>
+      ) : null}
+      {error ? <p className="temps-error">{error}</p> : null}
+
+      {loading ? (
+        <TempsDataTable label="Walk schedules" minHeight="short">
+          <EnterprisePageLoading label="Loading schedules…" />
+        </TempsDataTable>
+      ) : (
+        <TempsDataTable label="Walk schedules">
+          <table className="wil-table wsch-table">
+            <thead>
+              <tr>
+                <th>Walk</th>
+                <th>Frequency</th>
+                <th>Time windows</th>
+                <th>Assigned to</th>
+                <th>Next run</th>
+                <th>Status</th>
+                <th className="wsch-actions-col">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>
+                    <TempsEmptyState
+                      compact
+                      title={tab === "paused" ? "No paused schedules" : "No schedules yet"}
+                      description={
+                        tab === "paused"
+                          ? "Pause an active schedule to stop new windows."
+                          : "Create a schedule from a published walk."
+                      }
+                      action={
+                        tab === "all" || tab === "active" ? (
+                          <TempsButton variant="primary" onClick={openCreate}>
+                            Create schedule
+                          </TempsButton>
+                        ) : undefined
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((schedule) => {
+                  const walkName = schedule.template?.name ?? schedule.name ?? "Untitled walk";
+                  const active = selected?.id === schedule.id;
+                  return (
+                    <tr
+                      key={schedule.id}
+                      className={active ? "is-selected" : undefined}
+                      onClick={() => setSelectedId(schedule.id)}
+                    >
+                      <td>
+                        <div className="wsch-walk-cell">
+                          <strong className="wsch-walk-name">{walkName}</strong>
+                          {schedule.name?.trim() && schedule.name.trim() !== walkName ? (
+                            <span className="wsch-walk-alias">{schedule.name}</span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="wsch-meta">{frequencyLabel(schedule)}</span>
+                      </td>
+                      <td>
+                        <div className="wsch-window-pills">
+                          {schedule.windows.map((w) => (
+                            <span key={w.id} className="wsch-window-pill">
+                              {windowLabel(w)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="wsch-meta">{assignLabel(schedule)}</span>
+                      </td>
+                      <td>
+                        <span className="wsch-meta">{nextRunLabel(schedule, occurrences)}</span>
+                      </td>
+                      <td>
+                        <span
+                          className={`wsch-status ${
+                            schedule.isActive ? "wsch-status--active" : "wsch-status--paused"
+                          }`}
+                        >
+                          {schedule.isActive ? "Active" : "Paused"}
+                        </span>
+                      </td>
+                      <td className="wsch-actions-col" onClick={(e) => e.stopPropagation()}>
+                        <div
+                          className="wsch-menu-wrap"
+                          ref={menuId === schedule.id ? menuRef : undefined}
+                        >
+                          <button
+                            type="button"
+                            className="wil-row-menu"
+                            aria-label={`Actions for ${walkName}`}
+                            aria-expanded={menuId === schedule.id}
+                            disabled={busy}
+                            onClick={() =>
+                              setMenuId((prev) => (prev === schedule.id ? null : schedule.id))
+                            }
+                          >
+                            <IconDots />
+                          </button>
+                          {menuId === schedule.id ? (
+                            <div className="wsch-row-menu" role="menu">
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => openEdit(schedule)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => void toggleActive(schedule)}
+                              >
+                                {schedule.isActive ? "Pause" : "Resume"}
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="wsch-row-menu-danger"
+                                onClick={() => {
+                                  setMenuId(null);
+                                  setConfirmDeleteId(schedule.id);
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </TempsDataTable>
+      )}
 
       {modalMode ? (
         <div className="wsch-modal-backdrop" role="presentation" onClick={closeModal}>
@@ -829,6 +734,6 @@ export function WalkSchedulesPage() {
           </div>
         </div>
       ) : null}
-    </div>
+    </TempsPageShell>
   );
 }

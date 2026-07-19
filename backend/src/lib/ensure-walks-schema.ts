@@ -415,6 +415,17 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
     }
 
     try {
+      await execStep(
+        prisma,
+        steps,
+        "WalkSchedule.intervalMinutes",
+        `ALTER TABLE public."WalkSchedule" ADD COLUMN IF NOT EXISTS "intervalMinutes" INTEGER`,
+      );
+    } catch (err) {
+      console.warn("[startup] ensureWalksSchema alter skipped (WalkSchedule.intervalMinutes):", err);
+    }
+
+    try {
       await ensureWalksLibrarySchema(prisma);
       steps.push("library_schema");
     } catch (err) {

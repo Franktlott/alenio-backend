@@ -11,6 +11,7 @@ import { AlenioGoModuleSettingsPage } from "./routes/alenio-go/AlenioGoModuleSet
 import { WalkItemCreatePage } from "./routes/alenio-go/WalkItemCreatePage";
 import { WalkItemLibraryPage } from "./routes/alenio-go/WalkItemLibraryPage";
 import { WalkBuilderPage } from "./routes/alenio-go/WalkBuilderPage";
+import { WalkDetailsPage } from "./routes/alenio-go/WalkDetailsPage";
 import { WalksListPage } from "./routes/alenio-go/WalksListPage";
 import { WalkSchedulesPage } from "./routes/alenio-go/WalkSchedulesPage";
 import { TempsModuleLayout } from "./routes/alenio-go/TempsModuleLayout";
@@ -159,9 +160,12 @@ export default function App() {
               <Route index element={<Navigate to="library" replace />} />
               <Route path="library" element={<WalkItemLibraryPage />} />
               <Route path="library/new" element={<WalkItemCreatePage />} />
-              <Route path="walks" element={<WalksListPage />} />
-              <Route path="walks/builder" element={<WalkBuilderPage />} />
-              <Route path="walks/builder/:templateId" element={<WalkBuilderPage />} />
+              <Route path="library/:itemId/edit" element={<WalkItemCreatePage />} />
+            {/* Builder routes must stay above walks/:templateId so "builder" is never treated as an id */}
+            <Route path="walks/builder/:templateId" element={<WalkBuilderPage />} />
+            <Route path="walks/builder" element={<WalkBuilderPage />} />
+            <Route path="walks/:templateId" element={<WalkDetailsPage />} />
+            <Route path="walks" element={<WalksListPage />} />
               <Route path="schedule" element={<WalkSchedulesPage />} />
               <Route path="settings" element={<AlenioGoModuleSettingsPage moduleKey="temp-checks" />} />
             </Route>

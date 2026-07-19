@@ -903,6 +903,42 @@ walksRouter.post("/templates/:templateId/archive", async (c) => {
   }
 });
 
+walksRouter.post("/templates/:templateId/duplicate", async (c) => {
+  const teamId = c.req.param("teamId")!;
+  const templateId = c.req.param("templateId")!;
+  const uid = userId(c);
+  if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const gate = await assertCanManageWalks(teamId, uid);
+  if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+  try {
+    const result = await publishService.duplicateWalkTemplate(teamId, templateId, uid);
+    if ("error" in result) {
+      return c.json({ error: { message: result.error, code: result.error } }, 404);
+    }
+    return c.json({ data: result.template }, 201);
+  } catch (err) {
+    return prismaRouteError(c, err, "Failed to duplicate walk");
+  }
+});
+
+walksRouter.get("/templates/:templateId/versions", async (c) => {
+  const teamId = c.req.param("teamId")!;
+  const templateId = c.req.param("templateId")!;
+  const uid = userId(c);
+  if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const gate = await assertCanManageWalks(teamId, uid);
+  if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
+  try {
+    const rows = await publishService.listWalkTemplateVersions(teamId, templateId);
+    if (!rows) {
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: rows });
+  } catch (err) {
+    return prismaRouteError(c, err, "Failed to list walk versions");
+  }
+});
+
 walksRouter.get("/runs", async (c) => {
   const teamId = c.req.param("teamId")!;
   const uid = userId(c);
@@ -918,6 +954,9 @@ walksRouter.get("/runs", async (c) => {
 });
 
 // ── Schedules / occurrences ─────────────────────────────────────────────────
+
+const scheduleRecurrenceSchema = z.enum(["ONCE", "DAILY", "WEEKLY", "INTERVAL"]);
+const scheduleIntervalMinutesSchema = z.number().int().min(15).max(24 * 60).optional().nullable();
 
 walksRouter.get("/schedules", async (c) => {
   const teamId = c.req.param("teamId")!;
@@ -943,8 +982,9 @@ walksRouter.post(
       templateId: z.string().min(1),
       name: z.string().max(120).optional().nullable(),
       timezone: z.string().max(80).optional(),
-      recurrence: z.enum(["ONCE", "DAILY", "WEEKLY"]).optional(),
+      recurrence: scheduleRecurrenceSchema.optional(),
       daysOfWeek: z.array(z.number().int().min(0).max(6)).optional().nullable(),
+      intervalMinutes: scheduleIntervalMinutesSchema,
       effectiveFrom: z.string().datetime().optional(),
       effectiveTo: z.string().datetime().optional().nullable(),
       assignScope: z.enum(["WORKSPACE", "ROLE", "TEAM", "MEMBER", "ANY"]).optional(),
@@ -1009,8 +1049,9 @@ walksRouter.patch(
     z.object({
       name: z.string().max(120).optional().nullable(),
       timezone: z.string().max(80).optional(),
-      recurrence: z.enum(["ONCE", "DAILY", "WEEKLY"]).optional(),
+      recurrence: scheduleRecurrenceSchema.optional(),
       daysOfWeek: z.array(z.number().int().min(0).max(6)).optional().nullable(),
+      intervalMinutes: scheduleIntervalMinutesSchema,
       effectiveFrom: z.string().datetime().optional(),
       effectiveTo: z.string().datetime().optional().nullable(),
       assignScope: z.enum(["WORKSPACE", "ROLE", "TEAM", "MEMBER", "ANY"]).optional(),

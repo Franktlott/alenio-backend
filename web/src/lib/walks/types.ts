@@ -98,7 +98,10 @@ export type WalkRunCorrectiveAction = {
   title: string;
   actionType: string;
   instructions: string | null;
+  required?: boolean;
   blocksCompletion: boolean;
+  branch?: "first_failure" | "if_pass" | "if_fail" | null;
+  config?: Record<string, unknown> | null;
   status: string;
   completedAt: string | null;
 };

@@ -10,6 +10,8 @@ export const temperatureConfigSchema = z.object({
   allowBluetoothProbe: z.boolean().default(false),
   requireRetestOnFailure: z.boolean().default(false),
   maximumRetests: z.number().int().min(0).max(10).default(1),
+  /** Optional guidance shown to associates during retemp (e.g. "Retemp 2 additional products"). */
+  retestGuidance: z.string().max(500).optional().nullable(),
 });
 
 export type TemperatureConfig = z.infer<typeof temperatureConfigSchema>;
@@ -32,6 +34,7 @@ export const DEFAULT_TEMPERATURE_CONFIG: TemperatureConfig = {
   allowBluetoothProbe: false,
   requireRetestOnFailure: false,
   maximumRetests: 1,
+  retestGuidance: null,
 };
 
 export function evaluateTemperature(

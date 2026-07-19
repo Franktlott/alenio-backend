@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../prisma";
 import { serializeWalkTemplate } from "./serialize";
+import { materializeOccurrencesForSchedule } from "./schedule-service";
 import { templateInclude } from "./walk-template-service";
 
 function asSnapshotItem(item: {
@@ -102,6 +103,19 @@ export async function publishWalkTemplate(teamId: string, templateId: string, us
     return { template, versionRow };
   });
 
+  await prisma.walkSchedule.updateMany({
+    where: { templateId },
+    data: { templateVersionId: result.versionRow.id },
+  });
+
+  const activeSchedules = await prisma.walkSchedule.findMany({
+    where: { templateId, isActive: true },
+    select: { id: true },
+  });
+  await Promise.all(
+    activeSchedules.map((s) => materializeOccurrencesForSchedule(s.id, 14)),
+  );
+
   return {
     ok: true as const,
     template: serializeWalkTemplate(result.template, { includeItemsLoose: true }),
@@ -119,6 +133,19 @@ export async function createDraftFromPublished(teamId: string, templateId: strin
     include: templateInclude,
   });
   if (!source) return { error: "NOT_FOUND" as const };
+
+  // Reuse an existing open draft instead of stacking duplicates.
+  const existingDraft = await prisma.walkTemplate.findFirst({
+    where: { teamId, parentTemplateId: templateId, status: "DRAFT" },
+    include: templateInclude,
+    orderBy: { updatedAt: "desc" },
+  });
+  if (existingDraft) {
+    return {
+      ok: true as const,
+      template: serializeWalkTemplate(existingDraft, { includeItemsLoose: true }),
+    };
+  }
 
   const draft = await prisma.$transaction(async (tx) => {
     const created = await tx.walkTemplate.create({
@@ -175,6 +202,67 @@ export async function createDraftFromPublished(teamId: string, templateId: strin
   return { ok: true as const, template: serializeWalkTemplate(draft, { includeItemsLoose: true }) };
 }
 
+export async function duplicateWalkTemplate(teamId: string, templateId: string, userId: string) {
+  const source = await prisma.walkTemplate.findFirst({
+    where: { id: templateId, teamId },
+    include: templateInclude,
+  });
+  if (!source) return { error: "NOT_FOUND" as const };
+
+  const copy = await prisma.$transaction(async (tx) => {
+    const created = await tx.walkTemplate.create({
+      data: {
+        teamId,
+        name: `${source.name} (Copy)`,
+        description: source.description,
+        workplace: source.workplace,
+        scoringEnabled: source.scoringEnabled,
+        estimatedDurationMinutes: source.estimatedDurationMinutes,
+        status: "DRAFT",
+        version: 1,
+        isActive: true,
+        createdByUserId: userId,
+      },
+    });
+
+    const sectionIdMap = new Map<string, string>();
+    for (const section of source.sections) {
+      const s = await tx.walkTemplateSection.create({
+        data: {
+          templateId: created.id,
+          title: section.title,
+          description: section.description,
+          sortOrder: section.sortOrder,
+        },
+      });
+      sectionIdMap.set(section.id, s.id);
+    }
+
+    for (const placement of source.placements) {
+      await tx.walkTemplatePlacement.create({
+        data: {
+          templateId: created.id,
+          sectionId: placement.sectionId ? sectionIdMap.get(placement.sectionId) ?? null : null,
+          libraryItemId: placement.libraryItemId,
+          libraryItemVersionId: placement.libraryItemVersionId,
+          sortOrder: placement.sortOrder,
+          requiredOverride: placement.requiredOverride,
+          instructionsOverride: placement.instructionsOverride,
+          titleOverride: placement.titleOverride,
+        },
+      });
+    }
+
+    return tx.walkTemplate.findFirst({
+      where: { id: created.id },
+      include: templateInclude,
+    });
+  });
+
+  if (!copy) return { error: "NOT_FOUND" as const };
+  return { ok: true as const, template: serializeWalkTemplate(copy, { includeItemsLoose: true }) };
+}
+
 export async function archiveWalkTemplate(teamId: string, templateId: string) {
   const row = await prisma.walkTemplate.findFirst({ where: { id: templateId, teamId } });
   if (!row) return { error: "NOT_FOUND" as const };
@@ -193,4 +281,28 @@ export async function getLatestPublishedSnapshot(teamId: string, templateId: str
     where: { templateId },
     orderBy: { version: "desc" },
   });
+}
+
+export async function listWalkTemplateVersions(teamId: string, templateId: string) {
+  const template = await prisma.walkTemplate.findFirst({
+    where: { id: templateId, teamId },
+    select: { id: true },
+  });
+  if (!template) return null;
+  const rows = await prisma.walkTemplateVersion.findMany({
+    where: { templateId },
+    orderBy: { version: "desc" },
+    select: {
+      id: true,
+      version: true,
+      publishedAt: true,
+      publishedByUserId: true,
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    version: r.version,
+    publishedAt: r.publishedAt.toISOString(),
+    publishedByUserId: r.publishedByUserId,
+  }));
 }

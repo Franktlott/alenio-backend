@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import { TempsButton, TempsPageHeader, TempsPageShell } from "../../components/temps";
 import {
   fetchWorkspaceModule,
   fetchWorkspaceModuleTestSessions,
@@ -169,28 +170,26 @@ export function AlenioGoModuleSettingsPage({ moduleKey }: Props) {
 
   const isActive = module.status === "active";
   const mode = module.operatingMode;
+  const isTempsSettings = moduleKey === "temp-checks";
 
-  return (
-    <GoBackendModuleShell
-      title={module.moduleName}
-      subtitle={module.description}
-      tone={tone}
-      toolbar={
-        <div className="go-mod-toolbar">
-          <StatusBadge status={module.status} />
-          <OperatingModeBadge mode={mode} />
-          {isActive ? (
-            <button type="button" className="go-mod-btn go-mod-btn--ghost" disabled={busy} onClick={() => void deactivate()}>
-              Deactivate
-            </button>
-          ) : (
-            <button type="button" className="go-mod-btn go-mod-btn--primary" disabled={busy} onClick={() => void activate()}>
-              Activate module
-            </button>
-          )}
-        </div>
-      }
-    >
+  const statusActions = (
+    <>
+      <StatusBadge status={module.status} />
+      <OperatingModeBadge mode={mode} />
+      {isActive ? (
+        <button type="button" className="go-mod-btn go-mod-btn--ghost" disabled={busy} onClick={() => void deactivate()}>
+          Deactivate
+        </button>
+      ) : (
+        <button type="button" className="go-mod-btn go-mod-btn--primary" disabled={busy} onClick={() => void activate()}>
+          Activate module
+        </button>
+      )}
+    </>
+  );
+
+  const body: ReactNode = (
+    <>
       {error ? (
         <div className="go-backend-module-panel go-backend-panel-card go-mod-error" role="alert">
           {error}
@@ -496,6 +495,46 @@ export function AlenioGoModuleSettingsPage({ moduleKey }: Props) {
           </div>
         </div>
       ) : null}
+    </>
+  );
+
+  if (isTempsSettings) {
+    return (
+      <TempsPageShell testId="temps-settings-page" wide>
+        <TempsPageHeader
+          title="Settings"
+          description={module.description}
+          badges={
+            <>
+              <StatusBadge status={module.status} />
+              <OperatingModeBadge mode={mode} />
+            </>
+          }
+          actions={
+            isActive ? (
+              <TempsButton variant="ghost" disabled={busy} onClick={() => void deactivate()}>
+                Deactivate
+              </TempsButton>
+            ) : (
+              <TempsButton variant="primary" disabled={busy} onClick={() => void activate()}>
+                Activate module
+              </TempsButton>
+            )
+          }
+        />
+        {body}
+      </TempsPageShell>
+    );
+  }
+
+  return (
+    <GoBackendModuleShell
+      title={module.moduleName}
+      subtitle={module.description}
+      tone={tone}
+      toolbar={<div className="go-mod-toolbar">{statusActions}</div>}
+    >
+      {body}
     </GoBackendModuleShell>
   );
 }

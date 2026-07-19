@@ -31,6 +31,7 @@ export type WalkLibraryItem = {
       required: boolean;
       blocksCompletion: boolean;
       position: number;
+      config?: Record<string, unknown> | null;
     }>;
   } | null;
   versions: Array<{ id: string; version: number; name: string; createdAt: string }>;
@@ -54,6 +55,12 @@ export function fetchLibraryItems(
   const q = qs.toString();
   return apiGetJson<{ data: WalkLibraryItem[] }>(
     `${base(teamId)}/library/items${q ? `?${q}` : ""}`,
+  ).then((r) => r.data);
+}
+
+export function fetchLibraryItem(teamId: string, itemId: string) {
+  return apiGetJson<{ data: WalkLibraryItem }>(
+    `${base(teamId)}/library/items/${encodeURIComponent(itemId)}`,
   ).then((r) => r.data);
 }
 
@@ -129,6 +136,7 @@ export function putLibraryCorrectiveActions(
     instructions?: string | null;
     required?: boolean;
     blocksCompletion?: boolean;
+    config?: Record<string, unknown> | null;
   }>,
 ) {
   return apiPutJson<{ data: WalkLibraryItem }>(
@@ -159,7 +167,38 @@ export function createDraftFromPublished(teamId: string, templateId: string) {
   return apiPostJson<{ data: { id: string } }>(
     `${base(teamId)}/templates/${encodeURIComponent(templateId)}/create-draft`,
     {},
+  ).then((r) => {
+    const draft = r.data;
+    if (!draft?.id) {
+      throw new Error("Could not create an editable draft from this walk.");
+    }
+    return draft;
+  });
+}
+
+export function duplicateWalkTemplate(teamId: string, templateId: string) {
+  return apiPostJson<{ data: { id: string } }>(
+    `${base(teamId)}/templates/${encodeURIComponent(templateId)}/duplicate`,
+    {},
   ).then((r) => r.data);
+}
+
+export function archiveWalkTemplate(teamId: string, templateId: string) {
+  return apiPostJson<{ data: { id: string; status: string } }>(
+    `${base(teamId)}/templates/${encodeURIComponent(templateId)}/archive`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function fetchWalkTemplateVersions(teamId: string, templateId: string) {
+  return apiGetJson<{
+    data: Array<{
+      id: string;
+      version: number;
+      publishedAt: string;
+      publishedByUserId: string | null;
+    }>;
+  }>(`${base(teamId)}/templates/${encodeURIComponent(templateId)}/versions`).then((r) => r.data);
 }
 
 export function fetchOutdatedWalkItems(teamId: string, templateId: string) {
@@ -202,8 +241,11 @@ export type WalkSchedule = {
   timezone: string;
   recurrence: string;
   daysOfWeek: number[] | null;
+  intervalMinutes?: number | null;
   assignScope: string;
   assignRole: string | null;
+  assignUserIds?: string[] | null;
+  completionMode?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -230,11 +272,14 @@ export function fetchWalkSchedules(teamId: string, templateId?: string) {
 export type WalkScheduleWriteBody = {
   templateId?: string;
   name?: string | null;
-  recurrence?: "ONCE" | "DAILY" | "WEEKLY";
+  recurrence?: "ONCE" | "DAILY" | "WEEKLY" | "INTERVAL";
   daysOfWeek?: number[] | null;
+  intervalMinutes?: number | null;
   timezone?: string;
   assignScope?: "WORKSPACE" | "ROLE" | "TEAM" | "MEMBER" | "ANY";
   assignRole?: string | null;
+  assignUserIds?: string[] | null;
+  completionMode?: "ANY_ONE" | "EVERY_ASSIGNEE";
   isActive?: boolean;
   windows?: Array<{ startMinutes: number; dueMinutes: number; graceMinutes?: number }>;
 };

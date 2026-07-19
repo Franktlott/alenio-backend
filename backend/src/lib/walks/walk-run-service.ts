@@ -34,8 +34,25 @@ type SnapshotItem = {
     required: boolean;
     blocksCompletion?: boolean;
     position: number;
+    config?: Record<string, unknown> | null;
   }>;
 };
+
+function correctiveBranch(
+  action: { config?: Record<string, unknown> | null },
+): "first_failure" | "if_pass" | "if_fail" | null {
+  const raw = action.config?.branch;
+  if (raw === "first_failure" || raw === "if_pass" || raw === "if_fail") return raw;
+  return null;
+}
+
+/** If-pass notes are informational — they must not block the associate. */
+function isAssociateCorrectiveAction(action: {
+  config?: Record<string, unknown> | null;
+  actionType?: string;
+}): boolean {
+  return correctiveBranch(action) !== "if_pass";
+}
 
 const runResponseInclude = {
   responses: {
@@ -199,20 +216,32 @@ export function serializeWalkRun(run: {
               photoUrls: resp.photoUrls,
               completedBy: resp.completedBy,
               completedAt: resp.completedAt?.toISOString() ?? null,
-              correctiveActions: caDefs.map((action) => {
-                const result = caResults.find((r) => r.correctiveActionId === action.id);
-                return {
-                  id: action.id,
-                  title: action.title,
-                  actionType: action.actionType,
-                  instructions: action.instructions ?? null,
-                  blocksCompletion: Boolean(
-                    action.blocksCompletion || action.actionType === "BLOCK_COMPLETION",
-                  ),
-                  status: result?.status ?? "PENDING",
-                  completedAt: result?.completedAt?.toISOString() ?? null,
-                };
-              }),
+              correctiveActions: caDefs
+                .filter((action) => isAssociateCorrectiveAction(action))
+                .map((action) => {
+                  const result = caResults.find((r) => r.correctiveActionId === action.id);
+                  const required = Boolean(
+                    action.required ||
+                      action.blocksCompletion ||
+                      action.actionType === "BLOCK_COMPLETION",
+                  );
+                  return {
+                    id: action.id,
+                    title: action.title,
+                    actionType: action.actionType,
+                    instructions: action.instructions ?? null,
+                    required,
+                    blocksCompletion: Boolean(
+                      action.blocksCompletion ||
+                        action.actionType === "BLOCK_COMPLETION" ||
+                        required,
+                    ),
+                    branch: correctiveBranch(action),
+                    config: action.config ?? null,
+                    status: result?.status ?? "PENDING",
+                    completedAt: result?.completedAt?.toISOString() ?? null,
+                  };
+                }),
             }
           : null,
       };
@@ -461,6 +490,7 @@ export async function submitWalkItemResponse(input: {
 
   if (failed && item.correctiveActions?.length) {
     for (const action of item.correctiveActions) {
+      if (!isAssociateCorrectiveAction(action)) continue;
       await prisma.walkCorrectiveActionResult.upsert({
         where: {
           itemResponseId_correctiveActionId: {
