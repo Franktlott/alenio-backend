@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
-import { ExecCenterChecklistGroup } from "../../components/alenio-go/ExecCenterChecklistGroup";
+import {
+  ExecCenterChecklistGroup,
+  ExecCenterTableHeader,
+} from "../../components/alenio-go/ExecCenterChecklistGroup";
 import { ExecCenterCompleteModal } from "../../components/alenio-go/ExecCenterCompleteModal";
-import { ExecCenterOpsPanels } from "../../components/alenio-go/ExecCenterOpsPanels";
 import { ExecCenterResultsModal } from "../../components/alenio-go/ExecCenterResultsModal";
 import { ExecCenterSummaryCards } from "../../components/alenio-go/ExecCenterSummaryCards";
 import {
@@ -19,19 +21,18 @@ import {
   DAYPARTS,
   daypartGroupPriority,
   deltaLabel,
-  deriveAtRiskItems,
-  deriveRecentActivity,
   endOfLocalDay,
   formatDateChip,
   formatTime,
   formatUpdated,
-  nextCheckRow,
+  openActionsCount,
   PAGE_SIZE,
   rate,
+  rowMatchesStatusFilter,
   sortRowsForDisplay,
   startOfLocalDay,
-  STATUS_KEY,
-  statusClass,
+  startOfLocalWeek,
+  statusCounts,
   type DashboardRow,
   type ShiftFilter,
   type StatusFilter,
@@ -74,6 +75,28 @@ function IconExport() {
   );
 }
 
+const STATUS_STRIP: Array<{
+  key: Exclude<StatusFilter, "all">;
+  label: string;
+  detail: string;
+  tone: string;
+}> = [
+  { key: "overdue", label: "Overdue", detail: "Past due and not completed", tone: "danger" },
+  { key: "due_soon", label: "Due Soon", detail: "Due within the next 60 min", tone: "warn" },
+  { key: "in_progress", label: "In Progress", detail: "Currently being completed", tone: "info" },
+  { key: "completed", label: "Completed", detail: "Completed on time", tone: "success" },
+  { key: "not_started", label: "Not Started", detail: "Not yet started", tone: "muted" },
+];
+
+const FILTER_SEGMENTS: Array<{ key: StatusFilter; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "completed", label: "Completed" },
+  { key: "in_progress", label: "In Progress" },
+  { key: "due_soon", label: "Due Soon" },
+  { key: "overdue", label: "Overdue" },
+  { key: "not_started", label: "Not Started" },
+];
+
 export function TempsDashboardPage() {
   const { teamId, teamName } = useAlenioGoShell();
   const listRef = useRef<HTMLElement>(null);
@@ -84,13 +107,17 @@ export function TempsDashboardPage() {
   const [runs, setRuns] = useState<WalkRunListItem[]>([]);
   const [todayR, setTodayR] = useState<WalkReportingSummary | null>(null);
   const [yesterdayR, setYesterdayR] = useState<WalkReportingSummary | null>(null);
+  const [dayBeforeR, setDayBeforeR] = useState<WalkReportingSummary | null>(null);
+  const [weekR, setWeekR] = useState<WalkReportingSummary | null>(null);
+  const [priorWeekR, setPriorWeekR] = useState<WalkReportingSummary | null>(null);
+  const [days30R, setDays30R] = useState<WalkReportingSummary | null>(null);
+  const [prior30R, setPrior30R] = useState<WalkReportingSummary | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [shiftFilter, setShiftFilter] = useState<ShiftFilter>("all");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [collapseInitialized, setCollapseInitialized] = useState(false);
   const [page, setPage] = useState(1);
-  const [statusKeyOpen, setStatusKeyOpen] = useState(false);
   const [resultsRow, setResultsRow] = useState<DashboardRow | null>(null);
   const [completeRow, setCompleteRow] = useState<DashboardRow | null>(null);
 
@@ -119,21 +146,46 @@ export function TempsDashboardPage() {
       const tomorrowEnd = endOfLocalDay(addDays(now, 1));
       const yStart = startOfLocalDay(addDays(now, -1));
       const yEnd = endOfLocalDay(addDays(now, -1));
+      const dbStart = startOfLocalDay(addDays(now, -2));
+      const dbEnd = endOfLocalDay(addDays(now, -2));
+      const weekStart = startOfLocalWeek(now);
+      const priorWeekStart = addDays(weekStart, -7);
+      const priorWeekEnd = endOfLocalDay(addDays(weekStart, -1));
+      const days30Start = startOfLocalDay(addDays(now, -29));
+      const prior30Start = startOfLocalDay(addDays(now, -59));
+      const prior30End = endOfLocalDay(addDays(now, -30));
 
-      const [occs, runList, today, yesterday] = await Promise.all([
-        fetchWalkOccurrences(teamId, {
-          from: todayStart.toISOString(),
-          to: tomorrowEnd.toISOString(),
-        }),
-        fetchWalkRuns(teamId),
-        fetchWalkReporting(teamId, { from: todayStart.toISOString(), to: todayEnd.toISOString() }),
-        fetchWalkReporting(teamId, { from: yStart.toISOString(), to: yEnd.toISOString() }),
-      ]);
+      const [occs, runList, today, yesterday, dayBefore, week, priorWeek, days30, prior30] =
+        await Promise.all([
+          fetchWalkOccurrences(teamId, {
+            from: todayStart.toISOString(),
+            to: tomorrowEnd.toISOString(),
+          }),
+          fetchWalkRuns(teamId),
+          fetchWalkReporting(teamId, { from: todayStart.toISOString(), to: todayEnd.toISOString() }),
+          fetchWalkReporting(teamId, { from: yStart.toISOString(), to: yEnd.toISOString() }),
+          fetchWalkReporting(teamId, { from: dbStart.toISOString(), to: dbEnd.toISOString() }),
+          fetchWalkReporting(teamId, { from: weekStart.toISOString(), to: todayEnd.toISOString() }),
+          fetchWalkReporting(teamId, {
+            from: priorWeekStart.toISOString(),
+            to: priorWeekEnd.toISOString(),
+          }),
+          fetchWalkReporting(teamId, { from: days30Start.toISOString(), to: todayEnd.toISOString() }),
+          fetchWalkReporting(teamId, {
+            from: prior30Start.toISOString(),
+            to: prior30End.toISOString(),
+          }),
+        ]);
 
       setOccurrences(occs);
       setRuns(runList);
       setTodayR(today);
       setYesterdayR(yesterday);
+      setDayBeforeR(dayBefore);
+      setWeekR(week);
+      setPriorWeekR(priorWeek);
+      setDays30R(days30);
+      setPrior30R(prior30);
       setUpdatedAt(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard");
@@ -173,14 +225,11 @@ export function TempsDashboardPage() {
     [allRows],
   );
 
-  const overdueLive = useMemo(
-    () => todayRows.filter((r) => r.status === "overdue").length,
-    [todayRows],
-  );
+  const counts = useMemo(() => statusCounts(todayRows), [todayRows]);
+  const openActions = useMemo(() => openActionsCount(todayRows), [todayRows]);
 
   useEffect(() => {
     if (loading || collapseInitialized || todayRows.length === 0) return;
-    if (overdueLive > 0) setStatusFilter("overdue");
     const nextCollapsed: Record<string, boolean> = {};
     for (const part of DAYPARTS) {
       const partRows = todayRows.filter((r) => r.daypart === part.key);
@@ -191,7 +240,7 @@ export function TempsDashboardPage() {
     }
     setCollapsed(nextCollapsed);
     setCollapseInitialized(true);
-  }, [loading, collapseInitialized, todayRows, overdueLive]);
+  }, [loading, collapseInitialized, todayRows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -201,16 +250,7 @@ export function TempsDashboardPage() {
         const name = row.occurrence.template?.name ?? "";
         if (!name.toLowerCase().includes(q)) return false;
       }
-      switch (statusFilter) {
-        case "completed":
-          return row.status === "complete";
-        case "open":
-          return row.status === "open" || row.status === "not_started";
-        case "overdue":
-          return row.status === "overdue";
-        default:
-          return true;
-      }
+      return rowMatchesStatusFilter(row, statusFilter);
     });
   }, [todayRows, search, statusFilter, shiftFilter]);
 
@@ -241,33 +281,19 @@ export function TempsDashboardPage() {
 
   const todayRate = rate(todayR);
   const yesterdayRate = rate(yesterdayR);
-  const todayDelta = deltaLabel(todayRate, yesterdayRate);
-  const todayCompleted = todayR?.completion.completed ?? todayRows.filter((r) => r.status === "complete").length;
-  const todayTotal = todayR?.completion.occurrenceTotal ?? todayRows.length;
-  const completeLive = useMemo(
-    () => todayRows.filter((r) => r.status === "complete").length,
-    [todayRows],
-  );
-  const nextCheck = useMemo(() => nextCheckRow(todayRows), [todayRows]);
-  const upcoming = useMemo(
-    () =>
-      allRows.filter(
-        (r) =>
-          (r.dayKey === "today" || r.dayKey === "tomorrow") &&
-          (r.status === "not_started" || r.status === "open"),
-      ),
-    [allRows],
-  );
-  const atRisk = useMemo(() => deriveAtRiskItems(todayRows), [todayRows]);
-  const activity = useMemo(() => deriveRecentActivity(todayRows), [todayRows]);
-
-  function openByOccurrenceId(occurrenceId: string) {
-    const row = todayRows.find((r) => r.occurrence.id === occurrenceId);
-    if (row) openChecklistRow(row);
-  }
+  const dayBeforeRate = rate(dayBeforeR);
+  const weekRate = rate(weekR);
+  const priorWeekRate = rate(priorWeekR);
+  const days30Rate = rate(days30R);
+  const prior30Rate = rate(prior30R);
 
   function toggleGroup(key: string) {
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function toggleStatusFilter(key: Exclude<StatusFilter, "all">) {
+    setStatusFilter((prev) => (prev === key ? "all" : key));
+    scrollToList();
   }
 
   function exportCsv() {
@@ -313,12 +339,20 @@ export function TempsDashboardPage() {
   const showingFrom = filtered.length === 0 ? 0 : (pageSafe - 1) * PAGE_SIZE + 1;
   const showingTo = Math.min(pageSafe * PAGE_SIZE, filtered.length);
 
-  const vsYesterdayTone =
-    todayDelta.up == null ? "even" : todayDelta.up ? "up" : "down";
-  const vsYesterdayLabel =
-    todayDelta.up == null
-      ? "Even with yesterday"
-      : `${todayDelta.up ? "▲" : "▼"} ${todayDelta.text} vs yesterday`;
+  const countFor = (key: Exclude<StatusFilter, "all">) => {
+    switch (key) {
+      case "overdue":
+        return counts.overdue;
+      case "due_soon":
+        return counts.due_soon;
+      case "in_progress":
+        return counts.in_progress;
+      case "completed":
+        return counts.completed;
+      case "not_started":
+        return counts.not_started;
+    }
+  };
 
   return (
     <div className="exec-center" data-testid="temps-execution-center">
@@ -330,11 +364,7 @@ export function TempsDashboardPage() {
             </span>
             Execution Center
           </h1>
-          <p>
-            {overdueLive > 0
-              ? `${overdueLive} overdue · ${completeLive} complete · ${todayTotal} scheduled today`
-              : `${completeLive} of ${todayTotal} complete today`}
-          </p>
+          <p>Real-time overview of today&apos;s operational checklist results.</p>
         </div>
         <div className="exec-center-header-meta">
           <span className="exec-center-date-chip">{formatDateChip()}</span>
@@ -356,49 +386,53 @@ export function TempsDashboardPage() {
       {error ? <div className="exec-center-error">{error}</div> : null}
 
       <ExecCenterSummaryCards
-        overdueCount={overdueLive}
-        completeCount={completeLive}
-        nextCheck={nextCheck}
         todayRate={todayRate}
-        todayCompleted={todayCompleted}
-        todayTotal={todayTotal}
-        vsYesterdayLabel={vsYesterdayLabel}
-        vsYesterdayTone={vsYesterdayTone}
-        onFilterOverdue={() => {
-          setStatusFilter("overdue");
-          scrollToList();
-        }}
-        onFilterComplete={() => {
-          setStatusFilter("completed");
-          scrollToList();
-        }}
-        onOpenNext={() => {
-          if (nextCheck) openChecklistRow(nextCheck);
-        }}
+        yesterdayRate={yesterdayRate}
+        weekRate={weekRate}
+        days30Rate={days30Rate}
+        priorWeekRate={priorWeekRate}
+        prior30Rate={prior30Rate}
+        dayBeforeYesterdayRate={dayBeforeRate}
+        openActions={openActions}
+        todayDelta={deltaLabel(todayRate, yesterdayRate)}
+        yesterdayDelta={deltaLabel(yesterdayRate, dayBeforeRate)}
+        weekDelta={deltaLabel(weekRate, priorWeekRate)}
+        days30Delta={deltaLabel(days30Rate, prior30Rate)}
       />
 
-      <section className="exec-center-body">
-        <div className="exec-center-main">
-          <section className="exec-center-filters">
-        <label className="exec-center-search">
-          <IconSearch />
-          <input
-            type="search"
-            placeholder="Search checklists…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </label>
-        <div className="exec-center-status-tools">
+      <section className="exec-center-status-strip" aria-label="Status overview">
+        {STATUS_STRIP.map((item) => {
+          const n = countFor(item.key);
+          const active = statusFilter === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              className={`exec-center-status-card exec-center-status-card--${item.tone}${active ? " is-active" : ""}`}
+              onClick={() => toggleStatusFilter(item.key)}
+            >
+              <strong>
+                <em>{n}</em> {item.label}
+              </strong>
+              <span>{item.detail}</span>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="exec-center-workspace" aria-label="Checklist filters and results">
+        <section className="exec-center-filters">
+          <label className="exec-center-search">
+            <IconSearch />
+            <input
+              type="search"
+              placeholder="Search checklists…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
           <div className="exec-center-segments" role="tablist" aria-label="Status filter">
-            {(
-              [
-                ["all", "All"],
-                ["completed", "Completed"],
-                ["open", "Open"],
-                ["overdue", "Overdue"],
-              ] as const
-            ).map(([key, label]) => (
+            {FILTER_SEGMENTS.map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
@@ -408,166 +442,91 @@ export function TempsDashboardPage() {
                 onClick={() => setStatusFilter(key)}
               >
                 {label}
-                {key === "overdue" && overdueLive > 0 ? (
-                  <span className="exec-center-segment-count">{overdueLive}</span>
-                ) : null}
               </button>
             ))}
           </div>
-          <div className="exec-center-status-key">
-            <button
-              type="button"
-              className="exec-center-status-key-btn"
-              aria-label="Status key"
-              aria-expanded={statusKeyOpen}
-              aria-controls="exec-center-status-key-panel"
-              onClick={() => setStatusKeyOpen((open) => !open)}
+          <label className="exec-center-select">
+            <span className="visually-hidden">Location</span>
+            <select value={teamId} disabled aria-label="Location">
+              <option value={teamId}>{teamName || "All Locations"}</option>
+            </select>
+          </label>
+          <label className="exec-center-select">
+            <span className="visually-hidden">Shift</span>
+            <select
+              value={shiftFilter}
+              aria-label="Shift"
+              onChange={(e) => setShiftFilter(e.target.value as ShiftFilter)}
             >
-              i
-            </button>
-            {statusKeyOpen ? (
-              <div
-                id="exec-center-status-key-panel"
-                className="exec-center-status-key-panel"
-                role="note"
-              >
-                <div className="exec-center-status-key-head">
-                  <strong>Status key</strong>
-                  <button
-                    type="button"
-                    className="exec-center-status-key-close"
-                    aria-label="Close status key"
-                    onClick={() => setStatusKeyOpen(false)}
-                  >
-                    ✕
-                  </button>
-                </div>
-                <ul>
-                  {STATUS_KEY.map((item) => (
-                    <li key={item.status}>
-                      <span className={`exec-center-badge ${statusClass(item.status)}`}>
-                        {item.label}
-                      </span>
-                      <em>{item.detail}</em>
-                    </li>
-                  ))}
-                </ul>
+              <option value="all">Shift: All</option>
+              {DAYPARTS.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="exec-center-export" onClick={exportCsv}>
+            <IconExport />
+            Export
+          </button>
+        </section>
+
+        <section className="exec-center-board" ref={listRef}>
+          <div className="exec-center-board-scroll">
+            {grouped.length === 0 ? (
+              <div className="exec-center-empty-card">
+                No checklists match these filters for today.
               </div>
-            ) : null}
+            ) : (
+              <div className="exec-center-table-shell">
+                <ExecCenterTableHeader />
+                {grouped.map((group) => {
+                  const open = !collapsed[group.key];
+                  return (
+                    <ExecCenterChecklistGroup
+                      key={group.key}
+                      groupKey={group.key}
+                      label={group.label}
+                      rangeLabel={group.rangeLabel}
+                      count={group.allPartRows.length}
+                      open={open}
+                      onToggle={() => toggleGroup(group.key)}
+                      rows={group.rows}
+                      allPartRows={group.allPartRows}
+                      onOpenChecklist={openChecklistRow}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
-        <label className="exec-center-select">
-          <span>Location</span>
-          <select value={teamId} disabled>
-            <option value={teamId}>{teamName}</option>
-          </select>
-        </label>
-        <label className="exec-center-select">
-          <span>Shift</span>
-          <select
-            value={shiftFilter}
-            onChange={(e) => setShiftFilter(e.target.value as ShiftFilter)}
-          >
-            <option value="all">All</option>
-            {DAYPARTS.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" className="exec-center-export" onClick={exportCsv}>
-          <IconExport />
-          Export
-        </button>
-          </section>
 
-          {overdueLive > 0 && statusFilter !== "overdue" ? (
-            <div className="exec-center-alert">
-              <strong>{overdueLive} checklist{overdueLive === 1 ? "" : "s"} overdue</strong>
-              <span>Review missed windows and assign follow-up.</span>
-              <button type="button" onClick={() => setStatusFilter("overdue")}>
-                Show overdue
+          <footer className="exec-center-pager">
+            <span>
+              Showing {showingFrom}–{showingTo} of {filtered.length} checklists
+            </span>
+            <div className="exec-center-pager-controls">
+              <button
+                type="button"
+                disabled={pageSafe <= 1}
+                aria-label="Previous page"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                ‹
+              </button>
+              <span className="exec-center-pager-page">{pageSafe}</span>
+              <button
+                type="button"
+                disabled={pageSafe >= totalPages}
+                aria-label="Next page"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                ›
               </button>
             </div>
-          ) : null}
-
-          <section className="exec-center-board" ref={listRef}>
-        <div className="exec-center-board-scroll">
-          {grouped.length === 0 ? (
-            <div className="exec-center-empty-card">
-              No checklists match these filters for today.
-            </div>
-          ) : (
-            grouped.map((group) => {
-              const open = !collapsed[group.key];
-              const partDone = group.allPartRows.filter((r) => r.status === "complete").length;
-              const partOverdue = group.allPartRows.filter((r) => r.status === "overdue").length;
-              return (
-                <ExecCenterChecklistGroup
-                  key={group.key}
-                  groupKey={group.key}
-                  label={group.label}
-                  rangeLabel={group.rangeLabel}
-                  count={group.allPartRows.length}
-                  doneCount={partDone}
-                  overdueCount={partOverdue}
-                  open={open}
-                  onToggle={() => toggleGroup(group.key)}
-                  rows={group.rows}
-                  onOpenChecklist={openChecklistRow}
-                />
-              );
-            })
-          )}
-        </div>
-
-        <footer className="exec-center-pager">
-          <span>
-            Showing {showingFrom}–{showingTo} of {filtered.length} checklists
-          </span>
-          <div className="exec-center-pager-controls">
-            <button
-              type="button"
-              disabled={pageSafe <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </button>
-            <span>
-              {pageSafe} / {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={pageSafe >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              Next
-            </button>
-          </div>
-        </footer>
-          </section>
-        </div>
-
-        <ExecCenterOpsPanels
-          upcoming={upcoming}
-          atRisk={atRisk}
-          activity={activity}
-          onOpenUpcoming={openChecklistRow}
-          onOpenAtRisk={openByOccurrenceId}
-          onViewSchedule={() => {
-            setStatusFilter("all");
-            scrollToList();
-          }}
-          onViewOverdue={() => {
-            setStatusFilter("overdue");
-            scrollToList();
-          }}
-          onViewComplete={() => {
-            setStatusFilter("completed");
-            scrollToList();
-          }}
-        />
+          </footer>
+        </section>
       </section>
 
       {resultsRow && teamId ? (

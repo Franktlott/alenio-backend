@@ -1,11 +1,12 @@
 import type { DashboardRow, DaypartKey } from "../../lib/walks/exec-center-utils";
 import {
+  daypartAlertBadge,
   formatTime,
   initials,
+  progressToneClass,
   sortRowsForDisplay,
   statusBadgeLabel,
   statusClass,
-  timingLabel,
 } from "../../lib/walks/exec-center-utils";
 
 type Props = {
@@ -13,11 +14,10 @@ type Props = {
   label: string;
   rangeLabel: string;
   count: number;
-  doneCount: number;
-  overdueCount?: number;
   open: boolean;
   onToggle: () => void;
   rows: DashboardRow[];
+  allPartRows: DashboardRow[];
   onOpenChecklist: (row: DashboardRow) => void;
 };
 
@@ -54,6 +54,16 @@ function DaypartIcon({ daypart }: { daypart: DaypartKey }) {
   );
 }
 
+function ChecklistIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <path d="M9 12h6M9 16h4" />
+    </svg>
+  );
+}
+
 function IconChevron({ open }: { open: boolean }) {
   return (
     <svg
@@ -71,25 +81,69 @@ function IconChevron({ open }: { open: boolean }) {
   );
 }
 
+function IconResults() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <path d="M9 12h6M9 16h6" />
+    </svg>
+  );
+}
+
+function IconMore() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="5" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="12" cy="19" r="1.5" />
+    </svg>
+  );
+}
+
+function IconComment() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+export function ExecCenterTableHeader() {
+  return (
+    <div className="exec-center-table-head" role="row">
+      <span>Time</span>
+      <span>Checklist</span>
+      <span>Status</span>
+      <span>Progress</span>
+      <span>Corrective Actions</span>
+      <span>Results</span>
+      <span>Assignee</span>
+      <span>Comments</span>
+      <span className="exec-center-col-more" aria-hidden />
+    </div>
+  );
+}
+
 export function ExecCenterChecklistGroup({
   groupKey,
   label,
   rangeLabel,
   count,
-  doneCount,
-  overdueCount = 0,
   open,
   onToggle,
   rows,
+  allPartRows,
   onOpenChecklist,
 }: Props) {
-  const overdueInGroup = overdueCount;
   const sortedRows = sortRowsForDisplay(rows);
-  const allDone = doneCount === count && overdueInGroup === 0;
+  const alert = daypartAlertBadge(allPartRows);
+  const allDone =
+    allPartRows.length > 0 && allPartRows.every((r) => r.status === "complete");
 
   return (
     <section
-      className={`exec-center-daypart${overdueInGroup > 0 ? " exec-center-daypart--alert" : ""}${allDone ? " exec-center-daypart--done" : ""}`}
+      className={`exec-center-daypart${alert?.tone === "overdue" ? " exec-center-daypart--alert" : ""}${allDone ? " exec-center-daypart--done" : ""}`}
       data-group={groupKey}
     >
       <button type="button" className="exec-center-daypart-head" onClick={onToggle}>
@@ -98,52 +152,104 @@ export function ExecCenterChecklistGroup({
           <DaypartIcon daypart={groupKey} />
         </span>
         <div className="exec-center-daypart-title">
-          <strong>{label}</strong>
+          <strong>
+            {label} <em>({count})</em>
+          </strong>
           <span className="exec-center-daypart-range">{rangeLabel}</span>
         </div>
-        <span className="exec-center-daypart-score">
-          {doneCount}/{count}
-        </span>
-        {overdueInGroup > 0 ? (
-          <span className="exec-center-daypart-alert">{overdueInGroup} need action</span>
+        {alert ? (
+          <span className={`exec-center-daypart-alert exec-center-daypart-alert--${alert.tone}`}>
+            {alert.text}
+          </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="exec-center-check-list">
+        <div className="exec-center-table exec-center-table--group">
           {sortedRows.map((row) => (
-            <button
+            <div
               key={row.occurrence.id}
-              type="button"
-              className={`exec-center-check-card exec-center-check-card--${row.status}`}
-              onClick={() => onOpenChecklist(row)}
+              className={`exec-center-table-row exec-center-table-row--${row.status}`}
+              role="row"
             >
-              <span className="exec-center-check-time">{formatTime(row.occurrence.dueAt)}</span>
-              <span className="exec-center-check-main">
-                <span className="exec-center-check-title-row">
-                  <strong>{row.occurrence.template?.name ?? "Checklist"}</strong>
-                  <span className={`exec-center-badge ${statusClass(row.status)}`}>
-                    {statusBadgeLabel(row.status)}
-                  </span>
+              <span className="exec-center-col-time">{formatTime(row.occurrence.dueAt)}</span>
+              <span className="exec-center-col-name">
+                <span className="exec-center-check-ico" aria-hidden>
+                  <ChecklistIcon />
                 </span>
-                <span className="exec-center-check-meta">
-                  {timingLabel(row)}
-                  {row.openCa > 0 ? ` · ${row.openCa} open CA` : ""}
+                <strong>{row.occurrence.template?.name ?? "Checklist"}</strong>
+              </span>
+              <span className="exec-center-col-status">
+                <span className={`exec-center-badge ${statusClass(row.status)}`}>
+                  {statusBadgeLabel(row.status)}
                 </span>
               </span>
-              {row.userName ? (
-                <span className="exec-center-user">
-                  <span className="exec-center-user-avatar" aria-hidden>
-                    {initials(row.userName)}
-                  </span>
+              <span className="exec-center-col-progress">
+                <span className="exec-center-progress-pct">{row.completionPct}%</span>
+                <span
+                  className={`exec-center-progress-track ${progressToneClass(row.status)}`}
+                  role="progressbar"
+                  aria-valuenow={row.completionPct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <span
+                    className="exec-center-progress-fill"
+                    style={{ width: `${row.completionPct}%` }}
+                  />
                 </span>
-              ) : (
-                <span className="exec-center-user exec-center-user--empty" />
-              )}
-              <span className="exec-center-check-chevron" aria-hidden>
-                ›
               </span>
-            </button>
+              <span className="exec-center-col-ca">
+                {row.openCa > 0 ? (
+                  <span
+                    className={`exec-center-ca-pill${row.status === "overdue" ? " is-danger" : " is-warn"}`}
+                  >
+                    <span className="exec-center-ca-dot" aria-hidden />
+                    {row.openCa}
+                  </span>
+                ) : (
+                  <span className="exec-center-ca-empty">—</span>
+                )}
+              </span>
+              <span className="exec-center-col-results">
+                <button
+                  type="button"
+                  className="exec-center-icon-btn"
+                  aria-label={row.status === "complete" ? "View results" : "Complete checklist"}
+                  onClick={() => onOpenChecklist(row)}
+                >
+                  <IconResults />
+                </button>
+              </span>
+              <span className="exec-center-col-assignee">
+                {row.userName ? (
+                  <>
+                    <span className="exec-center-user-avatar" aria-hidden>
+                      {initials(row.userName)}
+                    </span>
+                    <span className="exec-center-user-name">{row.userName}</span>
+                  </>
+                ) : (
+                  <span className="exec-center-ca-empty">—</span>
+                )}
+              </span>
+              <span className="exec-center-col-comments">
+                <span className="exec-center-comments" aria-label="No comments">
+                  <IconComment />
+                  <span>—</span>
+                </span>
+              </span>
+              <span className="exec-center-col-more">
+                <button
+                  type="button"
+                  className="exec-center-icon-btn"
+                  aria-label="More actions"
+                  onClick={() => onOpenChecklist(row)}
+                >
+                  <IconMore />
+                </button>
+              </span>
+            </div>
           ))}
         </div>
       ) : null}

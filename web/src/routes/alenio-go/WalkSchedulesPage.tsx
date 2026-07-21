@@ -28,7 +28,6 @@ import {
 } from "../../lib/walks/library-api";
 import {
   DAY_LABELS,
-  assignScopeLabel,
   formatScheduleSummary,
   windowLabel,
 } from "../../lib/walks/schedule-summary";
@@ -38,12 +37,11 @@ import { useAlenioGoShell } from "./alenio-go-outlet-context";
 type TabId = "all" | "active" | "paused";
 type ModalMode = "create" | "edit";
 
+/** Temps checklists are always available to the whole workspace. */
+const TEMPS_ASSIGN_SCOPE = "WORKSPACE" as const;
+
 function frequencyLabel(schedule: WalkSchedule) {
   return formatScheduleSummary(schedule);
-}
-
-function assignLabel(schedule: WalkSchedule) {
-  return assignScopeLabel(schedule);
 }
 
 function nextRunLabel(schedule: WalkSchedule, occurrences: WalkOccurrenceRow[]) {
@@ -213,12 +211,9 @@ export function WalkSchedulesPage() {
     setFormName("");
     setFormRecurrence("DAILY");
     setFormDays([1, 3, 5]);
-    setFormWindows([
-      { due: "08:00", beforeMinutes: 120, afterMinutes: 30 },
-      { due: "15:00", beforeMinutes: 120, afterMinutes: 30 },
-      { due: "22:00", beforeMinutes: 120, afterMinutes: 30 },
-    ]);
-    setFormTemplateId(templates[0]?.id ?? "");
+    setFormWindows([{ due: "08:00", beforeMinutes: 120, afterMinutes: 30 }]);
+    // Start empty so the user explicitly picks a checklist.
+    setFormTemplateId("");
   }
 
   function openCreate() {
@@ -274,7 +269,7 @@ export function WalkSchedulesPage() {
     try {
       if (modalMode === "create") {
         if (!formTemplateId) {
-          setError("Select a published walk.");
+          setError("Select a checklist.");
           return;
         }
         const checklistName =
@@ -284,6 +279,9 @@ export function WalkSchedulesPage() {
           name: checklistName,
           recurrence: formRecurrence,
           daysOfWeek: formRecurrence === "WEEKLY" ? formDays : null,
+          assignScope: TEMPS_ASSIGN_SCOPE,
+          assignRole: null,
+          completionMode: "ANY_ONE",
           windows,
         });
         closeModal();
@@ -304,6 +302,9 @@ export function WalkSchedulesPage() {
         name: checklistName,
         recurrence: formRecurrence,
         daysOfWeek: formRecurrence === "WEEKLY" ? formDays : null,
+        assignScope: TEMPS_ASSIGN_SCOPE,
+        assignRole: null,
+        completionMode: "ANY_ONE",
         windows,
       });
       closeModal();
@@ -361,7 +362,7 @@ export function WalkSchedulesPage() {
     <TempsPageShell testId="walk-schedules-page" wide className="wsch-shell temps-page--fill">
       <TempsPageHeader
         title="Schedules"
-        description="Define when published walks open for associates, and manage active windows."
+        description="Pick a checklist, set its due times, and Temps associates on this team will see it when the window opens."
         actions={
           <TempsButton variant="primary" onClick={openCreate}>
             Create schedule
@@ -407,10 +408,9 @@ export function WalkSchedulesPage() {
           <table className="wil-table wsch-table">
             <thead>
               <tr>
-                <th>Walk</th>
+                <th>Checklist</th>
                 <th>Frequency</th>
                 <th>Time windows</th>
-                <th>Assigned to</th>
                 <th>Next run</th>
                 <th>Status</th>
                 <th className="wsch-actions-col">
@@ -421,14 +421,14 @@ export function WalkSchedulesPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={6}>
                     <TempsEmptyState
                       compact
                       title={tab === "paused" ? "No paused schedules" : "No schedules yet"}
                       description={
                         tab === "paused"
                           ? "Pause an active schedule to stop new windows."
-                          : "Create a schedule from a published walk."
+                          : "Select a published checklist and set its time windows."
                       }
                       action={
                         tab === "all" || tab === "active" ? (
@@ -469,9 +469,6 @@ export function WalkSchedulesPage() {
                             </span>
                           ))}
                         </div>
-                      </td>
-                      <td>
-                        <span className="wsch-meta">{assignLabel(schedule)}</span>
                       </td>
                       <td>
                         <span className="wsch-meta">{nextRunLabel(schedule, occurrences)}</span>
@@ -561,21 +558,27 @@ export function WalkSchedulesPage() {
             </header>
             <p className="wil-subtitle">
               {modalMode === "edit"
-                ? "Update frequency and time windows. Future open occurrences will be refreshed."
-                : "Pick a published walk and the daily windows associates must complete."}
+                ? "Update when this checklist is due. Future open windows will refresh."
+                : "Select a checklist, then set when associates should complete it. Everyone on this Temps team can take it."}
             </p>
 
             {templates.length === 0 && modalMode === "create" ? (
-              <p className="wil-error">Publish a walk in Walk Builder before creating a schedule.</p>
+              <p className="wil-error">Publish a checklist under Checklists before creating a schedule.</p>
             ) : (
               <div className="wsch-form">
-                <label>
-                  Walk
+                <label className="wsch-field-checklist">
+                  <span className="wsch-field-label">Checklist</span>
                   <select
                     value={formTemplateId}
                     disabled={modalMode === "edit"}
                     onChange={(e) => setFormTemplateId(e.target.value)}
+                    aria-label="Select checklist"
                   >
+                    {modalMode === "create" && !formTemplateId ? (
+                      <option value="" disabled>
+                        Select a checklist…
+                      </option>
+                    ) : null}
                     {templates.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name}
@@ -585,13 +588,13 @@ export function WalkSchedulesPage() {
                     formTemplateId &&
                     !templates.some((t) => t.id === formTemplateId) ? (
                       <option value={formTemplateId}>
-                        {schedules.find((s) => s.id === editingId)?.template?.name ?? "Walk"}
+                        {schedules.find((s) => s.id === editingId)?.template?.name ?? "Checklist"}
                       </option>
                     ) : null}
                   </select>
                 </label>
                 <label>
-                  Frequency
+                  <span className="wsch-field-label">Frequency</span>
                   <select
                     value={formRecurrence}
                     onChange={(e) => setFormRecurrence(e.target.value as "DAILY" | "WEEKLY")}
@@ -623,7 +626,7 @@ export function WalkSchedulesPage() {
                 ) : null}
                 <div className="wsch-windows-edit">
                   <div className="wsch-windows-edit-head">
-                    <strong>Due times</strong>
+                    <strong>Time windows</strong>
                     <button
                       type="button"
                       className="wb-linkish"
@@ -634,9 +637,12 @@ export function WalkSchedulesPage() {
                         ])
                       }
                     >
-                      + Add
+                      + Add window
                     </button>
                   </div>
+                  <p className="wsch-windows-help">
+                    Due time is when the check should be finished. Before / after is how long the window stays open.
+                  </p>
                   <div className="wsch-due-table" role="table" aria-label="Due times">
                     <div className="wsch-due-table-head" role="row">
                       <span role="columnheader">Due</span>
@@ -708,7 +714,7 @@ export function WalkSchedulesPage() {
                 className="wil-btn wil-btn--primary"
                 disabled={
                   busy ||
-                  (modalMode === "create" && templates.length === 0) ||
+                  (modalMode === "create" && (templates.length === 0 || !formTemplateId)) ||
                   !!findDraftWindowOverlapError(formWindows)
                 }
                 onClick={() => void submitModal()}

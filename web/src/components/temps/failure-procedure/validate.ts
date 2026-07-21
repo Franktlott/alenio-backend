@@ -25,6 +25,9 @@ export function getFailureProcedureMissing(draft: FailureProcedureDraft): string
 
   if (draft.allowRetempAfterSteps) {
     missing.push(...missingRequiredSteps(draft.ifFailSteps, "If Retest Fails"));
+    if (!draft.ifFailSteps.some((s) => s.text.trim()) && !missing.some((m) => m.startsWith("If Retest"))) {
+      missing.push("At least one If Retest Fails step");
+    }
   }
 
   return missing;

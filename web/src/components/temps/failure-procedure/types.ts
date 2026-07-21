@@ -4,7 +4,7 @@ export type FailureTypedStep = {
   required: boolean;
 };
 
-export type FailureBranchId = "first_failure" | "if_pass" | "if_fail";
+export type FailureBranchId = "first_failure" | "if_pass" | "if_fail" | "final_failure";
 
 export type FailureProcedureDraft = {
   firstFailureSteps: FailureTypedStep[];
@@ -20,6 +20,7 @@ export type FailureProcedureDraft = {
   retempNote: string;
   /** Optional note shown when a recheck passes after 1st failure steps. */
   ifPassNote: string;
+  /** Steps after a failed retest; once complete the item closes and the walk advances. */
   ifFailSteps: FailureTypedStep[];
 };
 
@@ -47,7 +48,7 @@ export function emptyTypedStep(text = ""): FailureTypedStep {
 export function emptyFailureProcedure(): FailureProcedureDraft {
   return {
     firstFailureSteps: [emptyTypedStep()],
-    allowRetempAfterSteps: false,
+    allowRetempAfterSteps: true,
     retempNote: "",
     ifPassNote: "",
     ifFailSteps: [emptyTypedStep()],

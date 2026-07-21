@@ -69,6 +69,8 @@ function stepFromAction(a: ApiAction): FailureTypedStep {
 function branchOf(a: ApiAction): FailureBranchId | null {
   const raw = a.config && typeof a.config === "object" ? a.config.branch : null;
   if (raw === "first_failure" || raw === "if_pass" || raw === "if_fail") return raw;
+  // Legacy 3-stage items: fold final-failure steps into the retest-fail list.
+  if (raw === "final_failure") return "if_fail";
   return null;
 }
 

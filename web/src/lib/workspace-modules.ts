@@ -126,7 +126,7 @@ export function defaultWorkspaceModules(): WorkspaceModule[] {
       description: "Configure temps in Go; associates take checks in the Alenio Temps app.",
       icon: "temp",
       tone: "emerald",
-      baseHref: "/go/temp-checks/module",
+      baseHref: "/go/temp-checks",
       status: "inactive",
       operatingMode: null,
       setupProgressPercent: 0,

@@ -1147,6 +1147,8 @@ export type ActivityReactionBucket = {
 
 export type ApiActivityItem = {
   id: string;
+  teamId?: string;
+  team?: { id: string; name: string } | null;
   type: string;
   createdAt: string;
   metadata: ActivityMetadata;
@@ -1308,6 +1310,41 @@ export function fetchTeamActivity(teamId: string) {
   ).then((r) => r.data);
 }
 
+/** Prefer combined feed; fall back to per-workspace fetch if `/api/activity` is not deployed yet. */
+export async function fetchAllActivity(
+  workspaces?: { id: string; name: string }[],
+): Promise<ApiActivityItem[]> {
+  try {
+    const data = await apiGetJson<{ data: ApiActivityItem[] }>("/api/activity").then((r) => r.data);
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    const missingCombined =
+      /not found|404/i.test(msg) || msg.includes("may not exist or you may not have access");
+    if (!missingCombined || !workspaces?.length) throw e;
+
+    const chunks = await Promise.all(
+      workspaces.map(async (ws) => {
+        try {
+          const items = await fetchTeamActivity(ws.id);
+          return items.map((item) => ({
+            ...item,
+            teamId: item.teamId ?? ws.id,
+            team: item.team ?? { id: ws.id, name: ws.name },
+          }));
+        } catch {
+          return [] as ApiActivityItem[];
+        }
+      }),
+    );
+
+    return chunks
+      .flat()
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 150);
+  }
+}
+
 export function postActivityReaction(teamId: string, activityId: string, emoji: string) {
   return apiPostJson<{ data: { toggled: boolean } }>(
     `/api/teams/${encodeURIComponent(teamId)}/activity/${encodeURIComponent(activityId)}/react`,
@@ -1320,6 +1357,75 @@ export function postActivityCelebrate(
   payload: { targetUserId: string; celebrationType: string; message?: string },
 ) {
   return apiPostJson<{ data: { id: string } }>(`/api/teams/${encodeURIComponent(teamId)}/activity/celebrate`, payload).then((r) => r.data);
+}
+
+export type RecognitionRange = "month" | "30d" | "all";
+
+export type RecognitionKpis = {
+  recognitionsGivenThisMonth: number;
+  recognitionsGivenLastMonth: number;
+  recognitionsGivenChangePct: number | null;
+  teamMembersRecognizedThisMonth: number;
+  totalLast30Days: number;
+  totalPrior30Days: number;
+  totalChangePct: number | null;
+  topRecognizer: {
+    userId: string;
+    name: string | null;
+    image: string | null;
+    count: number;
+    isCurrentUser: boolean;
+  } | null;
+};
+
+export type RecognitionItem = {
+  id: string;
+  createdAt: string;
+  celebrationType: string;
+  message: string | null;
+  giver: { id: string; name: string | null; image: string | null } | null;
+  target: { id: string | null; name: string | null; image: string | null };
+  reactions: Record<string, ActivityReactionBucket>;
+  visibility: "public";
+};
+
+export type RecognitionSummary = {
+  owner: { id: string; name: string | null; email: string | null; image: string | null } | null;
+  kpis: RecognitionKpis;
+  breakdown: Array<{ key: string; count: number }>;
+  topRecognizers: Array<{
+    rank: number;
+    userId: string;
+    name: string | null;
+    image: string | null;
+    count: number;
+    isCurrentUser: boolean;
+  }>;
+  items: RecognitionItem[];
+  nextCursor: string | null;
+  range: string;
+  typeFilter: string;
+};
+
+export function fetchTeamRecognitions(
+  teamId: string,
+  opts?: { range?: RecognitionRange; type?: string; limit?: number; cursor?: string | null },
+) {
+  const params = new URLSearchParams();
+  if (opts?.range) params.set("range", opts.range);
+  if (opts?.type && opts.type !== "all") params.set("type", opts.type);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.cursor) params.set("cursor", opts.cursor);
+  const qs = params.toString();
+  return apiGetJson<{ data: RecognitionSummary }>(
+    `/api/teams/${encodeURIComponent(teamId)}/recognitions${qs ? `?${qs}` : ""}`,
+  ).then((r) => r.data);
+}
+
+export function deleteActivityCelebration(teamId: string, activityId: string) {
+  return apiDeleteJson<void>(
+    `/api/teams/${encodeURIComponent(teamId)}/activity/${encodeURIComponent(activityId)}`,
+  );
 }
 
 export function fetchUpcomingVideoMeetings() {
@@ -1389,6 +1495,8 @@ export type WebTeamMemberRow = {
   id: string;
   userId: string;
   role: string;
+  /** When the member joined this workspace (`TeamMember.joinedAt`). */
+  joinedAt?: string;
   user: { id: string; name: string | null; email: string | null; image: string | null };
 };
 

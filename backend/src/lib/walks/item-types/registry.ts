@@ -78,25 +78,6 @@ function parseConfig<T>(schema: ZodTypeAny, raw: unknown, fallback: T): T {
   return parsed.success ? (parsed.data as T) : fallback;
 }
 
-/** Coerce string temps ("41") so Zod number fields parse; never invent ABOVE/165. */
-function parseTemperatureConfig(raw: unknown): TemperatureConfig | null {
-  const obj =
-    raw && typeof raw === "object" ? ({ ...(raw as Record<string, unknown>) } as Record<string, unknown>) : {};
-  const coerceBound = (v: unknown): unknown => {
-    if (v == null || v === "") return null;
-    if (typeof v === "number") return Number.isFinite(v) ? v : null;
-    if (typeof v === "string" && v.trim() !== "") {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : v;
-    }
-    return v;
-  };
-  if ("minimumTemperature" in obj) obj.minimumTemperature = coerceBound(obj.minimumTemperature);
-  if ("maximumTemperature" in obj) obj.maximumTemperature = coerceBound(obj.maximumTemperature);
-  const parsed = temperatureConfigSchema.safeParse(obj);
-  return parsed.success ? (parsed.data as TemperatureConfig) : null;
-}
-
 export const WALK_ITEM_TYPE_REGISTRY: Record<WalkItemType, WalkItemTypeDefinition> = {
   TEMPERATURE: {
     type: "TEMPERATURE",
@@ -108,12 +89,9 @@ export const WALK_ITEM_TYPE_REGISTRY: Record<WalkItemType, WalkItemTypeDefinitio
     configSchema: temperatureConfigSchema,
     responseSchema: temperatureResponseSchema,
     evaluate: (config, response) => {
-      const c = parseTemperatureConfig(config);
+      const c = parseConfig(temperatureConfigSchema, config, DEFAULT_TEMPERATURE_CONFIG);
       const r = temperatureResponseSchema.parse(response);
-      // Broken/mismatched config must not silently become hot-food ABOVE 165°F
-      // (that falsely FAILs cooler checks and opens corrective actions).
-      if (!c) return "FAIL";
-      return evaluateTemperature(c, r as TemperatureResponse);
+      return evaluateTemperature(c as TemperatureConfig, r as TemperatureResponse);
     },
   },
   YES_NO: {

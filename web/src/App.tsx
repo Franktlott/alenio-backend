@@ -13,6 +13,7 @@ import { WalkItemLibraryPage } from "./routes/alenio-go/WalkItemLibraryPage";
 import { WalkBuilderPage } from "./routes/alenio-go/WalkBuilderPage";
 import { WalkDetailsPage } from "./routes/alenio-go/WalkDetailsPage";
 import { WalksListPage } from "./routes/alenio-go/WalksListPage";
+import { WalkSchedulesPage } from "./routes/alenio-go/WalkSchedulesPage";
 import { TempsModuleLayout } from "./routes/alenio-go/TempsModuleLayout";
 import { TempsDashboardPage } from "./routes/alenio-go/TempsDashboardPage";
 import { TempsReportsPage } from "./routes/alenio-go/TempsReportsPage";
@@ -174,7 +175,7 @@ export default function App() {
             <Route path="walks/builder" element={<WalkBuilderPage />} />
             <Route path="walks/:templateId" element={<WalkDetailsPage />} />
             <Route path="walks" element={<WalksListPage />} />
-              <Route path="schedule" element={<Navigate to="/go/temp-checks/walks" replace />} />
+              <Route path="schedule" element={<WalkSchedulesPage />} />
               <Route path="reports" element={<TempsReportsPage />} />
             </Route>
             <Route path="briefings/*" element={<AlenioGoModuleSettingsPage moduleKey="briefings" />} />

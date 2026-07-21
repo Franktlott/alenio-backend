@@ -1,9 +1,15 @@
 import type { WalkOccurrenceRow, WalkReportingSummary, WalkRunListItem } from "./library-api";
 
 export type DaypartKey = "breakfast" | "midday" | "afternoon" | "evening" | "overnight";
-export type StatusFilter = "all" | "completed" | "open" | "overdue";
+export type StatusFilter =
+  | "all"
+  | "completed"
+  | "in_progress"
+  | "due_soon"
+  | "overdue"
+  | "not_started";
 export type ShiftFilter = "all" | DaypartKey;
-export type RowStatus = "complete" | "not_started" | "open" | "overdue";
+export type RowStatus = "complete" | "not_started" | "in_progress" | "due_soon" | "overdue";
 
 export type DashboardRow = {
   occurrence: WalkOccurrenceRow;
@@ -17,28 +23,13 @@ export type DashboardRow = {
   dayKey: "today" | "tomorrow" | "other";
 };
 
-export const STATUS_KEY: Array<{ status: RowStatus; label: string; detail: string }> = [
-  {
-    status: "not_started",
-    label: "Not Started",
-    detail: "Checklist has not been started yet (before or during the window).",
-  },
-  {
-    status: "open",
-    label: "Open",
-    detail: "Started and still inside the completion window. Stays Open until the window ends.",
-  },
-  {
-    status: "overdue",
-    label: "Overdue",
-    detail: "The completion window ended without finishing the checklist.",
-  },
-  {
-    status: "complete",
-    label: "Complete",
-    detail: "Checklist was finished.",
-  },
-];
+export type StatusCounts = {
+  overdue: number;
+  due_soon: number;
+  in_progress: number;
+  completed: number;
+  not_started: number;
+};
 
 export const DAYPARTS: Array<{
   key: DaypartKey;
@@ -53,6 +44,7 @@ export const DAYPARTS: Array<{
 ];
 
 export const PAGE_SIZE = 10;
+export const DUE_SOON_MS = 60 * 60 * 1000;
 
 export function startOfLocalDay(d = new Date()) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
@@ -66,6 +58,12 @@ export function addDays(d: Date, n: number) {
   const next = new Date(d);
   next.setDate(next.getDate() + n);
   return next;
+}
+
+export function startOfLocalWeek(d = new Date()) {
+  const day = startOfLocalDay(d);
+  const weekday = day.getDay(); // 0 = Sun
+  return addDays(day, -weekday);
 }
 
 export function isSameLocalDay(iso: string, day: Date) {
@@ -130,18 +128,24 @@ export function mapRowStatus(
   now: Date,
 ): { status: RowStatus; statusLabel: string } {
   if (occ.status === "COMPLETED" || occ.status === "COMPLETED_LATE") {
-    return { status: "complete", statusLabel: "Complete" };
+    return { status: "complete", statusLabel: "Completed" };
   }
   if (occ.status === "MISSED" || windowHasEnded(occ, now)) {
     return { status: "overdue", statusLabel: "Overdue" };
   }
+
+  const dueMs = new Date(occ.dueAt).getTime() - now.getTime();
+  if (dueMs <= DUE_SOON_MS) {
+    return { status: "due_soon", statusLabel: "Due Soon" };
+  }
+
   const started =
     occ.status === "IN_PROGRESS" ||
     Boolean(occ.runId) ||
     Boolean(occ.startedAt) ||
     Boolean(run);
   if (started) {
-    return { status: "open", statusLabel: "Open" };
+    return { status: "in_progress", statusLabel: "In Progress" };
   }
   return { status: "not_started", statusLabel: "Not Started" };
 }
@@ -196,26 +200,18 @@ export function buildDashboardRow(
   };
 }
 
-function formatDuration(ms: number): string {
-  const mins = Math.max(1, Math.round(Math.abs(ms) / 60000));
-  if (mins < 60) return `${mins} min`;
-  const hours = Math.floor(mins / 60);
-  const rem = mins % 60;
-  if (hours < 24) return rem ? `${hours}h ${rem}m` : `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-}
-
 export function statusBadgeLabel(status: RowStatus): string {
   switch (status) {
     case "complete":
-      return "Complete";
+      return "Completed";
     case "overdue":
       return "Overdue";
-    case "open":
-      return "Open";
+    case "due_soon":
+      return "Due Soon";
+    case "in_progress":
+      return "In Progress";
     default:
-      return "Upcoming";
+      return "Not Started";
   }
 }
 
@@ -225,133 +221,109 @@ export function statusClass(status: RowStatus) {
       return "exec-center-badge--complete";
     case "overdue":
       return "exec-center-badge--overdue";
-    case "open":
-      return "exec-center-badge--open";
+    case "due_soon":
+      return "exec-center-badge--due-soon";
+    case "in_progress":
+      return "exec-center-badge--in-progress";
     default:
       return "exec-center-badge--not-started";
   }
 }
 
-export function timingLabel(row: DashboardRow, now = new Date()): string {
-  if (row.status === "complete") {
-    const at = row.occurrence.completedAt ?? row.run?.completedAt;
-    return at ? `Completed at ${formatTime(at)}` : "Completed today";
+export function progressToneClass(status: RowStatus) {
+  switch (status) {
+    case "complete":
+      return "exec-center-progress--complete";
+    case "overdue":
+      return "exec-center-progress--overdue";
+    case "due_soon":
+      return "exec-center-progress--due-soon";
+    case "in_progress":
+      return "exec-center-progress--in-progress";
+    default:
+      return "exec-center-progress--not-started";
   }
-  const end = new Date(row.occurrence.graceEndsAt ?? row.occurrence.dueAt).getTime();
-  const due = new Date(row.occurrence.dueAt).getTime();
-  if (row.status === "overdue") {
-    return `Overdue by ${formatDuration(now.getTime() - end)}`;
-  }
-  const untilDue = due - now.getTime();
-  if (untilDue > 0) {
-    if (untilDue < 60 * 60 * 1000) return `Due in ${formatDuration(untilDue)}`;
-    return `Due at ${formatTime(row.occurrence.dueAt)}`;
-  }
-  return `Due at ${formatTime(row.occurrence.dueAt)}`;
 }
 
-export function formatRelativeTime(iso: string, now = new Date()): string {
-  const diff = now.getTime() - new Date(iso).getTime();
-  if (diff < 60_000) return "Just now";
-  if (diff < 60 * 60_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 24 * 60 * 60_000) return `${Math.floor(diff / (60 * 60_000))}h ago`;
-  return formatTime(iso);
-}
-
-export function nextCheckRow(rows: DashboardRow[]): DashboardRow | null {
-  return (
-    [...rows]
-      .filter((r) => r.status === "not_started" || r.status === "open")
-      .sort(
-        (a, b) =>
-          new Date(a.occurrence.dueAt).getTime() - new Date(b.occurrence.dueAt).getTime(),
-      )[0] ?? null
-  );
-}
-
-export type AtRiskItem = {
-  id: string;
-  title: string;
-  detail: string;
-  tone: "danger" | "warning";
-  occurrenceId?: string;
-};
-
-export function deriveAtRiskItems(todayRows: DashboardRow[], now = new Date()): AtRiskItem[] {
-  const items: AtRiskItem[] = [];
-
-  for (const row of todayRows.filter((r) => r.status === "overdue")) {
-    items.push({
-      id: `${row.occurrence.id}-overdue`,
-      title: row.occurrence.template?.name ?? "Checklist",
-      detail: timingLabel(row, now),
-      tone: "danger",
-      occurrenceId: row.occurrence.id,
-    });
-  }
-
-  for (const row of todayRows) {
-    const run = row.run;
-    if (!run?.items) {
-      if (row.openCa > 0 && row.status !== "overdue") {
-        items.push({
-          id: `${row.occurrence.id}-ca`,
-          title: row.occurrence.template?.name ?? "Checklist",
-          detail: `${row.openCa} open corrective action${row.openCa === 1 ? "" : "s"}`,
-          tone: "danger",
-          occurrenceId: row.occurrence.id,
-        });
-      }
-      continue;
-    }
-    for (const item of run.items) {
-      const resp = item.response;
-      if (!resp) continue;
-      if (resp.failed || resp.status === "FAIL" || resp.status === "NEEDS_ACTION") {
-        let detail = "Needs attention";
-        const value = (resp.response as { value?: number; unit?: string } | undefined)?.value;
-        const unit = (resp.response as { value?: number; unit?: string } | undefined)?.unit;
-        if (typeof value === "number") {
-          detail = `${value}${unit === "C" ? "°C" : "°F"} — outside safe range`;
-        } else if (resp.status === "NEEDS_ACTION") {
-          detail = "Corrective action required";
-        }
-        items.push({
-          id: `${row.occurrence.id}-${item.id}`,
-          title: item.title,
-          detail,
-          tone: "danger",
-          occurrenceId: row.occurrence.id,
-        });
-      }
-      for (const ca of resp.correctiveActions ?? []) {
-        if (ca.status === "PENDING") {
-          items.push({
-            id: `${row.occurrence.id}-${ca.id}`,
-            title: ca.title || item.title,
-            detail: `Open CA · ${row.occurrence.template?.name ?? "Checklist"}`,
-            tone: "warning",
-            occurrenceId: row.occurrence.id,
-          });
-        }
-      }
+export function statusCounts(rows: DashboardRow[]): StatusCounts {
+  const counts: StatusCounts = {
+    overdue: 0,
+    due_soon: 0,
+    in_progress: 0,
+    completed: 0,
+    not_started: 0,
+  };
+  for (const row of rows) {
+    switch (row.status) {
+      case "overdue":
+        counts.overdue += 1;
+        break;
+      case "due_soon":
+        counts.due_soon += 1;
+        break;
+      case "in_progress":
+        counts.in_progress += 1;
+        break;
+      case "complete":
+        counts.completed += 1;
+        break;
+      default:
+        counts.not_started += 1;
     }
   }
-  return items.slice(0, 10);
+  return counts;
+}
+
+export function openActionsCount(rows: DashboardRow[]): number {
+  return rows.reduce((sum, row) => sum + row.openCa, 0);
+}
+
+/** Daypart header alert pill — highest urgency first. */
+export function daypartAlertBadge(
+  rows: DashboardRow[],
+): { text: string; tone: "overdue" | "due_soon" | "not_started" } | null {
+  const overdue = rows.filter((r) => r.status === "overdue").length;
+  if (overdue > 0) return { text: `Overdue: ${overdue}`, tone: "overdue" };
+  const dueSoon = rows.filter((r) => r.status === "due_soon").length;
+  if (dueSoon > 0) return { text: `Due Soon: ${dueSoon}`, tone: "due_soon" };
+  const notStarted = rows.filter((r) => r.status === "not_started").length;
+  if (notStarted > 0 && notStarted === rows.length) {
+    return { text: `Not Started: ${notStarted}`, tone: "not_started" };
+  }
+  return null;
+}
+
+export function rowMatchesStatusFilter(row: DashboardRow, filter: StatusFilter): boolean {
+  switch (filter) {
+    case "completed":
+      return row.status === "complete";
+    case "in_progress":
+      return row.status === "in_progress";
+    case "due_soon":
+      return row.status === "due_soon";
+    case "overdue":
+      return row.status === "overdue";
+    case "not_started":
+      return row.status === "not_started";
+    default:
+      return true;
+  }
 }
 
 export function statusSortPriority(status: RowStatus): number {
   switch (status) {
     case "overdue":
       return 0;
-    case "open":
+    case "due_soon":
       return 1;
-    case "not_started":
+    case "in_progress":
       return 2;
-    case "complete":
+    case "not_started":
       return 3;
-    default:
+    case "complete":
       return 4;
+    default:
+      return 5;
   }
 }
 
@@ -364,29 +336,17 @@ export function sortRowsForDisplay(rows: DashboardRow[]): DashboardRow[] {
 }
 
 export function daypartGroupPriority(rows: DashboardRow[]): number {
-  const overdue = rows.filter((r) => r.status === "overdue").length;
-  if (overdue > 0) return 0;
-  const open = rows.filter((r) => r.status === "open" || r.status === "not_started").length;
-  if (open > 0) return 1;
-  return 2;
+  if (rows.some((r) => r.status === "overdue")) return 0;
+  if (rows.some((r) => r.status === "due_soon" || r.status === "in_progress")) return 1;
+  if (rows.some((r) => r.status === "not_started")) return 2;
+  return 3;
 }
 
-export type ActivityItem = {
-  id: string;
-  userName: string;
-  checklistName: string;
-  at: string;
-};
-
-export function deriveRecentActivity(todayRows: DashboardRow[]): ActivityItem[] {
-  return todayRows
-    .filter((r) => r.status === "complete")
-    .map((r) => ({
-      id: r.occurrence.id,
-      userName: r.userName ?? "Teammate",
-      checklistName: r.occurrence.template?.name ?? "Checklist",
-      at: r.occurrence.completedAt ?? r.run?.completedAt ?? r.occurrence.dueAt,
-    }))
-    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-    .slice(0, 8);
+/** Decorative sparkline points 0–100 from current/prior rates. */
+export function sparkPoints(current: number, prior: number): string {
+  const a = Math.max(0, Math.min(100, prior));
+  const b = Math.max(0, Math.min(100, Math.round((prior + current) / 2)));
+  const c = Math.max(0, Math.min(100, current));
+  const y = (v: number) => 28 - (v / 100) * 22;
+  return `M2 ${y(a)} L18 ${y(b)} L34 ${y(Math.min(100, b + 4))} L50 ${y(c)}`;
 }

@@ -1,29 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
-import {
-  TempsBuilderTabs,
-  TempsButton,
-  TempsPageHeader,
-  TempsPageShell,
-  TempsSectionCard,
-  TempsStatusBadge,
-  TempsSummaryBar,
-  useTempsNotice,
-  walkStatusTone,
-} from "../../components/temps";
 import { WalkItemEditDrawer } from "../../components/walk-builder/WalkItemEditDrawer";
-import {
-  defaultScheduleFormValue,
-  findDraftWindowOverlapError,
-  parseIntervalWindow,
-  parseWindows,
-  scheduleToFormValue,
-  WalkScheduleForm,
-  type WalkScheduleFormValue,
-} from "../../components/walk-builder/WalkScheduleForm";
 import { WalkTypeIcon } from "../../components/walk-builder/WalkItemIcons";
 import {
+  createWalkItem,
   createWalkTemplate,
   deleteWalkItem,
   fetchWalkTemplate,
@@ -32,112 +13,83 @@ import {
   patchWalkTemplate,
   reorderWalkItems,
 } from "../../lib/walks/api";
-import { WALK_PALETTE_CARDS } from "../../lib/walks/item-catalog";
+import { defaultTitleForType, WALK_PALETTE_CARDS } from "../../lib/walks/item-catalog";
 import {
   addLibraryItemToWalk,
   createDraftFromPublished,
-  createWalkSchedule,
-  deleteWalkSchedule,
   fetchLibraryItems,
   fetchOutdatedWalkItems,
-  fetchWalkSchedules,
   publishWalk,
-  updateWalkSchedule,
   type WalkLibraryItem,
-  type WalkSchedule,
 } from "../../lib/walks/library-api";
-import {
-  assignScopeLabel,
-  formatScheduleSummary,
-  summarizeWalkSchedules,
-} from "../../lib/walks/schedule-summary";
 import { flattenWalkItems, isPhase2ItemType, type WalkItem, type WalkTemplate } from "../../lib/walks/types";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 const BUILDER_STEPS = [
-  { id: "details", label: "Details", hint: "Name and walk info" },
-  { id: "items", label: "Items", hint: "Add from Item Library" },
-  { id: "schedule", label: "Schedule", hint: "When the walk is due" },
-  { id: "assignment", label: "Assignment", hint: "Who completes it" },
-  { id: "review", label: "Review & Publish", hint: "Validate and publish" },
+  { id: "build", label: "Build Your Walk", hint: "Add items & organize" },
+  { id: "rules", label: "Set Rules", hint: "Define pass/fail criteria" },
+  { id: "devices", label: "Devices & Methods", hint: "How items are recorded" },
+  { id: "corrective", label: "Corrective Actions", hint: "What happens if it fails" },
+  { id: "instructions", label: "Instructions", hint: "Guidance for associates" },
+  { id: "review", label: "Review & Publish", hint: "Preview and publish" },
 ] as const;
 
 type StepId = (typeof BUILDER_STEPS)[number]["id"];
-type ScheduleModalMode = "create" | "edit";
 
 function typeLabel(type: string) {
   return WALK_PALETTE_CARDS.find((c) => c.type === type)?.label ?? type;
 }
 
-function getPublishValidation(name: string, itemCount: number, schedules: WalkSchedule[]) {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  if (!name.trim()) errors.push("Walk name is required.");
-  if (itemCount === 0) errors.push("Add at least one item before publishing.");
-  const activeSchedules = schedules.filter((s) => s.isActive);
-  if (activeSchedules.length === 0) {
-    warnings.push("No active schedule — associates won't see this walk on a cadence.");
+function previewStatusForItem(item: WalkItem, index: number): {
+  kind: "fail" | "pass" | "needs" | "pending";
+  value?: string;
+  detail?: string;
+} {
+  if (item.type === "TEMPERATURE") {
+    const min = Number(item.config.minimumTemperature);
+    const max = Number(item.config.maximumTemperature);
+    const unit = String(item.config.unit ?? "F");
+    if (index === 0) {
+      return {
+        kind: "fail",
+        value: `162.4°${unit}`,
+        detail:
+          item.config.comparisonType === "ABOVE" && Number.isFinite(min)
+            ? `Target: ${min}°${unit} or above`
+            : "Target range not met",
+      };
+    }
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      return { kind: "pass", value: `38.2°${unit}`, detail: `Target: ${min}–${max}°${unit}` };
+    }
+    return { kind: "pass", value: `170°${unit}`, detail: "Within target" };
   }
-  const hasCustomAssignment = activeSchedules.some(
-    (s) => s.assignScope !== "WORKSPACE" || Boolean(s.assignRole?.trim()),
-  );
-  if (activeSchedules.length > 0 && !hasCustomAssignment) {
-    warnings.push("Using default assignment (all associates).");
+  if (item.type === "PHOTO" || (item.type === "VISUAL_CHECK" && item.config.requirePhotoOnFailure)) {
+    return { kind: "needs", detail: "Needs Photo" };
   }
-  return { errors, warnings, canPublish: errors.length === 0 };
-}
-
-function scheduleWriteBody(form: WalkScheduleFormValue, checklistName: string) {
-  const windows =
-    form.recurrence === "INTERVAL"
-      ? parseIntervalWindow(
-          form.intervalDayStart,
-          form.windows[0]?.due ?? "22:00",
-          form.windows[0]?.afterMinutes ?? 0,
-        )
-      : parseWindows(form.windows);
-  return {
-    name: checklistName.trim() || null,
-    recurrence: form.recurrence,
-    daysOfWeek: form.recurrence === "WEEKLY" ? form.daysOfWeek : null,
-    intervalMinutes: form.recurrence === "INTERVAL" ? form.intervalMinutes : null,
-    timezone: form.timezone,
-    assignScope: form.assignScope,
-    assignRole: form.assignScope === "ROLE" ? form.assignRole.trim() || null : null,
-    completionMode: form.completionMode,
-    windows,
-  };
+  if (item.type === "YES_NO") {
+    return { kind: "pass", value: String(item.config.passingAnswer ?? "YES") === "YES" ? "Yes" : "No" };
+  }
+  return { kind: "pending", detail: "Not started" };
 }
 
 export function WalkBuilderPage() {
   const { templateId: routeTemplateId } = useParams();
   const navigate = useNavigate();
-  const { canManage, teamId, teamName } = useAlenioGoShell();
+  const { canManage, teamId, teamName, userName } = useAlenioGoShell();
 
   const [template, setTemplate] = useState<WalkTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const { showNotice, noticeDialog } = useTempsNotice();
-  const [step, setStep] = useState<StepId>("details");
+  const [step, setStep] = useState<StepId>("build");
+  const [paletteTab, setPaletteTab] = useState<"all" | "library">("library");
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<WalkItem | null>(null);
   const [dragItemId, setDragItemId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
-  const [descriptionDraft, setDescriptionDraft] = useState("");
-  const [workplaceDraft, setWorkplaceDraft] = useState("");
-  const [estimatedDurationDraft, setEstimatedDurationDraft] = useState<number | "">(15);
   const [libraryItems, setLibraryItems] = useState<WalkLibraryItem[]>([]);
-  const [librarySearch, setLibrarySearch] = useState("");
-  const [libraryCategoryFilter, setLibraryCategoryFilter] = useState("");
-  const [schedules, setSchedules] = useState<WalkSchedule[]>([]);
-  const [scheduleModalMode, setScheduleModalMode] = useState<ScheduleModalMode | null>(null);
-  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
-  const [scheduleFormValue, setScheduleFormValue] = useState<WalkScheduleFormValue>(defaultScheduleFormValue);
-  const [confirmDeleteScheduleId, setConfirmDeleteScheduleId] = useState<string | null>(null);
-  const [assignmentScheduleId, setAssignmentScheduleId] = useState<string | null>(null);
-  const [assignmentFormValue, setAssignmentFormValue] = useState<WalkScheduleFormValue>(defaultScheduleFormValue);
   const [outdated, setOutdated] = useState<
     Array<{ placementId: string; title: string; pinnedVersion: number; currentVersion: number }>
   >([]);
@@ -147,29 +99,6 @@ export function WalkBuilderPage() {
     window.setTimeout(() => setToast(null), 2800);
   }, []);
 
-  const syncDraftsFromTemplate = useCallback(
-    (data: WalkTemplate) => {
-      setNameDraft(data.name);
-      setDescriptionDraft(data.description ?? "");
-      setWorkplaceDraft(data.workplace || teamName);
-      setEstimatedDurationDraft(data.estimatedDurationMinutes ?? 15);
-    },
-    [teamName],
-  );
-
-  const loadSchedules = useCallback(
-    async (templateId: string) => {
-      if (!teamId) return;
-      const rows = await fetchWalkSchedules(teamId, templateId).catch(() => []);
-      setSchedules(rows);
-      setAssignmentScheduleId((prev) => {
-        if (prev && rows.some((r) => r.id === prev)) return prev;
-        return rows[0]?.id ?? null;
-      });
-    },
-    [teamId],
-  );
-
   const loadTemplate = useCallback(
     async (id: string) => {
       if (!teamId) return;
@@ -178,13 +107,12 @@ export function WalkBuilderPage() {
         fetchOutdatedWalkItems(teamId, id).catch(() => []),
       ]);
       setTemplate(data);
-      syncDraftsFromTemplate(data);
+      setNameDraft(data.name);
       setOutdated(outdatedRows);
-      const flatItems = flattenWalkItems(data);
-      setSelectedItemId((prev) => prev ?? flatItems[0]?.id ?? null);
-      await loadSchedules(id);
+      const items = flattenWalkItems(data);
+      setSelectedItemId((prev) => prev ?? items[0]?.id ?? null);
     },
-    [teamId, syncDraftsFromTemplate, loadSchedules],
+    [teamId],
   );
 
   useEffect(() => {
@@ -202,7 +130,7 @@ export function WalkBuilderPage() {
 
     void (async () => {
       try {
-        if (routeTemplateId && routeTemplateId !== "undefined" && routeTemplateId !== "null") {
+        if (routeTemplateId) {
           await loadTemplate(routeTemplateId);
           return;
         }
@@ -236,45 +164,8 @@ export function WalkBuilderPage() {
   }, [canManage, teamId, routeTemplateId, teamName, navigate, loadTemplate]);
 
   const items = useMemo(() => (template ? flattenWalkItems(template) : []), [template]);
+  const selectedItem = items.find((i) => i.id === selectedItemId) ?? items[0] ?? null;
   const defaultSectionId = template?.sections[0]?.id ?? null;
-
-  const libraryCategories = useMemo(
-    () => [...new Set(libraryItems.map((i) => i.category).filter(Boolean))].sort(),
-    [libraryItems],
-  );
-
-  const filteredLibraryItems = useMemo(() => {
-    let list = libraryItems;
-    if (libraryCategoryFilter) {
-      list = list.filter((i) => i.category === libraryCategoryFilter);
-    }
-    if (librarySearch.trim()) {
-      const q = librarySearch.trim().toLowerCase();
-      list = list.filter(
-        (i) => i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q),
-      );
-    }
-    return list;
-  }, [libraryItems, libraryCategoryFilter, librarySearch]);
-
-  const scheduleSummary = useMemo(() => summarizeWalkSchedules(schedules), [schedules]);
-  const assignmentSchedule = useMemo(
-    () => schedules.find((s) => s.id === assignmentScheduleId) ?? schedules[0] ?? null,
-    [schedules, assignmentScheduleId],
-  );
-
-  const publishValidation = useMemo(
-    () => getPublishValidation(nameDraft, items.length, schedules),
-    [nameDraft, items.length, schedules],
-  );
-
-  const publishLabel =
-    template?.parentTemplateId || template?.status === "PUBLISHED" ? "Publish Changes" : "Publish Walk";
-
-  useEffect(() => {
-    if (!assignmentSchedule) return;
-    setAssignmentFormValue(scheduleToFormValue(assignmentSchedule));
-  }, [assignmentSchedule?.id]);
 
   if (!canManage || !teamId) {
     return <Navigate to="/go" replace />;
@@ -282,13 +173,11 @@ export function WalkBuilderPage() {
 
   if (loading || !template) {
     return (
-      <div className="temps-page temps-page--wide">
+      <div className="wb-shell wb-shell--loading">
         {error ? <p className="wb-error">{error}</p> : <EnterprisePageLoading label="Opening Walk Builder…" />}
       </div>
     );
   }
-
-  const activeTeamId = teamId;
 
   async function withBusy(fn: () => Promise<void>) {
     setBusy(true);
@@ -307,70 +196,51 @@ export function WalkBuilderPage() {
     await loadTemplate(template.id);
   }
 
-  async function saveDetailsPatch(patch: Parameters<typeof patchWalkTemplate>[2]) {
-    const updated = await patchWalkTemplate(activeTeamId, template!.id, patch);
-    setTemplate(updated);
-    syncDraftsFromTemplate(updated);
-  }
-
   async function saveDraft() {
     await withBusy(async () => {
-      // Published walks must be edited via a child draft — never unpublish in place.
-      if (template!.status === "PUBLISHED") {
-        const draft = await createDraftFromPublished(activeTeamId, template!.id);
-        await patchWalkTemplate(activeTeamId, draft.id, {
-          name: nameDraft.trim() || template!.name,
-          description: descriptionDraft.trim() || null,
-          workplace: workplaceDraft.trim() || teamName,
-          estimatedDurationMinutes:
-            estimatedDurationDraft === "" ? null : Number(estimatedDurationDraft) || null,
-        });
-        navigate(`/go/temp-checks/walks/builder/${draft.id}`);
-        showToast("Draft created — continue editing here");
-        return;
-      }
-
-      await saveDetailsPatch({
+      const updated = await patchWalkTemplate(teamId!, template!.id, {
         name: nameDraft.trim() || template!.name,
-        description: descriptionDraft.trim() || null,
-        workplace: workplaceDraft.trim() || teamName,
-        estimatedDurationMinutes:
-          estimatedDurationDraft === "" ? null : Number(estimatedDurationDraft) || null,
+        description: template!.description,
+        workplace: template!.workplace || teamName,
+        status: "DRAFT",
       });
+      setTemplate(updated);
       showToast("Draft saved");
     });
   }
 
   async function publishWalkAction() {
-    if (!publishValidation.canPublish) {
-      setStep("review");
-      showNotice({
-        title: "Walk not ready to publish",
-        message: "Complete the following before publishing:",
-        items:
-          publishValidation.errors.length > 0
-            ? publishValidation.errors
-            : ["Complete the required walk setup before publishing."],
-        tone: "warning",
-      });
+    await withBusy(async () => {
+      if (nameDraft.trim() && nameDraft.trim() !== template!.name) {
+        await patchWalkTemplate(teamId!, template!.id, { name: nameDraft.trim() });
+      }
+      const result = await publishWalk(teamId!, template!.id);
+      setTemplate(result.template as WalkTemplate);
+      showToast(`Walk published (v${result.publishedVersion.version})`);
+    });
+  }
+
+  async function addItem(type: (typeof WALK_PALETTE_CARDS)[number]["type"], phase2: boolean) {
+    if (!phase2) {
+      showToast("Available in a later phase");
       return;
     }
     await withBusy(async () => {
-      if (nameDraft.trim() && nameDraft.trim() !== template!.name) {
-        await patchWalkTemplate(activeTeamId, template!.id, { name: nameDraft.trim() });
-      }
-      const result = await publishWalk(activeTeamId, template!.id);
-      const published = result.template as WalkTemplate;
-      setTemplate(published);
-      syncDraftsFromTemplate(published);
-      showToast(`Walk published (v${result.publishedVersion.version})`);
-      navigate("/go/temp-checks/walks");
+      const created = await createWalkItem(teamId!, template!.id, {
+        type,
+        title: defaultTitleForType(type),
+        sectionId: defaultSectionId,
+        required: true,
+      });
+      await refresh();
+      setSelectedItemId(created.id);
+      setEditingItem(created);
     });
   }
 
   async function addFromLibrary(libraryItemId: string) {
     await withBusy(async () => {
-      await addLibraryItemToWalk(activeTeamId, template!.id, {
+      await addLibraryItemToWalk(teamId!, template!.id, {
         libraryItemId,
         sectionId: defaultSectionId,
       });
@@ -379,16 +249,9 @@ export function WalkBuilderPage() {
     });
   }
 
-  async function toggleItemRequired(item: WalkItem) {
-    await withBusy(async () => {
-      await patchWalkItem(activeTeamId, template!.id, item.id, { required: !item.required });
-      await refresh();
-    });
-  }
-
   async function updateOutdatedPlacement(placementId: string) {
     await withBusy(async () => {
-      await patchWalkItem(activeTeamId, template!.id, placementId, { pinToCurrentVersion: true });
+      await patchWalkItem(teamId!, template!.id, placementId, { pinToCurrentVersion: true });
       await refresh();
       showToast("Pinned to latest library version");
     });
@@ -404,340 +267,243 @@ export function WalkBuilderPage() {
     ordered.splice(to, 0, dragItemId);
     setDragItemId(null);
     await withBusy(async () => {
+      // Reorder within first section when possible; otherwise global order update per id list.
       const sectionId = items.find((i) => i.id === dragItemId)?.sectionId ?? defaultSectionId;
       const sectionOrdered = ordered.filter((id) => items.find((i) => i.id === id)?.sectionId === sectionId);
-      const updated = await reorderWalkItems(activeTeamId, template.id, sectionOrdered, sectionId);
+      const updated = await reorderWalkItems(teamId!, template.id, sectionOrdered, sectionId);
       setTemplate(updated);
     });
   }
 
-  function openCreateSchedule() {
-    setEditingScheduleId(null);
-    setScheduleFormValue(defaultScheduleFormValue());
-    setScheduleModalMode("create");
-  }
-
-  function openEditSchedule(schedule: WalkSchedule) {
-    setEditingScheduleId(schedule.id);
-    setScheduleFormValue(scheduleToFormValue(schedule));
-    setScheduleModalMode("edit");
-  }
-
-  function closeScheduleModal() {
-    setScheduleModalMode(null);
-    setEditingScheduleId(null);
-  }
-
-  async function submitScheduleModal() {
-    const checklistName = nameDraft.trim() || template?.name || "";
-    const body = scheduleWriteBody(scheduleFormValue, checklistName);
-    if (!body.windows.length) {
-      showNotice({
-        title: "Due time required",
-        message: "Add at least one valid due time and completion window before saving.",
-        tone: "warning",
-      });
-      return;
-    }
-    const overlapError =
-      scheduleFormValue.recurrence === "INTERVAL"
-        ? null
-        : findDraftWindowOverlapError(scheduleFormValue.windows);
-    if (overlapError) {
-      showNotice({
-        title: "Overlapping due times",
-        message: overlapError,
-        tone: "warning",
-      });
-      return;
-    }
-    await withBusy(async () => {
-      if (scheduleModalMode === "create") {
-        await createWalkSchedule(activeTeamId, {
-          templateId: template!.id,
-          ...body,
-        });
-        showToast("Schedule created");
-      } else if (editingScheduleId) {
-        await updateWalkSchedule(activeTeamId, editingScheduleId, body);
-        showToast("Schedule updated");
-      }
-      closeScheduleModal();
-      await loadSchedules(template!.id);
-    });
-  }
-
-  async function toggleScheduleActive(schedule: WalkSchedule) {
-    await withBusy(async () => {
-      await updateWalkSchedule(activeTeamId, schedule.id, { isActive: !schedule.isActive });
-      await loadSchedules(template!.id);
-      showToast(schedule.isActive ? "Schedule paused" : "Schedule resumed");
-    });
-  }
-
-  async function confirmDeleteSchedule() {
-    if (!confirmDeleteScheduleId) return;
-    await withBusy(async () => {
-      await deleteWalkSchedule(activeTeamId, confirmDeleteScheduleId);
-      setConfirmDeleteScheduleId(null);
-      await loadSchedules(template!.id);
-      showToast("Schedule deleted");
-    });
-  }
-
-  async function saveAssignment() {
-    if (!assignmentSchedule) return;
-    const checklistName = nameDraft.trim() || template?.name || "";
-    const body = scheduleWriteBody(assignmentFormValue, checklistName);
-    if (!body.windows.length) {
-      setError("Schedule windows are invalid.");
-      return;
-    }
-    await withBusy(async () => {
-      await updateWalkSchedule(activeTeamId, assignmentSchedule.id, {
-        assignScope: body.assignScope,
-        assignRole: body.assignRole,
-        completionMode: body.completionMode,
-      });
-      await loadSchedules(template!.id);
-      showToast("Assignment saved");
-    });
-  }
-
-  const stepIndex = BUILDER_STEPS.findIndex((s) => s.id === step);
-  const currentStepMeta = BUILDER_STEPS[stepIndex];
-  const prevStep = stepIndex > 0 ? BUILDER_STEPS[stepIndex - 1] : null;
-  const nextStep = stepIndex >= 0 && stepIndex < BUILDER_STEPS.length - 1 ? BUILDER_STEPS[stepIndex + 1] : null;
-
-  function StepFooter() {
-    return (
-      <div className="temps-builder-foot">
-        {prevStep ? (
-          <TempsButton variant="ghost" onClick={() => setStep(prevStep.id)}>
-            ← {prevStep.label}
-          </TempsButton>
-        ) : (
-          <span />
-        )}
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          {nextStep ? (
-            <>
-              <TempsButton variant="secondary" disabled={busy} onClick={() => void saveDraft()}>
-                Save Draft
-              </TempsButton>
-              <TempsButton variant="primary" onClick={() => setStep(nextStep.id)}>
-                Continue to {nextStep.label} →
-              </TempsButton>
-            </>
-          ) : (
-            <TempsButton
-              variant="primary"
-              disabled={busy || !publishValidation.canPublish}
-              onClick={() => void publishWalkAction()}
-            >
-              {publishLabel}
-            </TempsButton>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  const backTo = template.id
-    ? `/go/temp-checks/walks/${template.id}`
-    : "/go/temp-checks/walks";
+  const previewItems = items.slice(0, 3);
+  const progressPct = items.length ? Math.round((Math.min(3, items.length) / items.length) * 100) : 0;
 
   return (
-    <TempsPageShell testId="walk-builder-page" wide className="temps-builder-page">
-      <TempsPageHeader
-        breadcrumb={
-          <>
-            <Link to="/go/temp-checks/walks">Walks</Link>
-            <span aria-hidden>/</span>
-            <Link to={backTo}>{nameDraft.trim() || "Untitled walk"}</Link>
-            <span aria-hidden>/</span>
-            <span>Edit</span>
-          </>
-        }
-        title={nameDraft.trim() || "Untitled walk"}
-        description={`Step ${stepIndex + 1} of ${BUILDER_STEPS.length}: ${currentStepMeta?.label ?? ""} — ${currentStepMeta?.hint ?? ""}`}
-        badges={
-          <>
-            <TempsStatusBadge tone={walkStatusTone(template.status)} />
-            <TempsStatusBadge tone="neutral">{`Version ${template.version}`}</TempsStatusBadge>
-          </>
-        }
-        actions={
-          <>
-            <TempsButton variant="secondary" disabled={busy} onClick={() => void saveDraft()}>
-              Save Draft
-            </TempsButton>
-            {template.status === "PUBLISHED" ? (
-              <TempsButton
-                variant="ghost"
-                disabled={busy}
-                onClick={() => void saveDraft()}
-              >
-                Edit as draft
-              </TempsButton>
-            ) : null}
-            <TempsButton
-              variant="primary"
-              disabled={busy || !publishValidation.canPublish}
-              onClick={() => void publishWalkAction()}
+    <div className="wb-shell" data-testid="walk-builder-page">
+      <header className="wb-topbar">
+        <div className="wb-topbar-brand">
+          <Link to="/go/temp-checks/walks" className="wb-topbar-back" aria-label="Back to Walks">
+            ←
+          </Link>
+          <div>
+            <p className="wb-topbar-kicker">Alenio Temps</p>
+            <h1>Walk Builder</h1>
+            <p className="wb-topbar-sub">
+              Pull items from your Item Library to build a complete walk for {teamName}.
+            </p>
+          </div>
+        </div>
+        <div className="wb-topbar-actions">
+          <button
+            type="button"
+            className="wb-btn wb-btn--ghost"
+            onClick={() => showToast("AI Assistant coming soon")}
+          >
+            ✦ AI Assistant
+          </button>
+          <button type="button" className="wb-btn wb-btn--ghost" disabled={busy} onClick={() => void saveDraft()}>
+            Save Draft
+          </button>
+          {template.status === "PUBLISHED" ? (
+            <button
+              type="button"
+              className="wb-btn wb-btn--ghost"
+              disabled={busy}
+              onClick={() =>
+                void withBusy(async () => {
+                  const draft = await createDraftFromPublished(teamId!, template!.id);
+                  navigate(`/go/temp-checks/walks/builder/${draft.id}`);
+                  showToast("Draft created from published walk");
+                })
+              }
             >
-              {publishLabel}
-            </TempsButton>
-          </>
-        }
-      />
+              Create draft
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="wb-btn wb-btn--primary"
+            disabled={busy}
+            onClick={() => void publishWalkAction()}
+          >
+            Publish Walk
+          </button>
+        </div>
+      </header>
 
-      {template.parentTemplateId ? (
-        <p className="temps-toast">Editing a draft of a published walk</p>
-      ) : null}
-      {error ? <p className="temps-error">{error}</p> : null}
-      {noticeDialog}
-      {toast ? (
-        <p className="temps-toast temps-toast--float" role="status">
-          {toast}
-        </p>
-      ) : null}
+      {error ? <p className="wb-error wb-error--banner">{error}</p> : null}
+      {toast ? <p className="wb-toast">{toast}</p> : null}
       {outdated.length > 0 ? (
-        <div className="temps-callout" style={{ borderColor: "#fcd34d", background: "#fffbeb" }}>
-          <strong>{outdated.length} library item(s) have newer versions</strong>
+        <div className="wb-error wb-error--banner" style={{ background: "#fff7ed", color: "#9a3412" }}>
+          <strong>{outdated.length} library item(s)</strong> have newer versions.{" "}
           {outdated.slice(0, 3).map((o) => (
-            <span key={o.placementId} style={{ display: "inline-flex", gap: 8, marginRight: 8 }}>
+            <span key={o.placementId} style={{ display: "inline-flex", gap: 8, marginLeft: 8 }}>
               {o.title} (v{o.pinnedVersion} → v{o.currentVersion})
-              <TempsButton variant="ghost" onClick={() => void updateOutdatedPlacement(o.placementId)}>
+              <button
+                type="button"
+                className="wb-btn wb-btn--ghost"
+                style={{ padding: "0.15rem 0.5rem", fontSize: "0.75rem" }}
+                onClick={() => void updateOutdatedPlacement(o.placementId)}
+              >
                 Update
-              </TempsButton>
+              </button>
             </span>
           ))}
         </div>
       ) : null}
 
-      <TempsBuilderTabs
-        tabs={BUILDER_STEPS.map((s) => ({ id: s.id, label: s.label }))}
-        active={step}
-        onChange={setStep}
-      />
-
-      <div className="temps-builder-layout temps-builder-layout--with-summary">
-        <div className="temps-builder-main">
-          {step === "details" ? (
-            <div className="temps-builder-form">
-              <TempsSectionCard
-                title="Basic information"
-                description="Name and description shown to leaders and associates."
-              >
-                <label className="temps-field">
+      <div className="wb-body">
+        <aside className="wb-rail" aria-label="Builder steps">
+          <ol className="wb-rail-steps">
+            {BUILDER_STEPS.map((s, index) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  className={`wb-rail-step${step === s.id ? " wb-rail-step--active" : ""}`}
+                  onClick={() => setStep(s.id)}
+                >
+                  <span className="wb-rail-num">{index + 1}</span>
                   <span>
-                    Walk name <em style={{ color: "var(--temps-danger)" }}>*</em>
+                    <strong>{s.label}</strong>
+                    <em>{s.hint}</em>
                   </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+          <div className="wb-rail-help">
+            <p>Need help?</p>
+            <button type="button" className="wb-btn wb-btn--seneca" onClick={() => showToast("Ask Seneca coming soon")}>
+              Ask Seneca
+            </button>
+          </div>
+          <div className="wb-rail-user">
+            <div className="wb-rail-avatar" aria-hidden>
+              {(userName ?? "A").slice(0, 1).toUpperCase()}
+            </div>
+            <div>
+              <strong>{userName ?? "Leader"}</strong>
+              <span>{teamName}</span>
+            </div>
+          </div>
+        </aside>
+
+        <main className="wb-main">
+          {step !== "build" ? (
+            <section className="wb-placeholder-panel">
+              <h2>{BUILDER_STEPS.find((s) => s.id === step)?.label}</h2>
+              <p>
+                This step deepens in a later phase. Use the summary cards on the right to review defaults, or return to
+                Build Your Walk.
+              </p>
+              <button type="button" className="wb-btn wb-btn--primary" onClick={() => setStep("build")}>
+                Back to Build Your Walk
+              </button>
+            </section>
+          ) : (
+            <>
+              <div className="wb-main-head">
+                <div>
+                  <h2>1. Build Your Walk</h2>
                   <input
+                    className="wb-name-input"
                     value={nameDraft}
                     onChange={(e) => setNameDraft(e.target.value)}
                     onBlur={() => {
                       if (nameDraft.trim() && nameDraft.trim() !== template.name) {
                         void withBusy(async () => {
-                          await saveDetailsPatch({ name: nameDraft.trim() });
+                          const updated = await patchWalkTemplate(teamId, template.id, {
+                            name: nameDraft.trim(),
+                          });
+                          setTemplate(updated);
                         });
                       }
                     }}
-                    placeholder="e.g. Opening cooler walk"
                     aria-label="Walk name"
                   />
-                  <span className="temps-field-help">Shown to associates on Alenio Temps.</span>
-                </label>
-                <label className="temps-field">
-                  <span>Description</span>
-                  <textarea
-                    rows={4}
-                    value={descriptionDraft}
-                    onChange={(e) => setDescriptionDraft(e.target.value)}
-                    onBlur={() => {
-                      const next = descriptionDraft.trim() || null;
-                      if (next !== (template.description ?? null)) {
-                        void withBusy(async () => {
-                          await saveDetailsPatch({ description: next });
-                        });
-                      }
-                    }}
-                    placeholder="What this walk covers for leaders and auditors."
-                  />
-                </label>
-              </TempsSectionCard>
+                </div>
+                <div className="wb-tabs" role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={paletteTab === "all"}
+                    className={paletteTab === "all" ? "is-active" : undefined}
+                    onClick={() => setPaletteTab("all")}
+                  >
+                    All Items
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={paletteTab === "library"}
+                    className={paletteTab === "library" ? "is-active" : undefined}
+                    onClick={() => setPaletteTab("library")}
+                  >
+                    My Item Library
+                  </button>
+                </div>
+              </div>
 
-              <StepFooter />
-            </div>
-          ) : null}
-
-          {step === "items" ? (
-            <>
               <div className="wb-build-grid">
-                <section className="wb-palette" aria-label="My Item Library">
-                  <h3>My Item Library</h3>
-                  <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-                    <input
-                      type="search"
-                      placeholder="Search library…"
-                      value={librarySearch}
-                      onChange={(e) => setLibrarySearch(e.target.value)}
-                      style={{ flex: "1 1 140px" }}
-                    />
-                    <select
-                      value={libraryCategoryFilter}
-                      onChange={(e) => setLibraryCategoryFilter(e.target.value)}
-                      aria-label="Filter by category"
-                    >
-                      <option value="">All categories</option>
-                      {libraryCategories.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="wb-palette-list">
-                    {filteredLibraryItems.length === 0 ? (
-                      <p className="wb-muted">
-                        {libraryItems.length === 0 ? (
-                          <>
-                            No library items yet.{" "}
-                            <Link to="/go/temp-checks/library">Create items in Item Library</Link>.
-                          </>
-                        ) : (
-                          "No items match your search."
-                        )}
-                      </p>
-                    ) : (
-                      filteredLibraryItems.map((lib) => (
+                <section className="wb-palette" aria-label="Add item">
+                  <h3>Add Item</h3>
+                  {paletteTab === "library" ? (
+                    <div className="wb-palette-list">
+                      {libraryItems.length === 0 ? (
+                        <p className="wb-muted">
+                          No library items yet.{" "}
+                          <Link to="/go/temp-checks/library">Open Item Library</Link> or create from All Items.
+                        </p>
+                      ) : (
+                        libraryItems.map((lib) => (
+                          <button
+                            key={lib.id}
+                            type="button"
+                            className="wb-palette-card"
+                            disabled={busy}
+                            onClick={() => void addFromLibrary(lib.id)}
+                          >
+                            <span className="wb-palette-icon">
+                              <WalkTypeIcon type={lib.type as WalkItem["type"]} />
+                            </span>
+                            <span>
+                              <strong>{lib.name}</strong>
+                              <em>
+                                {lib.category} · v{lib.currentVersion}
+                              </em>
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ) : (
+                    <div className="wb-palette-list">
+                      {WALK_PALETTE_CARDS.map((card) => (
                         <button
-                          key={lib.id}
+                          key={card.type}
                           type="button"
-                          className="wb-palette-card"
+                          className={`wb-palette-card${card.phase2 ? "" : " wb-palette-card--soon"}`}
                           disabled={busy}
-                          onClick={() => void addFromLibrary(lib.id)}
+                          onClick={() => void addItem(card.type, card.phase2)}
+                          title={card.phase2 ? undefined : "Available in a later phase"}
                         >
                           <span className="wb-palette-icon">
-                            <WalkTypeIcon type={lib.type as WalkItem["type"]} />
+                            <WalkTypeIcon icon={card.icon} />
                           </span>
                           <span>
-                            <strong>{lib.name}</strong>
-                            <em>
-                              {lib.category} · v{lib.currentVersion}
-                            </em>
+                            <strong>{card.label}</strong>
+                            <em>{card.description}</em>
                           </span>
                         </button>
-                      ))
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                   <Link to="/go/temp-checks/library" className="wb-linkish">
                     Manage Item Library →
                   </Link>
                 </section>
 
-                <section className="wb-items wb-panel" aria-label="Your walk items" style={{ padding: "0.9rem" }}>
+                <section className="wb-items" aria-label="Your walk items">
                   <h3>Your Walk Items</h3>
                   <div className="wb-item-list">
                     {items.length === 0 ? (
@@ -765,19 +531,7 @@ export function WalkBuilderPage() {
                             <strong>{item.title}</strong>
                             <em>{typeLabel(item.type)}</em>
                           </span>
-                          <button
-                            type="button"
-                            className={`wb-item-required${item.required ? "" : " wb-item-required--off"}`}
-                            disabled={busy}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void toggleItemRequired(item);
-                            }}
-                            title={item.required ? "Mark optional" : "Mark required"}
-                            aria-pressed={item.required}
-                          >
-                            {item.required ? "Required" : "Optional"}
-                          </button>
+                          {item.required ? <span className="wb-item-required">Required</span> : null}
                           <button
                             type="button"
                             className="wb-item-menu"
@@ -793,291 +547,133 @@ export function WalkBuilderPage() {
                       ))
                     )}
                   </div>
-                  <Link to="/go/temp-checks/library" className="wb-add-item">
-                    + Create in Item Library
-                  </Link>
+                  <button
+                    type="button"
+                    className="wb-add-item"
+                    disabled={busy}
+                    onClick={() => void addItem("YES_NO", true)}
+                  >
+                    + Add Item
+                  </button>
                 </section>
               </div>
-              <div className="wb-panel" style={{ paddingTop: "0.85rem", paddingBottom: "0.85rem" }}>
-                <StepFooter />
-              </div>
             </>
-          ) : null}
+          )}
+        </main>
 
-          {step === "schedule" ? (
-            <section className="wb-panel">
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "1rem",
-                  gap: "1rem",
-                  flexWrap: "wrap",
-                }}
-              >
-                <p className="wb-muted" style={{ margin: 0, flex: "1 1 16rem" }}>
-                  Define when this walk becomes due. You can schedule drafts now — checks open after publish.
-                </p>
-                <TempsButton variant="primary" disabled={busy} onClick={openCreateSchedule}>
-                  Add schedule
-                </TempsButton>
-              </div>
-              {schedules.length === 0 ? (
-                <div className="wb-empty-state">
-                  <strong>Not scheduled yet</strong>
-                  <p className="wb-muted">Add a daily, weekly, interval, or one-time schedule for associates.</p>
-                  <div style={{ marginTop: "0.85rem" }}>
-                    <TempsButton variant="primary" disabled={busy} onClick={openCreateSchedule}>
-                      Add schedule
-                    </TempsButton>
-                  </div>
-                </div>
-              ) : (
-                <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.75rem" }}>
-                  {schedules.map((schedule) => (
-                    <li
-                      key={schedule.id}
-                      className="wb-summary-card"
-                      style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}
-                    >
-                      <div>
-                        <strong>{nameDraft.trim() || template.name}</strong>
-                        <p className="wb-muted" style={{ margin: "0.25rem 0 0" }}>
-                          {formatScheduleSummary(schedule)}
-                        </p>
-                        <span
-                          className={`wsch-status ${schedule.isActive ? "wsch-status--active" : "wsch-status--paused"}`}
-                          style={{ marginTop: "0.35rem", display: "inline-block" }}
-                        >
-                          {schedule.isActive ? "Active" : "Paused"}
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-                        <TempsButton
-                          variant="ghost"
-                          disabled={busy}
-                          onClick={() => void toggleScheduleActive(schedule)}
-                        >
-                          {schedule.isActive ? "Pause" : "Resume"}
-                        </TempsButton>
-                        <TempsButton variant="ghost" disabled={busy} onClick={() => openEditSchedule(schedule)}>
-                          Edit
-                        </TempsButton>
-                        <TempsButton
-                          variant="destructive"
-                          disabled={busy}
-                          onClick={() => setConfirmDeleteScheduleId(schedule.id)}
-                        >
-                          Delete
-                        </TempsButton>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <StepFooter />
-            </section>
-          ) : null}
-
-          {step === "assignment" ? (
-            <section className="wb-panel">
-              {schedules.length === 0 ? (
-                <>
-                  <div className="wb-empty-state">
-                    <strong>Add a schedule first</strong>
-                    <p className="wb-muted">Assignment is configured on each schedule — who should complete the check.</p>
-                  </div>
-                  <TempsButton variant="primary" onClick={() => setStep("schedule")}>
-                    Go to Schedule
-                  </TempsButton>
-                </>
-              ) : (
-                <>
-                  {schedules.length > 1 ? (
-                    <label style={{ display: "block", marginBottom: "1rem" }}>
-                      Schedule
-                      <select
-                        value={assignmentScheduleId ?? ""}
-                        onChange={(e) => setAssignmentScheduleId(e.target.value)}
-                      >
-                        {schedules.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name?.trim() || formatScheduleSummary(s)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  <WalkScheduleForm
-                    value={assignmentFormValue}
-                    onChange={setAssignmentFormValue}
-                    showAssignment
-                    disabled={busy}
-                    checklistName={nameDraft.trim() || template.name}
-                  />
-                  <div style={{ marginTop: "1rem" }}>
-                    <TempsButton
-                      variant="primary"
-                      disabled={busy || !assignmentSchedule}
-                      onClick={() => void saveAssignment()}
-                    >
-                      Save assignment
-                    </TempsButton>
-                  </div>
-                </>
-              )}
-              <StepFooter />
-            </section>
-          ) : null}
-
-          {step === "review" ? (
-            <section className="wb-panel">
-              <article className="wb-summary-card" style={{ marginBottom: "1rem" }}>
-                <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "0.65rem" }}>
-                  <li>
-                    <strong>Name:</strong> {nameDraft.trim() || "—"}
-                  </li>
-                  <li>
-                    <strong>Items:</strong> {items.length}
-                  </li>
-                  <li>
-                    <strong>Schedule:</strong> {scheduleSummary.label}
-                  </li>
-                  <li>
-                    <strong>Assignment:</strong>{" "}
-                    {assignmentSchedule ? assignScopeLabel(assignmentSchedule) : "—"}
-                  </li>
-                  <li>
-                    <strong>Version:</strong> v{template.version}
-                  </li>
-                  <li>
-                    <strong>Status:</strong> {template.status}
-                  </li>
-                </ul>
-              </article>
-
-              {publishValidation.errors.length > 0 ? (
-                <div className="wb-error wb-error--banner" style={{ marginBottom: "0.75rem" }}>
-                  <strong>Fix before publishing</strong>
-                  <ul style={{ margin: "0.35rem 0 0", paddingLeft: "1.25rem" }}>
-                    {publishValidation.errors.map((msg) => (
-                      <li key={msg}>{msg}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {publishValidation.warnings.length > 0 ? (
-                <div
-                  className="wb-error wb-error--banner"
-                  style={{ background: "#fffbeb", color: "#92400e", marginBottom: "0.75rem" }}
-                >
-                  <strong>Warnings</strong>
-                  <ul style={{ margin: "0.35rem 0 0", paddingLeft: "1.25rem" }}>
-                    {publishValidation.warnings.map((msg) => (
-                      <li key={msg}>{msg}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              <StepFooter />
-            </section>
-          ) : null}
-        </div>
-
-        <aside className="temps-section-card" aria-label="Walk summary">
-          <h3 className="temps-section-title">Walk summary</h3>
-          <TempsSummaryBar
-            items={[
-              {
-                label: "Items",
-                value: `${items.length} item${items.length === 1 ? "" : "s"}`,
-              },
-              { label: "Schedule", value: scheduleSummary.label },
-              {
-                label: "Assignment",
-                value: assignmentSchedule ? assignScopeLabel(assignmentSchedule) : "Not set",
-              },
-            ]}
-          />
-          {step !== "review" ? (
-            <div style={{ marginTop: "0.85rem" }}>
-              <TempsButton variant="secondary" onClick={() => setStep("review")} style={{ width: "100%" }}>
-                Review & Publish
-              </TempsButton>
-            </div>
-          ) : null}
-        </aside>
-      </div>
-
-      {scheduleModalMode ? (
-        <div className="wsch-modal-backdrop" role="presentation" onClick={closeScheduleModal}>
-          <div
-            className="wsch-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="wb-schedule-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header className="wsch-modal-head">
-              <h2 id="wb-schedule-modal-title">
-                {scheduleModalMode === "edit" ? "Edit schedule" : "Add schedule"}
-              </h2>
-              <button type="button" className="wil-row-menu" onClick={closeScheduleModal} aria-label="Close">
-                ✕
+        <aside className="wb-summary" aria-label="Settings summary">
+          <article className="wb-summary-card">
+            <header>
+              <h3>2. Set Rules</h3>
+              <button type="button" className="wb-linkish" onClick={() => setStep("rules")}>
+                Edit
               </button>
             </header>
-            <WalkScheduleForm
-              value={scheduleFormValue}
-              onChange={setScheduleFormValue}
-              disabled={busy}
-              checklistName={nameDraft.trim() || template?.name}
-            />
-            <footer className="wsch-modal-foot">
-              <TempsButton variant="ghost" onClick={closeScheduleModal}>
-                Cancel
-              </TempsButton>
-              <TempsButton
-                variant="primary"
-                disabled={
-                  busy ||
-                  (scheduleFormValue.recurrence !== "INTERVAL" &&
-                    !!findDraftWindowOverlapError(scheduleFormValue.windows))
-                }
-                onClick={() => void submitScheduleModal()}
-              >
-                {scheduleModalMode === "edit" ? "Save schedule" : "Create schedule"}
-              </TempsButton>
-            </footer>
-          </div>
-        </div>
-      ) : null}
+            <ul>
+              <li>
+                <span className="wb-dot wb-dot--pass" /> Passing — all required must pass
+              </li>
+              <li>
+                <span className="wb-dot wb-dot--fail" /> Failure — any required fails
+              </li>
+              <li>
+                <span className="wb-dot wb-dot--score" /> Score — % of items passed
+              </li>
+            </ul>
+          </article>
 
-      {confirmDeleteScheduleId ? (
-        <div className="wsch-modal-backdrop" role="presentation" onClick={() => setConfirmDeleteScheduleId(null)}>
-          <div
-            className="wsch-modal wsch-modal--confirm"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header className="wsch-modal-head">
-              <h2>Delete schedule?</h2>
+          <article className="wb-summary-card">
+            <header>
+              <h3>3. Corrective Actions</h3>
+              <button type="button" className="wb-linkish" onClick={() => setStep("corrective")}>
+                Edit
+              </button>
             </header>
-            <p className="wil-subtitle">Future occurrences for this schedule will be removed.</p>
-            <footer className="wsch-modal-foot">
-              <TempsButton variant="ghost" onClick={() => setConfirmDeleteScheduleId(null)}>
-                Cancel
-              </TempsButton>
-              <TempsButton variant="destructive" disabled={busy} onClick={() => void confirmDeleteSchedule()}>
-                Delete
-              </TempsButton>
-            </footer>
+            <ul>
+              <li>If a temperature fails → Follow food safety procedures</li>
+              <li>Require photo on failure → Enabled for visual checks</li>
+            </ul>
+          </article>
+
+          <article className="wb-summary-card">
+            <header>
+              <h3>4. Devices & Methods</h3>
+              <button type="button" className="wb-linkish" onClick={() => setStep("devices")}>
+                Edit
+              </button>
+            </header>
+            <ul>
+              <li>Bluetooth Thermometer — adapter ready later</li>
+              <li>Manual Entry — enabled</li>
+              <li>Photo Capture — enabled</li>
+            </ul>
+          </article>
+
+          <div className="wb-publish-cta">
+            <p>Looks good? Publish this walk to make it available to your team.</p>
+            <button
+              type="button"
+              className="wb-btn wb-btn--primary"
+              disabled={busy}
+              onClick={() => void publishWalkAction()}
+            >
+              Publish Walk
+            </button>
           </div>
-        </div>
-      ) : null}
+        </aside>
+
+        <aside className="wb-preview" aria-label="Associate preview">
+          <h3>Preview: Associate View</h3>
+          <div className="wb-phone">
+            <div className="wb-phone-screen">
+              <header className="wb-phone-head">
+                <strong>{nameDraft || template.name}</strong>
+                <span>{template.workplace || teamName}</span>
+                <div className="wb-phone-progress">
+                  <span>
+                    {Math.min(3, items.length)} of {items.length || 0}
+                  </span>
+                  <span>{progressPct}% Complete</span>
+                </div>
+                <div className="wb-phone-bar">
+                  <i style={{ width: `${progressPct}%` }} />
+                </div>
+              </header>
+
+              <div className="wb-phone-cards">
+                {previewItems.length === 0 ? (
+                  <p className="wb-muted">Add items to preview the associate experience.</p>
+                ) : (
+                  previewItems.map((item, index) => {
+                    const status = previewStatusForItem(item, index);
+                    const active = selectedItem?.id === item.id;
+                    return (
+                      <article
+                        key={item.id}
+                        className={`wb-phone-card wb-phone-card--${status.kind}${active ? " is-active" : ""}`}
+                        onClick={() => setSelectedItemId(item.id)}
+                      >
+                        <header>
+                          <strong>{item.title}</strong>
+                          {status.kind === "fail" ? <span className="wb-pill wb-pill--fail">Failed</span> : null}
+                          {status.kind === "pass" ? <span className="wb-pill wb-pill--pass">Pass</span> : null}
+                          {status.kind === "needs" ? <span className="wb-pill wb-pill--needs">Needs Photo</span> : null}
+                        </header>
+                        {status.value ? <p className="wb-phone-value">{status.value}</p> : null}
+                        {status.detail ? <p className="wb-phone-detail">{status.detail}</p> : null}
+                      </article>
+                    );
+                  })
+                )}
+              </div>
+
+              <button type="button" className="wb-phone-continue">
+                Continue Walk
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
 
       <WalkItemEditDrawer
         open={!!editingItem}
@@ -1087,7 +683,7 @@ export function WalkBuilderPage() {
         onSave={async (patch) => {
           if (!editingItem) return;
           await withBusy(async () => {
-            await patchWalkItem(activeTeamId, template.id, editingItem.id, patch);
+            await patchWalkItem(teamId, template.id, editingItem.id, patch);
             await refresh();
             setEditingItem(null);
             showToast("Item updated");
@@ -1096,13 +692,13 @@ export function WalkBuilderPage() {
         onDelete={async () => {
           if (!editingItem) return;
           await withBusy(async () => {
-            await deleteWalkItem(activeTeamId, template.id, editingItem.id);
+            await deleteWalkItem(teamId, template.id, editingItem.id);
             setEditingItem(null);
             await refresh();
             showToast("Item deleted");
           });
         }}
       />
-    </TempsPageShell>
+    </div>
   );
 }

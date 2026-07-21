@@ -215,8 +215,8 @@ function FixedTabBar({ state, navigation }: any) {
     }
     if (routeName === "activity" && isPaid) {
       void queryClient.prefetchQuery({
-        queryKey: ["activity", activeTeamId],
-        queryFn: () => api.get<unknown[]>(`/api/teams/${activeTeamId}/activity?limit=100`),
+        queryKey: ["activity", "all"],
+        queryFn: () => api.get<unknown[]>(`/api/activity`),
       });
       return;
     }

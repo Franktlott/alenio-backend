@@ -17,6 +17,7 @@ export {
 } from "./TempsNoticeDialog";
 export {
   FailureProcedureBuilder,
+  CorrectiveActionsFlow,
   emptyFailureProcedure,
   getFailureProcedureMissing,
   procedureToApiActions,

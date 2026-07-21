@@ -138,7 +138,6 @@ type Props = {
   canModify: boolean;
   activeDevGoals?: number;
   completedDevGoals?: number;
-  streak?: number;
   daysSinceLastCheckIn?: number | null;
   nextCheckInValue?: string;
   nextCheckInHint?: string;
@@ -324,18 +323,6 @@ function goalsReviewedLabel(meeting: OneOnOneMeeting): string {
   return section?.label?.trim() || "Check-in";
 }
 
-function countCheckInStreak(meetings: OneOnOneMeeting[]): number {
-  const published = [...meetings]
-    .filter((m) => m.status !== "draft")
-    .sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a));
-  let streak = 0;
-  for (const meeting of published) {
-    if (meeting.status === "draft") break;
-    streak += 1;
-  }
-  return streak;
-}
-
 function countFeedbackThisMonth(meetings: OneOnOneMeeting[]): number {
   const now = new Date();
   const month = now.getMonth();
@@ -386,14 +373,6 @@ function IconMetricTarget() {
       <circle cx="12" cy="12" r="8" />
       <circle cx="12" cy="12" r="4.5" />
       <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function IconMetricFlame() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M12 3c2 3 1 5.5-.5 7C13 10 16 11.5 16 15a4 4 0 1 1-8 0c0-2.5 1.5-4 2.5-5.5C9 7.5 10 5 12 3Z" />
     </svg>
   );
 }
@@ -476,7 +455,6 @@ export function OneOnOneHistoryTab({
   canModify,
   activeDevGoals,
   completedDevGoals,
-  streak,
   daysSinceLastCheckIn,
   nextCheckInValue,
   nextCheckInHint,
@@ -1576,7 +1554,6 @@ export function OneOnOneHistoryTab({
       ? null
       : [...meetings].sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))[0] ?? null;
   const latestExportable = publishedMeetings.find((m) => canPrintCheckIn(m)) ?? null;
-  const derivedStreak = streak ?? countCheckInStreak(meetings);
   const derivedGoalsActive = activeDevGoals ?? 0;
   const derivedGoalsCompleted = completedDevGoals ?? 0;
   const feedbackReceived = countFeedbackThisMonth(meetings);
@@ -1592,9 +1569,6 @@ export function OneOnOneHistoryTab({
     : "—";
   const nextDueDisplay = nextCheckInValue ?? "—";
   const nextDueHint = nextCheckInHint?.trim() || "Based on workplace standards";
-  const streakPrimary =
-    derivedStreak <= 0 ? "0" : derivedStreak === 1 ? "1 in a row" : `${derivedStreak} in a row`;
-  const streakHint = derivedStreak > 0 ? "Keep it going!" : "Start your streak";
   const feedbackPrimary = `${feedbackReceived} this month`;
   const feedbackHint = feedbackReceived > 0 ? `+${feedbackReceived} this month` : "No feedback yet";
   const nowForQuarter = new Date();
@@ -1626,33 +1600,6 @@ export function OneOnOneHistoryTab({
 
   return (
     <div className="enterprise-oneone-history enterprise-oneone-history--scrollable enterprise-checkins-page">
-      <div className="enterprise-checkins-section-head">
-        <div className="enterprise-checkins-section-head-copy">
-          <div className="enterprise-checkins-section-title-row">
-            <span className="enterprise-checkins-section-icon" aria-hidden>
-              <IconCheckinsHeader />
-            </span>
-            <h3 className="enterprise-checkins-section-title">Check-ins</h3>
-          </div>
-          <p className="enterprise-checkins-section-sub">
-            Track your progress, stay consistent, and keep growing.
-          </p>
-        </div>
-        {canCreate ? (
-          <button
-            type="button"
-            className="enterprise-checkins-new-btn"
-            disabled={loadingTemplates}
-            onClick={() => void startCreate()}
-          >
-            {loadingTemplates ? "Loading…" : "+ New check-in"}
-            <span className="enterprise-checkins-new-btn-chevron" aria-hidden>
-              ▾
-            </span>
-          </button>
-        ) : null}
-      </div>
-
       <div className="enterprise-checkins-metrics" aria-label="Check-in metrics">
         <div className="enterprise-checkins-metric enterprise-checkins-metric--green">
           <span className="enterprise-checkins-metric-icon" aria-hidden>
@@ -1674,14 +1621,6 @@ export function OneOnOneHistoryTab({
           <span className="enterprise-checkins-metric-hint">
             {derivedGoalsCompleted} completed
           </span>
-        </div>
-        <div className="enterprise-checkins-metric enterprise-checkins-metric--purple">
-          <span className="enterprise-checkins-metric-icon" aria-hidden>
-            <IconMetricFlame />
-          </span>
-          <span className="enterprise-checkins-metric-label">Check-in Streak</span>
-          <strong className="enterprise-checkins-metric-value">{streakPrimary}</strong>
-          <span className="enterprise-checkins-metric-hint">{streakHint}</span>
         </div>
         <div className="enterprise-checkins-metric enterprise-checkins-metric--orange">
           <span className="enterprise-checkins-metric-icon" aria-hidden>
@@ -1722,12 +1661,9 @@ export function OneOnOneHistoryTab({
               </p>
             </div>
             <div className="enterprise-checkins-history-controls">
-              <select className="enterprise-checkins-filter" aria-label="Filter check-ins" defaultValue="all">
-                <option value="all">All check-ins</option>
-              </select>
               <button
                 type="button"
-                className="enterprise-checkins-export-btn"
+                className="enterprise-checkins-export-btn enterprise-checkins-export-btn--sm"
                 disabled={!latestExportable || downloadingPdfId === latestExportable?.id}
                 onClick={onExportLatest}
               >
@@ -1736,6 +1672,22 @@ export function OneOnOneHistoryTab({
                   ? "Exporting…"
                   : "Export"}
               </button>
+              <select className="enterprise-checkins-filter" aria-label="Filter check-ins" defaultValue="all">
+                <option value="all">All check-ins</option>
+              </select>
+              {canCreate ? (
+                <button
+                  type="button"
+                  className="enterprise-checkins-new-btn enterprise-checkins-new-btn--sm"
+                  disabled={loadingTemplates}
+                  onClick={() => void startCreate()}
+                >
+                  {loadingTemplates ? "Loading…" : "+ New check-in"}
+                  <span className="enterprise-checkins-new-btn-chevron" aria-hidden>
+                    ▾
+                  </span>
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -1877,6 +1829,7 @@ export function OneOnOneHistoryTab({
               Showing {meetings.length} of {meetings.length} check-ins
             </div>
           ) : null}
+
         </div>
 
         <aside className="enterprise-checkins-aside">

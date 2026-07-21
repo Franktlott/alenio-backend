@@ -79,7 +79,6 @@ type FeedRow =
 
 function FeedItemCard({
   item,
-  activeTeamId,
   currentUserId,
   canDeleteCelebration,
   showPicker,
@@ -87,9 +86,9 @@ function FeedItemCard({
   onClosePicker,
   onCelebrate,
   showHint,
+  showWorkspaceLabel,
 }: {
   item: ActivityFeedItem;
-  activeTeamId: string | null;
   currentUserId: string | undefined;
   canDeleteCelebration: boolean;
   showPicker: boolean;
@@ -97,23 +96,25 @@ function FeedItemCard({
   onClosePicker: () => void;
   onCelebrate?: () => void;
   showHint?: boolean;
+  showWorkspaceLabel?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const itemTeamId = item.teamId;
 
   const { mutate: toggleReaction } = useMutation({
-    mutationFn: (emoji: string) => api.post(`/api/teams/${activeTeamId}/activity/${item.id}/react`, { emoji }),
+    mutationFn: (emoji: string) => api.post(`/api/teams/${itemTeamId}/activity/${item.id}/react`, { emoji }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", "all"] });
       onClosePicker();
     },
   });
 
   const { mutate: deleteCelebration, isPending: isDeleting } = useMutation({
-    mutationFn: () => api.delete(`/api/teams/${activeTeamId}/activity/${item.id}`),
+    mutationFn: () => api.delete(`/api/teams/${itemTeamId}/activity/${item.id}`),
     onSuccess: () => {
       setShowDeleteModal(false);
-      queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", "all"] });
       onClosePicker();
     },
   });
@@ -121,13 +122,27 @@ function FeedItemCard({
   const canDelete = item.type === "celebration" && canDeleteCelebration;
 
   const handleDelete = () => {
-    if (isDeleting || !activeTeamId) return;
+    if (isDeleting || !itemTeamId) return;
     onClosePicker();
     setShowDeleteModal(true);
   };
 
   return (
     <View>
+      {showWorkspaceLabel && item.teamName ? (
+        <Text
+          style={{
+            fontSize: 10,
+            fontWeight: "700",
+            color: "#64748B",
+            marginBottom: 4,
+            marginLeft: 4,
+          }}
+          numberOfLines={1}
+        >
+          {item.teamName}
+        </Text>
+      ) : null}
       <ActivityFeedCard
         item={item}
         onLongPress={onOpenPicker}
@@ -177,16 +192,17 @@ export default function ActivityScreen() {
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
   });
-  const myTeamRole = teams.find((t) => t.id === activeTeamId)?.role;
-  const isWorkspaceOwnerOrAdmin = myTeamRole === "owner" || myTeamRole === "admin";
 
   const [showReactionHint, setShowReactionHint] = useState(false);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
+  const [workspaceFilter, setWorkspaceFilter] = useState<string>("all");
   const [showFilterSheet, setShowFilterSheet] = useState(false);
+  const [showWorkspaceFilterSheet, setShowWorkspaceFilterSheet] = useState(false);
 
   const [showCelebrateModal, setShowCelebrateModal] = useState(false);
   const [celebrateStep, setCelebrateStep] = useState<1 | 2>(1);
+  const [celebrateTeamId, setCelebrateTeamId] = useState<string>("");
   const [celebrateTarget, setCelebrateTarget] = useState<{ id: string; name: string; image: string | null } | null>(null);
   const [celebrateType, setCelebrateType] = useState<CelebrationTypeKey>(CELEBRATION_TYPE_KEYS[0]!);
   const [celebrateMessage, setCelebrateMessage] = useState("");
@@ -217,34 +233,78 @@ export default function ActivityScreen() {
   }, [openPickerId]);
 
   const { data: activities = [], isLoading, refetch, isError, error } = useQuery({
-    queryKey: ["activity", activeTeamId],
-    queryFn: () => api.get<ActivityApiEvent[]>(`/api/teams/${activeTeamId}/activity`),
-    enabled: !!activeTeamId,
+    queryKey: ["activity", "all"],
+    queryFn: async () => {
+      try {
+        return await api.get<ActivityApiEvent[]>(`/api/activity`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        const missingCombined =
+          /not found|404/i.test(msg) || msg.includes("may not exist or you may not have access");
+        if (!missingCombined || teams.length === 0) throw e;
+        const chunks = await Promise.all(
+          teams.map(async (team) => {
+            try {
+              const items = await api.get<ActivityApiEvent[]>(`/api/teams/${team.id}/activity`);
+              return items.map((item) => ({
+                ...item,
+                teamId: item.teamId ?? team.id,
+                team: item.team ?? { id: team.id, name: team.name },
+              }));
+            } catch {
+              return [] as ActivityApiEvent[];
+            }
+          }),
+        );
+        return chunks
+          .flat()
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 150);
+      }
+    },
+    enabled: teams.length > 0,
     refetchInterval: 15000,
+    refetchOnMount: false,
   });
 
+  const celebrateTeamIdResolved =
+    celebrateTeamId || (workspaceFilter !== "all" ? workspaceFilter : activeTeamId ?? teams[0]?.id ?? "");
+
   const { data: teamMembers = [], isLoading: teamMembersLoading } = useQuery({
-    queryKey: ["team-members-feed", activeTeamId],
+    queryKey: ["team-members-feed", celebrateTeamIdResolved],
     queryFn: async () => {
       const team = await api.get<{
         members: { userId: string; user: { id: string; name: string; image: string | null } }[];
-      }>(`/api/teams/${activeTeamId}`);
+      }>(`/api/teams/${celebrateTeamIdResolved}`);
       return (team.members ?? []).filter((m) => m.userId !== currentUserId);
     },
-    enabled: !!activeTeamId && showCelebrateModal,
+    enabled: !!celebrateTeamIdResolved && showCelebrateModal,
   });
+
+  const workspaceFilteredActivities = useMemo(() => {
+    if (workspaceFilter === "all") return activities;
+    return activities.filter((a) => a.teamId === workspaceFilter);
+  }, [activities, workspaceFilter]);
 
   const feedItems = useMemo(
     () =>
-      activities
+      workspaceFilteredActivities
         .map(mapApiActivityToFeedItem)
         .filter((item) => matchesActivityFilter(item.type, activityFilter)),
-    [activities, activityFilter],
+    [workspaceFilteredActivities, activityFilter],
   );
 
-  const summary = useMemo(() => buildActivitySummary(activities.map(mapApiActivityToFeedItem)), [activities]);
+  const summary = useMemo(
+    () => buildActivitySummary(workspaceFilteredActivities.map(mapApiActivityToFeedItem)),
+    [workspaceFilteredActivities],
+  );
   const sections = useMemo(() => groupActivitiesByDate(feedItems), [feedItems]);
   const filterLabel = ACTIVITY_FILTER_OPTIONS.find((o) => o.key === activityFilter)?.label ?? "All Activity";
+  const workspaceFilterLabel =
+    workspaceFilter === "all"
+      ? "All workspaces"
+      : teams.find((t) => t.id === workspaceFilter)?.name ?? "Workspace";
+  const showWorkspaceLabels = workspaceFilter === "all" && teams.length > 1;
 
   const listRows = useMemo<FeedRow[]>(() => {
     const rows: FeedRow[] = [];
@@ -284,13 +344,14 @@ export default function ActivityScreen() {
     setCelebrateType(CELEBRATION_TYPE_KEYS[0]!);
     setCelebrateMessage("");
     setCelebrateMemberSearch("");
+    setCelebrateTeamId("");
   };
 
   const celebrateMutation = useMutation({
     mutationFn: (payload: { targetUserId: string; celebrationType: string; message?: string }) =>
-      api.post(`/api/teams/${activeTeamId}/activity/celebrate`, payload),
+      api.post(`/api/teams/${celebrateTeamIdResolved}/activity/celebrate`, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", "all"] });
       closeCelebrateModal();
     },
   });
@@ -315,6 +376,9 @@ export default function ActivityScreen() {
           <TouchableOpacity
             testID="celebrate-button"
             onPress={() => {
+              setCelebrateTeamId(
+                workspaceFilter !== "all" ? workspaceFilter : activeTeamId ?? teams[0]?.id ?? "",
+              );
               setShowCelebrateModal(true);
               setCelebrateStep(1);
               setCelebrateMemberSearch("");
@@ -356,7 +420,7 @@ export default function ActivityScreen() {
             title={option.label}
             subtitle={
               option.key === "all"
-                ? "Everything from your team"
+                ? "Everything from your workspaces"
                 : option.key === "tasks"
                   ? "Assignments and completions"
                   : option.key === "calendar"
@@ -368,6 +432,47 @@ export default function ActivityScreen() {
             onPress={() => {
               setActivityFilter(option.key);
               setShowFilterSheet(false);
+            }}
+          />
+        ))}
+      </AlenioBottomSheet>
+
+      <AlenioBottomSheet
+        visible={showWorkspaceFilterSheet}
+        title="Workspace"
+        subtitle="Filter activity by workspace"
+        onClose={() => setShowWorkspaceFilterSheet(false)}
+        compact
+        footer={
+          <TouchableOpacity
+            onPress={() => setShowWorkspaceFilterSheet(false)}
+            style={[alenioSheetStyles.cancelButton, { paddingVertical: 4 }]}
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        }
+      >
+        <AlenioSheetOption
+          compact
+          icon={<Check size={14} color="white" strokeWidth={2.5} />}
+          iconColor={workspaceFilter === "all" ? "#4361EE" : "#94A3B8"}
+          title="All workspaces"
+          subtitle="Combined timeline"
+          onPress={() => {
+            setWorkspaceFilter("all");
+            setShowWorkspaceFilterSheet(false);
+          }}
+        />
+        {teams.map((team) => (
+          <AlenioSheetOption
+            key={team.id}
+            compact
+            icon={<Check size={14} color="white" strokeWidth={2.5} />}
+            iconColor={workspaceFilter === team.id ? "#4361EE" : "#94A3B8"}
+            title={team.name}
+            onPress={() => {
+              setWorkspaceFilter(team.id);
+              setShowWorkspaceFilterSheet(false);
             }}
           />
         ))}
@@ -416,6 +521,46 @@ export default function ActivityScreen() {
 
             {celebrateStep === 1 ? (
               <>
+                {teams.length > 1 ? (
+                  <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 8 }}>
+                      Workspace
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
+                      {teams.map((team) => {
+                        const selected = celebrateTeamIdResolved === team.id;
+                        return (
+                          <TouchableOpacity
+                            key={team.id}
+                            onPress={() => {
+                              setCelebrateTeamId(team.id);
+                              setCelebrateTarget(null);
+                            }}
+                            style={{
+                              marginRight: 8,
+                              paddingHorizontal: 12,
+                              paddingVertical: 7,
+                              borderRadius: 999,
+                              backgroundColor: selected ? "#EEF2FF" : "#F8FAFC",
+                              borderWidth: 1,
+                              borderColor: selected ? "#4361EE" : "#E2E8F0",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: "700",
+                                color: selected ? "#4361EE" : "#64748B",
+                              }}
+                            >
+                              {team.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                ) : null}
                 <View
                   style={{
                     flexDirection: "row",
@@ -653,12 +798,37 @@ export default function ActivityScreen() {
               filterLabel={filterLabel}
               onPressFilter={() => setShowFilterSheet(true)}
             />
-            {activities.length > 0 ? (
+            {teams.length > 1 ? (
+              <View style={{ paddingHorizontal: 16, marginTop: 4 }}>
+                <TouchableOpacity
+                  testID="activity-workspace-filter"
+                  onPress={() => setShowWorkspaceFilterSheet(true)}
+                  style={{
+                    alignSelf: "flex-start",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 8,
+                    backgroundColor: "#fff",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                  }}
+                >
+                  <Users size={12} color="#64748B" />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }} numberOfLines={1}>
+                    {workspaceFilterLabel}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+            {workspaceFilteredActivities.length > 0 ? (
               <ActivitySummaryChips summary={summary} testID="activity-summary-chips" />
             ) : null}
           </View>
 
-          {activities.length === 0 ? (
+          {workspaceFilteredActivities.length === 0 ? (
             <View
               style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }}
               testID="empty-state"
@@ -712,19 +882,22 @@ export default function ActivityScreen() {
                   <View style={{ marginBottom: 6 }}>
                     <FeedItemCard
                       item={row.item}
-                      activeTeamId={activeTeamId}
                       currentUserId={currentUserId}
                       canDeleteCelebration={
-                        isWorkspaceOwnerOrAdmin || row.item.actor?.id === currentUserId
+                        row.item.actor?.id === currentUserId ||
+                        teams.find((t) => t.id === row.item.teamId)?.role === "owner" ||
+                        teams.find((t) => t.id === row.item.teamId)?.role === "admin"
                       }
                       showPicker={openPickerId === row.item.id}
                       onOpenPicker={() => setOpenPickerId(row.item.id)}
                       onClosePicker={() => setOpenPickerId(null)}
                       onCelebrate={() => {
+                        setCelebrateTeamId(row.item.teamId || celebrateTeamIdResolved);
                         setShowCelebrateModal(true);
                         setCelebrateStep(1);
                       }}
                       showHint={row.isFirstInFeed && showReactionHint}
+                      showWorkspaceLabel={showWorkspaceLabels}
                     />
                   </View>
                 );

@@ -103,9 +103,10 @@ function scheduleWriteBody(value: WalkScheduleFormValue, checklistName: string) 
     daysOfWeek: value.recurrence === "WEEKLY" ? value.daysOfWeek : null,
     intervalMinutes: value.recurrence === "INTERVAL" ? value.intervalMinutes : null,
     timezone: value.timezone,
-    assignScope: value.assignScope,
-    assignRole: value.assignRole.trim() || null,
-    completionMode: value.completionMode,
+    // Temps checklists are always available to the whole workspace.
+    assignScope: "WORKSPACE" as const,
+    assignRole: null,
+    completionMode: "ANY_ONE" as const,
     windows,
   };
 }
@@ -353,14 +354,14 @@ export function WalkDetailsPage() {
     setError(null);
     try {
       await updateWalkSchedule(teamId, primarySchedule.id, {
-        assignScope: assignmentForm.assignScope,
-        assignRole: assignmentForm.assignRole.trim() || null,
-        completionMode: assignmentForm.completionMode,
+        assignScope: "WORKSPACE",
+        assignRole: null,
+        completionMode: "ANY_ONE",
       });
       await load();
-      showToast("Assignment updated");
+      showToast("Team access saved");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update assignment.");
+      setError(err instanceof Error ? err.message : "Could not update team access.");
     } finally {
       setBusy(false);
     }
@@ -764,13 +765,9 @@ export function WalkDetailsPage() {
                         </select>
                       </label>
                     ) : null}
-                    <WalkScheduleForm
-                      value={assignmentForm}
-                      onChange={setAssignmentForm}
-                      showAssignment
-                      disabled={busy}
-                      checklistName={template.name}
-                    />
+                    <p className="wil-subtitle">
+                      This checklist is available to everyone on this Temps team when its schedule window is open.
+                    </p>
                     <footer style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
                       <button
                         type="button"
@@ -778,7 +775,7 @@ export function WalkDetailsPage() {
                         disabled={busy || !primarySchedule}
                         onClick={() => void saveAssignment()}
                       >
-                        {busy ? "Saving…" : "Save assignment"}
+                        {busy ? "Saving…" : "Confirm team access"}
                       </button>
                     </footer>
                   </>

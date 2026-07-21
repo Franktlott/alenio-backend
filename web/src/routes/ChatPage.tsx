@@ -352,6 +352,7 @@ export function ChatPage() {
   const [deleteMessageTarget, setDeleteMessageTarget] = useState<ChatMessageLike | null>(null);
   const [messageActionSaving, setMessageActionSaving] = useState(false);
   const [conversationFilter, setConversationFilter] = useState("");
+  const [messagesDrawerOpen, setMessagesDrawerOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -649,12 +650,14 @@ export function ChatPage() {
   const onTeamChange = (id: string) => {
     setParams({ teamId: id, topicId: "general" });
     setSendErr(null);
+    setMessagesDrawerOpen(false);
   };
 
   const onTopicChange = (topicId: string) => {
     if (!selectedTeamId) return;
     setParams({ teamId: selectedTeamId, topicId });
     setSendErr(null);
+    setMessagesDrawerOpen(false);
   };
 
   const onConversationChange = (conversationId: string) => {
@@ -662,7 +665,17 @@ export function ChatPage() {
     if (selectedTeamId) next.teamId = selectedTeamId;
     setParams(next);
     setSendErr(null);
+    setMessagesDrawerOpen(false);
   };
+
+  useEffect(() => {
+    if (!messagesDrawerOpen) return;
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") setMessagesDrawerOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [messagesDrawerOpen]);
 
   const closeCreateModals = () => {
     setCreateChannelOpen(false);
@@ -947,6 +960,11 @@ export function ChatPage() {
       ? "Team chat"
       : activeTopic?.name ?? "Team chat";
   const channelHeaderHash = !isDmMode;
+  const channelHeaderKicker = isDmMode
+    ? activeConversation?.isGroup
+      ? "Group message"
+      : "Direct message"
+    : selectedTeamName || "Workspace";
   const channelDescription = isDmMode
     ? activeConversation?.isGroup
       ? activeConversation.workspaceContext?.label
@@ -954,8 +972,13 @@ export function ChatPage() {
         : `${activeConversation.participants.length} members`
       : "Private conversation"
     : selectedTopicId === "general"
-      ? ""
-      : activeTopic?.description?.trim() || `Messages in ${activeTopic?.name ?? "this channel"}.`;
+      ? selectedTeamName
+        ? `${selectedTeamName} · Shared channel for the whole team`
+        : "Shared channel for the whole team"
+      : activeTopic?.description?.trim() ||
+        (selectedTeamName
+          ? `${selectedTeamName} · Messages in ${activeTopic?.name ?? "this channel"}`
+          : `Messages in ${activeTopic?.name ?? "this channel"}.`);
   const memberCount = isDmMode
     ? activeConversation?.participants.length ?? 0
     : teams?.find((t) => t.id === selectedTeamId)?._count?.members ?? 0;
@@ -1097,8 +1120,32 @@ export function ChatPage() {
 
   return (
     <>
-      <div className="chat-app-body chat-app-body-enterprise" data-testid="chat-screen">
-            <aside className="chat-sidebar" aria-label="Channels">
+      <div
+        className={`chat-app-body chat-app-body-enterprise${messagesDrawerOpen ? " chat-app-body--messages-open" : ""}`}
+        data-testid="chat-screen"
+      >
+            {messagesDrawerOpen ? (
+              <button
+                type="button"
+                className="chat-messages-backdrop"
+                aria-label="Close messages"
+                onClick={() => setMessagesDrawerOpen(false)}
+              />
+            ) : null}
+            <button
+              type="button"
+              className={`chat-messages-tab${messagesDrawerOpen ? " chat-messages-tab--open" : ""}`}
+              aria-expanded={messagesDrawerOpen}
+              aria-controls="chat-messages-drawer"
+              title={messagesDrawerOpen ? "Close messages" : "Open messages"}
+              onClick={() => setMessagesDrawerOpen((open) => !open)}
+            >
+              <span className="chat-messages-tab-icon" aria-hidden>
+                <IconCompose />
+              </span>
+              <span className="chat-messages-tab-label">Messages</span>
+            </button>
+            <aside className="chat-sidebar" id="chat-messages-drawer" aria-label="Channels">
               <div className="chat-sidebar-card">
                 <div className="chat-sidebar-top">
                   <h2 className="chat-sidebar-title">Messages</h2>
@@ -1207,19 +1254,6 @@ export function ChatPage() {
                                   ))
                                 : null}
                             </ul>
-                          ) : null}
-                          {selected && canCreateChannel ? (
-                            <button
-                              type="button"
-                              className="chat-workspace-add-channel"
-                              onClick={() => {
-                                setCreateErr(null);
-                                setCreateChannelOpen(true);
-                              }}
-                              data-testid="chat-add-channel"
-                            >
-                              <IconPlus /> Add channel
-                            </button>
                           ) : null}
                         </section>
                       );
@@ -1338,6 +1372,7 @@ export function ChatPage() {
               <div className="chat-main-card">
                 <div className="chat-channel-header">
                   <div className="chat-channel-header-main">
+                    <p className="chat-channel-header-kicker">{channelHeaderKicker}</p>
                     <div className="chat-channel-header-title-row">
                       <h1 className="chat-channel-header-title">
                         {channelHeaderHash ? <span className="chat-channel-hash">#</span> : null}
@@ -1350,6 +1385,20 @@ export function ChatPage() {
                     {channelDescription ? <p className="chat-channel-header-desc">{channelDescription}</p> : null}
                   </div>
                   <div className="chat-channel-header-actions">
+                    {!isDmMode && canCreateChannel ? (
+                      <button
+                        type="button"
+                        className="chat-header-new-channel"
+                        onClick={() => {
+                          setCreateErr(null);
+                          setCreateChannelOpen(true);
+                        }}
+                        data-testid="chat-add-channel"
+                      >
+                        <IconPlus />
+                        New channel
+                      </button>
+                    ) : null}
                     {memberCount > 0 ? (
                       <button type="button" className="chat-header-icon-btn" aria-label={`${memberCount} members`} title={`${memberCount} members`}>
                         <IconUsers />
@@ -1844,7 +1893,10 @@ export function ChatPage() {
                 </p>
               ) : null}
             </div>
-            <TeamActivityPanel teamId={selectedTeamId} currentUserId={me?.id} />
+            <TeamActivityPanel
+              teams={(teams ?? []).map((t) => ({ id: t.id, name: t.name }))}
+              currentUserId={me?.id}
+            />
       </div>
 
       <CreateChannelModal

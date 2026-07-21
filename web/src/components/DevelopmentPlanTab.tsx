@@ -8,6 +8,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   addDevelopmentGoalNote,
   createDevelopmentGoal,
@@ -128,18 +129,78 @@ function GoalStatusBadge({ status }: { status: DevelopmentGoalStatus | undefined
 }
 
 function DevPlanActivityKey() {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   return (
-    <details className="enterprise-dev-plan-activity-key">
-      <summary>{DEVELOPMENT_GOAL_ACTIVITY_KEY.title}</summary>
-      <p>{DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}</p>
-      <p>{DEVELOPMENT_GOAL_ACTIVITY_KEY.reminderSummary}</p>
-      <p className="enterprise-dev-plan-activity-key-label">Counts as activity</p>
-      <ul>
-        {DEVELOPMENT_GOAL_ACTIVITY_KEY.activityCountsAs.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </details>
+    <>
+      <button
+        type="button"
+        className="enterprise-dev-plan-activity-info-btn"
+        aria-label={DEVELOPMENT_GOAL_ACTIVITY_KEY.title}
+        title={DEVELOPMENT_GOAL_ACTIVITY_KEY.title}
+        onClick={() => setOpen(true)}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v5" strokeLinecap="round" />
+          <circle cx="12" cy="8" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+
+      {open
+        ? createPortal(
+            <div
+              className="enterprise-dev-plan-activity-modal-backdrop"
+              role="presentation"
+              onClick={() => setOpen(false)}
+            >
+              <div
+                className="enterprise-dev-plan-activity-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label={DEVELOPMENT_GOAL_ACTIVITY_KEY.title}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="enterprise-dev-plan-activity-modal-head">
+                  <h3 className="enterprise-dev-plan-activity-modal-title">
+                    {DEVELOPMENT_GOAL_ACTIVITY_KEY.title}
+                  </h3>
+                  <button
+                    type="button"
+                    className="enterprise-dev-plan-activity-modal-close"
+                    aria-label="Close"
+                    onClick={() => setOpen(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="enterprise-dev-plan-activity-modal-body">
+                  {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}
+                </p>
+                <p className="enterprise-dev-plan-activity-modal-body">
+                  {DEVELOPMENT_GOAL_ACTIVITY_KEY.reminderSummary}
+                </p>
+                <p className="enterprise-dev-plan-activity-modal-label">Counts as activity</p>
+                <ul className="enterprise-dev-plan-activity-modal-list">
+                  {DEVELOPMENT_GOAL_ACTIVITY_KEY.activityCountsAs.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
@@ -191,15 +252,6 @@ function IconMetricTarget() {
       <circle cx="12" cy="12" r="8" />
       <circle cx="12" cy="12" r="4.5" />
       <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function IconMetricCheck() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <circle cx="12" cy="12" r="8" />
-      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
     </svg>
   );
 }
@@ -885,23 +937,11 @@ function DevelopmentGoalCard({
         </section>
       ) : null}
 
-      <section className="enterprise-dev-plan-goal-section">
-        <p className="enterprise-dev-plan-section-label">Notes</p>
-        {goal.notes.length === 0 ? (
-          <p className="enterprise-dev-plan-notes-empty">No notes yet.</p>
-        ) : (
-          <ul className="enterprise-dev-plan-note-list">
-            {goal.notes.map((note) => (
-              <li key={note.id} className="enterprise-dev-plan-note">
-                <p className="enterprise-dev-plan-note-body">{note.body}</p>
-                <p className="enterprise-dev-plan-note-meta">
-                  {displayUserName(note.createdBy)} · {formatWhen(note.createdAt)}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {goal.notes.length > 0 ? (
+        <p className="enterprise-dev-plan-note-count">
+          {goal.notes.length} progress note{goal.notes.length === 1 ? "" : "s"}
+        </p>
+      ) : null}
 
       <footer className="enterprise-dev-plan-goal-footer">
         <p className="enterprise-dev-plan-goal-dates">
@@ -1228,53 +1268,6 @@ export function DevelopmentPlanTab({
       className="enterprise-dev-plan enterprise-checkins-page enterprise-oneone-history--scrollable"
       data-testid="development-plan-tab"
     >
-      <div className="enterprise-checkins-section-head">
-        <div className="enterprise-checkins-section-head-copy">
-          <div className="enterprise-checkins-section-title-row">
-            <span className="enterprise-checkins-section-icon" aria-hidden>
-              <IconDevHeader />
-            </span>
-            <h3 className="enterprise-checkins-section-title">Development</h3>
-          </div>
-          <p className="enterprise-checkins-section-sub">
-            Skills to build, action steps, and progress notes over time.
-          </p>
-        </div>
-        <div className="enterprise-dev-page-head-actions">
-          <button
-            type="button"
-            className="enterprise-checkins-export-btn"
-            onClick={onPrint}
-            disabled={loading || goals.length === 0}
-          >
-            Print
-          </button>
-          <button
-            type="button"
-            className="enterprise-checkins-export-btn"
-            onClick={() => void onDownloadPdf()}
-            disabled={loading || downloadingPdf || goals.length === 0}
-          >
-            <IconExport />
-            {downloadingPdf ? "Downloading…" : "Export"}
-          </button>
-          {canCreate ? (
-            <>
-              <button
-                type="button"
-                className="enterprise-checkins-export-btn enterprise-dev-page-seneca-btn"
-                onClick={() => setSenecaGoalOpen(true)}
-              >
-                Generate with Seneca
-              </button>
-              <button type="button" className="enterprise-checkins-new-btn" onClick={openCreate}>
-                + New goal
-              </button>
-            </>
-          ) : null}
-        </div>
-      </div>
-
       <div className="enterprise-checkins-metrics" aria-label="Development metrics">
         <div className="enterprise-checkins-metric">
           <span className="enterprise-checkins-metric-icon" aria-hidden>
@@ -1288,17 +1281,6 @@ export function DevelopmentPlanTab({
           <span className="enterprise-checkins-metric-hint">
             {inactiveGoals.length > 0 ? `${inactiveGoals.length} inactive` : "In progress"}
           </span>
-        </div>
-        <div className="enterprise-checkins-metric">
-          <span className="enterprise-checkins-metric-icon" aria-hidden>
-            <IconMetricCheck />
-          </span>
-          <span className="enterprise-checkins-metric-label">Completed</span>
-          <strong className="enterprise-checkins-metric-value">
-            {closedGoals.length}
-            <span className="enterprise-checkins-metric-suffix"> closed</span>
-          </strong>
-          <span className="enterprise-checkins-metric-hint">{completionPct}% complete</span>
         </div>
         <div className="enterprise-checkins-metric">
           <span className="enterprise-checkins-metric-icon" aria-hidden>
@@ -1334,13 +1316,37 @@ export function DevelopmentPlanTab({
       <div className="enterprise-checkins-main-grid">
         <div className="enterprise-checkins-history-card enterprise-dev-page-goals-card">
           <div className="enterprise-checkins-history-card-head">
-            <div>
+            <div className="enterprise-dev-page-goals-title-row">
               <h4 className="enterprise-checkins-history-title">Development goals</h4>
-              <p className="enterprise-checkins-history-sub">
-                Skills, action steps, and progress notes for {memberName}.
-              </p>
+              <DevPlanActivityKey />
             </div>
             <div className="enterprise-checkins-history-controls">
+              <button
+                type="button"
+                className="enterprise-checkins-export-btn enterprise-checkins-export-btn--sm"
+                onClick={onPrint}
+                disabled={loading || goals.length === 0}
+              >
+                Print
+              </button>
+              <button
+                type="button"
+                className="enterprise-checkins-export-btn enterprise-checkins-export-btn--sm"
+                onClick={() => void onDownloadPdf()}
+                disabled={loading || downloadingPdf || goals.length === 0}
+              >
+                <IconExport />
+                {downloadingPdf ? "Downloading…" : "Export"}
+              </button>
+              {canCreate ? (
+                <button
+                  type="button"
+                  className="enterprise-checkins-export-btn enterprise-checkins-export-btn--sm enterprise-dev-page-seneca-btn"
+                  onClick={() => setSenecaGoalOpen(true)}
+                >
+                  Seneca
+                </button>
+              ) : null}
               <select
                 className="enterprise-checkins-filter"
                 aria-label="Filter goals"
@@ -1351,7 +1357,16 @@ export function DevelopmentPlanTab({
                 <option value="active">Active</option>
                 <option value="completed">Completed</option>
               </select>
-              <DevPlanActivityKey />
+              {canCreate ? (
+                <button
+                  type="button"
+                  className="enterprise-checkins-new-btn enterprise-checkins-new-btn--sm"
+                  disabled={loading}
+                  onClick={openCreate}
+                >
+                  + New goal
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -1469,9 +1484,6 @@ export function DevelopmentPlanTab({
                 </section>
               ) : null}
 
-              {canCreate && goalFilter !== "completed" ? (
-                <DevPlanGrowCard canCreate onCreate={openCreate} />
-              ) : null}
             </div>
           )}
 

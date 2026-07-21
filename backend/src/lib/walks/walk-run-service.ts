@@ -34,201 +34,8 @@ type SnapshotItem = {
     required: boolean;
     blocksCompletion?: boolean;
     position: number;
-    config?: Record<string, unknown> | null;
   }>;
 };
-
-function correctiveBranch(
-  action: { config?: Record<string, unknown> | null },
-): "first_failure" | "if_pass" | "if_fail" | null {
-  const raw = action.config?.branch;
-  if (raw === "first_failure" || raw === "if_pass" || raw === "if_fail") return raw;
-  return null;
-}
-
-/** If-pass notes are informational — they must not block the associate. */
-function isAssociateCorrectiveAction(action: {
-  config?: Record<string, unknown> | null;
-  actionType?: string;
-}): boolean {
-  return correctiveBranch(action) !== "if_pass";
-}
-
-function isFirstFailureAction(action: { config?: Record<string, unknown> | null }): boolean {
-  const branch = correctiveBranch(action);
-  return branch === "first_failure" || branch == null;
-}
-
-function isIfFailAction(action: { config?: Record<string, unknown> | null }): boolean {
-  return correctiveBranch(action) === "if_fail";
-}
-
-function responseRetestCount(response: unknown): number {
-  if (!response || typeof response !== "object") return 0;
-  const count = (response as { retestCount?: unknown }).retestCount;
-  return typeof count === "number" && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
-}
-
-function maximumRetestsFromConfig(config: unknown): number {
-  if (!config || typeof config !== "object") return 1;
-  const n = (config as { maximumRetests?: unknown }).maximumRetests;
-  if (typeof n === "number" && Number.isFinite(n)) return Math.max(0, Math.min(10, Math.floor(n)));
-  return 1;
-}
-
-type DbClient = Pick<
-  typeof prisma,
-  "walkCorrectiveActionResult" | "walkItemResponse"
->;
-
-type OccurrenceWindow = {
-  windowStart: Date;
-  graceEndsAt: Date;
-  status?: string;
-};
-
-/** Scheduled Temps checks may only be worked during windowStart → graceEndsAt. */
-function assertOccurrenceInWindow(
-  occurrence: OccurrenceWindow,
-  now = new Date(),
-  opts?: { allowLateEntry?: boolean },
-): { ok: true } | { error: "OUTSIDE_WINDOW"; message: string } {
-  if (now < occurrence.windowStart) {
-    return {
-      error: "OUTSIDE_WINDOW" as const,
-      message: "This checklist is not available for entry yet",
-    };
-  }
-  if (now > occurrence.graceEndsAt) {
-    if (opts?.allowLateEntry) return { ok: true as const };
-    return {
-      error: "OUTSIDE_WINDOW" as const,
-      message: "This checklist’s entry window has ended",
-    };
-  }
-  return { ok: true as const };
-}
-
-/** Ad-hoc runs (no occurrence) are unrestricted; scheduled runs must be in window. */
-async function assertRunOccurrenceInWindow(
-  teamId: string,
-  runId: string,
-  opts?: { allowLateEntry?: boolean },
-): Promise<{ ok: true } | { error: "OUTSIDE_WINDOW"; message: string }> {
-  const occurrence = await prisma.walkOccurrence.findFirst({
-    where: { teamId, runId },
-    select: { windowStart: true, graceEndsAt: true, status: true },
-  });
-  if (!occurrence) return { ok: true as const };
-  return assertOccurrenceInWindow(occurrence, new Date(), opts);
-}
-
-const RUN_OWNED_MESSAGE =
-  "Another associate already started this check on a different device";
-
-/**
- * When schedule claimMode is FIRST_START_OWNS, only the associate who started
- * the run may continue / sync it. SHARED_RESUME allows any teammate.
- * Unowned prepared runs (startedByUserId null) are claimable by the first actor.
- */
-type ClaimCheckResult =
-  | { ok: true }
-  | { ok: false; error: "RUN_OWNED_BY_OTHER"; message: string };
-
-async function assertRunClaimAllowsUser(
-  teamId: string,
-  runId: string,
-  userId: string | null | undefined,
-  opts?: { claimIfUnowned?: boolean; startedByName?: string | null },
-): Promise<ClaimCheckResult> {
-  if (!userId) return { ok: true };
-  const occurrence = await prisma.walkOccurrence.findFirst({
-    where: { teamId, runId },
-    select: {
-      id: true,
-      startedByUserId: true,
-      schedule: { select: { claimMode: true } },
-    },
-  });
-  if (!occurrence) return { ok: true };
-  const claimMode = occurrence.schedule?.claimMode ?? "FIRST_START_OWNS";
-  if (claimMode !== "FIRST_START_OWNS") return { ok: true };
-  const ownerId = occurrence.startedByUserId;
-  if (ownerId && ownerId !== userId) {
-    return {
-      ok: false,
-      error: "RUN_OWNED_BY_OTHER",
-      message: RUN_OWNED_MESSAGE,
-    };
-  }
-  if (!ownerId && opts?.claimIfUnowned) {
-    const claimed = await prisma.walkOccurrence.updateMany({
-      where: { id: occurrence.id, startedByUserId: null },
-      data: { startedByUserId: userId, startedAt: new Date() },
-    });
-    if (claimed.count === 0) {
-      const refreshed = await prisma.walkOccurrence.findFirst({
-        where: { id: occurrence.id },
-        select: { startedByUserId: true },
-      });
-      if (refreshed?.startedByUserId && refreshed.startedByUserId !== userId) {
-        return {
-          ok: false,
-          error: "RUN_OWNED_BY_OTHER",
-          message: RUN_OWNED_MESSAGE,
-        };
-      }
-    } else {
-      await prisma.walkRun.update({
-        where: { id: runId },
-        data: {
-          startedByUserId: userId,
-          ...(opts.startedByName != null ? { startedByName: opts.startedByName } : {}),
-        },
-      });
-    }
-  }
-  return { ok: true };
-}
-
-async function upsertPendingCorrectiveResults(
-  db: DbClient,
-  itemResponseId: string,
-  actions: NonNullable<SnapshotItem["correctiveActions"]>,
-) {
-  for (const action of actions) {
-    await db.walkCorrectiveActionResult.upsert({
-      where: {
-        itemResponseId_correctiveActionId: {
-          itemResponseId,
-          correctiveActionId: action.id,
-        },
-      },
-      create: {
-        itemResponseId,
-        correctiveActionId: action.id,
-        status: "PENDING",
-      },
-      update: {},
-    });
-  }
-}
-
-async function skipPendingCorrectiveResults(
-  db: DbClient,
-  itemResponseId: string,
-  actionIds: string[],
-) {
-  if (actionIds.length === 0) return;
-  await db.walkCorrectiveActionResult.updateMany({
-    where: {
-      itemResponseId,
-      correctiveActionId: { in: actionIds },
-      status: "PENDING",
-    },
-    data: { status: "SKIPPED", completedAt: new Date() },
-  });
-}
 
 const runResponseInclude = {
   responses: {
@@ -392,42 +199,20 @@ export function serializeWalkRun(run: {
               photoUrls: resp.photoUrls,
               completedBy: resp.completedBy,
               completedAt: resp.completedAt?.toISOString() ?? null,
-              correctiveActions: caDefs
-                .filter((action) => isAssociateCorrectiveAction(action))
-                .map((action) => {
-                  const result = caResults.find((r) => r.correctiveActionId === action.id);
-                  const required = Boolean(
-                    action.required ||
-                      action.blocksCompletion ||
-                      action.actionType === "BLOCK_COMPLETION",
-                  );
-                  const branch = correctiveBranch(action);
-                  // Only treat a step as completable when a result row exists (or
-                  // NEEDS_ACTION opened first-failure and rows are about to be healed).
-                  const status =
-                    result?.status ??
-                    (branch === "if_fail"
-                      ? "LOCKED"
-                      : resp.status === "NEEDS_ACTION"
-                        ? "PENDING"
-                        : "LOCKED");
-                  return {
-                    id: action.id,
-                    title: action.title,
-                    actionType: action.actionType,
-                    instructions: action.instructions ?? null,
-                    required,
-                    blocksCompletion: Boolean(
-                      action.blocksCompletion ||
-                        action.actionType === "BLOCK_COMPLETION" ||
-                        required,
-                    ),
-                    branch,
-                    config: action.config ?? null,
-                    status,
-                    completedAt: result?.completedAt?.toISOString() ?? null,
-                  };
-                }),
+              correctiveActions: caDefs.map((action) => {
+                const result = caResults.find((r) => r.correctiveActionId === action.id);
+                return {
+                  id: action.id,
+                  title: action.title,
+                  actionType: action.actionType,
+                  instructions: action.instructions ?? null,
+                  blocksCompletion: Boolean(
+                    action.blocksCompletion || action.actionType === "BLOCK_COMPLETION",
+                  ),
+                  status: result?.status ?? "PENDING",
+                  completedAt: result?.completedAt?.toISOString() ?? null,
+                };
+              }),
             }
           : null,
       };
@@ -462,16 +247,6 @@ export async function startWalkRun(input: {
   isTest?: boolean;
   testSessionId?: string | null;
   occurrenceId?: string | null;
-  /**
-   * Warm the run snapshot for offline cache without claiming ownership.
-   * Used by Alenio Temps Today prefetch — first real open/sync claims the run.
-   */
-  prepareOnly?: boolean;
-  /**
-   * Manager late entry after grace (route must gate with assertCanManageWalks).
-   * Allows MISSED / past-grace starts; still blocks before window opens.
-   */
-  lateEntryOverride?: boolean;
 }) {
   let occurrence: {
     id: string;
@@ -479,11 +254,6 @@ export async function startWalkRun(input: {
     templateVersionId: string;
     status: string;
     runId: string | null;
-    windowStart: Date;
-    graceEndsAt: Date;
-    assignScope: string;
-    assignRole: string | null;
-    assignUserIds: unknown;
   } | null = null;
 
   if (input.occurrenceId) {
@@ -491,58 +261,12 @@ export async function startWalkRun(input: {
       where: { id: input.occurrenceId, teamId: input.teamId },
     });
     if (!occurrence) return { error: "NOT_FOUND" as const, message: "Occurrence not found" };
-    const windowCheck = assertOccurrenceInWindow(occurrence, new Date(), {
-      allowLateEntry: Boolean(input.lateEntryOverride),
-    });
-    if ("error" in windowCheck) {
-      return { error: windowCheck.error, message: windowCheck.message };
-    }
     if (occurrence.runId) {
       const existing = await getWalkRun(input.teamId, occurrence.runId);
-      if (!existing) {
-        // Orphaned runId — fall through to create a new run if status allows.
-      } else if (existing.status === "ABANDONED" && input.lateEntryOverride) {
-        // Manager late entry after abandon — clear link and create a fresh run below.
-        await prisma.walkOccurrence.update({
-          where: { id: occurrence.id },
-          data: { runId: null, status: "MISSED" },
-        });
-        occurrence = { ...occurrence, runId: null, status: "MISSED" };
-      } else if (existing.status !== "IN_PROGRESS") {
-        return {
-          error: "OCCURRENCE_CLOSED" as const,
-          message: "This check was already completed on another device",
-        };
-      } else {
-        if (input.prepareOnly) {
-          // Prefetch / warm-cache — do not claim ownership.
-          return { ok: true as const, run: existing };
-        }
-        const claim = await assertRunClaimAllowsUser(
-          input.teamId,
-          occurrence.runId,
-          input.startedByUserId,
-          {
-            claimIfUnowned: true,
-            startedByName: input.startedByName,
-          },
-        );
-        if (!claim.ok) {
-          return { error: claim.error, message: claim.message };
-        }
-        const refreshed = await getWalkRun(input.teamId, occurrence.runId);
-        return { ok: true as const, run: refreshed ?? existing };
-      }
+      if (existing) return { ok: true as const, run: existing };
     }
-    const openStatuses = input.lateEntryOverride
-      ? ["AVAILABLE", "IN_PROGRESS", "MISSED"]
-      : ["AVAILABLE", "IN_PROGRESS"];
-    // UPCOMING is blocked by the clock check above; completed statuses stay blocked.
-    if (!openStatuses.includes(occurrence.status)) {
-      return {
-        error: "OCCURRENCE_CLOSED" as const,
-        message: "This check was already completed or is no longer available",
-      };
+    if (!["AVAILABLE", "IN_PROGRESS", "UPCOMING"].includes(occurrence.status)) {
+      return { error: "OCCURRENCE_CLOSED" as const, message: "This walk window is not available" };
     }
   }
 
@@ -587,9 +311,6 @@ export async function startWalkRun(input: {
     return { error: "EMPTY_WALK" as const, message: "This walk has no items yet" };
   }
 
-  const claimUserId = input.prepareOnly ? null : (input.startedByUserId ?? null);
-  const claimUserName = input.prepareOnly ? null : (input.startedByName ?? null);
-
   const run = await prisma.$transaction(async (tx) => {
     const created = await tx.walkRun.create({
       data: {
@@ -598,8 +319,8 @@ export async function startWalkRun(input: {
         templateVersion,
         templateSnapshot: snapshot as unknown as Prisma.InputJsonValue,
         status: "IN_PROGRESS",
-        startedByUserId: claimUserId,
-        startedByName: claimUserName,
+        startedByUserId: input.startedByUserId ?? null,
+        startedByName: input.startedByName ?? null,
         deviceId: input.deviceId ?? null,
         isTest: input.isTest ?? false,
         testSessionId: input.testSessionId ?? null,
@@ -621,8 +342,8 @@ export async function startWalkRun(input: {
         data: {
           status: "IN_PROGRESS",
           runId: created.id,
-          startedByUserId: claimUserId,
-          startedAt: claimUserId ? new Date() : null,
+          startedByUserId: input.startedByUserId ?? null,
+          startedAt: new Date(),
         },
       });
     }
@@ -642,15 +363,12 @@ export async function getWalkRun(teamId: string, runId: string) {
   return serializeWalkRun(run);
 }
 
-export async function listWalkRuns(teamId: string, limit = 200) {
+export async function listWalkRuns(teamId: string, limit = 50) {
   const rows = await prisma.walkRun.findMany({
     where: { teamId },
     orderBy: { startedAt: "desc" },
     take: limit,
-    include: {
-      responses: { include: { correctiveActionResults: true } },
-      template: { select: { name: true } },
-    },
+    include: { responses: true, template: { select: { name: true } } },
   });
   return rows.map((run) => ({
     ...serializeWalkRun(run),
@@ -666,27 +384,7 @@ export async function submitWalkItemResponse(input: {
   notes?: string | null;
   photoUrls?: string[] | null;
   completedBy?: string | null;
-  /** Authenticated user — used for FIRST_START_OWNS claim checks. */
-  actorUserId?: string | null;
-  /**
-   * When true, save pass/fail without failure-procedure gating.
-   * Requires adminOverride so the skip is audited (Execution Center / Go kiosk).
-   */
-  skipFailureProcedure?: boolean;
-  /** Explicit manager/admin override acknowledgement (required with skipFailureProcedure). */
-  adminOverride?: boolean;
-  adminOverrideReason?: string | null;
-  /** Manager late entry after grace (route must gate manage). */
-  lateEntryOverride?: boolean;
 }) {
-  if (input.skipFailureProcedure && !input.adminOverride) {
-    return {
-      error: "ADMIN_OVERRIDE_REQUIRED" as const,
-      message:
-        "Skipping the failure procedure requires an explicit admin override",
-    };
-  }
-
   const run = await prisma.walkRun.findFirst({
     where: { id: input.runId, teamId: input.teamId },
     include: { responses: true },
@@ -694,21 +392,6 @@ export async function submitWalkItemResponse(input: {
   if (!run) return { error: "NOT_FOUND" as const };
   if (run.status !== "IN_PROGRESS") {
     return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
-  }
-  const claim = await assertRunClaimAllowsUser(
-    input.teamId,
-    input.runId,
-    input.actorUserId,
-    { claimIfUnowned: true, startedByName: input.completedBy },
-  );
-  if (!claim.ok) {
-    return { error: claim.error, message: claim.message };
-  }
-  const windowCheck = await assertRunOccurrenceInWindow(input.teamId, input.runId, {
-    allowLateEntry: Boolean(input.lateEntryOverride),
-  });
-  if ("error" in windowCheck) {
-    return { error: windowCheck.error, message: windowCheck.message };
   }
 
   const snapshot = parseSnapshot(run.templateSnapshot);
@@ -750,129 +433,50 @@ export async function submitWalkItemResponse(input: {
       : null);
 
   const existing = run.responses.find((r) => r.itemId === input.itemId);
-  const actions = item.correctiveActions ?? [];
-  const firstFailureActions = actions.filter(isFirstFailureAction);
-  const ifFailActions = actions.filter(isIfFailAction);
-  const hasProcedure = firstFailureActions.length > 0 || ifFailActions.length > 0;
-  const requireRetest = Boolean(
-    item.config && (item.config as { requireRetestOnFailure?: unknown }).requireRetestOnFailure,
-  );
-  const maxRetests = maximumRetestsFromConfig(item.config);
-  const retestCount = responseRetestCount(parsedResponse.data);
-  const isRetest = retestCount >= 1;
-  const retestsExhausted = retestCount >= Math.max(1, maxRetests);
-
-  let nextStatus: WalkItemResponseStatus = status;
-  let failed = status === "FAIL" || status === "NEEDS_ACTION";
-  const runProcedure = hasProcedure && !input.skipFailureProcedure;
-
-  if (runProcedure && failed && !isRetest) {
-    // First failure → open 1st-failure steps only.
-    nextStatus = "NEEDS_ACTION";
-  } else if (runProcedure && isRetest && status === "PASS") {
-    // Retemp passed → procedure complete; skip unused if-fail steps.
-    nextStatus = "RESOLVED";
-    failed = false;
-  } else if (
-    runProcedure &&
-    isRetest &&
-    status === "FAIL" &&
-    !retestsExhausted
-  ) {
-    // More retemps allowed — keep NEEDS_ACTION without opening if_fail yet.
-    nextStatus = "NEEDS_ACTION";
-    failed = true;
-  } else if (runProcedure && isRetest && status === "FAIL" && ifFailActions.length > 0) {
-    // Retests exhausted → open 2nd-failure steps.
-    nextStatus = "NEEDS_ACTION";
-    failed = true;
-  } else if (runProcedure && isRetest && status === "FAIL") {
-    // Retemp failed with no 2nd-failure steps — close procedure but keep fail audit.
-    nextStatus = "RESOLVED";
-    failed = true;
-  } else if (runProcedure && failed) {
-    nextStatus = "NEEDS_ACTION";
-  }
-
-  const persistedResponse =
-    input.skipFailureProcedure && input.adminOverride
-      ? {
-          ...(parsedResponse.data && typeof parsedResponse.data === "object"
-            ? (parsedResponse.data as Record<string, unknown>)
-            : { value: parsedResponse.data }),
-          adminOverride: true,
-          adminOverrideAt: new Date().toISOString(),
-          adminOverrideBy: input.completedBy ?? input.actorUserId ?? null,
-          adminOverrideReason:
-            input.adminOverrideReason?.trim() ||
-            "Failure procedure skipped (admin override)",
-        }
-      : parsedResponse.data;
-
-  const overrideNote =
-    input.skipFailureProcedure && input.adminOverride
-      ? `[Admin override] ${
-          input.adminOverrideReason?.trim() || "Failure procedure skipped"
-        }`
-      : null;
-  const mergedNotes = [input.notes?.trim(), overrideNote].filter(Boolean).join("\n") || null;
-
+  const failed = status === "FAIL" || status === "NEEDS_ACTION";
   const data = {
     itemType: item.type,
-    status: nextStatus,
-    response: persistedResponse as Prisma.InputJsonValue,
+    status: failed && (item.correctiveActions?.length ?? 0) > 0 ? ("NEEDS_ACTION" as const) : status,
+    response: parsedResponse.data as Prisma.InputJsonValue,
     failed,
-    notes: mergedNotes,
+    notes: input.notes ?? null,
     photoUrls: (photoUrls ?? undefined) as Prisma.InputJsonValue | undefined,
     completedBy: input.completedBy ?? null,
     completedAt: new Date(),
   };
 
-  // Persist response + procedure rows together so a failed upsert cannot leave
-  // NEEDS_ACTION with phantom PENDING steps and no result rows.
-  await prisma.$transaction(async (tx) => {
-    const itemResponseId = existing
-      ? (
-          await tx.walkItemResponse.update({ where: { id: existing.id }, data })
-        ).id
-      : (
-          await tx.walkItemResponse.create({
-            data: {
-              runId: run.id,
-              itemId: item.id,
-              ...data,
-            },
-          })
-        ).id;
+  const itemResponseId = existing
+    ? (
+        await prisma.walkItemResponse.update({ where: { id: existing.id }, data })
+      ).id
+    : (
+        await prisma.walkItemResponse.create({
+          data: {
+            runId: run.id,
+            itemId: item.id,
+            ...data,
+          },
+        })
+      ).id;
 
-    if (runProcedure) {
-      if (status === "PASS") {
-        // Passing reading must never keep leftover PENDING corrective steps.
-        await skipPendingCorrectiveResults(
-          tx,
+  if (failed && item.correctiveActions?.length) {
+    for (const action of item.correctiveActions) {
+      await prisma.walkCorrectiveActionResult.upsert({
+        where: {
+          itemResponseId_correctiveActionId: {
+            itemResponseId,
+            correctiveActionId: action.id,
+          },
+        },
+        create: {
           itemResponseId,
-          actions.map((a) => a.id),
-        );
-      } else if (!isRetest && status === "FAIL" && firstFailureActions.length > 0) {
-        await upsertPendingCorrectiveResults(tx, itemResponseId, firstFailureActions);
-      } else if (
-        isRetest &&
-        status === "FAIL" &&
-        retestsExhausted &&
-        ifFailActions.length > 0
-      ) {
-        await upsertPendingCorrectiveResults(tx, itemResponseId, ifFailActions);
-      } else if (
-        !requireRetest &&
-        status === "FAIL" &&
-        firstFailureActions.length === 0 &&
-        ifFailActions.length > 0
-      ) {
-        // Legacy / misconfigured: only if_fail steps exist and retest is off.
-        await upsertPendingCorrectiveResults(tx, itemResponseId, ifFailActions);
-      }
+          correctiveActionId: action.id,
+          status: "PENDING",
+        },
+        update: {},
+      });
     }
-  });
+  }
 
   const updated = await getWalkRun(input.teamId, input.runId);
   return { ok: true as const, run: updated };
@@ -885,101 +489,19 @@ export async function completeCorrectiveAction(input: {
   correctiveActionId: string;
   response?: unknown;
   completedBy?: string | null;
-  actorUserId?: string | null;
-  /**
-   * Manager resolve from Execution Center — allowed on IN_PROGRESS or COMPLETED,
-   * skips window + claim (route must gate with assertCanManageWalks).
-   */
-  managerResolve?: boolean;
 }) {
   const run = await prisma.walkRun.findFirst({
     where: { id: input.runId, teamId: input.teamId },
     include: { responses: { include: { correctiveActionResults: true } } },
   });
   if (!run) return { error: "NOT_FOUND" as const };
-  const allowedStatuses = input.managerResolve
-    ? ["IN_PROGRESS", "COMPLETED"]
-    : ["IN_PROGRESS"];
-  if (!allowedStatuses.includes(run.status)) {
-    return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
-  }
-  if (!input.managerResolve) {
-    const claim = await assertRunClaimAllowsUser(
-      input.teamId,
-      input.runId,
-      input.actorUserId,
-      { claimIfUnowned: true, startedByName: input.completedBy },
-    );
-    if (!claim.ok) {
-      return { error: claim.error, message: claim.message };
-    }
-    const windowCheck = await assertRunOccurrenceInWindow(input.teamId, input.runId);
-    if ("error" in windowCheck) {
-      return { error: windowCheck.error, message: windowCheck.message };
-    }
-  }
   const itemResponse = run.responses.find((r) => r.itemId === input.itemId);
   if (!itemResponse) return { error: "ITEM_NOT_FOUND" as const };
 
-  const snapshot = parseSnapshot(run.templateSnapshot);
-  const item = flattenSnapshotItems(snapshot).find((i) => i.id === input.itemId);
-  const actions = (item?.correctiveActions ?? []).filter(isAssociateCorrectiveAction);
-  const target = actions.find((a) => a.id === input.correctiveActionId);
-  if (!target) return { error: "ACTION_NOT_FOUND" as const };
-
-  // Heal missing result rows (e.g. older fail saves left NEEDS_ACTION without results).
-  let result = itemResponse.correctiveActionResults.find(
+  const result = itemResponse.correctiveActionResults.find(
     (r) => r.correctiveActionId === input.correctiveActionId,
   );
-  if (!result) {
-    if (itemResponse.status !== "NEEDS_ACTION") {
-      return { error: "ACTION_NOT_FOUND" as const };
-    }
-    const openActions = isIfFailAction(target)
-      ? actions.filter(isIfFailAction)
-      : actions.filter(isFirstFailureAction);
-    await upsertPendingCorrectiveResults(prisma, itemResponse.id, openActions);
-    const refreshed = await prisma.walkCorrectiveActionResult.findUnique({
-      where: {
-        itemResponseId_correctiveActionId: {
-          itemResponseId: itemResponse.id,
-          correctiveActionId: input.correctiveActionId,
-        },
-      },
-    });
-    if (!refreshed) return { error: "ACTION_NOT_FOUND" as const };
-    result = refreshed;
-    itemResponse.correctiveActionResults = [
-      ...itemResponse.correctiveActionResults.filter(
-        (r) => r.correctiveActionId !== refreshed.correctiveActionId,
-      ),
-      refreshed,
-    ];
-  }
-
-  if (result.status === "COMPLETED" || result.status === "SKIPPED") {
-    const updated = await getWalkRun(input.teamId, input.runId);
-    return { ok: true as const, run: updated };
-  }
-
-  const sameBranch = actions.filter((a) => {
-    if (isFirstFailureAction(target)) return isFirstFailureAction(a);
-    if (isIfFailAction(target)) return isIfFailAction(a);
-    return correctiveBranch(a) === correctiveBranch(target);
-  });
-  const targetIndex = sameBranch.findIndex((a) => a.id === input.correctiveActionId);
-  for (let i = 0; i < targetIndex; i++) {
-    const prior = sameBranch[i]!;
-    const priorResult = itemResponse.correctiveActionResults.find(
-      (r) => r.correctiveActionId === prior.id,
-    );
-    if (!priorResult || priorResult.status === "PENDING") {
-      return {
-        error: "OUT_OF_ORDER" as const,
-        message: `Complete step ${i + 1} before this step`,
-      };
-    }
-  }
+  if (!result) return { error: "ACTION_NOT_FOUND" as const };
 
   await prisma.walkCorrectiveActionResult.update({
     where: { id: result.id },
@@ -995,70 +517,10 @@ export async function completeCorrectiveAction(input: {
     where: { itemResponseId: itemResponse.id, status: "PENDING" },
   });
   if (pending === 0) {
-    const requireRetest = Boolean(
-      item?.config &&
-        (item.config as { requireRetestOnFailure?: unknown }).requireRetestOnFailure,
-    );
-    const maxRetests = maximumRetestsFromConfig(item?.config);
-    const retestCount = responseRetestCount(itemResponse.response);
-    const awaitingRetemp = requireRetest && retestCount < Math.max(1, maxRetests);
-
-    if (!awaitingRetemp || input.managerResolve) {
-      await prisma.walkItemResponse.update({
-        where: { id: itemResponse.id },
-        data: {
-          status: "RESOLVED",
-          // Manager resolve closes the CA; keep fail flag if the reading failed.
-          failed: input.managerResolve ? itemResponse.failed : false,
-        },
-      });
-    }
-    // If retemp is still required, keep NEEDS_ACTION so the associate must retest.
-  }
-
-  const updated = await getWalkRun(input.teamId, input.runId);
-  return { ok: true as const, run: updated };
-}
-
-/** Clears a saved item response + failure-procedure progress so the associate can restart. */
-export async function resetWalkItemResponse(input: {
-  teamId: string;
-  runId: string;
-  itemId: string;
-  actorUserId?: string | null;
-}) {
-  const run = await prisma.walkRun.findFirst({
-    where: { id: input.runId, teamId: input.teamId },
-    include: { responses: { include: { correctiveActionResults: true } } },
-  });
-  if (!run) return { error: "NOT_FOUND" as const };
-  if (run.status !== "IN_PROGRESS") {
-    return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
-  }
-  const claim = await assertRunClaimAllowsUser(
-    input.teamId,
-    input.runId,
-    input.actorUserId,
-    { claimIfUnowned: true },
-  );
-  if (!claim.ok) {
-    return { error: claim.error, message: claim.message };
-  }
-  const windowCheck = await assertRunOccurrenceInWindow(input.teamId, input.runId);
-  if ("error" in windowCheck) {
-    return { error: windowCheck.error, message: windowCheck.message };
-  }
-
-  const snapshot = parseSnapshot(run.templateSnapshot);
-  const item = flattenSnapshotItems(snapshot).find((i) => i.id === input.itemId);
-  if (!item) return { error: "ITEM_NOT_FOUND" as const, message: "Item not found on this walk" };
-
-  const existing = run.responses.find((r) => r.itemId === input.itemId);
-  if (existing) {
-    await prisma.walkCorrectiveActionResult.deleteMany({
-      where: { itemResponseId: existing.id },
+    await prisma.walkItemResponse.update({
+      where: { id: itemResponse.id },
+      data: { status: "RESOLVED", failed: false },
     });
-    await prisma.walkItemResponse.delete({ where: { id: existing.id } });
   }
 
   const updated = await getWalkRun(input.teamId, input.runId);
@@ -1095,15 +557,7 @@ export function scoreWalkRun(
   return scored > 0 ? Math.round((passed / scored) * 100) : null;
 }
 
-export async function completeWalkRun(
-  teamId: string,
-  runId: string,
-  opts?: {
-    actorUserId?: string | null;
-    completedBy?: string | null;
-    lateEntryOverride?: boolean;
-  },
-) {
+export async function completeWalkRun(teamId: string, runId: string) {
   const run = await prisma.walkRun.findFirst({
     where: { id: runId, teamId },
     include: { responses: true },
@@ -1111,19 +565,6 @@ export async function completeWalkRun(
   if (!run) return { error: "NOT_FOUND" as const };
   if (run.status !== "IN_PROGRESS") {
     return { error: "RUN_CLOSED" as const, message: "This walk is already closed" };
-  }
-  const claim = await assertRunClaimAllowsUser(teamId, runId, opts?.actorUserId, {
-    claimIfUnowned: true,
-    startedByName: opts?.completedBy,
-  });
-  if (!claim.ok) {
-    return { error: claim.error, message: claim.message };
-  }
-  const windowCheck = await assertRunOccurrenceInWindow(teamId, runId, {
-    allowLateEntry: Boolean(opts?.lateEntryOverride),
-  });
-  if ("error" in windowCheck) {
-    return { error: windowCheck.error, message: windowCheck.message };
   }
 
   const snapshot = parseSnapshot(run.templateSnapshot);
@@ -1138,32 +579,23 @@ export async function completeWalkRun(
 
   const responsesWithCa = await prisma.walkItemResponse.findMany({
     where: { runId },
-    include: { correctiveActionResults: true },
+    include: {
+      correctiveActionResults: {
+        include: { correctiveAction: true },
+      },
+    },
   });
-  const snapshotByItemId = new Map(items.map((i) => [i.id, i]));
   for (const resp of responsesWithCa) {
-    const snapshotItem = snapshotByItemId.get(resp.itemId);
-    const actionById = new Map(
-      (snapshotItem?.correctiveActions ?? []).map((a) => [a.id, a]),
-    );
     for (const ca of resp.correctiveActionResults) {
-      const def = actionById.get(ca.correctiveActionId);
       if (
         ca.status === "PENDING" &&
-        def &&
-        (def.blocksCompletion || def.actionType === "BLOCK_COMPLETION" || def.required)
+        (ca.correctiveAction.blocksCompletion || ca.correctiveAction.actionType === "BLOCK_COMPLETION")
       ) {
         return {
           error: "CORRECTIVE_BLOCKED" as const,
-          message: `Complete corrective action: ${def.title}`,
+          message: `Complete corrective action: ${ca.correctiveAction.title}`,
         };
       }
-    }
-    if (resp.status === "NEEDS_ACTION") {
-      return {
-        error: "CORRECTIVE_BLOCKED" as const,
-        message: "Finish the failure procedure (including retemp if required) before completing the walk",
-      };
     }
   }
 
@@ -1198,118 +630,4 @@ export async function completeWalkRun(
   });
 
   return { ok: true as const, run: serializeWalkRun(updated) };
-}
-
-export type SyncWalkRunItem = {
-  itemId: string;
-  response: unknown;
-  notes?: string | null;
-  photoUrls?: string[] | null;
-  correctiveActionIdsCompleted?: string[];
-};
-
-/**
- * Apply a batch of item responses + corrective completions in order, then
- * optionally complete the run. Used by Alenio Temps local-first floor sync.
- * The same itemId may appear more than once (e.g. fail → retemp).
- */
-export async function syncWalkRun(input: {
-  teamId: string;
-  runId: string;
-  items: SyncWalkRunItem[];
-  complete?: boolean;
-  completedBy?: string | null;
-  /** Authenticated user — used for FIRST_START_OWNS claim checks. */
-  actorUserId?: string | null;
-}) {
-  const run = await prisma.walkRun.findFirst({
-    where: { id: input.runId, teamId: input.teamId },
-    select: { id: true, status: true },
-  });
-  if (!run) return { error: "NOT_FOUND" as const, message: "Run not found" };
-  if (run.status !== "IN_PROGRESS") {
-    return {
-      error: "RUN_CLOSED" as const,
-      message: "This check was already completed on another device",
-    };
-  }
-  const claim = await assertRunClaimAllowsUser(
-    input.teamId,
-    input.runId,
-    input.actorUserId,
-    { claimIfUnowned: true, startedByName: input.completedBy },
-  );
-  if (!claim.ok) {
-    return { error: claim.error, message: claim.message };
-  }
-  const windowCheck = await assertRunOccurrenceInWindow(input.teamId, input.runId);
-  if ("error" in windowCheck) {
-    return { error: windowCheck.error, message: windowCheck.message };
-  }
-
-  let latest = await getWalkRun(input.teamId, input.runId);
-  if (!latest) return { error: "NOT_FOUND" as const, message: "Run not found" };
-
-  for (const entry of input.items) {
-    const submitted = await submitWalkItemResponse({
-      teamId: input.teamId,
-      runId: input.runId,
-      itemId: entry.itemId,
-      response: entry.response,
-      notes: entry.notes,
-      photoUrls: entry.photoUrls,
-      completedBy: input.completedBy,
-      actorUserId: input.actorUserId,
-    });
-    if (!("run" in submitted) || submitted.run == null) {
-      return {
-        error: "error" in submitted ? submitted.error : ("NOT_FOUND" as const),
-        message:
-          "message" in submitted && typeof submitted.message === "string"
-            ? submitted.message
-            : "Failed to sync item response",
-      };
-    }
-    latest = submitted.run;
-
-    for (const actionId of entry.correctiveActionIdsCompleted ?? []) {
-      const completed = await completeCorrectiveAction({
-        teamId: input.teamId,
-        runId: input.runId,
-        itemId: entry.itemId,
-        correctiveActionId: actionId,
-        completedBy: input.completedBy,
-        actorUserId: input.actorUserId,
-      });
-      if (!("run" in completed) || completed.run == null) {
-        return {
-          error: "error" in completed ? completed.error : ("NOT_FOUND" as const),
-          message:
-            "message" in completed && typeof completed.message === "string"
-              ? completed.message
-              : "Failed to sync corrective action",
-        };
-      }
-      latest = completed.run;
-    }
-  }
-
-  if (input.complete) {
-    const finished = await completeWalkRun(input.teamId, input.runId, {
-      actorUserId: input.actorUserId,
-      completedBy: input.completedBy,
-    });
-    if (!("run" in finished) || finished.run == null) {
-      return {
-        error: "error" in finished ? finished.error : ("NOT_FOUND" as const),
-        message:
-          "message" in finished && typeof finished.message === "string"
-            ? finished.message
-            : "Failed to complete run",
-      };
-    }
-    return { ok: true as const, run: finished.run };
-  }
-
-  return { ok: true as const, run: latest };
 }

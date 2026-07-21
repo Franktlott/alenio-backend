@@ -77,7 +77,7 @@ type RosterTone = "ok" | "warn" | "bad" | "muted";
 
 function formatDaysSinceLastCheckIn(days: number): string {
   if (days === 0) return "Today";
-  if (days === 1) return "1 day ago";
+  if (days === 1) return "Yesterday";
   return `${days} days ago`;
 }
 
@@ -85,7 +85,7 @@ function rosterCheckInColumn(
   compliance: MemberStandardsCompliance | undefined,
   daysSinceCheckIn: number | null | undefined,
   standards: WorkplaceStandards,
-): { tone: RosterTone; primary: string; secondary?: string } {
+): { tone: RosterTone; primary: string } {
   if (!standards.checkInRequired) {
     return { tone: "muted", primary: "—" };
   }
@@ -93,21 +93,24 @@ function rosterCheckInColumn(
     return { tone: "muted", primary: "—" };
   }
   if (daysSinceCheckIn == null) {
-    return { tone: "bad", primary: "No check-in yet" };
+    return { tone: "bad", primary: "No check-in" };
   }
-
-  const primary = formatDaysSinceLastCheckIn(daysSinceCheckIn);
 
   if (compliance.checkInStatus === "on_track") {
-    return { tone: "ok", primary };
+    return { tone: "ok", primary: formatDaysSinceLastCheckIn(daysSinceCheckIn) };
   }
   if (compliance.checkInStatus === "due_soon") {
-    return { tone: "warn", primary, secondary: "Due soon" };
+    if (daysSinceCheckIn === 0) return { tone: "warn", primary: "Due today" };
+    return { tone: "warn", primary: formatDaysSinceLastCheckIn(daysSinceCheckIn) };
   }
   if (compliance.checkInStatus === "overdue") {
-    return { tone: "bad", primary, secondary: "Overdue" };
+    if (daysSinceCheckIn <= 0) return { tone: "bad", primary: "Overdue" };
+    return {
+      tone: "bad",
+      primary: daysSinceCheckIn === 1 ? "1 day overdue" : `${daysSinceCheckIn} days overdue`,
+    };
   }
-  return { tone: "muted", primary };
+  return { tone: "muted", primary: formatDaysSinceLastCheckIn(daysSinceCheckIn) };
 }
 
 function rosterStandardsSummary(standards: WorkplaceStandards): string {
@@ -134,13 +137,14 @@ function rosterGoalsColumn(
   activeGoals: number,
 ): { tone: RosterTone; primary: string } {
   if (!standards.goalsRequired || standards.minimumActiveGoals <= 0) {
-    return { tone: "muted", primary: "Optional" };
+    if (activeGoals <= 0) return { tone: "muted", primary: "No goals" };
+    return { tone: "ok", primary: String(activeGoals) };
   }
+  if (activeGoals <= 0) return { tone: "bad", primary: "No goals" };
   const min = standards.minimumActiveGoals;
-  const met = activeGoals >= min;
   return {
-    tone: met ? "ok" : "bad",
-    primary: `${activeGoals} / ${min}`,
+    tone: activeGoals >= min ? "ok" : "bad",
+    primary: String(activeGoals),
   };
 }
 
@@ -162,12 +166,12 @@ function rosterOverallStatus(
     activeGoals < standards.minimumActiveGoals;
 
   if (noInitialCheckIn && missingGoals) {
-    return { tone: "bad", label: "No check-in or goals" };
+    return { tone: "bad", label: "Overdue" };
   }
 
   if (standards.checkInRequired) {
     if (noInitialCheckIn) {
-      return { tone: "bad", label: "No initial check-in" };
+      return { tone: "bad", label: "Overdue" };
     }
     if (compliance.checkInStatus === "overdue") {
       return { tone: "bad", label: "Overdue" };
@@ -182,7 +186,7 @@ function rosterOverallStatus(
   }
 
   if (!standards.checkInRequired && !standards.goalsRequired) {
-    return { tone: "muted", label: "Not required" };
+    return { tone: "muted", label: "—" };
   }
 
   return { tone: "ok", label: "On track" };
@@ -343,6 +347,16 @@ function IconSearch({ size = 18 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function IconUsers({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }
@@ -540,6 +554,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     teamCoreQuery.data?.workplaceStandards ??
     mergeWorkplaceStandards(null);
   const isPaid = teamCoreQuery.data?.isPaid ?? false;
+  void isPaid;
   const incoming = teamCoreQuery.data?.incoming ?? [];
   const pendingInvites = teamCoreQuery.data?.pendingInvites ?? [];
   const pendingCalendarEvents = teamCoreQuery.data?.pendingCalendarEvents ?? [];
@@ -575,6 +590,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const [rosterDrawerOpen, setRosterDrawerOpen] = useState(false);
   const memberPickerRef = useRef<HTMLDivElement>(null);
   const consumedMemberMeParamRef = useRef(false);
   const [roleFilter, setRoleFilter] = useState<"all" | "owner" | "team_leader" | "admin" | "member">("all");
@@ -636,7 +652,23 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   useEffect(() => {
     setMemberSearch("");
     setMemberPickerOpen(false);
+    setRosterDrawerOpen(false);
   }, [selectedTeamId]);
+
+  useEffect(() => {
+    if (!rosterDrawerOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setRosterDrawerOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [rosterDrawerOpen]);
+
+  function selectTeamMember(userId: string) {
+    setSelectedMemberId(userId);
+    setMemberPickerOpen(false);
+    setRosterDrawerOpen(false);
+  }
 
   useEffect(() => {
     if (!memberPickerOpen) return;
@@ -844,8 +876,40 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </p>
       ) : null}
 
-      <div className="enterprise-team-split">
-        <aside className="enterprise-team-split-list">
+      <div
+        className={[
+          "enterprise-team-split",
+          rosterDrawerOpen ? "enterprise-team-split--roster-open" : "",
+          isRegularMember ? "enterprise-team-split--member-self" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {!isRegularMember && rosterDrawerOpen ? (
+          <button
+            type="button"
+            className="enterprise-team-roster-backdrop"
+            aria-label="Close team members"
+            onClick={() => setRosterDrawerOpen(false)}
+          />
+        ) : null}
+        {!isRegularMember ? (
+          <button
+            type="button"
+            className={`enterprise-team-roster-tab${rosterDrawerOpen ? " enterprise-team-roster-tab--open" : ""}`}
+            aria-expanded={rosterDrawerOpen}
+            aria-controls="enterprise-team-roster-drawer"
+            title={rosterDrawerOpen ? "Close team members" : "Open team members"}
+            onClick={() => setRosterDrawerOpen((open) => !open)}
+          >
+            <span className="enterprise-team-roster-tab-icon" aria-hidden>
+              <IconUsers />
+            </span>
+            <span className="enterprise-team-roster-tab-label">Team</span>
+          </button>
+        ) : null}
+        {!isRegularMember ? (
+        <aside className="enterprise-team-split-list" id="enterprise-team-roster-drawer">
           <header className="enterprise-team-list-header">
             <div className="enterprise-team-list-toolbar">
               <div className="enterprise-team-list-search-wrap">
@@ -1081,8 +1145,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                             disabled={!canView}
                             onClick={() => {
                               if (!canView) return;
-                              setSelectedMemberId(m.userId);
-                              setMemberPickerOpen(false);
+                              selectTeamMember(m.userId);
                             }}
                           >
                             <UserAvatar user={m.user} className="enterprise-team-associates-avatar" alt={displayName} />
@@ -1117,10 +1180,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                                 role="option"
                                 aria-selected={isSelected}
                                 className={`enterprise-team-associates-option${isSelected ? " enterprise-team-associates-option--selected" : ""}`}
-                                onClick={() => {
-                                  setSelectedMemberId(former.userId);
-                                  setMemberPickerOpen(false);
-                                }}
+                                onClick={() => selectTeamMember(former.userId)}
                               >
                                 <UserAvatar
                                   user={former.user}
@@ -1219,14 +1279,26 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                             {displayName}
                             {isSelf ? " (you)" : ""}
                           </span>
-                          <span className="enterprise-team-roster-role-line">{roleLabel(m.role)}</span>
+                          <span className="enterprise-team-roster-role-line">
+                            <span>{roleLabel(m.role)}</span>
+                            {m.role === "owner" || m.role === "team_leader" || m.role === "admin" ? (
+                              <span className={rolePillClass(m.role)}>
+                                {m.role === "owner" ? "Owner" : m.role === "team_leader" ? "Leader" : "Admin"}
+                              </span>
+                            ) : null}
+                          </span>
                         </span>
                         {canView && overall ? (
                           <span
-                            className={`enterprise-team-roster-status-dot enterprise-team-roster-status-dot--${overall.tone}`}
+                            className={`enterprise-team-roster-status-end enterprise-team-roster-status-end--${overall.tone}`}
                             title={overall.label}
-                            aria-label={overall.label}
-                          />
+                          >
+                            <span
+                              className={`enterprise-team-roster-status-dot enterprise-team-roster-status-dot--${overall.tone}`}
+                              aria-hidden
+                            />
+                            <span className="enterprise-team-roster-status-label">{overall.label}</span>
+                          </span>
                         ) : canView ? (
                           <span className="enterprise-team-roster-status-dot enterprise-team-roster-status-dot--muted" aria-hidden />
                         ) : (
@@ -1242,7 +1314,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           <button
                             type="button"
                             className={cardClass}
-                            onClick={() => setSelectedMemberId(m.userId)}
+                            onClick={() => selectTeamMember(m.userId)}
                             data-testid={`team-roster-member-${m.userId}`}
                           >
                             {cardBody}
@@ -1264,7 +1336,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                       className="enterprise-team-roster-archived-btn"
                       onClick={() => {
                         const first = formerMembers[0];
-                        if (first) setSelectedMemberId(first.userId);
+                        if (first) selectTeamMember(first.userId);
                       }}
                     >
                       View archived members ({formerMembers.length})
@@ -1278,7 +1350,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                             <button
                               type="button"
                               className={`enterprise-team-roster-card enterprise-team-roster-card--list enterprise-team-roster-card--former${isSelected ? " enterprise-team-roster-card--selected" : ""}`}
-                              onClick={() => setSelectedMemberId(former.userId)}
+                              onClick={() => selectTeamMember(former.userId)}
                               data-testid={`team-roster-former-${former.userId}`}
                             >
                               <UserAvatar
@@ -1313,6 +1385,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
             </div>
           </div>
         </aside>
+        ) : null}
 
         <main className="enterprise-team-split-detail">
           {profileMember &&
@@ -1325,9 +1398,12 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               teamName={teamDetail.name}
               member={profileMember}
               isSelf={profileMember.userId === myId}
+              currentUserId={myId}
               isFormerMember={isFormerMemberProfile}
               managerName={ownerMember?.user.name ?? ownerMember?.user.email ?? null}
               leaderUserId={ownerMember?.userId ?? null}
+              ownerEmail={ownerMember?.user.email ?? null}
+              canModerateRecognitions={myRole === "owner" || myRole === "admin"}
               roleLabel={isFormerMemberProfile ? "Former member" : roleLabel(profileMember.role)}
               roleBadgeClass={isFormerMemberProfile ? "enterprise-team-role-badge enterprise-team-role-badge--former" : roleBadgeClass(profileMember.role)}
               canManage={!isFormerMemberProfile && canOpenMemberRow(myRole, profileMember)}
@@ -1346,7 +1422,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   myRole === "team_leader" ||
                   myRole === "admin")
               }
-              streak={isPaid ? memberStats?.[profileMember.userId]?.streak : undefined}
               overdueFollowUpTasks={memberStats?.[profileMember.userId]?.overdueFollowUpTasks}
               activeTasks={memberStats?.[profileMember.userId]?.activeTasks}
               completedTasks={memberStats?.[profileMember.userId]?.completedTasks}
@@ -1356,7 +1431,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               daysSinceLastCheckIn={memberStats?.[profileMember.userId]?.daysSinceLastOneOnOne}
               canManageStandards={canManageOneOneTemplates}
               onManageStandards={() => setWorkplaceStandardsOpen(true)}
-              onBack={isRegularMember ? undefined : () => setSelectedMemberId(null)}
+              onBack={isRegularMember ? undefined : () => setRosterDrawerOpen(true)}
               onManage={() => openMemberModal(profileMember)}
             />
           ) : (

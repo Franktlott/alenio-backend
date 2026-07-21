@@ -3,8 +3,8 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import {
   apiActionsToProcedure,
+  CorrectiveActionsFlow,
   emptyFailureProcedure,
-  FailureProcedureBuilder,
   getFailureProcedureMissing,
   procedureToApiActions,
   TempsButton,
@@ -26,14 +26,6 @@ import {
 import { isPhase2ItemType, type WalkItemType } from "../../lib/walks/types";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
-type StepId = "details" | "corrective" | "review";
-
-const STEPS: { id: StepId; label: string }[] = [
-  { id: "details", label: "Details" },
-  { id: "corrective", label: "Failure Procedure" },
-  { id: "review", label: "Review" },
-];
-
 const DEFAULT_CATEGORIES = [
   "Cold Storage",
   "Food Safety",
@@ -46,38 +38,6 @@ const DEFAULT_CATEGORIES = [
 function typeLabel(type: WalkItemType) {
   if (type === "MULTIPLE_CHOICE") return "Multiple Choice";
   return WALK_PALETTE_CARDS.find((c) => c.type === type)?.label ?? type;
-}
-
-function StepFooter({
-  onBack,
-  onNext,
-  nextLabel,
-  busy,
-  onSaveDraft,
-}: {
-  onBack: () => void;
-  onNext: () => void;
-  nextLabel: string;
-  busy?: boolean;
-  onSaveDraft?: () => void;
-}) {
-  return (
-    <div className="wic-card-footer">
-      <TempsButton variant="ghost" disabled={busy} onClick={onBack}>
-        ← Back
-      </TempsButton>
-      <div className="wic-card-footer-actions">
-        {onSaveDraft ? (
-          <TempsButton variant="secondary" disabled={busy} onClick={onSaveDraft}>
-            {busy ? "Saving…" : "Save Draft"}
-          </TempsButton>
-        ) : null}
-        <TempsButton variant="primary" disabled={busy} onClick={onNext}>
-          {nextLabel}
-        </TempsButton>
-      </div>
-    </div>
-  );
 }
 
 function asWalkType(value: string): WalkItemType {
@@ -96,7 +56,6 @@ export function WalkItemCreatePage() {
   const navigate = useNavigate();
   const { itemId } = useParams<{ itemId?: string }>();
   const isEdit = Boolean(itemId);
-  const [step, setStep] = useState<StepId>("details");
   const [loadingItem, setLoadingItem] = useState(isEdit);
   const { showNotice, noticeDialog } = useTempsNotice();
 
@@ -207,8 +166,10 @@ export function WalkItemCreatePage() {
       setUnit(config.unit === "C" ? "C" : "F");
       setMinTemp(config.minimumTemperature != null ? String(config.minimumTemperature) : "0");
       setMaxTemp(config.maximumTemperature != null ? String(config.maximumTemperature) : "41");
-      setAllowManual(config.allowManualEntry !== false);
-      setAllowBluetooth(config.allowBluetoothProbe !== false);
+      const nextManual = config.allowManualEntry !== false;
+      const nextBluetooth = config.allowBluetoothProbe !== false;
+      setAllowManual(nextManual || !nextBluetooth);
+      setAllowBluetooth(nextBluetooth);
       setRequireRetest(config.requireRetestOnFailure === true);
       setMaxRetests(config.maximumRetests != null ? String(config.maximumRetests) : "1");
     } else if (itemType === "YES_NO") {
@@ -260,8 +221,6 @@ export function WalkItemCreatePage() {
     );
   }
 
-  const stepIndex = STEPS.findIndex((s) => s.id === step);
-
   const detailsMissing = useMemo(() => {
     const missing: string[] = [];
     if (!name.trim()) missing.push("Item name");
@@ -274,16 +233,10 @@ export function WalkItemCreatePage() {
 
   const canContinueDetails = detailsMissing.length === 0;
 
-  function showDetailsMissingNotice(context: "continue" | "save" | "step") {
-    const intro =
-      context === "save"
-        ? "Complete the following before saving:"
-        : context === "step"
-          ? "Complete the following before moving ahead:"
-          : "Complete the following before continuing:";
+  function showDetailsMissingNotice() {
     showNotice({
       title: detailsMissing.length === 1 ? "Required field missing" : "Required fields missing",
-      message: intro,
+      message: "Complete the following before saving:",
       items: detailsMissing,
       tone: "warning",
     });
@@ -295,17 +248,11 @@ export function WalkItemCreatePage() {
   );
   const canContinueFailure = failureMissing.length === 0;
 
-  function showFailureMissingNotice(context: "continue" | "save" | "step") {
+  function showFailureMissingNotice() {
     setShowFpErrors(true);
-    const intro =
-      context === "save"
-        ? "Complete the following before saving:"
-        : context === "step"
-          ? "Complete the following before moving ahead:"
-          : "Complete the following before continuing:";
     showNotice({
       title: failureMissing.length === 1 ? "Required field missing" : "Required fields missing",
-      message: intro,
+      message: "Complete the following before saving:",
       items: failureMissing,
       tone: "warning",
     });
@@ -319,32 +266,16 @@ export function WalkItemCreatePage() {
   }
 
   const criteriaSummary = useMemo(() => {
-    if (type === "TEMPERATURE") {
-      const u = unit === "C" ? "°C" : "°F";
-      if (comparisonType === "BELOW") return `At or below ${maxTemp || "—"}${u}`;
-      if (comparisonType === "BETWEEN") return `Between ${minTemp || "—"}${u} and ${maxTemp || "—"}${u}`;
-      return `At or above ${minTemp || "—"}${u}`;
+    if (type !== "TEMPERATURE") return "";
+    const u = unit === "C" ? "°C" : "°F";
+    if (comparisonType === "BELOW") {
+      return `Pass when temperature is ${maxTemp || "—"}${u} or below.`;
     }
-    if (type === "YES_NO") return `Passing answer: ${passingAnswer === "YES" ? yesLabel : noLabel}`;
-    if (type === "QUANTITY") return `${qtyComparison.replace(/_/g, " ").toLowerCase()} ${qtyMin || qtyMax}`;
-    if (type === "MULTIPLE_CHOICE") return `Passing: ${mcPassing.split("\n").filter(Boolean).join(", ") || "—"}`;
-    if (type === "VISUAL_CHECK") return `Pass options: ${passingOptions.split("\n").filter(Boolean).join(", ")}`;
-    return "Configured on next steps";
-  }, [
-    type,
-    unit,
-    comparisonType,
-    minTemp,
-    maxTemp,
-    passingAnswer,
-    yesLabel,
-    noLabel,
-    qtyComparison,
-    qtyMin,
-    qtyMax,
-    mcPassing,
-    passingOptions,
-  ]);
+    if (comparisonType === "BETWEEN") {
+      return `Pass when temperature is between ${minTemp || "—"}${u} and ${maxTemp || "—"}${u}.`;
+    }
+    return `Pass when temperature is ${minTemp || "—"}${u} or above.`;
+  }, [type, unit, comparisonType, minTemp, maxTemp]);
 
   function lines(raw: string) {
     return raw
@@ -426,13 +357,11 @@ export function WalkItemCreatePage() {
 
   async function saveItem() {
     if (!canContinueDetails) {
-      setStep("details");
-      showDetailsMissingNotice("save");
+      showDetailsMissingNotice();
       return;
     }
     if (!canContinueFailure) {
-      setStep("corrective");
-      showFailureMissingNotice("save");
+      showFailureMissingNotice();
       return;
     }
     setBusy(true);
@@ -474,615 +403,518 @@ export function WalkItemCreatePage() {
     }
   }
 
-  function goNext() {
-    if (step === "details" && !canContinueDetails) {
-      showDetailsMissingNotice("continue");
-      return;
-    }
-    if (step === "corrective" && !canContinueFailure) {
-      showFailureMissingNotice("continue");
-      return;
-    }
-    setError(null);
-    const next = STEPS[stepIndex + 1];
-    if (next) setStep(next.id);
-  }
-
-  function goBack() {
-    setError(null);
-    const prev = STEPS[stepIndex - 1];
-    if (prev) setStep(prev.id);
-  }
-
-  function continueLabel() {
-    const next = STEPS[stepIndex + 1];
-    if (next) return `Continue to ${next.label} →`;
-    return isEdit ? "Save changes" : "Save Item";
-  }
-
   if (loadingItem) {
     return (
-      <TempsPageShell testId="walk-item-create-page" wide className="wic-page">
+      <TempsPageShell testId="walk-item-create-page" wide className="wic-page wic-page--single">
         <EnterprisePageLoading label="Loading item…" />
       </TempsPageShell>
     );
   }
 
   return (
-    <TempsPageShell testId="walk-item-create-page" wide className="wic-page">
+    <TempsPageShell testId="walk-item-create-page" wide className="wic-page wic-page--single">
       <TempsPageHeader
         breadcrumb={
           <>
             <Link to="/go/temp-checks/library">Item Library</Link>
-            <span aria-hidden>/</span>
-            <span>{isEdit ? "Edit Item" : "Create Item"}</span>
+            <span aria-hidden>›</span>
+            <span>{isEdit ? "Edit Item" : "Create New Item"}</span>
           </>
         }
-        title={name.trim() || (isEdit ? "Edit Item" : "Create New Item")}
-        actions={
-          <>
-            <TempsButton
-              variant="secondary"
-              disabled={busy}
-              onClick={() => navigate("/go/temp-checks/library")}
-            >
-              Cancel
-            </TempsButton>
-            <TempsButton variant="primary" disabled={busy} onClick={() => void saveItem()}>
-              {busy ? "Saving…" : "Save as Draft"}
-            </TempsButton>
-          </>
-        }
+        title={isEdit ? "Edit Item" : "Create New Item"}
+        description="Build a temperature check item to ensure food safety compliance."
       />
 
       {error ? <p className="temps-error">{error}</p> : null}
       {noticeDialog}
 
-      <div className="wic-body">
-        <aside className="wic-steps" aria-label="Create steps">
-          <nav className="wic-steps-nav">
-            {STEPS.map((s, i) => {
-              const active = s.id === step;
-              const done = i < stepIndex;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={`wic-step${active ? " is-active" : ""}${done ? " is-done" : ""}`}
-                  onClick={() => {
-                    if (i > 0 && !canContinueDetails) {
-                      setStep("details");
-                      showDetailsMissingNotice("step");
-                      return;
-                    }
-                    if (i > 1 && !canContinueFailure) {
-                      setStep("corrective");
-                      showFailureMissingNotice("step");
-                      return;
-                    }
-                    setError(null);
-                    setStep(s.id);
-                  }}
-                >
-                  <span className="wic-step-num" aria-hidden>
-                    {done ? "✓" : i + 1}
+      <form
+        className="wic-single-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void saveItem();
+        }}
+      >
+        <section className="wic-single-col" aria-label="Item details">
+          <section className="wic-panel wic-panel--mock" aria-labelledby="wic-basics-title">
+            <header className="wic-panel-head">
+              <h3 id="wic-basics-title">Item Details</h3>
+            </header>
+            <div className="wic-panel-body">
+              <label className="wic-field wic-field--full">
+                <span>
+                  Item name <i>*</i>
+                </span>
+                <input
+                  value={name}
+                  maxLength={100}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Walk-In Cooler Temperature"
+                />
+              </label>
+              <div className="wic-grid wic-grid--2">
+                <label className="wic-field">
+                  <span>
+                    Type <i>*</i>
                   </span>
-                  <span className="wic-step-label">{s.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-
-        <main className="wic-main">
-          {step === "details" ? (
-            <section className="wic-card wic-card--details">
-              <header className="wic-card-top wic-card-top--compact">
-                <div className="wic-card-title-row">
-                  <h2>1. Item Details</h2>
-                  <span className="wic-inline-summary" aria-live="polite">
-                    {criteriaSummary}
+                  <div className="wic-select-with-icon">
+                    <span className="wic-select-ico">
+                      <WalkTypeIcon type={type} size={16} />
+                    </span>
+                    <select
+                      value={type}
+                      disabled={isEdit}
+                      onChange={(e) => setType(e.target.value as WalkItemType)}
+                    >
+                      {WALK_PALETTE_CARDS.map((c) => (
+                        <option key={c.type} value={c.type}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
+                <label className="wic-field">
+                  <span>
+                    Category <i>*</i>
                   </span>
+                  <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                    <option value="">Select...</option>
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="wic-field">
+                <span>Default on walks</span>
+                <div className="wic-segment" role="group" aria-label="Required default">
+                  <button
+                    type="button"
+                    className={required ? "is-active" : undefined}
+                    onClick={() => setRequired(true)}
+                  >
+                    Required
+                  </button>
+                  <button
+                    type="button"
+                    className={!required ? "is-active" : undefined}
+                    onClick={() => setRequired(false)}
+                  >
+                    Optional
+                  </button>
                 </div>
+              </div>
+            </div>
+
+            <div className="wic-card-section" aria-labelledby="wic-methods-title">
+              <header className="wic-section-head">
+                <h4 id="wic-methods-title">Recording Methods</h4>
+                <span className="wic-section-sub">
+                  {type === "TEMPERATURE"
+                    ? "Choose Manual and/or Bluetooth — Photo is optional"
+                    : "Photo is optional evidence"}
+                </span>
               </header>
-              <div className="wic-details-fit">
-                <div className="wic-details-top">
-                  <section className="wic-panel wic-panel--compact" aria-labelledby="wic-basics-title">
-                    <header className="wic-panel-head wic-panel-head--compact">
-                      <h3 id="wic-basics-title">Basics</h3>
-                    </header>
-                    <div className="wic-panel-body wic-panel-body--compact">
-                      <label className="wic-field wic-field--full">
+              <div className="wic-method-grid" role="group" aria-label="Recording methods">
+                {type === "TEMPERATURE" ? (
+                  <>
+                    <label className={`wic-method-tile${allowManual ? " is-on" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={allowManual}
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          // Keep at least one of Manual / Bluetooth selected
+                          if (!next && !allowBluetooth) return;
+                          setAllowManual(next);
+                        }}
+                      />
+                      <span className="wic-method-ico" aria-hidden>
+                        <IconManual />
+                      </span>
+                      <span>
+                        <strong>Manual</strong>
+                        <em>Enter readings manually</em>
+                      </span>
+                    </label>
+                    <label className={`wic-method-tile${allowBluetooth ? " is-on" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={allowBluetooth}
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          if (!next && !allowManual) return;
+                          setAllowBluetooth(next);
+                        }}
+                      />
+                      <span className="wic-method-ico" aria-hidden>
+                        <IconBluetooth />
+                      </span>
+                      <span>
+                        <strong>Bluetooth</strong>
+                        <em>Use connected probe</em>
+                      </span>
+                    </label>
+                  </>
+                ) : null}
+                <label className={`wic-method-tile wic-method-tile--optional${photoCaptureEnabled ? " is-on" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={photoCaptureEnabled}
+                    onChange={(e) => setPhotoCaptureEnabled(e.target.checked)}
+                  />
+                  <span className="wic-method-ico" aria-hidden>
+                    <IconPhoto />
+                  </span>
+                  <span>
+                    <strong>Photo</strong>
+                    <em>Capture photo evidence</em>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="wic-card-section" aria-labelledby="wic-criteria-title">
+              <header className="wic-section-head">
+                <h4 id="wic-criteria-title">Passing Criteria</h4>
+                <span className="wic-type-chip">
+                  <WalkTypeIcon type={type} size={14} />
+                  {typeLabel(type)}
+                </span>
+              </header>
+              <div className="wic-criteria-body wic-section-body">
+              {type === "TEMPERATURE" ? (
+                <>
+                  <div className="wic-grid wic-grid--3">
+                    <label className="wic-field">
+                      <span>Unit</span>
+                      <select value={unit} onChange={(e) => setUnit(e.target.value as "F" | "C")}>
+                        <option value="F">°F</option>
+                        <option value="C">°C</option>
+                      </select>
+                    </label>
+                    <label className="wic-field">
+                      <span>Pass when</span>
+                      <select
+                        value={comparisonType}
+                        onChange={(e) =>
+                          setComparisonType(e.target.value as "ABOVE" | "BELOW" | "BETWEEN")
+                        }
+                      >
+                        <option value="ABOVE">At or above min</option>
+                        <option value="BELOW">At or below max</option>
+                        <option value="BETWEEN">Between min & max</option>
+                      </select>
+                    </label>
+                    {comparisonType !== "BELOW" ? (
+                      <label className="wic-field">
                         <span>
-                          Item name <i>*</i>
+                          Minimum (°{unit}) <i>*</i>
                         </span>
                         <input
-                          value={name}
-                          maxLength={100}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="e.g. Walk-In Cooler Temperature"
+                          type="number"
+                          value={minTemp}
+                          onChange={(e) => setMinTemp(e.target.value)}
                         />
                       </label>
-                      <div className="wic-grid wic-grid--2">
-                        <label className="wic-field">
-                          <span>
-                            Type <i>*</i>
-                          </span>
-                          <div className="wic-select-with-icon">
-                            <span className="wic-select-ico">
-                              <WalkTypeIcon type={type} size={16} />
-                            </span>
-                            <select
-                              value={type}
-                              disabled={isEdit}
-                              onChange={(e) => setType(e.target.value as WalkItemType)}
-                            >
-                              {WALK_PALETTE_CARDS.map((c) => (
-                                <option key={c.type} value={c.type}>
-                                  {c.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </label>
-                        <label className="wic-field">
-                          <span>
-                            Category <i>*</i>
-                          </span>
-                          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                            <option value="">Select…</option>
-                            {categories.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                      <div className="wic-field">
-                        <span>Default on walks</span>
-                        <div className="wic-segment" role="group" aria-label="Required default">
-                          <button
-                            type="button"
-                            className={required ? "is-active" : undefined}
-                            onClick={() => setRequired(true)}
-                          >
-                            Required
-                          </button>
-                          <button
-                            type="button"
-                            className={!required ? "is-active" : undefined}
-                            onClick={() => setRequired(false)}
-                          >
-                            Optional
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="wic-panel wic-panel--compact" aria-labelledby="wic-methods-title">
-                    <header className="wic-panel-head wic-panel-head--compact">
-                      <h3 id="wic-methods-title">Recording methods</h3>
-                    </header>
-                    <div className="wic-panel-body wic-panel-body--compact">
-                      <div className="wic-method-list" role="group" aria-label="Recording methods">
-                        {type === "TEMPERATURE" ? (
-                          <>
-                            <label className={`wic-method-row${allowManual ? " is-on" : ""}`}>
-                              <input
-                                type="checkbox"
-                                checked={allowManual}
-                                onChange={(e) => setAllowManual(e.target.checked)}
-                              />
-                              <span>
-                                <strong>Manual entry</strong>
-                                <em>Associates type the temperature on the device</em>
-                              </span>
-                            </label>
-                            <label className={`wic-method-row${allowBluetooth ? " is-on" : ""}`}>
-                              <input
-                                type="checkbox"
-                                checked={allowBluetooth}
-                                onChange={(e) => setAllowBluetooth(e.target.checked)}
-                              />
-                              <span>
-                                <strong>Bluetooth thermometer</strong>
-                                <em>Capture readings from a connected probe</em>
-                              </span>
-                            </label>
-                          </>
-                        ) : null}
-                        <label className={`wic-method-row${photoCaptureEnabled ? " is-on" : ""}`}>
-                          <input
-                            type="checkbox"
-                            checked={photoCaptureEnabled}
-                            onChange={(e) => setPhotoCaptureEnabled(e.target.checked)}
-                          />
-                          <span>
-                            <strong>Photo capture</strong>
-                            <em>Allow associates to attach a photo</em>
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-                  </section>
-                </div>
-
-                <section className="wic-panel wic-panel--criteria" aria-labelledby="wic-criteria-title">
-                  <header className="wic-panel-head wic-panel-head--compact">
-                    <h3 id="wic-criteria-title">Passing criteria</h3>
-                    <span className="wic-type-chip">
-                      <WalkTypeIcon type={type} size={14} />
-                      {typeLabel(type)}
-                    </span>
-                  </header>
-                  <div className="wic-panel-body wic-panel-body--compact wic-criteria-body">
-                    {type === "TEMPERATURE" ? (
-                      <div className="wic-grid wic-grid--3">
-                        <label className="wic-field">
-                          <span>Unit</span>
-                          <select value={unit} onChange={(e) => setUnit(e.target.value as "F" | "C")}>
-                            <option value="F">°F</option>
-                            <option value="C">°C</option>
-                          </select>
-                        </label>
-                        <label className="wic-field">
-                          <span>Pass when</span>
-                          <select
-                            value={comparisonType}
-                            onChange={(e) =>
-                              setComparisonType(e.target.value as "ABOVE" | "BELOW" | "BETWEEN")
-                            }
-                          >
-                            <option value="ABOVE">At or above min</option>
-                            <option value="BELOW">At or below max</option>
-                            <option value="BETWEEN">Between min & max</option>
-                          </select>
-                        </label>
-                        {comparisonType !== "BELOW" ? (
-                          <label className="wic-field">
-                            <span>Minimum (°{unit})</span>
-                            <input
-                              type="number"
-                              value={minTemp}
-                              onChange={(e) => setMinTemp(e.target.value)}
-                            />
-                          </label>
-                        ) : null}
-                        {comparisonType !== "ABOVE" ? (
-                          <label className="wic-field">
-                            <span>Maximum (°{unit})</span>
-                            <input
-                              type="number"
-                              value={maxTemp}
-                              onChange={(e) => setMaxTemp(e.target.value)}
-                            />
-                          </label>
-                        ) : null}
-                      </div>
                     ) : null}
-
-                    {type === "YES_NO" ? (
-                      <div className="wic-grid wic-grid--3">
-                        <label className="wic-field">
-                          <span>Yes label</span>
-                          <input value={yesLabel} onChange={(e) => setYesLabel(e.target.value)} />
-                        </label>
-                        <label className="wic-field">
-                          <span>No label</span>
-                          <input value={noLabel} onChange={(e) => setNoLabel(e.target.value)} />
-                        </label>
-                        <label className="wic-field">
-                          <span>Passing answer</span>
-                          <select
-                            value={passingAnswer}
-                            onChange={(e) => setPassingAnswer(e.target.value as "YES" | "NO")}
-                          >
-                            <option value="YES">Yes passes</option>
-                            <option value="NO">No passes</option>
-                          </select>
-                        </label>
-                      </div>
-                    ) : null}
-
-                    {type === "VISUAL_CHECK" ? (
-                      <>
-                        <div className="wic-grid wic-grid--2">
-                          <label className="wic-field">
-                            <span>Passing options</span>
-                            <textarea
-                              rows={3}
-                              value={passingOptions}
-                              onChange={(e) => setPassingOptions(e.target.value)}
-                              placeholder={"Pass\nLooks good"}
-                            />
-                          </label>
-                          <label className="wic-field">
-                            <span>Failing options</span>
-                            <textarea
-                              rows={3}
-                              value={failingOptions}
-                              onChange={(e) => setFailingOptions(e.target.value)}
-                              placeholder={"Fail\nNeeds attention"}
-                            />
-                          </label>
-                        </div>
-                        <label className="wic-check">
-                          <input
-                            type="checkbox"
-                            checked={requirePhotoOnFail}
-                            onChange={(e) => setRequirePhotoOnFail(e.target.checked)}
-                          />
-                          Require photo on fail
-                        </label>
-                      </>
-                    ) : null}
-
-                    {type === "PHOTO" ? (
-                      <div className="wic-grid wic-grid--3">
-                        <label className="wic-field">
-                          <span>Min photos</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={10}
-                            value={minPhotos}
-                            onChange={(e) => setMinPhotos(e.target.value)}
-                          />
-                        </label>
-                        <label className="wic-field">
-                          <span>Max photos</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={20}
-                            value={maxPhotos}
-                            onChange={(e) => setMaxPhotos(e.target.value)}
-                          />
-                        </label>
-                        <label className="wic-field">
-                          <span>Guidance</span>
-                          <input
-                            value={photoGuidance}
-                            onChange={(e) => setPhotoGuidance(e.target.value)}
-                            placeholder="What to capture"
-                          />
-                        </label>
-                      </div>
-                    ) : null}
-
-                    {type === "MULTIPLE_CHOICE" ? (
-                      <>
-                        <div className="wic-grid wic-grid--2">
-                          <label className="wic-field">
-                            <span>All options</span>
-                            <textarea
-                              rows={3}
-                              value={mcOptions}
-                              onChange={(e) => setMcOptions(e.target.value)}
-                              placeholder={"Option A\nOption B"}
-                            />
-                          </label>
-                          <label className="wic-field">
-                            <span>Passing options</span>
-                            <textarea
-                              rows={3}
-                              value={mcPassing}
-                              onChange={(e) => setMcPassing(e.target.value)}
-                              placeholder="Option A"
-                            />
-                          </label>
-                        </div>
-                        <label className="wic-check">
-                          <input
-                            type="checkbox"
-                            checked={mcAllowMultiple}
-                            onChange={(e) => setMcAllowMultiple(e.target.checked)}
-                          />
-                          Allow multiple selections
-                        </label>
-                      </>
-                    ) : null}
-
-                    {type === "QUANTITY" ? (
-                      <div className="wic-grid wic-grid--3">
-                        <label className="wic-field">
-                          <span>Unit</span>
-                          <input
-                            value={qtyUnit}
-                            onChange={(e) => setQtyUnit(e.target.value)}
-                            placeholder="items"
-                          />
-                        </label>
-                        <label className="wic-field">
-                          <span>Pass when</span>
-                          <select
-                            value={qtyComparison}
-                            onChange={(e) =>
-                              setQtyComparison(e.target.value as typeof qtyComparison)
-                            }
-                          >
-                            <option value="AT_LEAST">At least</option>
-                            <option value="AT_MOST">At most</option>
-                            <option value="EXACT">Exactly</option>
-                            <option value="BETWEEN">Between</option>
-                          </select>
-                        </label>
-                        <label className="wic-field">
-                          <span>Min / target</span>
-                          <input
-                            type="number"
-                            value={qtyMin}
-                            onChange={(e) => setQtyMin(e.target.value)}
-                          />
-                        </label>
-                        {qtyComparison === "BETWEEN" || qtyComparison === "AT_MOST" ? (
-                          <label className="wic-field">
-                            <span>Maximum</span>
-                            <input
-                              type="number"
-                              value={qtyMax}
-                              onChange={(e) => setQtyMax(e.target.value)}
-                            />
-                          </label>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {type === "TEXT" ? (
-                      <div className="wic-grid wic-grid--2">
-                        <label className="wic-field">
-                          <span>Placeholder</span>
-                          <input
-                            value={textPlaceholder}
-                            onChange={(e) => setTextPlaceholder(e.target.value)}
-                            placeholder="Enter notes…"
-                          />
-                        </label>
-                        <label className="wic-check" style={{ alignSelf: "end", marginBottom: "0.35rem" }}>
-                          <input
-                            type="checkbox"
-                            checked={textRequireNonEmpty}
-                            onChange={(e) => setTextRequireNonEmpty(e.target.checked)}
-                          />
-                          Require non-empty note
-                        </label>
-                      </div>
-                    ) : null}
-
-                    {type === "INSTRUCTION" ? (
-                      <>
-                        <label className="wic-field wic-field--full">
-                          <span>Instruction</span>
-                          <textarea
-                            rows={3}
-                            value={instructionBody}
-                            onChange={(e) => setInstructionBody(e.target.value)}
-                            placeholder="What should associates read?"
-                          />
-                        </label>
-                        <label className="wic-check">
-                          <input
-                            type="checkbox"
-                            checked={acknowledgeRequired}
-                            onChange={(e) => setAcknowledgeRequired(e.target.checked)}
-                          />
-                          Require acknowledgment
-                        </label>
-                      </>
+                    {comparisonType !== "ABOVE" ? (
+                      <label className="wic-field">
+                        <span>
+                          Maximum (°{unit}) <i>*</i>
+                        </span>
+                        <input
+                          type="number"
+                          value={maxTemp}
+                          onChange={(e) => setMaxTemp(e.target.value)}
+                        />
+                      </label>
                     ) : null}
                   </div>
-                </section>
-              </div>
-              <div className="wic-card-footer">
-                <span />
-                <TempsButton variant="primary" onClick={goNext}>
-                  {continueLabel()}
-                </TempsButton>
-              </div>
-            </section>
-          ) : null}
+                  <p className="wic-criteria-help">{criteriaSummary}</p>
+                </>
+              ) : null}
 
-          {step === "corrective" ? (
-            <section className="wic-card wic-card--fp">
-              <header className="wic-card-top">
-                <div className="wic-card-title-row">
-                  <h2>2. Failure Procedure</h2>
-                  <span className="fp-required-pill">Required</span>
+              {type === "YES_NO" ? (
+                <div className="wic-grid wic-grid--3">
+                  <label className="wic-field">
+                    <span>Yes label</span>
+                    <input value={yesLabel} onChange={(e) => setYesLabel(e.target.value)} />
+                  </label>
+                  <label className="wic-field">
+                    <span>No label</span>
+                    <input value={noLabel} onChange={(e) => setNoLabel(e.target.value)} />
+                  </label>
+                  <label className="wic-field">
+                    <span>Passing answer</span>
+                    <select
+                      value={passingAnswer}
+                      onChange={(e) => setPassingAnswer(e.target.value as "YES" | "NO")}
+                    >
+                      <option value="YES">Yes passes</option>
+                      <option value="NO">No passes</option>
+                    </select>
+                  </label>
                 </div>
-                <p className="wic-lede">
-                  Configure the standard workflow associates must complete when this inspection item
-                  fails.
-                </p>
-              </header>
-              <div className="wic-card-scroll">
-                <FailureProcedureBuilder
-                  value={failureProcedure}
-                  onChange={updateFailureProcedure}
-                  showRequiredErrors={showFpErrors}
-                />
-              </div>
-              <StepFooter
-                onBack={goBack}
-                onNext={goNext}
-                nextLabel={continueLabel()}
-                busy={busy}
-                onSaveDraft={() => void saveItem()}
-              />
-            </section>
-          ) : null}
+              ) : null}
 
-          {step === "review" ? (
-            <section className="wic-card">
-              <h2>3. Review</h2>
-              <p className="wic-lede">Confirm everything looks right, then save.</p>
-              <dl className="wic-review">
-                <div>
-                  <dt>Name</dt>
-                  <dd>{name.trim() || "—"}</dd>
+              {type === "VISUAL_CHECK" ? (
+                <>
+                  <div className="wic-grid wic-grid--2">
+                    <label className="wic-field">
+                      <span>Passing options</span>
+                      <textarea
+                        rows={2}
+                        value={passingOptions}
+                        onChange={(e) => setPassingOptions(e.target.value)}
+                        placeholder={"Pass\nLooks good"}
+                      />
+                    </label>
+                    <label className="wic-field">
+                      <span>Failing options</span>
+                      <textarea
+                        rows={2}
+                        value={failingOptions}
+                        onChange={(e) => setFailingOptions(e.target.value)}
+                        placeholder={"Fail\nNeeds attention"}
+                      />
+                    </label>
+                  </div>
+                  <label className="wic-check">
+                    <input
+                      type="checkbox"
+                      checked={requirePhotoOnFail}
+                      onChange={(e) => setRequirePhotoOnFail(e.target.checked)}
+                    />
+                    Require photo on fail
+                  </label>
+                </>
+              ) : null}
+
+              {type === "PHOTO" ? (
+                <div className="wic-grid wic-grid--3">
+                  <label className="wic-field">
+                    <span>Min photos</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={minPhotos}
+                      onChange={(e) => setMinPhotos(e.target.value)}
+                    />
+                  </label>
+                  <label className="wic-field">
+                    <span>Max photos</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={maxPhotos}
+                      onChange={(e) => setMaxPhotos(e.target.value)}
+                    />
+                  </label>
+                  <label className="wic-field">
+                    <span>Guidance</span>
+                    <input
+                      value={photoGuidance}
+                      onChange={(e) => setPhotoGuidance(e.target.value)}
+                      placeholder="What to capture"
+                    />
+                  </label>
                 </div>
-                <div>
-                  <dt>Type</dt>
-                  <dd>{typeLabel(type)}</dd>
+              ) : null}
+
+              {type === "MULTIPLE_CHOICE" ? (
+                <>
+                  <div className="wic-grid wic-grid--2">
+                    <label className="wic-field">
+                      <span>All options</span>
+                      <textarea
+                        rows={2}
+                        value={mcOptions}
+                        onChange={(e) => setMcOptions(e.target.value)}
+                        placeholder={"Option A\nOption B"}
+                      />
+                    </label>
+                    <label className="wic-field">
+                      <span>Passing options</span>
+                      <textarea
+                        rows={2}
+                        value={mcPassing}
+                        onChange={(e) => setMcPassing(e.target.value)}
+                        placeholder="Option A"
+                      />
+                    </label>
+                  </div>
+                  <label className="wic-check">
+                    <input
+                      type="checkbox"
+                      checked={mcAllowMultiple}
+                      onChange={(e) => setMcAllowMultiple(e.target.checked)}
+                    />
+                    Allow multiple selections
+                  </label>
+                </>
+              ) : null}
+
+              {type === "QUANTITY" ? (
+                <div className="wic-grid wic-grid--3">
+                  <label className="wic-field">
+                    <span>Unit</span>
+                    <input
+                      value={qtyUnit}
+                      onChange={(e) => setQtyUnit(e.target.value)}
+                      placeholder="items"
+                    />
+                  </label>
+                  <label className="wic-field">
+                    <span>Pass when</span>
+                    <select
+                      value={qtyComparison}
+                      onChange={(e) => setQtyComparison(e.target.value as typeof qtyComparison)}
+                    >
+                      <option value="AT_LEAST">At least</option>
+                      <option value="AT_MOST">At most</option>
+                      <option value="EXACT">Exactly</option>
+                      <option value="BETWEEN">Between</option>
+                    </select>
+                  </label>
+                  <label className="wic-field">
+                    <span>Min / target</span>
+                    <input
+                      type="number"
+                      value={qtyMin}
+                      onChange={(e) => setQtyMin(e.target.value)}
+                    />
+                  </label>
+                  {qtyComparison === "BETWEEN" || qtyComparison === "AT_MOST" ? (
+                    <label className="wic-field">
+                      <span>Maximum</span>
+                      <input
+                        type="number"
+                        value={qtyMax}
+                        onChange={(e) => setQtyMax(e.target.value)}
+                      />
+                    </label>
+                  ) : null}
                 </div>
-                <div>
-                  <dt>Category</dt>
-                  <dd>{category || "—"}</dd>
+              ) : null}
+
+              {type === "TEXT" ? (
+                <div className="wic-grid wic-grid--2">
+                  <label className="wic-field">
+                    <span>Placeholder</span>
+                    <input
+                      value={textPlaceholder}
+                      onChange={(e) => setTextPlaceholder(e.target.value)}
+                      placeholder="Enter notes…"
+                    />
+                  </label>
+                  <label className="wic-check" style={{ alignSelf: "end", marginBottom: "0.35rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={textRequireNonEmpty}
+                      onChange={(e) => setTextRequireNonEmpty(e.target.checked)}
+                    />
+                    Require non-empty note
+                  </label>
                 </div>
-                <div>
-                  <dt>Required</dt>
-                  <dd>{required ? "Required" : "Optional"}</dd>
-                </div>
-                <div>
-                  <dt>Passing criteria</dt>
-                  <dd>{criteriaSummary}</dd>
-                </div>
-                <div>
-                  <dt>Failure procedure</dt>
-                  <dd>
-                    {(() => {
-                      const first = failureProcedure.firstFailureSteps
-                        .map((s) => s.text.trim())
-                        .filter(Boolean);
-                      const fail = failureProcedure.ifFailSteps
-                        .map((s) => s.text.trim())
-                        .filter(Boolean);
-                      if (!first.length && !fail.length && !failureProcedure.ifPassNote.trim()) {
-                        return "None configured";
-                      }
-                      const parts = [
-                        first.length ? `1st failure: ${first.join(" → ")}` : null,
-                        "If pass: continue",
-                        fail.length ? `If fail: ${fail.join(" → ")}` : null,
-                      ].filter(Boolean);
-                      return parts.join(" · ");
-                    })()}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Devices</dt>
-                  <dd>
-                    {[
-                      type === "TEMPERATURE" && allowManual ? "Manual" : null,
-                      type === "TEMPERATURE" && allowBluetooth ? "Bluetooth" : null,
-                      photoCaptureEnabled ? "Photo" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "—"}
-                  </dd>
-                </div>
-              </dl>
-              <StepFooter
-                onBack={goBack}
-                onNext={() => void saveItem()}
-                nextLabel={busy ? "Saving…" : isEdit ? "Save changes" : "Save Item"}
-                busy={busy}
-              />
-            </section>
-          ) : null}
-        </main>
+              ) : null}
+
+              {type === "INSTRUCTION" ? (
+                <>
+                  <label className="wic-field wic-field--full">
+                    <span>Instruction</span>
+                    <textarea
+                      rows={2}
+                      value={instructionBody}
+                      onChange={(e) => setInstructionBody(e.target.value)}
+                      placeholder="What should associates read?"
+                    />
+                  </label>
+                  <label className="wic-check">
+                    <input
+                      type="checkbox"
+                      checked={acknowledgeRequired}
+                      onChange={(e) => setAcknowledgeRequired(e.target.checked)}
+                    />
+                    Require acknowledgment
+                  </label>
+                </>
+              ) : null}
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section className="wic-single-col wic-single-col--ca" aria-label="Corrective actions">
+          <CorrectiveActionsFlow
+            value={failureProcedure}
+            onChange={updateFailureProcedure}
+            showRequiredErrors={showFpErrors}
+          />
+        </section>
+      </form>
+
+      <div className="wic-footer-bar">
+        <p className="wic-footer-note">
+          {isEdit ? "Changes apply to the Item Library." : "New items are added to the Item Library."}
+        </p>
+        <TempsButton
+          variant="secondary"
+          disabled={busy}
+          onClick={() => navigate("/go/temp-checks/library")}
+        >
+          Cancel
+        </TempsButton>
+        <TempsButton
+          variant="primary"
+          className="wic-save-btn"
+          disabled={busy}
+          onClick={() => void saveItem()}
+        >
+          <IconSave />
+          {busy ? "Saving…" : isEdit ? "Save changes" : "Save Item"}
+        </TempsButton>
       </div>
     </TempsPageShell>
+  );
+}
+
+function IconSave() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+      <path d="M17 21v-8H7v8M7 3v5h8" />
+    </svg>
+  );
+}
+
+function IconManual() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <rect x="3" y="4" width="18" height="14" rx="2" />
+      <path d="M8 21h8M12 18v3" />
+    </svg>
+  );
+}
+
+function IconBluetooth() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M7 7l10 10-5 5V2l5 5L7 17" />
+    </svg>
+  );
+}
+
+function IconPhoto() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M4 7h3l2-2h6l2 2h3v12H4V7z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </svg>
   );
 }

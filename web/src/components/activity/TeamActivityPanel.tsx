@@ -1,28 +1,33 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  fetchTeamActivity,
+  fetchAllActivity,
   fetchWebTeam,
   postActivityCelebrate,
   postActivityReaction,
+  type ApiActivityItem,
 } from "../../lib/api";
 import { queryKeys } from "../../lib/query-keys";
 import { ActivityFeedItem, CELEBRATION_TYPES } from "./ActivityFeedPrimitives";
 
 const REACTION_HINT_KEY = "alenio_activity_reaction_hint";
 
+type WorkspaceOption = { id: string; name: string };
+
 type Props = {
-  teamId: string;
+  teams: WorkspaceOption[];
   currentUserId?: string;
 };
 
-export function TeamActivityPanel({ teamId, currentUserId }: Props) {
+export function TeamActivityPanel({ teams, currentUserId }: Props) {
   const queryClient = useQueryClient();
+  const [workspaceFilter, setWorkspaceFilter] = useState<string>("all");
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const [showReactionHint, setShowReactionHint] = useState(false);
   const [listErr, setListErr] = useState<string | null>(null);
   const [celebrateOpen, setCelebrateOpen] = useState(false);
   const [celebrateStep, setCelebrateStep] = useState<1 | 2>(1);
+  const [celebrateTeamId, setCelebrateTeamId] = useState<string>("");
   const [celebrateTarget, setCelebrateTarget] = useState<{ id: string; name: string; image: string | null } | null>(
     null,
   );
@@ -36,18 +41,22 @@ export function TeamActivityPanel({ teamId, currentUserId }: Props) {
   >([]);
 
   const activityQuery = useQuery({
-    queryKey: queryKeys.activity(teamId),
-    queryFn: async () => {
-      const data = await fetchTeamActivity(teamId);
-      return Array.isArray(data) ? data : [];
-    },
-    enabled: !!teamId,
+    queryKey: queryKeys.activityAll,
+    queryFn: async () => fetchAllActivity(teams),
+    enabled: teams.length > 0,
     refetchOnMount: false,
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
 
-  const items = activityQuery.data ?? [];
+  const allItems = activityQuery.data ?? [];
+  const items = useMemo(() => {
+    if (workspaceFilter === "all") return allItems;
+    return allItems.filter((item) => item.teamId === workspaceFilter);
+  }, [allItems, workspaceFilter]);
+
+  const showWorkspaceLabels = workspaceFilter === "all" && teams.length > 1;
+
   const queryErr =
     activityQuery.error instanceof Error
       ? activityQuery.error.message
@@ -55,11 +64,19 @@ export function TeamActivityPanel({ teamId, currentUserId }: Props) {
         ? "Could not load activity."
         : null;
   const displayErr = listErr ?? queryErr;
-  const showInitialLoading = activityQuery.isPending && items.length === 0;
+  const showInitialLoading = activityQuery.isPending && allItems.length === 0;
 
   const refreshActivity = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.activity(teamId) });
-  }, [queryClient, teamId]);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.activityAll }),
+      queryClient.invalidateQueries({ queryKey: ["recognitions"] }),
+    ]);
+  }, [queryClient]);
+
+  const resolveCelebrateTeamId = useCallback(() => {
+    if (workspaceFilter !== "all") return workspaceFilter;
+    return teams[0]?.id ?? "";
+  }, [workspaceFilter, teams]);
 
   useEffect(() => {
     if (sessionStorage.getItem(REACTION_HINT_KEY) !== "1") setShowReactionHint(true);
@@ -81,13 +98,13 @@ export function TeamActivityPanel({ teamId, currentUserId }: Props) {
   }, [openPickerId]);
 
   useEffect(() => {
-    if (!celebrateOpen || !teamId) return;
+    if (!celebrateOpen || !celebrateTeamId) return;
     let cancelled = false;
     setTeamMembersLoading(true);
     setCelebrateErr(null);
     void (async () => {
       try {
-        const team = await fetchWebTeam(teamId);
+        const team = await fetchWebTeam(celebrateTeamId);
         if (cancelled) return;
         const rows =
           team.members?.map((m) => ({
@@ -108,7 +125,7 @@ export function TeamActivityPanel({ teamId, currentUserId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [celebrateOpen, teamId, currentUserId]);
+  }, [celebrateOpen, celebrateTeamId, currentUserId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -122,27 +139,38 @@ export function TeamActivityPanel({ teamId, currentUserId }: Props) {
   }, []);
 
   const toggleReaction = useCallback(
-    async (activityId: string, emoji: string) => {
+    async (item: ApiActivityItem, emoji: string) => {
+      const teamId = item.teamId;
       if (!teamId) return;
       try {
-        await postActivityReaction(teamId, activityId, emoji);
+        await postActivityReaction(teamId, item.id, emoji);
         await refreshActivity();
         setListErr(null);
       } catch {
         setListErr("Could not update reaction.");
       }
     },
-    [teamId, refreshActivity],
+    [refreshActivity],
   );
 
+  const openCelebrate = () => {
+    setCelebrateTeamId(resolveCelebrateTeamId());
+    setCelebrateStep(1);
+    setCelebrateTarget(null);
+    setCelebrateType(CELEBRATION_TYPES[0]!.key);
+    setCelebrateMessage("");
+    setCelebrateErr(null);
+    setCelebrateOpen(true);
+  };
+
   const onCelebrateSubmit = async () => {
-    if (!teamId || !celebrateTarget) return;
+    if (!celebrateTeamId || !celebrateTarget) return;
     const msg = celebrateMessage.trim();
     if (!msg) return;
     setCelebrateSaving(true);
     setCelebrateErr(null);
     try {
-      await postActivityCelebrate(teamId, {
+      await postActivityCelebrate(celebrateTeamId, {
         targetUserId: celebrateTarget.id,
         celebrationType: celebrateType,
         message: msg,
@@ -169,20 +197,38 @@ export function TeamActivityPanel({ teamId, currentUserId }: Props) {
     [],
   );
 
-  if (!teamId) return null;
+  if (teams.length === 0) return null;
 
   return (
     <>
       <aside className="chat-activity-rail" aria-label="Activity" data-testid="chat-activity-rail">
         <div className="chat-activity-rail__head">
-          <div>
+          <div className="chat-activity-rail__head-copy">
             <h2 className="chat-activity-rail__title">Activity</h2>
             <p className="chat-activity-rail__sub">Team wins and updates</p>
+            {teams.length > 1 ? (
+              <label className="chat-activity-rail__filter">
+                <span className="sr-only">Filter by workspace</span>
+                <select
+                  value={workspaceFilter}
+                  onChange={(e) => setWorkspaceFilter(e.target.value)}
+                  aria-label="Filter activity by workspace"
+                  data-testid="activity-workspace-filter"
+                >
+                  <option value="all">All workspaces</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
           </div>
           <button
             type="button"
             className="chat-activity-rail__celebrate"
-            onClick={() => setCelebrateOpen(true)}
+            onClick={openCelebrate}
             data-testid="celebrate-button"
           >
             <span aria-hidden>🎉</span>
@@ -209,13 +255,16 @@ export function TeamActivityPanel({ teamId, currentUserId }: Props) {
             <div className="enterprise-activity-feed chat-activity-rail__feed">
               {items.map((item, index) => (
                 <div key={item.id} className="enterprise-activity-feed-item-wrap">
+                  {showWorkspaceLabels && item.team?.name ? (
+                    <span className="chat-activity-rail__workspace-chip">{item.team.name}</span>
+                  ) : null}
                   <ActivityFeedItem
                     item={item}
                     currentUserId={currentUserId}
                     showPicker={openPickerId === item.id}
                     onOpenPicker={() => setOpenPickerId(item.id)}
                     onClosePicker={() => setOpenPickerId(null)}
-                    onToggleReaction={(emoji) => toggleReaction(item.id, emoji)}
+                    onToggleReaction={(emoji) => toggleReaction(item, emoji)}
                   />
                   {index === 0 && showReactionHint ? hintLine : null}
                   {index < items.length - 1 && item.type !== "task_milestone" ? (
@@ -256,6 +305,26 @@ export function TeamActivityPanel({ teamId, currentUserId }: Props) {
             {celebrateErr ? <p className="auth-error enterprise-activity-modal-err">{celebrateErr}</p> : null}
             {celebrateStep === 1 ? (
               <div className="enterprise-activity-modal-body">
+                {teams.length > 1 ? (
+                  <label className="enterprise-activity-compose-label">
+                    Workspace
+                    <select
+                      className="enterprise-activity-celebrate-team-select"
+                      value={celebrateTeamId}
+                      onChange={(e) => {
+                        setCelebrateTeamId(e.target.value);
+                        setCelebrateTarget(null);
+                      }}
+                      aria-label="Workspace for celebration"
+                    >
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 {teamMembersLoading ? (
                   <p className="enterprise-muted">Loading teammates…</p>
                 ) : teamMembers.length === 0 ? (

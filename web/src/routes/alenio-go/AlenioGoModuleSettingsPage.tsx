@@ -207,18 +207,27 @@ export function AlenioGoModuleSettingsPage({ moduleKey }: Props) {
       </section>
 
       {moduleKey === "temp-checks" ? (
-        <section className="go-backend-module-panel go-backend-panel-card go-mod-section" aria-labelledby="go-mod-temps-library">
-          <h2 id="go-mod-temps-library" className="go-mod-section-title">Item Library</h2>
+        <section className="go-backend-module-panel go-backend-panel-card go-mod-section" aria-labelledby="go-mod-temps-open">
+          <h2 id="go-mod-temps-open" className="go-mod-section-title">TEMPS Food Safety</h2>
           <p className="enterprise-muted">
-            Create, manage, and reuse inspection items for temperature checks.
+            Open the Execution Center dashboard, or manage reusable items in the Item Library.
           </p>
-          <Link
-            to="/go/temp-checks/library"
-            className="go-mod-btn go-mod-btn--primary"
-            data-testid="open-temps-item-library"
-          >
-            Open Item Library
-          </Link>
+          <div className="go-mod-btn-row">
+            <Link
+              to="/go/temp-checks/overview"
+              className="go-mod-btn go-mod-btn--primary"
+              data-testid="open-temps-dashboard"
+            >
+              Open Dashboard
+            </Link>
+            <Link
+              to="/go/temp-checks/library"
+              className="go-mod-btn go-mod-btn--ghost"
+              data-testid="open-temps-item-library"
+            >
+              Item Library
+            </Link>
+          </div>
         </section>
       ) : null}
 

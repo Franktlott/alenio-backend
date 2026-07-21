@@ -44,6 +44,8 @@ export type ActivityMetadata = {
 
 export type ActivityApiEvent = {
   id: string;
+  teamId?: string;
+  team?: { id: string; name: string } | null;
   type: ActivityFeedType;
   createdAt: string;
   metadata: ActivityMetadata | null;
@@ -58,6 +60,8 @@ export type ActivityActionRoute = {
 
 export type ActivityFeedItem = {
   id: string;
+  teamId?: string;
+  teamName?: string | null;
   type: ActivityFeedType;
   actor: { id: string; name: string; image: string | null } | null;
   title: string;
@@ -338,6 +342,8 @@ export function mapApiActivityToFeedItem(event: ActivityApiEvent): ActivityFeedI
 
   return {
     id: event.id,
+    teamId: event.teamId,
+    teamName: event.team?.name ?? null,
     type: event.type,
     actor: event.user,
     title: mapped.title,

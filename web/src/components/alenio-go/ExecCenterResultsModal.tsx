@@ -248,8 +248,11 @@ export function ExecCenterResultsModal({
 
 function badgeClass(label: string): string {
   const normalized = label.toLowerCase();
-  if (normalized === "complete") return "exec-center-badge--complete";
-  if (normalized === "overdue") return "exec-center-badge--overdue";
-  if (normalized === "open") return "exec-center-badge--open";
+  if (normalized.includes("complete")) return "exec-center-badge--complete";
+  if (normalized.includes("overdue")) return "exec-center-badge--overdue";
+  if (normalized.includes("due soon")) return "exec-center-badge--due-soon";
+  if (normalized.includes("progress") || normalized === "open") {
+    return "exec-center-badge--in-progress";
+  }
   return "exec-center-badge--not-started";
 }

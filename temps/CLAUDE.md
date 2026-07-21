@@ -25,12 +25,9 @@ cd temps && npm start
 
 ## API surface (session auth)
 
-Floor capture is **local-first + sync** (not per-item PATCH).
-
 - `GET /api/teams`
+- `GET /api/teams/:teamId/walks/occurrences/available`
 - `GET /api/teams/:teamId/walks/occurrences?from=&to=`
-- `POST /api/teams/:teamId/walks/occurrences/:id/runs` — start (or `{ prepareOnly: true }` for offline warm-cache without claim)
-- `POST /api/teams/:teamId/walks/runs/:runId/sync` — batch responses + CA completions + optional complete
-- `POST /api/teams/:teamId/walks/runs/:runId/items/:itemId/reset`
-- `POST /api/upload/json` — CA photos
-- Auth token stored in SecureStore (`alenio-temps:access-token`)
+- `POST /api/teams/:teamId/walks/occurrences/:id/runs`
+- `PATCH /api/teams/:teamId/walks/runs/:runId/items/:itemId` — `{ response: { value, unit, source } }`
+- `POST /api/teams/:teamId/walks/runs/:runId/complete`

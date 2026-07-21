@@ -204,7 +204,13 @@ webRouter.get("/api/teams/:id", async (c) => {
   });
   const members = await prisma.teamMember.findMany({
     where: { teamId: id },
-    include: { user: { select: { id: true, name: true, email: true, image: true } } },
+    select: {
+      id: true,
+      userId: true,
+      role: true,
+      joinedAt: true,
+      user: { select: { id: true, name: true, email: true, image: true } },
+    },
   });
   const workplaceStandards = parseWorkplaceStandards(team?.workplaceStandards);
   const goFrontendSettings = parseGoFrontendSettings(team?.goFrontendSettings);

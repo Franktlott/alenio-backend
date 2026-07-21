@@ -1,4 +1,5 @@
 export { FailureProcedureBuilder } from "./FailureProcedureBuilder";
+export { CorrectiveActionsFlow } from "./CorrectiveActionsFlow";
 export { FailureStepList } from "./FailureStepList";
 export { FailureProcedureEmptyState } from "./FailureProcedureEmptyState";
 export { procedureToApiActions, apiActionsToProcedure } from "./serialize";

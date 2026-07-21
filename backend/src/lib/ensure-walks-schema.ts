@@ -222,45 +222,18 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
       );
     `,
     );
-    // Older DBs may have WalkItemResponse without itemId — CREATE TABLE IF NOT EXISTS won't add it.
-    const responseAlters: Array<[string, string]> = [
-      ["WalkItemResponse.itemId", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "itemId" TEXT`],
-      ["WalkItemResponse.itemType", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "itemType" TEXT`],
-      ["WalkItemResponse.status", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'NOT_STARTED'`],
-      ["WalkItemResponse.response", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "response" JSONB`],
-      ["WalkItemResponse.failed", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "failed" BOOLEAN NOT NULL DEFAULT false`],
-      ["WalkItemResponse.notes", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "notes" TEXT`],
-      ["WalkItemResponse.photoUrls", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "photoUrls" JSONB`],
-      ["WalkItemResponse.completedBy", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "completedBy" TEXT`],
-      ["WalkItemResponse.completedAt", `ALTER TABLE public."WalkItemResponse" ADD COLUMN IF NOT EXISTS "completedAt" TIMESTAMP(3)`],
-    ];
-    for (const [label, sql] of responseAlters) {
-      try {
-        await execStep(prisma, steps, label, sql);
-      } catch (err) {
-        console.warn(`[startup] ensureWalksSchema alter skipped (${label}):`, err);
-      }
-    }
-    try {
-      await execStep(
-        prisma,
-        steps,
-        "WalkItemResponse_uq",
-        `CREATE UNIQUE INDEX IF NOT EXISTS "WalkItemResponse_runId_itemId_key" ON public."WalkItemResponse"("runId", "itemId")`,
-      );
-    } catch (err) {
-      console.warn("[startup] ensureWalksSchema index skipped (WalkItemResponse_uq):", err);
-    }
-    try {
-      await execStep(
-        prisma,
-        steps,
-        "WalkItemResponse_idx",
-        `CREATE INDEX IF NOT EXISTS "WalkItemResponse_runId_idx" ON public."WalkItemResponse"("runId")`,
-      );
-    } catch (err) {
-      console.warn("[startup] ensureWalksSchema index skipped (WalkItemResponse_idx):", err);
-    }
+    await execStep(
+      prisma,
+      steps,
+      "WalkItemResponse_uq",
+      `CREATE UNIQUE INDEX IF NOT EXISTS "WalkItemResponse_runId_itemId_key" ON public."WalkItemResponse"("runId", "itemId")`,
+    );
+    await execStep(
+      prisma,
+      steps,
+      "WalkItemResponse_idx",
+      `CREATE INDEX IF NOT EXISTS "WalkItemResponse_runId_idx" ON public."WalkItemResponse"("runId")`,
+    );
 
     await execStep(
       prisma,
@@ -283,26 +256,12 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
       );
     `,
     );
-    // Only index legacy itemId when that column exists (library schema may already own this table).
-    try {
-      const caCols = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(`
-        SELECT column_name FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'WalkCorrectiveAction'
-      `);
-      const caNames = new Set(caCols.map((c) => c.column_name));
-      if (caNames.has("itemId")) {
-        await execStep(
-          prisma,
-          steps,
-          "WalkCorrectiveAction_idx",
-          `CREATE INDEX IF NOT EXISTS "WalkCorrectiveAction_itemId_idx" ON public."WalkCorrectiveAction"("itemId")`,
-        );
-      } else {
-        steps.push("WalkCorrectiveAction_idx_skipped");
-      }
-    } catch (err) {
-      console.warn("[startup] ensureWalksSchema index skipped (WalkCorrectiveAction_idx):", err);
-    }
+    await execStep(
+      prisma,
+      steps,
+      "WalkCorrectiveAction_idx",
+      `CREATE INDEX IF NOT EXISTS "WalkCorrectiveAction_itemId_idx" ON public."WalkCorrectiveAction"("itemId")`,
+    );
 
     await execStep(
       prisma,
@@ -418,8 +377,15 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
         EXCEPTION WHEN duplicate_object THEN NULL;
         END $$;`,
       ],
-      // Intentionally no FK from result.correctiveActionId → WalkCorrectiveAction:
-      // run snapshots own the action ids; library rows may be replaced later.
+      [
+        "fk_WalkCorrectiveActionResult_action",
+        `DO $$ BEGIN
+          ALTER TABLE public."WalkCorrectiveActionResult"
+            ADD CONSTRAINT "WalkCorrectiveActionResult_correctiveActionId_fkey"
+            FOREIGN KEY ("correctiveActionId") REFERENCES public."WalkCorrectiveAction"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;`,
+      ],
     ];
     for (const [label, sql] of fks) {
       try {
@@ -427,17 +393,6 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
       } catch (err) {
         console.warn(`[startup] ensureWalksSchema fk skipped (${label}):`, err);
       }
-    }
-    try {
-      await execStep(
-        prisma,
-        steps,
-        "drop_fk_WalkCorrectiveActionResult_action",
-        `ALTER TABLE public."WalkCorrectiveActionResult"
-         DROP CONSTRAINT IF EXISTS "WalkCorrectiveActionResult_correctiveActionId_fkey"`,
-      );
-    } catch (err) {
-      console.warn("[startup] ensureWalksSchema drop result→action fk skipped:", err);
     }
 
     const tablesPublic = await prisma.$queryRawUnsafe<Array<{ table_name: string }>>(`
@@ -457,17 +412,6 @@ export async function ensureWalksSchema(prisma: PrismaClient): Promise<WalksSche
       walkTemplateCount = await prisma.walkTemplate.count();
     } catch (err) {
       countError = err instanceof Error ? err.message : String(err);
-    }
-
-    try {
-      await execStep(
-        prisma,
-        steps,
-        "WalkSchedule.intervalMinutes",
-        `ALTER TABLE public."WalkSchedule" ADD COLUMN IF NOT EXISTS "intervalMinutes" INTEGER`,
-      );
-    } catch (err) {
-      console.warn("[startup] ensureWalksSchema alter skipped (WalkSchedule.intervalMinutes):", err);
     }
 
     try {

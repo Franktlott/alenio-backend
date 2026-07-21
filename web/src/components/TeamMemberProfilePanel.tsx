@@ -7,8 +7,10 @@ import {
   type WorkplaceStandards,
 } from "../lib/workplace-standards";
 import { DevelopmentPlanTab } from "./DevelopmentPlanTab";
+import { MemberProfileHeader } from "./MemberProfileHeader";
 import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
 import { ProfileOverviewTab } from "./ProfileOverviewTab";
+import { RecognitionTab } from "./RecognitionTab";
 import { UserAvatar } from "./UserAvatar";
 
 type ProfileSection =
@@ -16,20 +18,24 @@ type ProfileSection =
   | "Check-ins"
   | "Development"
   | "Recognition"
-  | "Feedback"
   | "Timeline"
-  | "Documents"
   | "Settings";
 
-const ACTIVE_SECTIONS: ProfileSection[] = ["Overview", "Check-ins", "Development"];
-const COMING_SOON_SECTIONS: ProfileSection[] = ["Recognition", "Feedback", "Timeline", "Documents", "Settings"];
-const ALL_SECTIONS: ProfileSection[] = [...ACTIVE_SECTIONS, ...COMING_SOON_SECTIONS];
+const COMING_SOON_SECTIONS: ProfileSection[] = ["Timeline", "Settings"];
+
+const NAV_GROUPS: { label: string | null; items: ProfileSection[] }[] = [
+  { label: null, items: ["Overview"] },
+  { label: "PERFORMANCE", items: ["Check-ins", "Development", "Recognition"] },
+  { label: "HISTORY", items: ["Timeline"] },
+  { label: "SETTINGS", items: ["Settings"] },
+];
 
 type Props = {
   teamId: string;
   teamName?: string | null;
   member: WebTeamMemberRow;
   isSelf: boolean;
+  currentUserId?: string;
   isFormerMember?: boolean;
   managerName: string | null;
   leaderUserId: string | null;
@@ -39,7 +45,6 @@ type Props = {
   canCreateOneOne: boolean;
   canCreateDevGoal: boolean;
   canAddDevNotes: boolean;
-  streak?: number;
   overdueFollowUpTasks?: number;
   activeTasks?: number;
   completedTasks?: number;
@@ -52,6 +57,9 @@ type Props = {
   onManageStandards?: () => void;
   onBack?: () => void;
   onManage: () => void;
+  ownerEmail?: string | null;
+  canModerateRecognitions?: boolean;
+  onSectionChange?: (section: ProfileSection) => void;
 };
 
 function nextCheckInLabel(
@@ -131,14 +139,6 @@ function IconNavRecognition() {
   );
 }
 
-function IconNavFeedback() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M4 5h16v11H8l-4 4V5Z" />
-    </svg>
-  );
-}
-
 function IconNavTimeline() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
@@ -146,15 +146,6 @@ function IconNavTimeline() {
       <circle cx="12" cy="12" r="2" />
       <circle cx="12" cy="19" r="2" />
       <path d="M12 7v3M12 14v3" />
-    </svg>
-  );
-}
-
-function IconNavDocuments() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-      <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-      <path d="M14 3v5h5M9 13h6M9 17h6" />
     </svg>
   );
 }
@@ -173,9 +164,7 @@ const SECTION_ICONS: Record<ProfileSection, ReactNode> = {
   "Check-ins": <IconNavCheckins />,
   Development: <IconNavDevelopment />,
   Recognition: <IconNavRecognition />,
-  Feedback: <IconNavFeedback />,
   Timeline: <IconNavTimeline />,
-  Documents: <IconNavDocuments />,
   Settings: <IconNavSettings />,
 };
 
@@ -184,6 +173,7 @@ export function TeamMemberProfilePanel({
   teamName,
   member,
   isSelf,
+  currentUserId,
   isFormerMember = false,
   managerName,
   leaderUserId,
@@ -193,7 +183,6 @@ export function TeamMemberProfilePanel({
   canCreateOneOne,
   canCreateDevGoal,
   canAddDevNotes,
-  streak,
   activeTasks: _activeTasks,
   completedTasks: _completedTasks,
   activeDevGoals,
@@ -201,24 +190,47 @@ export function TeamMemberProfilePanel({
   workplaceStandards,
   standardsCompliance,
   daysSinceLastCheckIn,
-  canManageStandards,
-  onManageStandards,
+  canManageStandards: _canManageStandards,
+  onManageStandards: _onManageStandards,
   onBack,
   onManage,
+  ownerEmail,
+  canModerateRecognitions = false,
+  onSectionChange,
 }: Props) {
   const [section, setSection] = useState<ProfileSection>("Overview");
   const displayName = member.user.name ?? member.user.email ?? "Member";
+  const resolvedCurrentUserId = currentUserId ?? (isSelf ? member.userId : undefined);
 
   useEffect(() => {
     setSection(isFormerMember ? "Check-ins" : "Overview");
   }, [isFormerMember, member.userId]);
+
+  useEffect(() => {
+    onSectionChange?.(section);
+  }, [section, onSectionChange]);
+
+  const selectSection = (item: ProfileSection) => {
+    setSection(item);
+    onSectionChange?.(item);
+  };
 
   const nextCheckIn = useMemo(
     () => nextCheckInLabel(workplaceStandards, daysSinceLastCheckIn, standardsCompliance),
     [workplaceStandards, daysSinceLastCheckIn, standardsCompliance],
   );
 
+  const lastActiveLabel = useMemo(() => {
+    if (daysSinceLastCheckIn == null) return null;
+    if (daysSinceLastCheckIn === 0) return "Today";
+    if (daysSinceLastCheckIn === 1) return "Yesterday";
+    if (daysSinceLastCheckIn < 7) return `${daysSinceLastCheckIn}d ago`;
+    if (daysSinceLastCheckIn < 30) return `${Math.floor(daysSinceLastCheckIn / 7)}w ago`;
+    return `${daysSinceLastCheckIn}d ago`;
+  }, [daysSinceLastCheckIn]);
+
   const contentSection = section;
+  const showProfileHeader = !isFormerMember;
 
   return (
     <div className="enterprise-team-profile enterprise-team-profile--wd" data-testid="team-member-profile">
@@ -269,45 +281,64 @@ export function TeamMemberProfilePanel({
 
           {!isFormerMember ? (
             <nav className="enterprise-team-profile-rail-nav" aria-label="Member profile sections">
-              {ALL_SECTIONS.map((item) => {
-                const soon = COMING_SOON_SECTIONS.includes(item);
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`enterprise-team-profile-rail-nav-item${section === item ? " is-active" : ""}${soon ? " is-soon" : ""}`}
-                    aria-selected={section === item}
-                    disabled={soon}
-                    title={soon ? "Coming soon" : undefined}
-                    onClick={() => setSection(item)}
-                  >
-                    <span className="enterprise-team-profile-rail-nav-icon" aria-hidden>
-                      {SECTION_ICONS[item]}
-                    </span>
-                    <span>{item}</span>
-                  </button>
-                );
-              })}
+              {NAV_GROUPS.map((group) => (
+                <div key={group.label ?? "top"} className="enterprise-team-profile-rail-nav-group">
+                  {group.label ? (
+                    <p className="enterprise-team-profile-rail-nav-group-label">{group.label}</p>
+                  ) : null}
+                  {group.items.map((item) => {
+                    const soon = COMING_SOON_SECTIONS.includes(item);
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        className={`enterprise-team-profile-rail-nav-item${section === item ? " is-active" : ""}${soon ? " is-soon" : ""}`}
+                        aria-selected={section === item}
+                        disabled={soon}
+                        title={soon ? "Coming soon" : undefined}
+                        onClick={() => selectSection(item)}
+                      >
+                        <span className="enterprise-team-profile-rail-nav-icon" aria-hidden>
+                          {SECTION_ICONS[item]}
+                        </span>
+                        <span>{item}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </nav>
           ) : null}
         </aside>
 
-        <div className="enterprise-team-profile-wd-main">
+        <div
+          className={`enterprise-team-profile-wd-main${showProfileHeader ? " enterprise-team-profile-wd-main--profile-chrome enterprise-team-profile-wd-main--unified" : ""}`}
+        >
+          {showProfileHeader ? (
+            <MemberProfileHeader
+              displayName={displayName}
+              isSelf={isSelf}
+              roleLabel={roleLabel}
+              roleBadgeClass={roleBadgeClass}
+              joinedAt={member.joinedAt ?? null}
+              lastActiveLabel={lastActiveLabel}
+              standardsCompliance={standardsCompliance}
+              onCheckIn={() => selectSection("Check-ins")}
+              onRecognition={() => selectSection("Recognition")}
+              onGoal={() => selectSection("Development")}
+            />
+          ) : null}
           <div className="enterprise-team-profile-wd-body">
             {contentSection === "Overview" ? (
               <ProfileOverviewTab
                 teamId={teamId}
                 memberUserId={member.userId}
-                roleLabel={roleLabel}
-                email={member.user.email}
                 isSelf={isSelf}
-                canManageStandards={canManageStandards}
                 canCreateDevGoal={canCreateDevGoal}
                 workplaceStandards={workplaceStandards}
                 standardsCompliance={standardsCompliance}
                 daysSinceLastCheckIn={daysSinceLastCheckIn}
-                onManageStandards={onManageStandards}
-                onOpenGrowthTab={() => setSection("Development")}
+                onOpenGrowthTab={() => selectSection("Development")}
               />
             ) : contentSection === "Development" ? (
               <DevelopmentPlanTab
@@ -318,6 +349,15 @@ export function TeamMemberProfilePanel({
                 canCreate={canCreateDevGoal}
                 canAddNotes={canAddDevNotes}
               />
+            ) : contentSection === "Recognition" ? (
+              <RecognitionTab
+                teamId={teamId}
+                currentUserId={resolvedCurrentUserId}
+                memberUserId={member.userId}
+                isSelf={isSelf}
+                canDelete={canModerateRecognitions}
+                ownerEmail={ownerEmail}
+              />
             ) : (
               <OneOnOneHistoryTab
                 teamId={teamId}
@@ -327,7 +367,6 @@ export function TeamMemberProfilePanel({
                 leaderUserId={leaderUserId}
                 canCreate={canCreateOneOne}
                 canModify={canCreateOneOne}
-                streak={streak}
                 activeDevGoals={activeDevGoals}
                 completedDevGoals={completedDevGoals}
                 daysSinceLastCheckIn={daysSinceLastCheckIn}

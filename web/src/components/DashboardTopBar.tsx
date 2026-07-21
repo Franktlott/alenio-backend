@@ -53,7 +53,7 @@ export function DashboardTopBar({
 
   return (
     <header
-      className={`enterprise-topbar${isGo ? " enterprise-topbar--go" : ""}${pageSubtitle ? " enterprise-topbar--with-subtitle" : ""}`}
+      className={`enterprise-topbar${isGo ? " enterprise-topbar--go" : ""} enterprise-topbar--with-subtitle`}
       data-testid="dashboard-topbar"
     >
       <div className="enterprise-topbar-context" data-testid="topbar-context">
@@ -65,7 +65,12 @@ export function DashboardTopBar({
         ) : (
           <div className="enterprise-topbar-context-copy">
             <h1 className="enterprise-topbar-title">{pageTitle}</h1>
-            {pageSubtitle ? <p className="enterprise-topbar-subtitle">{pageSubtitle}</p> : null}
+            <p
+              className={`enterprise-topbar-subtitle${pageSubtitle ? "" : " enterprise-topbar-subtitle--spacer"}`}
+              aria-hidden={pageSubtitle ? undefined : true}
+            >
+              {pageSubtitle ?? "\u00a0"}
+            </p>
           </div>
         )}
       </div>

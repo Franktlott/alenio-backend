@@ -210,8 +210,8 @@ export function EnterpriseShellLayout() {
     activeNav === "team"
       ? "Review goals and what’s next for this teammate."
       : activeNav === "chat"
-        ? teams?.find((team) => team.id === effectiveTeamId)?.name ?? "Messages"
-      : enterpriseNavTitle(activeNav);
+        ? undefined
+        : enterpriseNavTitle(activeNav);
   const hasNoTeams = teams !== null && teams.length === 0;
   const isSettingsRoute =
     location.pathname.startsWith("/settings") || location.pathname.startsWith("/profile");
