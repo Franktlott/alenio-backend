@@ -1,1 +1,10 @@
 node_modules
+
+# Local tooling / editor state
+.cursor/
+
+# Expo generated dev state & logs (can contain env dumps)
+**/.expo/
+
+# Firebase local cache
+.firebase/
