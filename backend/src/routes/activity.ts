@@ -183,6 +183,24 @@ function isRecognitionTypeKey(value: string): value is RecognitionTypeKey {
   return (RECOGNITION_TYPE_KEYS as readonly string[]).includes(value);
 }
 
+/** Map Chat Activity celebration keys onto Recognition’s five types for analytics. */
+function normalizeRecognitionType(value: string): RecognitionTypeKey | "other" {
+  if (isRecognitionTypeKey(value)) return value;
+  const legacy: Record<string, RecognitionTypeKey> = {
+    beyond: "beyond",
+    teamplayer: "teamwork",
+    mvp: "leadership",
+    rockstar: "leadership",
+    clutch: "leadership",
+    onfire: "beyond",
+    shoutout: "customer_service",
+    grateful: "teamwork",
+    bigbrain: "operational_excellence",
+    milestone: "leadership",
+  };
+  return legacy[value] ?? "other";
+}
+
 function parseActivityMetadata(raw: string | null): Record<string, unknown> | null {
   if (!raw) return null;
   try {
@@ -351,20 +369,21 @@ activityRouter.get("/:teamId/recognitions", async (c) => {
     other: 0,
   };
   for (const item of breakdownSource) {
-    if (isRecognitionTypeKey(item.celebrationType)) {
-      breakdownCounts[item.celebrationType] += 1;
-    } else {
-      breakdownCounts.other += 1;
-    }
+    const key = normalizeRecognitionType(item.celebrationType);
+    breakdownCounts[key] += 1;
   }
 
   let feedSource =
     range === "30d" ? last30 : range === "all" ? parsed : thisMonth;
   if (typeFilter && typeFilter !== "all") {
     if (typeFilter === "other") {
-      feedSource = feedSource.filter((i) => !isRecognitionTypeKey(i.celebrationType));
+      feedSource = feedSource.filter((i) => normalizeRecognitionType(i.celebrationType) === "other");
     } else {
-      feedSource = feedSource.filter((i) => i.celebrationType === typeFilter);
+      feedSource = feedSource.filter(
+        (i) =>
+          i.celebrationType === typeFilter ||
+          normalizeRecognitionType(i.celebrationType) === typeFilter,
+      );
     }
   }
 
