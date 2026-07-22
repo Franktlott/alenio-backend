@@ -45,6 +45,7 @@ export type AdminOrganizationRow = {
   slug: string;
   status: string;
   accountType?: string;
+  workspaceLimit?: number;
   ssoRequired: boolean;
   createdAt: string;
   workspaceCount: number;
@@ -62,6 +63,7 @@ export type AdminOrganizationDetail = {
   slug: string;
   status: string;
   accountType?: string;
+  workspaceLimit?: number;
   ssoRequired: boolean;
   createdAt: string;
   updatedAt: string;
@@ -157,6 +159,7 @@ export async function createAdminOrganization(body: {
   ownerPassword?: string;
   initialWorkspaceName?: string;
   plan?: "free" | "team" | "pro" | "operations";
+  workspaceLimit?: number;
 }): Promise<{
   organization: AdminOrganizationDetail;
   welcomeEmail: { sent: boolean; error?: string; kind?: "signup" | "welcome" } | null;
@@ -169,6 +172,17 @@ export async function createAdminOrganization(body: {
     organization: normalizeCreatedAt(res.data),
     welcomeEmail: res.welcomeEmail ?? null,
   };
+}
+
+export async function updateAdminOrganizationWorkspaceLimit(
+  organizationId: string,
+  workspaceLimit: number,
+): Promise<AdminOrganizationDetail> {
+  const res = await apiPatchJson<{ data: AdminOrganizationDetail }>(
+    `/api/admin/organizations/${encodeURIComponent(organizationId)}/workspace-limit`,
+    { workspaceLimit },
+  );
+  return normalizeCreatedAt(res.data);
 }
 
 export async function attachAdminOrganizationTeam(

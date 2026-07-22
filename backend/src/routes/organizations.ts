@@ -19,6 +19,7 @@ import { exchangeOktaAuthorizationCode, fetchOktaUserClaims } from "../lib/okta-
 import { completeOktaSsoLogin } from "../lib/okta-sso-login";
 import { webAuthCallbackUrl, webPublicBaseUrl } from "../lib/web-public-url";
 import { generateScimBearerToken, toPublicScimConfig } from "../lib/scim-config";
+import { createOrganizationWorkspace } from "../lib/enterprise-org-access";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -230,6 +231,58 @@ organizationsRouter.get("/for-team/:teamId", authGuard, async (c) => {
     },
   });
 });
+
+organizationsRouter.post(
+  "/:organizationId/workspaces",
+  authGuard,
+  zValidator(
+    "json",
+    z.object({
+      name: z.string().trim().min(2).max(200),
+      plan: z.enum(["free", "team", "pro", "operations"]).optional(),
+    }),
+  ),
+  async (c) => {
+    const user = c.get("user")!;
+    const { organizationId } = c.req.param();
+    const body = c.req.valid("json");
+    const result = await createOrganizationWorkspace({
+      organizationId,
+      userId: user.id,
+      name: body.name,
+      plan: body.plan,
+    });
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") {
+        return c.json(
+          { error: { message: "Only enterprise org owners can create workspaces.", code: result.code } },
+          403,
+        );
+      }
+      if (result.code === "NOT_FOUND") {
+        return c.json({ error: { message: "Enterprise customer not found.", code: result.code } }, 404);
+      }
+      if (result.code === "WORKSPACE_LIMIT") {
+        return c.json(
+          {
+            error: {
+              message: `Workspace limit reached (${result.workspaceCount}/${result.workspaceLimit}). Contact Alenio to increase your cap.`,
+              code: result.code,
+              workspaceLimit: result.workspaceLimit,
+              workspaceCount: result.workspaceCount,
+            },
+          },
+          409,
+        );
+      }
+      if (result.code === "TEAM_NAME_TAKEN") {
+        return c.json({ error: { message: "A workspace with this name already exists.", code: result.code } }, 409);
+      }
+      return c.json({ error: { message: "Could not create workspace.", code: result.code } }, 400);
+    }
+    return c.json({ data: result }, 201);
+  },
+);
 
 organizationsRouter.put(
   "/:organizationId/sso/okta",

@@ -193,6 +193,9 @@ export type WebEnterpriseOrganization = {
   slug: string;
   accountType: string;
   role: string;
+  workspaceLimit?: number;
+  workspaceCount?: number;
+  canCreateWorkspaces?: boolean;
   teams: Array<{
     id: string;
     name: string;
@@ -742,6 +745,19 @@ export function redeemEnterpriseInvite(token: string) {
   return apiPostJson<{
     data: { organizationId: string; organizationName: string; teamId: string | null };
   }>("/api/enterprise-invites/redeem", { token }).then((r) => r.data);
+}
+
+export function createEnterpriseOrganizationWorkspace(
+  organizationId: string,
+  body: { name: string; plan?: "free" | "team" | "pro" | "operations" },
+) {
+  return apiPostJson<{
+    data: {
+      team: { id: string; name: string; inviteCode: string; hasGoFeatures: boolean };
+      workspaceLimit: number;
+      workspaceCount: number;
+    };
+  }>(`/api/organizations/${encodeURIComponent(organizationId)}/workspaces`, body).then((r) => r.data);
 }
 
 export function inviteMemberByEmail(teamId: string, email: string) {

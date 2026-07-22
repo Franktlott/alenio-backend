@@ -119,6 +119,8 @@ model Organization {
    * "workspace" = SSO/SCIM shell created from a normal workspace (not a contract customer).
    */
   accountType   String   @default("enterprise")
+  /** Max workspaces this enterprise customer may create (set by Alenio). */
+  workspaceLimit Int      @default(5)
   /** When true, users on verified org domains must use this org's SSO (not password / shared Microsoft). */
   ssoRequired   Boolean  @default(false)
   /** Optional workspace new SSO users join first. */

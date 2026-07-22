@@ -16,6 +16,7 @@ import {
   deleteAdminOrganization,
   getAdminOrganization,
   listAdminOrganizations,
+  updateAdminOrganizationWorkspaceLimit,
 } from "../lib/admin-organizations";
 import { adminGuard } from "../middleware/admin-guard";
 import { prisma } from "../prisma";
@@ -498,6 +499,7 @@ adminApiRouter.post(
       ownerPassword: z.string().min(8).max(128).optional(),
       initialWorkspaceName: z.string().trim().min(2).max(200).optional(),
       plan: z.enum(["free", "team", "pro", "operations"]).optional(),
+      workspaceLimit: z.number().int().min(1).max(500).optional(),
     }),
   ),
   async (c) => {
@@ -587,12 +589,61 @@ adminApiRouter.post(
             409,
           );
         }
+        if (result.code === "WORKSPACE_LIMIT") {
+          return c.json(
+            {
+              error: {
+                message: `This customer is at their workspace cap (${result.workspaceLimit}). Raise the limit first.`,
+                code: result.code,
+              },
+            },
+            409,
+          );
+        }
         return c.json({ error: { message: "Could not attach workspace", code: "ATTACH_FAILED" } }, 400);
       }
       return c.json({ data: result.organization });
     } catch (err) {
       console.error("[admin] attach team failed:", err);
       return c.json({ error: { message: "Could not attach workspace", code: "ATTACH_FAILED" } }, 500);
+    }
+  },
+);
+
+adminApiRouter.patch(
+  "/organizations/:organizationId/workspace-limit",
+  zValidator(
+    "json",
+    z.object({
+      workspaceLimit: z.number().int().min(1).max(500),
+    }),
+  ),
+  async (c) => {
+    const { organizationId } = c.req.param();
+    const { workspaceLimit } = c.req.valid("json");
+    try {
+      const result = await updateAdminOrganizationWorkspaceLimit(organizationId, workspaceLimit);
+      if (!result.ok) {
+        if (result.code === "NOT_FOUND") {
+          return c.json({ error: { message: "Enterprise customer not found", code: result.code } }, 404);
+        }
+        if (result.code === "LIMIT_BELOW_USAGE") {
+          return c.json(
+            {
+              error: {
+                message: `Limit cannot be below current workspace count (${result.workspaceCount}).`,
+                code: result.code,
+              },
+            },
+            400,
+          );
+        }
+        return c.json({ error: { message: "Could not update workspace limit", code: "UPDATE_FAILED" } }, 400);
+      }
+      return c.json({ data: result.organization });
+    } catch (err) {
+      console.error("[admin] update workspace limit failed:", err);
+      return c.json({ error: { message: "Could not update workspace limit", code: "UPDATE_FAILED" } }, 500);
     }
   },
 );

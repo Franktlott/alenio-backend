@@ -1,7 +1,9 @@
 import { prisma } from "../prisma";
+import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "./team-name";
 
 const ORG_GO_ADMIN_ROLES = new Set(["org_owner", "org_admin"]);
 const PAID_ACTIVE_STATUSES = ["active", "trialing", "past_due", "incomplete", "paused"] as const;
+const DEFAULT_WORKSPACE_LIMIT = 5;
 
 function subscriptionHasGoFeatures(sub: { plan: string; status: string } | null | undefined): boolean {
   const plan = (sub?.plan ?? "free").trim().toLowerCase();
@@ -10,12 +12,19 @@ function subscriptionHasGoFeatures(sub: { plan: string; status: string } | null 
   return (PAID_ACTIVE_STATUSES as readonly string[]).includes(status);
 }
 
+function generateInviteCode(): string {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
 export type EnterpriseOrgForUser = {
   id: string;
   name: string;
   slug: string;
   accountType: string;
   role: string;
+  workspaceLimit: number;
+  workspaceCount: number;
+  canCreateWorkspaces: boolean;
   teams: Array<{
     id: string;
     name: string;
@@ -39,6 +48,7 @@ export async function listEnterpriseOrganizationsForUser(userId: string): Promis
           slug: true,
           accountType: true,
           status: true,
+          workspaceLimit: true,
           teams: {
             orderBy: { name: "asc" },
             select: {
@@ -56,19 +66,28 @@ export async function listEnterpriseOrganizationsForUser(userId: string): Promis
 
   return memberships
     .filter((m) => m.organization.status === "active")
-    .map((m) => ({
-      id: m.organization.id,
-      name: m.organization.name,
-      slug: m.organization.slug,
-      accountType: m.organization.accountType || "enterprise",
-      role: m.role,
-      teams: m.organization.teams.map((t) => ({
-        id: t.id,
-        name: t.name,
-        inviteCode: t.inviteCode,
-        hasGoFeatures: subscriptionHasGoFeatures(t.subscription),
-      })),
-    }));
+    .map((m) => {
+      const workspaceLimit = m.organization.workspaceLimit ?? DEFAULT_WORKSPACE_LIMIT;
+      const workspaceCount = m.organization.teams.length;
+      const canCreateWorkspaces =
+        ORG_GO_ADMIN_ROLES.has(m.role) && workspaceCount < workspaceLimit;
+      return {
+        id: m.organization.id,
+        name: m.organization.name,
+        slug: m.organization.slug,
+        accountType: m.organization.accountType || "enterprise",
+        role: m.role,
+        workspaceLimit,
+        workspaceCount,
+        canCreateWorkspaces,
+        teams: m.organization.teams.map((t) => ({
+          id: t.id,
+          name: t.name,
+          inviteCode: t.inviteCode,
+          hasGoFeatures: subscriptionHasGoFeatures(t.subscription),
+        })),
+      };
+    });
 }
 
 /** Org owner/admin can manage Alenio Go for any workspace linked to their enterprise org. */
@@ -95,4 +114,123 @@ export async function userCanManageEnterpriseOrgTeam(
   });
   if (!membership) return false;
   return ORG_GO_ADMIN_ROLES.has(membership.role);
+}
+
+/**
+ * Enterprise org owner/admin creates a workspace under their org (subject to Alenio-set cap).
+ * New workspaces get Operations features by default for Go.
+ */
+export async function createOrganizationWorkspace(input: {
+  organizationId: string;
+  userId: string;
+  name: string;
+  plan?: string;
+}) {
+  const membership = await prisma.organizationMembership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId: input.organizationId,
+        userId: input.userId,
+      },
+    },
+    select: { role: true },
+  });
+  if (!membership || !ORG_GO_ADMIN_ROLES.has(membership.role)) {
+    return { ok: false as const, code: "FORBIDDEN" as const };
+  }
+
+  const org = await prisma.organization.findUnique({
+    where: { id: input.organizationId },
+    select: {
+      id: true,
+      name: true,
+      accountType: true,
+      status: true,
+      workspaceLimit: true,
+      defaultTeamId: true,
+      _count: { select: { teams: true } },
+    },
+  });
+  if (!org || org.accountType !== "enterprise" || org.status !== "active") {
+    return { ok: false as const, code: "NOT_FOUND" as const };
+  }
+
+  const limit = org.workspaceLimit ?? DEFAULT_WORKSPACE_LIMIT;
+  if (org._count.teams >= limit) {
+    return {
+      ok: false as const,
+      code: "WORKSPACE_LIMIT" as const,
+      workspaceLimit: limit,
+      workspaceCount: org._count.teams,
+    };
+  }
+
+  const teamName = normalizeTeamName(input.name);
+  if (!teamName) return { ok: false as const, code: "VALIDATION" as const };
+  if (await isTeamDisplayNameTaken(teamName)) {
+    return { ok: false as const, code: "TEAM_NAME_TAKEN" as const };
+  }
+
+  const planRaw = (input.plan ?? "operations").trim().toLowerCase();
+  const plan = planRaw === "pro" ? "team" : planRaw;
+  if (!["free", "team", "operations"].includes(plan)) {
+    return { ok: false as const, code: "VALIDATION" as const };
+  }
+
+  let inviteCode = generateInviteCode();
+  while (await prisma.team.findUnique({ where: { inviteCode } })) {
+    inviteCode = generateInviteCode();
+  }
+
+  try {
+    const team = await prisma.$transaction(async (tx) => {
+      const created = await tx.team.create({
+        data: {
+          name: teamName,
+          inviteCode,
+          organizationId: org.id,
+          members: { create: { userId: input.userId, role: "owner" } },
+        },
+      });
+      await tx.teamSubscription.create({
+        data: { teamId: created.id, plan, status: "active" },
+      });
+      if (!org.defaultTeamId) {
+        await tx.organization.update({
+          where: { id: org.id },
+          data: { defaultTeamId: created.id },
+        });
+      }
+      return created;
+    });
+
+    const owner = await prisma.user.findUnique({
+      where: { id: input.userId },
+      select: { name: true },
+    });
+    const { notifyAdminsNewWorkspace } = await import("./admin-push");
+    void notifyAdminsNewWorkspace({
+      id: team.id,
+      name: team.name,
+      ownerName: owner?.name ?? null,
+    }).catch((err) => console.warn("[enterprise-org] workspace push failed", err));
+
+    return {
+      ok: true as const,
+      team: {
+        id: team.id,
+        name: team.name,
+        inviteCode: team.inviteCode,
+        hasGoFeatures: plan === "operations",
+      },
+      workspaceLimit: limit,
+      workspaceCount: org._count.teams + 1,
+    };
+  } catch (err) {
+    if (isPrismaUniqueOnName(err)) {
+      return { ok: false as const, code: "TEAM_NAME_TAKEN" as const };
+    }
+    console.error("[enterprise-org] create workspace failed:", err);
+    return { ok: false as const, code: "CREATE_FAILED" as const };
+  }
 }

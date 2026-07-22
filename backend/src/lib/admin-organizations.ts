@@ -14,6 +14,7 @@ export type AdminOrganizationRow = {
   status: string;
   /** Always "enterprise" — Organization rows are contract customers, not Stripe self-serve. */
   accountType: string;
+  workspaceLimit: number;
   ssoRequired: boolean;
   createdAt: Date;
   workspaceCount: number;
@@ -50,6 +51,7 @@ export async function listAdminOrganizations(): Promise<AdminOrganizationRow[]> 
     slug: org.slug,
     status: org.status,
     accountType: org.accountType || "enterprise",
+    workspaceLimit: org.workspaceLimit ?? 5,
     ssoRequired: org.ssoRequired,
     createdAt: org.createdAt,
     workspaceCount: org._count.teams,
@@ -119,9 +121,15 @@ export async function createAdminOrganization(input: {
   ownerPassword?: string;
   initialWorkspaceName?: string;
   plan?: string;
+  workspaceLimit?: number;
 }) {
   const name = input.name.trim().slice(0, 120);
   if (name.length < 2) return { ok: false as const, code: "VALIDATION" as const };
+
+  const workspaceLimit = Math.min(
+    500,
+    Math.max(1, Math.floor(input.workspaceLimit ?? 5)),
+  );
 
   const domain = input.domain ? normalizeEmailDomain(input.domain) : null;
   if (input.domain && !domain) return { ok: false as const, code: "INVALID_DOMAIN" as const };
@@ -187,6 +195,7 @@ export async function createAdminOrganization(input: {
         slug,
         status: "active",
         accountType: "enterprise",
+        workspaceLimit,
         defaultTeamId: createdWorkspace?.id ?? null,
         ...(domain
           ? {
@@ -258,8 +267,16 @@ export async function createAdminOrganization(input: {
 }
 
 export async function attachTeamToOrganization(organizationId: string, teamId: string) {
-  const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, defaultTeamId: true } });
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { id: true, defaultTeamId: true, workspaceLimit: true, _count: { select: { teams: true } } },
+  });
   if (!org) return { ok: false as const, code: "ORG_NOT_FOUND" as const };
+
+  const limit = org.workspaceLimit ?? 5;
+  if (org._count.teams >= limit) {
+    return { ok: false as const, code: "WORKSPACE_LIMIT" as const, workspaceLimit: limit };
+  }
 
   const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, organizationId: true } });
   if (!team) return { ok: false as const, code: "TEAM_NOT_FOUND" as const };
@@ -279,6 +296,34 @@ export async function attachTeamToOrganization(organizationId: string, teamId: s
     });
   }
 
+  const detail = await getAdminOrganization(organizationId);
+  return { ok: true as const, organization: detail! };
+}
+
+export async function updateAdminOrganizationWorkspaceLimit(
+  organizationId: string,
+  workspaceLimit: number,
+) {
+  const limit = Math.min(500, Math.max(1, Math.floor(workspaceLimit)));
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { id: true, accountType: true, _count: { select: { teams: true } } },
+  });
+  if (!org || org.accountType !== "enterprise") {
+    return { ok: false as const, code: "NOT_FOUND" as const };
+  }
+  if (limit < org._count.teams) {
+    return {
+      ok: false as const,
+      code: "LIMIT_BELOW_USAGE" as const,
+      workspaceCount: org._count.teams,
+    };
+  }
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: { workspaceLimit: limit },
+  });
   const detail = await getAdminOrganization(organizationId);
   return { ok: true as const, organization: detail! };
 }

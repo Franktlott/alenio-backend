@@ -17,6 +17,7 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
         "slug" TEXT NOT NULL,
         "status" TEXT NOT NULL DEFAULT 'active',
         "accountType" TEXT NOT NULL DEFAULT 'enterprise',
+        "workspaceLimit" INTEGER NOT NULL DEFAULT 5,
         "ssoRequired" BOOLEAN NOT NULL DEFAULT false,
         "defaultTeamId" TEXT,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -27,6 +28,10 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
     await prisma.$executeRawUnsafe(`
       ALTER TABLE public."Organization"
         ADD COLUMN IF NOT EXISTS "accountType" TEXT NOT NULL DEFAULT 'enterprise';
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE public."Organization"
+        ADD COLUMN IF NOT EXISTS "workspaceLimit" INTEGER NOT NULL DEFAULT 5;
     `);
     // Pre-enterprise Okta setup created Organization shells for normal workspaces.
     // Keep those as accountType=workspace so they do not appear as contract customers.

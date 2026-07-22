@@ -7,6 +7,7 @@ import {
   fetchAdminOrganizations,
   formatAdminDate,
   planLabel,
+  updateAdminOrganizationWorkspaceLimit,
   type AdminOrganizationRow,
 } from "../lib/admin-api";
 
@@ -20,6 +21,8 @@ export function AdminEnterpriseCustomersPanel() {
   const [ownerName, setOwnerName] = useState("");
   const [initialWorkspaceName, setInitialWorkspaceName] = useState("");
   const [plan, setPlan] = useState<"free" | "team" | "operations">("operations");
+  const [workspaceLimit, setWorkspaceLimit] = useState(5);
+  const [limitDraft, setLimitDraft] = useState("5");
   const [formError, setFormError] = useState<string | null>(null);
   const [welcomeNotice, setWelcomeNotice] = useState<string | null>(null);
 
@@ -43,6 +46,7 @@ export function AdminEnterpriseCustomersPanel() {
       setOwnerEmail("");
       setOwnerName("");
       setInitialWorkspaceName("");
+      setWorkspaceLimit(5);
       setFormError(null);
       setSelectedId(result.organization.id);
       if (result.welcomeEmail?.sent && result.welcomeEmail.kind === "signup") {
@@ -83,6 +87,18 @@ export function AdminEnterpriseCustomersPanel() {
     },
   });
 
+  const limitMutation = useMutation({
+    mutationFn: ({ id, limit }: { id: string; limit: number }) =>
+      updateAdminOrganizationWorkspaceLimit(id, limit),
+    onSuccess: async () => {
+      setWelcomeNotice("Workspace limit updated.");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
+    },
+    onError: (err) => {
+      setWelcomeNotice(err instanceof Error ? err.message : "Could not update workspace limit.");
+    },
+  });
+
   const rows: AdminOrganizationRow[] = listQuery.data ?? [];
   const detail = detailQuery.data ?? null;
 
@@ -106,6 +122,7 @@ export function AdminEnterpriseCustomersPanel() {
       ...(domain.trim() ? { domain: domain.trim(), markDomainVerified: true } : {}),
       ownerEmail: ownerEmail.trim(),
       ...(ownerName.trim() ? { ownerName: ownerName.trim() } : {}),
+      workspaceLimit,
       ...(initialWorkspaceName.trim()
         ? { initialWorkspaceName: initialWorkspaceName.trim(), plan }
         : {}),
@@ -200,6 +217,23 @@ export function AdminEnterpriseCustomersPanel() {
             data-testid="admin-enterprise-owner-name"
           />
 
+          <label className="auth-label" htmlFor="ent-limit">
+            Workspace cap (Alenio-set)
+          </label>
+          <input
+            id="ent-limit"
+            className="auth-input"
+            type="number"
+            min={1}
+            max={500}
+            value={workspaceLimit}
+            onChange={(e) => setWorkspaceLimit(Math.min(500, Math.max(1, Number(e.target.value) || 1)))}
+            data-testid="admin-enterprise-workspace-limit"
+          />
+          <p className="enterprise-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            How many workspaces this customer can create themselves.
+          </p>
+
           <label className="auth-label" htmlFor="ent-workspace">
             First workspace name (optional)
           </label>
@@ -263,6 +297,7 @@ export function AdminEnterpriseCustomersPanel() {
                   <th>Type</th>
                   <th>Domain</th>
                   <th>Workspaces</th>
+                  <th>Cap</th>
                   <th>SSO</th>
                   <th>SCIM</th>
                   <th>Status</th>
@@ -272,7 +307,7 @@ export function AdminEnterpriseCustomersPanel() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="enterprise-table-empty">
+                    <td colSpan={9} className="enterprise-table-empty">
                       No enterprise customers yet
                     </td>
                   </tr>
@@ -280,7 +315,10 @@ export function AdminEnterpriseCustomersPanel() {
                   rows.map((org) => (
                     <tr
                       key={org.id}
-                      onClick={() => setSelectedId(org.id)}
+                      onClick={() => {
+                        setSelectedId(org.id);
+                        setLimitDraft(String(org.workspaceLimit ?? 5));
+                      }}
                       style={{ cursor: "pointer", background: selectedId === org.id ? "rgba(67,97,238,0.08)" : undefined }}
                       data-testid={`admin-enterprise-row-${org.id}`}
                     >
@@ -306,6 +344,7 @@ export function AdminEnterpriseCustomersPanel() {
                         )}
                       </td>
                       <td>{org.workspaceCount}</td>
+                      <td>{org.workspaceLimit ?? 5}</td>
                       <td>{org.ssoEnabled ? "On" : "Off"}</td>
                       <td>{org.scimEnabled ? "On" : "Off"}</td>
                       <td>{org.status}</td>
@@ -343,6 +382,37 @@ export function AdminEnterpriseCustomersPanel() {
                     <div>
                       <dt>Default workspace</dt>
                       <dd>{detail.defaultTeam?.name ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Workspace cap</dt>
+                      <dd>
+                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                          <input
+                            className="auth-input"
+                            style={{ width: 88, margin: 0 }}
+                            type="number"
+                            min={1}
+                            max={500}
+                            value={limitDraft}
+                            onChange={(e) => setLimitDraft(e.target.value)}
+                            data-testid="admin-enterprise-detail-limit"
+                          />
+                          <button
+                            type="button"
+                            className="enterprise-team-btn-outline"
+                            disabled={limitMutation.isPending}
+                            onClick={() => {
+                              const next = Math.min(500, Math.max(1, Number(limitDraft) || 1));
+                              limitMutation.mutate({ id: detail.id, limit: next });
+                            }}
+                          >
+                            Save cap
+                          </button>
+                        </div>
+                        <span className="enterprise-muted" style={{ fontSize: 12 }}>
+                          {detail.teams.length} in use
+                        </span>
+                      </dd>
                     </div>
                     <div>
                       <dt>SSO</dt>
