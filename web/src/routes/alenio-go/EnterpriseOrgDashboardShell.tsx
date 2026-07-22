@@ -1,9 +1,16 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useEnterpriseOrgGo } from "./enterprise-org-go-context";
+import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import { useEnterpriseOrgGoOptional } from "./enterprise-org-go-context";
 
 /** Main Dashboard area: Overview + Corporate Workspaces (not corporate standards). */
 export function EnterpriseOrgDashboardShell() {
-  const { organizationName } = useEnterpriseOrgGo();
+  const ctx = useEnterpriseOrgGoOptional();
+
+  if (!ctx) {
+    return <EnterprisePageLoading label="Loading your enterprise dashboard" />;
+  }
+
+  const { organizationName } = ctx;
 
   return (
     <div className="enterprise-org-dashboard" data-testid="enterprise-org-dashboard-shell">
@@ -41,7 +48,8 @@ export function EnterpriseOrgDashboardShell() {
         </div>
       </header>
       <div className="enterprise-org-dashboard-body">
-        <Outlet />
+        {/* Re-pass org context — nested Outlets do not inherit parent context. */}
+        <Outlet context={ctx} />
       </div>
     </div>
   );

@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import { fetchOrgGoOverview } from "../../lib/api";
-import { useEnterpriseOrgGo } from "./enterprise-org-go-context";
+import { useEnterpriseOrgGoOptional } from "./enterprise-org-go-context";
 
 export function EnterpriseOrgGoOverviewPage() {
-  const { organizationId } = useEnterpriseOrgGo();
+  const ctx = useEnterpriseOrgGoOptional();
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchOrgGoOverview>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!ctx?.organizationId) return;
     let cancelled = false;
-    void fetchOrgGoOverview(organizationId)
+    void fetchOrgGoOverview(ctx.organizationId)
       .then((d) => {
         if (!cancelled) setData(d);
       })
@@ -20,7 +22,11 @@ export function EnterpriseOrgGoOverviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [organizationId]);
+  }, [ctx?.organizationId]);
+
+  if (!ctx) {
+    return <EnterprisePageLoading label="Loading your enterprise dashboard" />;
+  }
 
   return (
     <div className="enterprise-org-go-page" data-testid="enterprise-org-go-overview">

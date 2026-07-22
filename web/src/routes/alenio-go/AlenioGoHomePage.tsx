@@ -14,11 +14,15 @@ export function AlenioGoHomePage() {
   const ctx = useAlenioGoShell();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { me } = useEnterpriseShell();
+  const { me, teams } = useEnterpriseShell();
   const org = primaryEnterpriseOrg(me);
   const orgTeams = useMemo(() => enterpriseOrgTeams(me), [me]);
   const enterpriseAdmin = isEnterpriseOrgAdmin(me);
   const workspaceParam = (params.get("teamId") ?? "").trim();
+
+  if (me === undefined || teams === null) {
+    return null;
+  }
 
   /** Org admins without a workspace selected land on corporate Alenio Go. */
   if (enterpriseAdmin && org && !workspaceParam) {

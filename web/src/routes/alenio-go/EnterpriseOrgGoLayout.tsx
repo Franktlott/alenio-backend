@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { AlenioGoLogo } from "../../components/AlenioGoLogo";
-import { useEnterpriseOrgGo } from "./enterprise-org-go-context";
+import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import { useEnterpriseOrgGoOptional } from "./enterprise-org-go-context";
 
 const NAV: Array<{ to: string; label: string; soon?: boolean }> = [
   { to: "/go/org/modules", label: "Modules" },
@@ -14,7 +15,13 @@ const NAV: Array<{ to: string; label: string; soon?: boolean }> = [
 
 /** Corporate standards chrome (modules, library, etc.) — workspaces live on the Dashboard. */
 export function EnterpriseOrgGoLayout() {
-  const { organizationName } = useEnterpriseOrgGo();
+  const ctx = useEnterpriseOrgGoOptional();
+
+  if (!ctx) {
+    return <EnterprisePageLoading label="Loading corporate standards" />;
+  }
+
+  const { organizationName } = ctx;
 
   return (
     <div className="enterprise-org-go" data-testid="enterprise-org-go-layout">
@@ -27,10 +34,7 @@ export function EnterpriseOrgGoLayout() {
           </div>
         </div>
         <nav className="enterprise-org-go-nav-links">
-          <NavLink
-            to="/go/org/overview"
-            className="enterprise-org-go-link enterprise-org-go-link--back"
-          >
+          <NavLink to="/go/org/overview" className="enterprise-org-go-link enterprise-org-go-link--back">
             ← Dashboard
           </NavLink>
           {NAV.map((item) => (
@@ -48,7 +52,7 @@ export function EnterpriseOrgGoLayout() {
         </nav>
       </aside>
       <div className="enterprise-org-go-main">
-        <Outlet />
+        <Outlet context={ctx} />
       </div>
     </div>
   );
