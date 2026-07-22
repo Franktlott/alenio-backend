@@ -4,7 +4,7 @@ import { fetchOrgGoOverview } from "../../lib/api";
 import { useEnterpriseOrgGo } from "./enterprise-org-go-context";
 
 export function EnterpriseOrgGoOverviewPage() {
-  const { organizationId, organizationName } = useEnterpriseOrgGo();
+  const { organizationId } = useEnterpriseOrgGo();
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchOrgGoOverview>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -26,10 +26,9 @@ export function EnterpriseOrgGoOverviewPage() {
     <div className="enterprise-org-go-page" data-testid="enterprise-org-go-overview">
       <header className="enterprise-org-go-page-head">
         <div>
-          <p className="enterprise-org-go-eyebrow">Alenio Go · Organization</p>
-          <h1>Overview</h1>
-          <p className="enterprise-muted">
-            Corporate standards for {organizationName}. Assign modules once, configure locally at each workspace.
+          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Overview</h2>
+          <p className="enterprise-muted" style={{ margin: "0.35rem 0 0" }}>
+            Assign modules once under Corporate standards, then configure locally at each workspace.
           </p>
         </div>
       </header>
@@ -38,7 +37,7 @@ export function EnterpriseOrgGoOverviewPage() {
 
       <div className="enterprise-org-go-stats">
         <div className="enterprise-card enterprise-org-go-stat">
-          <span className="enterprise-muted">Workspaces</span>
+          <span className="enterprise-muted">Corporate workspaces</span>
           <strong>{data?.workspaceCount ?? "—"}</strong>
         </div>
         <div className="enterprise-card enterprise-org-go-stat">
@@ -56,14 +55,11 @@ export function EnterpriseOrgGoOverviewPage() {
       </div>
 
       <div className="enterprise-org-go-actions">
-        <Link to="/go/org/modules" className="auth-submit">
-          Manage modules
+        <Link to="/go/org/modules" className="enterprise-team-btn-outline" style={{ width: "auto" }}>
+          Corporate standards
         </Link>
-        <Link to="/go/org/library" className="enterprise-team-btn-outline">
-          Item library
-        </Link>
-        <Link to="/go/org/workspaces" className="enterprise-team-btn-outline">
-          Workspaces
+        <Link to="/go/org/workspaces" className="enterprise-team-btn-outline" style={{ width: "auto" }}>
+          Corporate Workspaces
         </Link>
       </div>
     </div>

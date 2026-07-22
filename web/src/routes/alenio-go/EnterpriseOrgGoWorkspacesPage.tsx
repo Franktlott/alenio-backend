@@ -31,9 +31,8 @@ export function EnterpriseOrgGoWorkspacesPage() {
     <div className="enterprise-org-go-page" data-testid="enterprise-org-go-workspaces">
       <header className="enterprise-org-go-page-head">
         <div>
-          <p className="enterprise-org-go-eyebrow">Organization</p>
-          <h1>Workspaces</h1>
-          <p className="enterprise-muted">
+          <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Corporate Workspaces</h2>
+          <p className="enterprise-muted" style={{ margin: "0.35rem 0 0" }}>
             Create and manage store workspaces. Click a row to open Go and configure assigned modules.
           </p>
         </div>

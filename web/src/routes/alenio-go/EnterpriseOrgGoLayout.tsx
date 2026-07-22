@@ -1,10 +1,8 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { AlenioGoLogo } from "../../components/AlenioGoLogo";
-import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
-import { primaryEnterpriseOrg } from "../../lib/enterprise-org";
+import { useEnterpriseOrgGo } from "./enterprise-org-go-context";
 
-const NAV: Array<{ to: string; label: string; end?: boolean; soon?: boolean }> = [
-  { to: "/go/org/overview", label: "Overview", end: true },
+const NAV: Array<{ to: string; label: string; soon?: boolean }> = [
   { to: "/go/org/modules", label: "Modules" },
   { to: "/go/org/library", label: "Item Library" },
   { to: "/go/org/templates", label: "Templates", soon: true },
@@ -12,37 +10,33 @@ const NAV: Array<{ to: string; label: string; end?: boolean; soon?: boolean }> =
   { to: "/go/org/devices", label: "Devices", soon: true },
   { to: "/go/org/policies", label: "Policies", soon: true },
   { to: "/go/org/reports", label: "Reports", soon: true },
-  { to: "/go/org/workspaces", label: "Workspaces" },
 ];
 
+/** Corporate standards chrome (modules, library, etc.) — workspaces live on the Dashboard. */
 export function EnterpriseOrgGoLayout() {
-  const { me } = useEnterpriseShell();
-  const org = primaryEnterpriseOrg(me);
-
-  if (!org) {
-    return (
-      <div className="enterprise-tab-shell" style={{ padding: "1.5rem" }}>
-        <p className="enterprise-muted">No enterprise organization found.</p>
-      </div>
-    );
-  }
+  const { organizationName } = useEnterpriseOrgGo();
 
   return (
     <div className="enterprise-org-go" data-testid="enterprise-org-go-layout">
-      <aside className="enterprise-org-go-nav" aria-label="Organization Alenio Go">
+      <aside className="enterprise-org-go-nav" aria-label="Corporate standards">
         <div className="enterprise-org-go-nav-brand">
           <AlenioGoLogo />
           <div>
             <p className="enterprise-org-go-eyebrow">Corporate standards</p>
-            <strong>{org.name}</strong>
+            <strong>{organizationName}</strong>
           </div>
         </div>
         <nav className="enterprise-org-go-nav-links">
+          <NavLink
+            to="/go/org/overview"
+            className="enterprise-org-go-link enterprise-org-go-link--back"
+          >
+            ← Dashboard
+          </NavLink>
           {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.end}
               className={({ isActive }) =>
                 `enterprise-org-go-link${isActive ? " is-active" : ""}${item.soon ? " is-soon" : ""}`
               }
@@ -54,7 +48,7 @@ export function EnterpriseOrgGoLayout() {
         </nav>
       </aside>
       <div className="enterprise-org-go-main">
-        <Outlet context={{ organizationId: org.id, organizationName: org.name, org }} />
+        <Outlet />
       </div>
     </div>
   );

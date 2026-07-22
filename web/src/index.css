@@ -55061,3 +55061,34 @@ a.go-mod-btn {
     grid-template-columns: 1fr;
   }
 }
+
+.enterprise-org-dashboard {
+  padding: 1.5rem 1.75rem 2rem;
+  min-width: 0;
+}
+.enterprise-org-dashboard-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.enterprise-org-dashboard-body {
+  min-width: 0;
+}
+.enterprise-org-go-link--back {
+  margin-bottom: 0.5rem;
+  color: #94a3b8 !important;
+  font-weight: 600;
+}
+.enterprise-org-go-link--back:hover {
+  color: #fff !important;
+}
+.enterprise-org-go-actions .enterprise-team-btn-outline,
+.enterprise-org-go-actions a.enterprise-team-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  width: auto;
+}

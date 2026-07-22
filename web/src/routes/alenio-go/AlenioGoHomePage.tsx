@@ -42,7 +42,7 @@ export function AlenioGoHomePage() {
             }}
             data-testid="enterprise-org-go-back"
           >
-            ← {org.name} workspaces
+            ← {org.name} Corporate Workspaces
           </button>
         </div>
       ) : null}

@@ -18,7 +18,7 @@ export function EnterpriseOrgGoStubPage({ title }: Props) {
       </header>
       <div className="enterprise-card" style={{ padding: "1.25rem" }}>
         <p className="enterprise-muted" style={{ margin: 0 }}>
-          Use Overview, Modules, Item Library, and Workspaces for corporate standards today.
+          Use Modules and Item Library for corporate standards. Manage stores from Dashboard → Corporate Workspaces.
         </p>
       </div>
     </div>
