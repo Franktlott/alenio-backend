@@ -6,8 +6,12 @@ import type { PrismaClient } from "@prisma/client";
  */
 export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<void> {
   try {
+    // Prod DB URLs often set search_path=neon_auth,public for Better Auth.
+    // Organization tables must live in public for the app Prisma client.
+    await prisma.$executeRawUnsafe(`SET search_path TO public`);
+
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Organization" (
+      CREATE TABLE IF NOT EXISTS public."Organization" (
         "id" TEXT NOT NULL,
         "name" TEXT NOT NULL,
         "slug" TEXT NOT NULL,
@@ -164,7 +168,7 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
     `);
 
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "OrganizationScimConfig" (
+      CREATE TABLE IF NOT EXISTS public."OrganizationScimConfig" (
         "id" TEXT NOT NULL,
         "organizationId" TEXT NOT NULL,
         "enabled" BOOLEAN NOT NULL DEFAULT false,
@@ -177,19 +181,19 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
     `);
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "OrganizationScimConfig_organizationId_key"
-      ON "OrganizationScimConfig"("organizationId");
+      ON public."OrganizationScimConfig"("organizationId");
     `);
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
-        ALTER TABLE "OrganizationScimConfig"
+        ALTER TABLE public."OrganizationScimConfig"
           ADD CONSTRAINT "OrganizationScimConfig_organizationId_fkey"
-          FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+          FOREIGN KEY ("organizationId") REFERENCES public."Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);
 
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "OrganizationScimUser" (
+      CREATE TABLE IF NOT EXISTS public."OrganizationScimUser" (
         "id" TEXT NOT NULL,
         "organizationId" TEXT NOT NULL,
         "userId" TEXT NOT NULL,
@@ -205,32 +209,32 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
     `);
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "OrganizationScimUser_organizationId_userName_key"
-      ON "OrganizationScimUser"("organizationId", "userName");
+      ON public."OrganizationScimUser"("organizationId", "userName");
     `);
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "OrganizationScimUser_organizationId_userId_key"
-      ON "OrganizationScimUser"("organizationId", "userId");
+      ON public."OrganizationScimUser"("organizationId", "userId");
     `);
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "OrganizationScimUser_organizationId_active_idx"
-      ON "OrganizationScimUser"("organizationId", "active");
+      ON public."OrganizationScimUser"("organizationId", "active");
     `);
     await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS "OrganizationScimUser_userId_idx" ON "OrganizationScimUser"("userId");
+      CREATE INDEX IF NOT EXISTS "OrganizationScimUser_userId_idx" ON public."OrganizationScimUser"("userId");
     `);
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
-        ALTER TABLE "OrganizationScimUser"
+        ALTER TABLE public."OrganizationScimUser"
           ADD CONSTRAINT "OrganizationScimUser_organizationId_fkey"
-          FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+          FOREIGN KEY ("organizationId") REFERENCES public."Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
-        ALTER TABLE "OrganizationScimUser"
+        ALTER TABLE public."OrganizationScimUser"
           ADD CONSTRAINT "OrganizationScimUser_userId_fkey"
-          FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+          FOREIGN KEY ("userId") REFERENCES public."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);

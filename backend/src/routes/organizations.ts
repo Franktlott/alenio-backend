@@ -65,11 +65,27 @@ async function loadOrgSsoBundle(organizationId: string) {
     where: { id: organizationId },
     include: {
       ssoConfig: true,
-      scimConfig: true,
       domains: { orderBy: { createdAt: "asc" }, take: 1 },
     },
   });
-  return org;
+  if (!org) return null;
+
+  let scimConfig: {
+    id: string;
+    organizationId: string;
+    enabled: boolean;
+    tokenHash: string | null;
+    tokenPrefix: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null = null;
+  try {
+    scimConfig = await prisma.organizationScimConfig.findUnique({ where: { organizationId } });
+  } catch (err) {
+    console.warn("[organizations] scimConfig unavailable (schema may be pending):", err);
+  }
+
+  return { ...org, scimConfig };
 }
 
 /** Ensure workspace has a parent Organization (owner-only). */
@@ -174,12 +190,12 @@ organizationsRouter.get("/for-team/:teamId", authGuard, async (c) => {
     return c.json({ error: { message: "Workspace not found", code: "NOT_FOUND" } }, 404);
   }
   if (!team.organizationId) {
-    return c.json({ data: { team, organization: null, sso: null } });
+    return c.json({ data: { team, organization: null, sso: null, scim: null } });
   }
 
   const org = await loadOrgSsoBundle(team.organizationId);
   if (!org) {
-    return c.json({ data: { team, organization: null, sso: null } });
+    return c.json({ data: { team, organization: null, sso: null, scim: null } });
   }
 
   const canManage = membership.role === "owner" || Boolean(await requireOrgOwner(user.id, org.id));
