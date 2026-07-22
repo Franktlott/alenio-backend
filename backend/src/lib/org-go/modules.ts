@@ -1,4 +1,4 @@
-import { prisma } from "../prisma";
+import { prisma } from "../../prisma";
 import { MODULE_DEFINITIONS } from "../workspace-modules";
 
 const ORG_GO_ADMIN_ROLES = new Set(["org_owner", "org_admin"]);
