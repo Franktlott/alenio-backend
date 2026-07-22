@@ -1,4 +1,4 @@
-import { apiDeleteJson, apiGetJson, apiPatchJson } from "./api";
+import { apiDeleteJson, apiGetJson, apiPatchJson, apiPostJson } from "./api";
 
 export type AdminUserRow = {
   id: string;
@@ -34,6 +34,56 @@ export type AdminTeamRow = {
     stripeCustomerId: string | null;
     currentPeriodEnd: string | null;
   };
+};
+
+export type AdminOrganizationRow = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  ssoRequired: boolean;
+  createdAt: string;
+  workspaceCount: number;
+  memberCount: number;
+  domain: string | null;
+  domainVerified: boolean;
+  ssoEnabled: boolean;
+  scimEnabled: boolean;
+  defaultTeam: { id: string; name: string } | null;
+};
+
+export type AdminOrganizationDetail = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  ssoRequired: boolean;
+  createdAt: string;
+  updatedAt: string;
+  defaultTeam: { id: string; name: string } | null;
+  domains: Array<{ id: string; domain: string; verifiedAt: string | null }>;
+  ssoConfig: {
+    provider: string;
+    protocol: string;
+    enabled: boolean;
+    issuer: string | null;
+    clientId: string | null;
+  } | null;
+  scimConfig: { enabled: boolean; tokenPrefix: string | null } | null;
+  teams: Array<{
+    id: string;
+    name: string;
+    inviteCode: string;
+    createdAt: string;
+    _count: { members: number };
+    subscription: { plan: string; status: string } | null;
+  }>;
+  memberships: Array<{
+    id: string;
+    role: string;
+    joinedAt: string;
+    user: { id: string; name: string; email: string };
+  }>;
 };
 
 function normalizeCreatedAt<T extends { createdAt: string | Date }>(row: T): T & { createdAt: string } {
@@ -73,6 +123,49 @@ export async function deleteAdminUser(id: string): Promise<{ deleted: boolean }>
 export async function fetchAdminTeams(): Promise<AdminTeamRow[]> {
   const res = await apiGetJson<{ data: AdminTeamRow[] }>("/api/admin/teams");
   return (res.data ?? []).map((t) => normalizeCreatedAt(t));
+}
+
+export async function fetchAdminOrganizations(): Promise<AdminOrganizationRow[]> {
+  const res = await apiGetJson<{ data: AdminOrganizationRow[] }>("/api/admin/organizations");
+  return (res.data ?? []).map((o) => normalizeCreatedAt(o));
+}
+
+export async function fetchAdminOrganization(organizationId: string): Promise<AdminOrganizationDetail> {
+  const res = await apiGetJson<{ data: AdminOrganizationDetail }>(
+    `/api/admin/organizations/${encodeURIComponent(organizationId)}`,
+  );
+  return {
+    ...normalizeCreatedAt(res.data),
+    updatedAt:
+      typeof res.data.updatedAt === "string"
+        ? res.data.updatedAt
+        : new Date(res.data.updatedAt as unknown as string).toISOString(),
+  };
+}
+
+export async function createAdminOrganization(body: {
+  name: string;
+  domain?: string;
+  markDomainVerified?: boolean;
+  ownerEmail?: string;
+  ownerName?: string;
+  ownerPassword?: string;
+  initialWorkspaceName?: string;
+  plan?: "free" | "team" | "pro" | "operations";
+}): Promise<AdminOrganizationDetail> {
+  const res = await apiPostJson<{ data: AdminOrganizationDetail }>("/api/admin/organizations", body);
+  return normalizeCreatedAt(res.data);
+}
+
+export async function attachAdminOrganizationTeam(
+  organizationId: string,
+  teamId: string,
+): Promise<AdminOrganizationDetail> {
+  const res = await apiPostJson<{ data: AdminOrganizationDetail }>(
+    `/api/admin/organizations/${encodeURIComponent(organizationId)}/attach-team`,
+    { teamId },
+  );
+  return normalizeCreatedAt(res.data);
 }
 
 export function formatAdminDate(dateStr: string): string {

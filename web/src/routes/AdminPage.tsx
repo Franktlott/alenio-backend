@@ -17,11 +17,12 @@ import {
   type AdminUserRow,
 } from "../lib/admin-api";
 import { SenecaStudioPage } from "./settings/SenecaStudioPage";
+import { AdminEnterpriseCustomersPanel } from "./AdminEnterpriseCustomersPanel";
 
-type AdminSection = "users" | "workspaces" | "seneca-studio";
+type AdminSection = "users" | "workspaces" | "enterprise-customers" | "seneca-studio";
 
 function parseAdminSection(raw: string | null): AdminSection {
-  if (raw === "workspaces" || raw === "seneca-studio") return raw;
+  if (raw === "workspaces" || raw === "seneca-studio" || raw === "enterprise-customers") return raw;
   return "users";
 }
 
@@ -174,6 +175,11 @@ export function AdminPage() {
           title: "Seneca Studio",
           subtitle: "Platform-wide coaching tone, rules, knowledge, and templates for every workspace.",
         }
+      : section === "enterprise-customers"
+        ? {
+            title: "Enterprise customers",
+            subtitle: "Company accounts that can own multiple workspaces, SSO, and SCIM.",
+          }
       : section === "workspaces"
         ? {
             title: "Workspaces",
@@ -193,6 +199,8 @@ export function AdminPage() {
     >
       {section === "seneca-studio" ? (
         <SenecaStudioPage scope="platform" embedded />
+      ) : section === "enterprise-customers" ? (
+        <AdminEnterpriseCustomersPanel />
       ) : (
         <>
           <div className="enterprise-admin-header">

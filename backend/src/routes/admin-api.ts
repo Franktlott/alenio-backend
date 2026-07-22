@@ -10,6 +10,12 @@ import {
   setPlatformAdmin,
   updateTeamSubscription,
 } from "../lib/admin-platform";
+import {
+  attachTeamToOrganization,
+  createAdminOrganization,
+  getAdminOrganization,
+  listAdminOrganizations,
+} from "../lib/admin-organizations";
 import { adminGuard } from "../middleware/admin-guard";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
@@ -451,6 +457,130 @@ adminApiRouter.patch(
       return c.json({ error: { message: "Invalid subscription values.", code: result.code } }, 400);
     }
     return c.json({ data: result.subscription });
+  },
+);
+
+adminApiRouter.get("/organizations", async (c) => {
+  try {
+    const organizations = await listAdminOrganizations();
+    return c.json({ data: organizations });
+  } catch (err) {
+    console.error("[admin] list organizations failed:", err);
+    return c.json({ error: { message: "Could not load enterprise customers", code: "LIST_FAILED" } }, 500);
+  }
+});
+
+adminApiRouter.get("/organizations/:organizationId", async (c) => {
+  const { organizationId } = c.req.param();
+  try {
+    const organization = await getAdminOrganization(organizationId);
+    if (!organization) {
+      return c.json({ error: { message: "Enterprise customer not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: organization });
+  } catch (err) {
+    console.error("[admin] get organization failed:", err);
+    return c.json({ error: { message: "Could not load enterprise customer", code: "GET_FAILED" } }, 500);
+  }
+});
+
+adminApiRouter.post(
+  "/organizations",
+  zValidator(
+    "json",
+    z.object({
+      name: z.string().trim().min(2).max(120),
+      domain: z.string().trim().min(3).max(200).optional(),
+      markDomainVerified: z.boolean().optional(),
+      ownerEmail: z.string().email().optional(),
+      ownerName: z.string().trim().min(1).max(200).optional(),
+      ownerPassword: z.string().min(8).max(128).optional(),
+      initialWorkspaceName: z.string().trim().min(2).max(200).optional(),
+      plan: z.enum(["free", "team", "pro", "operations"]).optional(),
+    }),
+  ),
+  async (c) => {
+    const body = c.req.valid("json");
+    try {
+      const result = await createAdminOrganization(body);
+      if (!result.ok) {
+        if (result.code === "DOMAIN_TAKEN") {
+          return c.json({ error: { message: "That email domain is already linked to another customer.", code: result.code } }, 409);
+        }
+        if (result.code === "TEAM_NAME_TAKEN") {
+          return c.json({ error: { message: "A workspace with this name already exists.", code: result.code } }, 409);
+        }
+        if (result.code === "OWNER_REQUIRED_FOR_WORKSPACE" || result.code === "OWNER_NAME_REQUIRED") {
+          return c.json(
+            {
+              error: {
+                message: "Owner name and email are required when creating the first workspace.",
+                code: result.code,
+              },
+            },
+            400,
+          );
+        }
+        if (result.code === "PASSWORD_REQUIRED") {
+          return c.json(
+            { error: { message: "Owner password is required when creating a new owner account.", code: result.code } },
+            400,
+          );
+        }
+        if (result.code === "EMAIL_TAKEN" || result.code === "AUTH_FAILED") {
+          return c.json({ error: { message: "Could not create owner account.", code: result.code } }, 500);
+        }
+        return c.json(
+          {
+            error: {
+              message: "Invalid enterprise customer details.",
+              code: "code" in result ? String(result.code) : "VALIDATION",
+            },
+          },
+          400,
+        );
+      }
+      return c.json({ data: result.organization }, 201);
+    } catch (err) {
+      console.error("[admin] create organization failed:", err);
+      return c.json({ error: { message: "Could not create enterprise customer", code: "CREATE_FAILED" } }, 500);
+    }
+  },
+);
+
+adminApiRouter.post(
+  "/organizations/:organizationId/attach-team",
+  zValidator(
+    "json",
+    z.object({
+      teamId: z.string().trim().min(1),
+    }),
+  ),
+  async (c) => {
+    const { organizationId } = c.req.param();
+    const { teamId } = c.req.valid("json");
+    try {
+      const result = await attachTeamToOrganization(organizationId, teamId);
+      if (!result.ok) {
+        if (result.code === "ORG_NOT_FOUND") {
+          return c.json({ error: { message: "Enterprise customer not found", code: result.code } }, 404);
+        }
+        if (result.code === "TEAM_NOT_FOUND") {
+          return c.json({ error: { message: "Workspace not found", code: result.code } }, 404);
+        }
+        if (result.code === "TEAM_ALREADY_LINKED") {
+          return c.json(
+            { error: { message: "That workspace already belongs to another enterprise customer.", code: result.code } },
+            409,
+          );
+        }
+        return c.json({ error: { message: "Could not attach workspace", code: "ATTACH_FAILED" } }, 400);
+      }
+      return c.json({ data: result.organization });
+    } catch (err) {
+      console.error("[admin] attach team failed:", err);
+      return c.json({ error: { message: "Could not attach workspace", code: "ATTACH_FAILED" } }, 500);
+    }
   },
 );
 

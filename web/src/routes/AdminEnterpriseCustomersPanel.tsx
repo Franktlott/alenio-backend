@@ -1,0 +1,360 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
+import {
+  createAdminOrganization,
+  fetchAdminOrganization,
+  fetchAdminOrganizations,
+  formatAdminDate,
+  planLabel,
+  type AdminOrganizationRow,
+} from "../lib/admin-api";
+
+export function AdminEnterpriseCustomersPanel() {
+  const queryClient = useQueryClient();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [name, setName] = useState("");
+  const [domain, setDomain] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [ownerPassword, setOwnerPassword] = useState("");
+  const [initialWorkspaceName, setInitialWorkspaceName] = useState("");
+  const [plan, setPlan] = useState<"free" | "team" | "operations">("operations");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const listQuery = useQuery({
+    queryKey: ["admin", "organizations"],
+    queryFn: () => fetchAdminOrganizations(),
+  });
+
+  const detailQuery = useQuery({
+    queryKey: ["admin", "organizations", selectedId],
+    queryFn: () => fetchAdminOrganization(selectedId!),
+    enabled: !!selectedId,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createAdminOrganization,
+    onSuccess: async (org) => {
+      setShowCreate(false);
+      setName("");
+      setDomain("");
+      setOwnerEmail("");
+      setOwnerName("");
+      setOwnerPassword("");
+      setInitialWorkspaceName("");
+      setFormError(null);
+      setSelectedId(org.id);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
+    },
+    onError: (err) => {
+      setFormError(err instanceof Error ? err.message : "Could not create enterprise customer.");
+    },
+  });
+
+  const rows: AdminOrganizationRow[] = listQuery.data ?? [];
+  const detail = detailQuery.data ?? null;
+
+  const onCreate = (e: FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    if (!name.trim()) {
+      setFormError("Enter a customer name.");
+      return;
+    }
+    createMutation.mutate({
+      name: name.trim(),
+      ...(domain.trim() ? { domain: domain.trim(), markDomainVerified: true } : {}),
+      ...(ownerEmail.trim() ? { ownerEmail: ownerEmail.trim() } : {}),
+      ...(ownerName.trim() ? { ownerName: ownerName.trim() } : {}),
+      ...(ownerPassword.trim() ? { ownerPassword: ownerPassword.trim() } : {}),
+      ...(initialWorkspaceName.trim()
+        ? { initialWorkspaceName: initialWorkspaceName.trim(), plan }
+        : {}),
+    });
+  };
+
+  return (
+    <div className="enterprise-admin-enterprise" data-testid="admin-enterprise-customers">
+      <header className="enterprise-admin-header" style={{ marginBottom: "1rem" }}>
+        <div>
+          <h1>Enterprise customers</h1>
+          <p className="enterprise-muted">
+            Company accounts that can own multiple workspaces, SSO, and SCIM. Bones only — more management tools
+            coming next.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="auth-submit"
+          onClick={() => {
+            setShowCreate((v) => !v);
+            setFormError(null);
+          }}
+          data-testid="admin-enterprise-create-toggle"
+        >
+          {showCreate ? "Cancel" : "New customer"}
+        </button>
+      </header>
+
+      {showCreate ? (
+        <form className="enterprise-card" onSubmit={onCreate} style={{ marginBottom: "1rem" }}>
+          <h2 className="enterprise-card-title enterprise-card-title-spaced">Create enterprise customer</h2>
+          <label className="auth-label" htmlFor="ent-name">
+            Customer name
+          </label>
+          <input
+            id="ent-name"
+            className="auth-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Acme Corp"
+            required
+            data-testid="admin-enterprise-name"
+          />
+
+          <label className="auth-label" htmlFor="ent-domain">
+            Email domain (optional)
+          </label>
+          <input
+            id="ent-domain"
+            className="auth-input"
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+            placeholder="acme.com"
+            data-testid="admin-enterprise-domain"
+          />
+
+          <label className="auth-label" htmlFor="ent-owner-email">
+            Owner email (optional)
+          </label>
+          <input
+            id="ent-owner-email"
+            className="auth-input"
+            type="email"
+            value={ownerEmail}
+            onChange={(e) => setOwnerEmail(e.target.value)}
+            placeholder="owner@acme.com"
+            data-testid="admin-enterprise-owner-email"
+          />
+
+          <label className="auth-label" htmlFor="ent-owner-name">
+            Owner name (optional)
+          </label>
+          <input
+            id="ent-owner-name"
+            className="auth-input"
+            value={ownerName}
+            onChange={(e) => setOwnerName(e.target.value)}
+            placeholder="Jane Owner"
+            data-testid="admin-enterprise-owner-name"
+          />
+
+          <label className="auth-label" htmlFor="ent-workspace">
+            First workspace name (optional)
+          </label>
+          <input
+            id="ent-workspace"
+            className="auth-input"
+            value={initialWorkspaceName}
+            onChange={(e) => setInitialWorkspaceName(e.target.value)}
+            placeholder="Acme HQ"
+            data-testid="admin-enterprise-workspace"
+          />
+
+          {initialWorkspaceName.trim() ? (
+            <>
+              <label className="auth-label" htmlFor="ent-password">
+                Owner password (required if owner is new)
+              </label>
+              <input
+                id="ent-password"
+                className="auth-input"
+                type="password"
+                autoComplete="new-password"
+                value={ownerPassword}
+                onChange={(e) => setOwnerPassword(e.target.value)}
+                data-testid="admin-enterprise-owner-password"
+              />
+              <label className="auth-label" htmlFor="ent-plan">
+                Workspace plan
+              </label>
+              <select
+                id="ent-plan"
+                className="auth-input"
+                value={plan}
+                onChange={(e) => setPlan(e.target.value as typeof plan)}
+                data-testid="admin-enterprise-plan"
+              >
+                <option value="operations">Operations</option>
+                <option value="team">Pro</option>
+                <option value="free">Free</option>
+              </select>
+            </>
+          ) : null}
+
+          {formError ? <p className="auth-error">{formError}</p> : null}
+
+          <button
+            type="submit"
+            className="auth-submit"
+            disabled={createMutation.isPending}
+            data-testid="admin-enterprise-create-submit"
+          >
+            {createMutation.isPending ? "Creating…" : "Create customer"}
+          </button>
+        </form>
+      ) : null}
+
+      {listQuery.isLoading ? (
+        <p className="enterprise-muted">Loading enterprise customers…</p>
+      ) : listQuery.isError ? (
+        <p className="enterprise-muted">
+          {listQuery.error instanceof Error ? listQuery.error.message : "Could not load enterprise customers."}
+        </p>
+      ) : (
+        <div className="enterprise-admin-split" style={{ display: "grid", gridTemplateColumns: selectedId ? "1.2fr 1fr" : "1fr", gap: "1rem" }}>
+          <div className="enterprise-table-wrap">
+            <table className="enterprise-table">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Domain</th>
+                  <th>Workspaces</th>
+                  <th>SSO</th>
+                  <th>SCIM</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="enterprise-table-empty">
+                      No enterprise customers yet
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((org) => (
+                    <tr
+                      key={org.id}
+                      onClick={() => setSelectedId(org.id)}
+                      style={{ cursor: "pointer", background: selectedId === org.id ? "rgba(67,97,238,0.08)" : undefined }}
+                      data-testid={`admin-enterprise-row-${org.id}`}
+                    >
+                      <td>
+                        <strong>{org.name}</strong>
+                        <div className="enterprise-muted" style={{ fontSize: 12 }}>
+                          {org.slug}
+                        </div>
+                      </td>
+                      <td>
+                        {org.domain ? (
+                          <span>
+                            {org.domain}
+                            {!org.domainVerified ? (
+                              <span className="enterprise-muted"> · unverified</span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>{org.workspaceCount}</td>
+                      <td>{org.ssoEnabled ? "On" : "Off"}</td>
+                      <td>{org.scimEnabled ? "On" : "Off"}</td>
+                      <td>{org.status}</td>
+                      <td>{formatAdminDate(org.createdAt)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {selectedId ? (
+            <aside className="enterprise-card" data-testid="admin-enterprise-detail">
+              {detailQuery.isLoading ? (
+                <p className="enterprise-muted">Loading customer…</p>
+              ) : detailQuery.isError || !detail ? (
+                <p className="enterprise-muted">Could not load customer detail.</p>
+              ) : (
+                <>
+                  <h2 className="enterprise-card-title enterprise-card-title-spaced">{detail.name}</h2>
+                  <p className="enterprise-muted" style={{ marginBottom: "0.75rem" }}>
+                    {detail.slug} · {detail.status}
+                  </p>
+                  <dl className="enterprise-admin-dl">
+                    <div>
+                      <dt>Domain</dt>
+                      <dd>
+                        {detail.domains[0]
+                          ? `${detail.domains[0].domain}${detail.domains[0].verifiedAt ? "" : " (unverified)"}`
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Default workspace</dt>
+                      <dd>{detail.defaultTeam?.name ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>SSO</dt>
+                      <dd>{detail.ssoConfig?.enabled ? `${detail.ssoConfig.provider} on` : "Off"}</dd>
+                    </div>
+                    <div>
+                      <dt>SCIM</dt>
+                      <dd>{detail.scimConfig?.enabled ? "On" : "Off"}</dd>
+                    </div>
+                  </dl>
+
+                  <h3 style={{ marginTop: "1rem", marginBottom: "0.5rem" }}>Workspaces</h3>
+                  {detail.teams.length === 0 ? (
+                    <p className="enterprise-muted">No workspaces linked yet.</p>
+                  ) : (
+                    <ul className="enterprise-admin-teams" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                      {detail.teams.map((team) => (
+                        <li
+                          key={team.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: "0.75rem",
+                            padding: "0.4rem 0",
+                            borderBottom: "1px solid rgba(0,0,0,0.06)",
+                          }}
+                        >
+                          <span>
+                            {team.name}
+                            <span className="enterprise-muted" style={{ display: "block", fontSize: 12 }}>
+                              {team._count.members} members
+                              {team.subscription ? ` · ${planLabel(team.subscription.plan)}` : ""}
+                            </span>
+                          </span>
+                          <span className="enterprise-muted" style={{ fontSize: 12 }}>
+                            {team.inviteCode}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <p className="enterprise-muted" style={{ marginTop: "1rem", fontSize: 12 }}>
+                    Next: attach existing workspaces, manage SSO/SCIM from admin, and invite org owners.
+                  </p>
+                  <button
+                    type="button"
+                    className="enterprise-team-btn-outline"
+                    style={{ marginTop: "0.75rem" }}
+                    onClick={() => setSelectedId(null)}
+                  >
+                    Close
+                  </button>
+                </>
+              )}
+            </aside>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}

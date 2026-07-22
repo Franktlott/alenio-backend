@@ -14,11 +14,17 @@ import type { WebMeUser, WebTeamRow } from "../lib/api";
 
 export type EnterpriseNavId = "activity" | "chat" | "execute" | "go" | "team" | "plan" | "settings" | "admin";
 
-type AdminSection = "users" | "workspaces" | "seneca-studio";
+type AdminSection = "users" | "workspaces" | "enterprise-customers" | "seneca-studio";
 
 const ADMIN_SECTIONS: Array<{ id: AdminSection; label: string; to: string; hint: string }> = [
   { id: "users", label: "Users", to: "/admin", hint: "Platform users" },
   { id: "workspaces", label: "Workspaces", to: "/admin?tab=workspaces", hint: "All workspaces" },
+  {
+    id: "enterprise-customers",
+    label: "Enterprise customers",
+    to: "/admin?tab=enterprise-customers",
+    hint: "Companies & workspaces",
+  },
   {
     id: "seneca-studio",
     label: "Seneca Studio",
@@ -29,7 +35,7 @@ const ADMIN_SECTIONS: Array<{ id: AdminSection; label: string; to: string; hint:
 
 function adminSectionFromSearch(search: string): AdminSection {
   const tab = new URLSearchParams(search).get("tab");
-  if (tab === "workspaces" || tab === "seneca-studio") return tab;
+  if (tab === "workspaces" || tab === "seneca-studio" || tab === "enterprise-customers") return tab;
   return "users";
 }
 

@@ -1,0 +1,226 @@
+import { prisma } from "../prisma";
+import { normalizeEmailDomain, uniqueOrgSlug } from "./organization-sso";
+import { createEnterpriseAccount } from "./admin-platform";
+
+export type AdminOrganizationRow = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  ssoRequired: boolean;
+  createdAt: Date;
+  workspaceCount: number;
+  memberCount: number;
+  domain: string | null;
+  domainVerified: boolean;
+  ssoEnabled: boolean;
+  scimEnabled: boolean;
+  defaultTeam: { id: string; name: string } | null;
+};
+
+export async function listAdminOrganizations(): Promise<AdminOrganizationRow[]> {
+  const orgs = await prisma.organization.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      domains: { orderBy: { createdAt: "asc" }, take: 1 },
+      ssoConfig: { select: { enabled: true } },
+      scimConfig: { select: { enabled: true } },
+      defaultTeam: { select: { id: true, name: true } },
+      _count: {
+        select: {
+          teams: true,
+          memberships: true,
+        },
+      },
+    },
+  });
+
+  return orgs.map((org) => ({
+    id: org.id,
+    name: org.name,
+    slug: org.slug,
+    status: org.status,
+    ssoRequired: org.ssoRequired,
+    createdAt: org.createdAt,
+    workspaceCount: org._count.teams,
+    memberCount: org._count.memberships,
+    domain: org.domains[0]?.domain ?? null,
+    domainVerified: Boolean(org.domains[0]?.verifiedAt),
+    ssoEnabled: Boolean(org.ssoConfig?.enabled),
+    scimEnabled: Boolean(org.scimConfig?.enabled),
+    defaultTeam: org.defaultTeam,
+  }));
+}
+
+export async function getAdminOrganization(organizationId: string) {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    include: {
+      domains: { orderBy: { createdAt: "asc" } },
+      ssoConfig: {
+        select: {
+          provider: true,
+          protocol: true,
+          enabled: true,
+          issuer: true,
+          clientId: true,
+        },
+      },
+      scimConfig: {
+        select: {
+          enabled: true,
+          tokenPrefix: true,
+        },
+      },
+      defaultTeam: { select: { id: true, name: true } },
+      teams: {
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          inviteCode: true,
+          createdAt: true,
+          _count: { select: { members: true } },
+          subscription: { select: { plan: true, status: true } },
+        },
+      },
+      memberships: {
+        orderBy: { joinedAt: "asc" },
+        take: 50,
+        select: {
+          id: true,
+          role: true,
+          joinedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      },
+    },
+  });
+  if (!org) return null;
+  return org;
+}
+
+export async function createAdminOrganization(input: {
+  name: string;
+  domain?: string;
+  markDomainVerified?: boolean;
+  ownerEmail?: string;
+  ownerName?: string;
+  ownerPassword?: string;
+  initialWorkspaceName?: string;
+  plan?: string;
+}) {
+  const name = input.name.trim().slice(0, 120);
+  if (name.length < 2) return { ok: false as const, code: "VALIDATION" as const };
+
+  const domain = input.domain ? normalizeEmailDomain(input.domain) : null;
+  if (input.domain && !domain) return { ok: false as const, code: "INVALID_DOMAIN" as const };
+
+  if (domain) {
+    const taken = await prisma.organizationDomain.findUnique({ where: { domain }, select: { id: true } });
+    if (taken) return { ok: false as const, code: "DOMAIN_TAKEN" as const };
+  }
+
+  let ownerUserId: string | null = null;
+  if (input.ownerEmail?.trim()) {
+    const email = input.ownerEmail.trim().toLowerCase();
+    const existing = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (existing) {
+      ownerUserId = existing.id;
+    } else if (!input.ownerName?.trim()) {
+      return { ok: false as const, code: "OWNER_NAME_REQUIRED" as const };
+    }
+  }
+
+  const slug = await uniqueOrgSlug(name);
+
+  // Optional: create first workspace via existing enterprise account helper.
+  let createdWorkspace: { id: string; name: string; inviteCode: string } | null = null;
+  if (input.initialWorkspaceName?.trim()) {
+    if (!input.ownerEmail?.trim() || !input.ownerName?.trim()) {
+      return { ok: false as const, code: "OWNER_REQUIRED_FOR_WORKSPACE" as const };
+    }
+    const workspace = await createEnterpriseAccount({
+      teamName: input.initialWorkspaceName.trim(),
+      ownerEmail: input.ownerEmail.trim(),
+      ownerName: input.ownerName.trim(),
+      ownerPassword: input.ownerPassword,
+      plan: input.plan,
+    });
+    if (!workspace.ok) return workspace;
+    createdWorkspace = workspace.team;
+    ownerUserId = workspace.owner.id;
+  }
+
+  const org = await prisma.$transaction(async (tx) => {
+    const created = await tx.organization.create({
+      data: {
+        name,
+        slug,
+        status: "active",
+        defaultTeamId: createdWorkspace?.id ?? null,
+        ...(domain
+          ? {
+              domains: {
+                create: {
+                  domain,
+                  verifiedAt: input.markDomainVerified ? new Date() : null,
+                },
+              },
+            }
+          : {}),
+        ...(ownerUserId
+          ? {
+              memberships: {
+                create: {
+                  userId: ownerUserId,
+                  role: "org_owner",
+                },
+              },
+            }
+          : {}),
+      },
+    });
+
+    if (createdWorkspace) {
+      await tx.team.update({
+        where: { id: createdWorkspace.id },
+        data: { organizationId: created.id },
+      });
+    }
+
+    return created;
+  });
+
+  const detail = await getAdminOrganization(org.id);
+  return { ok: true as const, organization: detail! };
+}
+
+export async function attachTeamToOrganization(organizationId: string, teamId: string) {
+  const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, defaultTeamId: true } });
+  if (!org) return { ok: false as const, code: "ORG_NOT_FOUND" as const };
+
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, organizationId: true } });
+  if (!team) return { ok: false as const, code: "TEAM_NOT_FOUND" as const };
+  if (team.organizationId && team.organizationId !== organizationId) {
+    return { ok: false as const, code: "TEAM_ALREADY_LINKED" as const };
+  }
+
+  await prisma.team.update({
+    where: { id: teamId },
+    data: { organizationId },
+  });
+
+  if (!org.defaultTeamId) {
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: { defaultTeamId: teamId },
+    });
+  }
+
+  const detail = await getAdminOrganization(organizationId);
+  return { ok: true as const, organization: detail! };
+}
