@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import { normalizeEmailDomain, uniqueOrgSlug } from "./organization-sso";
 import { createEnterpriseAccount } from "./admin-platform";
+import { detachEnterpriseOrgAdminsFromOrgWorkspaces } from "./enterprise-org-access";
 import { sendEnterpriseWelcomeEmail } from "./enterprise-welcome-email";
 import {
   createOrganizationSignupInvite,
@@ -178,6 +179,7 @@ export async function createAdminOrganization(input: {
         ownerName: ownerName || ownerEmail.split("@")[0] || "Owner",
         ownerPassword: input.ownerPassword,
         plan: input.plan,
+        addOwnerAsTeamMember: false,
       });
       if (!workspace.ok) return workspace;
       createdWorkspace = workspace.team;
@@ -229,6 +231,9 @@ export async function createAdminOrganization(input: {
 
     return created;
   });
+
+  // Enterprise org owners/admins manage at org level — never as workspace members.
+  await detachEnterpriseOrgAdminsFromOrgWorkspaces(org.id);
 
   let welcomeEmail: { sent: boolean; error?: string; kind?: "signup" | "welcome" } | null = null;
   if (ownerEmail && needsSignupInvite) {

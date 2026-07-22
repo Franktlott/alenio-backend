@@ -5,6 +5,46 @@ const ORG_GO_ADMIN_ROLES = new Set(["org_owner", "org_admin"]);
 const PAID_ACTIVE_STATUSES = ["active", "trialing", "past_due", "incomplete", "paused"] as const;
 const DEFAULT_WORKSPACE_LIMIT = 5;
 
+/**
+ * Enterprise org owners/admins manage the contract at org level.
+ * They must not be TeamMembers of that org's workspaces.
+ */
+export async function detachEnterpriseOrgAdminsFromOrgWorkspaces(organizationId: string) {
+  const admins = await prisma.organizationMembership.findMany({
+    where: {
+      organizationId,
+      role: { in: [...ORG_GO_ADMIN_ROLES] },
+    },
+    select: { userId: true },
+  });
+  const userIds = admins.map((a) => a.userId);
+  if (userIds.length === 0) return { removed: 0 };
+
+  const result = await prisma.teamMember.deleteMany({
+    where: {
+      userId: { in: userIds },
+      team: { organizationId },
+    },
+  });
+  return { removed: result.count };
+}
+
+/**
+ * Detach org owners/admins from all enterprise org workspaces (cleanup for already-assigned owners).
+ */
+export async function detachAllEnterpriseOrgAdminsFromWorkspaces() {
+  const orgs = await prisma.organization.findMany({
+    where: { accountType: "enterprise" },
+    select: { id: true },
+  });
+  let removed = 0;
+  for (const org of orgs) {
+    const r = await detachEnterpriseOrgAdminsFromOrgWorkspaces(org.id);
+    removed += r.removed;
+  }
+  return { organizations: orgs.length, removed };
+}
+
 function subscriptionHasGoFeatures(sub: { plan: string; status: string } | null | undefined): boolean {
   const plan = (sub?.plan ?? "free").trim().toLowerCase();
   const status = (sub?.status ?? "active").trim().toLowerCase();
@@ -189,7 +229,7 @@ export async function createOrganizationWorkspace(input: {
           name: teamName,
           inviteCode,
           organizationId: org.id,
-          members: { create: { userId: input.userId, role: "owner" } },
+          // Org admins are not workspace members — they manage via org role.
         },
       });
       await tx.teamSubscription.create({

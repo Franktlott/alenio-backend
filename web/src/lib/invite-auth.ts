@@ -49,12 +49,22 @@ export async function finishPostAuthNavigation(): Promise<string> {
   const enterpriseToken = getPendingEnterpriseInviteToken();
   if (enterpriseToken) {
     try {
-      const result = await redeemEnterpriseInvite(enterpriseToken);
-      if (result.teamId) setPersistedEnterpriseTeamId(result.teamId);
+      await redeemEnterpriseInvite(enterpriseToken);
     } catch {
       /* may already be redeemed via middleware by matching email */
     }
     clearPendingEnterpriseInviteToken();
+    if (isMobileBrowser()) {
+      try {
+        const me = await fetchWebMe();
+        if (me?.email) setMobileHandoffEmail(me.email);
+      } catch {
+        /* handoff page still works without email */
+      }
+      return "/get-app";
+    }
+    // Enterprise invite owners manage the org — not a store workspace.
+    return "/go";
   }
 
   if (isMobileBrowser()) {

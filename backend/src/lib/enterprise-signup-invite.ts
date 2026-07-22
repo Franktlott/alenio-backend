@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { env } from "../env";
 import { prisma } from "../prisma";
 import { createEnterpriseAccount } from "./admin-platform";
+import { detachEnterpriseOrgAdminsFromOrgWorkspaces } from "./enterprise-org-access";
 import { webPublicBaseUrl } from "./web-public-url";
 
 const INVITE_TTL_DAYS = 14;
@@ -248,8 +249,6 @@ export async function redeemOrganizationSignupInvite(input: {
     update: { role: "org_owner" },
   });
 
-  let teamId: string | null = invite.organization.defaultTeamId;
-
   if (invite.pendingWorkspaceName?.trim()) {
     const user = await prisma.user.findUnique({
       where: { id: input.userId },
@@ -260,6 +259,8 @@ export async function redeemOrganizationSignupInvite(input: {
       ownerEmail: invite.email,
       ownerName: user?.name || invite.suggestedName || invite.email.split("@")[0] || "Owner",
       plan: invite.pendingPlan ?? "operations",
+      // Org owner stays org-only; workspace is created empty for store staff later.
+      addOwnerAsTeamMember: false,
     });
     if (!workspace.ok) {
       // Membership already created; leave invite pending so they can retry after fixing name collision.
@@ -268,7 +269,6 @@ export async function redeemOrganizationSignupInvite(input: {
       }
       return { ok: false, code: "WORKSPACE_FAILED" };
     }
-    teamId = workspace.team.id;
     await prisma.team.update({
       where: { id: workspace.team.id },
       data: { organizationId: invite.organizationId },
@@ -280,6 +280,8 @@ export async function redeemOrganizationSignupInvite(input: {
       });
     }
   }
+
+  await detachEnterpriseOrgAdminsFromOrgWorkspaces(invite.organizationId);
 
   await prisma.organizationSignupInvite.update({
     where: { id: invite.id },
@@ -296,7 +298,8 @@ export async function redeemOrganizationSignupInvite(input: {
     ok: true,
     organizationId: invite.organizationId,
     organizationName: invite.organization.name,
-    teamId,
+    // Never hand the org owner into a workspace — they manage at org level.
+    teamId: null,
   };
 }
 

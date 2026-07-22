@@ -108,6 +108,13 @@ async function ensureOrgMembership(organizationId: string, userId: string) {
     update: {},
   });
 
+  const membership = await prisma.organizationMembership.findUnique({
+    where: { organizationId_userId: { organizationId, userId } },
+    select: { role: true },
+  });
+  // Org owners/admins manage the enterprise — never auto-join a workspace.
+  if (membership?.role === "org_owner" || membership?.role === "org_admin") return;
+
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { defaultTeamId: true },

@@ -243,12 +243,18 @@ export async function createEnterpriseAccount(input: {
   ownerName: string;
   ownerPassword?: string;
   plan?: string;
+  /**
+   * When false, create the workspace + subscription without adding the contact as a TeamMember.
+   * Used for enterprise org owners (org-level only). Default true for standalone admin workspace create.
+   */
+  addOwnerAsTeamMember?: boolean;
 }) {
   const teamName = normalizeTeamName(input.teamName);
   const ownerEmail = normalizeEmail(input.ownerEmail);
   const ownerName = input.ownerName.trim().slice(0, 200);
   const planRaw = input.plan?.trim().toLowerCase() ?? "team";
   const plan = planRaw === "pro" ? "team" : planRaw;
+  const addOwnerAsTeamMember = input.addOwnerAsTeamMember !== false;
   if (!VALID_PLANS.has(plan)) return { ok: false as const, code: "VALIDATION" as const };
   if (!teamName || !ownerEmail || !ownerName) return { ok: false as const, code: "VALIDATION" as const };
 
@@ -284,7 +290,9 @@ export async function createEnterpriseAccount(input: {
         data: {
           name: teamName,
           inviteCode,
-          members: { create: { userId: owner!.id, role: "owner" } },
+          ...(addOwnerAsTeamMember
+            ? { members: { create: { userId: owner!.id, role: "owner" } } }
+            : {}),
         },
       });
       await tx.teamSubscription.create({
