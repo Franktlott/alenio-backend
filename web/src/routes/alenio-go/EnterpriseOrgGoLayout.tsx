@@ -21,8 +21,6 @@ export function EnterpriseOrgGoLayout() {
     return <EnterprisePageLoading label="Loading corporate standards" />;
   }
 
-  const { organizationName } = ctx;
-
   return (
     <div className="enterprise-org-go" data-testid="enterprise-org-go-layout">
       <aside className="enterprise-org-go-nav" aria-label="Corporate standards">
@@ -30,7 +28,7 @@ export function EnterpriseOrgGoLayout() {
           <AlenioGoLogo />
           <div>
             <p className="enterprise-org-go-eyebrow">Corporate standards</p>
-            <strong>{organizationName}</strong>
+            <strong>{ctx.organizationName}</strong>
           </div>
         </div>
         <nav className="enterprise-org-go-nav-links">
@@ -52,7 +50,7 @@ export function EnterpriseOrgGoLayout() {
         </nav>
       </aside>
       <div className="enterprise-org-go-main">
-        <Outlet context={ctx} />
+        <Outlet />
       </div>
     </div>
   );

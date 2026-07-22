@@ -6,7 +6,8 @@ import {
   type OrgGoModule,
   type OrgGoModulePermissions,
 } from "../../lib/api";
-import { useEnterpriseOrgGo } from "./enterprise-org-go-context";
+import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import { useEnterpriseOrgGoOptional } from "./enterprise-org-go-context";
 
 const DEFAULT_PERMS: OrgGoModulePermissions = {
   allowScheduleEdits: true,
@@ -17,7 +18,7 @@ const DEFAULT_PERMS: OrgGoModulePermissions = {
 };
 
 export function EnterpriseOrgGoModulesPage() {
-  const { organizationId, org } = useEnterpriseOrgGo();
+  const ctx = useEnterpriseOrgGoOptional();
   const [modules, setModules] = useState<OrgGoModule[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -26,8 +27,10 @@ export function EnterpriseOrgGoModulesPage() {
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [perms, setPerms] = useState<OrgGoModulePermissions>(DEFAULT_PERMS);
 
-  const load = async () => {
-    const rows = await fetchOrgGoModules(organizationId);
+  const organizationId = ctx?.organizationId;
+
+  const load = async (orgId: string) => {
+    const rows = await fetchOrgGoModules(orgId);
     setModules(rows);
     if (!selectedId && rows[0]) selectModule(rows[0]);
   };
@@ -40,9 +43,16 @@ export function EnterpriseOrgGoModulesPage() {
   };
 
   useEffect(() => {
-    void load().catch((e) => setErr(e instanceof Error ? e.message : "Failed to load"));
+    if (!organizationId) return;
+    void load(organizationId).catch((e) => setErr(e instanceof Error ? e.message : "Failed to load"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
+
+  if (!ctx) {
+    return <EnterprisePageLoading label="Loading corporate standards" />;
+  }
+
+  const { org } = ctx;
 
   const selected = modules.find((m) => m.id === selectedId) ?? null;
 
@@ -50,12 +60,12 @@ export function EnterpriseOrgGoModulesPage() {
     setBusy(true);
     setErr(null);
     try {
-      const mod = await upsertOrgGoModule(organizationId, {
+      const mod = await upsertOrgGoModule(ctx.organizationId, {
         moduleKey: "temp-checks",
         moduleName: "Temperature Checks",
         status: "published",
       });
-      await load();
+      await load(ctx.organizationId);
       selectModule(mod);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not create module");
@@ -70,12 +80,12 @@ export function EnterpriseOrgGoModulesPage() {
     setErr(null);
     try {
       if (selected.status !== "published") {
-        await upsertOrgGoModule(organizationId, {
+        await upsertOrgGoModule(ctx.organizationId, {
           moduleKey: selected.moduleKey,
           status: "published",
         });
       }
-      const mod = await setOrgGoModuleAssignment(organizationId, selected.id, {
+      const mod = await setOrgGoModuleAssignment(ctx.organizationId, selected.id, {
         scope,
         teamIds: scope === "workspaces" ? teamIds : undefined,
         permissions: perms,

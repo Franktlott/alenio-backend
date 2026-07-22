@@ -1,9 +1,14 @@
-import { useEnterpriseOrgGo } from "./enterprise-org-go-context";
+import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import { useEnterpriseOrgGoOptional } from "./enterprise-org-go-context";
 
 type Props = { title: string };
 
 export function EnterpriseOrgGoStubPage({ title }: Props) {
-  const { organizationName } = useEnterpriseOrgGo();
+  const ctx = useEnterpriseOrgGoOptional();
+  if (!ctx) {
+    return <EnterprisePageLoading label="Loading corporate standards" />;
+  }
+
   return (
     <div className="enterprise-org-go-page" data-testid="enterprise-org-go-stub">
       <header className="enterprise-org-go-page-head">
@@ -11,8 +16,8 @@ export function EnterpriseOrgGoStubPage({ title }: Props) {
           <p className="enterprise-org-go-eyebrow">Coming later</p>
           <h1>{title}</h1>
           <p className="enterprise-muted">
-            {title} for {organizationName} will ship in a later phase of organization-first Alenio Go. Phase 1 focuses on
-            Modules, Item Library, and workspace configuration.
+            {title} for {ctx.organizationName} will ship in a later phase of organization-first Alenio Go. Phase 1
+            focuses on Modules, Item Library, and workspace configuration.
           </p>
         </div>
       </header>

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import { createOrgGoLibraryItem, fetchOrgGoLibrary } from "../../lib/api";
-import { useEnterpriseOrgGo } from "./enterprise-org-go-context";
+import { useEnterpriseOrgGoOptional } from "./enterprise-org-go-context";
 
 type LibItem = {
   id: string;
@@ -12,21 +13,28 @@ type LibItem = {
 };
 
 export function EnterpriseOrgGoLibraryPage() {
-  const { organizationId } = useEnterpriseOrgGo();
+  const ctx = useEnterpriseOrgGoOptional();
   const [items, setItems] = useState<LibItem[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = async () => {
-    const rows = (await fetchOrgGoLibrary(organizationId)) as LibItem[];
+  const organizationId = ctx?.organizationId;
+
+  const load = async (orgId: string) => {
+    const rows = (await fetchOrgGoLibrary(orgId)) as LibItem[];
     setItems(rows);
   };
 
   useEffect(() => {
-    void load().catch((e) => setErr(e instanceof Error ? e.message : "Failed to load library"));
+    if (!organizationId) return;
+    void load(organizationId).catch((e) => setErr(e instanceof Error ? e.message : "Failed to load library"));
   }, [organizationId]);
+
+  if (!ctx) {
+    return <EnterprisePageLoading label="Loading item library" />;
+  }
 
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,7 +42,7 @@ export function EnterpriseOrgGoLibraryPage() {
     setBusy(true);
     setErr(null);
     try {
-      await createOrgGoLibraryItem(organizationId, {
+      await createOrgGoLibraryItem(ctx.organizationId, {
         name: name.trim(),
         type: "TEMPERATURE",
         category: "Refrigeration",
@@ -42,7 +50,7 @@ export function EnterpriseOrgGoLibraryPage() {
       });
       setName("");
       setShowCreate(false);
-      await load();
+      await load(ctx.organizationId);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Could not create item");
     } finally {

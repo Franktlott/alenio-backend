@@ -10,14 +10,12 @@ export function EnterpriseOrgDashboardShell() {
     return <EnterprisePageLoading label="Loading your enterprise dashboard" />;
   }
 
-  const { organizationName } = ctx;
-
   return (
     <div className="enterprise-org-dashboard" data-testid="enterprise-org-dashboard-shell">
       <header className="enterprise-org-dashboard-head">
         <div>
           <p className="enterprise-org-go-eyebrow">Enterprise Dashboard</p>
-          <h1 style={{ margin: "0.15rem 0 0.35rem", fontSize: "1.5rem" }}>{organizationName}</h1>
+          <h1 style={{ margin: "0.15rem 0 0.35rem", fontSize: "1.5rem" }}>{ctx.organizationName}</h1>
         </div>
         <div
           className="enterprise-workspace-task-view-tabs"
@@ -48,8 +46,7 @@ export function EnterpriseOrgDashboardShell() {
         </div>
       </header>
       <div className="enterprise-org-dashboard-body">
-        {/* Re-pass org context — nested Outlets do not inherit parent context. */}
-        <Outlet context={ctx} />
+        <Outlet />
       </div>
     </div>
   );
