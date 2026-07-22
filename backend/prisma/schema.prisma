@@ -65,6 +65,7 @@ model User {
   subtaskCompletions SubtaskCompletion[]
   organizationMemberships OrganizationMembership[]
   organizationScimUsers OrganizationScimUser[]
+  organizationSignupInvitesAccepted OrganizationSignupInvite[]
 }
 
 model Session {
@@ -132,6 +133,7 @@ model Organization {
   scimConfig   OrganizationScimConfig?
   memberships  OrganizationMembership[]
   scimUsers    OrganizationScimUser[]
+  signupInvites OrganizationSignupInvite[]
 }
 
 /// Verified email domains that route login to an organization (e.g. acme.com).
@@ -1256,6 +1258,28 @@ model TeamInvite {
   acceptedUser User? @relation("TeamInvitesAccepted", fields: [acceptedUserId], references: [id], onDelete: SetNull)
 
   @@index([teamId, status])
+  @@index([email, status])
+}
+
+/** Invite for a new enterprise owner to create their Alenio account (name + password). */
+model OrganizationSignupInvite {
+  id                    String    @id @default(cuid())
+  organizationId        String
+  email                 String
+  suggestedName         String?
+  token                 String    @unique
+  status                String    @default("pending") // pending, accepted, cancelled
+  pendingWorkspaceName  String?
+  pendingPlan           String?
+  acceptedUserId        String?
+  createdAt             DateTime  @default(now())
+  expiresAt             DateTime
+  acceptedAt            DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  acceptedUser User?        @relation(fields: [acceptedUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
   @@index([email, status])
 }
 

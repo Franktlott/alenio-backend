@@ -511,11 +511,11 @@ adminApiRouter.post(
         if (result.code === "TEAM_NAME_TAKEN") {
           return c.json({ error: { message: "A workspace with this name already exists.", code: result.code } }, 409);
         }
-        if (result.code === "OWNER_REQUIRED_FOR_WORKSPACE" || result.code === "OWNER_NAME_REQUIRED") {
+        if (result.code === "OWNER_REQUIRED_FOR_WORKSPACE") {
           return c.json(
             {
               error: {
-                message: "Owner name and email are required when creating the first workspace.",
+                message: "Owner email is required when creating the first workspace.",
                 code: result.code,
               },
             },
@@ -524,7 +524,13 @@ adminApiRouter.post(
         }
         if (result.code === "PASSWORD_REQUIRED") {
           return c.json(
-            { error: { message: "Owner password is required when creating a new owner account.", code: result.code } },
+            {
+              error: {
+                message:
+                  "That owner email already needs a password only when creating an existing-user workspace fails — try again or omit the first workspace.",
+                code: result.code,
+              },
+            },
             400,
           );
         }

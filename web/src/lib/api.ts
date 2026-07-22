@@ -706,6 +706,28 @@ export function redeemTeamInvite(token: string) {
   ).then((r) => r.data);
 }
 
+export type EnterpriseInvitePreview = {
+  email: string;
+  suggestedName: string | null;
+  customerName: string;
+  customerSlug: string;
+  workspaceName: string | null;
+  expiresAt: string;
+  token: string;
+};
+
+export function fetchEnterpriseInviteByToken(token: string) {
+  return apiGetJson<{ data: EnterpriseInvitePreview }>(
+    `/api/enterprise-invites/${encodeURIComponent(token)}`,
+  ).then((r) => r.data);
+}
+
+export function redeemEnterpriseInvite(token: string) {
+  return apiPostJson<{
+    data: { organizationId: string; organizationName: string; teamId: string | null };
+  }>("/api/enterprise-invites/redeem", { token }).then((r) => r.data);
+}
+
 export function inviteMemberByEmail(teamId: string, email: string) {
   return apiPostJson<{
     data: {

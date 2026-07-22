@@ -81,12 +81,14 @@ import { senecaRouter } from "./routes/seneca";
 import { senecaTeamRouter } from "./routes/seneca-team";
 import { senecaStudioRouter } from "./routes/seneca-studio";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
+import { enterpriseInvitesPublicRouter } from "./routes/enterprise-invites";
 import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
 import { publicGoLinkRouter } from "./routes/public-go-link";
 import { publicGoWalksRouter } from "./routes/public-go-walks";
 import { walksRouter } from "./routes/walks";
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
+import { redeemPendingOrganizationSignupInvitesForUser } from "./lib/enterprise-signup-invite";
 
 const isProduction = env.NODE_ENV === "production";
 
@@ -353,6 +355,9 @@ app.use("*", async (c, next) => {
     if (user.email) {
       void redeemPendingInvitesForUser(user.id, user.email).catch((err) => {
         console.error("[auth-middleware] redeemPendingInvitesForUser failed:", err);
+      });
+      void redeemPendingOrganizationSignupInvitesForUser(user.id, user.email).catch((err) => {
+        console.error("[auth-middleware] redeemPendingOrganizationSignupInvitesForUser failed:", err);
       });
     }
   }
@@ -1254,6 +1259,7 @@ app.route("/api/public/checklist-hubs", publicChecklistHubsRouter);
 app.route("/api/public/go", publicGoLinkRouter);
 app.route("/api/public/go/walks", publicGoWalksRouter);
 app.route("/api/team-invites", teamInvitesPublicRouter);
+app.route("/api/enterprise-invites", enterpriseInvitesPublicRouter);
 app.route("/api/tasks/mine", myTasksRouter);
 app.route("/api/dms", dmsRouter);
 app.route("/api/join-requests", joinRequestsRouter);

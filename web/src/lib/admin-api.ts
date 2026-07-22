@@ -159,11 +159,11 @@ export async function createAdminOrganization(body: {
   plan?: "free" | "team" | "pro" | "operations";
 }): Promise<{
   organization: AdminOrganizationDetail;
-  welcomeEmail: { sent: boolean; error?: string } | null;
+  welcomeEmail: { sent: boolean; error?: string; kind?: "signup" | "welcome" } | null;
 }> {
   const res = await apiPostJson<{
     data: AdminOrganizationDetail;
-    welcomeEmail?: { sent: boolean; error?: string } | null;
+    welcomeEmail?: { sent: boolean; error?: string; kind?: "signup" | "welcome" } | null;
   }>("/api/admin/organizations", body);
   return {
     organization: normalizeCreatedAt(res.data),

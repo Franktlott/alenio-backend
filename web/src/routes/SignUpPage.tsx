@@ -16,7 +16,7 @@ import {
   messageLooksLikeResumeSignUp,
 } from "../lib/signup-recovery";
 import { isSessionTokenExpired, isSessionTokenUsable } from "../lib/token";
-import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
+import { finishPostAuthNavigation, setPendingEnterpriseInviteToken, setPendingInviteToken } from "../lib/invite-auth";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { goToEmailVerification } from "../lib/verify-redirect";
 import { setPendingSignUp } from "../lib/pending-signup";
@@ -26,8 +26,10 @@ import { signInWithMicrosoft } from "../lib/microsoft-auth";
 export function SignUpPage() {
   const [params] = useSearchParams();
   const inviteToken = useMemo(() => (params.get("invite") ?? "").trim(), [params]);
+  const enterpriseInviteToken = useMemo(() => (params.get("enterpriseInvite") ?? "").trim(), [params]);
   const emailFromInvite = useMemo(() => (params.get("email") ?? "").trim().toLowerCase(), [params]);
-  const [name, setName] = useState("");
+  const nameFromInvite = useMemo(() => (params.get("name") ?? "").trim(), [params]);
+  const [name, setName] = useState(nameFromInvite);
   const [email, setEmail] = useState(emailFromInvite);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,8 +48,16 @@ export function SignUpPage() {
   }, [inviteToken]);
 
   useEffect(() => {
+    if (enterpriseInviteToken) setPendingEnterpriseInviteToken(enterpriseInviteToken);
+  }, [enterpriseInviteToken]);
+
+  useEffect(() => {
     if (emailFromInvite) setEmail(emailFromInvite);
   }, [emailFromInvite]);
+
+  useEffect(() => {
+    if (nameFromInvite) setName(nameFromInvite);
+  }, [nameFromInvite]);
 
   const existing = getAccessToken();
   if (isSessionTokenUsable(existing)) {

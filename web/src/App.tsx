@@ -46,6 +46,7 @@ import { PricingPage } from "./routes/PricingPage";
 import { EnterprisePage } from "./routes/EnterprisePage";
 import { SecurityPage } from "./routes/SecurityPage";
 import { InvitePage } from "./routes/InvitePage";
+import { EnterpriseInvitePage } from "./routes/EnterpriseInvitePage";
 import { WorkspaceChecklistHubPage } from "./routes/WorkspaceChecklistHubPage";
 import { GoKioskSessionLayout } from "./routes/GoKioskSessionLayout";
 import { GetAppPage } from "./routes/GetAppPage";
@@ -131,6 +132,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
+        <Route path="/enterprise-invite/:token" element={<EnterpriseInvitePage />} />
         <Route path="/checklist/:hubToken" element={<GoKioskSessionLayout />}>
           <Route index element={<WorkspaceChecklistHubPage />} />
           <Route path=":checklistId" element={<Navigate to=".." replace />} />

@@ -2,6 +2,10 @@ import { prisma } from "../prisma";
 import { normalizeEmailDomain, uniqueOrgSlug } from "./organization-sso";
 import { createEnterpriseAccount } from "./admin-platform";
 import { sendEnterpriseWelcomeEmail } from "./enterprise-welcome-email";
+import {
+  createOrganizationSignupInvite,
+  sendEnterpriseSignupEmail,
+} from "./enterprise-signup-invite";
 
 export type AdminOrganizationRow = {
   id: string;
@@ -128,37 +132,52 @@ export async function createAdminOrganization(input: {
   }
 
   let ownerUserId: string | null = null;
-  if (input.ownerEmail?.trim()) {
-    const email = input.ownerEmail.trim().toLowerCase();
+  let needsSignupInvite = false;
+  const ownerEmail = input.ownerEmail?.trim().toLowerCase() || null;
+  const ownerName =
+    input.ownerName?.trim() ||
+    (ownerEmail ? ownerEmail.split("@")[0] : "") ||
+    null;
+
+  if (ownerEmail) {
     const existing = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: "insensitive" } },
+      where: { email: { equals: ownerEmail, mode: "insensitive" } },
       select: { id: true },
     });
     if (existing) {
       ownerUserId = existing.id;
-    } else if (!input.ownerName?.trim()) {
-      return { ok: false as const, code: "OWNER_NAME_REQUIRED" as const };
+    } else {
+      needsSignupInvite = true;
     }
   }
 
   const slug = await uniqueOrgSlug(name);
 
-  // Optional: create first workspace via existing enterprise account helper.
+  // Create first workspace only when the owner already has an Alenio account.
+  // New owners get a signup invite and the workspace is created after they register.
   let createdWorkspace: { id: string; name: string; inviteCode: string } | null = null;
+  let pendingWorkspaceName: string | null = null;
+  let pendingPlan: string | null = null;
+
   if (input.initialWorkspaceName?.trim()) {
-    if (!input.ownerEmail?.trim() || !input.ownerName?.trim()) {
+    if (!ownerEmail) {
       return { ok: false as const, code: "OWNER_REQUIRED_FOR_WORKSPACE" as const };
     }
-    const workspace = await createEnterpriseAccount({
-      teamName: input.initialWorkspaceName.trim(),
-      ownerEmail: input.ownerEmail.trim(),
-      ownerName: input.ownerName.trim(),
-      ownerPassword: input.ownerPassword,
-      plan: input.plan,
-    });
-    if (!workspace.ok) return workspace;
-    createdWorkspace = workspace.team;
-    ownerUserId = workspace.owner.id;
+    if (ownerUserId) {
+      const workspace = await createEnterpriseAccount({
+        teamName: input.initialWorkspaceName.trim(),
+        ownerEmail,
+        ownerName: ownerName || ownerEmail.split("@")[0] || "Owner",
+        ownerPassword: input.ownerPassword,
+        plan: input.plan,
+      });
+      if (!workspace.ok) return workspace;
+      createdWorkspace = workspace.team;
+      ownerUserId = workspace.owner.id;
+    } else {
+      pendingWorkspaceName = input.initialWorkspaceName.trim();
+      pendingPlan = input.plan?.trim().toLowerCase() || "operations";
+    }
   }
 
   const org = await prisma.$transaction(async (tx) => {
@@ -202,16 +221,36 @@ export async function createAdminOrganization(input: {
     return created;
   });
 
-  let welcomeEmail: { sent: boolean; error?: string } | null = null;
-  const ownerEmail = input.ownerEmail?.trim().toLowerCase();
-  if (ownerEmail) {
-    welcomeEmail = await sendEnterpriseWelcomeEmail({
-      customerName: name,
-      ownerName: input.ownerName,
-      ownerEmail,
-      domain,
-      workspaceName: createdWorkspace?.name ?? input.initialWorkspaceName ?? null,
+  let welcomeEmail: { sent: boolean; error?: string; kind?: "signup" | "welcome" } | null = null;
+  if (ownerEmail && needsSignupInvite) {
+    const invite = await createOrganizationSignupInvite({
+      organizationId: org.id,
+      email: ownerEmail,
+      suggestedName: ownerName,
+      pendingWorkspaceName,
+      pendingPlan,
     });
+    welcomeEmail = {
+      ...(await sendEnterpriseSignupEmail({
+        customerName: name,
+        ownerEmail,
+        suggestedName: ownerName,
+        workspaceName: pendingWorkspaceName,
+        token: invite.token,
+      })),
+      kind: "signup",
+    };
+  } else if (ownerEmail) {
+    welcomeEmail = {
+      ...(await sendEnterpriseWelcomeEmail({
+        customerName: name,
+        ownerName,
+        ownerEmail,
+        domain,
+        workspaceName: createdWorkspace?.name ?? null,
+      })),
+      kind: "welcome",
+    };
   }
 
   const detail = await getAdminOrganization(org.id);

@@ -18,7 +18,6 @@ export function AdminEnterpriseCustomersPanel() {
   const [domain, setDomain] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerName, setOwnerName] = useState("");
-  const [ownerPassword, setOwnerPassword] = useState("");
   const [initialWorkspaceName, setInitialWorkspaceName] = useState("");
   const [plan, setPlan] = useState<"free" | "team" | "operations">("operations");
   const [formError, setFormError] = useState<string | null>(null);
@@ -43,21 +42,22 @@ export function AdminEnterpriseCustomersPanel() {
       setDomain("");
       setOwnerEmail("");
       setOwnerName("");
-      setOwnerPassword("");
       setInitialWorkspaceName("");
       setFormError(null);
       setSelectedId(result.organization.id);
-      if (result.welcomeEmail?.sent) {
-        setWelcomeNotice("Welcome email sent to the owner.");
+      if (result.welcomeEmail?.sent && result.welcomeEmail.kind === "signup") {
+        setWelcomeNotice("Sign-up email sent — the owner can create their username and password.");
+      } else if (result.welcomeEmail?.sent) {
+        setWelcomeNotice("Welcome email sent to the existing owner.");
       } else if (result.welcomeEmail && !result.welcomeEmail.sent) {
         setWelcomeNotice(
           result.welcomeEmail.error
-            ? `Customer created. Welcome email not sent: ${result.welcomeEmail.error}`
-            : "Customer created. Welcome email was not sent.",
+            ? `Customer created. Email not sent: ${result.welcomeEmail.error}`
+            : "Customer created. Email was not sent.",
         );
       } else {
         setWelcomeNotice(
-          "Enterprise customer created. Add an owner email next time to send the welcome email.",
+          "Enterprise customer created. Add an owner email to send a sign-up or welcome email.",
         );
       }
       await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
@@ -93,12 +93,19 @@ export function AdminEnterpriseCustomersPanel() {
       setFormError("Enter a customer name.");
       return;
     }
+    if (!ownerEmail.trim()) {
+      setFormError("Owner email is required so we can send the sign-up email.");
+      return;
+    }
+    if (initialWorkspaceName.trim() && !ownerEmail.trim()) {
+      setFormError("Owner email is required when creating the first workspace.");
+      return;
+    }
     createMutation.mutate({
       name: name.trim(),
       ...(domain.trim() ? { domain: domain.trim(), markDomainVerified: true } : {}),
-      ...(ownerEmail.trim() ? { ownerEmail: ownerEmail.trim() } : {}),
+      ownerEmail: ownerEmail.trim(),
       ...(ownerName.trim() ? { ownerName: ownerName.trim() } : {}),
-      ...(ownerPassword.trim() ? { ownerPassword: ownerPassword.trim() } : {}),
       ...(initialWorkspaceName.trim()
         ? { initialWorkspaceName: initialWorkspaceName.trim(), plan }
         : {}),
@@ -139,8 +146,8 @@ export function AdminEnterpriseCustomersPanel() {
         <form className="enterprise-card" onSubmit={onCreate} style={{ marginBottom: "1rem" }}>
           <h2 className="enterprise-card-title enterprise-card-title-spaced">Create enterprise customer</h2>
           <p className="enterprise-muted" style={{ marginBottom: "0.75rem", fontSize: 13 }}>
-            Creates an <strong>enterprise contract</strong> account — not a Stripe self-serve upgrade. If you include
-            an owner email, we send a welcome email with next steps for SSO.
+            Creates an <strong>enterprise contract</strong> account. We email the owner a link to create their
+            display name and password (or a welcome email if they already have an Alenio account).
           </p>
           <label className="auth-label" htmlFor="ent-name">
             Customer name
@@ -168,7 +175,7 @@ export function AdminEnterpriseCustomersPanel() {
           />
 
           <label className="auth-label" htmlFor="ent-owner-email">
-            Owner email (optional)
+            Owner email
           </label>
           <input
             id="ent-owner-email"
@@ -177,11 +184,12 @@ export function AdminEnterpriseCustomersPanel() {
             value={ownerEmail}
             onChange={(e) => setOwnerEmail(e.target.value)}
             placeholder="owner@acme.com"
+            required
             data-testid="admin-enterprise-owner-email"
           />
 
           <label className="auth-label" htmlFor="ent-owner-name">
-            Owner name (optional)
+            Owner display name (optional)
           </label>
           <input
             id="ent-owner-name"
@@ -206,18 +214,6 @@ export function AdminEnterpriseCustomersPanel() {
 
           {initialWorkspaceName.trim() ? (
             <>
-              <label className="auth-label" htmlFor="ent-password">
-                Owner password (required if owner is new)
-              </label>
-              <input
-                id="ent-password"
-                className="auth-input"
-                type="password"
-                autoComplete="new-password"
-                value={ownerPassword}
-                onChange={(e) => setOwnerPassword(e.target.value)}
-                data-testid="admin-enterprise-owner-password"
-              />
               <label className="auth-label" htmlFor="ent-plan">
                 Workspace feature plan (not the customer type)
               </label>
@@ -233,7 +229,7 @@ export function AdminEnterpriseCustomersPanel() {
                 <option value="free">Free features</option>
               </select>
               <p className="enterprise-muted" style={{ fontSize: 12, marginTop: 4 }}>
-                Customer stays Enterprise. This only sets which product features the first workspace unlocks.
+                If the owner is new, the workspace is created after they finish sign-up.
               </p>
             </>
           ) : null}

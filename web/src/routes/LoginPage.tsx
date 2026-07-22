@@ -9,7 +9,7 @@ import {
 } from "../lib/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors";
 import { authErrorMessage, messageLooksLikeResumeSignUp } from "../lib/signup-recovery";
-import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
+import { finishPostAuthNavigation, setPendingEnterpriseInviteToken, setPendingInviteToken } from "../lib/invite-auth";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { isSessionTokenExpired, isSessionTokenUsable } from "../lib/token";
 import { goToEmailVerification, needsEmailVerification } from "../lib/verify-redirect";
@@ -23,6 +23,7 @@ export function LoginPage() {
   const sessionExpired = reason === "session";
   const verified = params.get("verified") === "1";
   const inviteToken = (params.get("invite") ?? "").trim();
+  const enterpriseInviteToken = (params.get("enterpriseInvite") ?? "").trim();
   const emailFromInvite = (params.get("email") ?? "").trim().toLowerCase();
   const ssoStatus = params.get("sso");
   const ssoMessage = params.get("message");
@@ -41,6 +42,10 @@ export function LoginPage() {
   useEffect(() => {
     if (inviteToken) setPendingInviteToken(inviteToken);
   }, [inviteToken]);
+
+  useEffect(() => {
+    if (enterpriseInviteToken) setPendingEnterpriseInviteToken(enterpriseInviteToken);
+  }, [enterpriseInviteToken]);
 
   useEffect(() => {
     const t = getAccessToken();

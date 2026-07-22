@@ -251,6 +251,52 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
       END $$;
     `);
 
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS public."OrganizationSignupInvite" (
+        "id" TEXT NOT NULL,
+        "organizationId" TEXT NOT NULL,
+        "email" TEXT NOT NULL,
+        "suggestedName" TEXT,
+        "token" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "pendingWorkspaceName" TEXT,
+        "pendingPlan" TEXT,
+        "acceptedUserId" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "expiresAt" TIMESTAMP(3) NOT NULL,
+        "acceptedAt" TIMESTAMP(3),
+        CONSTRAINT "OrganizationSignupInvite_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "OrganizationSignupInvite_token_key"
+      ON public."OrganizationSignupInvite"("token");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "OrganizationSignupInvite_organizationId_status_idx"
+      ON public."OrganizationSignupInvite"("organizationId", "status");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "OrganizationSignupInvite_email_status_idx"
+      ON public."OrganizationSignupInvite"("email", "status");
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE public."OrganizationSignupInvite"
+          ADD CONSTRAINT "OrganizationSignupInvite_organizationId_fkey"
+          FOREIGN KEY ("organizationId") REFERENCES public."Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE public."OrganizationSignupInvite"
+          ADD CONSTRAINT "OrganizationSignupInvite_acceptedUserId_fkey"
+          FOREIGN KEY ("acceptedUserId") REFERENCES public."User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+
     console.log("[startup] ensureOrganizationSchema ok");
   } catch (err) {
     console.error("[startup] ensureOrganizationSchema failed:", err);
