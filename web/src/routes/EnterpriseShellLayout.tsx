@@ -10,7 +10,7 @@ import { hasMobileWebPreferred } from "../lib/app-links";
 import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, resolveEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle, enterpriseTeamNavTitle } from "../lib/enterprise-nav";
-import { isEnterpriseOrgMember } from "../lib/enterprise-org";
+import { isEnterpriseOrgAdmin, isEnterpriseOrgMember } from "../lib/enterprise-org";
 import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { greetingForHour } from "../lib/alenio-go-dashboard";
@@ -206,15 +206,19 @@ export function EnterpriseShellLayout() {
     teams !== null && effectiveTeamId ? teams.find((t) => t.id === effectiveTeamId)?.role : undefined;
   const teamNavLabel = enterpriseTeamNavTitle(workspaceRole);
   const viewerName = (me?.name ?? me?.email ?? "there").trim().split(/\s+/)[0] || "there";
+  const enterpriseMember = isEnterpriseOrgMember(me);
+  const enterpriseOrgAdmin = isEnterpriseOrgAdmin(me);
+  const goNavLabel = enterpriseOrgAdmin ? "Dashboard" : "Alenio Go";
   const topBarPageTitle = `${greetingForHour(new Date().getHours())}, ${viewerName} 👋`;
   const topBarPageSubtitle =
     activeNav === "team"
       ? "Review goals and what’s next for this teammate."
       : activeNav === "chat"
         ? undefined
-        : enterpriseNavTitle(activeNav);
+        : activeNav === "go" && enterpriseOrgAdmin
+          ? "Enterprise Dashboard"
+          : enterpriseNavTitle(activeNav);
   const hasNoTeams = teams !== null && teams.length === 0;
-  const enterpriseMember = isEnterpriseOrgMember(me);
   const isSettingsRoute =
     location.pathname.startsWith("/settings") || location.pathname.startsWith("/profile");
   const isAdminRoute = location.pathname.startsWith("/admin");
@@ -354,6 +358,7 @@ export function EnterpriseShellLayout() {
         showPlanNav={workspaceOwner && !hasNoTeams}
         showActivityExecuteNav={showActivityExecuteNav && !hasNoTeams}
         showGoNav={showGoNav}
+        goNavLabel={goNavLabel}
         showAdminNav={showAdminNav}
         teamNavLabel={teamNavLabel}
         setupNavMode={hasNoTeams}

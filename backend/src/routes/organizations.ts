@@ -19,7 +19,7 @@ import { exchangeOktaAuthorizationCode, fetchOktaUserClaims } from "../lib/okta-
 import { completeOktaSsoLogin } from "../lib/okta-sso-login";
 import { webAuthCallbackUrl, webPublicBaseUrl } from "../lib/web-public-url";
 import { generateScimBearerToken, toPublicScimConfig } from "../lib/scim-config";
-import { createOrganizationWorkspace } from "../lib/enterprise-org-access";
+import { createOrganizationWorkspace, deleteOrganizationWorkspace, renameOrganizationWorkspace } from "../lib/enterprise-org-access";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -281,6 +281,78 @@ organizationsRouter.post(
       return c.json({ error: { message: "Could not create workspace.", code: result.code } }, 400);
     }
     return c.json({ data: result }, 201);
+  },
+);
+
+organizationsRouter.patch(
+  "/:organizationId/workspaces/:teamId",
+  authGuard,
+  zValidator(
+    "json",
+    z.object({
+      name: z.string().trim().min(2).max(200),
+    }),
+  ),
+  async (c) => {
+    const user = c.get("user")!;
+    const { organizationId, teamId } = c.req.param();
+    const body = c.req.valid("json");
+    const result = await renameOrganizationWorkspace({
+      organizationId,
+      teamId,
+      userId: user.id,
+      name: body.name,
+    });
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") {
+        return c.json(
+          { error: { message: "Only enterprise org owners or admins can edit workspaces.", code: result.code } },
+          403,
+        );
+      }
+      if (result.code === "NOT_FOUND" || result.code === "TEAM_NOT_FOUND") {
+        return c.json({ error: { message: "Workspace not found.", code: result.code } }, 404);
+      }
+      if (result.code === "TEAM_NAME_TAKEN") {
+        return c.json({ error: { message: "A workspace with this name already exists.", code: result.code } }, 409);
+      }
+      return c.json({ error: { message: "Could not update workspace.", code: result.code } }, 400);
+    }
+    return c.json({ data: result });
+  },
+);
+
+organizationsRouter.delete(
+  "/:organizationId/workspaces/:teamId",
+  authGuard,
+  zValidator(
+    "json",
+    z.object({
+      confirmPhrase: z.literal("DELETE"),
+    }),
+  ),
+  async (c) => {
+    const user = c.get("user")!;
+    const { organizationId, teamId } = c.req.param();
+    c.req.valid("json");
+    const result = await deleteOrganizationWorkspace({
+      organizationId,
+      teamId,
+      userId: user.id,
+    });
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") {
+        return c.json(
+          { error: { message: "Only enterprise org owners or admins can delete workspaces.", code: result.code } },
+          403,
+        );
+      }
+      if (result.code === "NOT_FOUND" || result.code === "TEAM_NOT_FOUND") {
+        return c.json({ error: { message: "Workspace not found.", code: result.code } }, 404);
+      }
+      return c.json({ error: { message: "Could not delete workspace.", code: result.code } }, 500);
+    }
+    return c.json({ data: result });
   },
 );
 

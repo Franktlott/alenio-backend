@@ -11,7 +11,8 @@ export const ENTERPRISE_NAV_TITLES: Record<EnterpriseNavId, string> = {
   admin: "Admin",
 };
 
-export function enterpriseNavTitle(nav: EnterpriseNavId): string {
+export function enterpriseNavTitle(nav: EnterpriseNavId, opts?: { goLabel?: string }): string {
+  if (nav === "go" && opts?.goLabel) return opts.goLabel;
   return ENTERPRISE_NAV_TITLES[nav];
 }
 

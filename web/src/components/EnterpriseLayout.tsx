@@ -61,6 +61,8 @@ type Props = {
   showActivityExecuteNav: boolean;
   /** When false, Alenio Go is hidden (requires Operations plan). */
   showGoNav?: boolean;
+  /** Sidebar label for `/go` — e.g. "Dashboard" for enterprise org admins. */
+  goNavLabel?: string;
   /** When true, platform Admin sidebar item is shown. */
   showAdminNav?: boolean;
   /** Sidebar + page label for `/team` — "Profile" for regular members. */
@@ -343,6 +345,7 @@ export function EnterpriseLayout({
   showPlanNav,
   showActivityExecuteNav,
   showGoNav = false,
+  goNavLabel = "Alenio Go",
   showAdminNav = false,
   teamNavLabel = "Team",
   setupNavMode = false,
@@ -532,7 +535,7 @@ export function EnterpriseLayout({
                   navId="go"
                   activeNav={activeNav}
                   icon={<AlenioGoLogo />}
-                  label="Alenio Go"
+                  label={goNavLabel}
                 />
               ) : null}
               {showAdminNav ? <AdminNavItem activeNav={activeNav} icon={<IconAdmin />} /> : null}
@@ -555,7 +558,7 @@ export function EnterpriseLayout({
                   navId="go"
                   activeNav={activeNav}
                   icon={<AlenioGoLogo />}
-                  label="Alenio Go"
+                  label={goNavLabel}
                 />
               ) : null}
               <NavItem

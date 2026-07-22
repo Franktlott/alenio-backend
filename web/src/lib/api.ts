@@ -760,6 +760,28 @@ export function createEnterpriseOrganizationWorkspace(
   }>(`/api/organizations/${encodeURIComponent(organizationId)}/workspaces`, body).then((r) => r.data);
 }
 
+export function renameEnterpriseOrganizationWorkspace(
+  organizationId: string,
+  teamId: string,
+  body: { name: string },
+) {
+  return apiPatchJson<{
+    data: { team: { id: string; name: string; inviteCode: string } };
+  }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/workspaces/${encodeURIComponent(teamId)}`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function deleteEnterpriseOrganizationWorkspace(organizationId: string, teamId: string) {
+  return apiRequest<{
+    data: { deletedTeamId: string; deletedName: string };
+  }>(`/api/organizations/${encodeURIComponent(organizationId)}/workspaces/${encodeURIComponent(teamId)}`, {
+    method: "DELETE",
+    body: JSON.stringify({ confirmPhrase: "DELETE" }),
+  }).then((r) => r.data);
+}
+
 export function inviteMemberByEmail(teamId: string, email: string) {
   return apiPostJson<{
     data: {

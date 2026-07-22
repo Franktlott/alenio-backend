@@ -234,3 +234,106 @@ export async function createOrganizationWorkspace(input: {
     return { ok: false as const, code: "CREATE_FAILED" as const };
   }
 }
+
+async function requireOrgAdminForOrg(userId: string, organizationId: string) {
+  const membership = await prisma.organizationMembership.findUnique({
+    where: { organizationId_userId: { organizationId, userId } },
+    select: { role: true },
+  });
+  if (!membership || !ORG_GO_ADMIN_ROLES.has(membership.role)) return null;
+  return membership;
+}
+
+/** Rename a workspace that belongs to the enterprise org. */
+export async function renameOrganizationWorkspace(input: {
+  organizationId: string;
+  teamId: string;
+  userId: string;
+  name: string;
+}) {
+  if (!(await requireOrgAdminForOrg(input.userId, input.organizationId))) {
+    return { ok: false as const, code: "FORBIDDEN" as const };
+  }
+
+  const org = await prisma.organization.findUnique({
+    where: { id: input.organizationId },
+    select: { id: true, accountType: true, status: true },
+  });
+  if (!org || org.accountType !== "enterprise" || org.status !== "active") {
+    return { ok: false as const, code: "NOT_FOUND" as const };
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: input.teamId },
+    select: { id: true, name: true, inviteCode: true, organizationId: true },
+  });
+  if (!team || team.organizationId !== input.organizationId) {
+    return { ok: false as const, code: "TEAM_NOT_FOUND" as const };
+  }
+
+  const teamName = normalizeTeamName(input.name);
+  if (!teamName) return { ok: false as const, code: "VALIDATION" as const };
+
+  if (teamName.toLowerCase() !== team.name.trim().toLowerCase()) {
+    if (await isTeamDisplayNameTaken(teamName)) {
+      return { ok: false as const, code: "TEAM_NAME_TAKEN" as const };
+    }
+  }
+
+  try {
+    const updated = await prisma.team.update({
+      where: { id: team.id },
+      data: { name: teamName },
+      select: { id: true, name: true, inviteCode: true },
+    });
+    return { ok: true as const, team: updated };
+  } catch (err) {
+    if (isPrismaUniqueOnName(err)) {
+      return { ok: false as const, code: "TEAM_NAME_TAKEN" as const };
+    }
+    console.error("[enterprise-org] rename workspace failed:", err);
+    return { ok: false as const, code: "UPDATE_FAILED" as const };
+  }
+}
+
+/** Permanently delete a workspace that belongs to the enterprise org. */
+export async function deleteOrganizationWorkspace(input: {
+  organizationId: string;
+  teamId: string;
+  userId: string;
+}) {
+  if (!(await requireOrgAdminForOrg(input.userId, input.organizationId))) {
+    return { ok: false as const, code: "FORBIDDEN" as const };
+  }
+
+  const org = await prisma.organization.findUnique({
+    where: { id: input.organizationId },
+    select: { id: true, accountType: true, status: true, defaultTeamId: true },
+  });
+  if (!org || org.accountType !== "enterprise" || org.status !== "active") {
+    return { ok: false as const, code: "NOT_FOUND" as const };
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: input.teamId },
+    select: { id: true, name: true, organizationId: true },
+  });
+  if (!team || team.organizationId !== input.organizationId) {
+    return { ok: false as const, code: "TEAM_NOT_FOUND" as const };
+  }
+
+  try {
+    if (org.defaultTeamId === team.id) {
+      await prisma.organization.update({
+        where: { id: org.id },
+        data: { defaultTeamId: null },
+      });
+    }
+    const { deleteWorkspaceCompletely } = await import("./delete-workspace");
+    await deleteWorkspaceCompletely(team.id);
+    return { ok: true as const, deletedTeamId: team.id, deletedName: team.name };
+  } catch (err) {
+    console.error("[enterprise-org] delete workspace failed:", err);
+    return { ok: false as const, code: "DELETE_FAILED" as const };
+  }
+}
