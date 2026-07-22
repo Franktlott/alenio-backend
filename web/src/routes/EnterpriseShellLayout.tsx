@@ -11,10 +11,10 @@ import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../con
 import { fetchWebMe, fetchWebTeams, patchApiProfile, type WebMeUser, type WebTeamRow } from "../lib/api";
 import { getBrowserTimeZone } from "../lib/timezone";
 import { hasMobileWebPreferred } from "../lib/app-links";
-import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, resolveEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
+import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle, enterpriseTeamNavTitle } from "../lib/enterprise-nav";
-import { enterpriseOrgTeams, isEnterpriseOrgAdmin, isEnterpriseOrgMember } from "../lib/enterprise-org";
+import { isEnterpriseOrgAdmin, isEnterpriseOrgMember, isKnownEnterpriseWorkspace } from "../lib/enterprise-org";
 import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { greetingForHour } from "../lib/alenio-go-dashboard";
@@ -113,22 +113,27 @@ export function EnterpriseShellLayout() {
 
   const teamsWorkspaceKeyRef = useRef("");
   useEffect(() => {
-    if (!teams?.length) {
+    if (teams === null) return;
+    if (!teams.length) {
       teamsWorkspaceKeyRef.current = "";
-      setSelectedTeamId("");
+      // Org admins are often not TeamMembers — keep their selected org workspace.
+      setSelectedTeamId((prev) => (isKnownEnterpriseWorkspace(me, teams, prev) ? prev : ""));
       return;
     }
     const nextKey = teamsWorkspaceSelectionKey(teams);
     if (nextKey === teamsWorkspaceKeyRef.current) return;
     teamsWorkspaceKeyRef.current = nextKey;
-    setSelectedTeamId((prev) => pickEnterpriseTeamId(teams, prev));
-  }, [teams]);
+    setSelectedTeamId((prev) => {
+      if (isKnownEnterpriseWorkspace(me, teams, prev)) return prev;
+      return pickEnterpriseTeamId(teams, prev);
+    });
+  }, [teams, me]);
 
   useEffect(() => {
     if (!selectedTeamId) return;
-    if (teams !== null && !teams.some((t) => t.id === selectedTeamId)) return;
+    if (!isKnownEnterpriseWorkspace(me, teams, selectedTeamId)) return;
     setPersistedEnterpriseTeamId(selectedTeamId);
-  }, [selectedTeamId, teams]);
+  }, [selectedTeamId, teams, me]);
 
   const refreshMeAndTeams = useCallback(async () => {
     const [rawMe, t] = await Promise.all([fetchWebMe(), fetchWebTeams()]);
@@ -236,26 +241,27 @@ export function EnterpriseShellLayout() {
   const activeNav = activeNavFromPath(location.pathname);
 
   useEffect(() => {
-    if (!teams?.length) return;
+    if (teams === null || me === undefined) return;
     // Chat's teamId identifies the conversation being viewed, not the user's
     // globally selected workspace.
     if (location.pathname.startsWith("/chat")) return;
     const teamIdFromUrl = new URLSearchParams(location.search).get("teamId")?.trim() ?? "";
     if (!teamIdFromUrl) return;
-    const resolved = resolveEnterpriseTeamId(teams, { teamIdFromUrl }, selectedTeamId);
-    if (resolved && resolved !== selectedTeamId) {
-      setSelectedTeamId(resolved);
-      setPersistedEnterpriseTeamId(resolved);
+    if (!isKnownEnterpriseWorkspace(me, teams, teamIdFromUrl)) return;
+    if (teamIdFromUrl !== selectedTeamId) {
+      setSelectedTeamId(teamIdFromUrl);
+      setPersistedEnterpriseTeamId(teamIdFromUrl);
     }
-  }, [teams, location.pathname, location.search, selectedTeamId]);
+  }, [teams, me, location.pathname, location.search, selectedTeamId]);
 
   /** Resolve workspace before passive effects run pickEnterpriseTeamId — layout effects need this or owners get misclassified briefly. */
   const effectiveTeamId = useMemo(() => {
-    if (teams === null || !teams.length) return "";
-    const inList = selectedTeamId && teams.some((t) => t.id === selectedTeamId) ? selectedTeamId : "";
-    const picked = inList || pickEnterpriseTeamId(teams, selectedTeamId);
+    if (me === undefined || teams === null) return "";
+    if (isKnownEnterpriseWorkspace(me, teams, selectedTeamId)) return selectedTeamId;
+    if (!teams.length) return "";
+    const picked = pickEnterpriseTeamId(teams, selectedTeamId);
     return picked && teams.some((t) => t.id === picked) ? picked : "";
-  }, [teams, selectedTeamId]);
+  }, [teams, selectedTeamId, me]);
 
   const workspaceOwner =
     teams !== null && !!effectiveTeamId && teams.find((t) => t.id === effectiveTeamId)?.role === "owner";
@@ -365,10 +371,7 @@ export function EnterpriseShellLayout() {
     if (me === undefined || teams === null) return;
     if (selectedTeamId !== workspaceBoot.teamId) return;
     if (!bootRefreshDone) return;
-
-    const knownInPersonal = teams.some((t) => t.id === workspaceBoot.teamId);
-    const knownInOrg = enterpriseOrgTeams(me).some((t) => t.id === workspaceBoot.teamId);
-    if (!knownInPersonal && !knownInOrg) return;
+    if (!isKnownEnterpriseWorkspace(me, teams, workspaceBoot.teamId)) return;
 
     const id = window.setTimeout(() => setBootTabsReady(true), 40);
     return () => window.clearTimeout(id);
@@ -456,6 +459,10 @@ export function EnterpriseShellLayout() {
   const showEnterpriseSsoBoot =
     Boolean(workspaceBoot) || me === undefined || (enterpriseMember && teams === null);
 
+  const shellSelectedTeamId = isKnownEnterpriseWorkspace(me, teams, selectedTeamId)
+    ? selectedTeamId
+    : effectiveTeamId;
+
   return (
     <EnterpriseShellContext.Provider value={contextValue}>
       {showEnterpriseSsoBoot ? (
@@ -477,7 +484,7 @@ export function EnterpriseShellLayout() {
       <EnterpriseLayout
         activeNav={activeNav}
         teams={teams ?? []}
-        selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : ""}
+        selectedTeamId={shellSelectedTeamId}
         onTeamChange={setSelectedTeamId}
         user={me ?? null}
         onSignOutNavigate={(path) => navigate(path)}
@@ -486,7 +493,7 @@ export function EnterpriseShellLayout() {
             user={me ?? null}
             pageTitle={topBarPageTitle}
             pageSubtitle={topBarPageSubtitle}
-            selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
+            selectedTeamId={shellSelectedTeamId}
           />
         }
         mainClassName={mainClassName}
