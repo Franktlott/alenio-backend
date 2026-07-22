@@ -5,7 +5,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { healWalksSchemaIfNeeded, prismaRouteError } from "../lib/prisma-errors";
 import { listWalkItemTypeCatalog } from "../lib/walks/item-types/registry";
-import { assertCanManageWalks, assertCanViewWalks } from "../lib/walks/permissions";
+import { assertCanEditWalkStandards, assertCanManageWalks, assertCanViewWalks } from "../lib/walks/permissions";
 import { serializeWalkSection } from "../lib/walks/serialize";
 import { WALK_ITEM_TYPES, WALK_LIBRARY_CATEGORIES, WALK_TEMPLATE_STATUSES } from "../lib/walks/types";
 import * as libraryService from "../lib/walks/library-service";
@@ -124,7 +124,7 @@ walksRouter.post("/templates", zValidator("json", createTemplateSchema), async (
   const teamId = c.req.param("teamId")!;
   const uid = userId(c);
   if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-  const gate = await assertCanManageWalks(teamId, uid);
+  const gate = await assertCanEditWalkStandards(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   const body = c.req.valid("json");
   try {
@@ -167,7 +167,7 @@ walksRouter.patch("/templates/:templateId", zValidator("json", patchTemplateSche
   const templateId = c.req.param("templateId")!;
   const uid = userId(c);
   if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-  const gate = await assertCanManageWalks(teamId, uid);
+  const gate = await assertCanEditWalkStandards(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
     const data = await withWalksSchemaRetry(() =>
@@ -777,7 +777,7 @@ walksRouter.post("/library/items", zValidator("json", libraryCreateSchema), asyn
   const teamId = c.req.param("teamId")!;
   const uid = userId(c);
   if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-  const gate = await assertCanManageWalks(teamId, uid);
+  const gate = await assertCanEditWalkStandards(teamId, uid);
   if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
   try {
     const result = await libraryService.createLibraryItem({
@@ -826,7 +826,7 @@ walksRouter.patch(
     const itemId = c.req.param("itemId")!;
     const uid = userId(c);
     if (!uid) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-    const gate = await assertCanManageWalks(teamId, uid);
+    const gate = await assertCanEditWalkStandards(teamId, uid);
     if (!gate.ok) return c.json({ error: { message: gate.message, code: "FORBIDDEN" } }, gate.status);
     try {
       const result = await libraryService.updateLibraryItem(

@@ -17,6 +17,12 @@ import { WalkSchedulesPage } from "./routes/alenio-go/WalkSchedulesPage";
 import { TempsModuleLayout } from "./routes/alenio-go/TempsModuleLayout";
 import { TempsDashboardPage } from "./routes/alenio-go/TempsDashboardPage";
 import { TempsReportsPage } from "./routes/alenio-go/TempsReportsPage";
+import { EnterpriseOrgGoLayout } from "./routes/alenio-go/EnterpriseOrgGoLayout";
+import { EnterpriseOrgGoOverviewPage } from "./routes/alenio-go/EnterpriseOrgGoOverviewPage";
+import { EnterpriseOrgGoModulesPage } from "./routes/alenio-go/EnterpriseOrgGoModulesPage";
+import { EnterpriseOrgGoLibraryPage } from "./routes/alenio-go/EnterpriseOrgGoLibraryPage";
+import { EnterpriseOrgGoWorkspacesPage } from "./routes/alenio-go/EnterpriseOrgGoWorkspacesPage";
+import { EnterpriseOrgGoStubPage } from "./routes/alenio-go/EnterpriseOrgGoStubPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { AdminPage } from "./routes/AdminPage";
 import { BillingPage } from "./routes/BillingPage";
@@ -156,6 +162,18 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/go" element={<AlenioGoLayout />}>
             <Route index element={<AlenioGoHomePage />} />
+            <Route path="org" element={<EnterpriseOrgGoLayout />}>
+              <Route index element={<Navigate to="overview" replace />} />
+              <Route path="overview" element={<EnterpriseOrgGoOverviewPage />} />
+              <Route path="modules" element={<EnterpriseOrgGoModulesPage />} />
+              <Route path="library" element={<EnterpriseOrgGoLibraryPage />} />
+              <Route path="workspaces" element={<EnterpriseOrgGoWorkspacesPage />} />
+              <Route path="templates" element={<EnterpriseOrgGoStubPage title="Templates" />} />
+              <Route path="procedures" element={<EnterpriseOrgGoStubPage title="Procedures" />} />
+              <Route path="devices" element={<EnterpriseOrgGoStubPage title="Devices" />} />
+              <Route path="policies" element={<EnterpriseOrgGoStubPage title="Policies" />} />
+              <Route path="reports" element={<EnterpriseOrgGoStubPage title="Reports" />} />
+            </Route>
             <Route path="alerts" element={<AlenioGoAlertsModulePage />} />
             <Route path="devices/*" element={<AlenioGoLinkedDevicesRoutes />} />
             <Route path="setup" element={<Navigate to="/go/devices" replace />} />

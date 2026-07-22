@@ -1105,6 +1105,24 @@ teamsRouter.get("/:teamId/modules", async (c) => {
   return c.json({ data: { modules } });
 });
 
+// GET /api/teams/:teamId/go/assigned-modules — enterprise org-assigned modules for configure mode
+teamsRouter.get("/:teamId/go/assigned-modules", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+    select: { id: true },
+  });
+  const { userCanManageEnterpriseOrgTeam } = await import("../lib/enterprise-org-access");
+  const orgManaged = await userCanManageEnterpriseOrgTeam(user.id, teamId);
+  if (!membership && !orgManaged) {
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+  const { listAssignedModulesForWorkspace } = await import("../lib/org-go/modules");
+  const data = await listAssignedModulesForWorkspace(teamId);
+  return c.json({ data });
+});
+
 // GET /api/teams/:teamId/modules/:moduleKey
 teamsRouter.get("/:teamId/modules/:moduleKey", async (c) => {
   const user = c.get("user")!;

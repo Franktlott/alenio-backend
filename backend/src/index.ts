@@ -24,6 +24,7 @@ import { mobileBillingRouter } from "./routes/mobile-billing";
 import { activityRouter } from "./routes/activity";
 import { userActivityRouter } from "./routes/user-activity";
 import { organizationsRouter, ssoPublicRouter } from "./routes/organizations";
+import { orgGoRouter } from "./routes/org-go";
 import { scimRouter } from "./routes/scim";
 
 import { topicsRouter } from "./routes/topics";
@@ -73,6 +74,7 @@ import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
 import { ensureWalksSchema } from "./lib/ensure-walks-schema";
 import { ensureBetterAuthSchema } from "./lib/ensure-better-auth-schema";
 import { ensureOrganizationSchema } from "./lib/ensure-organization-schema";
+import { ensureOrgGoSchema } from "./lib/ensure-org-go-schema";
 import { ensureSenecaStudioSchema } from "./lib/ensure-seneca-studio-schema";
 import { webPublicBaseUrl } from "./lib/web-public-url";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
@@ -101,6 +103,7 @@ if (!isProduction) {
 const startupSchemaReady = Promise.all([
   ensureBetterAuthSchema(prisma),
   ensureOrganizationSchema(prisma),
+  ensureOrgGoSchema(prisma),
   ensureSenecaStudioSchema(prisma),
   ...(isProduction
     ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureTaskArchiveSchema(prisma)]
@@ -1267,6 +1270,7 @@ app.route("/api/teams", calendarRouter);
 app.route("/api/teams", activityRouter);
 app.route("/api/activity", userActivityRouter);
 app.route("/api/organizations", organizationsRouter);
+app.route("/api/organizations", orgGoRouter);
 app.route("/api/sso", ssoPublicRouter);
 app.route("/scim/v2", scimRouter);
 app.route("/api/teams", topicsRouter);

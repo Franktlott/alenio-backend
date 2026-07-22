@@ -1,6 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
+import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
+import { fetchWorkspaceAssignedModules, type OrgGoModulePermissions } from "../../lib/api";
+import { primaryEnterpriseOrg } from "../../lib/enterprise-org";
 
 function IconDashboard() {
   return (
@@ -140,13 +143,50 @@ function NavItem({
 
 export function TempsModuleLayout() {
   const goShell = useAlenioGoShell();
+  const { me } = useEnterpriseShell();
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const [enterpriseMode, setEnterpriseMode] = useState(false);
+  const [flags, setFlags] = useState<OrgGoModulePermissions | null>(null);
+  const org = primaryEnterpriseOrg(me);
+  const teamQs = goShell.teamId ? `?teamId=${encodeURIComponent(goShell.teamId)}` : "";
 
   useEffect(() => {
     setNavOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!goShell.teamId || !org) {
+      setEnterpriseMode(false);
+      setFlags(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchWorkspaceAssignedModules(goShell.teamId)
+      .then((data) => {
+        if (cancelled) return;
+        const temps = data.modules.find((m) => m.moduleKey === "temp-checks");
+        if (data.enterprise && temps?.workspacePermissions) {
+          setEnterpriseMode(true);
+          setFlags(temps.workspacePermissions);
+        } else {
+          setEnterpriseMode(false);
+          setFlags(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEnterpriseMode(false);
+          setFlags(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [goShell.teamId, org?.id]);
+
+  const lockBuild = enterpriseMode && flags && !flags.allowTemplateEdits;
 
   return (
     <div className={`temps-module${navOpen ? " temps-module--nav-open" : ""}`} data-testid="temps-module-shell">
@@ -164,37 +204,73 @@ export function TempsModuleLayout() {
           type="button"
           className="temps-nav-logo"
           aria-label="Back to Alenio Go"
-          onClick={() => navigate("/go")}
+          onClick={() => navigate(org ? `/go${teamQs}` : "/go")}
         >
           <TempsBrandMark />
         </button>
 
         <nav className="temps-nav-scroll">
-          <div className="temps-nav-section">
-            <NavItem to="/go/temp-checks/overview" end icon={<IconDashboard />}>
-              Dashboard
-            </NavItem>
-          </div>
+          {enterpriseMode ? (
+            <>
+              <div className="temps-nav-section">
+                <p className="temps-nav-section-label">Configure</p>
+                <NavItem to="/go/temp-checks/overview" end icon={<IconDashboard />}>
+                  Today
+                </NavItem>
+                <NavItem to="/go/temp-checks/module" icon={<IconChecklists />}>
+                  Modules
+                </NavItem>
+                <NavItem to="/go/temp-checks/schedule" icon={<IconSchedule />}>
+                  Schedules
+                </NavItem>
+                <NavItem
+                  to="/go/temp-checks/library"
+                  matchPrefix="/go/temp-checks/library"
+                  icon={<IconItems />}
+                  soon={!!lockBuild}
+                >
+                  Equipment
+                </NavItem>
+                <NavItem to={`/go/devices${teamQs}`} icon={<IconLocations />}>
+                  Devices
+                </NavItem>
+              </div>
+              <div className="temps-nav-section">
+                <p className="temps-nav-section-label">Insights</p>
+                <NavItem to="/go/temp-checks/reports" icon={<IconReports />}>
+                  Reports
+                </NavItem>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="temps-nav-section">
+                <NavItem to="/go/temp-checks/overview" end icon={<IconDashboard />}>
+                  Dashboard
+                </NavItem>
+              </div>
 
-          <div className="temps-nav-section">
-            <p className="temps-nav-section-label">Build</p>
-            <NavItem to="/go/temp-checks/library" matchPrefix="/go/temp-checks/library" icon={<IconItems />}>
-              Item Library
-            </NavItem>
-            <NavItem to="/go/temp-checks/walks" matchPrefix="/go/temp-checks/walks" icon={<IconChecklists />}>
-              Checklists
-            </NavItem>
-            <NavItem to="/go/temp-checks/schedule" icon={<IconSchedule />}>
-              Schedule
-            </NavItem>
-          </div>
+              <div className="temps-nav-section">
+                <p className="temps-nav-section-label">Build</p>
+                <NavItem to="/go/temp-checks/library" matchPrefix="/go/temp-checks/library" icon={<IconItems />}>
+                  Item Library
+                </NavItem>
+                <NavItem to="/go/temp-checks/walks" matchPrefix="/go/temp-checks/walks" icon={<IconChecklists />}>
+                  Checklists
+                </NavItem>
+                <NavItem to="/go/temp-checks/schedule" icon={<IconSchedule />}>
+                  Schedule
+                </NavItem>
+              </div>
 
-          <div className="temps-nav-section">
-            <p className="temps-nav-section-label">Insights</p>
-            <NavItem to="/go/temp-checks/reports" icon={<IconReports />}>
-              Reports
-            </NavItem>
-          </div>
+              <div className="temps-nav-section">
+                <p className="temps-nav-section-label">Insights</p>
+                <NavItem to="/go/temp-checks/reports" icon={<IconReports />}>
+                  Reports
+                </NavItem>
+              </div>
+            </>
+          )}
         </nav>
 
         <div className="temps-nav-footer">
@@ -240,6 +316,12 @@ export function TempsModuleLayout() {
             Alenio <em>Temps</em>
           </span>
         </div>
+        {enterpriseMode ? (
+          <div className="temps-enterprise-banner" role="status">
+            Corporate standards — local configuration only
+            {lockBuild ? ". Template and library edits are locked by your organization." : null}
+          </div>
+        ) : null}
         <Outlet context={goShell} />
       </div>
     </div>

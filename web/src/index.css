@@ -54886,3 +54886,178 @@ a.go-mod-btn {
 .enterprise-team-profile-wd-main--unified .enterprise-recognition-rail-card:not(:last-child) {
   border-bottom: 1px solid #eef1f5;
 }
+
+/* Enterprise org-first Alenio Go (corporate standards) */
+.enterprise-org-go {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: calc(100vh - 4rem);
+  background: #f4f6f9;
+}
+.enterprise-org-go-nav {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 1.25rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.enterprise-org-go-nav-brand {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.35rem 0.5rem 0.85rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+.enterprise-org-go-nav-brand strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #f8fafc;
+}
+.enterprise-org-go-eyebrow {
+  margin: 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.enterprise-org-go-nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.enterprise-org-go-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.enterprise-org-go-link:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: #fff;
+}
+.enterprise-org-go-link.is-active {
+  background: #1d4ed8;
+  color: #fff;
+}
+.enterprise-org-go-link.is-soon {
+  opacity: 0.72;
+}
+.enterprise-org-go-soon {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+.enterprise-org-go-main {
+  padding: 1.5rem 1.75rem 2rem;
+  min-width: 0;
+}
+.enterprise-org-go-page-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.enterprise-org-go-page-head h1 {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 1.5rem;
+}
+.enterprise-org-go-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.enterprise-org-go-stat {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.enterprise-org-go-stat strong {
+  font-size: 1.5rem;
+}
+.enterprise-org-go-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.enterprise-org-go-split {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.2fr);
+  gap: 1rem;
+}
+.enterprise-org-go-module-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.enterprise-org-go-module-list button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  font: inherit;
+}
+.enterprise-org-go-module-list button span {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+.enterprise-org-go-module-list button.is-active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+.enterprise-org-go-team-checks,
+.enterprise-org-go-perm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+}
+.enterprise-org-go-perm {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.temps-enterprise-banner {
+  margin: 0.75rem 1rem 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+@media (max-width: 900px) {
+  .enterprise-org-go {
+    grid-template-columns: 1fr;
+  }
+  .enterprise-org-go-nav {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .enterprise-org-go-split {
+    grid-template-columns: 1fr;
+  }
+}

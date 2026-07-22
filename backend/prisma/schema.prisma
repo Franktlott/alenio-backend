@@ -136,6 +136,8 @@ model Organization {
   memberships  OrganizationMembership[]
   scimUsers    OrganizationScimUser[]
   signupInvites OrganizationSignupInvite[]
+  goModules    OrganizationModule[]
+  walkLibraryItems WalkLibraryItem[]
 }
 
 /// Verified email domains that route login to an organization (e.g. acme.com).
@@ -232,6 +234,59 @@ model OrganizationMembership {
   @@index([organizationId])
 }
 
+/// Enterprise org-owned Alenio Go module (corporate standards).
+/// status: draft | published | archived
+model OrganizationModule {
+  id             String   @id @default(cuid())
+  organizationId String
+  moduleKey      String
+  moduleName     String
+  status         String   @default("draft")
+  /** Org-wide defaults (limits, photos, signatures, offline, branding, languages). */
+  defaultsJson   Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization     Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments      OrganizationModuleAssignment[]
+  workspaceModules WorkspaceModule[]
+
+  @@unique([organizationId, moduleKey])
+  @@index([organizationId])
+}
+
+/// How an org module is rolled out to workspaces. scope: organization | workspaces
+model OrganizationModuleAssignment {
+  id                      String   @id @default(cuid())
+  organizationModuleId    String
+  scope                   String   @default("organization")
+  allowScheduleEdits      Boolean  @default(true)
+  allowEquipmentAdditions Boolean  @default(true)
+  allowLocalNotes         Boolean  @default(true)
+  allowLocalNotifications Boolean  @default(true)
+  /** Template/SOP edits locked unless explicitly allowed. */
+  allowTemplateEdits      Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  organizationModule OrganizationModule                @relation(fields: [organizationModuleId], references: [id], onDelete: Cascade)
+  teams              OrganizationModuleAssignmentTeam[]
+
+  @@index([organizationModuleId])
+}
+
+model OrganizationModuleAssignmentTeam {
+  id           String @id @default(cuid())
+  assignmentId String
+  teamId       String
+
+  assignment OrganizationModuleAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  team       Team                         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, teamId])
+  @@index([teamId])
+}
+
 model Team {
   id          String       @id @default(cuid())
   /** Trimmed in API; unique so two workspaces cannot share the same name (case-insensitive check in routes). */
@@ -275,6 +330,7 @@ model Team {
   walkRuns WalkRun[]
   walkLibraryItems WalkLibraryItem[]
   walkOccurrences WalkOccurrence[]
+  moduleAssignmentTeams OrganizationModuleAssignmentTeam[]
   conversations Conversation[]
   workspaceModules WorkspaceModule[]
   moduleTestSessions ModuleTestSession[]
@@ -312,13 +368,17 @@ model WorkspaceModule {
   allowedTestingUserIds      String?
   /// JSON string array of roles allowed to see the module while testing.
   allowedTestingRoles        String?
+  /// Optional link to the org module this workspace instance was synced from (enterprise).
+  organizationModuleId String?
   createdAt              DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  organizationModule OrganizationModule? @relation(fields: [organizationModuleId], references: [id], onDelete: SetNull)
 
   @@unique([teamId, moduleKey])
   @@index([teamId])
+  @@index([organizationModuleId])
 }
 
 /// Admin-only record of a testing session for a module (feeds the Testing Sessions view).
@@ -880,9 +940,11 @@ model BriefingCompletion {
 }
 
 /// Workspace reusable inspection item (catalog head). status: ACTIVE | ARCHIVED
+/// Owned by a workspace (teamId) OR an enterprise organization (organizationId) — not both.
 model WalkLibraryItem {
   id               String   @id @default(cuid())
-  teamId           String
+  teamId           String?
+  organizationId   String?
   name             String
   description      String?
   category         String   @default("Custom")
@@ -894,13 +956,16 @@ model WalkLibraryItem {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  team        Team                     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  versions    WalkLibraryItemVersion[]
-  placements  WalkTemplatePlacement[]
+  team         Team?                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  organization Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions     WalkLibraryItemVersion[]
+  placements   WalkTemplatePlacement[]
 
   @@index([teamId, status])
   @@index([teamId, type])
   @@index([teamId, category])
+  @@index([organizationId, status])
+  @@index([organizationId, type])
 }
 
 /// Immutable library item configuration. Edits create a new version row.

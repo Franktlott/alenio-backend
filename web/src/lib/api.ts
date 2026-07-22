@@ -782,6 +782,117 @@ export function deleteEnterpriseOrganizationWorkspace(organizationId: string, te
   }).then((r) => r.data);
 }
 
+export type OrgGoModulePermissions = {
+  allowScheduleEdits: boolean;
+  allowEquipmentAdditions: boolean;
+  allowLocalNotes: boolean;
+  allowLocalNotifications: boolean;
+  allowTemplateEdits: boolean;
+};
+
+export type OrgGoModule = {
+  id: string;
+  organizationId: string;
+  moduleKey: string;
+  moduleName: string;
+  status: string;
+  defaults: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  assignment: {
+    id: string;
+    scope: "organization" | "workspaces";
+    teamIds: string[];
+    teams: Array<{ id: string; name: string }>;
+    permissions: OrgGoModulePermissions;
+  } | null;
+  workspacePermissions?: OrgGoModulePermissions;
+};
+
+export function fetchOrgGoOverview(organizationId: string) {
+  return apiGetJson<{
+    data: {
+      workspaceCount: number;
+      libraryItemCount: number;
+      moduleCount: number;
+      publishedModuleCount: number;
+      workspacesWithAssignments: number;
+      modules: OrgGoModule[];
+    };
+  }>(`/api/organizations/${encodeURIComponent(organizationId)}/go/overview`).then((r) => r.data);
+}
+
+export function fetchOrgGoModules(organizationId: string) {
+  return apiGetJson<{ data: { modules: OrgGoModule[] } }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/go/modules`,
+  ).then((r) => r.data.modules);
+}
+
+export function upsertOrgGoModule(
+  organizationId: string,
+  body: {
+    moduleKey: string;
+    moduleName?: string;
+    status?: "draft" | "published" | "archived";
+    defaults?: Record<string, unknown>;
+  },
+) {
+  return apiPostJson<{ data: OrgGoModule }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/go/modules`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function setOrgGoModuleAssignment(
+  organizationId: string,
+  moduleId: string,
+  body: {
+    scope: "organization" | "workspaces";
+    teamIds?: string[];
+    permissions?: Partial<OrgGoModulePermissions>;
+  },
+) {
+  return apiPutJson<{ data: OrgGoModule }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/go/modules/${encodeURIComponent(moduleId)}/assignment`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function fetchOrgGoLibrary(organizationId: string, params?: { q?: string; status?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.q) qs.set("q", params.q);
+  if (params?.status) qs.set("status", params.status);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return apiGetJson<{ data: { items: unknown[] } }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/go/library${suffix}`,
+  ).then((r) => r.data.items);
+}
+
+export function createOrgGoLibraryItem(
+  organizationId: string,
+  body: {
+    name: string;
+    description?: string | null;
+    category?: string;
+    type: string;
+    instructions?: string | null;
+    requiredDefault?: boolean;
+    config?: unknown;
+    deviceMethods?: unknown;
+  },
+) {
+  return apiPostJson<{ data: { item: unknown } }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/go/library`,
+    body,
+  ).then((r) => r.data.item);
+}
+
+export function fetchWorkspaceAssignedModules(teamId: string) {
+  return apiGetJson<{
+    data: { enterprise: boolean; modules: OrgGoModule[] };
+  }>(`/api/teams/${encodeURIComponent(teamId)}/go/assigned-modules`).then((r) => r.data);
+}
+
 export function inviteMemberByEmail(teamId: string, email: string) {
   return apiPostJson<{
     data: {
