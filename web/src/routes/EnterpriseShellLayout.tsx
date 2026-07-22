@@ -10,6 +10,7 @@ import { hasMobileWebPreferred } from "../lib/app-links";
 import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, resolveEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle, enterpriseTeamNavTitle } from "../lib/enterprise-nav";
+import { isEnterpriseOrgMember } from "../lib/enterprise-org";
 import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { greetingForHour } from "../lib/alenio-go-dashboard";
@@ -213,21 +214,25 @@ export function EnterpriseShellLayout() {
         ? undefined
         : enterpriseNavTitle(activeNav);
   const hasNoTeams = teams !== null && teams.length === 0;
+  const enterpriseMember = isEnterpriseOrgMember(me);
   const isSettingsRoute =
     location.pathname.startsWith("/settings") || location.pathname.startsWith("/profile");
   const isAdminRoute = location.pathname.startsWith("/admin");
+  const isGoRoute = location.pathname.startsWith("/go");
   const showAdminNav = me?.isAdmin === true;
-  const showNoTeamsEmptyState = hasNoTeams && !isSettingsRoute && !isAdminRoute;
+  /** Self-serve users without a workspace see setup. Enterprise customers skip it — they use org Go. */
+  const showNoTeamsEmptyState =
+    hasNoTeams && !enterpriseMember && !isSettingsRoute && !isAdminRoute;
   /** Treat missing `hasTeamFeatures` as allowed so refetches / first paint never redirect to Chat. */
   const showActivityExecuteNav =
     teams === null ||
     !effectiveTeamId ||
     teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures !== false;
   /**
-   * Alenio Go: Operations workspaces, or always during no-workspace setup
-   * (enterprise onboarding shows Go + Settings only).
+   * Alenio Go: enterprise org members always; otherwise Operations workspace or no-team setup.
    */
   const showGoNav =
+    enterpriseMember ||
     hasNoTeams ||
     (teams !== null &&
       !!effectiveTeamId &&
@@ -239,19 +244,36 @@ export function EnterpriseShellLayout() {
     navigate("/get-app", { replace: true });
   }, [navigate]);
 
+  /** Enterprise customers land in Alenio Go instead of workspace create/join. */
+  useLayoutEffect(() => {
+    if (teams === null || me === undefined) return;
+    if (!enterpriseMember || !hasNoTeams) return;
+    if (isSettingsRoute || isAdminRoute || isGoRoute) return;
+    navigate("/go", { replace: true });
+  }, [
+    teams,
+    me,
+    enterpriseMember,
+    hasNoTeams,
+    isSettingsRoute,
+    isAdminRoute,
+    isGoRoute,
+    navigate,
+  ]);
+
   /** Plan / billing is owner-only; Workspace requires Pro+; Go requires Operations; Admin is platform-admin-only. */
   useLayoutEffect(() => {
     if (teams === null) return;
     const path = location.pathname;
     if (path.startsWith("/admin")) {
       if (me !== undefined && me?.isAdmin !== true) {
-        navigate("/dashboard", { replace: true });
+        navigate(enterpriseMember ? "/go" : "/dashboard", { replace: true });
       }
       return;
     }
     if (path.startsWith("/billing")) {
       if (!workspaceOwner && effectiveTeamId) {
-        navigate("/dashboard", { replace: true });
+        navigate(enterpriseMember ? "/go" : "/dashboard", { replace: true });
       }
       return;
     }
@@ -261,9 +283,19 @@ export function EnterpriseShellLayout() {
     }
     const isTeamGatedShellRoute = path.startsWith("/dashboard") || path.startsWith("/tasks/new");
     if (isTeamGatedShellRoute && !showActivityExecuteNav && path !== "/chat") {
-      navigate("/chat", { replace: true });
+      navigate(enterpriseMember ? "/go" : "/chat", { replace: true });
     }
-  }, [teams, location.pathname, workspaceOwner, showActivityExecuteNav, showGoNav, effectiveTeamId, navigate, me]);
+  }, [
+    teams,
+    location.pathname,
+    workspaceOwner,
+    showActivityExecuteNav,
+    showGoNav,
+    effectiveTeamId,
+    navigate,
+    me,
+    enterpriseMember,
+  ]);
 
   const contextValue = useMemo<EnterpriseShellContextValue>(
     () => ({
@@ -319,8 +351,8 @@ export function EnterpriseShellLayout() {
         mainClassName={mainClassName}
         contentClassName={contentClassName}
         workspaceOverlayLoading={workspaceMainLoading}
-        showPlanNav={workspaceOwner}
-        showActivityExecuteNav={showActivityExecuteNav}
+        showPlanNav={workspaceOwner && !hasNoTeams}
+        showActivityExecuteNav={showActivityExecuteNav && !hasNoTeams}
         showGoNav={showGoNav}
         showAdminNav={showAdminNav}
         teamNavLabel={teamNavLabel}

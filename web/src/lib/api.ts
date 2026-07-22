@@ -183,6 +183,22 @@ export type WebMeUser = {
   timezone?: string | null;
   /** Platform admin — Alenio-wide Admin tab /ops. Absent on older API responses. */
   isAdmin?: boolean;
+  /** Enterprise contract orgs this user belongs to (with all linked workspaces). */
+  organizations?: WebEnterpriseOrganization[];
+};
+
+export type WebEnterpriseOrganization = {
+  id: string;
+  name: string;
+  slug: string;
+  accountType: string;
+  role: string;
+  teams: Array<{
+    id: string;
+    name: string;
+    inviteCode: string | null;
+    hasGoFeatures: boolean;
+  }>;
 };
 
 export type WebTeamRow = {

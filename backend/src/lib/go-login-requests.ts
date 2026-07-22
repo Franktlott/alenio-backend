@@ -26,13 +26,18 @@ export async function findTeamByInviteCode<T extends { id: string }>(
   return (insensitive as T | null) ?? null;
 }
 
-/** Owners and team leaders can approve Alenio Go device links. */
+/** Owners and team leaders can approve Alenio Go device links.
+ * Enterprise org owners/admins can manage Go for every workspace in their org.
+ */
 export async function canManageGoLoginRequests(teamId: string, userId: string): Promise<boolean> {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId, teamId } },
   });
-  if (!membership) return false;
-  return membership.role === "owner" || membership.role === "team_leader";
+  if (membership && (membership.role === "owner" || membership.role === "team_leader")) {
+    return true;
+  }
+  const { userCanManageEnterpriseOrgTeam } = await import("./enterprise-org-access");
+  return userCanManageEnterpriseOrgTeam(userId, teamId);
 }
 
 export async function notifyGoLoginApprovers(

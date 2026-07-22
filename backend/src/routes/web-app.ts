@@ -107,7 +107,9 @@ webRouter.get("/api/me", async (c) => {
   });
   // Do not return 200 + null — that lets the empty-workspace UI look "signed in" with a broken user row.
   if (!user) return c.json({ error: "Unauthorized" }, 401);
-  return c.json({ data: user });
+  const { listEnterpriseOrganizationsForUser } = await import("../lib/enterprise-org-access");
+  const organizations = await listEnterpriseOrganizationsForUser(userId);
+  return c.json({ data: { ...user, organizations } });
 });
 
 // ── API: teams list ───────────────────────────────────────────────────────────
@@ -194,7 +196,9 @@ webRouter.get("/api/teams/:id", async (c) => {
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
   const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
-  if (!membership) return c.json({ error: "Not found" }, 404);
+  const { userCanManageEnterpriseOrgTeam } = await import("../lib/enterprise-org-access");
+  const orgAdmin = membership ? false : await userCanManageEnterpriseOrgTeam(userId, id);
+  if (!membership && !orgAdmin) return c.json({ error: "Not found" }, 404);
   const team = await prisma.team.findUnique({
     where: { id },
     select: {
@@ -226,7 +230,7 @@ webRouter.get("/api/teams/:id", async (c) => {
     data: {
       ...team,
       members,
-      myRole: membership.role,
+      myRole: membership?.role ?? (orgAdmin ? "org_admin" : "member"),
       workplaceStandards,
       goFrontendSettings,
       requiredCheckInTemplateTitle,

@@ -93,13 +93,18 @@ export function getModuleDefinition(moduleKey: string): ModuleDefinition | null 
   return MODULE_DEFINITIONS.find((m) => m.moduleKey === moduleKey) ?? null;
 }
 
-/** Owners and team leaders manage module lifecycle. */
+/** Owners and team leaders manage module lifecycle.
+ * Enterprise org owners/admins can manage modules for org workspaces.
+ */
 export async function canManageModules(teamId: string, userId: string): Promise<boolean> {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId, teamId } },
   });
-  if (!membership) return false;
-  return membership.role === "owner" || membership.role === "team_leader";
+  if (membership && (membership.role === "owner" || membership.role === "team_leader")) {
+    return true;
+  }
+  const { userCanManageEnterpriseOrgTeam } = await import("./enterprise-org-access");
+  return userCanManageEnterpriseOrgTeam(userId, teamId);
 }
 
 function parseStringArray(raw: string | null | undefined): string[] {
