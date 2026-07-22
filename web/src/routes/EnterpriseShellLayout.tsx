@@ -223,11 +223,15 @@ export function EnterpriseShellLayout() {
     teams === null ||
     !effectiveTeamId ||
     teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures !== false;
-  /** Alenio Go only on Operations — missing flag means hidden (safer default). */
+  /**
+   * Alenio Go: Operations workspaces, or always during no-workspace setup
+   * (enterprise onboarding shows Go + Settings only).
+   */
   const showGoNav =
-    teams !== null &&
-    !!effectiveTeamId &&
-    teams.find((t) => t.id === effectiveTeamId)?.hasGoFeatures === true;
+    hasNoTeams ||
+    (teams !== null &&
+      !!effectiveTeamId &&
+      teams.find((t) => t.id === effectiveTeamId)?.hasGoFeatures === true);
 
   /** Phone browsers should use the native app unless the user chose web explicitly. */
   useLayoutEffect(() => {
@@ -320,6 +324,7 @@ export function EnterpriseShellLayout() {
         showGoNav={showGoNav}
         showAdminNav={showAdminNav}
         teamNavLabel={teamNavLabel}
+        setupNavMode={hasNoTeams}
       >
         {teams === null ? (
           <EnterprisePageLoading label="Loading your workspace" />

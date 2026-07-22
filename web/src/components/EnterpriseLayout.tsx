@@ -65,6 +65,11 @@ type Props = {
   showAdminNav?: boolean;
   /** Sidebar + page label for `/team` — "Profile" for regular members. */
   teamNavLabel?: string;
+  /**
+   * No workspace yet — only Alenio Go (+ Admin if platform admin), Settings, and Sign out.
+   * Hides Chat / Workspace / Team / Billing and the workspace switcher.
+   */
+  setupNavMode?: boolean;
 };
 
 const WORKSPACE_OVERLAY_MIN_MS = 220;
@@ -340,6 +345,7 @@ export function EnterpriseLayout({
   showGoNav = false,
   showAdminNav = false,
   teamNavLabel = "Team",
+  setupNavMode = false,
 }: Props) {
   const [showWorkspaceOverlay, setShowWorkspaceOverlay] = useState(false);
   /** User changed workspace (sidebar or profile); until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
@@ -518,32 +524,56 @@ export function EnterpriseLayout({
           <img src="/icon.png" alt="" className="enterprise-sidebar-mark" width={60} height={60} />
         </Link>
         <nav className="enterprise-nav" aria-label="Product">
-          <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
-          {showActivityExecuteNav ? (
-            <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconWorkspace />} label="Workspace" />
-          ) : null}
-          {showGoNav ? (
-            <NavItem
-              to="/go"
-              navId="go"
-              activeNav={activeNav}
-              icon={<AlenioGoLogo />}
-              label="Alenio Go"
-            />
-          ) : null}
-          <NavItem
-            to="/team"
-            navId="team"
-            activeNav={activeNav}
-            icon={teamNavLabel === "Profile" ? <IconProfile /> : <IconTeam />}
-            label={teamNavLabel}
-          />
-          {showPlanNav ? (
-            <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
-          ) : null}
-          {showAdminNav ? <AdminNavItem activeNav={activeNav} icon={<IconAdmin />} /> : null}
+          {setupNavMode ? (
+            <>
+              {showGoNav ? (
+                <NavItem
+                  to="/go"
+                  navId="go"
+                  activeNav={activeNav}
+                  icon={<AlenioGoLogo />}
+                  label="Alenio Go"
+                />
+              ) : null}
+              {showAdminNav ? <AdminNavItem activeNav={activeNav} icon={<IconAdmin />} /> : null}
+            </>
+          ) : (
+            <>
+              <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
+              {showActivityExecuteNav ? (
+                <NavItem
+                  to="/dashboard"
+                  navId="execute"
+                  activeNav={activeNav}
+                  icon={<IconWorkspace />}
+                  label="Workspace"
+                />
+              ) : null}
+              {showGoNav ? (
+                <NavItem
+                  to="/go"
+                  navId="go"
+                  activeNav={activeNav}
+                  icon={<AlenioGoLogo />}
+                  label="Alenio Go"
+                />
+              ) : null}
+              <NavItem
+                to="/team"
+                navId="team"
+                activeNav={activeNav}
+                icon={teamNavLabel === "Profile" ? <IconProfile /> : <IconTeam />}
+                label={teamNavLabel}
+              />
+              {showPlanNav ? (
+                <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
+              ) : null}
+              {showAdminNav ? <AdminNavItem activeNav={activeNav} icon={<IconAdmin />} /> : null}
+            </>
+          )}
         </nav>
         <div className="enterprise-rail-footer">
+          {!setupNavMode ? (
           <div
             className="enterprise-rail-footer-item-wrap"
             ref={workspaceWrapRef}
@@ -645,6 +675,7 @@ export function EnterpriseLayout({
                 )
               : null}
           </div>
+          ) : null}
           <Link
             to="/settings"
             className={`enterprise-nav-item${activeNav === "settings" ? " enterprise-nav-item-active" : ""}`}
