@@ -13,6 +13,7 @@ import {
 import {
   attachTeamToOrganization,
   createAdminOrganization,
+  deleteAdminOrganization,
   getAdminOrganization,
   listAdminOrganizations,
 } from "../lib/admin-organizations";
@@ -589,5 +590,19 @@ adminApiRouter.post(
     }
   },
 );
+
+adminApiRouter.delete("/organizations/:organizationId", async (c) => {
+  const { organizationId } = c.req.param();
+  try {
+    const result = await deleteAdminOrganization(organizationId);
+    if (!result.ok) {
+      return c.json({ error: { message: "Enterprise customer not found", code: result.code } }, 404);
+    }
+    return c.json({ data: result });
+  } catch (err) {
+    console.error("[admin] delete organization failed:", err);
+    return c.json({ error: { message: "Could not remove enterprise customer", code: "DELETE_FAILED" } }, 500);
+  }
+});
 
 export { adminApiRouter };

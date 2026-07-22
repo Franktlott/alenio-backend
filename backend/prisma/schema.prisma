@@ -114,8 +114,8 @@ model Organization {
   /** "active" | "suspended" */
   status        String   @default("active")
   /**
-   * Always "enterprise" for Organization rows.
-   * Self-serve Stripe customers are Team + TeamSubscription only (no Organization).
+   * "enterprise" = Alenio Enterprise contract customer (Admin → Enterprise customers).
+   * "workspace" = SSO/SCIM shell created from a normal workspace (not a contract customer).
    */
   accountType   String   @default("enterprise")
   /** When true, users on verified org domains must use this org's SSO (not password / shared Microsoft). */

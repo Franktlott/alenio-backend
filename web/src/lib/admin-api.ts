@@ -182,6 +182,19 @@ export async function attachAdminOrganizationTeam(
   return normalizeCreatedAt(res.data);
 }
 
+export async function deleteAdminOrganization(organizationId: string): Promise<{
+  deleted: { id: string; name: string; slug: string };
+  unlinkedWorkspaces: Array<{ id: string; name: string }>;
+}> {
+  const res = await apiDeleteJson<{
+    data: {
+      deleted: { id: string; name: string; slug: string };
+      unlinkedWorkspaces: Array<{ id: string; name: string }>;
+    };
+  }>(`/api/admin/organizations/${encodeURIComponent(organizationId)}`);
+  return res.data;
+}
+
 export function formatAdminDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
     month: "short",

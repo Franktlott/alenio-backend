@@ -137,6 +137,8 @@ organizationsRouter.post(
         data: {
           name,
           slug,
+          // Workspace SSO shell — not an Alenio Enterprise contract customer.
+          accountType: "workspace",
           defaultTeamId: team.id,
           memberships: {
             create: {

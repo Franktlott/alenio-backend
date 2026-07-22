@@ -28,6 +28,13 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
       ALTER TABLE public."Organization"
         ADD COLUMN IF NOT EXISTS "accountType" TEXT NOT NULL DEFAULT 'enterprise';
     `);
+    // Pre-enterprise Okta setup created Organization shells for normal workspaces.
+    // Keep those as accountType=workspace so they do not appear as contract customers.
+    await prisma.$executeRawUnsafe(`
+      UPDATE public."Organization"
+      SET "accountType" = 'workspace', "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "slug" = 'wawa-5101' AND "accountType" = 'enterprise';
+    `);
 
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "Organization_slug_key" ON "Organization"("slug");

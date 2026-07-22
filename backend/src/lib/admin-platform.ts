@@ -117,7 +117,9 @@ export async function listPlatformTeams(limit = 200) {
   });
 
   return teams.map((team) => {
-    const isEnterprise = Boolean(team.organizationId && team.organization);
+    const isEnterprise =
+      Boolean(team.organizationId && team.organization) &&
+      (team.organization?.accountType || "enterprise") === "enterprise";
     return {
       id: team.id,
       name: team.name,
@@ -126,9 +128,9 @@ export async function listPlatformTeams(limit = 200) {
       memberCount: team._count.members,
       taskCount: team._count.tasks,
       owner: team.members[0]?.user ?? null,
-      /** "enterprise" = linked to an Organization (contract customer). "self_serve" = Stripe/plan only. */
+      /** "enterprise" = linked to a contract Organization. "self_serve" = Stripe/plan only (or workspace SSO org). */
       billingChannel: isEnterprise ? ("enterprise" as const) : ("self_serve" as const),
-      organization: team.organization
+      organization: isEnterprise && team.organization
         ? {
             id: team.organization.id,
             name: team.organization.name,

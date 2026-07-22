@@ -22,7 +22,9 @@ export type AdminOrganizationRow = {
 };
 
 export async function listAdminOrganizations(): Promise<AdminOrganizationRow[]> {
+  // Contract customers only — workspace SSO orgs (accountType "workspace") stay off this list.
   const orgs = await prisma.organization.findMany({
+    where: { accountType: "enterprise" },
     orderBy: { createdAt: "desc" },
     include: {
       domains: { orderBy: { createdAt: "asc" }, take: 1 },
@@ -240,4 +242,49 @@ export async function attachTeamToOrganization(organizationId: string, teamId: s
 
   const detail = await getAdminOrganization(organizationId);
   return { ok: true as const, organization: detail! };
+}
+
+/**
+ * Remove an enterprise customer record.
+ * Linked workspaces are kept and unlinked (back to self-serve).
+ */
+export async function deleteAdminOrganization(organizationId: string) {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { id: true, name: true, slug: true, defaultTeamId: true },
+  });
+  if (!org) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  const linkedTeams = await prisma.team.findMany({
+    where: { organizationId },
+    select: { id: true, name: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.organization.update({
+      where: { id: organizationId },
+      data: { defaultTeamId: null },
+    });
+    await tx.team.updateMany({
+      where: { organizationId },
+      data: { organizationId: null },
+    });
+    await tx.organization.delete({ where: { id: organizationId } });
+  });
+
+  return {
+    ok: true as const,
+    deleted: { id: org.id, name: org.name, slug: org.slug },
+    unlinkedWorkspaces: linkedTeams,
+  };
+}
+
+/** One-shot cleanup: demote a misclassified org by slug (keeps workspaces). */
+export async function demoteOrganizationBySlug(slug: string) {
+  const org = await prisma.organization.findUnique({
+    where: { slug },
+    select: { id: true },
+  });
+  if (!org) return { ok: false as const, code: "NOT_FOUND" as const };
+  return deleteAdminOrganization(org.id);
 }

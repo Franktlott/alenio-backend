@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import {
   createAdminOrganization,
+  deleteAdminOrganization,
   fetchAdminOrganization,
   fetchAdminOrganizations,
   formatAdminDate,
@@ -64,6 +65,21 @@ export function AdminEnterpriseCustomersPanel() {
     },
     onError: (err) => {
       setFormError(err instanceof Error ? err.message : "Could not create enterprise customer.");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteAdminOrganization,
+    onSuccess: async (result) => {
+      setSelectedId(null);
+      setWelcomeNotice(
+        `Removed ${result.deleted.name}. ${result.unlinkedWorkspaces.length} workspace(s) kept as self-serve.`,
+      );
+      await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "teams"] });
+    },
+    onError: (err) => {
+      setWelcomeNotice(err instanceof Error ? err.message : "Could not remove enterprise customer.");
     },
   });
 
@@ -374,16 +390,35 @@ export function AdminEnterpriseCustomersPanel() {
                   )}
 
                   <p className="enterprise-muted" style={{ marginTop: "1rem", fontSize: 12 }}>
-                    Next: attach existing workspaces, manage SSO/SCIM from admin, and invite org owners.
+                    Remove clears the enterprise customer only. Linked workspaces stay and become self-serve again.
                   </p>
-                  <button
-                    type="button"
-                    className="enterprise-team-btn-outline"
-                    style={{ marginTop: "0.75rem" }}
-                    onClick={() => setSelectedId(null)}
-                  >
-                    Close
-                  </button>
+                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="enterprise-team-btn-destructive"
+                      disabled={deleteMutation.isPending}
+                      data-testid="admin-enterprise-remove"
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Remove enterprise customer “${detail.name}”? Workspaces stay; they will no longer be marked Enterprise.`,
+                          )
+                        ) {
+                          return;
+                        }
+                        deleteMutation.mutate(detail.id);
+                      }}
+                    >
+                      {deleteMutation.isPending ? "Removing…" : "Remove customer"}
+                    </button>
+                    <button
+                      type="button"
+                      className="enterprise-team-btn-outline"
+                      onClick={() => setSelectedId(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
                 </>
               )}
             </aside>
