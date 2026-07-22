@@ -341,11 +341,21 @@ export async function addUserToTeam(teamId: string, userId: string): Promise<{ r
   return { role: newMemberRole };
 }
 
-export function buildInviteLinks(token: string): { webUrl: string; appUrl: string } {
+export function buildInviteLinks(token: string): {
+  webUrl: string;
+  /** HTTPS bridge for email clients (Gmail blocks custom schemes). */
+  appUrl: string;
+  /** Native app scheme deep link. */
+  appDeepLink: string;
+} {
   const webBase = (env.WEB_PUBLIC_URL ?? env.BACKEND_URL).replace(/\/$/, "");
-  const webUrl = `${webBase}/invite/${encodeURIComponent(token)}`;
-  const appUrl = `${env.APP_SCHEME}://invite/${encodeURIComponent(token)}`;
-  return { webUrl, appUrl };
+  const backendBase = env.BACKEND_URL.replace(/\/$/, "");
+  const encoded = encodeURIComponent(token);
+  const webUrl = `${webBase}/invite/${encoded}`;
+  const appDeepLink = `${env.APP_SCHEME}://invite/${encoded}`;
+  // Email buttons must use HTTPS — same pattern as /reset-password → alenio://…
+  const appUrl = `${backendBase}/open-invite?token=${encoded}`;
+  return { webUrl, appUrl, appDeepLink };
 }
 
 export async function sendTeamInviteEmail(input: TeamInviteEmailInput): Promise<{ sent: boolean; error?: string }> {
