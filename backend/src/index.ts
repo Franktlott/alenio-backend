@@ -24,6 +24,7 @@ import { mobileBillingRouter } from "./routes/mobile-billing";
 import { activityRouter } from "./routes/activity";
 import { userActivityRouter } from "./routes/user-activity";
 import { organizationsRouter, ssoPublicRouter } from "./routes/organizations";
+import { scimRouter } from "./routes/scim";
 
 import { topicsRouter } from "./routes/topics";
 import { adminRouter } from "./routes/admin";
@@ -292,6 +293,7 @@ async function waitForStartupSchema(c: { req: { path: string } }, next: () => Pr
 app.use("/api/*", waitForStartupSchema);
 app.use("/web/*", waitForStartupSchema);
 app.use("/admin/*", waitForStartupSchema);
+app.use("/scim/*", waitForStartupSchema);
 
 // Stripe webhooks need the raw body for signature verification (must run before JSON parsers on this path only — no global body parser).
 app.post("/api/webhooks/stripe", handleStripeWebhook);
@@ -1260,6 +1262,7 @@ app.route("/api/teams", activityRouter);
 app.route("/api/activity", userActivityRouter);
 app.route("/api/organizations", organizationsRouter);
 app.route("/api/sso", ssoPublicRouter);
+app.route("/scim/v2", scimRouter);
 app.route("/api/teams", topicsRouter);
 app.route("/api/teams", pollsRouter);
 app.route("/api/og-preview", ogPreviewRouter);

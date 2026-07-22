@@ -202,9 +202,9 @@ export function ProfilePage() {
             <section className="enterprise-card seneca-studio-settings-entry" data-testid="settings-okta-entry">
               <div className="seneca-studio-settings-entry-row">
                 <div>
-                  <h2 className="enterprise-card-title enterprise-card-title-spaced">Okta SSO</h2>
+                  <h2 className="enterprise-card-title enterprise-card-title-spaced">Okta SSO & SCIM</h2>
                   <p className="enterprise-muted seneca-studio-settings-entry-desc">
-                    Connect your company Okta so teammates can sign in with their work identity.
+                    Connect Okta for company sign-in and optional automatic user provisioning.
                   </p>
                 </div>
                 <Link to="/settings/sso/okta" className="auth-submit seneca-studio-settings-entry-btn">

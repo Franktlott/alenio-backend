@@ -24,6 +24,10 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true,
         },
+        "/scim": {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
         "/web": {
           target: proxyTarget,
           changeOrigin: true,

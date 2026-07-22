@@ -64,6 +64,7 @@ model User {
   pollVotes     PollVote[] @relation("PollVoteUser")
   subtaskCompletions SubtaskCompletion[]
   organizationMemberships OrganizationMembership[]
+  organizationScimUsers OrganizationScimUser[]
 }
 
 model Session {
@@ -122,7 +123,9 @@ model Organization {
   teams        Team[]                    @relation("OrgWorkspaces")
   domains      OrganizationDomain[]
   ssoConfig    OrganizationSsoConfig?
+  scimConfig   OrganizationScimConfig?
   memberships  OrganizationMembership[]
+  scimUsers    OrganizationScimUser[]
 }
 
 /// Verified email domains that route login to an organization (e.g. acme.com).
@@ -163,6 +166,43 @@ model OrganizationSsoConfig {
   updatedAt        DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+/// SCIM 2.0 provisioning credentials for an organization (Okta → Alenio directory sync).
+model OrganizationScimConfig {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  enabled        Boolean  @default(false)
+  /** SHA-256 hex of the bearer token. */
+  tokenHash      String?
+  /** First characters of the token for admin display (not secret). */
+  tokenPrefix    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+/// SCIM-managed user link for an organization (tracks active + userName independently of User).
+model OrganizationScimUser {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  userName       String
+  externalId     String?
+  active         Boolean  @default(true)
+  givenName      String?
+  familyName     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userName])
+  @@unique([organizationId, userId])
+  @@index([organizationId, active])
+  @@index([userId])
 }
 
 /// Company-level membership (separate from TeamMember workspace roles).

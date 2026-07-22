@@ -2425,10 +2425,20 @@ export type OrganizationSsoPublicConfig = {
   callbackUrl: string;
 };
 
+export type OrganizationScimPublicConfig = {
+  enabled: boolean;
+  hasToken: boolean;
+  tokenPrefix: string | null;
+  baseUrl: string;
+  organizationId: string;
+  token?: string;
+};
+
 export type OrganizationForTeamResponse = {
   team: { id: string; name: string; organizationId: string | null };
   organization: { id: string; name: string; slug: string; ssoRequired: boolean } | null;
   sso: OrganizationSsoPublicConfig | { enabled: boolean; provider: string; organizationName: string } | null;
+  scim: OrganizationScimPublicConfig | { enabled: boolean } | null;
 };
 
 export function fetchOrganizationForTeam(teamId: string) {
@@ -2477,4 +2487,24 @@ export function discoverSsoForEmail(email: string) {
       reason?: string;
     };
   }>("/api/sso/discover", { email }).then((r) => r.data);
+}
+
+export function fetchOrganizationScim(organizationId: string) {
+  return apiGetJson<{ data: OrganizationScimPublicConfig }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/scim`,
+  ).then((r) => r.data);
+}
+
+export function saveOrganizationScim(organizationId: string, enabled: boolean) {
+  return apiPutJson<{ data: OrganizationScimPublicConfig }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/scim`,
+    { enabled },
+  ).then((r) => r.data);
+}
+
+export function regenerateOrganizationScimToken(organizationId: string) {
+  return apiPostJson<{ data: OrganizationScimPublicConfig }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/scim/token`,
+    {},
+  ).then((r) => r.data);
 }

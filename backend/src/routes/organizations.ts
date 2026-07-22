@@ -18,6 +18,7 @@ import {
 import { exchangeOktaAuthorizationCode, fetchOktaUserClaims } from "../lib/okta-oidc";
 import { completeOktaSsoLogin } from "../lib/okta-sso-login";
 import { webAuthCallbackUrl, webPublicBaseUrl } from "../lib/web-public-url";
+import { generateScimBearerToken, toPublicScimConfig } from "../lib/scim-config";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -64,6 +65,7 @@ async function loadOrgSsoBundle(organizationId: string) {
     where: { id: organizationId },
     include: {
       ssoConfig: true,
+      scimConfig: true,
       domains: { orderBy: { createdAt: "asc" }, take: 1 },
     },
   });
@@ -201,6 +203,11 @@ organizationsRouter.get("/for-team/:teamId", authGuard, async (c) => {
             enabled: Boolean(org.ssoConfig?.enabled),
             provider: org.ssoConfig?.provider ?? "okta",
             organizationName: org.name,
+          },
+      scim: canManage
+        ? toPublicScimConfig({ organizationId: org.id, scim: org.scimConfig })
+        : {
+            enabled: Boolean(org.scimConfig?.enabled),
           },
     },
   });
@@ -343,12 +350,122 @@ organizationsRouter.get("/:organizationId/sso", authGuard, async (c) => {
     return c.json({ error: { message: "Organization not found", code: "NOT_FOUND" } }, 404);
   }
   return c.json({
-    data: toPublicSsoConfig({
-      org,
-      sso: org.ssoConfig,
-      domain: org.domains[0] ?? null,
-      backendUrl: env.BACKEND_URL,
+    data: {
+      sso: toPublicSsoConfig({
+        org,
+        sso: org.ssoConfig,
+        domain: org.domains[0] ?? null,
+        backendUrl: env.BACKEND_URL,
+      }),
+      scim: toPublicScimConfig({ organizationId: org.id, scim: org.scimConfig }),
+    },
+  });
+});
+
+organizationsRouter.get("/:organizationId/scim", authGuard, async (c) => {
+  const user = c.get("user")!;
+  const { organizationId } = c.req.param();
+  if (!(await requireOrgOwner(user.id, organizationId))) {
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+  const org = await loadOrgSsoBundle(organizationId);
+  if (!org) {
+    return c.json({ error: { message: "Organization not found", code: "NOT_FOUND" } }, 404);
+  }
+  return c.json({
+    data: toPublicScimConfig({ organizationId: org.id, scim: org.scimConfig }),
+  });
+});
+
+organizationsRouter.put(
+  "/:organizationId/scim",
+  authGuard,
+  zValidator(
+    "json",
+    z.object({
+      enabled: z.boolean(),
     }),
+  ),
+  async (c) => {
+    const user = c.get("user")!;
+    const { organizationId } = c.req.param();
+    const body = c.req.valid("json");
+
+    if (!(await requireOrgOwner(user.id, organizationId))) {
+      return c.json({ error: { message: "Only organization owners can configure SCIM", code: "FORBIDDEN" } }, 403);
+    }
+
+    const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true } });
+    if (!org) {
+      return c.json({ error: { message: "Organization not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    const existing = await prisma.organizationScimConfig.findUnique({ where: { organizationId } });
+    if (body.enabled && !existing?.tokenHash) {
+      return c.json(
+        {
+          error: {
+            message: "Generate a SCIM token before enabling provisioning",
+            code: "VALIDATION_ERROR",
+          },
+        },
+        400,
+      );
+    }
+
+    const scim = await prisma.organizationScimConfig.upsert({
+      where: { organizationId },
+      create: {
+        organizationId,
+        enabled: body.enabled,
+      },
+      update: {
+        enabled: body.enabled,
+        updatedAt: new Date(),
+      },
+    });
+
+    return c.json({
+      data: toPublicScimConfig({ organizationId, scim }),
+    });
+  },
+);
+
+organizationsRouter.post("/:organizationId/scim/token", authGuard, async (c) => {
+  const user = c.get("user")!;
+  const { organizationId } = c.req.param();
+
+  if (!(await requireOrgOwner(user.id, organizationId))) {
+    return c.json({ error: { message: "Only organization owners can manage SCIM tokens", code: "FORBIDDEN" } }, 403);
+  }
+
+  const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true } });
+  if (!org) {
+    return c.json({ error: { message: "Organization not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  const generated = generateScimBearerToken();
+  const scim = await prisma.organizationScimConfig.upsert({
+    where: { organizationId },
+    create: {
+      organizationId,
+      enabled: true,
+      tokenHash: generated.tokenHash,
+      tokenPrefix: generated.tokenPrefix,
+    },
+    update: {
+      tokenHash: generated.tokenHash,
+      tokenPrefix: generated.tokenPrefix,
+      enabled: true,
+      updatedAt: new Date(),
+    },
+  });
+
+  return c.json({
+    data: {
+      ...toPublicScimConfig({ organizationId, scim }),
+      token: generated.token,
+    },
   });
 });
 

@@ -163,6 +163,78 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
       CREATE UNIQUE INDEX IF NOT EXISTS "SsoOidcState_state_key" ON "SsoOidcState"("state");
     `);
 
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "OrganizationScimConfig" (
+        "id" TEXT NOT NULL,
+        "organizationId" TEXT NOT NULL,
+        "enabled" BOOLEAN NOT NULL DEFAULT false,
+        "tokenHash" TEXT,
+        "tokenPrefix" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "OrganizationScimConfig_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "OrganizationScimConfig_organizationId_key"
+      ON "OrganizationScimConfig"("organizationId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "OrganizationScimConfig"
+          ADD CONSTRAINT "OrganizationScimConfig_organizationId_fkey"
+          FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "OrganizationScimUser" (
+        "id" TEXT NOT NULL,
+        "organizationId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "userName" TEXT NOT NULL,
+        "externalId" TEXT,
+        "active" BOOLEAN NOT NULL DEFAULT true,
+        "givenName" TEXT,
+        "familyName" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "OrganizationScimUser_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "OrganizationScimUser_organizationId_userName_key"
+      ON "OrganizationScimUser"("organizationId", "userName");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "OrganizationScimUser_organizationId_userId_key"
+      ON "OrganizationScimUser"("organizationId", "userId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "OrganizationScimUser_organizationId_active_idx"
+      ON "OrganizationScimUser"("organizationId", "active");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "OrganizationScimUser_userId_idx" ON "OrganizationScimUser"("userId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "OrganizationScimUser"
+          ADD CONSTRAINT "OrganizationScimUser_organizationId_fkey"
+          FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "OrganizationScimUser"
+          ADD CONSTRAINT "OrganizationScimUser_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+
     console.log("[startup] ensureOrganizationSchema ok");
   } catch (err) {
     console.error("[startup] ensureOrganizationSchema failed:", err);
