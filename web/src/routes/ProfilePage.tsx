@@ -17,7 +17,8 @@ import {
   uploadProfilePhoto,
   type WebTeamRow,
 } from "../lib/api";
-import { pickEnterpriseTeamId, setPersistedEnterpriseTeamId, switchEnterpriseWorkspace } from "../lib/enterprise-selected-team";
+import { pickEnterpriseTeamId, switchEnterpriseWorkspace } from "../lib/enterprise-selected-team";
+import { isEnterpriseOrgMember } from "../lib/enterprise-org";
 import { senecaStudioAccess } from "../lib/seneca-studio-api";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "../lib/timezone";
 import { UserAvatar } from "../components/UserAvatar";
@@ -49,6 +50,7 @@ export function ProfilePage() {
     selectedTeamId,
     setSelectedTeamId,
     refreshMeAndTeams,
+    beginEnterpriseWorkspaceBoot,
   } = useEnterpriseShell();
   const queryClient = useQueryClient();
   const [nameEdit, setNameEdit] = useState("");
@@ -377,6 +379,7 @@ export function ProfilePage() {
             selectedTeamId={selectedTeamId}
             onSelectWorkspace={(teamId) => {
               if (!teamId || teamId === selectedTeamId) return;
+              if (isEnterpriseOrgMember(me)) beginEnterpriseWorkspaceBoot(teamId);
               switchEnterpriseWorkspace(teamId, setSelectedTeamId);
             }}
             onRefresh={refreshMeAndTeams}
@@ -385,6 +388,7 @@ export function ProfilePage() {
               setTeams(fresh ?? []);
               if (selectedTeamId === deletedId) {
                 const next = pickEnterpriseTeamId(fresh ?? [], "");
+                if (next && isEnterpriseOrgMember(me)) beginEnterpriseWorkspaceBoot(next);
                 switchEnterpriseWorkspace(next, setSelectedTeamId);
               }
               await refreshMeAndTeams();

@@ -72,6 +72,8 @@ type Props = {
    * Hides Chat / Workspace / Team / Billing and the workspace switcher.
    */
   setupNavMode?: boolean;
+  /** Enterprise: start SSO-style boot before switching workspace (tabs settle under overlay). */
+  onEnterpriseWorkspaceBoot?: (teamId: string) => void;
 };
 
 const WORKSPACE_OVERLAY_MIN_MS = 220;
@@ -349,6 +351,7 @@ export function EnterpriseLayout({
   showAdminNav = false,
   teamNavLabel = "Team",
   setupNavMode = false,
+  onEnterpriseWorkspaceBoot,
 }: Props) {
   const [showWorkspaceOverlay, setShowWorkspaceOverlay] = useState(false);
   /** User changed workspace (sidebar or profile); until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
@@ -419,6 +422,11 @@ export function EnterpriseLayout({
 
   const handleWorkspaceSelectChange = (teamId: string) => {
     if (teamId === selectedTeamId) return;
+    if (onEnterpriseWorkspaceBoot) {
+      onEnterpriseWorkspaceBoot(teamId);
+      switchEnterpriseWorkspace(teamId, onTeamChange);
+      return;
+    }
     beginWorkspaceSwitchOverlay();
     switchEnterpriseWorkspace(teamId, onTeamChange);
   };

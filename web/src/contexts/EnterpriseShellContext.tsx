@@ -9,6 +9,11 @@ export type EnterpriseShellContextValue = {
   selectedTeamId: string;
   setSelectedTeamId: Dispatch<SetStateAction<string>>;
   setWorkspaceMainLoading: (v: boolean) => void;
+  /**
+   * Full-screen SSO-style boot while an enterprise workspace opens and sidebar tabs
+   * settle to that workspace's allowed nav.
+   */
+  beginEnterpriseWorkspaceBoot: (teamId: string) => void;
   refreshMeAndTeams: () => Promise<void>;
   /** Extra `main` class on the enterprise shell (cleared on route change). */
   setShellMainClassSuffix: (v: string) => void;

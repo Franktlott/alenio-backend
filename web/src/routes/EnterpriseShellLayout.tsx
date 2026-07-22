@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  AuthLoadingScreen,
+  ENTERPRISE_WORKSPACE_LOADING_STEPS,
+} from "../components/AuthLoadingScreen";
 import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
 import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
@@ -10,11 +14,15 @@ import { hasMobileWebPreferred } from "../lib/app-links";
 import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, resolveEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle, enterpriseTeamNavTitle } from "../lib/enterprise-nav";
-import { isEnterpriseOrgAdmin, isEnterpriseOrgMember } from "../lib/enterprise-org";
+import { enterpriseOrgTeams, isEnterpriseOrgAdmin, isEnterpriseOrgMember } from "../lib/enterprise-org";
 import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { greetingForHour } from "../lib/alenio-go-dashboard";
 
+const WORKSPACE_BOOT_STEP_MS = 700;
+const WORKSPACE_BOOT_MIN_MS = 2000;
+const WORKSPACE_BOOT_MAX_MS = 6500;
+const WORKSPACE_BOOT_EXIT_MS = 320;
 export type EnterpriseRouteHandle = {
   enterpriseContentClassName?: string;
   enterpriseMainClassName?: string;
@@ -55,7 +63,12 @@ export function EnterpriseShellLayout() {
   const [workspaceMainLoading, setWorkspaceMainLoading] = useState(false);
   const [shellMainSuffix, setShellMainSuffix] = useState("");
   const [shellContentSuffix, setShellContentSuffix] = useState("");
-
+  const [workspaceBoot, setWorkspaceBoot] = useState<{ teamId: string; startedAt: number } | null>(null);
+  const [bootActiveIndex, setBootActiveIndex] = useState(0);
+  const [bootAllDone, setBootAllDone] = useState(false);
+  const [bootExiting, setBootExiting] = useState(false);
+  const [bootTabsReady, setBootTabsReady] = useState(false);
+  const [bootRefreshDone, setBootRefreshDone] = useState(false);
   useEffect(() => {
     setWorkspaceMainLoading(false);
     setShellMainSuffix("");
@@ -162,6 +175,50 @@ export function EnterpriseShellLayout() {
   const setWorkspaceMainLoadingCb = useCallback((v: boolean) => {
     setWorkspaceMainLoading(v);
   }, []);
+
+  const beginEnterpriseWorkspaceBoot = useCallback((teamId: string) => {
+    const id = teamId.trim();
+    if (!id) return;
+    setBootRefreshDone(false);
+    setBootActiveIndex(0);
+    setBootAllDone(false);
+    setBootExiting(false);
+    setBootTabsReady(false);
+    setWorkspaceBoot({ teamId: id, startedAt: Date.now() });
+  }, []);
+
+  /** Animate SSO-style checklist while an enterprise workspace boots. */
+  useEffect(() => {
+    if (!workspaceBoot) return;
+    const timers: number[] = [];
+    ENTERPRISE_WORKSPACE_LOADING_STEPS.forEach((_, index) => {
+      if (index === 0) return;
+      timers.push(
+        window.setTimeout(() => {
+          setBootActiveIndex(index);
+        }, WORKSPACE_BOOT_STEP_MS * index),
+      );
+    });
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+    };
+  }, [workspaceBoot]);
+
+  /** Refresh membership/feature flags so sidebar tabs match the opened workspace. */
+  useEffect(() => {
+    if (!workspaceBoot) return;
+    let cancelled = false;
+    void refreshMeAndTeams()
+      .catch(() => {
+        /* keep current shell state */
+      })
+      .finally(() => {
+        if (!cancelled) setBootRefreshDone(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceBoot, refreshMeAndTeams]);
 
   const setShellMainClassSuffix = useCallback((v: string) => {
     setShellMainSuffix(v);
@@ -301,6 +358,64 @@ export function EnterpriseShellLayout() {
     enterpriseMember,
   ]);
 
+  /** Hold SSO boot until workspace selection + allowed nav tabs have settled. */
+  useEffect(() => {
+    if (!workspaceBoot) return;
+    if (me === undefined || teams === null) return;
+    if (selectedTeamId !== workspaceBoot.teamId) return;
+    if (!bootRefreshDone) return;
+
+    const knownInPersonal = teams.some((t) => t.id === workspaceBoot.teamId);
+    const knownInOrg = enterpriseOrgTeams(me).some((t) => t.id === workspaceBoot.teamId);
+    if (!knownInPersonal && !knownInOrg) return;
+
+    const id = window.setTimeout(() => setBootTabsReady(true), 40);
+    return () => window.clearTimeout(id);
+  }, [
+    workspaceBoot,
+    me,
+    teams,
+    selectedTeamId,
+    bootRefreshDone,
+    showGoNav,
+    showActivityExecuteNav,
+    showPlanNav,
+    teamNavLabel,
+    goNavLabel,
+  ]);
+
+  useEffect(() => {
+    if (!workspaceBoot || !bootTabsReady || bootExiting) return;
+    const elapsed = Date.now() - workspaceBoot.startedAt;
+    const remaining = Math.max(WORKSPACE_BOOT_MIN_MS - elapsed, 0);
+    const id = window.setTimeout(() => {
+      setBootAllDone(true);
+      setBootExiting(true);
+    }, remaining);
+    return () => window.clearTimeout(id);
+  }, [workspaceBoot, bootTabsReady, bootExiting]);
+
+  useEffect(() => {
+    if (!workspaceBoot || !bootExiting) return;
+    const id = window.setTimeout(() => {
+      setWorkspaceBoot(null);
+      setBootAllDone(false);
+      setBootExiting(false);
+      setBootTabsReady(false);
+      setBootActiveIndex(0);
+    }, WORKSPACE_BOOT_EXIT_MS);
+    return () => window.clearTimeout(id);
+  }, [workspaceBoot, bootExiting]);
+
+  useEffect(() => {
+    if (!workspaceBoot) return;
+    const id = window.setTimeout(() => {
+      setBootAllDone(true);
+      setBootExiting(true);
+    }, WORKSPACE_BOOT_MAX_MS);
+    return () => window.clearTimeout(id);
+  }, [workspaceBoot]);
+
   const contextValue = useMemo<EnterpriseShellContextValue>(
     () => ({
       me,
@@ -310,6 +425,7 @@ export function EnterpriseShellLayout() {
       selectedTeamId,
       setSelectedTeamId,
       setWorkspaceMainLoading: setWorkspaceMainLoadingCb,
+      beginEnterpriseWorkspaceBoot,
       refreshMeAndTeams,
       setShellMainClassSuffix,
       setShellContentClassSuffix,
@@ -319,6 +435,7 @@ export function EnterpriseShellLayout() {
       teams,
       selectedTeamId,
       setWorkspaceMainLoadingCb,
+      beginEnterpriseWorkspaceBoot,
       refreshMeAndTeams,
       setShellMainClassSuffix,
       setShellContentClassSuffix,
@@ -335,8 +452,27 @@ export function EnterpriseShellLayout() {
     );
   }
 
+  const showEnterpriseSsoBoot =
+    Boolean(workspaceBoot) || me === undefined || (enterpriseMember && teams === null);
+
   return (
     <EnterpriseShellContext.Provider value={contextValue}>
+      {showEnterpriseSsoBoot ? (
+        <AuthLoadingScreen
+          overlay
+          title={workspaceBoot ? "Opening workspace" : "Connecting your workspace"}
+          subtitle={
+            workspaceBoot
+              ? "Updating navigation for this workspace"
+              : "Preparing your enterprise dashboard"
+          }
+          steps={ENTERPRISE_WORKSPACE_LOADING_STEPS}
+          activeIndex={bootActiveIndex}
+          allDone={bootAllDone || (!workspaceBoot && teams !== null && me !== undefined)}
+          exiting={bootExiting}
+          testId="enterprise-workspace-boot-screen"
+        />
+      ) : null}
       <EnterpriseLayout
         activeNav={activeNav}
         teams={teams ?? []}
@@ -362,9 +498,12 @@ export function EnterpriseShellLayout() {
         showAdminNav={showAdminNav}
         teamNavLabel={teamNavLabel}
         setupNavMode={hasNoTeams}
+        onEnterpriseWorkspaceBoot={enterpriseMember ? beginEnterpriseWorkspaceBoot : undefined}
       >
         {teams === null ? (
-          <EnterprisePageLoading label="Loading your workspace" />
+          enterpriseMember || me === undefined ? null : (
+            <EnterprisePageLoading label="Loading your workspace" />
+          )
         ) : showNoTeamsEmptyState ? (
           <div className="chat-app-body chat-app-body-enterprise chat-app-body-no-teams enterprise-tab-shell">
             <NoTeamsEmptyState onRefreshWorkspaces={refreshMeAndTeams} />

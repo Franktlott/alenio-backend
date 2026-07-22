@@ -10,12 +10,19 @@ import {
   renameEnterpriseOrganizationWorkspace,
 } from "../../lib/api";
 import { enterpriseOrgTeams } from "../../lib/enterprise-org";
-import { setPersistedEnterpriseTeamId } from "../../lib/enterprise-selected-team";
+import { switchEnterpriseWorkspace } from "../../lib/enterprise-selected-team";
 import { useEnterpriseOrgGoOptional } from "./enterprise-org-go-context";
 
 export function EnterpriseOrgGoWorkspacesPage() {
   const ctx = useEnterpriseOrgGoOptional();
-  const { me, setMe, setSelectedTeamId, refreshMeAndTeams, teams } = useEnterpriseShell();
+  const {
+    me,
+    setMe,
+    setSelectedTeamId,
+    refreshMeAndTeams,
+    teams,
+    beginEnterpriseWorkspaceBoot,
+  } = useEnterpriseShell();
   const navigate = useNavigate();
   const orgTeams = useMemo(() => enterpriseOrgTeams(me), [me]);
 
@@ -34,6 +41,12 @@ export function EnterpriseOrgGoWorkspacesPage() {
     }
   };
 
+  const openWorkspace = (teamId: string) => {
+    beginEnterpriseWorkspaceBoot(teamId);
+    switchEnterpriseWorkspace(teamId, setSelectedTeamId);
+    navigate(`/go?teamId=${encodeURIComponent(teamId)}`, { replace: true });
+  };
+
   return (
     <div className="enterprise-org-go-page" data-testid="enterprise-org-go-workspaces">
       <header className="enterprise-org-go-page-head">
@@ -50,20 +63,14 @@ export function EnterpriseOrgGoWorkspacesPage() {
         workspaceCount={org.workspaceCount ?? org.teams.length}
         canCreateWorkspaces={org.canCreateWorkspaces === true}
         teams={orgTeams}
-        onSelectWorkspace={(teamId) => {
-          setPersistedEnterpriseTeamId(teamId);
-          setSelectedTeamId(teamId);
-          navigate(`/go?teamId=${encodeURIComponent(teamId)}`, { replace: true });
-        }}
+        onSelectWorkspace={openWorkspace}
         onCreateWorkspace={async (name) => {
           const created = await createEnterpriseOrganizationWorkspace(organizationId, {
             name,
             plan: "operations",
           });
           await refreshOrg();
-          setPersistedEnterpriseTeamId(created.team.id);
-          setSelectedTeamId(created.team.id);
-          navigate(`/go?teamId=${encodeURIComponent(created.team.id)}`, { replace: true });
+          openWorkspace(created.team.id);
         }}
         onRenameWorkspace={async (teamId, name) => {
           await renameEnterpriseOrganizationWorkspace(organizationId, teamId, { name });

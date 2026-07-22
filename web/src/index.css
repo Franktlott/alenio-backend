@@ -41930,6 +41930,12 @@ button.enterprise-profile-legal-link {
   opacity: 1;
   transition: opacity 0.32s ease;
 }
+.auth-loading-screen--overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  min-height: 100dvh;
+}
 .auth-loading-screen--exit {
   opacity: 0;
 }
