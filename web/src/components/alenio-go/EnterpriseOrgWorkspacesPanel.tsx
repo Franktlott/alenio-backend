@@ -129,25 +129,25 @@ export function EnterpriseOrgWorkspacesPanel({
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: "0.75rem",
           marginBottom: "1rem",
         }}
       >
-        <div>
-          <h2 className="enterprise-card-title" style={{ margin: 0 }}>
-            Workspaces
-          </h2>
-          <p className="enterprise-muted" style={{ margin: "0.35rem 0 0", maxWidth: 620 }}>
-            Add, rename, or delete workspaces for {organizationName} (cap: {workspaceCount}/{workspaceLimit}).
-          </p>
-        </div>
         {canCreateWorkspaces ? (
           <button
             type="button"
-            className="auth-submit"
+            className="enterprise-team-btn-outline"
+            style={{
+              background: "#2563eb",
+              borderColor: "#2563eb",
+              color: "#fff",
+              width: "auto",
+              minHeight: 0,
+              padding: "0.55rem 1rem",
+              fontSize: "0.875rem",
+            }}
             onClick={() => {
               setShowCreate((v) => !v);
               setError(null);
@@ -158,6 +158,10 @@ export function EnterpriseOrgWorkspacesPanel({
           </button>
         ) : null}
       </div>
+
+      <p className="enterprise-muted" style={{ margin: "0 0 1rem", maxWidth: 620 }}>
+        Cap: {workspaceCount}/{workspaceLimit} workspaces for {organizationName}.
+      </p>
 
       {showCreate ? (
         <form className="enterprise-card" onSubmit={onSubmit} style={{ marginBottom: "1rem", padding: "1rem" }}>
@@ -177,7 +181,19 @@ export function EnterpriseOrgWorkspacesPanel({
             data-testid="enterprise-org-workspace-name"
           />
           {error ? <p className="auth-error">{error}</p> : null}
-          <button type="submit" className="auth-submit" disabled={busy} data-testid="enterprise-org-workspace-submit">
+          <button
+            type="submit"
+            className="enterprise-team-btn-outline"
+            style={{
+              marginTop: "0.75rem",
+              background: "#2563eb",
+              borderColor: "#2563eb",
+              color: "#fff",
+              width: "auto",
+            }}
+            disabled={busy}
+            data-testid="enterprise-org-workspace-submit"
+          >
             {busy ? "Creating…" : "Create workspace"}
           </button>
         </form>
@@ -211,23 +227,26 @@ export function EnterpriseOrgWorkspacesPanel({
             </thead>
             <tbody>
               {teams.map((team) => (
-                <tr key={team.id}>
+                <tr
+                  key={team.id}
+                  className="enterprise-table-row-clickable"
+                  tabIndex={0}
+                  onClick={() => onSelectWorkspace(team.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectWorkspace(team.id);
+                    }
+                  }}
+                  data-testid={`enterprise-org-go-open-${team.id}`}
+                >
                   <td>
                     <strong>{team.name}</strong>
                   </td>
                   <td>{team.inviteCode ?? "—"}</td>
                   <td>{team.hasGoFeatures ? "Ready" : "Features pending"}</td>
-                  <td>
+                  <td className="enterprise-table-td-actions" onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                      <button
-                        type="button"
-                        className="auth-submit"
-                        style={{ padding: "0.4rem 0.85rem", fontSize: 13 }}
-                        onClick={() => onSelectWorkspace(team.id)}
-                        data-testid={`enterprise-org-go-open-${team.id}`}
-                      >
-                        Open Go
-                      </button>
                       <button
                         type="button"
                         className="enterprise-team-btn-outline"

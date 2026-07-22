@@ -33,7 +33,9 @@ export function EnterpriseOrgGoWorkspacesPage() {
         <div>
           <p className="enterprise-org-go-eyebrow">Organization</p>
           <h1>Workspaces</h1>
-          <p className="enterprise-muted">Create and manage store workspaces. Open Go to configure assigned modules.</p>
+          <p className="enterprise-muted">
+            Create and manage store workspaces. Click a row to open Go and configure assigned modules.
+          </p>
         </div>
       </header>
       <EnterpriseOrgWorkspacesPanel
