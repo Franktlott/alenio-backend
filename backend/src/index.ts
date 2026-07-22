@@ -1318,6 +1318,21 @@ setInterval(runCleanup, 60 * 60 * 1000);
 // Re-schedule any pending meeting reminders after server restart
 initMeetingReminders();
 
+void import("./lib/enterprise-org-access")
+  .then(({ detachAllEnterpriseOrgAdminsFromWorkspaces }) =>
+    detachAllEnterpriseOrgAdminsFromWorkspaces(),
+  )
+  .then((result) => {
+    if (result.removed > 0) {
+      console.log(
+        `[enterprise-org] detached ${result.removed} org admin workspace membership(s) across ${result.organizations} org(s)`,
+      );
+    }
+  })
+  .catch((err) => {
+    console.warn("[enterprise-org] detach org admins from workspaces failed:", err);
+  });
+
 import { handleRealtimeUpgrade, realtimeWebsocket } from "./lib/realtime-ws";
 
 const port = Number(process.env.PORT) || 3000;
