@@ -5,6 +5,8 @@ export const ENTERPRISE_NAV_TITLES: Record<EnterpriseNavId, string> = {
   chat: "Chat",
   execute: "Workspace",
   go: "Alenio Go",
+  workspaces: "Corporate Workspaces",
+  users: "Users",
   team: "Team",
   plan: "Billing",
   settings: "Settings",

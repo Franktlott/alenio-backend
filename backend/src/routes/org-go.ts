@@ -255,4 +255,57 @@ orgGoRouter.patch(
   },
 );
 
+orgGoRouter.get("/:organizationId/members", authGuard, async (c) => {
+  const user = c.get("user")!;
+  const { organizationId } = c.req.param();
+  if (!(await requireEnterpriseOrgAdmin(user.id, organizationId))) {
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+
+  const [orgMemberships, workspaceMemberships] = await Promise.all([
+    prisma.organizationMembership.findMany({
+      where: { organizationId },
+      include: {
+        user: { select: { id: true, name: true, email: true, image: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.teamMember.findMany({
+      where: { team: { organizationId } },
+      include: {
+        user: { select: { id: true, name: true, email: true, image: true } },
+        team: { select: { id: true, name: true } },
+      },
+      orderBy: [{ team: { name: "asc" } }, { createdAt: "asc" }],
+    }),
+  ]);
+
+  const members = [
+    ...orgMemberships.map((m) => ({
+      id: `org:${m.id}`,
+      userId: m.userId,
+      name: m.user.name,
+      email: m.user.email,
+      image: m.user.image,
+      role: m.role,
+      scope: "organization" as const,
+      workspaceId: null as string | null,
+      workspaceName: null as string | null,
+    })),
+    ...workspaceMemberships.map((m) => ({
+      id: `team:${m.id}`,
+      userId: m.userId,
+      name: m.user.name,
+      email: m.user.email,
+      image: m.user.image,
+      role: m.role,
+      scope: "workspace" as const,
+      workspaceId: m.team.id,
+      workspaceName: m.team.name,
+    })),
+  ];
+
+  return c.json({ data: { members } });
+});
+
 /** Workspace assigned modules live on teams router — see teams.ts */

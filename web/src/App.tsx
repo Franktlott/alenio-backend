@@ -24,6 +24,7 @@ import { EnterpriseOrgGoOverviewPage } from "./routes/alenio-go/EnterpriseOrgGoO
 import { EnterpriseOrgGoModulesPage } from "./routes/alenio-go/EnterpriseOrgGoModulesPage";
 import { EnterpriseOrgGoLibraryPage } from "./routes/alenio-go/EnterpriseOrgGoLibraryPage";
 import { EnterpriseOrgGoWorkspacesPage } from "./routes/alenio-go/EnterpriseOrgGoWorkspacesPage";
+import { EnterpriseOrgUsersPage } from "./routes/alenio-go/EnterpriseOrgUsersPage";
 import { EnterpriseOrgGoStubPage } from "./routes/alenio-go/EnterpriseOrgGoStubPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { AdminPage } from "./routes/AdminPage";
@@ -169,6 +170,7 @@ export default function App() {
                 <Route index element={<Navigate to="overview" replace />} />
                 <Route path="overview" element={<EnterpriseOrgGoOverviewPage />} />
                 <Route path="workspaces" element={<EnterpriseOrgGoWorkspacesPage />} />
+                <Route path="users" element={<EnterpriseOrgUsersPage />} />
               </Route>
               <Route element={<EnterpriseOrgGoLayout />}>
                 <Route path="modules" element={<EnterpriseOrgGoModulesPage />} />

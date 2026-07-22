@@ -43,6 +43,8 @@ function routeLayoutHandleFromPath(pathname: string): EnterpriseRouteHandle {
 
 function activeNavFromPath(pathname: string): EnterpriseNavId {
   if (pathname.startsWith("/chat")) return "chat";
+  if (pathname.startsWith("/go/org/workspaces")) return "workspaces";
+  if (pathname.startsWith("/go/org/users")) return "users";
   if (pathname.startsWith("/go")) return "go";
   if (pathname.startsWith("/billing")) return "plan";
   if (pathname.startsWith("/team")) return "team";
@@ -278,9 +280,13 @@ export function EnterpriseShellLayout() {
       ? "Review goals and what’s next for this teammate."
       : activeNav === "chat"
         ? undefined
-        : activeNav === "go" && enterpriseOrgAdmin
-          ? "Enterprise Dashboard"
-          : enterpriseNavTitle(activeNav);
+        : activeNav === "workspaces"
+          ? "Corporate Workspaces"
+          : activeNav === "users"
+            ? "Organization users"
+            : activeNav === "go" && enterpriseOrgAdmin
+              ? "Enterprise Dashboard"
+              : enterpriseNavTitle(activeNav);
   const hasNoTeams = teams !== null && teams.length === 0;
   const isSettingsRoute =
     location.pathname.startsWith("/settings") || location.pathname.startsWith("/profile");
@@ -503,6 +509,8 @@ export function EnterpriseShellLayout() {
         showActivityExecuteNav={showActivityExecuteNav && !hasNoTeams}
         showGoNav={showGoNav}
         goNavLabel={goNavLabel}
+        goNavTo={enterpriseOrgAdmin ? "/go/org/overview" : "/go"}
+        showEnterpriseOrgNav={enterpriseOrgAdmin}
         showAdminNav={showAdminNav}
         teamNavLabel={teamNavLabel}
         setupNavMode={hasNoTeams}

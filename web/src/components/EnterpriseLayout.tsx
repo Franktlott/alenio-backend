@@ -12,7 +12,17 @@ import {
 } from "../lib/enterprise-selected-team";
 import type { WebMeUser, WebTeamRow } from "../lib/api";
 
-export type EnterpriseNavId = "activity" | "chat" | "execute" | "go" | "team" | "plan" | "settings" | "admin";
+export type EnterpriseNavId =
+  | "activity"
+  | "chat"
+  | "execute"
+  | "go"
+  | "workspaces"
+  | "users"
+  | "team"
+  | "plan"
+  | "settings"
+  | "admin";
 
 type AdminSection = "users" | "workspaces" | "enterprise-customers" | "seneca-studio";
 
@@ -63,6 +73,10 @@ type Props = {
   showGoNav?: boolean;
   /** Sidebar label for `/go` — e.g. "Dashboard" for enterprise org admins. */
   goNavLabel?: string;
+  /** Enterprise org admin: Corporate Workspaces + Users in the left rail. */
+  showEnterpriseOrgNav?: boolean;
+  /** Dashboard / Go href — org admins use `/go/org/overview`. */
+  goNavTo?: string;
   /** When true, platform Admin sidebar item is shown. */
   showAdminNav?: boolean;
   /** Sidebar + page label for `/team` — "Profile" for regular members. */
@@ -149,6 +163,31 @@ function IconProfile() {
   );
 }
 
+function IconUsers() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function IconCorporateWorkspaces() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M3 21h18" />
+      <path d="M5 21V7l7-4 7 4v14" />
+      <path d="M9 21v-6h6v6" />
+      <path d="M9 10h.01" />
+      <path d="M15 10h.01" />
+      <path d="M9 14h.01" />
+      <path d="M15 14h.01" />
+    </svg>
+  );
+}
+
 function NavItem({
   to,
   navId,
@@ -168,6 +207,7 @@ function NavItem({
       to={to}
       className={`enterprise-nav-item ${active ? "enterprise-nav-item-active" : ""}`}
       data-testid={`nav-${navId}`}
+      title={label}
     >
       <span className="enterprise-nav-icon">{icon}</span>
       <span className="enterprise-nav-label">{label}</span>
@@ -348,6 +388,8 @@ export function EnterpriseLayout({
   showActivityExecuteNav,
   showGoNav = false,
   goNavLabel = "Alenio Go",
+  showEnterpriseOrgNav = false,
+  goNavTo = "/go",
   showAdminNav = false,
   teamNavLabel = "Team",
   setupNavMode = false,
@@ -539,12 +581,30 @@ export function EnterpriseLayout({
             <>
               {showGoNav ? (
                 <NavItem
-                  to="/go"
+                  to={goNavTo}
                   navId="go"
                   activeNav={activeNav}
                   icon={<AlenioGoLogo />}
                   label={goNavLabel}
                 />
+              ) : null}
+              {showEnterpriseOrgNav ? (
+                <>
+                  <NavItem
+                    to="/go/org/workspaces"
+                    navId="workspaces"
+                    activeNav={activeNav}
+                    icon={<IconCorporateWorkspaces />}
+                    label="Workspaces"
+                  />
+                  <NavItem
+                    to="/go/org/users"
+                    navId="users"
+                    activeNav={activeNav}
+                    icon={<IconUsers />}
+                    label="Users"
+                  />
+                </>
               ) : null}
               {showAdminNav ? <AdminNavItem activeNav={activeNav} icon={<IconAdmin />} /> : null}
             </>
@@ -562,12 +622,30 @@ export function EnterpriseLayout({
               ) : null}
               {showGoNav ? (
                 <NavItem
-                  to="/go"
+                  to={goNavTo}
                   navId="go"
                   activeNav={activeNav}
                   icon={<AlenioGoLogo />}
                   label={goNavLabel}
                 />
+              ) : null}
+              {showEnterpriseOrgNav ? (
+                <>
+                  <NavItem
+                    to="/go/org/workspaces"
+                    navId="workspaces"
+                    activeNav={activeNav}
+                    icon={<IconCorporateWorkspaces />}
+                    label="Workspaces"
+                  />
+                  <NavItem
+                    to="/go/org/users"
+                    navId="users"
+                    activeNav={activeNav}
+                    icon={<IconUsers />}
+                    label="Users"
+                  />
+                </>
               ) : null}
               <NavItem
                 to="/team"

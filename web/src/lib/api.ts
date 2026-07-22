@@ -822,6 +822,24 @@ export function fetchOrgGoOverview(organizationId: string) {
   }>(`/api/organizations/${encodeURIComponent(organizationId)}/go/overview`).then((r) => r.data);
 }
 
+export type OrgDirectoryMember = {
+  id: string;
+  userId: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+  role: string;
+  scope: "organization" | "workspace";
+  workspaceId: string | null;
+  workspaceName: string | null;
+};
+
+export function fetchOrgMembers(organizationId: string) {
+  return apiGetJson<{ data: { members: OrgDirectoryMember[] } }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/members`,
+  ).then((r) => r.data.members);
+}
+
 export function fetchOrgGoModules(organizationId: string) {
   return apiGetJson<{ data: { modules: OrgGoModule[] } }>(
     `/api/organizations/${encodeURIComponent(organizationId)}/go/modules`,

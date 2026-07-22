@@ -1,8 +1,8 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import { useEnterpriseOrgGoOptional } from "./enterprise-org-go-context";
 
-/** Main Dashboard area: Overview + Corporate Workspaces (not corporate standards). */
+/** Shared chrome for enterprise Dashboard / Workspaces / Users (sidebar owns section nav). */
 export function EnterpriseOrgDashboardShell() {
   const ctx = useEnterpriseOrgGoOptional();
 
@@ -16,33 +16,6 @@ export function EnterpriseOrgDashboardShell() {
         <div>
           <p className="enterprise-org-go-eyebrow">Enterprise Dashboard</p>
           <h1 style={{ margin: "0.15rem 0 0.35rem", fontSize: "1.5rem" }}>{ctx.organizationName}</h1>
-        </div>
-        <div
-          className="enterprise-workspace-task-view-tabs"
-          role="tablist"
-          aria-label="Dashboard sections"
-        >
-          <NavLink
-            to="/go/org/overview"
-            end
-            role="tab"
-            className={({ isActive }) =>
-              `enterprise-workspace-task-view-tab${isActive ? " enterprise-workspace-task-view-tab-on" : ""}`
-            }
-            data-testid="enterprise-org-tab-overview"
-          >
-            Overview
-          </NavLink>
-          <NavLink
-            to="/go/org/workspaces"
-            role="tab"
-            className={({ isActive }) =>
-              `enterprise-workspace-task-view-tab${isActive ? " enterprise-workspace-task-view-tab-on" : ""}`
-            }
-            data-testid="enterprise-org-tab-corporate-workspaces"
-          >
-            Corporate Workspaces
-          </NavLink>
         </div>
       </header>
       <div className="enterprise-org-dashboard-body">
