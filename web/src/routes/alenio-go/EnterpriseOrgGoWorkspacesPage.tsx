@@ -1,5 +1,7 @@
-import { useEnterpriseOrgGo } from "./enterprise-org-go-context";
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { EnterpriseOrgWorkspacesPanel } from "../../components/alenio-go/EnterpriseOrgWorkspacesPanel";
+import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import {
   createEnterpriseOrganizationWorkspace,
@@ -9,14 +11,19 @@ import {
 } from "../../lib/api";
 import { enterpriseOrgTeams } from "../../lib/enterprise-org";
 import { setPersistedEnterpriseTeamId } from "../../lib/enterprise-selected-team";
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEnterpriseOrgGoOptional } from "./enterprise-org-go-context";
 
 export function EnterpriseOrgGoWorkspacesPage() {
-  const { organizationId, organizationName, org } = useEnterpriseOrgGo();
-  const { me, setMe, setSelectedTeamId, refreshMeAndTeams } = useEnterpriseShell();
+  const ctx = useEnterpriseOrgGoOptional();
+  const { me, setMe, setSelectedTeamId, refreshMeAndTeams, teams } = useEnterpriseShell();
   const navigate = useNavigate();
   const orgTeams = useMemo(() => enterpriseOrgTeams(me), [me]);
+
+  if (!ctx || me === undefined || teams === null) {
+    return <EnterprisePageLoading label="Loading corporate workspaces" />;
+  }
+
+  const { organizationId, organizationName, org } = ctx;
 
   const refreshOrg = async () => {
     try {
