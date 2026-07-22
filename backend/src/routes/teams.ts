@@ -53,6 +53,7 @@ import {
   generateInviteToken,
   inviteExpiresAt,
   inviteOrAddMemberByEmail,
+  loadTeamInviteEmailContext,
   previewInviteByEmail,
   listPendingTeamInvites,
   sendTeamInviteEmail,
@@ -845,25 +846,31 @@ teamsRouter.post("/:teamId/invites/:inviteId/resend", async (c) => {
   }
 
   const token = generateInviteToken();
+  const expiresAt = inviteExpiresAt();
   const updated = await prisma.teamInvite.update({
     where: { id: inviteId },
-    data: { token, expiresAt: inviteExpiresAt(), invitedById: user.id },
+    data: { token, expiresAt, invitedById: user.id },
     include: {
       invitedBy: { select: { id: true, name: true, email: true, image: true } },
       acceptedUser: { select: { id: true, name: true, email: true, image: true } },
     },
   });
 
-  const inviter = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { name: true, email: true },
+  const emailContext = await loadTeamInviteEmailContext({
+    teamId,
+    invitedById: user.id,
+    teamName: invite.team.name,
   });
 
   const emailResult = await sendTeamInviteEmail({
     to: invite.email,
-    teamName: invite.team.name,
-    inviterName: inviter?.name ?? inviter?.email ?? "A team leader",
+    teamName: emailContext.teamName,
+    teamImage: emailContext.teamImage,
+    inviterName: emailContext.inviterName,
+    inviterImage: emailContext.inviterImage,
+    inviterRole: emailContext.inviterRole,
     token,
+    expiresAt,
   });
 
   if (!emailResult.sent) {

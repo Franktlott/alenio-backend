@@ -4,8 +4,333 @@ import { prisma } from "../prisma";
 import { env } from "../env";
 import { logActivity } from "./activity";
 import { sendPushToUsers } from "./push";
+import { webPublicBaseUrl } from "./web-public-url";
 
 const INVITE_TTL_DAYS = 7;
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function brandAssetUrl(path: string): string {
+  const base = webPublicBaseUrl().replace(/\/$/, "");
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function formatInviteRole(role: string | null | undefined): string {
+  if (role === "owner") return "Owner";
+  if (role === "team_leader" || role === "admin") return "Team Leader";
+  return "Member";
+}
+
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
+}
+
+function formatExpiryDate(expiresAt: Date): string {
+  try {
+    return expiresAt.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return expiresAt.toISOString();
+  }
+}
+
+export type TeamInviteEmailInput = {
+  to: string;
+  teamName: string;
+  teamImage?: string | null;
+  inviterName: string;
+  inviterImage?: string | null;
+  inviterRole?: string | null;
+  token: string;
+  expiresAt: Date;
+};
+
+export function buildTeamInviteEmail(input: TeamInviteEmailInput): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const { webUrl, appUrl } = buildInviteLinks(input.token);
+  const teamName = escapeHtml(input.teamName.trim() || "Workspace");
+  const inviterName = escapeHtml(input.inviterName.trim() || "A teammate");
+  const inviterRole = escapeHtml(formatInviteRole(input.inviterRole));
+  const toEmail = escapeHtml(normalizeInviteEmail(input.to));
+  const logoUrl = brandAssetUrl("/icon.png");
+  const year = new Date().getFullYear();
+  const expiryLabel = escapeHtml(formatExpiryDate(input.expiresAt));
+  const teamInitials = escapeHtml(initialsFromName(input.teamName));
+  const inviterInitials = escapeHtml(initialsFromName(input.inviterName));
+  const teamImage = input.teamImage?.trim() ? escapeHtml(input.teamImage.trim()) : "";
+  const inviterImage = input.inviterImage?.trim() ? escapeHtml(input.inviterImage.trim()) : "";
+
+  const iosStore = env.IOS_APP_STORE_URL?.trim() ?? "";
+  const androidStore = env.ANDROID_PLAY_STORE_URL?.trim() ?? "";
+  const storeParts = [
+    iosStore ? `<a href="${escapeHtml(iosStore)}" style="color:#4361EE;font-weight:600;text-decoration:none;">App Store</a>` : "",
+    androidStore
+      ? `<a href="${escapeHtml(androidStore)}" style="color:#4361EE;font-weight:600;text-decoration:none;">Google Play</a>`
+      : "",
+  ].filter(Boolean);
+  const storeBar =
+    storeParts.length > 0
+      ? `<tr>
+          <td style="padding:0 28px 24px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F1F5F9;border-radius:12px;">
+              <tr>
+                <td style="padding:14px 16px;color:#64748B;font-size:13px;line-height:1.5;">
+                  Don't have the app yet? Download for ${storeParts.join(" · ")}.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`
+      : "";
+
+  const teamAvatarHtml = teamImage
+    ? `<img src="${teamImage}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;border-radius:12px;object-fit:cover;" />`
+    : `<div style="width:48px;height:48px;border-radius:12px;background:#EEF2FF;color:#4361EE;font-size:16px;font-weight:800;line-height:48px;text-align:center;">${teamInitials}</div>`;
+
+  const inviterAvatarHtml = inviterImage
+    ? `<img src="${inviterImage}" width="40" height="40" alt="" style="display:block;width:40px;height:40px;border-radius:20px;object-fit:cover;" />`
+    : `<div style="width:40px;height:40px;border-radius:20px;background:#EEF2FF;color:#4361EE;font-size:13px;font-weight:800;line-height:40px;text-align:center;">${inviterInitials}</div>`;
+
+  const features: Array<{ icon: string; title: string; body: string }> = [
+    { icon: "💬", title: "Team Chat", body: "Stay in sync" },
+    { icon: "✅", title: "Daily Tasks", body: "Get work done" },
+    { icon: "📅", title: "Schedule", body: "Never miss a beat" },
+    { icon: "⭐", title: "Recognition", body: "Celebrate wins" },
+    { icon: "🔔", title: "Team Updates", body: "Know what's next" },
+  ];
+
+  const featureCells = features
+    .map(
+      (f) => `
+      <td width="20%" valign="top" style="padding:8px 4px;text-align:center;">
+        <div style="font-size:22px;line-height:28px;margin-bottom:6px;">${f.icon}</div>
+        <div style="color:#0F172A;font-size:12px;font-weight:700;line-height:1.3;">${f.title}</div>
+        <div style="color:#64748B;font-size:11px;line-height:1.35;margin-top:2px;">${f.body}</div>
+      </td>`,
+    )
+    .join("");
+
+  const subject = `${input.inviterName.trim() || "A teammate"} invited you to ${input.teamName.trim() || "a workspace"} on Alenio`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background:#EEF2F7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#EEF2F7;padding:28px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;">
+        <tr>
+          <td style="padding:20px 28px 8px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              <tr>
+                <td align="left" valign="middle">
+                  <table role="presentation" cellspacing="0" cellpadding="0">
+                    <tr>
+                      <td valign="middle" style="padding-right:8px;">
+                        <img src="${logoUrl}" width="28" height="28" alt="Alenio" style="display:block;border-radius:8px;" />
+                      </td>
+                      <td valign="middle" style="color:#0F172A;font-size:18px;font-weight:700;letter-spacing:-0.02em;">alenio</td>
+                    </tr>
+                  </table>
+                </td>
+                <td align="right" valign="middle" style="color:#94A3B8;font-size:13px;font-weight:600;">You're invited!</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:16px 28px 8px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              <tr>
+                <td width="58%" valign="top" style="padding-right:16px;">
+                  <h1 style="margin:0 0 12px;color:#0F172A;font-size:28px;line-height:1.2;font-weight:800;letter-spacing:-0.02em;">
+                    Join the <span style="color:#4361EE;">${teamName}</span> team
+                  </h1>
+                  <p style="margin:0 0 10px;color:#475569;font-size:15px;line-height:1.55;">
+                    <strong style="color:#0F172A;">${inviterName}</strong> invited you to join the
+                    <strong style="color:#0F172A;">${teamName}</strong> workspace in Alenio.
+                  </p>
+                  <p style="margin:0;color:#64748B;font-size:14px;line-height:1.55;">
+                    Stay connected with your team, complete daily tasks, and keep work moving — all in one place.
+                  </p>
+                </td>
+                <td width="42%" valign="top">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;box-shadow:0 8px 24px rgba(15,23,42,0.06);">
+                    <tr>
+                      <td style="padding:16px 16px 14px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td width="56" valign="middle">${teamAvatarHtml}</td>
+                            <td valign="middle" style="padding-left:10px;">
+                              <div style="color:#0F172A;font-size:15px;font-weight:700;line-height:1.3;">${teamName}</div>
+                              <div style="color:#94A3B8;font-size:12px;margin-top:2px;">Workspace</div>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:0 16px;">
+                        <div style="height:1px;background:#F1F5F9;line-height:1px;font-size:1px;">&nbsp;</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:14px 16px 16px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                          <tr>
+                            <td width="44" valign="middle">${inviterAvatarHtml}</td>
+                            <td valign="middle" style="padding-left:10px;">
+                              <div style="color:#64748B;font-size:12px;line-height:1.3;">Invited by</div>
+                              <div style="color:#0F172A;font-size:14px;font-weight:700;line-height:1.3;">${inviterName}</div>
+                              <div style="color:#94A3B8;font-size:12px;margin-top:1px;">${inviterRole}</div>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 28px 8px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F8FAFC;border:1px solid #E8EEF5;border-radius:14px;">
+              <tr>
+                <td style="padding:16px 12px 6px;text-align:center;color:#0F172A;font-size:14px;font-weight:700;">
+                  What you'll have access to
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:0 8px 12px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>${featureCells}</tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 28px 12px;" align="center">
+            <table role="presentation" cellspacing="0" cellpadding="0">
+              <tr>
+                <td style="padding:0 6px 8px 0;">
+                  <a href="${escapeHtml(appUrl)}" style="display:inline-block;background:#4361EE;color:#FFFFFF;text-decoration:none;padding:13px 20px;border-radius:12px;font-weight:700;font-size:14px;">
+                    Open in Alenio App
+                  </a>
+                </td>
+                <td style="padding:0 0 8px 6px;">
+                  <a href="${escapeHtml(webUrl)}" style="display:inline-block;background:#FFFFFF;color:#4361EE;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700;font-size:14px;border:1.5px solid #4361EE;">
+                    Continue in Browser →
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        ${storeBar}
+
+        <tr>
+          <td style="padding:4px 28px 24px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #E2E8F0;border-radius:14px;">
+              <tr>
+                <td width="50%" valign="top" style="padding:16px;border-right:1px solid #F1F5F9;">
+                  <div style="color:#0F172A;font-size:13px;font-weight:700;margin-bottom:8px;">🔒 Security &amp; trust</div>
+                  <div style="color:#475569;font-size:13px;line-height:1.5;">
+                    This invite was sent to
+                    <a href="mailto:${toEmail}" style="color:#4361EE;text-decoration:none;font-weight:600;">${toEmail}</a>.
+                  </div>
+                  <div style="color:#94A3B8;font-size:12px;margin-top:8px;line-height:1.4;">Your connection is secured.</div>
+                </td>
+                <td width="50%" valign="top" style="padding:16px;">
+                  <div style="color:#0F172A;font-size:13px;font-weight:700;margin-bottom:8px;">⏰ Invitation expires</div>
+                  <div style="background:#EEF2FF;border-radius:10px;padding:12px 14px;text-align:center;margin-bottom:8px;">
+                    <div style="color:#4361EE;font-size:22px;font-weight:800;line-height:1.1;">${INVITE_TTL_DAYS} Days</div>
+                    <div style="color:#64748B;font-size:11px;margin-top:4px;">${expiryLabel}</div>
+                  </div>
+                  <div style="color:#94A3B8;font-size:12px;line-height:1.4;">
+                    If you weren't expecting this, you can ignore this email.
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="background:#F8FAFC;border-top:1px solid #E6EBF2;padding:16px 28px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              <tr>
+                <td align="left" valign="middle">
+                  <img src="${logoUrl}" width="20" height="20" alt="Alenio" style="display:inline-block;vertical-align:middle;border-radius:6px;margin-right:6px;" />
+                  <span style="color:#0F172A;font-size:13px;font-weight:700;vertical-align:middle;">alenio</span>
+                </td>
+                <td align="right" valign="middle" style="color:#94A3B8;font-size:12px;">
+                  Connect · Execute · Elevate
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" align="center" style="padding-top:10px;color:#94A3B8;font-size:11px;">
+                  © ${year} Alenio. All rights reserved.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = [
+    subject,
+    "",
+    `Join the ${input.teamName.trim() || "workspace"} team`,
+    "",
+    `${input.inviterName.trim() || "A teammate"} invited you to join ${input.teamName.trim() || "a workspace"} in Alenio.`,
+    "",
+    `Open in Alenio app: ${appUrl}`,
+    `Continue in browser: ${webUrl}`,
+    "",
+    `This invite was sent to ${normalizeInviteEmail(input.to)}.`,
+    `Expires in ${INVITE_TTL_DAYS} days (${formatExpiryDate(input.expiresAt)}).`,
+    "",
+    "If you weren't expecting this, you can ignore this email.",
+    "",
+    "Connect · Execute · Elevate",
+    `© ${year} Alenio`,
+  ].join("\n");
+
+  return { subject, html, text };
+}
 
 export function normalizeInviteEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -107,52 +432,20 @@ export function buildInviteLinks(token: string): { webUrl: string; appUrl: strin
   return { webUrl, appUrl };
 }
 
-export async function sendTeamInviteEmail(input: {
-  to: string;
-  teamName: string;
-  inviterName: string;
-  token: string;
-}): Promise<{ sent: boolean; error?: string }> {
+export async function sendTeamInviteEmail(input: TeamInviteEmailInput): Promise<{ sent: boolean; error?: string }> {
   if (!env.RESEND_API_KEY) {
     console.error("[team-invites] RESEND_API_KEY is not set");
     return { sent: false, error: "Email service not configured" };
   }
 
-  const { webUrl, appUrl } = buildInviteLinks(input.token);
-  const iosStore = env.IOS_APP_STORE_URL?.trim() ?? "";
-  const androidStore = env.ANDROID_PLAY_STORE_URL?.trim() ?? "";
-  const storeLinks = [
-    iosStore ? `<a href="${iosStore}" style="color: #4361EE;">Download for iOS</a>` : "",
-    androidStore ? `<a href="${androidStore}" style="color: #4361EE;">Download for Android</a>` : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const { subject, html, text } = buildTeamInviteEmail(input);
   const resend = new Resend(env.RESEND_API_KEY);
   const { error } = await resend.emails.send({
     from: env.FROM_EMAIL,
     to: input.to,
-    subject: `${input.inviterName} invited you to ${input.teamName} on Alenio`,
-    html: `
-      <div style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">
-        <h2 style="color: #4361EE; margin-bottom: 8px;">You're invited to ${input.teamName}</h2>
-        <p style="color: #475569; line-height: 1.6;">
-          <strong>${input.inviterName}</strong> added you to their workspace on Alenio.
-          On your phone, open the app link below. On a computer, use the web link.
-        </p>
-        <p style="margin: 20px 0 12px;">
-          <a href="${appUrl}" style="display: inline-block; background: #4361EE; color: white; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; margin-right: 8px; margin-bottom: 8px;">
-            Open in Alenio app
-          </a>
-          <a href="${webUrl}" style="display: inline-block; background: #EEF2FF; color: #4361EE; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; margin-bottom: 8px;">
-            Continue on web
-          </a>
-        </p>
-        ${storeLinks ? `<p style="color: #64748B; font-size: 13px; line-height: 1.5;">Don't have the app yet? ${storeLinks}</p>` : ""}
-        <p style="color: #94A3B8; font-size: 13px; line-height: 1.5; margin-top: 16px;">
-          This invite expires in ${INVITE_TTL_DAYS} days.
-        </p>
-      </div>
-    `,
+    subject,
+    html,
+    text,
   });
 
   if (error) {
@@ -161,6 +454,43 @@ export async function sendTeamInviteEmail(input: {
   }
 
   return { sent: true };
+}
+
+/** Load team + inviter fields needed for the invite email template. */
+export async function loadTeamInviteEmailContext(input: {
+  teamId: string;
+  invitedById: string;
+  teamName?: string;
+  inviterName?: string;
+}): Promise<{
+  teamName: string;
+  teamImage: string | null;
+  inviterName: string;
+  inviterImage: string | null;
+  inviterRole: string | null;
+}> {
+  const [team, inviter, membership] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id: input.teamId },
+      select: { name: true, image: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: input.invitedById },
+      select: { name: true, email: true, image: true },
+    }),
+    prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId: input.invitedById, teamId: input.teamId } },
+      select: { role: true },
+    }),
+  ]);
+
+  return {
+    teamName: input.teamName?.trim() || team?.name || "Workspace",
+    teamImage: team?.image ?? null,
+    inviterName: input.inviterName?.trim() || inviter?.name || inviter?.email || "A team leader",
+    inviterImage: inviter?.image ?? null,
+    inviterRole: membership?.role ?? null,
+  };
 }
 
 export function serializeTeamInvite(invite: {
@@ -401,11 +731,22 @@ export async function inviteOrAddMemberByEmail(input: {
     });
   }
 
-  const emailResult = await sendTeamInviteEmail({
-    to: normalized,
+  const emailContext = await loadTeamInviteEmailContext({
+    teamId: input.teamId,
+    invitedById: input.invitedById,
     teamName: input.teamName,
     inviterName: input.inviterName,
+  });
+
+  const emailResult = await sendTeamInviteEmail({
+    to: normalized,
+    teamName: emailContext.teamName,
+    teamImage: emailContext.teamImage,
+    inviterName: emailContext.inviterName,
+    inviterImage: emailContext.inviterImage,
+    inviterRole: emailContext.inviterRole,
     token: invite.token,
+    expiresAt: invite.expiresAt,
   });
 
   return {

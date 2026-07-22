@@ -40,9 +40,8 @@ import {
   type MemberStandardsCompliance,
 } from "@/lib/workplace-standards";
 import { StandardsStatusKey } from "@/components/StandardsStatusKey";
-import { TeamMemberRow, TeamMemberRowSkeleton, teamMemberListBottomPadding, TEAM_MEMBER_ROW_GAP } from "@/components/TeamMemberRow";
+import { TeamMemberRow, TeamMemberRowSkeleton, TEAM_MEMBER_ROW_GAP } from "@/components/TeamMemberRow";
 import {
-  ProfileCard,
   ProfileSection,
   ProfileToolbarButton,
 } from "@/components/profile/ProfileEnterpriseUI";
@@ -73,7 +72,7 @@ import {
   type TeamInvite,
 } from "@/lib/team-invites-api";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { TAB_BAR_HEIGHT } from "@/lib/tab-bar";
+import { tabBarClearance } from "@/lib/tab-bar";
 import Svg, { Path, Circle, Line, Text as SvgText, Polyline } from "react-native-svg";
 
 type JoinRequest = {
@@ -275,8 +274,8 @@ function PerformanceChart({ data, dark }: { data: Array<{ label: string; complet
 // ------------------------------------------------------------------
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
-  // Sit just above the fixed tab bar (tab height + home indicator + small gap).
-  const TAB_BAR_CLEARANCE = TAB_BAR_HEIGHT + insets.bottom + 8;
+  // Match Chat: sit flush above the fixed tab bar (no extra gap).
+  const TAB_BAR_CLEARANCE = tabBarClearance(insets.bottom, 0);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const hasHydrated = useTeamStore((s) => s._hasHydrated);
@@ -992,11 +991,6 @@ export default function TeamScreen() {
             style={{ flex: 1, minHeight: 0, alignSelf: "stretch" }}
             title="Team Members"
             titleAccessory={isPaid ? <StandardsStatusKey iconSize={12} /> : undefined}
-            subtitle={
-              isPaid
-                ? "Tap a member to view their profile and standards."
-                : "Tap a member to view their profile."
-            }
             action={
               isOwnerOrLeader || isPaid || isOwner ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -1044,17 +1038,13 @@ export default function TeamScreen() {
               ) : undefined
             }
           >
-            <ProfileCard style={{ flex: 1, minHeight: 0, alignSelf: "stretch" }}>
-              <ScrollView
+            <ScrollView
                 ref={membersListRef}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minHeight: 0 }}
                 nestedScrollEnabled
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                  flexGrow: 1,
-                  paddingHorizontal: 10,
-                  paddingTop: 10,
-                  paddingBottom: teamMemberListBottomPadding(formerMembers.length > 0),
+                  paddingBottom: 6,
                   gap: TEAM_MEMBER_ROW_GAP,
                 }}
                 refreshControl={
@@ -1167,9 +1157,26 @@ export default function TeamScreen() {
                   </View>
                 ) : null}
               </ScrollView>
-            </ProfileCard>
           </ProfileSection>
         </View>
+
+        <Text
+          testID="team-members-hint"
+          style={{
+            flexShrink: 0,
+            textAlign: "center",
+            fontSize: 11,
+            lineHeight: 15,
+            color: "#94A3B8",
+            paddingHorizontal: 24,
+            paddingTop: 6,
+            paddingBottom: 8,
+          }}
+        >
+          {isPaid
+            ? "Tap a member to view their profile and standards."
+            : "Tap a member to view their profile."}
+        </Text>
       </View>
 
       {/* ── QR Code Modal ─────────────────────────────────────────────── */}

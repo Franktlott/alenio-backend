@@ -18,7 +18,7 @@ import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Camera, ImageIcon, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe, AlertTriangle, ShieldAlert, ChevronRight, Lock, Shield } from "lucide-react-native";
+import { Camera, ImageIcon, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe, AlertTriangle, ShieldAlert, ChevronRight, Lock, Shield, FileText } from "lucide-react-native";
 import { notificationPreferencesSummary } from "@/components/NotificationPreferencesPanel";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
 import { authClient, agentDebugLog, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
@@ -617,27 +617,27 @@ export default function ProfileScreen() {
       <View style={{ flex: 1, minHeight: 0 }}>
         {/* Profile hero — fixed */}
         <View style={{ flexShrink: 0 }}>
-          <View style={{ height: 160, overflow: "hidden" }}>
+          <View style={{ height: 96, overflow: "hidden" }}>
             <Image
               source={require("@/assets/profile-header.png")}
-              style={{ width: "100%", height: 160 }}
+              style={{ width: "100%", height: 96 }}
               resizeMode="cover"
             />
             <LinearGradient
               colors={["transparent", "rgba(241,245,249,0.95)"]}
-              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 70 }}
+              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 48 }}
             />
           </View>
 
-          <View style={{ alignItems: "center", paddingBottom: 24, paddingHorizontal: 16 }}>
+          <View style={{ alignItems: "center", paddingBottom: 12, paddingHorizontal: 16 }}>
             <TouchableOpacity
               onPress={handlePhotoPress}
               disabled={uploadMutation.isPending}
-              style={{ marginTop: -64, marginBottom: 16 }}
+              style={{ marginTop: -48, marginBottom: 8 }}
               testID="avatar-upload-button"
             >
               <View
-                className="w-32 h-32 rounded-full overflow-hidden bg-indigo-100"
+                className="w-24 h-24 rounded-full overflow-hidden bg-indigo-100"
                 style={{ borderWidth: 3, borderColor: "#F8FAFC", position: "relative" }}
               >
                 <View
@@ -652,13 +652,13 @@ export default function ProfileScreen() {
                   }}
                   pointerEvents="none"
                 >
-                  <Text className="text-indigo-600 text-4xl font-bold">{avatarInitial}</Text>
+                  <Text className="text-indigo-600 text-3xl font-bold">{avatarInitial}</Text>
                 </View>
                 {showAvatarImage ? (
                   <Image
                     key={avatarUri}
                     source={{ uri: avatarUri }}
-                    style={{ position: "absolute", top: 0, left: 0, width: 128, height: 128 }}
+                    style={{ position: "absolute", top: 0, left: 0, width: 96, height: 96 }}
                     resizeMode="cover"
                     onError={() => setAvatarFailedUri(avatarUri)}
                     testID="profile-avatar-image"
@@ -681,13 +681,13 @@ export default function ProfileScreen() {
                   </View>
                 ) : null}
               </View>
-              <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
-                <Camera size={15} color="white" />
+              <View className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
+                <Camera size={13} color="white" />
               </View>
             </TouchableOpacity>
 
-            <Text style={{ fontSize: 18, fontWeight: "700", color: nameColor, marginBottom: 2 }}>{displayName}</Text>
-            <Text style={{ fontSize: 13, color: emailColor }}>{displayEmail}</Text>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: nameColor, marginBottom: 1 }}>{displayName}</Text>
+            <Text style={{ fontSize: 12, color: emailColor }}>{displayEmail}</Text>
           </View>
         </View>
 
@@ -786,7 +786,16 @@ export default function ProfileScreen() {
                 onPress={() => router.push("/account-hub")}
                 testID="account-hub-row"
               />
-              <ProfileDivider inset />
+            </ProfileCard>
+          </ProfileSection>
+
+          <ProfileSection title="Calendar sync">
+            <OutlookCalendarCard />
+          </ProfileSection>
+
+          {/* Settings */}
+          <ProfileSection title="Settings">
+            <ProfileCard>
               <ProfileMenuRow
                 icon={Bell}
                 title="Notifications"
@@ -803,10 +812,6 @@ export default function ProfileScreen() {
                 testID="timezone-menu-row"
               />
             </ProfileCard>
-          </ProfileSection>
-
-          <ProfileSection title="Calendar sync">
-            <OutlookCalendarCard />
           </ProfileSection>
 
         {/* Push Notifications Debug — hidden, preserved for future use */}
@@ -891,22 +896,26 @@ export default function ProfileScreen() {
           <ProfileSection title="Legal & privacy">
             <ProfileCard>
               <ProfileMenuRow
+                icon={Lock}
                 title="Privacy Policy"
                 onPress={() => router.push("/privacy-policy")}
                 testID="privacy-policy-link"
               />
-              <ProfileDivider />
+              <ProfileDivider inset />
               <ProfileMenuRow
+                icon={FileText}
                 title="Terms of Service"
                 onPress={() => router.push("/terms-of-service")}
                 testID="terms-of-service-link"
               />
-              <ProfileDivider />
+              <ProfileDivider inset />
               <ProfileMenuRow
+                icon={Trash2}
                 title="Account deletion"
                 subtitle="Permanently remove your account and data"
                 onPress={() => setDeleteStep(1)}
                 testID="account-deletion-link"
+                destructive
               />
             </ProfileCard>
             <Text style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", marginTop: 10 }}>

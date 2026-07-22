@@ -12,7 +12,7 @@ export const PROFILE_UI = {
     borderColor: "#E2E8F0",
     overflow: "hidden" as const,
   },
-  sectionGap: 20,
+  sectionGap: 14,
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700" as const,
@@ -20,13 +20,13 @@ export const PROFILE_UI = {
     color: "#64748B",
     textTransform: "uppercase" as const,
   },
-  rowTitle: { fontSize: 14, fontWeight: "600" as const, color: "#0F172A" },
-  rowSubtitle: { fontSize: 12, color: "#64748B", marginTop: 2, lineHeight: 16 },
+  rowTitle: { fontSize: 13, fontWeight: "600" as const, color: "#0F172A" },
+  rowSubtitle: { fontSize: 11, color: "#64748B", marginTop: 1, lineHeight: 14 },
   divider: { height: 1, backgroundColor: "#F1F5F9" },
   iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 7,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -36,7 +36,7 @@ export const PROFILE_UI = {
 };
 
 export function ProfileContent({ children }: { children: React.ReactNode }) {
-  return <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: PROFILE_UI.sectionGap }}>{children}</View>;
+  return <View style={{ paddingHorizontal: 16, paddingTop: 4, gap: PROFILE_UI.sectionGap }}>{children}</View>;
 }
 
 export function ProfileSection({
@@ -57,17 +57,19 @@ export function ProfileSection({
   const fillsHeight = style != null && (style.flex === 1 || style.flexGrow === 1 || style.minHeight === 0);
   return (
     <View style={style}>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 12, flexShrink: 0 }}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <View style={{ marginBottom: 6, flexShrink: 0 }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={PROFILE_UI.sectionLabel}>{title}</Text>
             {titleAccessory}
           </View>
-          {subtitle ? (
-            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4, lineHeight: 17 }}>{subtitle}</Text>
-          ) : null}
+          {action}
         </View>
-        {action}
+        {subtitle ? (
+          <Text style={{ fontSize: 11, color: "#64748B", marginTop: 3, lineHeight: 15, alignSelf: "stretch" }}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
       {fillsHeight ? <View style={{ flex: 1, minHeight: 0 }}>{children}</View> : children}
     </View>
@@ -79,7 +81,7 @@ export function ProfileCard({ children, style }: { children: React.ReactNode; st
 }
 
 export function ProfileDivider({ inset = false }: { inset?: boolean }) {
-  return <View style={[PROFILE_UI.divider, inset ? { marginLeft: 52 } : undefined]} />;
+  return <View style={[PROFILE_UI.divider, inset ? { marginLeft: 46 } : undefined]} />;
 }
 
 export function ProfileMenuRow({
@@ -104,10 +106,10 @@ export function ProfileMenuRow({
   trailing?: React.ReactNode;
 }) {
   const content = (
-    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 13, minHeight: 52 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, minHeight: 44 }}>
       {Icon ? (
-        <View style={[PROFILE_UI.iconBox, { marginRight: 12 }]}>
-          <Icon size={18} color={destructive ? "#DC2626" : iconColor} strokeWidth={2} />
+        <View style={[PROFILE_UI.iconBox, { marginRight: 10 }]}>
+          <Icon size={16} color={destructive ? "#DC2626" : iconColor} strokeWidth={2} />
         </View>
       ) : null}
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -118,7 +120,7 @@ export function ProfileMenuRow({
       </View>
       {trailing}
       {showChevron && !trailing ? (
-        <ChevronRight size={18} color={destructive ? "#F87171" : "#94A3B8"} style={{ marginLeft: 4 }} />
+        <ChevronRight size={16} color={destructive ? "#F87171" : "#94A3B8"} style={{ marginLeft: 4 }} />
       ) : null}
     </View>
   );

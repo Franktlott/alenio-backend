@@ -35,7 +35,7 @@ type ProfileWorkspaceListProps = {
 };
 
 const MAX_VISIBLE_ROWS = 4;
-const ROW_HEIGHT = 52;
+const ROW_HEIGHT = 44;
 
 function WorkspaceRowIcon({ team, active }: { team: Pick<Team, "name" | "image">; active: boolean }) {
   return (
@@ -65,8 +65,8 @@ function WorkspaceRowContent({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 14,
-        paddingVertical: 13,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
         minHeight: ROW_HEIGHT,
       }}
     >
@@ -416,7 +416,7 @@ export function ProfileWorkspaceList({
                       return (
                         <View key={team.id}>
                           {index > 0 ? (
-                            <View style={{ height: 1, backgroundColor: "#F1F5F9", marginLeft: 52 }} />
+                            <View style={{ height: 1, backgroundColor: "#F1F5F9", marginLeft: 46 }} />
                           ) : null}
                           <Pressable
                             onPress={() => {

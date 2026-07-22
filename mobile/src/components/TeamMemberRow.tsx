@@ -383,10 +383,5 @@ export function TeamMemberRowSkeleton({ paid = true }: { paid?: boolean }) {
   );
 }
 
-/** Extra scroll padding so the last row clears the guidance banner. */
-export function teamMemberListBottomPadding(hasFormerMembers: boolean): number {
-  return hasFormerMembers ? 64 : 56;
-}
-
 /** Gap between member row cards in the list. */
 export const TEAM_MEMBER_ROW_GAP = 5;

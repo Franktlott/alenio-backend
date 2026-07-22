@@ -134,8 +134,8 @@ function FeedItemCard({
             fontWeight: "700",
             color: "#64748B",
             marginBottom: 0,
-            marginLeft: 16,
-            marginTop: 4,
+            marginLeft: 14,
+            marginTop: 2,
           }}
           numberOfLines={1}
         >
@@ -763,10 +763,10 @@ export default function ActivityScreen() {
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
-                        marginTop: index === 0 ? 6 : 10,
-                        marginBottom: 2,
-                        paddingHorizontal: 16,
-                        gap: 10,
+                        marginTop: index === 0 ? 4 : 8,
+                        marginBottom: 1,
+                        paddingHorizontal: 14,
+                        gap: 8,
                       }}
                     >
                       <Text

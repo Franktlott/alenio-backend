@@ -37,9 +37,9 @@ export function ActivityCardShell({
         opacity: pressed && onPress ? 0.94 : 1,
       })}
     >
-      <View style={{ paddingHorizontal: 16, paddingVertical: ACTIVITY_LAYOUT.cardPadding, gap: ACTIVITY_LAYOUT.cardGap }}>
+      <View style={{ paddingHorizontal: 14, paddingVertical: ACTIVITY_LAYOUT.cardPadding, gap: ACTIVITY_LAYOUT.cardGap }}>
         {children}
-        {footer ? <View style={{ marginTop: 2 }}>{footer}</View> : null}
+        {footer ? <View>{footer}</View> : null}
       </View>
     </Pressable>
   );

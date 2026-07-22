@@ -50,10 +50,10 @@ export function ActivityActionButton({
         accessibilityRole="button"
         style={({ pressed }) => [
           {
-            minHeight: 28,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 7,
+            minHeight: 24,
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+            borderRadius: 6,
             borderWidth: 1,
             borderColor: accentColor,
             backgroundColor: "transparent",
@@ -64,7 +64,7 @@ export function ActivityActionButton({
           style,
         ]}
       >
-        <Text style={{ fontSize: 12, fontWeight: "600", color: accentColor }}>{label}</Text>
+        <Text style={{ fontSize: 11, fontWeight: "600", color: accentColor }}>{label}</Text>
       </Pressable>
     );
   }
@@ -76,14 +76,14 @@ export function ActivityActionButton({
       testID={testID}
       style={({ pressed }) => [
         {
-          minHeight: 28,
+          minHeight: 24,
           justifyContent: "center",
           opacity: pressed ? 0.7 : 1,
         },
         style,
       ]}
     >
-      <Text style={{ fontSize: 12, fontWeight: "600", color: accentColor }}>{label}</Text>
+      <Text style={{ fontSize: 11, fontWeight: "600", color: accentColor }}>{label}</Text>
     </Pressable>
   );
 }

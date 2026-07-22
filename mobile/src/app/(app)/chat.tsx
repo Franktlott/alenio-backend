@@ -126,29 +126,26 @@ function ChatEmptyState({
     <View
       testID={testID}
       style={{
-        flex: 1,
         marginHorizontal: 14,
-        marginBottom: 8,
-        minHeight: 220,
+        marginBottom: 6,
         backgroundColor: "#FFFFFF",
-        borderRadius: 14,
+        borderRadius: 10,
         borderWidth: 1,
         borderColor: "#E9EDF2",
         alignItems: "center",
-        justifyContent: "center",
         paddingHorizontal: 20,
-        paddingVertical: 28,
+        paddingVertical: 20,
       }}
     >
       <Image
         source={image}
-        style={{ width: 152, height: 152, marginBottom: 12 }}
+        style={{ width: 120, height: 120, marginBottom: 10 }}
         resizeMode="contain"
         accessibilityIgnoresInvertColors
       />
       <Text
         style={{
-          fontSize: 17,
+          fontSize: 16,
           fontWeight: "800",
           color: "#0F172A",
           textAlign: "center",
@@ -165,7 +162,7 @@ function ChatEmptyState({
           textAlign: "center",
           lineHeight: 18,
           maxWidth: 280,
-          marginBottom: onPrimary ? 16 : 0,
+          marginBottom: onPrimary ? 14 : 0,
         }}
       >
         {body}
@@ -669,15 +666,6 @@ export default function ChatScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
               paddingBottom: 6,
-              flexGrow:
-                conversationsLoading || conversations.length === 0 || sortedUnpinnedDms.length === 0
-                  ? 1
-                  : undefined,
-              justifyContent:
-                !conversationsLoading &&
-                (conversations.length === 0 || sortedUnpinnedDms.length === 0)
-                  ? ("center" as const)
-                  : undefined,
             }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
             keyboardShouldPersistTaps="handled"

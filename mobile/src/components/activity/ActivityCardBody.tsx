@@ -39,19 +39,19 @@ export function ActivityCardBody({
   const displayName = memberName ?? actor.name;
 
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 7 }}>
       <View
         style={{
           width: ACTIVITY_LAYOUT.badgeSize,
           height: ACTIVITY_LAYOUT.badgeSize,
-          borderRadius: 7,
+          borderRadius: 6,
           backgroundColor: tint.badgeBg,
           alignItems: "center",
           justifyContent: "center",
           marginTop: 1,
         }}
       >
-        <LabelIcon size={14} color={tint.icon} strokeWidth={2.25} />
+        <LabelIcon size={12} color={tint.icon} strokeWidth={2.25} />
       </View>
 
       <UserAvatar
@@ -62,7 +62,7 @@ export function ActivityCardBody({
         textColor={ACTIVITY_COLORS.slate500}
       />
 
-      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 0 }}>
         <View
           style={{
             flexDirection: "row",
@@ -79,7 +79,7 @@ export function ActivityCardBody({
               color: tint.labelText,
               letterSpacing: 0.4,
               textTransform: "uppercase",
-              lineHeight: 12,
+              lineHeight: 11,
             }}
             numberOfLines={1}
           >
@@ -91,7 +91,7 @@ export function ActivityCardBody({
               color: ACTIVITY_COLORS.slate400,
               fontWeight: "500",
               flexShrink: 0,
-              lineHeight: 12,
+              lineHeight: 11,
             }}
           >
             {formatRelativeTime(timestamp)}
@@ -99,7 +99,7 @@ export function ActivityCardBody({
         </View>
 
         <Text
-          style={{ fontSize: 13, fontWeight: "700", color: ACTIVITY_COLORS.slate900, lineHeight: 16 }}
+          style={{ fontSize: 13, fontWeight: "700", color: ACTIVITY_COLORS.slate900, lineHeight: 15 }}
           numberOfLines={1}
         >
           {displayName}
@@ -107,7 +107,7 @@ export function ActivityCardBody({
 
         {description ? (
           <Text
-            style={{ fontSize: 12, fontWeight: "500", color: ACTIVITY_COLORS.slate700, lineHeight: 15 }}
+            style={{ fontSize: 12, fontWeight: "500", color: ACTIVITY_COLORS.slate700, lineHeight: 14 }}
             numberOfLines={2}
           >
             {description}
@@ -115,7 +115,7 @@ export function ActivityCardBody({
         ) : null}
 
         {metadata ? (
-          <Text style={{ fontSize: 11, color: ACTIVITY_COLORS.slate500, lineHeight: 14 }} numberOfLines={1}>
+          <Text style={{ fontSize: 11, color: ACTIVITY_COLORS.slate500, lineHeight: 13 }} numberOfLines={1}>
             {metadata}
           </Text>
         ) : null}
@@ -123,7 +123,7 @@ export function ActivityCardBody({
         {children}
 
         {action ? (
-          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2 }}>{action}</View>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 1 }}>{action}</View>
         ) : null}
       </View>
     </View>

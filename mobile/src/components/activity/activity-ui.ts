@@ -15,14 +15,14 @@ export type ActivityTintTokens = {
 
 export const ACTIVITY_LAYOUT = {
   cardRadius: 0,
-  cardPadding: 8,
-  cardGap: 2,
+  cardPadding: 6,
+  cardGap: 1,
   cardMarginHorizontal: 0,
   cardMarginVertical: 0,
-  sectionGap: 6,
-  avatarSize: 34,
-  avatarColumn: 36,
-  badgeSize: 28,
+  sectionGap: 4,
+  avatarSize: 30,
+  avatarColumn: 32,
+  badgeSize: 24,
 } as const;
 
 export const ACTIVITY_COLORS = {
