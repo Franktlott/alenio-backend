@@ -268,7 +268,7 @@ orgGoRouter.get("/:organizationId/members", authGuard, async (c) => {
       include: {
         user: { select: { id: true, name: true, email: true, image: true } },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { joinedAt: "asc" },
     }),
     prisma.teamMember.findMany({
       where: { team: { organizationId } },
@@ -276,7 +276,7 @@ orgGoRouter.get("/:organizationId/members", authGuard, async (c) => {
         user: { select: { id: true, name: true, email: true, image: true } },
         team: { select: { id: true, name: true } },
       },
-      orderBy: [{ team: { name: "asc" } }, { createdAt: "asc" }],
+      orderBy: [{ team: { name: "asc" } }, { joinedAt: "asc" }],
     }),
   ]);
 

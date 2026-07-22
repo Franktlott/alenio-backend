@@ -49,15 +49,17 @@ export function EnterpriseOrgUsersPage() {
 
       {err ? <p className="enterprise-muted" style={{ color: "#b91c1c" }}>{err}</p> : null}
 
-      {members === null ? (
-        <EnterprisePageLoading label="Loading users" />
-      ) : members.length === 0 ? (
+      {!err && members === null ? <EnterprisePageLoading label="Loading users" /> : null}
+
+      {!err && members && members.length === 0 ? (
         <div className="enterprise-card" style={{ padding: "1.25rem" }}>
           <p className="enterprise-muted" style={{ margin: 0 }}>
             No users yet. Invite org admins or add people to store workspaces.
           </p>
         </div>
-      ) : (
+      ) : null}
+
+      {!err && members && members.length > 0 ? (
         <div className="enterprise-table-wrap">
           <table className="enterprise-table">
             <thead>
@@ -86,7 +88,7 @@ export function EnterpriseOrgUsersPage() {
             </tbody>
           </table>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
