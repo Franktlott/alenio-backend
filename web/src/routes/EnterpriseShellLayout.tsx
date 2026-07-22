@@ -298,6 +298,7 @@ export function EnterpriseShellLayout() {
     (teams !== null &&
       !!effectiveTeamId &&
       teams.find((t) => t.id === effectiveTeamId)?.hasGoFeatures === true);
+  const showPlanNav = workspaceOwner && !hasNoTeams;
 
   /** Phone browsers should use the native app unless the user chose web explicitly. */
   useLayoutEffect(() => {
@@ -491,7 +492,7 @@ export function EnterpriseShellLayout() {
         mainClassName={mainClassName}
         contentClassName={contentClassName}
         workspaceOverlayLoading={workspaceMainLoading}
-        showPlanNav={workspaceOwner && !hasNoTeams}
+        showPlanNav={showPlanNav}
         showActivityExecuteNav={showActivityExecuteNav && !hasNoTeams}
         showGoNav={showGoNav}
         goNavLabel={goNavLabel}
