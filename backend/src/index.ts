@@ -23,6 +23,8 @@ import { subscriptionRouter } from "./routes/subscription";
 import { mobileBillingRouter } from "./routes/mobile-billing";
 import { activityRouter } from "./routes/activity";
 import { userActivityRouter } from "./routes/user-activity";
+import { organizationsRouter, ssoPublicRouter } from "./routes/organizations";
+
 import { topicsRouter } from "./routes/topics";
 import { adminRouter } from "./routes/admin";
 import { adminApiRouter } from "./routes/admin-api";
@@ -1256,6 +1258,8 @@ app.route("/api/join-requests", joinRequestsRouter);
 app.route("/api/teams", calendarRouter);
 app.route("/api/teams", activityRouter);
 app.route("/api/activity", userActivityRouter);
+app.route("/api/organizations", organizationsRouter);
+app.route("/api/sso", ssoPublicRouter);
 app.route("/api/teams", topicsRouter);
 app.route("/api/teams", pollsRouter);
 app.route("/api/og-preview", ogPreviewRouter);

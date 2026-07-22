@@ -105,8 +105,7 @@ export async function performWorkspaceSwitch(
     }),
   ]);
 
-  const normalizedPlan = subscription.plan === "pro" ? "team" : subscription.plan;
-  useSubscriptionStore.getState().setPlan(normalizedPlan === "team" ? "team" : "free");
+  useSubscriptionStore.getState().setPlan(hasTeamPlan(subscription) ? "team" : "free");
 
   if (hasTeamPlan(subscription)) {
     await Promise.all([

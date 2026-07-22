@@ -48,6 +48,8 @@ type Props = {
   compactEmpty?: boolean;
   /** When true, fills parent height and scrolls the list independently. */
   fillHeight?: boolean;
+  /** Section header label (defaults to "Spaces"). */
+  title?: string;
 };
 
 function topicActivityTime(topic: SpaceTopic): number {
@@ -63,6 +65,7 @@ export function SpacesSection({
   cardStyle,
   compactEmpty = false,
   fillHeight = false,
+  title = "Spaces",
 }: Props) {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
@@ -181,7 +184,7 @@ export function SpacesSection({
             marginBottom: 2,
           }}
         >
-          Spaces
+          {title}
         </Text>
         <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 16 }} numberOfLines={1}>
           {topics.length === 0
@@ -222,9 +225,9 @@ export function SpacesSection({
         {
           alignItems: "center",
           justifyContent: "center",
-          paddingVertical: compactEmpty ? 10 : 14,
+          paddingVertical: compactEmpty ? 10 : fillHeight ? 24 : 14,
           paddingHorizontal: 12,
-          marginBottom: 4,
+          marginBottom: fillHeight ? 0 : 4,
           ...(fillHeight ? { flex: 1, minHeight: 0 } : null),
         },
       ]}
@@ -232,9 +235,9 @@ export function SpacesSection({
       <Image
         source={require("@/assets/messages-empty-team.png")}
         style={{
-          width: compactEmpty ? 52 : 80,
-          height: compactEmpty ? 52 : 80,
-          marginBottom: compactEmpty ? 2 : 4,
+          width: compactEmpty ? 64 : 96,
+          height: compactEmpty ? 64 : 96,
+          marginBottom: compactEmpty ? 6 : 10,
         }}
         resizeMode="contain"
         accessibilityIgnoresInvertColors
@@ -376,7 +379,7 @@ export function SpacesSection({
     <View style={fillHeight ? { flex: 1, minHeight: 0 } : undefined}>
       {header}
       {fillHeight && topics.length === 0 && !isLoading ? (
-        <View style={{ flex: 1, minHeight: 0, paddingBottom: 4 }}>{listBody}</View>
+        <View style={{ flex: 1, minHeight: 0 }}>{listBody}</View>
       ) : fillHeight ? (
         <ScrollView
           style={{ flex: 1, minHeight: 0 }}

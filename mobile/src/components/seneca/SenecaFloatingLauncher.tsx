@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
+import { usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -17,15 +18,22 @@ import {
 const senecaIcon = require("@/assets/seneca-icon.png");
 
 const FAB_ABOVE_NAV_GAP = 12;
-/** Fill most of the white circle; contain keeps the tall mark from clipping. */
-const ICON_SIZE = Math.round(SENECA_FAB_SIZE * 0.82);
+/** Extra lift on Chat so Seneca clears the pin hint / empty-state copy. */
+const CHAT_FAB_EXTRA_LIFT = 28;
+/** Snug white ring around the mark — not flush to the edge. */
+const ICON_SIZE = Math.round(SENECA_FAB_SIZE * 0.78);
 
 function canUseSeneca(role?: string | null): boolean {
   return role === "owner" || role === "team_leader";
 }
 
+function isChatRoute(pathname: string): boolean {
+  return pathname === "/chat" || pathname.endsWith("/chat");
+}
+
 export function SenecaFloatingLauncher() {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
@@ -41,7 +49,8 @@ export function SenecaFloatingLauncher() {
 
   if (!showSeneca) return null;
 
-  const padBottom = insets.bottom + TAB_BAR_HEIGHT + FAB_ABOVE_NAV_GAP;
+  const chatLift = isChatRoute(pathname) ? CHAT_FAB_EXTRA_LIFT : 0;
+  const padBottom = insets.bottom + TAB_BAR_HEIGHT + FAB_ABOVE_NAV_GAP + chatLift;
   const padRight = Math.max(insets.right, SENECA_FAB_RIGHT_INSET);
 
   return (
@@ -61,15 +70,17 @@ export function SenecaFloatingLauncher() {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setOpen(true);
           }}
-          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+          style={({ pressed }) => [styles.shadowWrap, pressed && styles.buttonPressed]}
           testID="seneca-floating-launcher"
         >
-          <Image
-            source={senecaIcon}
-            style={styles.icon}
-            resizeMode="contain"
-            accessibilityIgnoresInvertColors
-          />
+          <View style={styles.circle}>
+            <Image
+              source={senecaIcon}
+              style={styles.icon}
+              resizeMode="contain"
+              accessibilityIgnoresInvertColors
+            />
+          </View>
         </Pressable>
       </View>
       <SenecaAssistantSheet
@@ -93,27 +104,32 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     alignItems: "flex-end",
   },
-  button: {
+  shadowWrap: {
     width: SENECA_FAB_SIZE,
     height: SENECA_FAB_SIZE,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
     borderRadius: SENECA_FAB_SIZE / 2,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  circle: {
+    width: SENECA_FAB_SIZE,
+    height: SENECA_FAB_SIZE,
+    borderRadius: SENECA_FAB_SIZE / 2,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   icon: {
     width: ICON_SIZE,
     height: ICON_SIZE,
   },
   buttonPressed: {
-    opacity: 0.92,
     transform: [{ scale: 0.97 }],
   },
 });

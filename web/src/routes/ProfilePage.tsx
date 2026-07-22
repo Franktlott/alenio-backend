@@ -198,6 +198,21 @@ export function ProfilePage() {
               </div>
             </section>
           ) : null}
+          {activeTeam?.role === "owner" ? (
+            <section className="enterprise-card seneca-studio-settings-entry" data-testid="settings-okta-entry">
+              <div className="seneca-studio-settings-entry-row">
+                <div>
+                  <h2 className="enterprise-card-title enterprise-card-title-spaced">Okta SSO</h2>
+                  <p className="enterprise-muted seneca-studio-settings-entry-desc">
+                    Connect your company Okta so teammates can sign in with their work identity.
+                  </p>
+                </div>
+                <Link to="/settings/sso/okta" className="auth-submit seneca-studio-settings-entry-btn">
+                  Set up Okta
+                </Link>
+              </div>
+            </section>
+          ) : null}
           <section className="enterprise-card enterprise-profile-account">
             <div className="enterprise-profile-account-head">
             <h2 className="enterprise-card-title enterprise-card-title-spaced enterprise-profile-account-title">Account</h2>

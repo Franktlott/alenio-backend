@@ -1,5 +1,5 @@
 import type { MemberStandardsCompliance, WorkplaceStandards } from "./workplace-standards";
-import { NO_INITIAL_CHECK_IN_LABEL } from "./workplace-standards";
+import { NO_INITIAL_CHECK_IN_LABEL, NO_INITIAL_CHECK_IN_OR_GOALS_LABEL } from "./workplace-standards";
 
 export type FollowUpTasksDisplay = {
   label: string;
@@ -77,12 +77,12 @@ export function formatDaysSinceCheckIn(days: number | null | undefined): string 
   return `${days}d ago`;
 }
 
-/** Roster status copy aligned with team member list mockup. */
+/**
+ * Roster status copy — matches Status key labels.
+ * Combined "no check-in or goals" maps to the key's "No initial check-in".
+ */
 export function formatMemberRosterStatusLabel(label: string): string {
-  if (label === NO_INITIAL_CHECK_IN_LABEL) return "Not complete";
-  if (label === "Check-in due soon") return "Due soon";
-  if (label === "Overdue check-in") return "Overdue";
-  if (label === "Needs active goals") return "Not complete";
+  if (label === NO_INITIAL_CHECK_IN_OR_GOALS_LABEL) return NO_INITIAL_CHECK_IN_LABEL;
   return label;
 }
 

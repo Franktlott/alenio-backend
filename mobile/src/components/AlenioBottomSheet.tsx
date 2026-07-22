@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  Dimensions,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -42,7 +43,8 @@ function SheetContent({
   showCloseButton = false,
 }: Omit<Props, "visible" | "asScreen">) {
   const insets = useSafeAreaInsets();
-  const bottomPad = Math.max(insets.bottom, 20) + (compact ? 8 : 12);
+  const bottomPad = Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
+  const bodyMaxHeight = Math.round(Dimensions.get("window").height * (compact ? 0.5 : 0.58));
 
   return (
     <View style={styles.backdrop} testID={testID}>
@@ -86,8 +88,12 @@ function SheetContent({
             ) : null}
           </View>
           <ScrollView
-            style={styles.bodyScroll}
-            contentContainerStyle={[styles.bodyContent, compact ? styles.bodyContentCompact : null]}
+            style={[styles.bodyScroll, { maxHeight: bodyMaxHeight }]}
+            contentContainerStyle={[
+              styles.bodyContent,
+              compact ? styles.bodyContentCompact : null,
+              styles.bodyContentGrow,
+            ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             bounces={false}
@@ -156,7 +162,8 @@ export function AlenioSheetOption({
   subtitle,
   onPress,
   destructive = false,
-  compact = false,
+  compact = true,
+  tint,
   testID,
 }: {
   icon: React.ReactNode;
@@ -166,11 +173,15 @@ export function AlenioSheetOption({
   onPress: () => void;
   destructive?: boolean;
   compact?: boolean;
+  tint?: "blue" | "purple" | "slate" | "danger";
   testID?: string;
 }) {
   return (
     <Pressable onPress={onPress} testID={testID} accessibilityRole="button">
-      <AlenioSheetCard tint={destructive ? "danger" : "blue"} compact={compact}>
+      <AlenioSheetCard
+        tint={destructive ? "danger" : tint ?? "blue"}
+        compact={compact}
+      >
         <View style={[alenioSheetStyles.optionRow, compact ? alenioSheetStyles.optionRowCompact : null]}>
           <AlenioSheetIcon color={destructive ? "#EF4444" : iconColor} compact={compact}>
             {icon}
@@ -208,24 +219,24 @@ export const alenioSheetStyles = StyleSheet.create({
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-  },
-  optionRowCompact: {
     gap: 10,
   },
+  optionRowCompact: {
+    gap: 8,
+  },
   optionTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: "#0F172A",
   },
   optionTitleCompact: {
-    fontSize: 14,
+    fontSize: 13,
   },
   optionSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#94A3B8",
-    marginTop: 2,
-    lineHeight: 17,
+    marginTop: 1,
+    lineHeight: 15,
   },
   optionSubtitleCompact: {
     fontSize: 11,
@@ -233,58 +244,58 @@ export const alenioSheetStyles = StyleSheet.create({
     lineHeight: 14,
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
     color: "#0F172A",
-    marginBottom: 6,
+    marginBottom: 4,
   },
   fieldInput: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
     color: "#0F172A",
   },
   primaryButton: {
     width: "100%",
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: "#4361EE",
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 44,
   },
   primaryButtonDisabled: {
     opacity: 0.55,
   },
   primaryButtonText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: "#FFFFFF",
   },
   cancelButton: {
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   cancelButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#64748B",
   },
   errorBox: {
     backgroundColor: "#FEF2F2",
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 10,
+    padding: 10,
     borderWidth: 1,
     borderColor: "#FECACA",
   },
   errorText: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#B91C1C",
-    lineHeight: 18,
+    lineHeight: 16,
   },
 });
 
@@ -297,64 +308,66 @@ const styles = StyleSheet.create({
   avoider: {
     width: "100%",
     maxHeight: "92%",
+    justifyContent: "flex-end",
   },
   sheet: {
     width: "100%",
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    maxHeight: "100%",
-  },
-  sheetCompact: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 16,
+    paddingTop: 10,
+    maxHeight: "100%",
+    flexGrow: 0,
+  },
+  sheetCompact: {
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingHorizontal: 14,
     paddingTop: 8,
   },
   handle: {
-    width: 40,
+    width: 36,
     height: 4,
     borderRadius: 2,
     backgroundColor: "#E2E8F0",
     alignSelf: "center",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   handleCompact: {
-    marginBottom: 10,
+    marginBottom: 8,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 4,
+    gap: 8,
+    marginBottom: 2,
   },
   headerRowCompact: {
     gap: 8,
     marginBottom: 0,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F1F5F9",
     marginLeft: 4,
   },
   logo: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-  },
-  logoCompact: {
-    width: 26,
-    height: 26,
+    width: 28,
+    height: 28,
     borderRadius: 7,
   },
+  logoCompact: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+  },
   title: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     color: "#0F172A",
   },
@@ -362,10 +375,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#94A3B8",
-    marginTop: 2,
-    lineHeight: 17,
+    marginTop: 1,
+    lineHeight: 15,
   },
   subtitleCompact: {
     fontSize: 11,
@@ -377,45 +390,49 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   bodyContent: {
-    gap: 12,
-    paddingTop: 12,
-    paddingBottom: 4,
+    gap: 8,
+    paddingTop: 10,
+    paddingBottom: 2,
   },
   bodyContentCompact: {
     gap: 6,
     paddingTop: 8,
     paddingBottom: 2,
   },
+  bodyContentGrow: {
+    flexGrow: 0,
+  },
   footer: {
-    gap: 4,
-    paddingTop: 12,
+    gap: 2,
+    paddingTop: 10,
   },
   footerCompact: {
     gap: 2,
-    paddingTop: 8,
+    paddingTop: 6,
   },
   card: {
-    borderRadius: 16,
-    padding: 16,
-    gap: 12,
-  },
-  cardCompact: {
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    gap: 0,
+    gap: 8,
+  },
+  cardCompact: {
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 6,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   iconCircleCompact: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
   },
 });

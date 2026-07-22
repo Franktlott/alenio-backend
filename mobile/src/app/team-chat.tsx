@@ -20,6 +20,8 @@ import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2, Rep
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
+import { ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { isLeaderRole, resolveMyTeamRole } from "@/lib/member-identity";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import { uploadFile } from "@/lib/upload";
 import { pickMedia, takePhoto } from "@/lib/file-picker";
@@ -251,7 +253,7 @@ export default function TeamChatScreen() {
   const [confirmEndPollId, setConfirmEndPollId] = useState<string | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [jumpingToPin, setJumpingToPin] = useState(false);
-  const currentUserId = session?.user?.id ?? "";
+  const sessionUserId = typeof session?.user?.id === "string" ? session.user.id : "";
   const prevMsgCountRef = useRef<number>(0);
   const lastMessageIdRef = useRef<string | null>(null);
 
@@ -379,12 +381,26 @@ export default function TeamChatScreen() {
     [jumpingToPin, queryClient, teamId, topicKey, fetchNextPage, polls, scrollToIndex],
   );
 
+  const { data: meProfile } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () =>
+      api.get<{ id: string; name: string; email: string; image: string | null }>("/api/me"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60,
+  });
+
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
     queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
     enabled: !!teamId,
   });
-  const currentUserRole = team?.members?.find((m) => m.userId === currentUserId)?.role;
+  const { myId: currentUserId, myRole: currentUserRole } = resolveMyTeamRole({
+    teamRole: team?.role,
+    members: team?.members,
+    meId: meProfile?.id,
+    meEmail: meProfile?.email || (typeof session?.user?.email === "string" ? session.user.email : undefined),
+    sessionUserId,
+  });
 
   const { data: topics = [] } = useQuery<SpaceTopic[]>({
     queryKey: ["topics", teamId],
@@ -468,7 +484,7 @@ export default function TeamChatScreen() {
   });
 
   const canDelete = (msg: Message) =>
-    msg.senderId === currentUserId ||
+    (!!currentUserId && msg.senderId === currentUserId) ||
     currentUserRole === "owner" ||
     currentUserRole === "admin";
 
@@ -656,7 +672,7 @@ export default function TeamChatScreen() {
       </Modal>
 
       {/* Who reacted modal */}
-      <Modal visible={!!reactionView} transparent animationType="fade" onRequestClose={() => setReactionView(null)}>
+      <Modal visible={!!reactionView} transparent animationType="slide" onRequestClose={() => setReactionView(null)}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setReactionView(null)}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <View style={{ backgroundColor: "white", marginHorizontal: 12, marginBottom: 32, borderRadius: 16, overflow: "hidden" }}>
@@ -1104,8 +1120,8 @@ export default function TeamChatScreen() {
               if ("_isPoll" in item) {
                 const poll = item as PollType;
                 const canDeletePoll =
-                  poll.createdById === currentUserId ||
-                  (poll.allowLeaderDelete && (currentUserRole === "owner" || currentUserRole === "team_leader" || currentUserRole === "admin"));
+                  (!!currentUserId && poll.createdById === currentUserId) ||
+                  (poll.allowLeaderDelete && isLeaderRole(currentUserRole));
                 return (
                   <PollCard
                     poll={poll}

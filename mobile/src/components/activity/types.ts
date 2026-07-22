@@ -87,14 +87,23 @@ export type ActivitySummary = {
 };
 
 export const ACTIVITY_FILTER_OPTIONS: { key: ActivityFilter; label: string }[] = [
-  { key: "all", label: "All Activity" },
+  { key: "all", label: "All" },
   { key: "tasks", label: "Tasks" },
-  { key: "calendar", label: "Calendar" },
   { key: "team", label: "Team" },
-  { key: "celebrations", label: "Celebrations" },
+  { key: "calendar", label: "Calendar" },
+  { key: "celebrations", label: "Recognition" },
 ];
 
-const DATE_GROUP_ORDER: ActivityDateGroup[] = ["today", "yesterday", "this_week", "earlier"];
+/** Display order folds this_week into earlier */
+type ActivityDisplayDateGroup = "today" | "yesterday" | "earlier";
+
+const DATE_GROUP_ORDER: ActivityDisplayDateGroup[] = ["today", "yesterday", "earlier"];
+const DATE_GROUP_BUCKET: Record<ActivityDateGroup, ActivityDisplayDateGroup> = {
+  today: "today",
+  yesterday: "yesterday",
+  this_week: "earlier",
+  earlier: "earlier",
+};
 
 function startOfDay(d: Date): Date {
   const next = new Date(d);
@@ -132,13 +141,12 @@ export function getDateGroup(iso: string): ActivityDateGroup {
 export function dateGroupLabel(group: ActivityDateGroup): string {
   switch (group) {
     case "today":
-      return "TODAY";
+      return "Today";
     case "yesterday":
-      return "YESTERDAY";
+      return "Yesterday";
     case "this_week":
-      return "THIS WEEK";
     case "earlier":
-      return "EARLIER";
+      return "Earlier";
   }
 }
 
@@ -172,12 +180,13 @@ export function buildActivitySummary(items: ActivityFeedItem[]): ActivitySummary
 }
 
 export function groupActivitiesByDate(items: ActivityFeedItem[]): ActivityDateSection[] {
-  const buckets = new Map<ActivityDateGroup, ActivityFeedItem[]>();
+  const buckets = new Map<ActivityDisplayDateGroup, ActivityFeedItem[]>();
 
   for (const item of items) {
-    const existing = buckets.get(item.dateGroup) ?? [];
+    const bucket = DATE_GROUP_BUCKET[item.dateGroup];
+    const existing = buckets.get(bucket) ?? [];
     existing.push(item);
-    buckets.set(item.dateGroup, existing);
+    buckets.set(bucket, existing);
   }
 
   return DATE_GROUP_ORDER.filter((group) => (buckets.get(group)?.length ?? 0) > 0).map((group) => ({
@@ -240,7 +249,7 @@ function mapCalendarEvent(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
     return {
       title: `${count} events added`,
       description: `${name} added ${count} events to the calendar`,
-      actionLabel: "View Calendar",
+      actionLabel: "Open Calendar",
       actionRoute: { pathname: "/(app)/execute" },
     };
   }
@@ -253,7 +262,7 @@ function mapCalendarEvent(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
   return {
     title: eventTitle,
     description,
-    actionLabel: "View Calendar",
+    actionLabel: "Open Calendar",
     actionRoute: { pathname: "/(app)/execute" },
   };
 }
@@ -263,7 +272,7 @@ function mapMemberJoined(item: ActivityApiEvent): Pick<ActivityFeedItem, "title"
   return {
     title: `${name} joined`,
     description: `${name} joined the team`,
-    actionLabel: "Send Welcome",
+    actionLabel: "Welcome",
     actionRoute: { pathname: "/(app)/team" },
   };
 }

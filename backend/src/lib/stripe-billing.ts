@@ -331,22 +331,51 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
 const subscriptionReadReconcileCooldownMs = 10_000;
 const lastSubscriptionReadReconcileAt = new Map<string, number>();
 
-export async function syncCancelAtPeriodEndFromStripe(teamId: string): Promise<boolean> {
+export type StripeBillingInterval = "month" | "year";
+
+export type StripeSubscriptionSyncResult = {
+  cancelAtPeriodEnd: boolean;
+  billingInterval: StripeBillingInterval | null;
+};
+
+export function billingIntervalFromStripeSubscription(
+  subscription: Stripe.Subscription,
+): StripeBillingInterval | null {
+  const item = subscription.items?.data?.[0];
+  const price = item?.price;
+  const recurring = price && typeof price === "object" ? price.recurring : null;
+  const interval = recurring?.interval;
+  if (interval === "month" || interval === "year") return interval;
+  return null;
+}
+
+/** Pull cancel-at-period-end + billing interval from Stripe and persist subscription row. */
+export async function syncSubscriptionDetailsFromStripe(teamId: string): Promise<StripeSubscriptionSyncResult> {
   const row = await getTeamSubscription(teamId);
   const subId = row.stripeSubscriptionId?.trim();
   const stripe = getStripeClient();
-  if (!subId || !stripe) return row.cancelAtPeriodEnd === true;
+  if (!subId || !stripe) {
+    return { cancelAtPeriodEnd: row.cancelAtPeriodEnd === true, billingInterval: null };
+  }
 
   try {
-    const subscription = await stripe.subscriptions.retrieve(subId, { expand: ["items.data"] });
+    const subscription = await stripe.subscriptions.retrieve(subId, { expand: ["items.data.price"] });
     const customerId = stripeCustomerIdOfSubscription(subscription);
     await applySubscriptionFromStripeSubscription(teamId, customerId, subscription);
-    return isStripeSubscriptionCanceling(subscription);
+    return {
+      cancelAtPeriodEnd: isStripeSubscriptionCanceling(subscription),
+      billingInterval: billingIntervalFromStripeSubscription(subscription),
+    };
   } catch (e) {
-    console.warn("[stripe] syncCancelAtPeriodEndFromStripe failed", teamId, e);
+    console.warn("[stripe] syncSubscriptionDetailsFromStripe failed", teamId, e);
     const refreshed = await getTeamSubscription(teamId);
-    return refreshed.cancelAtPeriodEnd === true;
+    return { cancelAtPeriodEnd: refreshed.cancelAtPeriodEnd === true, billingInterval: null };
   }
+}
+
+export async function syncCancelAtPeriodEndFromStripe(teamId: string): Promise<boolean> {
+  const result = await syncSubscriptionDetailsFromStripe(teamId);
+  return result.cancelAtPeriodEnd;
 }
 
 /**

@@ -19,7 +19,6 @@ import Animated, {
 } from "react-native-reanimated";
 import type { ActivityFeedItem } from "./types";
 import { formatRelativeTime } from "./types";
-import { ACTIVITY_LAYOUT } from "./activity-ui";
 import {
   getCelebrationCardTheme,
   type CelebrationHeroStyle,
@@ -394,8 +393,8 @@ export function CelebrationActivityCard({ item, footer, onLongPress, onCelebrate
 
 const styles = StyleSheet.create({
   cardOuter: {
-    marginHorizontal: ACTIVITY_LAYOUT.cardMarginHorizontal,
-    marginVertical: 4,
+    marginHorizontal: 16,
+    marginVertical: 6,
     shadowColor: "#4C1D95",
     shadowOpacity: 0.24,
     shadowRadius: 12,

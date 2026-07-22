@@ -1112,6 +1112,8 @@ export type ApiCalendarEvent = {
   color?: string | null;
   isHidden?: boolean | null;
   isVideoMeeting?: boolean | null;
+  isOneOnOne?: boolean | null;
+  assigneeIds?: string[] | null;
   approvalStatus?: "pending" | "approved" | "rejected" | null;
   createdById?: string;
   createdBy?: { id: string; name: string; image?: string | null };
@@ -2406,4 +2408,73 @@ export function workspaceChecklistHubUrl(hubToken: string): string {
 /** @deprecated Use workspaceChecklistHubUrl */
 export function checklistPublicUrl(publicToken: string): string {
   return workspaceChecklistHubUrl(publicToken);
+}
+
+export type OrganizationSsoPublicConfig = {
+  provider: string;
+  protocol: string;
+  enabled: boolean;
+  issuer: string | null;
+  clientId: string | null;
+  hasClientSecret: boolean;
+  domain: string | null;
+  domainVerified: boolean;
+  ssoRequired: boolean;
+  organizationId: string;
+  organizationName: string;
+  callbackUrl: string;
+};
+
+export type OrganizationForTeamResponse = {
+  team: { id: string; name: string; organizationId: string | null };
+  organization: { id: string; name: string; slug: string; ssoRequired: boolean } | null;
+  sso: OrganizationSsoPublicConfig | { enabled: boolean; provider: string; organizationName: string } | null;
+};
+
+export function fetchOrganizationForTeam(teamId: string) {
+  return apiGetJson<{ data: OrganizationForTeamResponse }>(
+    `/api/organizations/for-team/${encodeURIComponent(teamId)}`,
+  ).then((r) => r.data);
+}
+
+export function createOrganizationFromTeam(teamId: string, name?: string) {
+  return apiPostJson<{
+    data: {
+      organization: { id: string; name: string; slug: string } | null;
+      sso: OrganizationSsoPublicConfig | null;
+    };
+  }>(`/api/organizations/from-team/${encodeURIComponent(teamId)}`, name ? { name } : {}).then((r) => r.data);
+}
+
+export function saveOrganizationOktaSso(
+  organizationId: string,
+  body: {
+    issuer: string;
+    clientId: string;
+    clientSecret?: string;
+    domain: string;
+    enabled?: boolean;
+    ssoRequired?: boolean;
+    markDomainVerified?: boolean;
+  },
+) {
+  return apiPutJson<{ data: OrganizationSsoPublicConfig }>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/sso/okta`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function discoverSsoForEmail(email: string) {
+  return apiPostJson<{
+    data: {
+      ssoAvailable: boolean;
+      provider?: string;
+      organizationId?: string;
+      organizationName?: string;
+      domain?: string;
+      ssoRequired?: boolean;
+      startPath?: string;
+      reason?: string;
+    };
+  }>("/api/sso/discover", { email }).then((r) => r.data);
 }

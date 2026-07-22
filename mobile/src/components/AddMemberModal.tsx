@@ -29,32 +29,32 @@ type Props = {
 
 function MemberPreviewCard({ preview, displayName }: { preview: TeamInvitePreview; displayName: string }) {
   return (
-    <View style={alenioSheetStyles.optionRow}>
-      <AlenioSheetIcon color={preview.found ? "#4361EE" : "#7C3AED"}>
+    <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
+      <AlenioSheetIcon color={preview.found ? "#4361EE" : "#7C3AED"} compact>
         {preview.user?.image ? (
-          <Image source={{ uri: preview.user.image }} style={{ width: 44, height: 44 }} resizeMode="cover" />
+          <Image source={{ uri: preview.user.image }} style={{ width: 30, height: 30 }} resizeMode="cover" />
         ) : (
-          <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>
             {displayName[0]?.toUpperCase() ?? "?"}
           </Text>
         )}
       </AlenioSheetIcon>
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-          <Text style={alenioSheetStyles.optionTitle} numberOfLines={2}>
+          <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]} numberOfLines={2}>
             {displayName}
           </Text>
           <View
             style={{
-              paddingHorizontal: 8,
-              paddingVertical: 3,
+              paddingHorizontal: 7,
+              paddingVertical: 2,
               borderRadius: 999,
               backgroundColor: preview.found ? "#ECFDF5" : "#EFF6FF",
             }}
           >
             <Text
               style={{
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: "700",
                 letterSpacing: 0.4,
                 color: preview.found ? "#047857" : "#1D4ED8",
@@ -158,6 +158,7 @@ export function AddMemberModal({
       title={title}
       subtitle={subtitle}
       onClose={handleClose}
+      compact
       testID="add-member-modal"
       footer={
         <>
@@ -187,14 +188,14 @@ export function AddMemberModal({
     >
       {step === "email" ? (
         <>
-          <AlenioSheetCard>
-            <View style={alenioSheetStyles.optionRow}>
-              <AlenioSheetIcon>
-                <UserPlus size={22} color="white" />
+          <AlenioSheetCard compact>
+            <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
+              <AlenioSheetIcon compact>
+                <UserPlus size={16} color="white" />
               </AlenioSheetIcon>
               <View style={{ flex: 1 }}>
-                <Text style={alenioSheetStyles.optionTitle}>Invite by email</Text>
-                <Text style={alenioSheetStyles.optionSubtitle}>
+                <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]}>Invite by email</Text>
+                <Text style={[alenioSheetStyles.optionSubtitle, alenioSheetStyles.optionSubtitleCompact]}>
                   We&apos;ll look them up before adding them to this workspace.
                 </Text>
               </View>
@@ -231,7 +232,7 @@ export function AddMemberModal({
         </>
       ) : preview ? (
         <>
-          <AlenioSheetCard>
+          <AlenioSheetCard compact>
             <MemberPreviewCard preview={preview} displayName={displayName} />
           </AlenioSheetCard>
 
@@ -252,31 +253,31 @@ export function AddMemberModal({
           )}
 
           {preview.pendingInvite && !preview.alreadyMember ? (
-            <AlenioSheetCard tint="slate">
-              <Text style={{ fontSize: 13, color: "#92400E", lineHeight: 18 }}>
+            <AlenioSheetCard tint="slate" compact>
+              <Text style={{ fontSize: 12, color: "#92400E", lineHeight: 16 }}>
                 Already invited — confirming will refresh their invite.
               </Text>
             </AlenioSheetCard>
           ) : null}
 
           {preview.found && otherWorkspaces.length > 0 ? (
-            <AlenioSheetCard tint="purple">
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>
+            <AlenioSheetCard tint="purple" compact>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>
                 Other workspaces ({otherWorkspaces.length})
               </Text>
               {otherWorkspaces.map((ws) => (
-                <View key={ws.id} style={alenioSheetStyles.optionRow}>
-                  <AlenioSheetIcon color="#7C3AED">
+                <View key={ws.id} style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
+                  <AlenioSheetIcon color="#7C3AED" compact>
                     {ws.image ? (
-                      <Image source={{ uri: ws.image }} style={{ width: 44, height: 44 }} resizeMode="cover" />
+                      <Image source={{ uri: ws.image }} style={{ width: 30, height: 30 }} resizeMode="cover" />
                     ) : (
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>
                         {ws.name[0]?.toUpperCase() ?? "?"}
                       </Text>
                     )}
                   </AlenioSheetIcon>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={alenioSheetStyles.optionTitle} numberOfLines={1}>
+                    <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]} numberOfLines={1}>
                       {ws.name}
                     </Text>
                     <Text style={alenioSheetStyles.optionSubtitle}>

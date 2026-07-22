@@ -94,7 +94,7 @@ function DmChatEmptyState({
       <Reanimated.View style={[{ marginBottom: 4, marginTop: 4 }, illustrationStyle]}>
         <Image
           source={require("@/assets/dm-empty-start.png")}
-          style={{ width: 160, height: 160 }}
+          style={{ width: 152, height: 152 }}
           resizeMode="contain"
           accessibilityIgnoresInvertColors
         />
@@ -648,7 +648,7 @@ export default function DMChatScreen() {
       </Modal>
 
       {/* Who reacted modal */}
-      <Modal visible={!!reactionView} transparent animationType="fade" onRequestClose={() => setReactionView(null)}>
+      <Modal visible={!!reactionView} transparent animationType="slide" onRequestClose={() => setReactionView(null)}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setReactionView(null)}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <View style={{ backgroundColor: "white", marginHorizontal: 12, marginBottom: 32, borderRadius: 16, overflow: "hidden" }}>

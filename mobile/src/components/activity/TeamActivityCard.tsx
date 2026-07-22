@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Text, View } from "react-native";
 import { UserMinus, UserPlus } from "lucide-react-native";
 import { router } from "expo-router";
 import type { ActivityFeedItem } from "./types";
@@ -7,7 +6,6 @@ import { ACTIVITY_COLORS, getActivityTintTokens, getActivityTypeLabel } from "./
 import { ActivityCardShell } from "./ActivityCardShell";
 import { ActivityCardBody } from "./ActivityCardBody";
 import { ActivityActionButton } from "./ActivityActionButton";
-import { AvatarStack } from "./AvatarStack";
 
 type Props = {
   item: ActivityFeedItem;
@@ -21,7 +19,8 @@ export function TeamActivityCard({ item, footer, onLongPress, testID }: Props) {
   const isJoined = item.type === "member_joined";
   const LabelIcon = isJoined ? UserPlus : UserMinus;
   const actorName = item.actor?.name ?? item.metadata.userName ?? "Someone";
-  const teamPeople = item.metadata.assignees ?? (item.actor ? [item.actor] : []);
+
+  const description = isJoined ? "Joined the team" : "Left the team";
 
   const navigate = () => {
     if (item.actionRoute) router.push(item.actionRoute as never);
@@ -41,29 +40,20 @@ export function TeamActivityCard({ item, footer, onLongPress, testID }: Props) {
         LabelIcon={LabelIcon}
         tint={tint}
         timestamp={item.timestamp}
-      >
-        <Text style={{ fontSize: 13, fontWeight: "600", color: ACTIVITY_COLORS.slate900, lineHeight: 18 }}>
-          {isJoined ? `${actorName} joined the team` : item.description ?? item.title}
-        </Text>
-
-        {teamPeople.length > 1 ? (
-          <View style={{ marginTop: 2 }}>
-            <AvatarStack people={teamPeople} size={18} borderColor={ACTIVITY_COLORS.white} maxVisible={4} />
-          </View>
-        ) : null}
-
-        {item.actionLabel ? (
-          <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2 }}>
+        memberName={actorName}
+        description={description}
+        action={
+          item.actionLabel ? (
             <ActivityActionButton
               label={item.actionLabel}
               onPress={navigate}
               accentColor={ACTIVITY_COLORS.primary}
-              variant="pill"
+              variant="ghost"
               testID={`${testID ?? item.id}-action`}
             />
-          </View>
-        ) : null}
-      </ActivityCardBody>
+          ) : null
+        }
+      />
     </ActivityCardShell>
   );
 }

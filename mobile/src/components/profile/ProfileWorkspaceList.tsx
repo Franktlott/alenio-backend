@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, Modal, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Building2, Check, ChevronDown, LogOut, X } from "lucide-react-native";
+import { Building2, Check, ChevronDown, LogOut, Pencil, X } from "lucide-react-native";
 import type { Team } from "@/lib/types";
 import {
   formatTeamRole,
@@ -124,21 +124,45 @@ function ActiveWorkspaceRow({
   onManageActive?: () => void;
   onLeaveActive?: () => void;
 }) {
-  const trailing = onLeaveActive ? (
-    <Pressable
-      onPress={onLeaveActive}
-      hitSlop={8}
-      testID="leave-active-workspace"
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, marginLeft: 4 })}
-      accessibilityRole="button"
-      accessibilityLabel="Leave workspace"
-    >
-      <LogOut size={18} color="#64748B" />
-    </Pressable>
-  ) : canSwitch ? (
-    <ChevronDown size={18} color="#64748B" style={{ marginLeft: 4 }} />
-  ) : (
-    <Check size={20} color="#4338CA" strokeWidth={2.5} style={{ marginLeft: 4 }} />
+  const trailing = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+      {onManageActive ? (
+        <Pressable
+          onPress={onManageActive}
+          hitSlop={8}
+          testID="edit-active-workspace"
+          style={({ pressed }) => ({
+            opacity: pressed ? 0.6 : 1,
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            backgroundColor: "#EEF2FF",
+            alignItems: "center",
+            justifyContent: "center",
+          })}
+          accessibilityRole="button"
+          accessibilityLabel="Edit workspace name and photo"
+        >
+          <Pencil size={15} color="#4338CA" strokeWidth={2.25} />
+        </Pressable>
+      ) : null}
+      {onLeaveActive ? (
+        <Pressable
+          onPress={onLeaveActive}
+          hitSlop={8}
+          testID="leave-active-workspace"
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, marginLeft: 2 })}
+          accessibilityRole="button"
+          accessibilityLabel="Leave workspace"
+        >
+          <LogOut size={18} color="#64748B" />
+        </Pressable>
+      ) : canSwitch ? (
+        <ChevronDown size={18} color="#64748B" style={{ marginLeft: 2 }} />
+      ) : (
+        <Check size={20} color="#4338CA" strokeWidth={2.5} style={{ marginLeft: 2 }} />
+      )}
+    </View>
   );
 
   return (

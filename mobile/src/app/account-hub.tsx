@@ -21,6 +21,7 @@ import {
   ExternalLink,
   Globe,
   Info,
+  Pencil,
   Plus,
   RefreshCw,
   Scale,
@@ -38,12 +39,18 @@ import {
   PROFILE_UI,
   ProfileCard,
 } from "@/components/profile/ProfileEnterpriseUI";
+import { EditWorkspaceModal } from "@/components/EditWorkspaceModal";
 import {
+  billingCycleLabelFromSubscription,
   openWorkspaceBilling,
+  pendingWorkspaceRow,
+  planBadgeLabel,
+  isPaidPlanBadge,
   rowFromTeamAndSubscription,
   tierFromPlan,
   workspaceSubscriptionLine,
   workspaceSubscriptionTone,
+  type SubscriptionApiRow,
   type WorkspaceBillingRow,
   type WorkspaceSubscriptionTone,
 } from "@/lib/account-hub-api";
@@ -52,6 +59,10 @@ import { useTeamStore } from "@/lib/state/team-store";
 import {
   ACCOUNT_HUB_TITLE,
 } from "@/lib/plan-access-copy";
+
+function canEditWorkspace(role: string | undefined | null) {
+  return ["owner", "team_leader"].includes((role ?? "").trim().toLowerCase());
+}
 
 const TEAM_ACCENT = "#4361EE";
 const FREE_ACCENT = "#64748B";
@@ -65,11 +76,12 @@ const WORKSPACE_CARD_GAP = 6;
 
 const PANEL_ACTION_CARD_STYLE = {
   backgroundColor: "#EEF2FF",
-  borderRadius: 16,
-  padding: 12,
+  borderRadius: 12,
+  paddingVertical: 8,
+  paddingHorizontal: 10,
   flexDirection: "row" as const,
   alignItems: "center" as const,
-  gap: 12,
+  gap: 8,
 };
 
 const FREE_INCLUDED = ["Activity feed", "Team chat", "Team members"] as const;
@@ -130,16 +142,17 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-function ListPlanBadge({ tier }: { tier: "free" | "team" }) {
-  const isTeam = tier === "team";
+function ListPlanBadge({ plan }: { plan: string | null | undefined }) {
+  const label = planBadgeLabel(plan);
+  const isPaid = isPaidPlanBadge(label);
   return (
     <View
       style={{
         paddingHorizontal: 7,
         paddingVertical: 2,
         borderRadius: 999,
-        backgroundColor: isTeam ? TEAM_ACCENT : "#F1F5F9",
-        borderWidth: isTeam ? 0 : 1,
+        backgroundColor: isPaid ? TEAM_ACCENT : "#F1F5F9",
+        borderWidth: isPaid ? 0 : 1,
         borderColor: "#E2E8F0",
       }}
     >
@@ -147,11 +160,11 @@ function ListPlanBadge({ tier }: { tier: "free" | "team" }) {
         style={{
           fontSize: 8,
           fontWeight: "800",
-          color: isTeam ? "#FFFFFF" : "#64748B",
-          letterSpacing: 0.4,
+          color: isPaid ? "#FFFFFF" : "#64748B",
+          letterSpacing: 0.2,
         }}
       >
-        {isTeam ? "TEAM" : "FREE"}
+        {label}
       </Text>
     </View>
   );
@@ -195,7 +208,11 @@ function subscriptionStatusTextColor(tone: WorkspaceSubscriptionTone): string {
   return "#64748B";
 }
 
-function selectedWorkspaceStatusLabel(tier: "free" | "team", tone: WorkspaceSubscriptionTone): string {
+function selectedWorkspaceStatusLabel(
+  tier: "free" | "team" | "pending",
+  tone: WorkspaceSubscriptionTone,
+): string {
+  if (tier === "pending" || tone === "pending") return "Loading…";
   if (tier !== "team") return "Free plan";
   if (tone === "canceling") return "Canceling";
   if (tone === "issue") return "Payment issue";
@@ -255,10 +272,10 @@ function ActionIconBox({ children }: { children: React.ReactNode }) {
   return (
     <View
       style={{
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        backgroundColor: "#EEF2FF",
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: "#FFFFFF",
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
@@ -269,19 +286,20 @@ function ActionIconBox({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SelectedPlanBadge({ tier }: { tier: "free" | "team" }) {
-  const isTeam = tier === "team";
+function SelectedPlanBadge({ plan }: { plan: string | null | undefined }) {
+  const label = planBadgeLabel(plan);
+  const isPaid = isPaidPlanBadge(label);
   return (
     <View
       style={{
-        backgroundColor: isTeam ? TEAM_ACCENT : FREE_ACCENT,
+        backgroundColor: isPaid ? TEAM_ACCENT : FREE_ACCENT,
         paddingHorizontal: 8,
         paddingVertical: 3,
         borderRadius: 999,
       }}
     >
-      <Text style={{ color: "white", fontSize: 9, fontWeight: "800", letterSpacing: 0.3 }}>
-        {isTeam ? "TEAM" : "FREE"}
+      <Text style={{ color: "white", fontSize: 9, fontWeight: "800", letterSpacing: 0.2 }}>
+        {label}
       </Text>
     </View>
   );
@@ -306,8 +324,8 @@ function PanelActionCard({
     <View style={PANEL_ACTION_CARD_STYLE}>
       <ActionIconBox>{icon}</ActionIconBox>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{title}</Text>
-        <Text style={{ fontSize: 10, color: "#64748B", marginTop: 2, lineHeight: 13 }} numberOfLines={2}>
+        <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A", lineHeight: 15 }}>{title}</Text>
+        <Text style={{ fontSize: 10, color: "#64748B", marginTop: 1, lineHeight: 12 }} numberOfLines={1}>
           {subtitle}
         </Text>
       </View>
@@ -338,11 +356,11 @@ function OpenWebDashboardButton({
       style={{
         backgroundColor: TEAM_ACCENT,
         borderRadius: 999,
-        paddingHorizontal: 10,
-        paddingVertical: 7,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
         flexDirection: "row",
         alignItems: "center",
-        gap: 5,
+        gap: 4,
         flexShrink: 0,
         opacity: loading ? 0.7 : 1,
       }}
@@ -357,13 +375,13 @@ function OpenWebDashboardButton({
               color: "white",
               fontSize: 9,
               fontWeight: "700",
-              lineHeight: 12,
+              lineHeight: 11,
               letterSpacing: 0.1,
             }}
           >
-            Open Secure Web{"\n"}Dashboard
+            Open Web
           </Text>
-          <ExternalLink size={12} color="white" strokeWidth={2.5} />
+          <ExternalLink size={11} color="white" strokeWidth={2.5} />
         </>
       )}
     </TouchableOpacity>
@@ -376,22 +394,28 @@ function SelectedWorkspacePanel({
   billingCycleLabel,
   onOpenWeb,
   onComparePlans,
+  onEditWorkspace,
   isOpeningBilling = false,
 }: {
   workspace: WorkspaceBillingRow;
-  selectedTier: "free" | "team";
+  selectedTier: "free" | "team" | "pending";
   billingCycleLabel: string;
   onOpenWeb: () => void;
   onComparePlans: () => void;
+  onEditWorkspace?: () => void;
   isOpeningBilling?: boolean;
 }) {
-  const subscriptionTone = workspaceSubscriptionTone(workspace.subscription);
+  const subscription = workspace.subscription;
+  const subscriptionTone = workspaceSubscriptionTone(subscription);
   const renewalValue =
-    selectedTier === "team" && workspace.subscription.currentPeriodEnd
-      ? formatShortDate(workspace.subscription.currentPeriodEnd)
-      : "—";
+    selectedTier === "team" && subscription?.currentPeriodEnd
+      ? formatShortDate(subscription.currentPeriodEnd)
+      : selectedTier === "pending"
+        ? "…"
+        : "—";
   const renewalLabel = subscriptionTone === "canceling" ? "Ends on" : "Renewal date";
   const statusLabel = selectedWorkspaceStatusLabel(selectedTier, subscriptionTone);
+  const canEdit = !!onEditWorkspace && canEditWorkspace(workspace.role);
 
   return (
     <View>
@@ -400,16 +424,84 @@ function SelectedWorkspacePanel({
       <ProfileCard style={{ borderRadius: 14, borderColor: "#E2E8F0" }}>
         <View style={{ padding: 10, paddingBottom: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <WorkspaceTeamAvatar team={workspace} size={40} active />
+            <Pressable
+              onPress={canEdit ? onEditWorkspace : undefined}
+              disabled={!canEdit}
+              hitSlop={4}
+              testID="account-hub-edit-workspace-avatar"
+              style={({ pressed }) => ({ opacity: canEdit && pressed ? 0.85 : 1 })}
+              accessibilityRole={canEdit ? "button" : undefined}
+              accessibilityLabel={canEdit ? "Edit workspace photo" : undefined}
+            >
+              <View>
+                <WorkspaceTeamAvatar team={workspace} size={40} active />
+                {canEdit ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      right: -3,
+                      bottom: -3,
+                      width: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      backgroundColor: TEAM_ACCENT,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 2,
+                      borderColor: "#FFFFFF",
+                    }}
+                  >
+                    <Pencil size={9} color="#FFFFFF" strokeWidth={2.5} />
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }} numberOfLines={1}>
-                {workspace.name}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ flexShrink: 1, fontSize: 15, fontWeight: "800", color: "#0F172A" }} numberOfLines={1}>
+                  {workspace.name}
+                </Text>
+                {canEdit ? (
+                  <Pressable
+                    onPress={onEditWorkspace}
+                    hitSlop={8}
+                    testID="account-hub-edit-workspace"
+                    style={({ pressed }) => ({
+                      opacity: pressed ? 0.6 : 1,
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      backgroundColor: "#EEF2FF",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    })}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit workspace name and photo"
+                  >
+                    <Pencil size={13} color={TEAM_ACCENT} strokeWidth={2.25} />
+                  </Pressable>
+                ) : null}
+              </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-                <SelectedPlanBadge tier={selectedTier} />
+                {selectedTier === "pending" ? (
+                  <View
+                    style={{
+                      backgroundColor: "#E2E8F0",
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 999,
+                    }}
+                  >
+                    <Text style={{ color: "#64748B", fontSize: 9, fontWeight: "800", letterSpacing: 0.3 }}>
+                      …
+                    </Text>
+                  </View>
+                ) : (
+                  <SelectedPlanBadge plan={subscription?.plan} />
+                )}
                 <StatusDot
                   active={selectedTier === "team" && subscriptionTone === "active"}
-                  tone={selectedTier === "team" ? subscriptionTone : "free"}
+                  tone={selectedTier === "team" || selectedTier === "pending" ? subscriptionTone : "free"}
                 />
                 <Text
                   style={{
@@ -435,9 +527,20 @@ function SelectedWorkspacePanel({
           </View>
         </View>
 
-        <View style={{ paddingHorizontal: 10, paddingBottom: 10, gap: 8 }}>
+        <View style={{ paddingHorizontal: 10, paddingBottom: 8, gap: 5 }}>
+          {canEdit ? (
+            <PanelActionCard
+              icon={<Pencil size={14} color={TEAM_ACCENT} />}
+              title="Edit Workspace"
+              subtitle="Update the workspace name and group photo."
+              trailing={<ChevronRight size={14} color="#CBD5E1" />}
+              onPress={onEditWorkspace}
+              testID="account-hub-edit-workspace-card"
+            />
+          ) : null}
+
           <PanelActionCard
-            icon={<Globe size={16} color={TEAM_ACCENT} />}
+            icon={<Globe size={14} color={TEAM_ACCENT} />}
             title="Manage on Web"
             subtitle="Manage billing, invoices, payment methods, members, and upgrades."
             trailing={
@@ -446,10 +549,10 @@ function SelectedWorkspacePanel({
           />
 
           <PanelActionCard
-            icon={<Scale size={16} color={TEAM_ACCENT} />}
+            icon={<Scale size={14} color={TEAM_ACCENT} />}
             title="Compare Plans"
             subtitle="See all plan features and find the right fit for your team."
-            trailing={<ChevronRight size={16} color="#CBD5E1" />}
+            trailing={<ChevronRight size={14} color="#CBD5E1" />}
             onPress={onComparePlans}
             testID="compare-plans-toggle"
           />
@@ -491,13 +594,16 @@ function WorkspaceCardList({
 }) {
   const renderCard = (row: WorkspaceBillingRow, index: number) => {
     const selected = row.id === selectedTeamId;
-    const tier = tierFromPlan(row.subscription.plan);
-    const planLoading = plansLoading && !subscriptionByTeamId.has(row.id);
+    const subscription = row.subscription;
+    const planLoading = !subscription && (plansLoading || !subscriptionByTeamId.has(row.id));
+    const tier = subscription ? tierFromPlan(subscription.plan) : null;
     const isTeam = tier === "team";
-    const subscriptionTone = workspaceSubscriptionTone(row.subscription);
-    const renewalLabel = planLoading
-      ? "Loading plan…"
-      : workspaceSubscriptionLine(row.subscription, formatShortDate);
+    const subscriptionTone = workspaceSubscriptionTone(subscription);
+    const renewalLabel = row.subscriptionError
+      ? "Couldn't load plan"
+      : planLoading
+        ? "Loading plan…"
+        : workspaceSubscriptionLine(subscription, formatShortDate);
 
     return (
       <View
@@ -555,13 +661,15 @@ function WorkspaceCardList({
                   ) : (
                     <SubscriptionStatusIcon
                       tone={subscriptionTone}
-                      hasPeriodEnd={isTeam && !!row.subscription.currentPeriodEnd}
+                      hasPeriodEnd={isTeam && !!subscription?.currentPeriodEnd}
                     />
                   )}
                   <Text
                     style={{
                       fontSize: 10,
-                      color: planLoading ? "#64748B" : subscriptionStatusTextColor(subscriptionTone),
+                      color: planLoading || row.subscriptionError
+                        ? "#64748B"
+                        : subscriptionStatusTextColor(subscriptionTone),
                       marginLeft: 4,
                       lineHeight: 12,
                       fontWeight: subscriptionTone === "canceling" ? "600" : "400",
@@ -572,7 +680,15 @@ function WorkspaceCardList({
                   </Text>
                 </View>
               </View>
-              <ListPlanBadge tier={tier} />
+              {planLoading ? (
+                <ActivityIndicator size="small" color="#94A3B8" style={{ marginRight: 4 }} />
+              ) : row.subscriptionError ? (
+                <View style={{ paddingHorizontal: 7, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 8, fontWeight: "700", color: "#94A3B8" }}>—</Text>
+                </View>
+              ) : (
+                <ListPlanBadge plan={subscription?.plan} />
+              )}
               <ChevronRight size={16} color="#CBD5E1" style={{ marginLeft: 6 }} />
             </View>
           </Pressable>
@@ -714,6 +830,7 @@ export default function AccountHubScreen() {
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [comparePlansOpen, setComparePlansOpen] = useState(false);
+  const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceBillingRow | null>(null);
   const [billingUrl, setBillingUrl] = useState<string | null>(null);
   const [billingModalOpen, setBillingModalOpen] = useState(false);
   const [billingWorkspaceName, setBillingWorkspaceName] = useState<string | null>(null);
@@ -733,14 +850,7 @@ export default function AccountHubScreen() {
   const subscriptionQueries = useQueries({
     queries: teams.map((team) => ({
       queryKey: ["subscription", team.id],
-      queryFn: () =>
-        api.get<{
-          plan: string;
-          status: string;
-          currentPeriodEnd: string | null;
-          cancelAtPeriodEnd?: boolean;
-          billingProvider?: "stripe" | "mobile_store" | "none";
-        }>(`/api/teams/${team.id}/subscription`),
+      queryFn: () => api.get<SubscriptionApiRow>(`/api/teams/${team.id}/subscription`),
       enabled: !!team.id,
       staleTime: 0,
       retry: 1,
@@ -748,7 +858,7 @@ export default function AccountHubScreen() {
   });
 
   const subscriptionByTeamId = useMemo(() => {
-    const map = new Map<string, (typeof subscriptionQueries)[number]["data"]>();
+    const map = new Map<string, SubscriptionApiRow>();
     teams.forEach((team, index) => {
       const sub = subscriptionQueries[index]?.data;
       if (sub) map.set(team.id, sub);
@@ -757,30 +867,16 @@ export default function AccountHubScreen() {
   }, [teams, subscriptionQueries]);
 
   const workspaces = useMemo((): WorkspaceBillingRow[] => {
-    return teams.map((team) => {
+    return teams.map((team, index) => {
       const sub = subscriptionByTeamId.get(team.id);
       if (sub) return rowFromTeamAndSubscription(team, sub);
-      return {
-        id: team.id,
-        name: team.name,
-        image: team.image,
-        role: team.role,
-        canManageBilling: team.role === "owner",
-        memberCount: team._count?.members ?? 0,
-        subscription: {
-          plan: "free",
-          status: "active",
-          currentPeriodEnd: null,
-          cancelAtPeriodEnd: false,
-          billingProvider: "none",
-          hasStripeCustomer: false,
-          hasStripeSubscription: false,
-        },
-      };
+      const query = subscriptionQueries[index];
+      const failed = !!query && !query.isLoading && !query.isFetching && query.isError;
+      return pendingWorkspaceRow(team, failed);
     });
-  }, [teams, subscriptionByTeamId]);
+  }, [teams, subscriptionByTeamId, subscriptionQueries]);
 
-  const plansLoading = subscriptionQueries.some((q) => q.isLoading);
+  const plansLoading = subscriptionQueries.some((q) => q.isLoading || q.isFetching);
   const isLoading = teamsLoading;
   const isError = teamsError;
   const error = teamsLoadError;
@@ -819,14 +915,10 @@ export default function AccountHubScreen() {
   }, [billingFlash, refetch]);
 
   const selected = workspaces.find((w) => w.id === selectedTeamId) ?? null;
-  const selectedTier = tierFromPlan(selected?.subscription.plan);
-  const hasStripeBilling =
-    selected?.subscription.billingProvider === "stripe" ||
-    selected?.subscription.hasStripeSubscription ||
-    selected?.subscription.hasStripeCustomer;
-
-  const billingCycleLabel =
-    selectedTier === "team" && hasStripeBilling ? "Monthly" : selectedTier === "team" ? "Active" : "—";
+  const selectedTier: "free" | "team" | "pending" = !selected?.subscription
+    ? "pending"
+    : tierFromPlan(selected.subscription.plan);
+  const billingCycleLabel = billingCycleLabelFromSubscription(selected?.subscription);
 
   const billingMutation = useMutation({
     mutationFn: (workspace: WorkspaceBillingRow) => openWorkspaceBilling(workspace),
@@ -1019,6 +1111,9 @@ export default function AccountHubScreen() {
                   billingCycleLabel={billingCycleLabel}
                   onOpenWeb={openSelectedWorkspaceBilling}
                   onComparePlans={() => setComparePlansOpen(true)}
+                  onEditWorkspace={
+                    canEditWorkspace(selected.role) ? () => setEditingWorkspace(selected) : undefined
+                  }
                   isOpeningBilling={billingMutation.isPending}
                 />
               </View>
@@ -1036,7 +1131,17 @@ export default function AccountHubScreen() {
         ) : null}
       </View>
 
-      <ComparePlansModal visible={comparePlansOpen} selectedTier={selectedTier} onClose={() => setComparePlansOpen(false)} />
+      <ComparePlansModal
+        visible={comparePlansOpen}
+        selectedTier={selectedTier === "pending" ? "free" : selectedTier}
+        onClose={() => setComparePlansOpen(false)}
+      />
+
+      <EditWorkspaceModal
+        workspace={editingWorkspace}
+        visible={!!editingWorkspace}
+        onClose={() => setEditingWorkspace(null)}
+      />
 
       <BillingPortalWebViewModal
         visible={billingModalOpen}

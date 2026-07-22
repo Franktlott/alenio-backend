@@ -27,6 +27,7 @@ import { useSession } from "@/lib/auth/use-session";
 import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
 import { clampRecurrenceCount, maxRecurrenceCount, recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { resolveMyTeamRole } from "@/lib/member-identity";
 import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 
@@ -76,8 +77,9 @@ export default function CreateTaskScreen() {
 
   const { data: meProfile } = useQuery({
     queryKey: ME_QUERY_KEY,
-    queryFn: () => api.get<{ timezone?: string | null }>("/api/me"),
-    enabled: !!teamId,
+    queryFn: () =>
+      api.get<{ id: string; email: string; timezone?: string | null }>("/api/me"),
+    enabled: !!session?.user || !!teamId,
   });
 
   const [title, setTitle] = useState(typeof prefillTitle === "string" ? prefillTitle : "");
@@ -124,8 +126,16 @@ export default function CreateTaskScreen() {
   });
 
   const members = team?.members ?? [];
-  const currentMembership = members.find((m) => m.userId === session?.user?.id);
-  const isRegularMember = !currentMembership || currentMembership.role === "member";
+  const sessionUserId = typeof session?.user?.id === "string" ? session.user.id : "";
+  const { myId, myRole } = resolveMyTeamRole({
+    teamRole: team?.role,
+    members,
+    meId: meProfile?.id,
+    meEmail: meProfile?.email || (typeof session?.user?.email === "string" ? session.user.email : undefined),
+    sessionUserId,
+  });
+  // Member-only due-date limit only when role is explicitly member (never on a failed roster match).
+  const memberDueDateLimit = myRole === "member";
 
   const assigneeOptions = useMemo(
     () =>
@@ -317,7 +327,7 @@ export default function CreateTaskScreen() {
 
   const memberDisplayName = (member: TeamMember) => {
     const base = member.user.name || member.user.email || "Unknown";
-    return member.userId === session?.user?.id ? `${base} (You)` : base;
+    return myId && member.userId === myId ? `${base} (You)` : base;
   };
 
   const addSubtask = () => {
@@ -528,7 +538,7 @@ export default function CreateTaskScreen() {
                       value={dueDate ?? new Date()}
                       mode="date"
                       display="inline"
-                      minimumDate={isRegularMember ? new Date() : undefined}
+                      minimumDate={memberDueDateLimit ? new Date() : undefined}
                       onChange={(_e, date) => { if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
                       testID="date-time-picker"
                       style={{ alignSelf: "center", marginHorizontal: 8 }}
@@ -563,7 +573,7 @@ export default function CreateTaskScreen() {
                   value={dueDate ?? new Date()}
                   mode="date"
                   display="calendar"
-                  minimumDate={isRegularMember ? new Date() : undefined}
+                  minimumDate={memberDueDateLimit ? new Date() : undefined}
                   onChange={(_e, date) => { setShowDatePicker(false); if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
                   testID="date-time-picker"
                 />
@@ -1142,7 +1152,7 @@ export default function CreateTaskScreen() {
                     <View className="ml-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#4361EE20" }}>
                       <Text className="text-xs font-semibold text-indigo-600 capitalize">{t.priority}</Text>
                     </View>
-                    {t.createdById === session?.user?.id ? (
+                    {myId && t.createdById === myId ? (
                       <View className="flex-row items-center ml-2" style={{ gap: 8 }}>
                         <TouchableOpacity
                           onPress={(e) => {

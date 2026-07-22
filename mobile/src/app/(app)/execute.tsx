@@ -38,7 +38,7 @@ import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { earlierIncompleteSeriesTasks } from "@/lib/recurring-task";
 import { formatTaskDueDateLabel } from "@/lib/timezone";
-import { hasTeamPlan, hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
+import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { workspaceTaskClearance } from "@/lib/tab-bar";
 import { WorkspaceHeader } from "@/components/workspace/WorkspaceHeader";
 import { WorkspaceViewToggle, type WorkspaceViewMode } from "@/components/workspace/WorkspaceViewToggle";
@@ -290,12 +290,6 @@ export default function TasksScreen() {
   });
   const plan = useSubscriptionStore((s) => s.plan);
   const hasTaskAccess = hasWorkspaceTaskAccess(subscription, plan);
-  React.useEffect(() => {
-    if (subscription) {
-      const normalized = subscription.plan === "pro" ? "team" : subscription.plan;
-      useSubscriptionStore.getState().setPlan(normalized === "team" ? "team" : "free");
-    }
-  }, [subscription]);
 
   const {
     data: activeTasksData,
@@ -423,7 +417,9 @@ export default function TasksScreen() {
   });
 
   const calendarEventsWithOutlook = React.useMemo((): CalendarEvent[] => {
-    const teamEvents = calendarEvents.filter((e) => !e.isHidden);
+    // Trust API visibility: private check-ins / meetings are already filtered to creator + assignees.
+    // Do not strip isHidden here — that hid scheduled check-ins from both participants.
+    const teamEvents = calendarEvents;
     const outlookEvents: CalendarEvent[] = externalBusyEvents.map((event: ExternalCalendarEventItem) => ({
       id: `ext-${event.id}`,
       title: event.title?.trim() || "Untitled event",
@@ -1115,7 +1111,10 @@ export default function TasksScreen() {
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
                 contentContainerStyle={{
-                  paddingTop: 4,
+                  paddingTop:
+                    visibleTasks.length === 0 && !showTasksLoading
+                      ? workspaceTaskClearance(insets.bottom) * 0.35
+                      : 4,
                   paddingBottom: workspaceTaskClearance(insets.bottom),
                   flexGrow: 1,
                   justifyContent: visibleTasks.length === 0 && !showTasksLoading ? "center" : undefined,
@@ -1584,6 +1583,7 @@ export default function TasksScreen() {
         title="What would you like to add?"
         subtitle="Create something for this workspace"
         onClose={() => setShowAddModal(false)}
+        compact
         testID="workspace-add-sheet"
         footer={
           <TouchableOpacity
@@ -1597,7 +1597,7 @@ export default function TasksScreen() {
       >
         {isOwnerOrLeader ? (
           <AlenioSheetOption
-            icon={<CalendarDays size={22} color="white" />}
+            icon={<CalendarDays size={16} color="white" />}
             iconColor="#7C3AED"
             title="Team calendar event"
             subtitle="Add a public event for the whole team"
@@ -1608,7 +1608,7 @@ export default function TasksScreen() {
           />
         ) : (
           <AlenioSheetOption
-            icon={<CalendarDays size={22} color="white" />}
+            icon={<CalendarDays size={16} color="white" />}
             iconColor="#64748B"
             title="Calendar event"
             subtitle="Add a private or public event"
@@ -1620,7 +1620,7 @@ export default function TasksScreen() {
         )}
         {isOwnerOrLeader ? (
           <AlenioSheetOption
-            icon={<Video size={22} color="white" />}
+            icon={<Video size={16} color="white" />}
             title="Virtual meeting"
             subtitle="Create a meeting with a video call link"
             onPress={() => {
@@ -1631,7 +1631,7 @@ export default function TasksScreen() {
         ) : null}
         {!isRegularMember ? (
           <AlenioSheetOption
-            icon={<CheckSquare size={22} color="white" />}
+            icon={<CheckSquare size={16} color="white" />}
             title="Task"
             subtitle="Create a new task for the team"
             onPress={() => {

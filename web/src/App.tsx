@@ -30,6 +30,7 @@ import { TeamPage } from "./routes/TeamPage";
 import { ProfilePage } from "./routes/ProfilePage";
 import { SettingsAiHubPage } from "./routes/settings/SettingsAiHubPage";
 import { SenecaWorkspaceContextPage } from "./routes/settings/SenecaWorkspaceContextPage";
+import { SettingsOktaSsoPage } from "./routes/settings/SettingsOktaSsoPage";
 import { ForgotPasswordPage } from "./routes/ForgotPasswordPage";
 import { LoginPage } from "./routes/LoginPage";
 import { SignUpPage } from "./routes/SignUpPage";
@@ -190,6 +191,7 @@ export default function App() {
           <Route path="/settings/ai" element={<SettingsAiHubPage />} />
           <Route path="/settings/ai/seneca-studio" element={<Navigate to="/admin?tab=seneca-studio" replace />} />
           <Route path="/settings/ai/workspace-context" element={<SenecaWorkspaceContextPage />} />
+          <Route path="/settings/sso/okta" element={<SettingsOktaSsoPage />} />
           <Route path="/profile" element={<Navigate to="/settings" replace />} />
           <Route path="/tasks/new" element={<CreateTaskPage />} />
         </Route>

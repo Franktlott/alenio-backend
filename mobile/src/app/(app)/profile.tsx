@@ -612,15 +612,6 @@ export default function ProfileScreen() {
       <AppTabHeader
         topInset={insets.top}
         testID="profile-header"
-        rightAction={
-          <Pressable
-            onPress={() => setShowSignOutConfirm(true)}
-            style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
-            testID="sign-out-icon-button"
-          >
-            <LogOut size={20} color="rgba(255,255,255,0.85)" />
-          </Pressable>
-        }
       />
 
       <View style={{ flex: 1, minHeight: 0 }}>
@@ -717,10 +708,10 @@ export default function ProfileScreen() {
                 ? undefined
                 : teams.length > 1
                   ? canManageActiveTeam
-                    ? "Tap to switch · hold to edit."
+                    ? "Tap to switch · pencil to edit name & photo."
                     : "Tap your workspace to switch."
                   : canManageActiveTeam
-                    ? "Press and hold to edit workspace."
+                    ? "Tap the pencil to edit name & photo."
                     : undefined
             }
             action={

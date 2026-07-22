@@ -331,14 +331,14 @@ export default function OnboardingScreen() {
       ) : null}
 
       {mode === "create" ? (
-        <AlenioSheetCard>
-          <View style={alenioSheetStyles.optionRow}>
-            <AlenioSheetIcon>
-              <Building2 size={22} color="white" />
+        <AlenioSheetCard compact>
+          <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
+            <AlenioSheetIcon compact>
+              <Building2 size={16} color="white" />
             </AlenioSheetIcon>
             <View style={{ flex: 1 }}>
-              <Text style={alenioSheetStyles.optionTitle}>New workplace</Text>
-              <Text style={alenioSheetStyles.optionSubtitle}>
+              <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]}>New workplace</Text>
+              <Text style={[alenioSheetStyles.optionSubtitle, alenioSheetStyles.optionSubtitleCompact]}>
                 Create a team space for your organization.
               </Text>
             </View>
@@ -360,14 +360,14 @@ export default function OnboardingScreen() {
         </AlenioSheetCard>
       ) : (
         <>
-          <AlenioSheetCard tint="purple">
-            <View style={alenioSheetStyles.optionRow}>
-              <AlenioSheetIcon color="#7C3AED">
-                <Users size={22} color="white" />
+          <AlenioSheetCard tint="purple" compact>
+            <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
+              <AlenioSheetIcon color="#7C3AED" compact>
+                <Users size={16} color="white" />
               </AlenioSheetIcon>
               <View style={{ flex: 1 }}>
-                <Text style={alenioSheetStyles.optionTitle}>Join with invite code</Text>
-                <Text style={alenioSheetStyles.optionSubtitle}>
+                <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]}>Join with invite code</Text>
+                <Text style={[alenioSheetStyles.optionSubtitle, alenioSheetStyles.optionSubtitleCompact]}>
                   Enter the code shared by your team admin.
                 </Text>
               </View>
@@ -395,14 +395,14 @@ export default function OnboardingScreen() {
           </AlenioSheetCard>
 
           <TouchableOpacity onPress={openScanner} activeOpacity={0.92} testID="scan-qr-button">
-            <AlenioSheetCard>
-              <View style={alenioSheetStyles.optionRow}>
-                <AlenioSheetIcon>
-                  <ScanLine size={22} color="white" />
+            <AlenioSheetCard compact>
+              <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
+                <AlenioSheetIcon compact>
+                  <ScanLine size={16} color="white" />
                 </AlenioSheetIcon>
                 <View style={{ flex: 1 }}>
-                  <Text style={alenioSheetStyles.optionTitle}>Scan QR code</Text>
-                  <Text style={alenioSheetStyles.optionSubtitle}>
+                  <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]}>Scan QR code</Text>
+                  <Text style={[alenioSheetStyles.optionSubtitle, alenioSheetStyles.optionSubtitleCompact]}>
                     Point at your team QR code to join automatically.
                   </Text>
                 </View>
@@ -424,6 +424,7 @@ export default function OnboardingScreen() {
     <>
       <AlenioBottomSheet
         asScreen
+        compact
         title={sheetTitle}
         subtitle={sheetSubtitle}
         onClose={handleClose}
@@ -522,22 +523,22 @@ const styles = StyleSheet.create({
   modeToggle: {
     flexDirection: "row",
     backgroundColor: WELCOME_UI.pageBg,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: WELCOME_UI.border,
-    padding: 3,
+    padding: 2,
   },
   modeOption: {
     flex: 1,
-    paddingVertical: 7,
+    paddingVertical: 6,
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 6,
   },
   modeOptionActive: {
     backgroundColor: WELCOME_UI.primary,
   },
   modeOptionText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: WELCOME_UI.body,
   },

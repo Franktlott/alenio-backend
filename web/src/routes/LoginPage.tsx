@@ -14,6 +14,8 @@ import { isMobileBrowser } from "../lib/mobile-browser";
 import { isSessionTokenExpired, isSessionTokenUsable } from "../lib/token";
 import { goToEmailVerification, needsEmailVerification } from "../lib/verify-redirect";
 import { signInWithMicrosoft } from "../lib/microsoft-auth";
+import { discoverSsoForEmail } from "../lib/api";
+import { getResolvedBackendUrl } from "../lib/env-config";
 
 export function LoginPage() {
   const [params] = useSearchParams();
@@ -22,11 +24,16 @@ export function LoginPage() {
   const verified = params.get("verified") === "1";
   const inviteToken = (params.get("invite") ?? "").trim();
   const emailFromInvite = (params.get("email") ?? "").trim().toLowerCase();
+  const ssoStatus = params.get("sso");
+  const ssoMessage = params.get("message");
   const [email, setEmail] = useState(emailFromInvite);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [microsoftLoading, setMicrosoftLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [ssoLoading, setSsoLoading] = useState(false);
+  const [error, setError] = useState<string | null>(
+    ssoStatus === "error" ? ssoMessage || "Company SSO sign-in failed. Try again." : null,
+  );
   const [hint, setHint] = useState<string | null>(
     verified ? "Email verified. Sign in with your password to continue." : null,
   );
@@ -115,7 +122,7 @@ export function LoginPage() {
   };
 
   const onMicrosoft = async () => {
-    if (loading || microsoftLoading) return;
+    if (loading || microsoftLoading || ssoLoading) return;
     setError(null);
     setMicrosoftLoading(true);
     try {
@@ -129,6 +136,36 @@ export function LoginPage() {
     } catch (err) {
       setError(formatAuthFlowError(err));
       setMicrosoftLoading(false);
+    }
+  };
+
+  const onCompanySso = async () => {
+    if (loading || microsoftLoading || ssoLoading) return;
+    setError(null);
+    setHint(null);
+    const emailNorm = email.trim().toLowerCase();
+    if (!emailNorm) {
+      setError("Enter your work email to continue with company SSO.");
+      return;
+    }
+    setSsoLoading(true);
+    try {
+      const discovery = await discoverSsoForEmail(emailNorm);
+      if (!discovery.ssoAvailable || !discovery.startPath) {
+        if (discovery.reason === "domain_unverified") {
+          setError("Company SSO is not ready yet (domain not verified). Contact your workspace owner.");
+        } else {
+          setError("No company SSO is set up for that email domain yet.");
+        }
+        setSsoLoading(false);
+        return;
+      }
+      if (inviteToken) setPendingInviteToken(inviteToken);
+      const base = getResolvedBackendUrl().replace(/\/$/, "");
+      window.location.href = `${base}${discovery.startPath}`;
+    } catch (err) {
+      setError(formatAuthFlowError(err));
+      setSsoLoading(false);
     }
   };
 
@@ -213,7 +250,12 @@ export function LoginPage() {
               {hint}
             </p>
           ) : null}
-          <button type="submit" className="auth-btn-primary" disabled={loading || microsoftLoading} data-testid="login-submit">
+          <button
+            type="submit"
+            className="auth-btn-primary"
+            disabled={loading || microsoftLoading || ssoLoading}
+            data-testid="login-submit"
+          >
             {loading ? "Signing in…" : "Sign in"}
           </button>
           </form>
@@ -222,8 +264,18 @@ export function LoginPage() {
           </div>
           <button
             type="button"
+            className="auth-btn-secondary"
+            disabled={loading || microsoftLoading || ssoLoading}
+            onClick={() => void onCompanySso()}
+            data-testid="login-company-sso"
+            style={{ marginBottom: "0.65rem" }}
+          >
+            {ssoLoading ? "Checking SSO…" : "Continue with company SSO"}
+          </button>
+          <button
+            type="button"
             className="auth-btn-secondary auth-btn-microsoft"
-            disabled={loading || microsoftLoading}
+            disabled={loading || microsoftLoading || ssoLoading}
             onClick={() => void onMicrosoft()}
             data-testid="login-microsoft"
           >

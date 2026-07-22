@@ -1,4 +1,4 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, Platform } from "react-native";
 import type { TaskStatusTab } from "./workspace-types";
 import { WS } from "./workspace-ui";
 
@@ -8,6 +8,10 @@ type Props = {
   completedCount: number;
   onChange: (tab: TaskStatusTab) => void;
 };
+
+const TAB_HEIGHT = 32;
+const TAB_FONT = WS.control - 1;
+const TAB_LINE = TAB_FONT + 2;
 
 export function TaskStatusTabs({
   statusTab,
@@ -25,9 +29,11 @@ export function TaskStatusTabs({
     <View
       style={{
         flexDirection: "row",
+        alignItems: "center",
         backgroundColor: WS.chipBg,
         borderRadius: 10,
         padding: 3,
+        height: TAB_HEIGHT + 6,
       }}
     >
       {tabs.map((tab) => {
@@ -39,8 +45,8 @@ export function TaskStatusTabs({
             onPress={() => onChange(tab.key)}
             style={{
               flex: isArchive ? 0.72 : 1.14,
+              height: TAB_HEIGHT,
               borderRadius: 8,
-              paddingVertical: 7,
               paddingHorizontal: isArchive ? 4 : 2,
               alignItems: "center",
               justifyContent: "center",
@@ -50,9 +56,14 @@ export function TaskStatusTabs({
           >
             <Text
               style={{
-                fontSize: WS.control - 1,
+                fontSize: TAB_FONT,
+                lineHeight: TAB_LINE,
                 fontWeight: WS.controlWeight,
                 color: selected ? "white" : WS.muted,
+                textAlign: "center",
+                ...(Platform.OS === "android"
+                  ? { includeFontPadding: false, textAlignVertical: "center" as const }
+                  : {}),
               }}
               numberOfLines={1}
               adjustsFontSizeToFit

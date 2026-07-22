@@ -19,6 +19,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
+import { ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { isLeaderRole, memberMatchesUserId } from "@/lib/member-identity";
 import type { Team } from "@/lib/types";
 import { fetchOneOnOneTemplates, type OneOnOneTemplate } from "@/lib/member-profile-api";
 import {
@@ -73,17 +75,45 @@ export default function PlanOneOnOneScreen() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
 
+  const { data: meProfile } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () =>
+      api.get<{ id: string; name: string; email: string; image: string | null }>("/api/me"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60,
+  });
+
   const { data: team, isLoading: teamLoading } = useQuery({
     queryKey: ["team", teamId],
     queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
     enabled: !!teamId,
   });
 
+  const { data: teamsList = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60,
+  });
+
+  const sessionUserId = typeof session?.user?.id === "string" ? session.user.id : "";
+  const sessionEmail = typeof session?.user?.email === "string" ? session.user.email : "";
+  const myEmail = meProfile?.email || sessionEmail;
+  const resolvedUserId = meProfile?.id || sessionUserId;
+  const listTeamRole = teamsList.find((t) => t.id === teamId)?.role;
+  const membership =
+    team?.members?.find((m) => resolvedUserId && (m.userId === resolvedUserId || m.user.id === resolvedUserId)) ??
+    team?.members?.find((m) => memberMatchesUserId(m, "", myEmail)) ??
+    null;
+  const paramRole = typeof myRole === "string" ? myRole : Array.isArray(myRole) ? myRole[0] : undefined;
   const resolvedRole =
-    myRole ??
-    team?.members?.find((member) => member.userId === session?.user?.id)?.role ??
-    "member";
-  const isOwnerOrLeader = resolvedRole === "owner" || resolvedRole === "team_leader";
+    (team as Team & { role?: string } | undefined)?.role ||
+    listTeamRole ||
+    paramRole ||
+    membership?.role ||
+    null;
+  const currentUserId = membership?.userId || resolvedUserId;
+  const isOwnerOrLeader = isLeaderRole(resolvedRole);
   const isEditing = !!eventId;
 
   const cachedEvents = queryClient.getQueryData<CalendarEvent[]>(["calendar-events", teamId]) ?? [];
@@ -126,16 +156,15 @@ export default function PlanOneOnOneScreen() {
   });
 
   const memberOptions = useMemo(() => {
-    const currentUserId = session?.user?.id;
     return (team?.members ?? [])
-      .filter((member) => member.userId !== currentUserId)
+      .filter((member) => !currentUserId || member.userId !== currentUserId)
       .map((member) => ({
         userId: member.userId,
         label: memberDisplayName(member.user.name, member.user.email),
         role: member.role,
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [session?.user?.id, team?.members]);
+  }, [currentUserId, team?.members]);
 
   const selectedMember = memberOptions.find((member) => member.userId === selectedMemberUserId) ?? null;
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? null;
@@ -198,6 +227,14 @@ export default function PlanOneOnOneScreen() {
   const mutationError =
     (createMutation.error instanceof Error ? createMutation.error.message : null) ??
     (updateMutation.error instanceof Error ? updateMutation.error.message : null);
+
+  if (teamLoading && !resolvedRole) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator color="#4361EE" />
+      </SafeAreaView>
+    );
+  }
 
   if (!isOwnerOrLeader) {
     return (

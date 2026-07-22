@@ -3,11 +3,10 @@ import {
   Text,
   FlatList,
   ActivityIndicator,
-  Modal,
   TouchableOpacity,
   TextInput,
-  Dimensions,
-  ScrollView,
+  StyleSheet,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -15,31 +14,28 @@ import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import {
   Activity,
-  Users,
   Search,
   X,
   Check,
+  ChevronDown,
+  Building2,
+  Plus,
 } from "lucide-react-native";
-import { Image as ExpoImage } from "expo-image";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "@/lib/auth/use-session";
 import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
-import { tabBarClearance } from "@/lib/tab-bar";
+import { tabBarClearance, SENECA_FAB_SIZE, SENECA_FAB_RIGHT_INSET } from "@/lib/tab-bar";
 import { AppTabHeader } from "@/components/AppTabHeader";
 import type { Team } from "@/lib/types";
 import {
   ActivityIntroHeader,
-  ActivitySummaryChips,
   ActivityFeedCard,
-  ACTIVITY_FILTER_OPTIONS,
   CelebrationTypePickerCards,
   CelebrationDeleteModal,
   CELEBRATION_TYPE_KEYS,
   mapApiActivityToFeedItem,
   matchesActivityFilter,
-  buildActivitySummary,
   groupActivitiesByDate,
   type ActivityApiEvent,
   type ActivityDateSection,
@@ -48,12 +44,14 @@ import {
   type CelebrationTypeKey,
 } from "@/components/activity";
 import { ActivityReactionRow } from "@/components/activity/ActivityReactionRow";
-import { AlenioBottomSheet, AlenioSheetOption, alenioSheetStyles } from "@/components/AlenioBottomSheet";
+import {
+  AlenioBottomSheet,
+  AlenioSheetCard,
+  AlenioSheetOption,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
 
 const REACTION_HINT_KEY = "reaction_hint_shown";
-const CELEBRATE_SHEET_MAX_HEIGHT = Math.round(Dimensions.get("window").height * 0.8);
-const CELEBRATE_HEADER_HEIGHT = 73;
-const CELEBRATE_MEMBER_SEARCH_HEIGHT = 56;
 
 type CelebrateTeamMember = {
   userId: string;
@@ -135,8 +133,9 @@ function FeedItemCard({
             fontSize: 10,
             fontWeight: "700",
             color: "#64748B",
-            marginBottom: 4,
-            marginLeft: 4,
+            marginBottom: 0,
+            marginLeft: 16,
+            marginTop: 4,
           }}
           numberOfLines={1}
         >
@@ -197,7 +196,6 @@ export default function ActivityScreen() {
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [workspaceFilter, setWorkspaceFilter] = useState<string>("all");
-  const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [showWorkspaceFilterSheet, setShowWorkspaceFilterSheet] = useState(false);
 
   const [showCelebrateModal, setShowCelebrateModal] = useState(false);
@@ -207,6 +205,7 @@ export default function ActivityScreen() {
   const [celebrateType, setCelebrateType] = useState<CelebrationTypeKey>(CELEBRATION_TYPE_KEYS[0]!);
   const [celebrateMessage, setCelebrateMessage] = useState("");
   const [celebrateMemberSearch, setCelebrateMemberSearch] = useState("");
+  const [showCelebrateWorkspaceMenu, setShowCelebrateWorkspaceMenu] = useState(false);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -294,17 +293,20 @@ export default function ActivityScreen() {
     [workspaceFilteredActivities, activityFilter],
   );
 
-  const summary = useMemo(
-    () => buildActivitySummary(workspaceFilteredActivities.map(mapApiActivityToFeedItem)),
-    [workspaceFilteredActivities],
-  );
   const sections = useMemo(() => groupActivitiesByDate(feedItems), [feedItems]);
-  const filterLabel = ACTIVITY_FILTER_OPTIONS.find((o) => o.key === activityFilter)?.label ?? "All Activity";
   const workspaceFilterLabel =
     workspaceFilter === "all"
       ? "All workspaces"
       : teams.find((t) => t.id === workspaceFilter)?.name ?? "Workspace";
   const showWorkspaceLabels = workspaceFilter === "all" && teams.length > 1;
+
+  const openCelebrate = () => {
+    setCelebrateTeamId(workspaceFilter !== "all" ? workspaceFilter : activeTeamId ?? teams[0]?.id ?? "");
+    setShowCelebrateModal(true);
+    setCelebrateStep(1);
+    setCelebrateMemberSearch("");
+    setShowCelebrateWorkspaceMenu(false);
+  };
 
   const listRows = useMemo<FeedRow[]>(() => {
     const rows: FeedRow[] = [];
@@ -345,6 +347,7 @@ export default function ActivityScreen() {
     setCelebrateMessage("");
     setCelebrateMemberSearch("");
     setCelebrateTeamId("");
+    setShowCelebrateWorkspaceMenu(false);
   };
 
   const celebrateMutation = useMutation({
@@ -356,9 +359,6 @@ export default function ActivityScreen() {
     },
   });
 
-  const celebrateMemberListMaxHeight =
-    CELEBRATE_SHEET_MAX_HEIGHT - CELEBRATE_HEADER_HEIGHT - CELEBRATE_MEMBER_SEARCH_HEIGHT - insets.bottom - 16;
-
   if (!activeTeamId) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
@@ -368,74 +368,36 @@ export default function ActivityScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="activity-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }} edges={[]} testID="activity-screen">
       <AppTabHeader
         topInset={insets.top}
         testID="activity-header"
         rightAction={
-          <TouchableOpacity
-            testID="celebrate-button"
-            onPress={() => {
-              setCelebrateTeamId(
-                workspaceFilter !== "all" ? workspaceFilter : activeTeamId ?? teams[0]?.id ?? "",
-              );
-              setShowCelebrateModal(true);
-              setCelebrateStep(1);
-              setCelebrateMemberSearch("");
-            }}
-            style={{
-              backgroundColor: "rgba(255,255,255,0.2)",
-              borderRadius: 20,
-              paddingHorizontal: 10,
-              paddingVertical: 5,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 5,
-            }}
-          >
-            <Text style={{ fontSize: 12 }}>🎉</Text>
-            <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>Celebrate</Text>
-          </TouchableOpacity>
+          teams.length > 1 ? (
+            <TouchableOpacity
+              onPress={() => setShowWorkspaceFilterSheet(true)}
+              testID="activity-intro-header-workspace-filter"
+              accessibilityLabel={workspaceFilterLabel}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                maxWidth: 160,
+                backgroundColor: "rgba(255,255,255,0.2)",
+                borderRadius: 16,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              }}
+            >
+              <Building2 size={13} color="white" strokeWidth={2.25} />
+              <Text style={{ flexShrink: 1, color: "white", fontSize: 12, fontWeight: "700" }} numberOfLines={1}>
+                {workspaceFilterLabel}
+              </Text>
+              <ChevronDown size={14} color="white" />
+            </TouchableOpacity>
+          ) : null
         }
       />
-
-      <AlenioBottomSheet
-        visible={showFilterSheet}
-        title="Filter activity"
-        subtitle="Choose what to show in your feed"
-        onClose={() => setShowFilterSheet(false)}
-        compact
-        footer={
-          <TouchableOpacity onPress={() => setShowFilterSheet(false)} style={[alenioSheetStyles.cancelButton, { paddingVertical: 4 }]}>
-            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        }
-      >
-        {ACTIVITY_FILTER_OPTIONS.map((option) => (
-          <AlenioSheetOption
-            key={option.key}
-            compact
-            icon={<Check size={14} color="white" strokeWidth={2.5} />}
-            iconColor={activityFilter === option.key ? "#4361EE" : "#94A3B8"}
-            title={option.label}
-            subtitle={
-              option.key === "all"
-                ? "Everything from your workspaces"
-                : option.key === "tasks"
-                  ? "Assignments and completions"
-                  : option.key === "calendar"
-                    ? "Events and meetings"
-                    : option.key === "team"
-                      ? "Joins and departures"
-                      : "Milestones and shoutouts"
-            }
-            onPress={() => {
-              setActivityFilter(option.key);
-              setShowFilterSheet(false);
-            }}
-          />
-        ))}
-      </AlenioBottomSheet>
 
       <AlenioBottomSheet
         visible={showWorkspaceFilterSheet}
@@ -478,285 +440,253 @@ export default function ActivityScreen() {
         ))}
       </AlenioBottomSheet>
 
-      {/* Celebrate modal */}
-      <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={closeCelebrateModal}>
-        <SafeKeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }}>
-          <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} activeOpacity={1} onPress={closeCelebrateModal} />
-          <View
-            style={{
-              backgroundColor: "white",
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              maxHeight: CELEBRATE_SHEET_MAX_HEIGHT,
-              overflow: "hidden",
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 20,
-                paddingTop: 20,
-                paddingBottom: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: "#F1F5F9",
-              }}
+      <AlenioBottomSheet
+        visible={showCelebrateModal}
+        title={celebrateStep === 1 ? "Who to celebrate?" : `Celebrate ${celebrateTarget?.name ?? ""}`}
+        subtitle={
+          celebrateStep === 1
+            ? "Pick a teammate for a shoutout"
+            : "Choose a type and add a short message"
+        }
+        onClose={closeCelebrateModal}
+        compact
+        showCloseButton
+        testID="celebrate-sheet"
+        footer={
+          celebrateStep === 1 ? (
+            <TouchableOpacity
+              onPress={closeCelebrateModal}
+              style={[alenioSheetStyles.cancelButton, { paddingVertical: 4 }]}
             >
+              <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
               <TouchableOpacity
-                onPress={celebrateStep === 2 ? () => setCelebrateStep(1) : closeCelebrateModal}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                testID="celebrate-submit"
+                onPress={() => {
+                  if (!celebrateTarget) return;
+                  celebrateMutation.mutate({
+                    targetUserId: celebrateTarget.id,
+                    celebrationType: celebrateType,
+                    message: celebrateMessage.trim(),
+                  });
+                }}
+                disabled={celebrateMutation.isPending || !celebrateMessage.trim()}
+                style={[
+                  alenioSheetStyles.primaryButton,
+                  !celebrateMessage.trim() || celebrateMutation.isPending
+                    ? alenioSheetStyles.primaryButtonDisabled
+                    : null,
+                  { minHeight: 44, paddingVertical: 12, borderRadius: 12 },
+                ]}
               >
-                <Text style={{ fontSize: 14, color: "#64748B", fontWeight: "600" }}>
-                  {celebrateStep === 2 ? "← Back" : "Cancel"}
-                </Text>
+                {celebrateMutation.isPending ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={[alenioSheetStyles.primaryButtonText, { fontSize: 14 }]}>
+                    Post Celebration
+                  </Text>
+                )}
               </TouchableOpacity>
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B" }}>
-                {celebrateStep === 1 ? "Who to celebrate? 🎉" : `Celebrate ${celebrateTarget?.name ?? ""}`}
-              </Text>
-              <TouchableOpacity onPress={closeCelebrateModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <X size={20} color="#94A3B8" />
+              <TouchableOpacity
+                onPress={() => setCelebrateStep(1)}
+                style={[alenioSheetStyles.cancelButton, { paddingVertical: 4 }]}
+              >
+                <Text style={alenioSheetStyles.cancelButtonText}>Back</Text>
               </TouchableOpacity>
-            </View>
-
-            {celebrateStep === 1 ? (
-              <>
-                {teams.length > 1 ? (
-                  <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 8 }}>
-                      Workspace
-                    </Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-                      {teams.map((team) => {
-                        const selected = celebrateTeamIdResolved === team.id;
-                        return (
-                          <TouchableOpacity
-                            key={team.id}
-                            onPress={() => {
-                              setCelebrateTeamId(team.id);
-                              setCelebrateTarget(null);
-                            }}
-                            style={{
-                              marginRight: 8,
-                              paddingHorizontal: 12,
-                              paddingVertical: 7,
-                              borderRadius: 999,
-                              backgroundColor: selected ? "#EEF2FF" : "#F8FAFC",
-                              borderWidth: 1,
-                              borderColor: selected ? "#4361EE" : "#E2E8F0",
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 12,
-                                fontWeight: "700",
-                                color: selected ? "#4361EE" : "#64748B",
-                              }}
-                            >
-                              {team.name}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                ) : null}
-                <View
+            </>
+          )
+        }
+      >
+        {celebrateStep === 1 ? (
+          <>
+            {teams.length > 1 ? (
+              <View>
+                <Text style={[alenioSheetStyles.fieldLabel, { marginBottom: 6 }]}>Workspace</Text>
+                <TouchableOpacity
+                  onPress={() => setShowCelebrateWorkspaceMenu((open) => !open)}
+                  activeOpacity={0.85}
+                  testID="celebrate-workspace-dropdown"
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    marginHorizontal: 16,
-                    marginTop: 12,
-                    marginBottom: 8,
+                    gap: 8,
                     paddingHorizontal: 12,
-                    height: CELEBRATE_MEMBER_SEARCH_HEIGHT - 12,
+                    paddingVertical: 10,
                     borderRadius: 12,
                     backgroundColor: "#F8FAFC",
                     borderWidth: 1,
-                    borderColor: "#E2E8F0",
-                    gap: 8,
+                    borderColor: showCelebrateWorkspaceMenu ? "#4361EE" : "#E2E8F0",
                   }}
                 >
-                  <Search size={18} color="#94A3B8" />
-                  <TextInput
-                    value={celebrateMemberSearch}
-                    onChangeText={setCelebrateMemberSearch}
-                    placeholder="Search teammates"
-                    placeholderTextColor="#94A3B8"
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                    returnKeyType="search"
-                    style={{ flex: 1, fontSize: 15, color: "#0F172A", paddingVertical: 0 }}
-                    testID="celebrate-member-search"
+                  <Building2 size={15} color="#64748B" strokeWidth={2.25} />
+                  <Text
+                    style={{ flex: 1, fontSize: 14, fontWeight: "600", color: "#0F172A" }}
+                    numberOfLines={1}
+                  >
+                    {teams.find((t) => t.id === celebrateTeamIdResolved)?.name ?? "Select workspace"}
+                  </Text>
+                  <ChevronDown
+                    size={16}
+                    color="#94A3B8"
+                    style={{ transform: [{ rotate: showCelebrateWorkspaceMenu ? "180deg" : "0deg" }] }}
                   />
-                  {celebrateMemberSearch.length > 0 ? (
-                    <TouchableOpacity onPress={() => setCelebrateMemberSearch("")} hitSlop={8}>
-                      <X size={16} color="#94A3B8" />
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
+                </TouchableOpacity>
 
-                {teamMembersLoading ? (
-                  <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                    <ActivityIndicator color="#4361EE" />
-                  </View>
-                ) : teamMembers.length === 0 ? (
-                  <View style={{ alignItems: "center", paddingHorizontal: 24, paddingVertical: 44, paddingBottom: insets.bottom + 16 }}>
-                    <Text style={{ fontSize: 36, marginBottom: 10 }}>🎉</Text>
-                    <Text style={{ fontSize: 16, fontWeight: "700", color: "#334155", textAlign: "center" }}>
-                      No teammates to celebrate yet
-                    </Text>
-                    <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 8, lineHeight: 20 }}>
-                      Add more team members first, then come back to post a celebration.
-                    </Text>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={filteredCelebrateMembers}
-                    keyExtractor={(m) => m.userId}
-                    style={{ maxHeight: Math.max(180, celebrateMemberListMaxHeight) }}
-                    contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
-                    showsVerticalScrollIndicator
-                    keyboardShouldPersistTaps="handled"
-                    testID="celebrate-member-list"
-                    ListEmptyComponent={
-                      <View style={{ alignItems: "center", paddingHorizontal: 24, paddingVertical: 32 }}>
-                        <Text style={{ fontSize: 15, fontWeight: "700", color: "#334155" }}>No matches</Text>
-                      </View>
-                    }
-                    renderItem={({ item: m }) => (
-                      <TouchableOpacity
-                        testID={`celebrate-member-${m.userId}`}
-                        onPress={() => {
-                          setCelebrateTarget(m.user);
-                          setCelebrateStep(2);
-                        }}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          paddingHorizontal: 20,
-                          paddingVertical: 14,
-                          borderBottomWidth: 1,
-                          borderBottomColor: "#F8FAFC",
-                        }}
-                      >
-                        <View
+                {showCelebrateWorkspaceMenu ? (
+                  <View
+                    style={{
+                      marginTop: 6,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: "#E2E8F0",
+                      backgroundColor: "#FFFFFF",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {teams.map((team, index) => {
+                      const selected = celebrateTeamIdResolved === team.id;
+                      return (
+                        <TouchableOpacity
+                          key={team.id}
+                          onPress={() => {
+                            setCelebrateTeamId(team.id);
+                            setCelebrateTarget(null);
+                            setShowCelebrateWorkspaceMenu(false);
+                          }}
                           style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 22,
-                            backgroundColor: "#EEF2FF",
+                            flexDirection: "row",
                             alignItems: "center",
-                            justifyContent: "center",
-                            marginRight: 14,
-                            overflow: "hidden",
+                            gap: 10,
+                            paddingHorizontal: 12,
+                            paddingVertical: 11,
+                            backgroundColor: selected ? "#EEF2FF" : "#FFFFFF",
+                            borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth,
+                            borderTopColor: "#E2E8F0",
                           }}
                         >
-                          {m.user.image ? (
-                            <ExpoImage source={{ uri: m.user.image }} style={{ width: 44, height: 44 }} contentFit="cover" />
-                          ) : (
-                            <Text style={{ fontSize: 18, fontWeight: "700", color: "#4361EE" }}>
-                              {m.user.name[0]?.toUpperCase()}
-                            </Text>
-                          )}
-                        </View>
-                        <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B", flex: 1 }}>{m.user.name}</Text>
-                        <Text style={{ fontSize: 18 }}>→</Text>
-                      </TouchableOpacity>
-                    )}
-                  />
-                )}
-              </>
-            ) : (
-              <ScrollView
-                style={{ maxHeight: CELEBRATE_SHEET_MAX_HEIGHT - CELEBRATE_HEADER_HEIGHT }}
-                contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40 }}
-                showsVerticalScrollIndicator
-                keyboardShouldPersistTaps="handled"
-              >
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "600",
-                    color: "#64748B",
-                    marginBottom: 12,
-                    textTransform: "uppercase",
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  Choose a celebration
-                </Text>
-                <View style={{ marginBottom: 20 }} testID="celebrate-type-picker-wrap">
-                  <CelebrationTypePickerCards
-                    selected={celebrateType}
-                    onSelect={setCelebrateType}
-                  />
-                </View>
+                          <Text
+                            style={{
+                              flex: 1,
+                              fontSize: 14,
+                              fontWeight: selected ? "700" : "500",
+                              color: selected ? "#4361EE" : "#334155",
+                            }}
+                            numberOfLines={1}
+                          >
+                            {team.name}
+                          </Text>
+                          {selected ? <Check size={16} color="#4361EE" strokeWidth={2.5} /> : null}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
 
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "600",
-                    color: "#64748B",
-                    marginBottom: 8,
-                    textTransform: "uppercase",
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  Message <Text style={{ color: "#EF4444" }}>*</Text>
-                </Text>
+            <AlenioSheetCard tint="slate" compact>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Search size={16} color="#94A3B8" />
                 <TextInput
-                  testID="celebrate-message-input"
-                  value={celebrateMessage}
-                  onChangeText={setCelebrateMessage}
-                  placeholder={`Say something nice about ${celebrateTarget?.name ?? "them"}...`}
-                  placeholderTextColor="#CBD5E1"
-                  multiline
-                  maxLength={300}
-                  style={{
-                    backgroundColor: "#F8FAFC",
-                    borderWidth: 1,
-                    borderColor: "#E2E8F0",
-                    borderRadius: 12,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    fontSize: 15,
-                    color: "#1E293B",
-                    minHeight: 80,
-                    maxHeight: 140,
-                    marginBottom: 20,
+                  value={celebrateMemberSearch}
+                  onChangeText={setCelebrateMemberSearch}
+                  placeholder="Search teammates"
+                  placeholderTextColor="#94A3B8"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  style={{ flex: 1, fontSize: 14, color: "#0F172A", paddingVertical: 0 }}
+                  testID="celebrate-member-search"
+                />
+                {celebrateMemberSearch.length > 0 ? (
+                  <TouchableOpacity onPress={() => setCelebrateMemberSearch("")} hitSlop={8}>
+                    <X size={14} color="#94A3B8" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </AlenioSheetCard>
+
+            {teamMembersLoading ? (
+              <View style={{ alignItems: "center", paddingVertical: 24 }}>
+                <ActivityIndicator color="#4361EE" />
+              </View>
+            ) : teamMembers.length === 0 ? (
+              <AlenioSheetCard tint="slate" compact>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#334155", textAlign: "center" }}>
+                  No teammates to celebrate yet
+                </Text>
+                <Text style={{ fontSize: 12, color: "#64748B", textAlign: "center", marginTop: 4, lineHeight: 17 }}>
+                  Add more team members first, then come back to post a celebration.
+                </Text>
+              </AlenioSheetCard>
+            ) : filteredCelebrateMembers.length === 0 ? (
+              <AlenioSheetCard tint="slate" compact>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#334155", textAlign: "center" }}>
+                  No matches
+                </Text>
+              </AlenioSheetCard>
+            ) : (
+              filteredCelebrateMembers.map((m) => (
+                <AlenioSheetOption
+                  key={m.userId}
+                  compact
+                  testID={`celebrate-member-${m.userId}`}
+                  iconColor="#4361EE"
+                  icon={
+                    m.user.image ? (
+                      <Image source={{ uri: m.user.image }} style={{ width: 32, height: 32 }} />
+                    ) : (
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>
+                        {m.user.name[0]?.toUpperCase()}
+                      </Text>
+                    )
+                  }
+                  title={m.user.name}
+                  onPress={() => {
+                    setCelebrateTarget(m.user);
+                    setShowCelebrateWorkspaceMenu(false);
+                    setCelebrateStep(2);
                   }}
                 />
-
-                <TouchableOpacity
-                  testID="celebrate-submit"
-                  onPress={() => {
-                    if (!celebrateTarget) return;
-                    celebrateMutation.mutate({
-                      targetUserId: celebrateTarget.id,
-                      celebrationType: celebrateType,
-                      message: celebrateMessage.trim(),
-                    });
-                  }}
-                  disabled={celebrateMutation.isPending || !celebrateMessage.trim()}
-                  style={{
-                    backgroundColor: celebrateMessage.trim() ? "#4361EE" : "#CBD5E1",
-                    borderRadius: 14,
-                    paddingVertical: 15,
-                    alignItems: "center",
-                  }}
-                >
-                  {celebrateMutation.isPending ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>🎉 Post Celebration</Text>
-                  )}
-                </TouchableOpacity>
-              </ScrollView>
+              ))
             )}
-          </View>
-        </SafeKeyboardAvoidingView>
-      </Modal>
+          </>
+        ) : (
+          <>
+            <View testID="celebrate-type-picker-wrap">
+              <Text style={[alenioSheetStyles.fieldLabel, { marginBottom: 8 }]}>Celebration type</Text>
+              <CelebrationTypePickerCards selected={celebrateType} onSelect={setCelebrateType} />
+            </View>
+
+            <AlenioSheetCard tint="slate" compact>
+              <Text style={alenioSheetStyles.fieldLabel}>
+                Message <Text style={{ color: "#EF4444" }}>*</Text>
+              </Text>
+              <TextInput
+                testID="celebrate-message-input"
+                value={celebrateMessage}
+                onChangeText={setCelebrateMessage}
+                placeholder={`Say something nice about ${celebrateTarget?.name ?? "them"}...`}
+                placeholderTextColor="#94A3B8"
+                multiline
+                maxLength={300}
+                style={[
+                  alenioSheetStyles.fieldInput,
+                  {
+                    minHeight: 72,
+                    maxHeight: 120,
+                    paddingVertical: 10,
+                    fontSize: 14,
+                    backgroundColor: "#FFFFFF",
+                  },
+                ]}
+              />
+            </AlenioSheetCard>
+          </>
+        )}
+      </AlenioBottomSheet>
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }} testID="loading-indicator">
@@ -785,48 +715,13 @@ export default function ActivityScreen() {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          <View
-            style={{
-              backgroundColor: "#F8FAFC",
-              borderBottomWidth: 1,
-              borderBottomColor: "#E8EDF3",
-              paddingBottom: 10,
-            }}
-          >
-            <ActivityIntroHeader
-              filter={activityFilter}
-              filterLabel={filterLabel}
-              onPressFilter={() => setShowFilterSheet(true)}
-            />
-            {teams.length > 1 ? (
-              <View style={{ paddingHorizontal: 16, marginTop: 4 }}>
-                <TouchableOpacity
-                  testID="activity-workspace-filter"
-                  onPress={() => setShowWorkspaceFilterSheet(true)}
-                  style={{
-                    alignSelf: "flex-start",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: 8,
-                    backgroundColor: "#fff",
-                    borderWidth: 1,
-                    borderColor: "#E2E8F0",
-                  }}
-                >
-                  <Users size={12} color="#64748B" />
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }} numberOfLines={1}>
-                    {workspaceFilterLabel}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
-            {workspaceFilteredActivities.length > 0 ? (
-              <ActivitySummaryChips summary={summary} testID="activity-summary-chips" />
-            ) : null}
-          </View>
+          <ActivityIntroHeader
+            filter={activityFilter}
+            onSelectFilter={setActivityFilter}
+            onPressFilterIcon={
+              teams.length > 1 ? () => setShowWorkspaceFilterSheet(true) : undefined
+            }
+          />
 
           {workspaceFilteredActivities.length === 0 ? (
             <View
@@ -849,7 +744,7 @@ export default function ActivityScreen() {
                 if (row.kind === "section") return `section-${row.section.group}`;
                 return `item-${row.item.id}-${index}`;
               }}
-              renderItem={({ item: row }) => {
+              renderItem={({ item: row, index }) => {
                 if (row.kind === "empty-filter") {
                   return (
                     <View style={{ alignItems: "center", paddingHorizontal: 32, paddingVertical: 40 }}>
@@ -864,51 +759,90 @@ export default function ActivityScreen() {
                 }
                 if (row.kind === "section") {
                   return (
-                    <View style={{ marginTop: 8, marginBottom: 4, paddingHorizontal: 16 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginTop: index === 0 ? 6 : 10,
+                        marginBottom: 2,
+                        paddingHorizontal: 16,
+                        gap: 10,
+                      }}
+                    >
                       <Text
                         style={{
                           fontSize: 11,
                           fontWeight: "700",
-                          color: "#64748B",
-                          letterSpacing: 0.8,
+                          color: "#94A3B8",
+                          letterSpacing: 0.6,
+                          textTransform: "uppercase",
                         }}
                       >
                         {row.section.label}
                       </Text>
+                      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: "#E2E8F0" }} />
                     </View>
                   );
                 }
                 return (
-                  <View style={{ marginBottom: 6 }}>
-                    <FeedItemCard
-                      item={row.item}
-                      currentUserId={currentUserId}
-                      canDeleteCelebration={
-                        row.item.actor?.id === currentUserId ||
-                        teams.find((t) => t.id === row.item.teamId)?.role === "owner" ||
-                        teams.find((t) => t.id === row.item.teamId)?.role === "admin"
-                      }
-                      showPicker={openPickerId === row.item.id}
-                      onOpenPicker={() => setOpenPickerId(row.item.id)}
-                      onClosePicker={() => setOpenPickerId(null)}
-                      onCelebrate={() => {
-                        setCelebrateTeamId(row.item.teamId || celebrateTeamIdResolved);
-                        setShowCelebrateModal(true);
-                        setCelebrateStep(1);
-                      }}
-                      showHint={row.isFirstInFeed && showReactionHint}
-                      showWorkspaceLabel={showWorkspaceLabels}
-                    />
-                  </View>
+                  <FeedItemCard
+                    item={row.item}
+                    currentUserId={currentUserId}
+                    canDeleteCelebration={
+                      row.item.actor?.id === currentUserId ||
+                      teams.find((t) => t.id === row.item.teamId)?.role === "owner" ||
+                      teams.find((t) => t.id === row.item.teamId)?.role === "admin"
+                    }
+                    showPicker={openPickerId === row.item.id}
+                    onOpenPicker={() => setOpenPickerId(row.item.id)}
+                    onClosePicker={() => setOpenPickerId(null)}
+                    onCelebrate={() => {
+                      setCelebrateTeamId(row.item.teamId || celebrateTeamIdResolved);
+                      setShowCelebrateModal(true);
+                      setCelebrateStep(1);
+                    }}
+                    showHint={row.isFirstInFeed && showReactionHint}
+                    showWorkspaceLabel={showWorkspaceLabels}
+                  />
                 );
               }}
               onRefresh={refetch}
               refreshing={isLoading}
-              contentContainerStyle={{ paddingTop: 6, paddingBottom: tabBarClearance(insets.bottom) + 8 }}
+              contentContainerStyle={{
+                paddingTop: 0,
+                paddingBottom: tabBarClearance(insets.bottom) + SENECA_FAB_SIZE * 2 + 24,
+              }}
               showsVerticalScrollIndicator={false}
               testID="activity-list"
             />
           )}
+
+          <TouchableOpacity
+            testID="celebrate-button"
+            onPress={openCelebrate}
+            accessibilityLabel="Celebrate"
+            activeOpacity={0.9}
+            style={{
+              position: "absolute",
+              right: SENECA_FAB_RIGHT_INSET,
+              // Sit above the global Seneca FAB so the two don't overlap
+              bottom: tabBarClearance(insets.bottom, 12) + SENECA_FAB_SIZE + 10,
+              width: SENECA_FAB_SIZE,
+              height: SENECA_FAB_SIZE,
+              borderRadius: SENECA_FAB_SIZE / 2,
+              backgroundColor: "#4361EE",
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#1E293B",
+              shadowOpacity: 0.2,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 6,
+              zIndex: 20,
+            }}
+          >
+            <Plus size={28} color="white" strokeWidth={2.5} />
+          </TouchableOpacity>
         </View>
       )}
     </SafeAreaView>

@@ -389,7 +389,7 @@ export function EventsSection({
             >
               <Image
                 source={require("@/assets/calendar-empty-day.png")}
-                style={{ width: 96, height: 96, marginBottom: 10 }}
+                style={{ width: 152, height: 152, marginBottom: 12 }}
                 resizeMode="contain"
                 accessibilityIgnoresInvertColors
               />

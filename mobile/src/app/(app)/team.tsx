@@ -20,13 +20,12 @@ import {
   UserPlus,
   Clock,
   X,
-  Crown,
   Camera,
   Trash2,
   ChevronLeft,
-  ChevronRight,
   ChevronDown,
   QrCode,
+  Plus,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -36,7 +35,6 @@ import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
 import { formatDaysSinceCheckIn, computeTeamCompliancePercentages, formatTeamCompliancePercent, teamComplianceColor } from "@/lib/member-stats-display";
 import {
-  memberStandardsBadges,
   mergeWorkplaceStandards,
   type MemberStatsPayload,
   type MemberStandardsCompliance,
@@ -50,6 +48,8 @@ import {
 } from "@/components/profile/ProfileEnterpriseUI";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
+import { ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { isLeaderRole, memberMatchesUserId } from "@/lib/member-identity";
 import QRCode from "react-native-qrcode-svg";
 import { router, useFocusEffect } from "expo-router";
 import { reconcileActiveTeamAfterRemoval } from "@/lib/workspace-switch";
@@ -59,6 +59,9 @@ import { AddMemberModal } from "@/components/AddMemberModal";
 import { PendingInvitesChip, PendingInvitesSheet } from "@/components/PendingInvitesSheet";
 import { PendingJoinRequestsSheet } from "@/components/PendingJoinRequestsSheet";
 import { TeamOverviewTasksSheet, type TeamOverviewTaskFilter } from "@/components/TeamOverviewTasksSheet";
+import { TeamInsightsSheet } from "@/components/TeamInsightsSheet";
+import { WorkplaceStandardsSheet } from "@/components/WorkplaceStandardsSheet";
+import { SenecaAssistantSheet } from "@/components/seneca/SenecaAssistantSheet";
 import { AppTabHeader } from "@/components/AppTabHeader";
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -70,7 +73,7 @@ import {
   type TeamInvite,
 } from "@/lib/team-invites-api";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { tabBarClearance, workspaceTaskRightInset } from "@/lib/tab-bar";
+import { TAB_BAR_HEIGHT } from "@/lib/tab-bar";
 import Svg, { Path, Circle, Line, Text as SvgText, Polyline } from "react-native-svg";
 
 type JoinRequest = {
@@ -107,18 +110,19 @@ function personalCheckInMetricColor(status: MemberStandardsCompliance["checkInSt
 
 function personalGoalsMetricColor(status: MemberStandardsCompliance["goalsStatus"] | undefined): string {
   if (status === "on_track") return "#10B981";
-  if (status === "missing_goals") return "#4F46E5";
+  if (status === "missing_goals") return "#EF4444";
   return "#94A3B8";
 }
 
-function sortMembersWithSelfFirst<T extends { userId: string; user: { name?: string | null } }>(
-  members: T[],
-  myId: string,
-): T[] {
+function sortMembersWithSelfFirst<
+  T extends { userId: string; user: { id?: string; name?: string | null; email?: string | null } },
+>(members: T[], myId: string, myEmail?: string): T[] {
   const byName = (a: T, b: T) => (a.user.name ?? "").localeCompare(b.user.name ?? "");
-  if (!myId) return [...members].sort(byName);
-  const self = members.find((member) => member.userId === myId);
-  const others = members.filter((member) => member.userId !== myId).sort(byName);
+  if (!myId && !myEmail) return [...members].sort(byName);
+  const self = members.find((member) => memberMatchesUserId(member, myId, myEmail));
+  const others = members
+    .filter((member) => !memberMatchesUserId(member, myId, myEmail))
+    .sort(byName);
   return self ? [self, ...others] : others;
 }
 
@@ -271,7 +275,8 @@ function PerformanceChart({ data, dark }: { data: Array<{ label: string; complet
 // ------------------------------------------------------------------
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
-  const TAB_BAR_CLEARANCE = tabBarClearance(insets.bottom);
+  // Sit just above the fixed tab bar (tab height + home indicator + small gap).
+  const TAB_BAR_CLEARANCE = TAB_BAR_HEIGHT + insets.bottom + 8;
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const hasHydrated = useTeamStore((s) => s._hasHydrated);
@@ -279,6 +284,15 @@ export default function TeamScreen() {
   const queryClient = useQueryClient();
   const plan = useSubscriptionStore((s) => s.plan);
   const isPaid = plan === "team";
+
+  // Prefer /api/me — same backend identity as team membership. Auth session can lag or disagree.
+  const { data: meProfile } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () =>
+      api.get<{ id: string; name: string; email: string; image: string | null }>("/api/me"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60,
+  });
 
   const { data: team, isLoading } = useQuery({
     queryKey: ["team", activeTeamId],
@@ -294,14 +308,27 @@ export default function TeamScreen() {
     }, [session?.user, activeTeamId, setActiveTeamId, queryClient]),
   );
 
-  const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
-  const myRole = currentMembership?.role ?? (team as Team & { role?: string } | undefined)?.role;
-  const myId = session?.user?.id ?? "";
-  const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader" || myRole === "admin";
+  const sessionUserId =
+    typeof session?.user?.id === "string" ? session.user.id : "";
+  const sessionEmail =
+    typeof session?.user?.email === "string" ? session.user.email : "";
+  const myEmail = meProfile?.email || sessionEmail;
+  const resolvedUserId = meProfile?.id || sessionUserId;
+  const currentMembership =
+    team?.members?.find((m) => resolvedUserId && (m.userId === resolvedUserId || m.user.id === resolvedUserId)) ??
+    team?.members?.find((m) => memberMatchesUserId(m, "", myEmail)) ??
+    null;
+  // Prefer the roster userId once matched (covers session/me id drift + email fallback).
+  const myId = currentMembership?.userId || resolvedUserId;
+  // Prefer server-attested role (team.role) so leaders aren't demoted by a mismatched roster row.
+  const myRole =
+    (team as Team & { role?: string } | undefined)?.role || currentMembership?.role;
+  const isOwnerOrLeader = isLeaderRole(myRole);
+  const isOwner = myRole === "owner";
   const canViewMemberProfile = (targetUserId: string, targetRole: string) => {
     if (!myId || targetUserId === myId) return true;
     if (targetRole === "owner") return false;
-    return myRole === "owner" || myRole === "team_leader";
+    return isLeaderRole(myRole);
   };
   const canManageMember = (targetUserId: string, targetRole: string) => {
     if (!myRole || (myRole !== "owner" && myRole !== "team_leader")) return false;
@@ -535,6 +562,9 @@ export default function TeamScreen() {
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [pendingInvitesOpen, setPendingInvitesOpen] = useState(false);
   const [overviewTasksSheet, setOverviewTasksSheet] = useState<TeamOverviewTaskFilter | null>(null);
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [standardsOpen, setStandardsOpen] = useState(false);
+  const [senecaOpen, setSenecaOpen] = useState(false);
   const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
   const [joinRequestActionId, setJoinRequestActionId] = useState<string | null>(null);
@@ -685,7 +715,6 @@ export default function TeamScreen() {
     .filter((t) => isTaskOverdue(t))
     .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
   const totalOverdue = overdueTasks.length;
-  const hasTappableTaskStats = totalOpen > 0 || totalDueToday > 0 || totalOverdue > 0;
   const overviewComplianceMetrics = showTeamOverview
     ? ([
         {
@@ -726,7 +755,7 @@ export default function TeamScreen() {
           : [];
 
   // Logged-in user first, then everyone else alphabetically
-  const sortedMembers = sortMembersWithSelfFirst(members, myId);
+  const sortedMembers = sortMembersWithSelfFirst(members, myId, myEmail);
   const showMemberSkeletons = isLoading || (isPaid && memberStatsLoading && !memberStatsPayload && !refreshing);
 
   // ------------------------------------------------------------------
@@ -819,9 +848,35 @@ export default function TeamScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={[]} testID="team-screen">
 
-      <AppTabHeader topInset={insets.top} testID="team-header" />
+      <AppTabHeader
+        topInset={insets.top}
+        testID="team-header"
+        rightAction={
+          isOwnerOrLeader ? (
+            <Pressable
+              onPress={() => {
+                setAddMemberError(null);
+                setAddMemberOpen(true);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                backgroundColor: "rgba(255,255,255,0.22)",
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 20,
+              }}
+              testID="add-member-button"
+            >
+              <Plus size={13} color="white" />
+              <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add</Text>
+            </Pressable>
+          ) : null
+        }
+      />
 
-      <View style={{ flex: 1, paddingBottom: TAB_BAR_CLEARANCE }}>
+      <View style={{ flex: 1, minHeight: 0, paddingBottom: TAB_BAR_CLEARANCE }}>
         {/* ── Team info card (fixed) ── */}
         <View style={{
           marginHorizontal: 12,
@@ -838,7 +893,7 @@ export default function TeamScreen() {
             colors={["#4361EE", "#7C3AED"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={{ padding: 14 }}
+            style={{ paddingVertical: 12, paddingHorizontal: 14 }}
           >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             {/* Avatar */}
@@ -921,110 +976,20 @@ export default function TeamScreen() {
           </LinearGradient>
         </View>
 
-        {/* ── 2. AT A GLANCE CARD (paid only, unified) ──────────────── */}
-        {isPaid ? (
-          <View
-            style={{
-              backgroundColor: "white",
-              borderRadius: 16,
-              marginHorizontal: 12,
-              marginTop: 8,
-              paddingTop: 10,
-              paddingBottom: 8,
-              paddingHorizontal: 14,
-              shadowColor: "#000",
-              shadowOpacity: 0.06,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 3,
-            }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A", marginBottom: 6 }}>
-              {showTeamOverview ? "Team Overview" : "My Overview"}
-            </Text>
 
-            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 6 }}>
-              {(
-                [
-                  { key: "open" as const, value: totalOpen, label: "Open", color: "#10B981" },
-                  { key: "dueToday" as const, value: totalDueToday, label: "Due today", color: "#F59E0B" },
-                  { key: "overdue" as const, value: totalOverdue, label: "Overdue", color: "#EF4444" },
-                ] as const
-              ).map(({ key, value, label, color }) => {
-                const statContent = (
-                  <>
-                    <Text style={{ fontSize: 20, fontWeight: "900", color, lineHeight: 22 }}>{value}</Text>
-                    <Text numberOfLines={1} style={{ fontSize: 10, color: "#64748B", marginTop: 1, textAlign: "center" }}>
-                      {label}
-                    </Text>
-                  </>
-                );
-
-                if (value > 0) {
-                  return (
-                    <Pressable
-                      key={key}
-                      style={{ flex: 1, alignItems: "center", paddingVertical: 2 }}
-                      onPress={() => setOverviewTasksSheet(key)}
-                      testID={`team-overview-${key}`}
-                    >
-                      {statContent}
-                    </Pressable>
-                  );
-                }
-
-                return (
-                  <View key={key} style={{ flex: 1, alignItems: "center", paddingVertical: 2 }}>
-                    {statContent}
-                  </View>
-                );
-              })}
-            </View>
-
-            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 6, marginTop: 4 }}>
-              {overviewComplianceMetrics.map(({ key, value, label, color }) => (
-                <View key={key} style={{ flex: 1, alignItems: "center", paddingVertical: 2 }}>
-                  <Text
-                    numberOfLines={showTeamOverview ? 1 : 2}
-                    style={
-                      showTeamOverview
-                        ? { fontSize: 20, fontWeight: "900", color, lineHeight: 22, textAlign: "center" }
-                        : { fontSize: 13, fontWeight: "700", color, lineHeight: 16, textAlign: "center" }
-                    }
-                  >
-                    {value}
-                  </Text>
-                  <Text numberOfLines={2} style={{ fontSize: 10, color: "#64748B", marginTop: 1, textAlign: "center", lineHeight: 13 }}>
-                    {label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {hasTappableTaskStats ? (
-              <Text
-                numberOfLines={1}
-                style={{ fontSize: 9, color: "#94A3B8", marginTop: 2 }}
-              >
-                Tap a number to view tasks
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-
-
-        {/* ── 4. TEAM MEMBERS (Workspaces-style section + card) ───── */}
+        {/* ── Team Members ───── */}
         <View
           style={{
             flex: 1,
             minHeight: 0,
             marginHorizontal: 16,
             marginTop: 12,
-            marginBottom: 4,
+            marginBottom: 0,
+            alignSelf: "stretch",
           }}
         >
           <ProfileSection
-            style={{ flex: 1, minHeight: 0 }}
+            style={{ flex: 1, minHeight: 0, alignSelf: "stretch" }}
             title="Team Members"
             titleAccessory={isPaid ? <StandardsStatusKey iconSize={12} /> : undefined}
             subtitle={
@@ -1033,9 +998,9 @@ export default function TeamScreen() {
                 : "Tap a member to view their profile."
             }
             action={
-              isOwnerOrLeader ? (
+              isOwnerOrLeader || isPaid || isOwner ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  {pendingApprovalCount > 0 ? (
+                  {isOwnerOrLeader && pendingApprovalCount > 0 ? (
                     <Pressable
                       onPress={() => setJoinRequestsOpen(true)}
                       hitSlop={8}
@@ -1058,26 +1023,35 @@ export default function TeamScreen() {
                       </Text>
                     </Pressable>
                   ) : null}
-                  <PendingInvitesChip count={pendingInvites.length} onPress={() => setPendingInvitesOpen(true)} />
-                  <ProfileToolbarButton
-                    label="Add"
-                    onPress={() => {
-                      setAddMemberError(null);
-                      setAddMemberOpen(true);
-                    }}
-                    testID="add-member-button"
-                  />
+                  {isOwnerOrLeader ? (
+                    <PendingInvitesChip count={pendingInvites.length} onPress={() => setPendingInvitesOpen(true)} />
+                  ) : null}
+                  {isOwner ? (
+                    <ProfileToolbarButton
+                      label="Settings"
+                      onPress={() => setStandardsOpen(true)}
+                      testID="workplace-settings-button"
+                    />
+                  ) : null}
+                  {isPaid ? (
+                    <ProfileToolbarButton
+                      label="Insights"
+                      onPress={() => setInsightsOpen(true)}
+                      testID="team-insights-button"
+                    />
+                  ) : null}
                 </View>
               ) : undefined
             }
           >
-            <ProfileCard style={{ flex: 1, minHeight: 120 }}>
+            <ProfileCard style={{ flex: 1, minHeight: 0, alignSelf: "stretch" }}>
               <ScrollView
                 ref={membersListRef}
                 style={{ flex: 1 }}
                 nestedScrollEnabled
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
+                  flexGrow: 1,
                   paddingHorizontal: 10,
                   paddingTop: 10,
                   paddingBottom: teamMemberListBottomPadding(formerMembers.length > 0),
@@ -1096,11 +1070,7 @@ export default function TeamScreen() {
                   sortedMembers.map((item: TeamMember) => {
                     const stats = memberStats?.[item.userId];
                     const compliance = stats?.standardsCompliance;
-                    const complianceBadges = compliance
-                      ? memberStandardsBadges(compliance, stats?.daysSinceLastOneOnOne)
-                      : [];
-                    const primaryBadge = complianceBadges[0] ?? null;
-                    const isCurrentUser = item.userId === myId;
+                    const isCurrentUser = memberMatchesUserId(item, myId, myEmail);
                     const hasProfilePermission = canViewMemberProfile(item.userId, item.role);
                     const canOpenProfile = hasProfilePermission;
                     const canOpenManagement = !isPaid && canManageMember(item.userId, item.role);
@@ -1117,7 +1087,8 @@ export default function TeamScreen() {
                         hasProfilePermission={hasProfilePermission}
                         checkInValue={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
                         goalsValue={compliance?.goalsDisplay ?? "—"}
-                        statusBadge={primaryBadge}
+                        checkInStatus={compliance?.checkInStatus}
+                        goalsStatus={compliance?.goalsStatus}
                         onPress={
                           isPressable
                             ? () =>
@@ -1199,137 +1170,6 @@ export default function TeamScreen() {
             </ProfileCard>
           </ProfileSection>
         </View>
-
-        {isPaid && isOwnerOrLeader ? (
-          <View
-            style={{
-              marginLeft: 16,
-              marginRight: workspaceTaskRightInset() + 12,
-              marginTop: 8,
-              flexShrink: 0,
-              backgroundColor: "#FFFFFF",
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-            }}
-          >
-            <View
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Crown size={13} color="#475569" strokeWidth={2} />
-            </View>
-            <Text
-              style={{
-                fontSize: 12,
-                color: "#475569",
-                fontWeight: "500",
-                flex: 1,
-                textAlign: "center",
-                lineHeight: 16,
-              }}
-              numberOfLines={2}
-            >
-              Tap a member to view their profile, growth plan, and check-in history.
-            </Text>
-            <ChevronRight size={15} color="#94A3B8" strokeWidth={2} />
-          </View>
-        ) : isPaid ? (
-          <View
-            style={{
-              marginHorizontal: 12,
-              marginTop: 4,
-              flexShrink: 0,
-              backgroundColor: "#FFFFFF",
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                color: "#475569",
-                fontWeight: "500",
-                textAlign: "center",
-                lineHeight: 16,
-              }}
-              numberOfLines={2}
-            >
-              Tap your name to view your profile, growth plan, and check-in history.
-            </Text>
-          </View>
-        ) : !isPaid && isOwnerOrLeader ? (
-          <View
-            style={{
-              marginLeft: 12,
-              marginRight: workspaceTaskRightInset() + 12,
-              marginTop: 4,
-              flexShrink: 0,
-              backgroundColor: "#FFFFFF",
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                color: "#475569",
-                fontWeight: "500",
-                textAlign: "center",
-                lineHeight: 16,
-              }}
-              numberOfLines={2}
-            >
-              Tap a member to change their role or remove them from the workplace.
-            </Text>
-          </View>
-        ) : !isPaid ? (
-          <View
-            style={{
-              marginHorizontal: 12,
-              marginTop: 4,
-              flexShrink: 0,
-              backgroundColor: "#FFFFFF",
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 12,
-                color: "#475569",
-                fontWeight: "500",
-                textAlign: "center",
-                lineHeight: 16,
-              }}
-              numberOfLines={2}
-            >
-              Tap a member to open their profile. Development tools require Team access.
-            </Text>
-          </View>
-        ) : null}
       </View>
 
       {/* ── QR Code Modal ─────────────────────────────────────────────── */}
@@ -1464,6 +1304,49 @@ export default function TeamScreen() {
         onClose={() => setPendingInvitesOpen(false)}
         onCancel={(invite) => cancelInviteMutation.mutate(invite.id)}
         onResend={(invite) => resendInviteMutation.mutate(invite.id)}
+      />
+
+      {isPaid ? (
+        <TeamInsightsSheet
+          visible={insightsOpen}
+          title={showTeamOverview ? "Team Insights" : "My Insights"}
+          openCount={totalOpen}
+          dueTodayCount={totalDueToday}
+          overdueCount={totalOverdue}
+          complianceMetrics={overviewComplianceMetrics}
+          onClose={() => setInsightsOpen(false)}
+          onSelectStatus={(key) => {
+            setInsightsOpen(false);
+            setOverviewTasksSheet(key);
+          }}
+          onAskSeneca={
+            isOwnerOrLeader
+              ? () => {
+                  setInsightsOpen(false);
+                  setSenecaOpen(true);
+                }
+              : undefined
+          }
+          onViewReport={() => {
+            setInsightsOpen(false);
+            router.push("/(app)/execute");
+          }}
+        />
+      ) : null}
+
+      {isOwner && activeTeamId ? (
+        <WorkplaceStandardsSheet
+          visible={standardsOpen}
+          teamId={activeTeamId}
+          initialStandards={workplaceStandards}
+          onClose={() => setStandardsOpen(false)}
+        />
+      ) : null}
+
+      <SenecaAssistantSheet
+        open={senecaOpen}
+        onClose={() => setSenecaOpen(false)}
+        teamId={activeTeamId}
       />
 
       <TeamOverviewTasksSheet

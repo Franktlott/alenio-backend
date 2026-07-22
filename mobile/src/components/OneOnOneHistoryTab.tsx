@@ -72,6 +72,7 @@ type Props = {
   canCreate: boolean;
   canModify: boolean;
   isSelf?: boolean;
+  myRole?: string | null;
   autoStartCheckIn?: boolean;
   preferredTemplateId?: string | null;
   plannedEventId?: string | null;
@@ -309,6 +310,7 @@ export function OneOnOneHistoryTab({
   canCreate,
   canModify,
   isSelf = false,
+  myRole = null,
   autoStartCheckIn = false,
   preferredTemplateId = null,
   plannedEventId = null,
@@ -1455,6 +1457,7 @@ export function OneOnOneHistoryTab({
                           memberUserId,
                           templateId: event.oneOnOneTemplateId ?? undefined,
                           startDate: event.startDate,
+                          ...(myRole ? { myRole } : {}),
                         }),
                       );
                     }}
@@ -1631,6 +1634,7 @@ export function OneOnOneHistoryTab({
               router.push(
                 planOneOnOneHref(teamId, {
                   memberUserId,
+                  ...(myRole ? { myRole } : {}),
                 }),
               )
             }

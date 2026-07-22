@@ -8,6 +8,7 @@ import {
   TextInput,
   StyleSheet,
   Keyboard,
+  Linking,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
@@ -134,6 +135,17 @@ function StickyAskBar({
         <Lock size={11} color={COLORS.textSoft} strokeWidth={2.2} />
         <Text style={styles.privacyText}>Private to you · Workspace data stays secure</Text>
       </View>
+      <Text style={styles.settingsNote}>
+        Seneca workplace settings can be adjusted online at{" "}
+        <Text
+          style={styles.settingsLink}
+          onPress={() => {
+            void Linking.openURL("https://alenio.com");
+          }}
+        >
+          alenio.com
+        </Text>
+      </Text>
     </View>
   );
 }
@@ -870,5 +882,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSoft,
     fontWeight: "500",
+  },
+  settingsNote: {
+    marginTop: 6,
+    paddingHorizontal: 16,
+    fontSize: 11,
+    lineHeight: 15,
+    color: COLORS.textSoft,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  settingsLink: {
+    color: "#4361EE",
+    fontWeight: "700",
+    textDecorationLine: "underline",
   },
 });

@@ -16,6 +16,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore, buildDmLastReadMap } from "@/lib/state/unread-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { hasTeamPlan } from "@/lib/plan-access-copy";
 import { useTaskStore } from "@/lib/state/task-store";
 import { useEffect, useMemo } from "react";
 import type { CalendarEvent, Conversation, Team, Task } from "@/lib/types";
@@ -389,9 +390,7 @@ export default function AppLayout() {
       return;
     }
     if (subscription) {
-      const raw = (subscription.plan ?? "free").trim().toLowerCase();
-      const paid = raw === "team" || raw === "pro" || raw === "operations";
-      setPlan(paid ? "team" : "free");
+      setPlan(hasTeamPlan(subscription) ? "team" : "free");
     }
   }, [subscription, activeTeamId, setPlan]);
 

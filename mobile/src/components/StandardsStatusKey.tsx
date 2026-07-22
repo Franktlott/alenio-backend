@@ -2,48 +2,68 @@ import { useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Info, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  STANDARDS_BADGE_LEGEND,
-  standardsBadgeColors,
-  type StandardsBadgeVariant,
-} from "@/lib/workplace-standards";
 
-const STANDARDS_STATUS_KEY_ORDER: StandardsBadgeVariant[] = [
-  "on_track",
-  "check_in_due_soon",
-  "overdue_check_in",
-  "no_check_in",
-  "needs_active_goals",
+type HealthSwatch = {
+  key: string;
+  color: string;
+  bg: string;
+  border: string;
+  label: string;
+  description: string;
+};
+
+const HEALTH_LEGEND: HealthSwatch[] = [
+  {
+    key: "good",
+    color: "#047857",
+    bg: "#ECFDF5",
+    border: "#A7F3D0",
+    label: "Green",
+    description: "Check-in is current, or goals meet the workplace minimum.",
+  },
+  {
+    key: "attention",
+    color: "#B45309",
+    bg: "#FFFBEB",
+    border: "#FDE68A",
+    label: "Amber",
+    description: "Check-in is due soon and needs attention.",
+  },
+  {
+    key: "critical",
+    color: "#B91C1C",
+    bg: "#FEF2F2",
+    border: "#FECACA",
+    label: "Red",
+    description: "Check-in is overdue or missing, or goals are below the required minimum.",
+  },
+  {
+    key: "neutral",
+    color: "#475569",
+    bg: "#F8FAFC",
+    border: "#E2E8F0",
+    label: "Grey",
+    description: "Not required for this workplace standard.",
+  },
 ];
 
-const BADGE_COLUMN_WIDTH = 124;
-
-function StatusKeyBadge({ label, colors }: { label: string; colors: { bg: string; text: string } }) {
+function ColorSample({ item }: { item: HealthSwatch }) {
   return (
     <View
       style={{
-        width: BADGE_COLUMN_WIDTH,
+        width: 72,
         flexShrink: 0,
-        backgroundColor: colors.bg,
         paddingHorizontal: 8,
         paddingVertical: 5,
-        borderRadius: 10,
-        minHeight: 22,
+        borderRadius: 8,
+        backgroundColor: item.bg,
+        borderWidth: 1,
+        borderColor: item.border,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Text
-        style={{
-          fontSize: 9,
-          fontWeight: "700",
-          color: colors.text,
-          lineHeight: 12,
-          textAlign: "center",
-        }}
-      >
-        {label}
-      </Text>
+      <Text style={{ fontSize: 11, fontWeight: "700", color: item.color, lineHeight: 14 }}>{item.label}</Text>
     </View>
   );
 }
@@ -51,9 +71,6 @@ function StatusKeyBadge({ label, colors }: { label: string; colors: { bg: string
 export function StandardsStatusKey({ iconSize = 13 }: { iconSize?: number }) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
-  const items = STANDARDS_STATUS_KEY_ORDER.map((variant) =>
-    STANDARDS_BADGE_LEGEND.find((entry) => entry.variant === variant),
-  ).filter((entry): entry is (typeof STANDARDS_BADGE_LEGEND)[number] => Boolean(entry));
 
   return (
     <>
@@ -117,7 +134,7 @@ export function StandardsStatusKey({ iconSize = 13 }: { iconSize?: number }) {
                   </Text>
                   <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827", marginTop: 2 }}>Status key</Text>
                   <Text style={{ fontSize: 11, color: "#667085", marginTop: 2, lineHeight: 14 }}>
-                    What each badge means for check-ins and development goals.
+                    Check-in and Goals colors show each member’s standards health.
                   </Text>
                 </View>
                 <Pressable
@@ -139,32 +156,29 @@ export function StandardsStatusKey({ iconSize = 13 }: { iconSize?: number }) {
               <ScrollView
                 style={{ maxHeight: 300 }}
                 contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 4 }}
-                showsVerticalScrollIndicator={items.length > 4}
+                showsVerticalScrollIndicator={false}
               >
-                {items.map((item, index) => {
-                  const colors = standardsBadgeColors(item.variant);
-                  return (
-                    <View
-                      key={item.variant}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "flex-start",
-                        gap: 10,
-                        paddingVertical: 9,
-                        paddingHorizontal: 8,
-                        borderTopWidth: index === 0 ? 1 : 0,
-                        borderBottomWidth: 1,
-                        borderColor: "#EEF2F6",
-                        backgroundColor: "#FFFFFF",
-                      }}
-                    >
-                      <StatusKeyBadge label={item.label} colors={colors} />
-                      <Text style={{ flex: 1, fontSize: 11, color: "#475569", lineHeight: 15, paddingTop: 2 }}>
-                        {item.description}
-                      </Text>
-                    </View>
-                  );
-                })}
+                {HEALTH_LEGEND.map((item, index) => (
+                  <View
+                    key={item.key}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      paddingVertical: 10,
+                      paddingHorizontal: 8,
+                      borderTopWidth: index === 0 ? 1 : 0,
+                      borderBottomWidth: 1,
+                      borderColor: "#EEF2F6",
+                      backgroundColor: "#FFFFFF",
+                    }}
+                  >
+                    <ColorSample item={item} />
+                    <Text style={{ flex: 1, fontSize: 12, color: "#475569", lineHeight: 16, paddingTop: 2 }}>
+                      {item.description}
+                    </Text>
+                  </View>
+                ))}
               </ScrollView>
 
               <View style={{ paddingHorizontal: 12, paddingTop: 6 }}>

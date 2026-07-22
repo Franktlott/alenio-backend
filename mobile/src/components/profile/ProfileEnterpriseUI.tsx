@@ -54,6 +54,7 @@ export function ProfileSection({
   children: React.ReactNode;
   style?: ViewStyle;
 }) {
+  const fillsHeight = style != null && (style.flex === 1 || style.flexGrow === 1 || style.minHeight === 0);
   return (
     <View style={style}>
       <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 12, flexShrink: 0 }}>
@@ -68,7 +69,7 @@ export function ProfileSection({
         </View>
         {action}
       </View>
-      {children}
+      {fillsHeight ? <View style={{ flex: 1, minHeight: 0 }}>{children}</View> : children}
     </View>
   );
 }

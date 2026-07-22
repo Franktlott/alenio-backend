@@ -22,16 +22,17 @@ export function TasksEmptyState({
         flexGrow: 1,
         justifyContent: "center",
         paddingHorizontal: 16,
-        paddingTop: 8,
-        paddingBottom: 16,
+        paddingTop: 0,
+        paddingBottom: 8,
+        marginTop: -18,
         alignItems: "center",
-        minHeight: 320,
+        minHeight: 280,
       }}
       testID="empty-state"
     >
       <Image
-        source={require("@/assets/tasks-empty-member-v4.png")}
-        style={{ width: 168, height: 168, marginBottom: 8 }}
+        source={require("@/assets/tasks-empty-caught-up.png")}
+        style={{ width: 152, height: 152, marginBottom: 12 }}
         resizeMode="contain"
         accessibilityIgnoresInvertColors
       />

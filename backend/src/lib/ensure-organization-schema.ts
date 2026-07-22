@@ -149,6 +149,20 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
       END $$;
     `);
 
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SsoOidcState" (
+        "id" TEXT NOT NULL,
+        "state" TEXT NOT NULL,
+        "payload" TEXT NOT NULL,
+        "expiresAt" TIMESTAMP(3) NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "SsoOidcState_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "SsoOidcState_state_key" ON "SsoOidcState"("state");
+    `);
+
     console.log("[startup] ensureOrganizationSchema ok");
   } catch (err) {
     console.error("[startup] ensureOrganizationSchema failed:", err);

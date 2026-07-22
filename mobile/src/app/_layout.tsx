@@ -276,7 +276,7 @@ function RootLayoutNav() {
               name="onboarding"
               options={{
                 presentation: "transparentModal",
-                animation: "fade",
+                animation: "slide_from_bottom",
                 headerShown: false,
               }}
             />
@@ -292,6 +292,7 @@ function RootLayoutNav() {
             <Stack.Screen name="plan-one-on-one" />
             <Stack.Screen name="task-detail" />
             <Stack.Screen name="member-profile" />
+            <Stack.Screen name="workspace" />
             <Stack.Screen name="team-chat" />
             <Stack.Screen name="dm-chat" />
             <Stack.Screen

@@ -24,6 +24,8 @@ import {
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
+import { ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { isLeaderRole, memberMatchesUserId } from "@/lib/member-identity";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import type { Team, TeamMember, TeamRole } from "@/lib/types";
@@ -138,6 +140,14 @@ export default function MemberProfileScreen() {
   const plan = useSubscriptionStore((s) => s.plan);
   const isPaid = plan === "team";
 
+  const { data: meProfile } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () =>
+      api.get<{ id: string; name: string; email: string; image: string | null }>("/api/me"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60,
+  });
+
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<ProfileTab>(() =>
     params.startCheckIn === "1" ? "Check-In" : parseTab(params.tab),
@@ -150,6 +160,15 @@ export default function MemberProfileScreen() {
     enabled: !!teamId,
   });
 
+  // Role from workspace list — same auth as bearer; used if roster id matching fails.
+  const { data: teamsList = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60,
+  });
+  const listTeamRole = teamsList.find((t) => t.id === teamId)?.role;
+
   const { data: memberStatsPayload } = useQuery({
     queryKey: ["member-stats", teamId],
     queryFn: () => api.get<MemberStatsPayload>(`/api/teams/${teamId}/tasks/member-stats`),
@@ -158,10 +177,22 @@ export default function MemberProfileScreen() {
   const memberStats = memberStatsPayload?.stats;
   const workplaceStandards = mergeWorkplaceStandards(memberStatsPayload?.workplaceStandards);
 
+  const sessionUserId = typeof session?.user?.id === "string" ? session.user.id : "";
+  const sessionEmail = typeof session?.user?.email === "string" ? session.user.email : "";
+  const myEmail = meProfile?.email || sessionEmail;
+  const resolvedUserId = meProfile?.id || sessionUserId;
+
   const member = team?.members?.find((m) => m.userId === memberUserId) ?? null;
-  const myMembership = team?.members?.find((m) => m.userId === session?.user?.id);
-  const myRole = myMembership?.role;
-  const canViewAsLeader = myRole === "owner" || myRole === "team_leader";
+  // Prefer exact userId match; only then fall back to email (avoids wrong row when names collide).
+  const myMembership =
+    team?.members?.find((m) => resolvedUserId && (m.userId === resolvedUserId || m.user.id === resolvedUserId)) ??
+    team?.members?.find((m) => memberMatchesUserId(m, "", myEmail)) ??
+    null;
+  const myId = myMembership?.userId || resolvedUserId;
+  // Prefer server-attested role on the team payload / teams list over a mismatched roster row.
+  const teamRole = (team as Team & { role?: TeamRole } | undefined)?.role;
+  const myRole = teamRole || listTeamRole || myMembership?.role;
+  const canViewAsLeader = isLeaderRole(myRole);
   const { data: formerMembers = [], isLoading: formerMembersLoading } = useQuery({
     queryKey: ["former-members", teamId],
     queryFn: () => api.get<FormerMemberRow[]>(`/api/teams/${teamId}/former-members`),
@@ -181,8 +212,7 @@ export default function MemberProfileScreen() {
         }
       : null);
   const isFormerMember = !member && !!formerMember;
-  const myId = session?.user?.id ?? "";
-  const isSelf = memberUserId === myId;
+  const isSelf = !!myId && memberUserId === myId;
 
   const ownerMember = team?.members?.find((m) => m.role === "owner");
   const managerName = ownerMember?.user.name ?? ownerMember?.user.email ?? null;
@@ -190,17 +220,16 @@ export default function MemberProfileScreen() {
 
   const canManage = useMemo(() => {
     if (isFormerMember || !profileMember || !myRole) return false;
-    if (myRole !== "owner" && myRole !== "team_leader") return false;
+    if (!isLeaderRole(myRole) || myRole === "admin") return false;
     if (profileMember.role === "owner") return false;
     if (myRole === "team_leader" && profileMember.role !== "member") return false;
     return profileMember.userId !== myId;
   }, [isFormerMember, profileMember, myRole, myId]);
 
   const canCreateDevGoal =
-    !isFormerMember &&
-    (isSelf || myRole === "owner" || myRole === "team_leader" || myRole === "admin");
+    !isFormerMember && (isSelf || isLeaderRole(myRole));
   const canAddDevNotes = canCreateDevGoal;
-  const canCreateOneOne = !isFormerMember && (myRole === "owner" || myRole === "team_leader");
+  const canCreateOneOne = !isFormerMember && isLeaderRole(myRole);
   const shouldAutoStartCheckIn = params.startCheckIn === "1";
   const preferredCheckInTemplateId =
     typeof params.templateId === "string" && params.templateId.length > 0 ? params.templateId : null;
@@ -281,7 +310,7 @@ export default function MemberProfileScreen() {
     );
   }
 
-  const canViewProfile = isSelf || myRole === "owner" || myRole === "team_leader";
+  const canViewProfile = isSelf || isLeaderRole(myRole);
   if (!canViewProfile) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
@@ -539,6 +568,7 @@ export default function MemberProfileScreen() {
                 canCreate={canCreateOneOne}
                 canModify={canCreateOneOne}
                 isSelf={isSelf}
+                myRole={myRole}
                 autoStartCheckIn={shouldAutoStartCheckIn}
                 preferredTemplateId={preferredCheckInTemplateId}
                 plannedEventId={plannedCheckInEventId}

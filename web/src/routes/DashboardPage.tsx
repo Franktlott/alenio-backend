@@ -454,7 +454,16 @@ export function DashboardPage() {
     const uid = me?.id ?? null;
     return events.filter((e) => {
       if (!e.isHidden) return true;
+      // Private events: creator, or assignee on check-in / video meeting (matches backend ACL).
       if (uid && e.createdById === uid) return true;
+      if (
+        uid &&
+        Array.isArray(e.assigneeIds) &&
+        e.assigneeIds.includes(uid) &&
+        (e.isOneOnOne || e.isVideoMeeting)
+      ) {
+        return true;
+      }
       return false;
     });
   }, [events, me?.id]);

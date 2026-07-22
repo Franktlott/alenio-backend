@@ -54,7 +54,7 @@ export function WorkspaceFilterPicker({ picker, filters, members, isLeader, onCl
           : "Sort";
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }} onPress={onClose}>
         <Pressable onPress={(e) => e.stopPropagation()}>
           <View style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 32, maxHeight: "70%" }}>

@@ -10,17 +10,19 @@ export type ActivityTintTokens = {
   accent: string;
   icon: string;
   rail: string;
+  badgeBg: string;
 };
 
 export const ACTIVITY_LAYOUT = {
-  cardRadius: 10,
-  cardPadding: 12,
-  cardGap: 4,
-  cardMarginHorizontal: 16,
-  cardMarginVertical: 4,
-  sectionGap: 8,
+  cardRadius: 0,
+  cardPadding: 8,
+  cardGap: 2,
+  cardMarginHorizontal: 0,
+  cardMarginVertical: 0,
+  sectionGap: 6,
   avatarSize: 34,
-  avatarColumn: 40,
+  avatarColumn: 36,
+  badgeSize: 28,
 } as const;
 
 export const ACTIVITY_COLORS = {
@@ -39,52 +41,56 @@ export const ACTIVITY_COLORS = {
   sectionPillBorder: "#E2E8F0",
 } as const;
 
-/** Enterprise tints: white cards, muted labels, thin left rail */
 const TINT_TOKENS: Record<ActivityTint, ActivityTintTokens> = {
   tasks: {
     background: "#FFFFFF",
-    border: "#E2E8F0",
+    border: "#F1F5F9",
     labelBg: "transparent",
     labelText: "#047857",
     accent: "#059669",
     icon: "#059669",
     rail: "#059669",
+    badgeBg: "#D1FAE5",
   },
   events: {
     background: "#FFFFFF",
-    border: "#E2E8F0",
+    border: "#F1F5F9",
     labelBg: "transparent",
     labelText: "#5B21B6",
     accent: "#6D28D9",
     icon: "#6D28D9",
     rail: "#6D28D9",
+    badgeBg: "#EDE9FE",
   },
   team: {
     background: "#FFFFFF",
-    border: "#E2E8F0",
+    border: "#F1F5F9",
     labelBg: "transparent",
     labelText: "#3730A3",
     accent: "#4361EE",
     icon: "#4361EE",
     rail: "#4361EE",
+    badgeBg: "#DBEAFE",
   },
   milestones: {
     background: "#FFFFFF",
-    border: "#E2E8F0",
+    border: "#F1F5F9",
     labelBg: "transparent",
     labelText: "#92400E",
     accent: "#B45309",
     icon: "#B45309",
     rail: "#D97706",
+    badgeBg: "#FEF3C7",
   },
   neutral: {
     background: "#FFFFFF",
-    border: "#E2E8F0",
+    border: "#F1F5F9",
     labelBg: "transparent",
     labelText: "#475569",
     accent: "#64748B",
     icon: "#64748B",
     rail: "#94A3B8",
+    badgeBg: "#F1F5F9",
   },
 };
 
@@ -111,12 +117,13 @@ export function getActivityTintTokens(type: ActivityFeedType): ActivityTintToken
   if (type === "task_completed") {
     return {
       background: "#FFFFFF",
-      border: "#E2E8F0",
+      border: "#F1F5F9",
       labelBg: "transparent",
       labelText: "#0F766E",
       accent: "#0D9488",
       icon: "#0D9488",
       rail: "#0D9488",
+      badgeBg: "#CCFBF1",
     };
   }
   return TINT_TOKENS[getActivityTint(type)];
@@ -127,7 +134,7 @@ export function getActivityTypeLabel(type: ActivityFeedType, metadata?: { eventC
     case "task_completed":
       return "Task Completed";
     case "task_assigned":
-      return "Tasks Assigned";
+      return "Task Assigned";
     case "calendar_event_added": {
       const count = metadata?.eventCount ?? 1;
       return count > 1 ? `${count} Events Added` : "Event Added";
@@ -141,7 +148,7 @@ export function getActivityTypeLabel(type: ActivityFeedType, metadata?: { eventC
     case "personal_best":
       return "Personal Best";
     case "celebration":
-      return "Celebration";
+      return "Recognition";
     default:
       return "Update";
   }

@@ -921,7 +921,7 @@ export default function CalendarScreen() {
         ) : null}
       </ScrollView>
 
-      <Modal visible={pendingCalendarOpen} transparent animationType="fade" onRequestClose={() => setPendingCalendarOpen(false)}>
+      <Modal visible={pendingCalendarOpen} transparent animationType="slide" onRequestClose={() => setPendingCalendarOpen(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setPendingCalendarOpen(false)}>
           <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "80%" }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>

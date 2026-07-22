@@ -22,9 +22,12 @@ function subscriptionSummary(sub: Awaited<ReturnType<typeof getTeamSubscription>
     plan: sub.plan,
     status: sub.status,
     currentPeriodEnd: sub.currentPeriodEnd,
+    cancelAtPeriodEnd: sub.cancelAtPeriodEnd === true,
     billingProvider,
     hasStripeCustomer: !!sub.stripeCustomerId?.trim(),
     hasStripeSubscription: !!sub.stripeSubscriptionId?.trim(),
+    stripeCustomerId: sub.stripeCustomerId,
+    stripeSubscriptionId: sub.stripeSubscriptionId,
   };
 }
 

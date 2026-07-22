@@ -31,6 +31,7 @@ function pageTitleForPath(pathname: string): string | null {
   if (pathname.startsWith("/settings/ai/seneca-studio")) return "Seneca Studio";
   if (pathname.startsWith("/settings/ai/workspace-context")) return "Workspace Context";
   if (pathname.startsWith("/settings/ai")) return "AI Settings";
+  if (pathname.startsWith("/settings/sso")) return "Okta SSO";
   if (pathname.startsWith("/settings") || pathname.startsWith("/profile")) return enterpriseNavTitle("settings");
   return null;
 }

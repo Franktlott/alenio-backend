@@ -235,7 +235,7 @@ export function AdminUsageLineChart({ data, loading, testID = "admin-usage-chart
         </Text>
       </View>
 
-      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+      <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
         <Pressable
           style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" }}
           onPress={() => setPickerOpen(false)}
