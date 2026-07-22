@@ -65,309 +65,185 @@ export function buildTeamInviteEmail(input: TeamInviteEmailInput): {
   text: string;
 } {
   const { webUrl, appUrl } = buildInviteLinks(input.token);
-  const teamName = escapeHtml(input.teamName.trim() || "Workspace");
-  const inviterName = escapeHtml(input.inviterName.trim() || "A teammate");
+  const teamNameRaw = input.teamName.trim() || "Workspace";
+  const inviterNameRaw = input.inviterName.trim() || "A teammate";
+  const teamName = escapeHtml(teamNameRaw);
+  const inviterName = escapeHtml(inviterNameRaw);
   const inviterRole = escapeHtml(formatInviteRole(input.inviterRole));
   const toEmail = escapeHtml(normalizeInviteEmail(input.to));
   const logoUrl = brandAssetUrl("/icon.png");
   const year = new Date().getFullYear();
   const expiryLabel = escapeHtml(formatExpiryDate(input.expiresAt));
-  const teamInitials = escapeHtml(initialsFromName(input.teamName));
-  const inviterInitials = escapeHtml(initialsFromName(input.inviterName));
+  const teamInitials = escapeHtml(initialsFromName(teamNameRaw));
+  const inviterInitials = escapeHtml(initialsFromName(inviterNameRaw));
   const teamImage = input.teamImage?.trim() ? escapeHtml(input.teamImage.trim()) : "";
   const inviterImage = input.inviterImage?.trim() ? escapeHtml(input.inviterImage.trim()) : "";
+  const fromLabel = "Alenio";
+
+  const teamAvatarHtml = teamImage
+    ? `<img src="${teamImage}" width="44" height="44" alt="" style="display:block;width:44px;height:44px;border-radius:10px;object-fit:cover;" />`
+    : `<div style="width:44px;height:44px;border-radius:10px;background:#EEF2FF;color:#4361EE;font-size:14px;font-weight:800;line-height:44px;text-align:center;">${teamInitials}</div>`;
+
+  const inviterAvatarHtml = inviterImage
+    ? `<img src="${inviterImage}" width="36" height="36" alt="" style="display:block;width:36px;height:36px;border-radius:18px;object-fit:cover;" />`
+    : `<div style="width:36px;height:36px;border-radius:18px;background:#EEF2FF;color:#4361EE;font-size:12px;font-weight:800;line-height:36px;text-align:center;">${inviterInitials}</div>`;
 
   const iosStore = env.IOS_APP_STORE_URL?.trim() ?? "";
   const androidStore = env.ANDROID_PLAY_STORE_URL?.trim() ?? "";
-  const storeParts = [
-    iosStore ? `<a href="${escapeHtml(iosStore)}" style="color:#4361EE;font-weight:600;text-decoration:none;">App Store</a>` : "",
-    androidStore
-      ? `<a href="${escapeHtml(androidStore)}" style="color:#4361EE;font-weight:600;text-decoration:none;">Google Play</a>`
-      : "",
+  const storeLineParts = [
+    iosStore ? `iOS: ${iosStore}` : "",
+    androidStore ? `Android: ${androidStore}` : "",
   ].filter(Boolean);
-  const storeBar =
-    storeParts.length > 0
-      ? `<tr>
-          <td class="email-pad" style="padding:0 28px 24px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F1F5F9;border-radius:12px;">
-              <tr>
-                <td style="padding:14px 16px;color:#64748B;font-size:13px;line-height:1.5;">
-                  Don't have the app yet? Download for ${storeParts.join(" · ")}.
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>`
+  const storeHtml =
+    iosStore || androidStore
+      ? `<p style="margin:12px 0 0;color:#64748B;font-size:13px;line-height:1.5;">
+          Don't have the app yet?
+          ${iosStore ? `<a href="${escapeHtml(iosStore)}" style="color:#4361EE;font-weight:600;text-decoration:none;">Download for iOS</a>` : ""}
+          ${iosStore && androidStore ? " · " : ""}
+          ${androidStore ? `<a href="${escapeHtml(androidStore)}" style="color:#4361EE;font-weight:600;text-decoration:none;">Download for Android</a>` : ""}
+        </p>`
       : "";
 
-  const teamAvatarHtml = teamImage
-    ? `<img src="${teamImage}" width="48" height="48" alt="" style="display:block;width:48px;height:48px;border-radius:12px;object-fit:cover;" />`
-    : `<div style="width:48px;height:48px;border-radius:12px;background:#EEF2FF;color:#4361EE;font-size:16px;font-weight:800;line-height:48px;text-align:center;">${teamInitials}</div>`;
-
-  const inviterAvatarHtml = inviterImage
-    ? `<img src="${inviterImage}" width="40" height="40" alt="" style="display:block;width:40px;height:40px;border-radius:20px;object-fit:cover;" />`
-    : `<div style="width:40px;height:40px;border-radius:20px;background:#EEF2FF;color:#4361EE;font-size:13px;font-weight:800;line-height:40px;text-align:center;">${inviterInitials}</div>`;
-
-  const features: Array<{ icon: string; title: string; body: string }> = [
-    { icon: "💬", title: "Team Chat", body: "Stay in sync with your workplace" },
-    { icon: "✅", title: "Daily Tasks", body: "See and complete assigned work" },
-    { icon: "📅", title: "Schedule", body: "Keep meetings and check-ins on track" },
-    { icon: "⭐", title: "Recognition", body: "Celebrate great work with your team" },
-    { icon: "🔔", title: "Team Updates", body: "Get activity that matters to you" },
+  const steps = [
+    "Open the invite on your phone or computer",
+    "Sign in or create your Alenio account with this email",
+    `Join ${teamNameRaw} and start collaborating`,
   ];
-
-  const featureRows = features
+  const stepsHtml = steps
     .map(
-      (f, index) => `
-      <tr>
-        <td style="padding:10px 14px;${index < features.length - 1 ? "border-bottom:1px solid #E8EEF5;" : ""}">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-            <tr>
-              <td width="40" valign="middle" style="font-size:20px;line-height:24px;">${f.icon}</td>
-              <td valign="middle" style="padding-left:8px;">
-                <div style="color:#0F172A;font-size:14px;font-weight:700;line-height:1.3;">${f.title}</div>
-                <div style="color:#64748B;font-size:12px;line-height:1.4;margin-top:2px;">${f.body}</div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>`,
+      (step, i) => `
+        <tr>
+          <td style="padding:0 0 10px;vertical-align:top;width:28px;">
+            <div style="width:22px;height:22px;border-radius:999px;background:#EEF2FF;color:#4361EE;font-size:12px;font-weight:700;line-height:22px;text-align:center;">${i + 1}</div>
+          </td>
+          <td style="padding:0 0 10px;color:#475569;font-size:14px;line-height:1.45;">${escapeHtml(step)}</td>
+        </tr>`,
     )
     .join("");
 
-  const subject = `${input.inviterName.trim() || "A teammate"} invited you to ${input.teamName.trim() || "a workspace"} on Alenio`;
+  const subject = `${inviterNameRaw} invited you to ${teamNameRaw} on Alenio`;
+  const title = `Join ${teamNameRaw}`;
+  const intro = `${inviterNameRaw} invited you to join the ${teamNameRaw} workspace in Alenio. Open the invite below to get started.`;
+  const footerNote = `This invite expires in ${INVITE_TTL_DAYS} days (${formatExpiryDate(input.expiresAt)}). If you did not expect this invitation, you can ignore this email.`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="x-apple-disable-message-reformatting" />
   <title>${escapeHtml(subject)}</title>
-  <style type="text/css">
-    @media only screen and (max-width: 620px) {
-      .email-shell { padding: 12px 8px !important; }
-      .email-pad { padding-left: 16px !important; padding-right: 16px !important; }
-      .hero-title { font-size: 24px !important; line-height: 1.25 !important; }
-      .hero-col,
-      .info-col,
-      .cta-col {
-        display: block !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        padding-right: 0 !important;
-        padding-left: 0 !important;
-        border-right: 0 !important;
-      }
-      .hero-card-wrap { margin-top: 16px !important; }
-      .info-col + .info-col { border-top: 1px solid #F1F5F9 !important; }
-      .cta-btn {
-        display: block !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-        text-align: center !important;
-        margin: 0 0 10px 0 !important;
-      }
-      .footer-col { display: block !important; width: 100% !important; text-align: center !important; padding-bottom: 6px !important; }
-    }
-  </style>
 </head>
-<body style="margin:0;padding:0;background:#EEF2F7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#EEF2F7;" class="email-shell">
-    <tr><td align="center" style="padding:28px 12px;" class="email-shell">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;">
-        <tr>
-          <td class="email-pad" style="padding:20px 28px 8px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr>
-                <td align="left" valign="middle">
-                  <table role="presentation" cellspacing="0" cellpadding="0">
-                    <tr>
-                      <td valign="middle" style="padding-right:8px;">
-                        <img src="${logoUrl}" width="28" height="28" alt="Alenio" style="display:block;border-radius:8px;" />
-                      </td>
-                      <td valign="middle" style="color:#0F172A;font-size:18px;font-weight:700;letter-spacing:-0.02em;">alenio</td>
-                    </tr>
-                  </table>
-                </td>
-                <td align="right" valign="middle" style="color:#94A3B8;font-size:13px;font-weight:600;">You're invited!</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <tr>
-          <td class="email-pad" style="padding:16px 28px 8px;">
-            <!--[if mso]>
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td width="340" valign="top">
-            <![endif]-->
-            <div class="hero-col" style="display:inline-block;width:100%;max-width:340px;vertical-align:top;padding-right:16px;box-sizing:border-box;">
-              <h1 class="hero-title" style="margin:0 0 12px;color:#0F172A;font-size:28px;line-height:1.2;font-weight:800;letter-spacing:-0.02em;">
-                Join the <span style="color:#4361EE;">${teamName}</span> team
-              </h1>
-              <p style="margin:0 0 10px;color:#475569;font-size:15px;line-height:1.55;">
-                <strong style="color:#0F172A;">${inviterName}</strong> invited you to join the
-                <strong style="color:#0F172A;">${teamName}</strong> workspace in Alenio.
-              </p>
-              <p style="margin:0;color:#64748B;font-size:14px;line-height:1.55;">
-                Stay connected with your team, complete daily tasks, and keep work moving — all in one place.
-              </p>
-            </div>
-            <!--[if mso]>
-            </td><td width="260" valign="top">
-            <![endif]-->
-            <div class="hero-col hero-card-wrap" style="display:inline-block;width:100%;max-width:260px;vertical-align:top;box-sizing:border-box;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;">
+<body style="margin:0;padding:0;background:#E8ECF2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#E8ECF2;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#FFFFFF;border:1px solid #D5DDE8;border-radius:14px;overflow:hidden;box-shadow:0 8px 28px rgba(15,23,42,0.08);">
+          <tr>
+            <td style="background:linear-gradient(135deg,#0B1220 0%,#152238 55%,#1E293B 100%);padding:22px 28px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
-                  <td style="padding:16px 16px 14px;">
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td width="56" valign="middle">${teamAvatarHtml}</td>
-                        <td valign="middle" style="padding-left:10px;">
-                          <div style="color:#0F172A;font-size:15px;font-weight:700;line-height:1.3;">${teamName}</div>
-                          <div style="color:#94A3B8;font-size:12px;margin-top:2px;">Workspace</div>
-                        </td>
-                      </tr>
-                    </table>
+                  <td style="vertical-align:middle;">
+                    <img src="${logoUrl}" width="36" height="36" alt="Alenio" style="display:block;border-radius:8px;" />
                   </td>
-                </tr>
-                <tr>
-                  <td style="padding:0 16px;">
-                    <div style="height:1px;background:#F1F5F9;line-height:1px;font-size:1px;">&nbsp;</div>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:14px 16px 16px;">
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td width="44" valign="middle">${inviterAvatarHtml}</td>
-                        <td valign="middle" style="padding-left:10px;">
-                          <div style="color:#64748B;font-size:12px;line-height:1.3;">Invited by</div>
-                          <div style="color:#0F172A;font-size:14px;font-weight:700;line-height:1.3;">${inviterName}</div>
-                          <div style="color:#94A3B8;font-size:12px;margin-top:1px;">${inviterRole}</div>
-                        </td>
-                      </tr>
-                    </table>
+                  <td style="vertical-align:middle;padding-left:12px;">
+                    <div style="color:#FFFFFF;font-size:16px;font-weight:700;letter-spacing:-0.02em;">Alenio</div>
                   </td>
                 </tr>
               </table>
-            </div>
-            <!--[if mso]>
-            </td></tr></table>
-            <![endif]-->
-          </td>
-        </tr>
-
-        <tr>
-          <td class="email-pad" style="padding:20px 28px 8px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F8FAFC;border:1px solid #E8EEF5;border-radius:14px;">
-              <tr>
-                <td style="padding:16px 14px 8px;color:#0F172A;font-size:14px;font-weight:700;">
-                  What you'll have access to
-                </td>
-              </tr>
-              ${featureRows}
-              <tr><td style="height:6px;font-size:1px;line-height:1px;">&nbsp;</td></tr>
-            </table>
-          </td>
-        </tr>
-
-        <tr>
-          <td class="email-pad" style="padding:20px 28px 12px;" align="center">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr>
-                <td class="cta-col" style="padding:0 0 10px 0;">
-                  <a class="cta-btn" href="${escapeHtml(appUrl)}" style="display:block;background:#4361EE;color:#FFFFFF;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700;font-size:15px;text-align:center;">
-                    Open in Alenio App
-                  </a>
-                </td>
-              </tr>
-              <tr>
-                <td class="cta-col" style="padding:0;">
-                  <a class="cta-btn" href="${escapeHtml(webUrl)}" style="display:block;background:#FFFFFF;color:#4361EE;text-decoration:none;padding:13px 20px;border-radius:12px;font-weight:700;font-size:15px;text-align:center;border:1.5px solid #4361EE;">
-                    Continue in Browser →
-                  </a>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        ${storeBar}
-
-        <tr>
-          <td class="email-pad" style="padding:4px 28px 24px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #E2E8F0;border-radius:14px;">
-              <tr>
-                <td style="padding:0;">
-                  <div class="info-col" style="display:inline-block;width:100%;max-width:290px;vertical-align:top;box-sizing:border-box;padding:16px;">
-                    <div style="color:#0F172A;font-size:13px;font-weight:700;margin-bottom:8px;">🔒 Security &amp; trust</div>
-                    <div style="color:#475569;font-size:13px;line-height:1.5;word-break:break-word;">
-                      This invite was sent to
-                      <a href="mailto:${toEmail}" style="color:#4361EE;text-decoration:none;font-weight:600;">${toEmail}</a>.
-                    </div>
-                    <div style="color:#94A3B8;font-size:12px;margin-top:8px;line-height:1.4;">Your connection is secured.</div>
-                  </div>
-                  <div class="info-col" style="display:inline-block;width:100%;max-width:290px;vertical-align:top;box-sizing:border-box;padding:16px;">
-                    <div style="color:#0F172A;font-size:13px;font-weight:700;margin-bottom:8px;">⏰ Invitation expires</div>
-                    <div style="background:#EEF2FF;border-radius:10px;padding:12px 14px;text-align:center;margin-bottom:8px;">
-                      <div style="color:#4361EE;font-size:22px;font-weight:800;line-height:1.1;">${INVITE_TTL_DAYS} Days</div>
-                      <div style="color:#64748B;font-size:11px;margin-top:4px;">${expiryLabel}</div>
-                    </div>
-                    <div style="color:#94A3B8;font-size:12px;line-height:1.4;">
-                      If you weren't expecting this, you can ignore this email.
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <tr>
-          <td class="email-pad" style="background:#F8FAFC;border-top:1px solid #E6EBF2;padding:16px 28px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr>
-                <td class="footer-col" align="left" valign="middle">
-                  <img src="${logoUrl}" width="20" height="20" alt="Alenio" style="display:inline-block;vertical-align:middle;border-radius:6px;margin-right:6px;" />
-                  <span style="color:#0F172A;font-size:13px;font-weight:700;vertical-align:middle;">alenio</span>
-                </td>
-                <td class="footer-col" align="right" valign="middle" style="color:#94A3B8;font-size:12px;">
-                  Connect · Execute · Elevate
-                </td>
-              </tr>
-              <tr>
-                <td colspan="2" align="center" style="padding-top:10px;color:#94A3B8;font-size:11px;">
-                  © ${year} Alenio. All rights reserved.
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 28px 8px;">
+              <div style="color:#4361EE;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">You're invited</div>
+              <h1 style="margin:0 0 10px;color:#0F172A;font-size:22px;line-height:1.25;letter-spacing:-0.02em;font-weight:700;">${escapeHtml(title)}</h1>
+              <p style="margin:0;color:#475569;font-size:15px;line-height:1.55;">${escapeHtml(intro)}</p>
+              <p style="margin:12px 0 0;color:#64748B;font-size:13px;">Sent to <strong style="color:#0F172A;">${toEmail}</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 28px 8px;">
+              <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="52" valign="middle">${teamAvatarHtml}</td>
+                    <td valign="middle" style="padding-left:12px;">
+                      <div style="color:#64748B;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:4px;">Workspace</div>
+                      <div style="color:#0F172A;font-size:16px;font-weight:700;line-height:1.3;">${teamName}</div>
+                    </td>
+                  </tr>
+                </table>
+                <div style="height:1px;background:#E2E8F0;margin:14px 0;"></div>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="44" valign="middle">${inviterAvatarHtml}</td>
+                    <td valign="middle" style="padding-left:12px;">
+                      <div style="color:#64748B;font-size:12px;line-height:1.3;">Invited by</div>
+                      <div style="color:#0F172A;font-size:14px;font-weight:700;line-height:1.3;">${inviterName}</div>
+                      <div style="color:#94A3B8;font-size:12px;margin-top:2px;">${inviterRole}</div>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 28px 8px;">
+              <div style="color:#0F172A;font-size:13px;font-weight:700;margin-bottom:10px;">Next steps</div>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">${stepsHtml}</table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 28px 8px;">
+              <a href="${escapeHtml(appUrl)}" style="display:block;background:#4361EE;color:#FFFFFF;text-decoration:none;padding:13px 18px;border-radius:10px;font-weight:600;font-size:15px;text-align:center;margin-bottom:10px;">
+                Open in Alenio app
+              </a>
+              <a href="${escapeHtml(webUrl)}" style="display:block;background:#EEF2FF;color:#4361EE;text-decoration:none;padding:13px 18px;border-radius:10px;font-weight:600;font-size:15px;text-align:center;">
+                Continue on web
+              </a>
+              ${storeHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 28px 24px;">
+              <p style="margin:0;color:#64748B;font-size:13px;line-height:1.5;">
+                ${escapeHtml(footerNote)}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#F8FAFC;border-top:1px solid #E6EBF2;padding:16px 28px;">
+              <p style="margin:0;color:#94A3B8;font-size:12px;line-height:1.45;">
+                Sent by ${escapeHtml(fromLabel)} · © ${year} Alenio Insights, LLC
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
   </table>
 </body>
 </html>`;
 
   const text = [
-    subject,
+    title,
     "",
-    `Join the ${input.teamName.trim() || "workspace"} team`,
+    intro,
+    `Sent to: ${normalizeInviteEmail(input.to)}`,
     "",
-    `${input.inviterName.trim() || "A teammate"} invited you to join ${input.teamName.trim() || "a workspace"} in Alenio.`,
+    `Workspace: ${teamNameRaw}`,
+    `Invited by: ${inviterNameRaw} (${formatInviteRole(input.inviterRole)})`,
+    "",
+    "Next steps:",
+    ...steps.map((s, i) => `${i + 1}. ${s}`),
     "",
     `Open in Alenio app: ${appUrl}`,
-    `Continue in browser: ${webUrl}`,
+    `Continue on web: ${webUrl}`,
+    ...storeLineParts,
     "",
-    `This invite was sent to ${normalizeInviteEmail(input.to)}.`,
-    `Expires in ${INVITE_TTL_DAYS} days (${formatExpiryDate(input.expiresAt)}).`,
-    "",
-    "If you weren't expecting this, you can ignore this email.",
-    "",
-    "Connect · Execute · Elevate",
-    `© ${year} Alenio`,
-  ].join("\n");
+    footerNote,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return { subject, html, text };
 }
