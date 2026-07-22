@@ -105,13 +105,19 @@ model Verification {
   updatedAt  DateTime @updatedAt
 }
 
-/// Company / customer account above workspaces. SSO and verified email domains hang off this.
+/// Company / enterprise-contract account above workspaces (SSO, SCIM, multi-workspace).
+/// Distinct from self-serve paid tiers on TeamSubscription (free / Pro / Operations via Stripe).
 model Organization {
   id            String   @id @default(cuid())
   name          String
   slug          String   @unique
   /** "active" | "suspended" */
   status        String   @default("active")
+  /**
+   * Always "enterprise" for Organization rows.
+   * Self-serve Stripe customers are Team + TeamSubscription only (no Organization).
+   */
+  accountType   String   @default("enterprise")
   /** When true, users on verified org domains must use this org's SSO (not password / shared Microsoft). */
   ssoRequired   Boolean  @default(false)
   /** Optional workspace new SSO users join first. */

@@ -28,6 +28,9 @@ export type AdminTeamRow = {
   memberCount: number;
   taskCount: number;
   owner: { id: string; name: string; email: string } | null;
+  /** Linked Organization = enterprise contract; otherwise self-serve Stripe/plan. */
+  billingChannel?: "enterprise" | "self_serve";
+  organization?: { id: string; name: string; accountType: string } | null;
   subscription: {
     plan: string;
     status: string;
@@ -41,6 +44,7 @@ export type AdminOrganizationRow = {
   name: string;
   slug: string;
   status: string;
+  accountType?: string;
   ssoRequired: boolean;
   createdAt: string;
   workspaceCount: number;
@@ -57,6 +61,7 @@ export type AdminOrganizationDetail = {
   name: string;
   slug: string;
   status: string;
+  accountType?: string;
   ssoRequired: boolean;
   createdAt: string;
   updatedAt: string;
@@ -152,9 +157,18 @@ export async function createAdminOrganization(body: {
   ownerPassword?: string;
   initialWorkspaceName?: string;
   plan?: "free" | "team" | "pro" | "operations";
-}): Promise<AdminOrganizationDetail> {
-  const res = await apiPostJson<{ data: AdminOrganizationDetail }>("/api/admin/organizations", body);
-  return normalizeCreatedAt(res.data);
+}): Promise<{
+  organization: AdminOrganizationDetail;
+  welcomeEmail: { sent: boolean; error?: string } | null;
+}> {
+  const res = await apiPostJson<{
+    data: AdminOrganizationDetail;
+    welcomeEmail?: { sent: boolean; error?: string } | null;
+  }>("/api/admin/organizations", body);
+  return {
+    organization: normalizeCreatedAt(res.data),
+    welcomeEmail: res.welcomeEmail ?? null,
+  };
 }
 
 export async function attachAdminOrganizationTeam(
@@ -180,4 +194,18 @@ export function planLabel(plan: string): string {
   if (plan === "operations") return "Operations";
   if (plan === "team" || plan === "pro") return "Pro";
   return "Free";
+}
+
+/** Admin-only: distinguish enterprise contract customers from self-serve paid tiers. */
+export function billingChannelLabel(team: {
+  billingChannel?: "enterprise" | "self_serve";
+  organization?: { name: string } | null;
+  subscription: { plan: string };
+}): string {
+  if (team.billingChannel === "enterprise" || team.organization) {
+    return team.organization?.name
+      ? `Enterprise · ${team.organization.name}`
+      : "Enterprise";
+  }
+  return `Self-serve · ${planLabel(team.subscription.plan)}`;
 }

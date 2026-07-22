@@ -12,6 +12,7 @@ import {
   fetchAdminUsers,
   formatAdminDate,
   planLabel,
+  billingChannelLabel,
   setAdminUserPlatformAdmin,
   type AdminUserDetail,
   type AdminUserRow,
@@ -178,12 +179,14 @@ export function AdminPage() {
       : section === "enterprise-customers"
         ? {
             title: "Enterprise customers",
-            subtitle: "Company accounts that can own multiple workspaces, SSO, and SCIM.",
+            subtitle:
+              "Contract company accounts (SSO, SCIM, multi-workspace) — not the same as self-serve Pro / Operations plans.",
           }
       : section === "workspaces"
         ? {
             title: "Workspaces",
-            subtitle: "All workspaces on the platform.",
+            subtitle:
+              "All workspaces. Self-serve rows are Stripe/paid tiers; Enterprise rows belong to a contract customer.",
           }
         : {
             title: "Users",
@@ -389,6 +392,7 @@ export function AdminPage() {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Account</th>
                 <th>Plan</th>
                 <th>Status</th>
                 <th>Members</th>
@@ -399,7 +403,7 @@ export function AdminPage() {
             <tbody>
               {teams.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="enterprise-table-empty">
+                  <td colSpan={7} className="enterprise-table-empty">
                     No workspaces found
                   </td>
                 </tr>
@@ -407,6 +411,20 @@ export function AdminPage() {
                 teams.map((team) => (
                   <tr key={team.id}>
                     <td>{team.name}</td>
+                    <td>
+                      {team.billingChannel === "enterprise" || team.organization ? (
+                        <span>
+                          <span className="enterprise-admin-badge">Enterprise</span>
+                          {team.organization?.name ? (
+                            <span className="enterprise-muted" style={{ display: "block", fontSize: 12 }}>
+                              {team.organization.name}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : (
+                        <span className="enterprise-muted">{billingChannelLabel(team)}</span>
+                      )}
+                    </td>
                     <td>{planLabel(team.subscription.plan)}</td>
                     <td>{team.subscription.status}</td>
                     <td>{team.memberCount}</td>

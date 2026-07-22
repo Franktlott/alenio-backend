@@ -18,12 +18,12 @@ type AdminSection = "users" | "workspaces" | "enterprise-customers" | "seneca-st
 
 const ADMIN_SECTIONS: Array<{ id: AdminSection; label: string; to: string; hint: string }> = [
   { id: "users", label: "Users", to: "/admin", hint: "Platform users" },
-  { id: "workspaces", label: "Workspaces", to: "/admin?tab=workspaces", hint: "All workspaces" },
+  { id: "workspaces", label: "Workspaces", to: "/admin?tab=workspaces", hint: "Self-serve & linked" },
   {
     id: "enterprise-customers",
     label: "Enterprise customers",
     to: "/admin?tab=enterprise-customers",
-    hint: "Companies & workspaces",
+    hint: "Contract accounts",
   },
   {
     id: "seneca-studio",

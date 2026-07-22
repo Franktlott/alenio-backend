@@ -540,7 +540,13 @@ adminApiRouter.post(
           400,
         );
       }
-      return c.json({ data: result.organization }, 201);
+      return c.json(
+        {
+          data: result.organization,
+          welcomeEmail: result.welcomeEmail,
+        },
+        201,
+      );
     } catch (err) {
       console.error("[admin] create organization failed:", err);
       return c.json({ error: { message: "Could not create enterprise customer", code: "CREATE_FAILED" } }, 500);

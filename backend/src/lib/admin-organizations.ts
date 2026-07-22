@@ -1,12 +1,15 @@
 import { prisma } from "../prisma";
 import { normalizeEmailDomain, uniqueOrgSlug } from "./organization-sso";
 import { createEnterpriseAccount } from "./admin-platform";
+import { sendEnterpriseWelcomeEmail } from "./enterprise-welcome-email";
 
 export type AdminOrganizationRow = {
   id: string;
   name: string;
   slug: string;
   status: string;
+  /** Always "enterprise" — Organization rows are contract customers, not Stripe self-serve. */
+  accountType: string;
   ssoRequired: boolean;
   createdAt: Date;
   workspaceCount: number;
@@ -40,6 +43,7 @@ export async function listAdminOrganizations(): Promise<AdminOrganizationRow[]> 
     name: org.name,
     slug: org.slug,
     status: org.status,
+    accountType: org.accountType || "enterprise",
     ssoRequired: org.ssoRequired,
     createdAt: org.createdAt,
     workspaceCount: org._count.teams,
@@ -161,6 +165,7 @@ export async function createAdminOrganization(input: {
         name,
         slug,
         status: "active",
+        accountType: "enterprise",
         defaultTeamId: createdWorkspace?.id ?? null,
         ...(domain
           ? {
@@ -195,8 +200,20 @@ export async function createAdminOrganization(input: {
     return created;
   });
 
+  let welcomeEmail: { sent: boolean; error?: string } | null = null;
+  const ownerEmail = input.ownerEmail?.trim().toLowerCase();
+  if (ownerEmail) {
+    welcomeEmail = await sendEnterpriseWelcomeEmail({
+      customerName: name,
+      ownerName: input.ownerName,
+      ownerEmail,
+      domain,
+      workspaceName: createdWorkspace?.name ?? input.initialWorkspaceName ?? null,
+    });
+  }
+
   const detail = await getAdminOrganization(org.id);
-  return { ok: true as const, organization: detail! };
+  return { ok: true as const, organization: detail!, welcomeEmail };
 }
 
 export async function attachTeamToOrganization(organizationId: string, teamId: string) {

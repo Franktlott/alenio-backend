@@ -90,6 +90,10 @@ export async function listPlatformTeams(limit = 200) {
       name: true,
       inviteCode: true,
       createdAt: true,
+      organizationId: true,
+      organization: {
+        select: { id: true, name: true, accountType: true },
+      },
       subscription: {
         select: {
           plan: true,
@@ -112,23 +116,35 @@ export async function listPlatformTeams(limit = 200) {
     take: limit,
   });
 
-  return teams.map((team) => ({
-    id: team.id,
-    name: team.name,
-    inviteCode: team.inviteCode,
-    createdAt: team.createdAt.toISOString(),
-    memberCount: team._count.members,
-    taskCount: team._count.tasks,
-    owner: team.members[0]?.user ?? null,
-    subscription: team.subscription
-      ? {
-          plan: team.subscription.plan,
-          status: team.subscription.status,
-          stripeCustomerId: team.subscription.stripeCustomerId,
-          currentPeriodEnd: team.subscription.currentPeriodEnd?.toISOString() ?? null,
-        }
-      : { plan: "free", status: "active", stripeCustomerId: null, currentPeriodEnd: null },
-  }));
+  return teams.map((team) => {
+    const isEnterprise = Boolean(team.organizationId && team.organization);
+    return {
+      id: team.id,
+      name: team.name,
+      inviteCode: team.inviteCode,
+      createdAt: team.createdAt.toISOString(),
+      memberCount: team._count.members,
+      taskCount: team._count.tasks,
+      owner: team.members[0]?.user ?? null,
+      /** "enterprise" = linked to an Organization (contract customer). "self_serve" = Stripe/plan only. */
+      billingChannel: isEnterprise ? ("enterprise" as const) : ("self_serve" as const),
+      organization: team.organization
+        ? {
+            id: team.organization.id,
+            name: team.organization.name,
+            accountType: team.organization.accountType || "enterprise",
+          }
+        : null,
+      subscription: team.subscription
+        ? {
+            plan: team.subscription.plan,
+            status: team.subscription.status,
+            stripeCustomerId: team.subscription.stripeCustomerId,
+            currentPeriodEnd: team.subscription.currentPeriodEnd?.toISOString() ?? null,
+          }
+        : { plan: "free", status: "active", stripeCustomerId: null, currentPeriodEnd: null },
+    };
+  });
 }
 
 export async function getPlatformTeam(teamId: string) {

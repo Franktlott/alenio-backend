@@ -21,6 +21,7 @@ export function AdminEnterpriseCustomersPanel() {
   const [initialWorkspaceName, setInitialWorkspaceName] = useState("");
   const [plan, setPlan] = useState<"free" | "team" | "operations">("operations");
   const [formError, setFormError] = useState<string | null>(null);
+  const [welcomeNotice, setWelcomeNotice] = useState<string | null>(null);
 
   const listQuery = useQuery({
     queryKey: ["admin", "organizations"],
@@ -35,7 +36,7 @@ export function AdminEnterpriseCustomersPanel() {
 
   const createMutation = useMutation({
     mutationFn: createAdminOrganization,
-    onSuccess: async (org) => {
+    onSuccess: async (result) => {
       setShowCreate(false);
       setName("");
       setDomain("");
@@ -44,8 +45,22 @@ export function AdminEnterpriseCustomersPanel() {
       setOwnerPassword("");
       setInitialWorkspaceName("");
       setFormError(null);
-      setSelectedId(org.id);
+      setSelectedId(result.organization.id);
+      if (result.welcomeEmail?.sent) {
+        setWelcomeNotice("Welcome email sent to the owner.");
+      } else if (result.welcomeEmail && !result.welcomeEmail.sent) {
+        setWelcomeNotice(
+          result.welcomeEmail.error
+            ? `Customer created. Welcome email not sent: ${result.welcomeEmail.error}`
+            : "Customer created. Welcome email was not sent.",
+        );
+      } else {
+        setWelcomeNotice(
+          "Enterprise customer created. Add an owner email next time to send the welcome email.",
+        );
+      }
       await queryClient.invalidateQueries({ queryKey: ["admin", "organizations"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "teams"] });
     },
     onError: (err) => {
       setFormError(err instanceof Error ? err.message : "Could not create enterprise customer.");
@@ -80,8 +95,8 @@ export function AdminEnterpriseCustomersPanel() {
         <div>
           <h1>Enterprise customers</h1>
           <p className="enterprise-muted">
-            Company accounts that can own multiple workspaces, SSO, and SCIM. Bones only — more management tools
-            coming next.
+            Contract company accounts (SSO, SCIM, multi-workspace). Separate from self-serve Pro / Operations
+            subscriptions on the Workspaces tab.
           </p>
         </div>
         <button
@@ -90,6 +105,7 @@ export function AdminEnterpriseCustomersPanel() {
           onClick={() => {
             setShowCreate((v) => !v);
             setFormError(null);
+            setWelcomeNotice(null);
           }}
           data-testid="admin-enterprise-create-toggle"
         >
@@ -97,9 +113,19 @@ export function AdminEnterpriseCustomersPanel() {
         </button>
       </header>
 
+      {welcomeNotice ? (
+        <p className="enterprise-muted" style={{ marginBottom: "1rem" }} data-testid="admin-enterprise-welcome-notice">
+          {welcomeNotice}
+        </p>
+      ) : null}
+
       {showCreate ? (
         <form className="enterprise-card" onSubmit={onCreate} style={{ marginBottom: "1rem" }}>
           <h2 className="enterprise-card-title enterprise-card-title-spaced">Create enterprise customer</h2>
+          <p className="enterprise-muted" style={{ marginBottom: "0.75rem", fontSize: 13 }}>
+            Creates an <strong>enterprise contract</strong> account — not a Stripe self-serve upgrade. If you include
+            an owner email, we send a welcome email with next steps for SSO.
+          </p>
           <label className="auth-label" htmlFor="ent-name">
             Customer name
           </label>
@@ -177,7 +203,7 @@ export function AdminEnterpriseCustomersPanel() {
                 data-testid="admin-enterprise-owner-password"
               />
               <label className="auth-label" htmlFor="ent-plan">
-                Workspace plan
+                Workspace feature plan (not the customer type)
               </label>
               <select
                 id="ent-plan"
@@ -186,10 +212,13 @@ export function AdminEnterpriseCustomersPanel() {
                 onChange={(e) => setPlan(e.target.value as typeof plan)}
                 data-testid="admin-enterprise-plan"
               >
-                <option value="operations">Operations</option>
-                <option value="team">Pro</option>
-                <option value="free">Free</option>
+                <option value="operations">Operations features</option>
+                <option value="team">Pro features</option>
+                <option value="free">Free features</option>
               </select>
+              <p className="enterprise-muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Customer stays Enterprise. This only sets which product features the first workspace unlocks.
+              </p>
             </>
           ) : null}
 
@@ -219,6 +248,7 @@ export function AdminEnterpriseCustomersPanel() {
               <thead>
                 <tr>
                   <th>Customer</th>
+                  <th>Type</th>
                   <th>Domain</th>
                   <th>Workspaces</th>
                   <th>SSO</th>
@@ -230,7 +260,7 @@ export function AdminEnterpriseCustomersPanel() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="enterprise-table-empty">
+                    <td colSpan={8} className="enterprise-table-empty">
                       No enterprise customers yet
                     </td>
                   </tr>
@@ -247,6 +277,9 @@ export function AdminEnterpriseCustomersPanel() {
                         <div className="enterprise-muted" style={{ fontSize: 12 }}>
                           {org.slug}
                         </div>
+                      </td>
+                      <td>
+                        <span className="enterprise-admin-badge">Enterprise contract</span>
                       </td>
                       <td>
                         {org.domain ? (
@@ -282,6 +315,8 @@ export function AdminEnterpriseCustomersPanel() {
                 <>
                   <h2 className="enterprise-card-title enterprise-card-title-spaced">{detail.name}</h2>
                   <p className="enterprise-muted" style={{ marginBottom: "0.75rem" }}>
+                    <span className="enterprise-admin-badge">Enterprise contract</span>
+                    {" · "}
                     {detail.slug} · {detail.status}
                   </p>
                   <dl className="enterprise-admin-dl">

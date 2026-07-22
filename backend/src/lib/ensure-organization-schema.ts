@@ -16,12 +16,17 @@ export async function ensureOrganizationSchema(prisma: PrismaClient): Promise<vo
         "name" TEXT NOT NULL,
         "slug" TEXT NOT NULL,
         "status" TEXT NOT NULL DEFAULT 'active',
+        "accountType" TEXT NOT NULL DEFAULT 'enterprise',
         "ssoRequired" BOOLEAN NOT NULL DEFAULT false,
         "defaultTeamId" TEXT,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "Organization_pkey" PRIMARY KEY ("id")
       );
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE public."Organization"
+        ADD COLUMN IF NOT EXISTS "accountType" TEXT NOT NULL DEFAULT 'enterprise';
     `);
 
     await prisma.$executeRawUnsafe(`
