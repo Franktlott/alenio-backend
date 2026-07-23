@@ -267,6 +267,9 @@ export default function TeamChatScreen() {
   const {
     messages,
     isLoading,
+    isError: messagesError,
+    error: messagesLoadError,
+    refetch: refetchMessages,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -576,7 +579,7 @@ export default function TeamChatScreen() {
   const headerTeamName = Array.isArray(teamName) ? teamName[0] : (teamName ?? team?.name ?? "Team Chat");
 
   return (
-    <SafeAreaView testID="team-chat-screen" className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]}>
+    <SafeAreaView testID="team-chat-screen" className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]}>
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity onPress={() => router.back()} className="mr-3" testID="back-button">
@@ -1072,6 +1075,31 @@ export default function TeamChatScreen() {
         {isLoading ? (
           <View testID="team-chat-loading" className="flex-1 items-center justify-center">
             <ActivityIndicator color="#4361EE" />
+          </View>
+        ) : messagesError && messages.length === 0 ? (
+          <View
+            testID="team-chat-error"
+            style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#64748B", textAlign: "center" }}>
+              Couldn&apos;t load messages
+            </Text>
+            <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 8, textAlign: "center" }}>
+              {messagesLoadError instanceof Error ? messagesLoadError.message : "Please try again."}
+            </Text>
+            <TouchableOpacity
+              onPress={() => void refetchMessages()}
+              testID="team-chat-error-retry"
+              style={{
+                marginTop: 16,
+                backgroundColor: "#4361EE",
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+              }}
+            >
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>Retry</Text>
+            </TouchableOpacity>
           </View>
         ) : messages.length === 0 && polls.length === 0 ? (
           <View testID="team-chat-empty" className="flex-1 items-center justify-center px-6">

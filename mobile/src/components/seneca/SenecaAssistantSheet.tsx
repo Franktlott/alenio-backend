@@ -133,10 +133,13 @@ function StickyAskBar({
       </View>
       <View style={styles.privacyRow}>
         <Lock size={11} color={COLORS.textSoft} strokeWidth={2.2} />
-        <Text style={styles.privacyText}>Private to you · Workspace data stays secure</Text>
+        <Text style={styles.privacyText}>Private session · Workspace data remains secure</Text>
       </View>
+      <Text style={styles.accuracyNote}>
+        AI-generated guidance may contain inaccuracies. Verify critical information before making decisions.
+      </Text>
       <Text style={styles.settingsNote}>
-        Seneca workplace settings can be adjusted online at{" "}
+        Manage Seneca workspace settings at{" "}
         <Text
           style={styles.settingsLink}
           onPress={() => {
@@ -882,6 +885,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSoft,
     fontWeight: "500",
+  },
+  accuracyNote: {
+    marginTop: 5,
+    paddingHorizontal: 16,
+    fontSize: 10,
+    lineHeight: 14,
+    color: COLORS.textSoft,
+    fontWeight: "500",
+    textAlign: "center",
   },
   settingsNote: {
     marginTop: 6,

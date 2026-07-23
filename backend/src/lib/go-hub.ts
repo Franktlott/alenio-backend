@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import { prisma } from "../prisma";
-import { getTeamSubscription } from "../routes/subscription";
+import { getTeamSubscription, teamSubscriptionRowHasGoFeatures } from "../routes/subscription";
 
 export function generateGoHubToken(): string {
   return randomBytes(24).toString("base64url");
@@ -8,10 +8,7 @@ export function generateGoHubToken(): string {
 
 export async function teamHasGoPlan(teamId: string): Promise<boolean> {
   const subscription = await getTeamSubscription(teamId);
-  const plan = (subscription.plan ?? "free").trim().toLowerCase();
-  const status = (subscription.status ?? "active").trim().toLowerCase();
-  if (plan !== "operations") return false;
-  return ["active", "trialing", "past_due", "incomplete", "paused"].includes(status);
+  return teamSubscriptionRowHasGoFeatures(subscription);
 }
 
 export async function ensureTeamGoHubToken(teamId: string): Promise<string> {

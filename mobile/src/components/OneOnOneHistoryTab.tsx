@@ -9,13 +9,31 @@ import {
   FlatList,
   ActivityIndicator,
   KeyboardAvoidingView,
+  InputAccessoryView,
   Platform,
   Image,
+  Alert,
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, X, ChevronLeft, Check, CalendarCheck, PlayCircle, Calendar, Trash2, Printer, Download, Pencil } from "lucide-react-native";
+import {
+  Plus,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  MoreVertical,
+  Check,
+  CalendarCheck,
+  PlayCircle,
+  Calendar,
+  Clock,
+  Users,
+  Trash2,
+  Printer,
+  Download,
+  Pencil,
+} from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { bottomSheetMenu } from "@/lib/bottom-sheet-menu-styles";
@@ -67,18 +85,23 @@ type Props = {
   teamId: string;
   memberUserId: string;
   memberName: string;
+  memberImage?: string | null;
   managerName: string | null;
   leaderUserId: string | null;
   canCreate: boolean;
   canModify: boolean;
   isSelf?: boolean;
   myRole?: string | null;
-  autoStartCheckIn?: boolean;
+  /** Increment to open the template picker (safe across tab remounts). */
+  startCheckInToken?: number;
   preferredTemplateId?: string | null;
   plannedEventId?: string | null;
+  onFlowActiveChange?: (active: boolean) => void;
 };
 
 type OneOneView = "list" | "pick" | "fill";
+
+const CHECK_IN_INPUT_ACCESSORY_ID = "check-in-save-actions";
 
 type CheckInActionMenu =
   | { kind: "planned"; event: PlannedOneOnOneEvent }
@@ -153,6 +176,27 @@ function dueDateInputToIso(value: string): string | undefined {
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
   const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return match?.[1] ? match[0] : undefined;
+}
+
+const TEMPLATE_CARD_ACCENTS = [
+  { color: "#7C3AED", bg: "#F3E8FF" },
+  { color: "#2563EB", bg: "#DBEAFE" },
+  { color: "#16A34A", bg: "#DCFCE7" },
+  { color: "#EA580C", bg: "#FFEDD5" },
+] as const;
+
+function estimateTemplateDuration(template: OneOnOneTemplate): string {
+  const title = template.title.toLowerCase();
+  if (title.includes("quarter") || title.includes("annual") || title.includes("review")) {
+    return "30-45 min";
+  }
+  if (title.includes("custom")) return "Custom time";
+  const fieldCount = template.fields.filter(
+    (f) => f.type !== "section" && f.type !== "associate_notes",
+  ).length;
+  if (fieldCount <= 5) return "15-20 min";
+  if (fieldCount <= 9) return "20-30 min";
+  return "30-45 min";
 }
 
 function groupFields(fields: OneOnOneTemplateField[]) {
@@ -305,15 +349,17 @@ export function OneOnOneHistoryTab({
   teamId,
   memberUserId,
   memberName,
+  memberImage = null,
   managerName,
   leaderUserId,
   canCreate,
   canModify,
   isSelf = false,
   myRole = null,
-  autoStartCheckIn = false,
+  startCheckInToken = 0,
   preferredTemplateId = null,
   plannedEventId = null,
+  onFlowActiveChange,
 }: Props) {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -340,9 +386,15 @@ export function OneOnOneHistoryTab({
   const [highlightLeaderFieldId, setHighlightLeaderFieldId] = useState<string | null>(null);
   const [highlightRequiredFieldId, setHighlightRequiredFieldId] = useState<string | null>(null);
   const fillScrollRef = useRef<ScrollView>(null);
+  const lastStartCheckInTokenRef = useRef(0);
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
   const [linkedPlannedEventId, setLinkedPlannedEventId] = useState<string | null>(null);
-  const autoStartHandledRef = useRef(false);
+  const memberInitial = memberName.trim()[0]?.toUpperCase() || "?";
+
+  useEffect(() => {
+    onFlowActiveChange?.(view !== "list");
+    return () => onFlowActiveChange?.(false);
+  }, [onFlowActiveChange, view]);
 
   const {
     data: upcomingPlanned = [],
@@ -389,6 +441,14 @@ export function OneOnOneHistoryTab({
     d.setHours(0, 0, 0, 0);
     return d;
   }, []);
+
+  const recentMeetings = useMemo(
+    () =>
+      [...meetings]
+        .sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))
+        .slice(0, 4),
+    [meetings],
+  );
 
   const resolveLeaderUserId = (meeting?: OneOnOneMeeting | null) =>
     leaderUserId ?? meeting?.createdById ?? null;
@@ -438,7 +498,7 @@ export function OneOnOneHistoryTab({
     setErr(null);
     setTemplates([]);
     setLinkedPlannedEventId(null);
-    autoStartHandledRef.current = false;
+    lastStartCheckInTokenRef.current = 0;
   }, [memberUserId, teamId]);
 
   const startCreate = async () => {
@@ -637,8 +697,9 @@ export function OneOnOneHistoryTab({
   };
 
   useEffect(() => {
-    if (!autoStartCheckIn || !canCreate || autoStartHandledRef.current) return;
-    autoStartHandledRef.current = true;
+    if (!startCheckInToken || !canCreate) return;
+    if (startCheckInToken === lastStartCheckInTokenRef.current) return;
+    lastStartCheckInTokenRef.current = startCheckInToken;
     if (plannedEventId) {
       setLinkedPlannedEventId(plannedEventId);
     }
@@ -666,7 +727,7 @@ export function OneOnOneHistoryTab({
         setLoadingTemplates(false);
       }
     })();
-  }, [autoStartCheckIn, canCreate, preferredTemplateId, plannedEventId, teamId]);
+  }, [startCheckInToken, canCreate, preferredTemplateId, plannedEventId, teamId]);
 
   const startEdit = (meeting: OneOnOneMeeting) => {
     setPreviewMeeting(null);
@@ -889,26 +950,29 @@ export function OneOnOneHistoryTab({
   const renderFieldInput = (field: OneOnOneTemplateField) => {
     const value = responses[field.id] ?? "";
     const isLong = field.type === "long_text" || field.type === "manager_notes";
+    const labelLower = field.label.trim().toLowerCase();
+    const placeholder =
+      labelLower.length > 42 ? "Enter response…" : `Enter ${labelLower}…`;
 
     if (field.type === "rating") {
       const max = field.ratingMax ?? 5;
       const current = typeof value === "number" ? value : Number(value) || 0;
       return (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
           {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
             <Pressable
               key={n}
               onPress={() => setFieldValue(field.id, n)}
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
+                width: 34,
+                height: 34,
+                borderRadius: 17,
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: current === n ? "#4361EE" : "#F1F5F9",
               }}
             >
-              <Text style={{ fontWeight: "700", color: current === n ? "white" : "#64748B" }}>{n}</Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: current === n ? "white" : "#64748B" }}>{n}</Text>
             </Pressable>
           ))}
         </View>
@@ -918,7 +982,7 @@ export function OneOnOneHistoryTab({
     if (field.type === "yes_no") {
       const current = String(value).toLowerCase();
       return (
-        <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flexDirection: "row", gap: 6 }}>
           {(["yes", "no"] as const).map((option) => {
             const active = current === option;
             return (
@@ -926,15 +990,15 @@ export function OneOnOneHistoryTab({
                 key={option}
                 onPress={() => setFieldValue(field.id, option)}
                 style={{
-                  minWidth: 72,
-                  height: 40,
-                  borderRadius: 20,
+                  minWidth: 64,
+                  height: 34,
+                  borderRadius: 17,
                   alignItems: "center",
                   justifyContent: "center",
                   backgroundColor: active ? "#4361EE" : "#F1F5F9",
                 }}
               >
-                <Text style={{ fontWeight: "700", color: active ? "white" : "#64748B" }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: active ? "white" : "#64748B" }}>
                   {option === "yes" ? "Yes" : "No"}
                 </Text>
               </Pressable>
@@ -949,16 +1013,20 @@ export function OneOnOneHistoryTab({
         value={String(value)}
         onChangeText={(v) => setFieldValue(field.id, v)}
         multiline={isLong}
-        placeholder={`Enter ${field.label.toLowerCase()}…`}
+        inputAccessoryViewID={Platform.OS === "ios" ? CHECK_IN_INPUT_ACCESSORY_ID : undefined}
+        placeholder={placeholder}
+        placeholderTextColor="#94A3B8"
         style={{
           borderWidth: 1,
           borderColor: "#E2E8F0",
           borderRadius: 10,
-          padding: 12,
-          fontSize: 15,
+          paddingHorizontal: 11,
+          paddingVertical: Platform.OS === "ios" ? 10 : 8,
+          fontSize: 14,
           color: "#0F172A",
-          minHeight: isLong ? 100 : undefined,
+          minHeight: isLong ? 72 : undefined,
           textAlignVertical: isLong ? "top" : "center",
+          backgroundColor: "#F8FAFC",
         }}
       />
     );
@@ -1039,36 +1107,120 @@ export function OneOnOneHistoryTab({
       .filter((f) => f.type !== "section" && f.type !== "associate_notes")
       .sort((a, b) => a.order - b.order);
 
+    const renderSaveActions = (keyboardAccessory = false) => (
+      <View
+        style={{
+          flexDirection: "row",
+          paddingHorizontal: 12,
+          paddingTop: 8,
+          paddingBottom: keyboardAccessory ? 8 : Math.max(8, insets.bottom > 0 ? 4 : 8),
+          borderTopWidth: 1,
+          borderTopColor: "#F1F5F9",
+          backgroundColor: "white",
+          gap: 8,
+        }}
+      >
+        {!editingMeeting || editingMeeting.status === "draft" ? (
+          <Pressable
+            onPress={onSaveDraftClick}
+            disabled={saving}
+            style={{
+              flex: 1,
+              borderRadius: 10,
+              paddingVertical: 11,
+              alignItems: "center",
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              backgroundColor: "#FFFFFF",
+              opacity: saving ? 0.6 : 1,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569" }}>
+              {saving ? "Saving…" : "Save draft"}
+            </Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          onPress={onPublishClick}
+          disabled={saving}
+          style={{
+            flex: 1.2,
+            backgroundColor: "#4361EE",
+            borderRadius: 10,
+            paddingVertical: 12,
+            alignItems: "center",
+            opacity: saving ? 0.6 : 1,
+          }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>
+            {saving
+              ? "Saving…"
+              : editingMeeting?.status === "draft"
+                ? "Publish check-in"
+                : editingMeeting
+                  ? "Save changes"
+                  : "Save check-in"}
+          </Text>
+        </Pressable>
+      </View>
+    );
+
     return (
-      <View style={{ flex: 1, backgroundColor: "white" }}>
+      <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            padding: 16,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
             borderBottomWidth: 1,
             borderBottomColor: "#F1F5F9",
-            gap: 12,
+            gap: 8,
+            backgroundColor: "#FFFFFF",
           }}
         >
           <Pressable onPress={exitFill} hitSlop={8}>
-            <ChevronLeft size={22} color="#4361EE" />
+            <ChevronLeft size={20} color="#4361EE" />
           </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
+          <View
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              backgroundColor: "#EEF2FF",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ fontSize: 10, fontWeight: "800", color: "#4F46E5" }}>2</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }} numberOfLines={1}>
               {editingMeeting
                 ? editingMeeting.status === "draft"
                   ? "Resume editing"
                   : "Edit check-in"
                 : selectedTemplate.title}
             </Text>
-            <Text style={{ fontSize: 12, color: "#64748B" }}>{memberName}</Text>
+            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }} numberOfLines={1}>
+              Complete the check-in form
+            </Text>
           </View>
         </View>
 
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView ref={fillScrollRef} contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 100 }}>
-            {err ? <Text style={{ fontSize: 13, color: "#DC2626" }}>{err}</Text> : null}
+          <ScrollView
+            ref={fillScrollRef}
+            contentContainerStyle={{
+              paddingHorizontal: 14,
+              paddingTop: 14,
+              paddingBottom: Math.max(110, insets.bottom + 88),
+              gap: 14,
+            }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {err ? <Text style={{ fontSize: 12, color: "#DC2626" }}>{err}</Text> : null}
             {fillFields.map((field) => {
               const isRequiredHighlight = highlightRequiredFieldId === field.id;
               const isLeaderHighlight = highlightLeaderFieldId === field.id;
@@ -1078,29 +1230,43 @@ export function OneOnOneHistoryTab({
                 style={
                   isRequiredHighlight
                     ? {
-                        borderWidth: 2,
+                        borderWidth: 1.5,
                         borderColor: "#DC2626",
-                        borderRadius: 12,
-                        padding: 10,
+                        borderRadius: 10,
+                        padding: 8,
                         backgroundColor: "#FEF2F2",
                       }
                     : isLeaderHighlight
                       ? {
-                          borderWidth: 2,
+                          borderWidth: 1.5,
                           borderColor: "#818CF8",
-                          borderRadius: 12,
-                          padding: 10,
+                          borderRadius: 10,
+                          padding: 8,
                           backgroundColor: "#EEF2FF",
                         }
-                      : undefined
+                      : {
+                          borderWidth: 1,
+                          borderColor: "#E8ECFA",
+                          borderRadius: 12,
+                          padding: 10,
+                          backgroundColor: "#FFFFFF",
+                        }
                 }
               >
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155", marginBottom: 6 }}>
+                <Text
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: "700",
+                    color: "#0F172A",
+                    marginBottom: 6,
+                    lineHeight: 17,
+                  }}
+                >
                   {field.label}
                   {field.required ? <Text style={{ color: "#DC2626" }}> *</Text> : null}
                 </Text>
                 {field.helpText ? (
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 6, lineHeight: 16 }}>
+                  <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 5, lineHeight: 15 }}>
                     {field.helpText}
                   </Text>
                 ) : null}
@@ -1110,26 +1276,29 @@ export function OneOnOneHistoryTab({
             })}
 
             {!editingMeeting ? (
-              <View>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>Follow-up tasks</Text>
+              <View style={{ marginTop: 2 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Follow-up tasks</Text>
                   <Pressable onPress={() => setFollowUpDrafts([...followUpDrafts, newFollowUpDraft()])}>
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Add task</Text>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>Add task</Text>
                   </Pressable>
                 </View>
                 {followUpDrafts.map((draft) => (
                   <View
                     key={draft.id}
                     style={{
-                      marginBottom: 12,
-                      padding: 12,
+                      marginBottom: 8,
+                      padding: 10,
                       backgroundColor: "#F8FAFC",
-                      borderRadius: 12,
-                      gap: 8,
+                      borderRadius: 10,
+                      gap: 6,
                     }}
                   >
                     <TextInput
                       value={draft.title}
+                      inputAccessoryViewID={
+                        Platform.OS === "ios" ? CHECK_IN_INPUT_ACCESSORY_ID : undefined
+                      }
                       onChangeText={(v) =>
                         setFollowUpDrafts(
                           followUpDrafts.map((d) => (d.id === draft.id ? { ...d, title: v } : d)),
@@ -1191,6 +1360,9 @@ export function OneOnOneHistoryTab({
                     </View>
                     <TextInput
                       value={draft.dueDate}
+                      inputAccessoryViewID={
+                        Platform.OS === "ios" ? CHECK_IN_INPUT_ACCESSORY_ID : undefined
+                      }
                       onChangeText={(v) =>
                         setFollowUpDrafts(
                           followUpDrafts.map((d) => (d.id === draft.id ? { ...d, dueDate: v } : d)),
@@ -1216,66 +1388,64 @@ export function OneOnOneHistoryTab({
               </View>
             ) : null}
           </ScrollView>
-        </KeyboardAvoidingView>
 
-        <View
-          style={{
-            padding: 16,
-            borderTopWidth: 1,
-            borderTopColor: "#F1F5F9",
-            backgroundColor: "white",
-            gap: 10,
-          }}
-        >
-          {!editingMeeting || editingMeeting.status === "draft" ? (
-            <Pressable
-              onPress={onSaveDraftClick}
-              disabled={saving}
-              style={{
-                borderRadius: 12,
-                paddingVertical: 14,
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                opacity: saving ? 0.6 : 1,
-              }}
-            >
-              <Text style={{ fontWeight: "700", color: "#475569" }}>{saving ? "Saving…" : "Save draft"}</Text>
-            </Pressable>
-          ) : null}
-          <Pressable
-            onPress={onPublishClick}
-            disabled={saving}
-            style={{
-              backgroundColor: "#4361EE",
-              borderRadius: 12,
-              paddingVertical: 14,
-              alignItems: "center",
-              opacity: saving ? 0.6 : 1,
-            }}
-          >
-            <Text style={{ fontWeight: "700", color: "white" }}>
-              {saving
-                ? "Saving…"
-                : editingMeeting?.status === "draft"
-                  ? "Publish check-in"
-                  : editingMeeting
-                    ? "Save changes"
-                    : "Save check-in"}
-            </Text>
-          </Pressable>
-        </View>
+          {renderSaveActions()}
+        </KeyboardAvoidingView>
+        {Platform.OS === "ios" ? (
+          <InputAccessoryView nativeID={CHECK_IN_INPUT_ACCESSORY_ID}>
+            {renderSaveActions(true)}
+          </InputAccessoryView>
+        ) : null}
       </View>
     );
   };
 
+  const showTemplateGuide = () => {
+    if (templates.length === 0) return;
+    const body = templates
+      .map((t, index) => {
+        const desc = t.description?.trim() || "No description yet.";
+        return `${index + 1}. ${t.title}\n${desc}`;
+      })
+      .join("\n\n");
+    Alert.alert("Check-in template guide", body);
+  };
+
   const renderPickView = () => (
-    <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, gap: 8 }}>
-        <Pressable onPress={() => setView("list")} hitSlop={8}>
-          <ChevronLeft size={22} color="#4361EE" />
+    <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 4, backgroundColor: "#F8FAFC" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <Pressable
+          onPress={() => setView("list")}
+          hitSlop={8}
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            backgroundColor: "#EEF2FF",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <ChevronLeft size={18} color="#4361EE" />
         </Pressable>
-        <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Choose template</Text>
+        <View
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            backgroundColor: "#EEF2FF",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 10, fontWeight: "800", color: "#4F46E5" }}>1</Text>
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }}>Choose check-in template</Text>
+          <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
+            Select the type of conversation you'd like to have.
+          </Text>
+        </View>
       </View>
       {loadingTemplates ? (
         <ActivityIndicator color="#4361EE" style={{ marginVertical: 24 }} />
@@ -1286,25 +1456,87 @@ export function OneOnOneHistoryTab({
           error={err ?? "No check-in templates yet. Ask your workspace owner to create templates on the web Team page."}
         />
       ) : (
-        <View style={{ gap: 10, marginTop: 8 }}>
-          {templates.map((t) => (
-            <Pressable
-              key={t.id}
-              onPress={() => pickTemplate(t)}
-              style={{
-                backgroundColor: "white",
-                borderRadius: 12,
-                padding: 16,
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-              }}
-            >
-              <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>{t.title}</Text>
-              {t.description ? (
-                <Text style={{ fontSize: 13, color: "#64748B", marginTop: 4 }}>{t.description}</Text>
-              ) : null}
-            </Pressable>
-          ))}
+        <View style={{ width: "100%", gap: 8, paddingBottom: 12 }}>
+          {templates.map((t, index) => {
+            const accent = TEMPLATE_CARD_ACCENTS[index % TEMPLATE_CARD_ACCENTS.length]!;
+            const duration = estimateTemplateDuration(t);
+            return (
+              <Pressable
+                key={t.id}
+                onPress={() => pickTemplate(t)}
+                style={({ pressed }) => ({
+                  width: "100%",
+                  backgroundColor: pressed ? "#F8FAFF" : "#FFFFFF",
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#E0E7FF",
+                  shadowColor: "#0F172A",
+                  shadowOpacity: 0.03,
+                  shadowRadius: 5,
+                  shadowOffset: { width: 0, height: 1 },
+                  elevation: 1,
+                })}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", padding: 10, gap: 10 }}>
+                  <View
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 10,
+                      backgroundColor: accent.bg,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <CalendarCheck size={17} color={accent.color} strokeWidth={2.2} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+                      {t.title}
+                    </Text>
+                    {t.description ? (
+                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2, lineHeight: 15 }} numberOfLines={2}>
+                        {t.description}
+                      </Text>
+                    ) : null}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 5 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <Clock size={10} color="#94A3B8" />
+                        <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>{duration}</Text>
+                      </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3, flexShrink: 1 }}>
+                        <Users size={10} color="#94A3B8" />
+                        <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }} numberOfLines={1}>
+                          Manager + Associate
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <ChevronRight size={17} color={accent.color} strokeWidth={2.2} />
+                </View>
+              </Pressable>
+            );
+          })}
+
+          <Pressable
+            onPress={showTemplateGuide}
+            style={{
+              marginTop: 2,
+              backgroundColor: "#EEF2FF",
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Text style={{ flex: 1, fontSize: 11, color: "#475569", lineHeight: 15 }}>
+              Not sure which one to use? View descriptions for each template.
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: "#4F46E5" }}>View guide ›</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -1478,32 +1710,6 @@ export function OneOnOneHistoryTab({
                 </View>
               ) : historyMeeting ? (
                 <View style={{ paddingBottom: 4 }}>
-                  {canPrintCheckIn(historyMeeting) ? (
-                    <>
-                      <Pressable
-                        onPress={() => void onPrint(historyMeeting)}
-                        disabled={printingPdf}
-                        style={bottomSheetMenu.row}
-                        testID="history-check-in-print"
-                      >
-                        <Text style={bottomSheetMenu.rowLabel}>
-                          {printingPdf ? "Printing…" : "Print"}
-                        </Text>
-                        <Printer size={bottomSheetMenu.iconSize} color="#4361EE" />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => void onDownloadPdf(historyMeeting)}
-                        disabled={downloadingPdfId === historyMeeting.id}
-                        style={bottomSheetMenu.row}
-                        testID="history-check-in-download"
-                      >
-                        <Text style={bottomSheetMenu.rowLabel}>
-                          {downloadingPdfId === historyMeeting.id ? "Downloading…" : "Download PDF"}
-                        </Text>
-                        <Download size={bottomSheetMenu.iconSize} color="#4361EE" />
-                      </Pressable>
-                    </>
-                  ) : null}
                   <Pressable
                     onPress={() => {
                       const meeting = historyMeeting;
@@ -1611,24 +1817,109 @@ export function OneOnOneHistoryTab({
     </>
   );
 
-  if (view === "fill") {
-    return (
-      <>
-        {renderFillView()}
+  const closeCheckInFlow = () => {
+    setView("list");
+    setSelectedTemplate(null);
+    setEditingMeeting(null);
+    setResponses({});
+    setFollowUpDrafts([]);
+    setErr(null);
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
+    setHighlightRequiredFieldId(null);
+    setHighlightLeaderFieldId(null);
+    setLinkedPlannedEventId(null);
+  };
+
+  const renderCheckInFlowModal = () => (
+    <Modal
+      visible={view !== "list"}
+      animationType="slide"
+      presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
+      onRequestClose={closeCheckInFlow}
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#F8FAFC",
+          paddingTop: Platform.OS === "ios" ? 18 : insets.top + 8,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 14,
+            paddingBottom: 8,
+            gap: 10,
+            backgroundColor: "#F8FAFC",
+          }}
+        >
+          <View
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: "#EEF2FF",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+            }}
+          >
+            {memberImage ? (
+              <Image source={{ uri: memberImage }} style={{ width: 34, height: 34 }} />
+            ) : (
+              <Text style={{ fontSize: 14, fontWeight: "800", color: "#4F46E5" }}>{memberInitial}</Text>
+            )}
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              style={{
+                fontSize: 9,
+                fontWeight: "700",
+                color: "#818CF8",
+                letterSpacing: 0.6,
+                textTransform: "uppercase",
+              }}
+            >
+              Starting check-in with
+            </Text>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+              {memberName}
+            </Text>
+          </View>
+          <Pressable
+            onPress={closeCheckInFlow}
+            hitSlop={10}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 15,
+              backgroundColor: "#F1F5F9",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <X size={16} color="#64748B" />
+          </Pressable>
+        </View>
+
+        <View style={{ flex: 1 }}>
+          {view === "pick" ? renderPickView() : renderFillView()}
+        </View>
         {renderPublishModals()}
         {renderCheckInActionMenuModal()}
-      </>
-    );
-  }
-  if (view === "pick") return renderPickView();
+      </View>
+    </Modal>
+  );
 
-  const showHistorySection = upcomingPlanned.length > 0 || meetings.length > 0;
   const showEmptyState = !loadingMeetings && upcomingPlanned.length === 0 && meetings.length === 0;
 
   return (
-    <View style={{ gap: 16, flexGrow: showEmptyState ? 1 : undefined }}>
+    <View style={{ gap: 10, flexGrow: showEmptyState ? 1 : undefined }}>
+      {renderCheckInFlowModal()}
       {canCreate ? (
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
           <Pressable
             onPress={() =>
               router.push(
@@ -1643,16 +1934,16 @@ export function OneOnOneHistoryTab({
               alignItems: "center",
               gap: 4,
               backgroundColor: "white",
-              borderRadius: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
+              borderRadius: 9,
+              paddingHorizontal: 10,
+              paddingVertical: 7,
               borderWidth: 1,
               borderColor: "#E2E8F0",
             }}
             testID="plan-one-on-one-button"
           >
-            <CalendarCheck size={16} color="#475569" />
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>Schedule check-in</Text>
+            <CalendarCheck size={14} color="#475569" />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}>Schedule</Text>
           </Pressable>
           <Pressable
             onPress={() => void startCreate()}
@@ -1661,14 +1952,14 @@ export function OneOnOneHistoryTab({
               alignItems: "center",
               gap: 4,
               backgroundColor: "#4361EE",
-              borderRadius: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
+              borderRadius: 9,
+              paddingHorizontal: 10,
+              paddingVertical: 7,
             }}
             testID="new-check-in-button"
           >
-            <Plus size={16} color="white" />
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New check-in</Text>
+            <Plus size={14} color="white" />
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>New check-in</Text>
           </Pressable>
         </View>
       ) : null}
@@ -1726,8 +2017,8 @@ export function OneOnOneHistoryTab({
             onStart={canCreate ? () => void startCreate() : undefined}
           />
         </View>
-      ) : showHistorySection ? (
-        <View style={{ gap: 8 }}>
+      ) : recentMeetings.length > 0 ? (
+        <View style={{ gap: 6 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text
               style={{
@@ -1738,102 +2029,112 @@ export function OneOnOneHistoryTab({
                 letterSpacing: 1.1,
               }}
             >
-              {upcomingPlanned.length > 0 ? "Check-in history" : "Check-ins"}
+              Recent check-ins
             </Text>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{meetings.length}</Text>
+            {meetings.length > 4 ? (
+              <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8" }}>
+                Showing 4 of {meetings.length}
+              </Text>
+            ) : null}
           </View>
           <View
             style={{
               backgroundColor: "white",
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: "#E2E8F0",
+              borderColor: "#E8ECFA",
               overflow: "hidden",
             }}
           >
-            {[...meetings]
-              .sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))
-              .map((meeting, index) => {
-                const isDraft = meeting.status === "draft";
-                const followUpCount = meeting.followUpTasks?.length ?? 0;
-                const overdueCount = countOverdueFollowUpTasks(meeting.followUpTasks, todayStart);
-                const openCount = (meeting.followUpTasks ?? []).filter((task) => task.status !== "done").length;
-                const status = getOneOnOneMeetingStatusFromMeeting(meeting);
-                const colors = isDraft
-                  ? { bg: "#EEF2FF", text: "#4338CA", accent: "#6366F1" }
-                  : oneOnOneMeetingStatusColors(status);
-                const statusLabel = isDraft ? "Draft" : oneOnOneMeetingStatusLabel(status);
-                const conductedBy = meeting.createdBy?.name?.trim() || null;
-                const followUpMeta =
-                  followUpCount === 0
-                    ? "0 follow-ups"
-                    : overdueCount > 0
-                      ? `${overdueCount} overdue · ${followUpCount} total`
-                      : openCount > 0
-                        ? `${openCount} open · ${followUpCount} total`
-                        : `${followUpCount} follow-up${followUpCount === 1 ? "" : "s"}`;
-                const metaParts = [
-                  formatMeetingDate(oneOnOneDisplayDate(meeting)),
-                  followUpMeta,
-                  conductedBy ? `by ${conductedBy}` : null,
-                ].filter(Boolean);
-
-                return (
-                  <Pressable
-                    key={meeting.id}
-                    onPress={() => setPreviewMeeting(meeting)}
-                    onLongPress={canModify ? () => openHistoryMeetingMenu(meeting) : undefined}
-                    delayLongPress={400}
+            {recentMeetings.map((meeting, index) => {
+              const taskCount = meeting.followUpTasks?.length ?? 0;
+              const openTaskCount = (meeting.followUpTasks ?? []).filter(
+                (task) => task.status !== "done",
+              ).length;
+              const allTasksDone = taskCount > 0 && openTaskCount === 0;
+              return (
+                <Pressable
+                  key={meeting.id}
+                  onPress={() => setPreviewMeeting(meeting)}
+                  onLongPress={canModify ? () => openHistoryMeetingMenu(meeting) : undefined}
+                  delayLongPress={400}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopColor: "#F1F5F9",
+                    backgroundColor: "white",
+                    paddingVertical: 9,
+                    paddingHorizontal: 12,
+                    gap: 8,
+                  }}
+                >
+                  <View
                     style={{
-                      flexDirection: "row",
-                      borderTopWidth: index === 0 ? 0 : 1,
-                      borderTopColor: "#F1F5F9",
-                      backgroundColor: "white",
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: index === 0 ? "#6366F1" : "#CBD5E1",
                     }}
-                  >
-                    <View style={{ width: 3, backgroundColor: colors.accent }} />
-                    <View style={{ flex: 1, paddingVertical: 12, paddingLeft: 12, paddingRight: 8 }}>
-                      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text
-                            style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", letterSpacing: -0.2 }}
-                            numberOfLines={1}
-                          >
-                            {meeting.templateTitle}
-                          </Text>
-                          <Text
-                            style={{ fontSize: 12, color: "#64748B", marginTop: 3, lineHeight: 16 }}
-                            numberOfLines={1}
-                          >
-                            {metaParts.join(" · ")}
-                          </Text>
-                        </View>
-                        <View
-                          style={{
-                            backgroundColor: colors.bg,
-                            borderRadius: 4,
-                            paddingHorizontal: 7,
-                            paddingVertical: 3,
-                            marginTop: 1,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 9,
-                              fontWeight: "800",
-                              color: colors.text,
-                              letterSpacing: 0.5,
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            {statusLabel}
-                          </Text>
-                        </View>
-                      </View>
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: index === 0 ? "700" : "600",
+                        color: index === 0 ? "#4F46E5" : "#0F172A",
+                      }}
+                      numberOfLines={1}
+                    >
+                      {meeting.templateTitle}
+                    </Text>
+                    <Text style={{ fontSize: 10.5, color: "#94A3B8", marginTop: 2 }} numberOfLines={1}>
+                      {formatMeetingDate(oneOnOneDisplayDate(meeting))}
+                    </Text>
+                  </View>
+                  {taskCount > 0 ? (
+                    <View
+                      style={{
+                        backgroundColor: allTasksDone ? "#DCFCE7" : "#FFF7ED",
+                        borderRadius: 999,
+                        paddingHorizontal: 7,
+                        paddingVertical: 3,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 9.5,
+                          fontWeight: "700",
+                          color: allTasksDone ? "#15803D" : "#C2410C",
+                        }}
+                        numberOfLines={1}
+                      >
+                        {allTasksDone
+                          ? "Tasks done"
+                          : `${openTaskCount} open`}
+                      </Text>
                     </View>
-                  </Pressable>
-                );
-              })}
+                  ) : null}
+                  {canModify ? (
+                    <Pressable
+                      onPress={() => openHistoryMeetingMenu(meeting)}
+                      hitSlop={10}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 8,
+                        backgroundColor: "#F8FAFC",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                      testID={`check-in-menu-${meeting.id}`}
+                    >
+                      <MoreVertical size={15} color="#64748B" />
+                    </Pressable>
+                  ) : null}
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       ) : null}

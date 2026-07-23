@@ -101,7 +101,10 @@ export async function performWorkspaceSwitch(
     }),
     queryClient.fetchQuery({
       queryKey: ["subscription", teamId],
-      queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${teamId}/subscription`),
+      queryFn: () =>
+        api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
+          `/api/teams/${teamId}/subscription`,
+        ),
     }),
   ]);
 

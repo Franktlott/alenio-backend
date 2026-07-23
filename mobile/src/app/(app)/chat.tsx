@@ -5,15 +5,13 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
   Image,
   Pressable,
   RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, Lock, Plus, Pin } from "lucide-react-native";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { MessageCircle, Users, Plus, Pin } from "lucide-react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -24,39 +22,34 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore, buildDmLastReadMap, getDmUnreadCount } from "@/lib/state/unread-store";
 import type { Conversation, Team } from "@/lib/types";
 import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
-import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { PAYWALL_BODY, PAYWALL_TITLE } from "@/lib/plan-access-copy";
 import { tabBarClearance } from "@/lib/tab-bar";
 import { dmOtherParticipant, resolveUserImageUrl } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 import { AppTabHeader } from "@/components/AppTabHeader";
-import { AddMemberModal } from "@/components/AddMemberModal";
 import {
   AlenioBottomSheet,
   AlenioSheetOption,
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { WorkspacesSection } from "@/components/WorkspacesSection";
-import { inviteMemberByEmail } from "@/lib/team-invites-api";
-import { isLeaderRole, resolveMyTeamRole } from "@/lib/member-identity";
 
 const PINNED_DMS_KEY = "pinned_dms";
 const MAX_DM_PINS = 5;
 
 const cardStyle = {
-  marginHorizontal: 14,
-  marginBottom: 6,
+  marginHorizontal: 12,
+  marginBottom: 4,
   backgroundColor: "#FFFFFF",
-  borderRadius: 10,
-  paddingVertical: 9,
-  paddingHorizontal: 12,
+  borderRadius: 9,
+  paddingVertical: 7,
+  paddingHorizontal: 10,
   borderWidth: 1,
   borderColor: "#E9EDF2",
 } as const;
 
-const AVATAR = 32;
-const PINNED_CIRCLE = 52;
+const AVATAR = 28;
+const PINNED_CIRCLE = 42;
 /** Equal slots so at most 5 circles fit across the row. */
 const PINNED_SLOT_PCT = 100 / MAX_DM_PINS;
 
@@ -72,29 +65,29 @@ function SectionHeader({
   return (
     <View
       style={{
-        marginHorizontal: 14,
-        marginTop: 4,
-        marginBottom: 6,
+        marginHorizontal: 12,
+        marginTop: 2,
+        marginBottom: 4,
         flexDirection: "row",
         alignItems: "flex-end",
         justifyContent: "space-between",
-        gap: 12,
+        gap: 8,
       }}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           style={{
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: "700",
             color: "#64748B",
-            letterSpacing: 0.8,
+            letterSpacing: 0.7,
             textTransform: "uppercase",
-            marginBottom: 2,
+            marginBottom: 1,
           }}
         >
           {title}
         </Text>
-        <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 16 }} numberOfLines={1}>
+        <Text style={{ fontSize: 11, color: "#94A3B8", lineHeight: 14 }} numberOfLines={1}>
           {subtitle}
         </Text>
       </View>
@@ -126,43 +119,44 @@ function ChatEmptyState({
     <View
       testID={testID}
       style={{
-        marginHorizontal: 14,
-        marginBottom: 6,
-        backgroundColor: "#FFFFFF",
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: "#E9EDF2",
+        width: "100%",
+        marginBottom: 4,
         alignItems: "center",
-        paddingHorizontal: 20,
-        paddingVertical: 20,
+        justifyContent: "center",
+        paddingHorizontal: 16,
+        paddingVertical: 14,
       }}
     >
       <Image
         source={image}
-        style={{ width: 120, height: 120, marginBottom: 10 }}
+        style={{ width: 72, height: 72, marginBottom: 8, alignSelf: "center" }}
         resizeMode="contain"
         accessibilityIgnoresInvertColors
       />
       <Text
         style={{
-          fontSize: 16,
-          fontWeight: "800",
+          fontSize: 14,
+          fontWeight: "700",
           color: "#0F172A",
           textAlign: "center",
+          alignSelf: "center",
           letterSpacing: -0.2,
-          marginBottom: 6,
+          marginBottom: 4,
+          width: "100%",
         }}
       >
         {title}
       </Text>
       <Text
         style={{
-          fontSize: 13,
+          fontSize: 12,
           color: "#64748B",
           textAlign: "center",
-          lineHeight: 18,
-          maxWidth: 280,
-          marginBottom: onPrimary ? 14 : 0,
+          alignSelf: "center",
+          lineHeight: 16,
+          maxWidth: 260,
+          marginBottom: onPrimary ? 10 : 0,
+          width: "100%",
         }}
       >
         {body}
@@ -174,19 +168,20 @@ function ChatEmptyState({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "center",
-            gap: 5,
+            alignSelf: "center",
+            gap: 4,
             backgroundColor: "#4361EE",
-            borderRadius: 10,
-            paddingHorizontal: 16,
-            paddingVertical: 11,
-            minWidth: 148,
+            borderRadius: 9,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            minWidth: 120,
           }}
           accessibilityRole="button"
           accessibilityLabel={primaryLabel}
           testID="messages-empty-add"
         >
-          <Plus size={15} color="#FFFFFF" strokeWidth={2.5} />
-          <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "700" }}>{primaryLabel}</Text>
+          <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>{primaryLabel}</Text>
         </Pressable>
       ) : null}
       {secondaryLabel && onSecondary ? (
@@ -194,9 +189,9 @@ function ChatEmptyState({
           onPress={onSecondary}
           accessibilityRole="button"
           accessibilityLabel={secondaryLabel}
-          style={{ paddingVertical: 10, marginTop: 4 }}
+          style={{ paddingVertical: 8, marginTop: 2 }}
         >
-          <Text style={{ color: "#4361EE", fontSize: 13, fontWeight: "600" }}>{secondaryLabel}</Text>
+          <Text style={{ color: "#4361EE", fontSize: 12, fontWeight: "600" }}>{secondaryLabel}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -219,10 +214,7 @@ export default function ChatScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const queryClient = useQueryClient();
-  const [showGroupPaywall, setShowGroupPaywall] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [pinsReady, setPinsReady] = useState(false);
@@ -276,9 +268,6 @@ export default function ChatScreen() {
     toast({ title: "Pinned to top", preset: "done" });
   };
 
-  const plan = useSubscriptionStore((s) => s.plan);
-  const isPaid = plan === "team";
-
   const { data: teamDetail } = useQuery({
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
@@ -288,7 +277,13 @@ export default function ChatScreen() {
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
 
   // DM conversations
-  const { data: conversations = [], isLoading: conversationsLoading } = useQuery<Conversation[]>({
+  const {
+    data: conversations = [],
+    isLoading: conversationsLoading,
+    isError: conversationsError,
+    error: conversationsLoadError,
+    refetch: refetchConversations,
+  } = useQuery<Conversation[]>({
     queryKey: ["dms"],
     queryFn: () => api.get<Conversation[]>("/api/dms"),
     refetchInterval: 5000,
@@ -311,37 +306,15 @@ export default function ChatScreen() {
     setRefreshing(false);
   };
 
-  const inviteMemberMutation = useMutation({
-    mutationFn: (email: string) => inviteMemberByEmail(activeTeamId!, email),
-    onSuccess: () => {
-      setShowInviteModal(false);
-      setInviteError(null);
-      queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] });
-      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
-      toast({ title: "Invite sent", preset: "done" });
-    },
-    onError: (err: Error) => {
-      setInviteError(err.message || "Could not send invite.");
-    },
-  });
-
   if (!activeTeamId) {
     return (
-      <SafeAreaView className="flex-1 bg-slate-50" edges={["top"]}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]}>
         <NoWorkspaceRedirect />
       </SafeAreaView>
     );
   }
 
   const members = teamDetail?.members ?? [];
-  const { myRole } = resolveMyTeamRole({
-    teamRole: teamDetail?.role,
-    members,
-    sessionUserId: typeof session?.user?.id === "string" ? session.user.id : "",
-    meEmail: typeof session?.user?.email === "string" ? session.user.email : undefined,
-  });
-  const canInviteMembers = isLeaderRole(myRole);
-
   const avatarUser = (
     user: { id?: string; name?: string | null; email?: string | null; image?: string | null } | null | undefined,
   ) => {
@@ -353,16 +326,6 @@ export default function ChatScreen() {
       ...user,
       image: resolveUserImageUrl(user.image) ?? resolveUserImageUrl(fromTeam?.image) ?? user.image ?? fromTeam?.image ?? null,
     };
-  };
-
-  const openInviteTeamMembers = () => {
-    if (canInviteMembers) {
-      setInviteError(null);
-      setShowInviteModal(true);
-      return;
-    }
-    // Members can share the workspace invite code from the Team tab.
-    router.push("/(app)/team");
   };
 
   const sortedUnpinnedDms = [...conversations]
@@ -389,7 +352,9 @@ export default function ChatScreen() {
       params: {
         conversationId: conv.id,
         recipientName: displayName,
-        recipientImage: resolveUserImageUrl(otherUser?.image) ?? "",
+        recipientImage: isGroup
+          ? (resolveUserImageUrl(conv.image) ?? "")
+          : (resolveUserImageUrl(otherUser?.image) ?? ""),
         isGroup: isGroup ? "true" : "false",
       },
     });
@@ -422,38 +387,57 @@ export default function ChatScreen() {
           paddingHorizontal: 2,
         }}
       >
-        <View style={{ width: PINNED_CIRCLE, height: PINNED_CIRCLE, marginBottom: 5 }}>
+        <View style={{ width: PINNED_CIRCLE, height: PINNED_CIRCLE, marginBottom: 3 }}>
           {isGroup ? (
-            <View
-              style={{
-                width: PINNED_CIRCLE,
-                height: PINNED_CIRCLE,
-                borderRadius: PINNED_CIRCLE / 2,
-                backgroundColor: "#F5F3FF",
-                borderWidth: 2,
-                borderColor: "#C4B5FD",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Users size={22} color="#7C3AED" />
-            </View>
+            resolveUserImageUrl(conv.image) ? (
+              <View
+                style={{
+                  width: PINNED_CIRCLE,
+                  height: PINNED_CIRCLE,
+                  borderRadius: PINNED_CIRCLE / 2,
+                  borderWidth: 1.5,
+                  borderColor: "#C4B5FD",
+                  overflow: "hidden",
+                }}
+              >
+                <Image
+                  source={{ uri: resolveUserImageUrl(conv.image)! }}
+                  style={{ width: PINNED_CIRCLE - 3, height: PINNED_CIRCLE - 3 }}
+                  resizeMode="cover"
+                />
+              </View>
+            ) : (
+              <View
+                style={{
+                  width: PINNED_CIRCLE,
+                  height: PINNED_CIRCLE,
+                  borderRadius: PINNED_CIRCLE / 2,
+                  backgroundColor: "#F5F3FF",
+                  borderWidth: 1.5,
+                  borderColor: "#C4B5FD",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Users size={17} color="#7C3AED" />
+              </View>
+            )
           ) : otherUser ? (
             <View
               style={{
                 borderRadius: PINNED_CIRCLE / 2,
-                borderWidth: 2,
+                borderWidth: 1.5,
                 borderColor: "#A5B4FC",
                 overflow: "hidden",
               }}
             >
               <UserAvatar
                 user={otherUser}
-                size={PINNED_CIRCLE - 4}
-                radius={(PINNED_CIRCLE - 4) / 2}
+                size={PINNED_CIRCLE - 3}
+                radius={(PINNED_CIRCLE - 3) / 2}
                 backgroundColor="#EEF2FF"
                 textColor="#4361EE"
-                fontSize={16}
+                fontSize={13}
               />
             </View>
           ) : (
@@ -463,13 +447,13 @@ export default function ChatScreen() {
                 height: PINNED_CIRCLE,
                 borderRadius: PINNED_CIRCLE / 2,
                 backgroundColor: "#EEF2FF",
-                borderWidth: 2,
+                borderWidth: 1.5,
                 borderColor: "#A5B4FC",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <MessageCircle size={22} color="#4361EE" />
+              <MessageCircle size={17} color="#4361EE" />
             </View>
           )}
           {unreadCount > 0 ? (
@@ -479,17 +463,17 @@ export default function ChatScreen() {
                 top: -1,
                 right: -1,
                 backgroundColor: "#EF4444",
-                borderRadius: 8,
-                minWidth: 16,
-                height: 16,
+                borderRadius: 7,
+                minWidth: 14,
+                height: 14,
                 alignItems: "center",
                 justifyContent: "center",
-                paddingHorizontal: 4,
+                paddingHorizontal: 3,
                 borderWidth: 1.5,
                 borderColor: "#F8F9FC",
               }}
             >
-              <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>
+              <Text style={{ color: "white", fontSize: 8, fontWeight: "700" }}>
                 {unreadCount > 9 ? "9+" : unreadCount}
               </Text>
             </View>
@@ -499,9 +483,9 @@ export default function ChatScreen() {
                 position: "absolute",
                 bottom: -1,
                 right: -1,
-                width: 18,
-                height: 18,
-                borderRadius: 9,
+                width: 15,
+                height: 15,
+                borderRadius: 8,
                 backgroundColor: "#4338CA",
                 alignItems: "center",
                 justifyContent: "center",
@@ -509,12 +493,12 @@ export default function ChatScreen() {
                 borderColor: "#F8F9FC",
               }}
             >
-              <Pin size={9} color="white" fill="white" />
+              <Pin size={7} color="white" fill="white" />
             </View>
           )}
         </View>
         <Text
-          style={{ fontSize: 11, fontWeight: "600", color: "#334155", textAlign: "center", width: "100%" }}
+          style={{ fontSize: 10, fontWeight: "600", color: "#334155", textAlign: "center", width: "100%" }}
           numberOfLines={1}
         >
           {label}
@@ -543,40 +527,48 @@ export default function ChatScreen() {
         delayLongPress={350}
         style={cardStyle}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {isGroup ? (
-            <View style={{ width: AVATAR, height: AVATAR, borderRadius: 9, backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Users size={16} color="#7C3AED" />
-            </View>
+            resolveUserImageUrl(conv.image) ? (
+              <Image
+                source={{ uri: resolveUserImageUrl(conv.image)! }}
+                style={{ width: AVATAR, height: AVATAR, borderRadius: 8, flexShrink: 0 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={{ width: AVATAR, height: AVATAR, borderRadius: 8, backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Users size={14} color="#7C3AED" />
+              </View>
+            )
           ) : otherUser ? (
             <UserAvatar
               user={otherUser}
               size={AVATAR}
-              radius={9}
+              radius={8}
               backgroundColor="#EEF2FF"
               textColor="#4361EE"
-              fontSize={13}
+              fontSize={12}
             />
           ) : (
-            <View style={{ width: AVATAR, height: AVATAR, borderRadius: 9, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <MessageCircle size={16} color="#4361EE" />
+            <View style={{ width: AVATAR, height: AVATAR, borderRadius: 8, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <MessageCircle size={14} color="#4361EE" />
             </View>
           )}
 
           <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-              <Text style={{ fontSize: 13.5, fontWeight: "600", color: "#0F172A", flex: 1 }} numberOfLines={1}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", flex: 1 }} numberOfLines={1}>
                 {displayName}
               </Text>
-              <Text style={{ fontSize: 10, color: "#94A3B8", marginLeft: 8, flexShrink: 0 }}>{timeStr}</Text>
+              <Text style={{ fontSize: 9, color: "#94A3B8", marginLeft: 6, flexShrink: 0 }}>{timeStr}</Text>
             </View>
             {groupWorkspace ? (
-              <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366F1", marginBottom: 2 }} numberOfLines={1}>
+              <Text style={{ fontSize: 9, fontWeight: "600", color: "#6366F1", marginBottom: 1 }} numberOfLines={1}>
                 {groupWorkspace}
               </Text>
             ) : null}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: 12, color: "#6B7280", flex: 1 }} numberOfLines={1}>
+              <Text style={{ fontSize: 11, color: "#6B7280", flex: 1 }} numberOfLines={1}>
                 {lastMsg
                   ? `${lastMsg.sender.id === session?.user?.id ? "You" : (lastMsg.sender.name?.trim().split(/\s+/)[0] || "Someone")}: ${
                       lastMsg.content?.trim() || "Attachment"
@@ -584,8 +576,8 @@ export default function ChatScreen() {
                   : "No messages yet"}
               </Text>
               {unreadCount > 0 ? (
-                <View style={{ backgroundColor: "#EF4444", borderRadius: 9, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 5, marginLeft: 8, flexShrink: 0 }}>
-                  <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>{unreadCount}</Text>
+                <View style={{ backgroundColor: "#EF4444", borderRadius: 8, minWidth: 16, height: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, marginLeft: 6, flexShrink: 0 }}>
+                  <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>{unreadCount}</Text>
                 </View>
               ) : null}
             </View>
@@ -596,7 +588,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView testID="chat-screen" style={{ flex: 1, backgroundColor: "#F8F9FC" }} edges={[]}>
+    <SafeAreaView testID="chat-screen" style={{ flex: 1, backgroundColor: "transparent" }} edges={[]}>
       <AppTabHeader
         topInset={insets.top}
         testID="chat-header"
@@ -616,44 +608,88 @@ export default function ChatScreen() {
 
       <View style={{ flex: 1, minHeight: 0, paddingBottom: tabBarClearance(insets.bottom, 0) }}>
         <View style={{ flex: 1, minHeight: 0 }}>
-        {/* Pinned — up to 5 avatar circles with name underneath */}
-        {pinnedConversations.length > 0 ? (
-          <View style={{ flexShrink: 0, paddingBottom: 4 }} testID="pinned-conversations-section">
-            <SectionHeader
-              title="Pinned"
-              subtitle="Hold a circle to unpin"
-            />
+        {/* Pinned — always above Messages; empty hint or avatar circles */}
+        <View style={{ flexShrink: 0, paddingTop: 6, paddingBottom: 2 }} testID="pinned-conversations-section">
+          <SectionHeader
+            title="Pinned"
+            subtitle={
+              pinnedConversations.length > 0
+                ? "Hold a circle to unpin"
+                : "Quick access at the top"
+            }
+          />
+          {pinnedConversations.length > 0 ? (
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "flex-start",
                 justifyContent: "flex-start",
-                paddingHorizontal: 10,
-                paddingTop: 2,
-                paddingBottom: 6,
+                paddingHorizontal: 8,
+                paddingTop: 1,
+                paddingBottom: 4,
               }}
             >
               {pinnedConversations.map((conv) => renderPinnedCircle(conv))}
             </View>
-          </View>
-        ) : null}
-
-        {/* Workspaces panel — team chats + channels for every workspace */}
-        <View style={{ flex: 2, minHeight: 0, flexBasis: 0 }}>
-          <WorkspacesSection
-            activeTeamId={activeTeamId}
-            onSelectTeam={setActiveTeamId}
-            cardStyle={cardStyle}
-          />
+          ) : (
+            <View
+              style={{
+                marginHorizontal: 12,
+                marginBottom: 2,
+                backgroundColor: "#FFFFFF",
+                borderRadius: 9,
+                borderWidth: 1,
+                borderColor: "#E9EDF2",
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                gap: 9,
+              }}
+              testID="pinned-conversations-empty"
+            >
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 7,
+                  backgroundColor: "#F3E8FF",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Pin size={13} color="#7C3AED" strokeWidth={2.2} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "700",
+                    color: "#0F172A",
+                    letterSpacing: -0.1,
+                    marginBottom: 1,
+                  }}
+                >
+                  No pinned conversations
+                </Text>
+                <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 14 }} numberOfLines={2}>
+                  Pin conversations for quick access at the top of your list.
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Messages panel — unpinned direct messages + groups */}
-        <View style={{ flex: 3, minHeight: 0, flexBasis: 0, borderTopWidth: 1, borderTopColor: "#E8ECF1" }}>
+        <View style={{ flex: 3, minHeight: 0, flexBasis: 0, paddingTop: 4 }}>
           <SectionHeader
             title="Messages"
             subtitle={
               conversationsLoading
                 ? "Loading conversations…"
+                : conversationsError
+                  ? "Couldn’t load conversations"
                 : sortedUnpinnedDms.length === 0 && pinnedConversations.length > 0
                   ? "All conversations are pinned above"
                   : conversations.length === 0
@@ -672,8 +708,35 @@ export default function ChatScreen() {
             nestedScrollEnabled
           >
             {conversationsLoading ? (
-              <View style={{ paddingVertical: 24, alignItems: "center" }}>
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
                 <ActivityIndicator color="#4361EE" />
+              </View>
+            ) : conversationsError ? (
+              <View
+                style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingVertical: 20 }}
+                testID="conversations-error-state"
+              >
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#64748B", textAlign: "center" }}>
+                  Couldn&apos;t load conversations
+                </Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
+                  {conversationsLoadError instanceof Error
+                    ? conversationsLoadError.message
+                    : "Please try again."}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => void refetchConversations()}
+                  testID="conversations-error-retry"
+                  style={{
+                    marginTop: 12,
+                    backgroundColor: "#4361EE",
+                    borderRadius: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                  }}
+                >
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>Retry</Text>
+                </TouchableOpacity>
               </View>
             ) : conversations.length === 0 ? (
               <ChatEmptyState
@@ -683,8 +746,6 @@ export default function ChatScreen() {
                 body={'No conversations yet. Tap “+ Add” to message a teammate.'}
                 primaryLabel="Add"
                 onPrimary={() => setShowAddModal(true)}
-                secondaryLabel={canInviteMembers ? "Invite a teammate" : undefined}
-                onSecondary={canInviteMembers ? openInviteTeamMembers : undefined}
               />
             ) : sortedUnpinnedDms.length === 0 ? (
               <ChatEmptyState
@@ -699,24 +760,33 @@ export default function ChatScreen() {
               sortedUnpinnedDms.map((conv) => renderDmCard(conv))
             )}
           </ScrollView>
+          <Text
+            testID="pin-hint-footer"
+            style={{
+              flexShrink: 0,
+              textAlign: "center",
+              fontSize: 10,
+              lineHeight: 13,
+              color: "#94A3B8",
+              paddingHorizontal: 20,
+              paddingTop: 2,
+              paddingBottom: 4,
+            }}
+          >
+            Hold a conversation to pin up to {MAX_DM_PINS} at the top
+          </Text>
+        </View>
+
+        {/* Workspaces panel — team chats + channels for every workspace */}
+        <View style={{ flex: 2, minHeight: 0, flexBasis: 0, borderTopWidth: 1, borderTopColor: "#E8ECF1" }}>
+          <WorkspacesSection
+            activeTeamId={activeTeamId}
+            onSelectTeam={setActiveTeamId}
+            cardStyle={cardStyle}
+          />
         </View>
         </View>
 
-        <Text
-          testID="pin-hint-footer"
-          style={{
-            flexShrink: 0,
-            textAlign: "center",
-            fontSize: 11,
-            lineHeight: 15,
-            color: "#94A3B8",
-            paddingHorizontal: 24,
-            paddingTop: 6,
-            paddingBottom: 8,
-          }}
-        >
-          Hold and press a conversation to pin up to {MAX_DM_PINS} to the top
-        </Text>
       </View>
 
       {/* Add / New Conversation modal */}
@@ -750,72 +820,11 @@ export default function ChatScreen() {
           subtitle="Create a group conversation"
           onPress={() => {
             setShowAddModal(false);
-            if (!isPaid) {
-              setShowGroupPaywall(true);
-            } else {
-              router.push("/create-group");
-            }
+            router.push("/create-group");
           }}
           testID="add-modal-new-group"
         />
       </AlenioBottomSheet>
-
-      <AddMemberModal
-        visible={showInviteModal}
-        teamId={activeTeamId ?? ""}
-        teamName={teamDetail?.name ?? "Team"}
-        confirming={inviteMemberMutation.isPending}
-        error={inviteError}
-        onClose={() => {
-          setInviteError(null);
-          setShowInviteModal(false);
-        }}
-        onClearError={() => setInviteError(null)}
-        onConfirm={(email) => inviteMemberMutation.mutate(email)}
-      />
-
-      {/* Group chat paywall — same slide-up sheet motion */}
-      <Modal visible={showGroupPaywall} transparent animationType="slide" onRequestClose={() => setShowGroupPaywall(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }} onPress={() => setShowGroupPaywall(false)}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View
-              style={{
-                backgroundColor: "white",
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                paddingHorizontal: 20,
-                paddingTop: 12,
-                paddingBottom: 28,
-                width: "100%",
-                alignItems: "center",
-              }}
-              testID="group-paywall-modal"
-            >
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 14 }} />
-              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                <Lock size={24} color="#4361EE" />
-              </View>
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 6 }}>{PAYWALL_TITLE}</Text>
-              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginBottom: 18, lineHeight: 18 }}>
-                {PAYWALL_BODY}
-              </Text>
-              <TouchableOpacity
-                onPress={() => { setShowGroupPaywall(false); router.push("/account-hub"); }}
-                testID="group-paywall-view-plan"
-                style={{ borderRadius: 12, overflow: "hidden", width: "100%", shadowColor: "#4361EE", shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5, marginBottom: 8 }}
-              >
-                <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 12, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>View plan details</Text>
-                  <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 14 }}>→</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowGroupPaywall(false)} style={alenioSheetStyles.cancelButton} testID="group-paywall-dismiss">
-                <Text style={alenioSheetStyles.cancelButtonText}>Not now</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 }

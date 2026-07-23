@@ -47,7 +47,7 @@ export default function SwitchWorkspaceScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: PROFILE_UI.pageBg }} edges={["top", "bottom"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]}>
       <View
         style={{
           flexDirection: "row",

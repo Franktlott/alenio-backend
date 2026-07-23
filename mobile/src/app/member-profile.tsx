@@ -20,6 +20,11 @@ import {
   Crown,
   Shield,
   X,
+  User,
+  MessageSquare,
+  Calendar,
+  Target,
+  Star,
 } from "lucide-react-native";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
@@ -39,10 +44,11 @@ import {
   ProfileSection,
 } from "@/components/profile/ProfileEnterpriseUI";
 import { DevelopmentToolsLockedCard } from "@/components/DevelopmentToolsLockedCard";
+import { resolveUserImageUrl } from "@/lib/user-avatar";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
 const FORMER_MEMBER_TABS = ["Check-In"] as const;
-const PAGE_BG = "#F3F5FC";
+const PAGE_BG = "transparent";
 const PAGE_BORDER = "#E0E7FF";
 const TAB_TRACK_BG = "#E8ECFA";
 type ProfileTab = (typeof PROFILE_TABS)[number] | (typeof FORMER_MEMBER_TABS)[number];
@@ -153,6 +159,11 @@ export default function MemberProfileScreen() {
     params.startCheckIn === "1" ? "Check-In" : parseTab(params.tab),
   );
   const [manageOpen, setManageOpen] = useState(false);
+  const [startCheckInToken, setStartCheckInToken] = useState(() =>
+    params.startCheckIn === "1" ? 1 : 0,
+  );
+  const [requestCreateGoal, setRequestCreateGoal] = useState(false);
+  const [checkInFlowActive, setCheckInFlowActive] = useState(false);
 
   const { data: team, isLoading } = useQuery({
     queryKey: ["team", teamId],
@@ -230,7 +241,6 @@ export default function MemberProfileScreen() {
     !isFormerMember && (isSelf || isLeaderRole(myRole));
   const canAddDevNotes = canCreateDevGoal;
   const canCreateOneOne = !isFormerMember && isLeaderRole(myRole);
-  const shouldAutoStartCheckIn = params.startCheckIn === "1";
   const preferredCheckInTemplateId =
     typeof params.templateId === "string" && params.templateId.length > 0 ? params.templateId : null;
   const plannedCheckInEventId =
@@ -240,6 +250,41 @@ export default function MemberProfileScreen() {
 
   const stats = memberStats?.[memberUserId];
   const displayName = profileMember?.user.name ?? profileMember?.user.email ?? "Member";
+
+  const messageMutation = useMutation({
+    mutationFn: (recipientId: string) =>
+      api.post<{ id: string; recipient: { name: string; image?: string | null } | null }>(
+        "/api/dms/find-or-create",
+        { recipientId },
+      ),
+    onSuccess: (conv) => {
+      queryClient.invalidateQueries({ queryKey: ["dms"] });
+      router.push({
+        pathname: "/dm-chat",
+        params: {
+          conversationId: conv.id,
+          recipientName: conv.recipient?.name ?? displayName,
+          recipientImage: resolveUserImageUrl(conv.recipient?.image) ?? "",
+          isGroup: "false",
+        },
+      });
+    },
+    onError: (err: Error) => toast({ title: err.message || "Could not open message", preset: "error" }),
+  });
+
+  const goToCheckIn = (autoStart = false) => {
+    setActiveTab("Check-In");
+    if (autoStart) setStartCheckInToken((token) => token + 1);
+  };
+
+  const goToCreateGoal = () => {
+    setRequestCreateGoal(true);
+    setActiveTab("Growth");
+  };
+
+  const goToRecognition = () => {
+    router.push("/(app)/activity");
+  };
 
   useEffect(() => {
     if (isFormerMember) {
@@ -335,15 +380,18 @@ export default function MemberProfileScreen() {
     ? activeTab
     : (visibleTabs[0] ?? "Overview");
 
+  const showActionBar =
+    isPaid && !isFormerMember && visibleTabs.length > 0 && !checkInFlowActive;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG }} edges={["bottom"]}>
       <LinearGradient
         colors={["#4361EE", "#7C3AED"]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={{
-          paddingTop: insets.top + 10,
-          paddingBottom: 12,
+          paddingTop: insets.top + 6,
+          paddingBottom: 36,
           paddingHorizontal: 12,
         }}
       >
@@ -351,22 +399,22 @@ export default function MemberProfileScreen() {
           <Pressable
             onPress={() => router.back()}
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              backgroundColor: "rgba(255,255,255,0.2)",
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: "rgba(255,255,255,0.22)",
               alignItems: "center",
               justifyContent: "center",
             }}
             testID="member-profile-back"
           >
-            <ArrowLeft size={18} color="#FFFFFF" />
+            <ArrowLeft size={16} color="#FFFFFF" />
           </Pressable>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.75)", textTransform: "uppercase", letterSpacing: 0.6 }}>
+          <View style={{ flex: 1, minWidth: 0, alignItems: "center" }}>
+            <Text style={{ fontSize: 9, fontWeight: "700", color: "rgba(255,255,255,0.72)", textTransform: "uppercase", letterSpacing: 0.7 }}>
               {isFormerMember ? "Former member" : "Team member"}
             </Text>
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#FFFFFF" }} numberOfLines={1}>
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#FFFFFF", marginTop: 0 }} numberOfLines={1}>
               {displayName}
               {isSelf ? " (you)" : ""}
             </Text>
@@ -375,129 +423,155 @@ export default function MemberProfileScreen() {
             <Pressable
               onPress={() => setManageOpen(true)}
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                backgroundColor: "rgba(255,255,255,0.2)",
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: "rgba(255,255,255,0.22)",
                 alignItems: "center",
                 justifyContent: "center",
               }}
               testID="member-profile-manage"
             >
-              <MoreVertical size={18} color="#FFFFFF" />
+              <MoreVertical size={16} color="#FFFFFF" />
             </Pressable>
-          ) : null}
+          ) : (
+            <View style={{ width: 32 }} />
+          )}
         </View>
       </LinearGradient>
 
-      <View style={{ flex: 1, paddingTop: 12 }}>
-        <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
+      <View style={{ flex: 1, marginTop: -26 }}>
+        <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
           <View
             style={{
               backgroundColor: "white",
               borderRadius: 14,
               borderWidth: 1,
               borderColor: PAGE_BORDER,
-              padding: 14,
+              padding: 12,
               shadowColor: "#0F172A",
-              shadowOpacity: 0.05,
+              shadowOpacity: 0.06,
               shadowRadius: 10,
               shadowOffset: { width: 0, height: 2 },
               elevation: 2,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: "#EEF2FF",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  overflow: "hidden",
-                  borderWidth: 2,
-                  borderColor: "#E0E7FF",
-                }}
-              >
-                {profileMember.user.image ? (
-                  <Image source={{ uri: profileMember.user.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
-                ) : (
-                  <Text style={{ fontSize: 18, fontWeight: "800", color: "#4361EE" }}>
-                    {profileMember.user.name?.[0]?.toUpperCase() ?? "?"}
-                  </Text>
-                )}
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+              <View style={{ position: "relative" }}>
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: "#EEF2FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                  }}
+                >
+                  {profileMember.user.image ? (
+                    <Image source={{ uri: profileMember.user.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+                  ) : (
+                    <Text style={{ fontSize: 18, fontWeight: "800", color: "#6366F1" }}>
+                      {profileMember.user.name?.[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  )}
+                </View>
+                {!isFormerMember ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      bottom: 0,
+                      width: 11,
+                      height: 11,
+                      borderRadius: 6,
+                      backgroundColor: "#22C55E",
+                      borderWidth: 2,
+                      borderColor: "#FFFFFF",
+                    }}
+                  />
+                ) : null}
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                   <View
                     style={{
                       backgroundColor: isFormerMember ? "#F8FAFC" : "#EEF2FF",
-                      borderRadius: 6,
+                      borderRadius: 999,
                       paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      borderWidth: 1,
-                      borderColor: isFormerMember ? "#E2E8F0" : "#C7D2FE",
+                      paddingVertical: 2,
                     }}
                   >
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: isFormerMember ? "#64748B" : "#4338CA" }}>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: isFormerMember ? "#64748B" : "#4F46E5" }}>
                       {isFormerMember ? "Former member" : roleLabel(profileMember.role)}
                     </Text>
                   </View>
                   {!isFormerMember ? (
-                  <View
-                    style={{
-                      backgroundColor: "#ECFDF5",
-                      borderRadius: 6,
-                      paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      borderWidth: 1,
-                      borderColor: "#BBF7D0",
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#15803D" }}>Active</Text>
-                  </View>
+                    <View
+                      style={{
+                        backgroundColor: "#ECFDF5",
+                        borderRadius: 999,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: "#22C55E" }} />
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: "#15803D" }}>Active</Text>
+                    </View>
                   ) : null}
                 </View>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A", marginTop: 4 }} numberOfLines={1}>
+                  {displayName}
+                </Text>
                 {profileMember.user.email ? (
-                  <Text style={{ fontSize: 12, color: "#64748B", marginTop: 6 }} numberOfLines={1}>
+                  <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }} numberOfLines={1}>
                     {profileMember.user.email}
                   </Text>
                 ) : null}
                 {managerName && profileMember.role !== "owner" && !isFormerMember ? (
-                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 3 }} numberOfLines={1}>
-                    Reports to {managerName}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
+                    <User size={11} color="#818CF8" strokeWidth={2.2} />
+                    <Text style={{ fontSize: 11, color: "#64748B", flex: 1 }} numberOfLines={1}>
+                      Reports to {managerName}
+                    </Text>
+                  </View>
                 ) : null}
               </View>
             </View>
           </View>
         </View>
 
-        <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
+        <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
           {visibleTabs.length > 1 ? (
             <View
               style={{
                 flexDirection: "row",
                 backgroundColor: TAB_TRACK_BG,
-                borderRadius: 12,
+                borderRadius: 11,
                 padding: 3,
-                gap: 3,
+                gap: 2,
               }}
             >
               {visibleTabs.map((tab) => (
                 <Pressable
                   key={tab}
-                  onPress={() => setActiveTab(tab)}
+                  onPress={() => {
+                    if (tab !== "Growth") setRequestCreateGoal(false);
+                    setActiveTab(tab);
+                  }}
                   style={{
                     flex: 1,
-                    paddingVertical: 8,
-                    borderRadius: 10,
+                    paddingVertical: 7,
+                    borderRadius: 9,
                     backgroundColor: activeTabSafe === tab ? "white" : "transparent",
                     alignItems: "center",
                     shadowColor: activeTabSafe === tab ? "#0F172A" : "transparent",
                     shadowOpacity: activeTabSafe === tab ? 0.06 : 0,
-                    shadowRadius: 4,
+                    shadowRadius: 3,
                     shadowOffset: { width: 0, height: 1 },
                     elevation: activeTabSafe === tab ? 1 : 0,
                   }}
@@ -527,15 +601,26 @@ export default function MemberProfileScreen() {
             <DevelopmentToolsLockedCard isOwner={myRole === "owner"} teamId={teamId} compact />
           </View>
         ) : activeTabSafe === "Overview" ? (
-          <View style={{ flex: 1, paddingHorizontal: 12, paddingBottom: Math.max(12, insets.bottom) }}>
+          <View
+            style={{
+              flex: 1,
+              paddingHorizontal: 12,
+              paddingBottom: showActionBar ? 4 : Math.max(10, insets.bottom),
+            }}
+          >
             <ProfileOverviewTab
               teamId={teamId}
               memberUserId={memberUserId}
+              memberName={displayName}
               streak={stats?.streak}
               overdueFollowUpTasks={stats?.overdueFollowUpTasks}
               workplaceStandards={workplaceStandards}
               standardsCompliance={stats?.standardsCompliance}
               daysSinceLastCheckIn={stats?.daysSinceLastOneOnOne}
+              canStartCheckIn={canCreateOneOne}
+              canCreateGoal={canCreateDevGoal}
+              onStartCheckIn={() => goToCheckIn(true)}
+              onCreateGoal={goToCreateGoal}
             />
           </View>
         ) : (
@@ -544,8 +629,8 @@ export default function MemberProfileScreen() {
             contentContainerStyle={{
               flexGrow: 1,
               paddingHorizontal: 12,
-              paddingBottom: Math.max(24, insets.bottom),
-              paddingTop: 2,
+              paddingBottom: showActionBar ? 12 : Math.max(20, insets.bottom),
+              paddingTop: 0,
             }}
             nestedScrollEnabled
           >
@@ -554,28 +639,121 @@ export default function MemberProfileScreen() {
                 teamId={teamId}
                 memberUserId={memberUserId}
                 memberName={displayName}
+                memberImage={profileMember.user.image}
                 managerName={managerName}
                 canCreate={canCreateDevGoal}
                 canAddNotes={canAddDevNotes}
+                autoOpenCreate={requestCreateGoal}
               />
             ) : (
               <OneOnOneHistoryTab
                 teamId={teamId}
                 memberUserId={memberUserId}
                 memberName={displayName}
+                memberImage={profileMember.user.image}
                 managerName={managerName}
                 leaderUserId={leaderUserId}
                 canCreate={canCreateOneOne}
                 canModify={canCreateOneOne}
                 isSelf={isSelf}
                 myRole={myRole}
-                autoStartCheckIn={shouldAutoStartCheckIn}
+                startCheckInToken={startCheckInToken}
                 preferredTemplateId={preferredCheckInTemplateId}
                 plannedEventId={plannedCheckInEventId}
+                onFlowActiveChange={setCheckInFlowActive}
               />
             )}
           </ScrollView>
         )}
+
+        {showActionBar ? (
+          <View
+            style={{
+              flexDirection: "row",
+              borderTopWidth: 1,
+              borderTopColor: "#E8ECFA",
+              backgroundColor: "#FFFFFF",
+              paddingTop: 6,
+              paddingBottom: Math.max(6, insets.bottom),
+              paddingHorizontal: 6,
+            }}
+          >
+            {(
+              [
+                {
+                  key: "message",
+                  label: "Message",
+                  icon: MessageSquare,
+                  disabled: isSelf || messageMutation.isPending,
+                  onPress: () => {
+                    if (!isSelf) messageMutation.mutate(memberUserId);
+                  },
+                },
+                {
+                  key: "check-in",
+                  label: "Start check-in",
+                  icon: Calendar,
+                  disabled: !canCreateOneOne,
+                  onPress: () => goToCheckIn(true),
+                },
+                {
+                  key: "goal",
+                  label: "New goal",
+                  icon: Target,
+                  disabled: !canCreateDevGoal,
+                  onPress: goToCreateGoal,
+                },
+                {
+                  key: "recognition",
+                  label: "Send recognition",
+                  icon: Star,
+                  disabled: isSelf,
+                  onPress: goToRecognition,
+                },
+              ] as const
+            ).map((action) => {
+              const Icon = action.icon;
+              const emphasized =
+                (action.key === "check-in" && activeTabSafe === "Check-In") ||
+                (action.key === "goal" && activeTabSafe === "Growth");
+              return (
+                <Pressable
+                  key={action.key}
+                  onPress={action.onPress}
+                  disabled={action.disabled}
+                  style={{ flex: 1, alignItems: "center", gap: 3, opacity: action.disabled ? 0.35 : 1 }}
+                  testID={`member-profile-action-${action.key}`}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      backgroundColor: emphasized ? "#EEF2FF" : "#F8FAFC",
+                      borderWidth: 1,
+                      borderColor: emphasized ? "#C7D2FE" : "#E8ECFA",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Icon size={15} color={emphasized ? "#4361EE" : "#475569"} strokeWidth={2} />
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: 9,
+                      fontWeight: "600",
+                      color: emphasized ? "#4361EE" : "#475569",
+                      textAlign: "center",
+                    }}
+                    numberOfLines={2}
+                  >
+                    {action.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
       </View>
 
       <Modal visible={manageOpen} transparent animationType="slide" onRequestClose={() => setManageOpen(false)}>

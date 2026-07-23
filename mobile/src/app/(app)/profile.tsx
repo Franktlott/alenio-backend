@@ -44,7 +44,7 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
 import { applyTeamRemovedFromAccount } from "@/lib/workspace-switch";
 import { toast } from "burnt";
-import { ACCOUNT_HUB_TITLE } from "@/lib/plan-access-copy";
+import { ACCOUNT_HUB_TITLE, hasTeamPlan } from "@/lib/plan-access-copy";
 import { tabBarClearance } from "@/lib/tab-bar";
 import type { Team } from "@/lib/types";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
@@ -608,7 +608,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F1F5F9" }} edges={[]} testID="profile-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={[]} testID="profile-screen">
       <AppTabHeader
         topInset={insets.top}
         testID="profile-header"
@@ -778,7 +778,7 @@ export default function ProfileScreen() {
                 title={ACCOUNT_HUB_TITLE}
                 subtitle={
                   isOwnerOfAnyTeam
-                    ? ownerTeamSubscription?.plan === "team"
+                    ? hasTeamPlan(ownerTeamSubscription)
                       ? "Team access active · Manage workplaces"
                       : "Manage workplace subscriptions"
                     : "View workplace plans"
@@ -798,7 +798,7 @@ export default function ProfileScreen() {
             <ProfileCard>
               <ProfileMenuRow
                 icon={Bell}
-                title="Notifications"
+                title="Notification settings"
                 subtitle={notificationPreferencesSummary(notifPrefs)}
                 onPress={() => router.push("/notifications")}
                 testID="notifications-menu-row"

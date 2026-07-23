@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { View, Text, Pressable } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, MessageSquare } from "lucide-react-native";
+import { ArrowLeft, ChevronRight, MessageSquare, MoreHorizontal, Users } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -12,20 +12,21 @@ import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Message, Team } from "@/lib/types";
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { SpacesSection } from "@/components/SpacesSection";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const cardStyle = {
   marginHorizontal: 14,
-  marginBottom: 8,
+  marginBottom: 6,
   backgroundColor: "white",
-  borderRadius: 12,
-  paddingVertical: 12,
-  paddingHorizontal: 14,
+  borderRadius: 14,
+  paddingVertical: 10,
+  paddingHorizontal: 12,
   borderWidth: 1,
   borderColor: "#E8ECF1",
   shadowColor: "#0F172A",
-  shadowOpacity: 0.04,
-  shadowRadius: 6,
-  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.05,
+  shadowRadius: 8,
+  shadowOffset: { width: 0, height: 3 },
   elevation: 1,
 } as const;
 
@@ -105,30 +106,32 @@ export default function WorkspaceScreen() {
 
   const headerName = teamName ?? team?.name ?? "Workspace";
   const memberCount = team?.members?.length ?? team?._count?.members;
+  const visibleMembers = team?.members?.slice(0, 5) ?? [];
+  const extraMembers = Math.max(0, (memberCount ?? 0) - visibleMembers.length);
 
   const openMainChat = () =>
     router.push({ pathname: "/team-chat", params: { teamId, teamName: headerName } });
 
   return (
-    <SafeAreaView testID="workspace-screen" style={{ flex: 1, backgroundColor: "#F8F9FC" }} edges={["top"]}>
+    <SafeAreaView testID="workspace-screen" style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]}>
       {/* Top bar */}
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          paddingHorizontal: 12,
-          paddingTop: 6,
-          paddingBottom: 4,
+          paddingHorizontal: 14,
+          paddingTop: 4,
+          paddingBottom: 2,
         }}
       >
         <Pressable
           testID="workspace-back"
           onPress={() => router.back()}
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
+            width: 32,
+            height: 32,
+            borderRadius: 16,
             backgroundColor: "#FFFFFF",
             borderWidth: 1,
             borderColor: "#E8ECF1",
@@ -138,24 +141,42 @@ export default function WorkspaceScreen() {
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <ArrowLeft size={20} color="#0F172A" />
+          <ArrowLeft size={17} color="#334155" />
         </Pressable>
-        <View style={{ width: 36 }} />
+        <Pressable
+          testID="workspace-menu"
+          onPress={() => router.push("/(app)/team")}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: "#FFFFFF",
+            borderWidth: 1,
+            borderColor: "#E8ECF1",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Workspace details"
+        >
+          <MoreHorizontal size={17} color="#64748B" />
+        </Pressable>
       </View>
 
       {/* Workspace identity */}
-      <View style={{ alignItems: "center", paddingTop: 8, paddingBottom: 16, paddingHorizontal: 24 }}>
+      <View style={{ alignItems: "center", paddingTop: 2, paddingBottom: 12, paddingHorizontal: 24 }}>
         <WorkspaceTeamAvatar
           team={{ name: headerName, image: team?.image ?? null }}
-          size={72}
-          radius={20}
-          backgroundColor="#EEF2FF"
-          textColor="#4361EE"
+          size={58}
+          radius={16}
+          backgroundColor="#6D42D8"
+          textColor="#FFFFFF"
+          borderColor="#DDD6FE"
         />
         <Text
           style={{
-            marginTop: 12,
-            fontSize: 20,
+            marginTop: 8,
+            fontSize: 19,
             fontWeight: "800",
             color: "#0F172A",
             letterSpacing: -0.4,
@@ -165,41 +186,86 @@ export default function WorkspaceScreen() {
         >
           {headerName}
         </Text>
-        {memberCount ? (
-          <Text style={{ marginTop: 2, fontSize: 12, color: "#94A3B8" }}>
-            {memberCount} member{memberCount === 1 ? "" : "s"}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
+          <Users size={11} color="#94A3B8" />
+          <Text style={{ fontSize: 11, color: "#64748B" }}>
+            {memberCount ?? 0} member{memberCount === 1 ? "" : "s"}
           </Text>
+        </View>
+        {visibleMembers.length > 0 ? (
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6 }}>
+            {visibleMembers.map((member, index) => (
+              <UserAvatar
+                key={member.userId}
+                user={member.user}
+                size={29}
+                radius={15}
+                backgroundColor="#EEF2FF"
+                textColor="#4361EE"
+                fontSize={10}
+                style={{
+                  marginLeft: index === 0 ? 0 : -6,
+                  borderWidth: 2,
+                  borderColor: "#F8F9FC",
+                }}
+              />
+            ))}
+            {extraMembers > 0 ? (
+              <View
+                style={{
+                  width: 29,
+                  height: 29,
+                  borderRadius: 15,
+                  marginLeft: -6,
+                  backgroundColor: "#EEF2FF",
+                  borderWidth: 2,
+                  borderColor: "#F8F9FC",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 9, fontWeight: "700", color: "#6366F1" }}>+{extraMembers}</Text>
+              </View>
+            ) : null}
+          </View>
         ) : null}
+        <Text style={{ marginTop: 6, fontSize: 10, color: "#94A3B8", textAlign: "center" }}>
+          Main communication hub for the team.
+        </Text>
       </View>
 
       <View style={{ flex: 1, minHeight: 0 }}>
         {/* Main chat */}
-        <Pressable testID="workspace-main-chat" onPress={openMainChat} style={cardStyle}>
+        <Pressable
+          testID="workspace-main-chat"
+          onPress={openMainChat}
+          style={[cardStyle, { paddingVertical: 11 }]}
+        >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <View
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                backgroundColor: "#EEF2FF",
+                width: 38,
+                height: 38,
+                borderRadius: 11,
+                backgroundColor: "#F3F0FF",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <MessageSquare size={20} color="#4361EE" />
+              <MessageSquare size={17} color="#7C3AED" />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>
-                  Main chat
+                <Text style={{ fontSize: 13.5, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>
+                  Main Chat
                 </Text>
                 <Text style={{ fontSize: 11, color: "#94A3B8", flexShrink: 0 }}>
                   {relativeTime(generalLast?.createdAt)}
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 2 }}>
-                <Text style={{ fontSize: 12, color: "#6B7280", flex: 1 }} numberOfLines={1}>
+                <Text style={{ fontSize: 11, color: "#64748B", flex: 1 }} numberOfLines={1}>
                   {previewText(generalLast)}
                 </Text>
                 {mainChatUnread > 0 ? (
@@ -222,6 +288,7 @@ export default function WorkspaceScreen() {
                 ) : null}
               </View>
             </View>
+            <ChevronRight size={16} color="#A78BFA" />
           </View>
         </Pressable>
 
@@ -233,8 +300,9 @@ export default function WorkspaceScreen() {
               teamName={headerName}
               canManage={canManage}
               cardStyle={cardStyle}
-              title="Channels"
+              title="Spaces"
               fillHeight
+              workspaceHub
             />
           ) : null}
         </View>

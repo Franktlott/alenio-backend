@@ -1,8 +1,8 @@
 import { prisma } from "../prisma";
+import { teamSubscriptionRowHasGoFeatures } from "../routes/subscription";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "./team-name";
 
 const ORG_GO_ADMIN_ROLES = new Set(["org_owner", "org_admin"]);
-const PAID_ACTIVE_STATUSES = ["active", "trialing", "past_due", "incomplete", "paused"] as const;
 const DEFAULT_WORKSPACE_LIMIT = 5;
 
 /**
@@ -43,13 +43,6 @@ export async function detachAllEnterpriseOrgAdminsFromWorkspaces() {
     removed += r.removed;
   }
   return { organizations: orgs.length, removed };
-}
-
-function subscriptionHasGoFeatures(sub: { plan: string; status: string } | null | undefined): boolean {
-  const plan = (sub?.plan ?? "free").trim().toLowerCase();
-  const status = (sub?.status ?? "active").trim().toLowerCase();
-  if (plan !== "operations") return false;
-  return (PAID_ACTIVE_STATUSES as readonly string[]).includes(status);
 }
 
 function generateInviteCode(): string {
@@ -124,7 +117,7 @@ export async function listEnterpriseOrganizationsForUser(userId: string): Promis
           id: t.id,
           name: t.name,
           inviteCode: t.inviteCode,
-          hasGoFeatures: subscriptionHasGoFeatures(t.subscription),
+          hasGoFeatures: teamSubscriptionRowHasGoFeatures(t.subscription),
         })),
       };
     });
@@ -261,7 +254,7 @@ export async function createOrganizationWorkspace(input: {
         id: team.id,
         name: team.name,
         inviteCode: team.inviteCode,
-        hasGoFeatures: plan === "operations",
+        hasGoFeatures: teamSubscriptionRowHasGoFeatures({ plan, status: "active" }),
       },
       workspaceLimit: limit,
       workspaceCount: org._count.teams + 1,

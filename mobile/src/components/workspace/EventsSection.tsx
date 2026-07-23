@@ -1,6 +1,7 @@
-import type { ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { View, Text, Pressable, ScrollView, Image, useWindowDimensions, type RefreshControlProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import {
   Clock,
   Users,
@@ -15,6 +16,7 @@ import {
   eventShowsScheduledTime,
   formatEventTimeRange,
 } from "@/lib/format-event-time";
+import { isWithinMeetingTimeFrame } from "@/lib/video-meeting-join";
 import { tabBarClearance } from "@/lib/tab-bar";
 import { WS } from "./workspace-ui";
 
@@ -33,6 +35,8 @@ type EventRow = {
   kind: "holiday" | "event" | "task";
   isVideoMeeting?: boolean;
   isOneOnOne?: boolean;
+  startDate?: string;
+  endDate?: string | null;
   canManage?: boolean;
   onLongPress?: () => void;
   onPress?: () => void;
@@ -130,7 +134,15 @@ function CompactEventCard({
   );
 }
 
-function DayListEventCard({ row }: { row: EventRow }) {
+function DayListEventCard({
+  row,
+  showJoin,
+  onJoin,
+}: {
+  row: EventRow;
+  showJoin?: boolean;
+  onJoin?: () => void;
+}) {
   const Icon = row.kind === "holiday"
     ? Clock
     : row.kind === "task" || row.badgeTone === "task"
@@ -168,6 +180,7 @@ function DayListEventCard({ row }: { row: EventRow }) {
         paddingLeft: 0,
         overflow: "hidden",
       }}
+      testID={`day-event-card-${row.key}`}
     >
       <View style={{ width: 3, alignSelf: "stretch", backgroundColor: row.accentColor, marginRight: 10 }} />
       <View style={{ width: 68, paddingRight: 4, flexShrink: 0 }}>
@@ -201,7 +214,32 @@ function DayListEventCard({ row }: { row: EventRow }) {
           {row.subtitle}
         </Text>
       </View>
-      <EventBadge label={row.badge} tone={row.badgeTone} />
+      {showJoin && onJoin ? (
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation?.();
+            onJoin();
+          }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            backgroundColor: "#4361EE",
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 999,
+            flexShrink: 0,
+          }}
+          testID={`day-event-join-${row.key}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Join ${row.title}`}
+        >
+          <Video size={12} color="#FFFFFF" strokeWidth={2.4} />
+          <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF" }}>Join</Text>
+        </Pressable>
+      ) : (
+        <EventBadge label={row.badge} tone={row.badgeTone} />
+      )}
     </Pressable>
   );
 }
@@ -259,6 +297,8 @@ function buildEventRows(
       kind: "event" as const,
       isVideoMeeting: ev.isVideoMeeting,
       isOneOnOne,
+      startDate: ev.startDate,
+      endDate: ev.endDate ?? null,
       canManage,
       onLongPress: canManage && onEventLongPress ? () => onEventLongPress(ev) : undefined,
       onPress: isExternal ? undefined : onEventPress ? () => onEventPress(ev) : undefined,
@@ -317,6 +357,13 @@ export function EventsSection({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+
   const contentWidth = screenWidth - SECTION_HORIZONTAL_PADDING * 2;
   const rows = buildEventRows(
     dayHolidays,
@@ -376,12 +423,9 @@ export function EventsSection({
             <View
               style={{
                 flex: 1,
+                width: "100%",
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: WS.surface,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: WS.cardBorder,
                 paddingHorizontal: 20,
                 paddingVertical: 28,
               }}
@@ -389,7 +433,7 @@ export function EventsSection({
             >
               <Image
                 source={require("@/assets/calendar-empty-day.png")}
-                style={{ width: 152, height: 152, marginBottom: 12 }}
+                style={{ width: 152, height: 152, marginBottom: 12, alignSelf: "center" }}
                 resizeMode="contain"
                 accessibilityIgnoresInvertColors
               />
@@ -399,8 +443,10 @@ export function EventsSection({
                   fontWeight: "800",
                   color: WS.ink,
                   textAlign: "center",
+                  alignSelf: "center",
                   letterSpacing: -0.2,
                   marginBottom: 6,
+                  width: "100%",
                 }}
               >
                 Nothing scheduled
@@ -410,9 +456,11 @@ export function EventsSection({
                   fontSize: 13,
                   color: WS.muted,
                   textAlign: "center",
+                  alignSelf: "center",
                   lineHeight: 18,
                   maxWidth: 280,
                   marginBottom: onAddEvent ? 16 : 0,
+                  width: "100%",
                 }}
               >
                 No events or tasks for this day. Tap “+ Add” to get started.
@@ -424,6 +472,7 @@ export function EventsSection({
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
+                    alignSelf: "center",
                     gap: 5,
                     backgroundColor: WS.accent,
                     borderRadius: 10,
@@ -454,9 +503,28 @@ export function EventsSection({
               flexGrow: fillRemaining ? 1 : undefined,
             }}
           >
-            {rows.map((row) => (
-              <DayListEventCard key={row.key} row={row} />
-            ))}
+            {rows.map((row) => {
+              const showJoin =
+                !!row.isVideoMeeting &&
+                !!row.startDate &&
+                isWithinMeetingTimeFrame(row.startDate, row.endDate, nowMs);
+              return (
+                <DayListEventCard
+                  key={row.key}
+                  row={row}
+                  showJoin={showJoin}
+                  onJoin={
+                    showJoin
+                      ? () =>
+                          router.push({
+                            pathname: "/video-call",
+                            params: { roomId: row.key, roomName: row.title },
+                          })
+                      : undefined
+                  }
+                />
+              );
+            })}
           </ScrollView>
         )}
       </View>

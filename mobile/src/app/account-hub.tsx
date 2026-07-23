@@ -960,7 +960,7 @@ export default function AccountHubScreen() {
   }, [billingMutation, selected]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: PROFILE_UI.pageBg }} edges={["top", "bottom"]} testID="account-hub-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]} testID="account-hub-screen">
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View
           style={{
@@ -990,7 +990,7 @@ export default function AccountHubScreen() {
           paddingHorizontal: 16,
           paddingTop: 10,
           paddingBottom: Math.max(insets.bottom, 8),
-          backgroundColor: PROFILE_UI.pageBg,
+          backgroundColor: "transparent",
         }}
       >
         {isLoading ? (

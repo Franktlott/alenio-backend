@@ -1,5 +1,4 @@
 import { prisma } from "../prisma";
-import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "../routes/subscription";
 
 export type GroupConversationWorkspace = {
   id: string;
@@ -179,14 +178,3 @@ export async function assertParticipantsShareWorkspaceWithCreator(
   }
 }
 
-export async function userHasPaidTeamPlan(userId: string): Promise<boolean> {
-  const memberships = await prisma.teamMember.findMany({
-    where: { userId },
-    select: { teamId: true },
-  });
-  for (const { teamId } of memberships) {
-    const subscription = await getTeamSubscription(teamId);
-    if (teamSubscriptionRowHasTeamFeatures(subscription)) return true;
-  }
-  return false;
-}

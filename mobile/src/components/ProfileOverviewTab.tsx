@@ -1,18 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator, ScrollView } from "react-native";
+import {
+  Target,
+  Calendar,
+  Clock,
+  Flag,
+} from "lucide-react-native";
 import {
   fetchDevelopmentGoals,
   fetchOneOnOneMeetings,
   type DevelopmentGoal,
+  type OneOnOneMeeting,
 } from "@/lib/member-profile-api";
-import { oneOnOnePublishedAt, latestPublishedCheckInForStandards } from "@/lib/one-on-one-dates";
+import {
+  oneOnOneDisplayDateMs,
+  oneOnOnePublishedAt,
+  latestPublishedCheckInForStandards,
+} from "@/lib/one-on-one-dates";
 import { calendarDaysSinceDate } from "@/lib/member-stats-display";
-
 import {
   DEFAULT_WORKPLACE_STANDARDS,
   formatCheckInFrequencySummary,
-  memberStandardsBadges,
-  standardsBadgeColors,
+  frequencyToDays,
   type MemberStandardsCompliance,
   type WorkplaceStandards,
 } from "@/lib/workplace-standards";
@@ -21,11 +30,16 @@ import { StandardsStatusKey } from "@/components/StandardsStatusKey";
 type Props = {
   teamId: string;
   memberUserId: string;
+  memberName: string;
   streak?: number;
   overdueFollowUpTasks?: number;
   workplaceStandards?: WorkplaceStandards;
   standardsCompliance?: MemberStandardsCompliance;
   daysSinceLastCheckIn?: number | null;
+  canStartCheckIn?: boolean;
+  canCreateGoal?: boolean;
+  onStartCheckIn?: () => void;
+  onCreateGoal?: () => void;
 };
 
 function formatDateOnly(iso: string): string {
@@ -52,101 +66,106 @@ function daysSinceDate(iso: string): number {
   return calendarDaysSinceDate(iso);
 }
 
-function daysSinceText(days: number): string {
-  if (days === 1) return "1 day";
-  return `${days} days`;
-}
-
-function formatUpdatedWithDays(iso: string): string {
-  const days = daysSinceDate(iso);
-  return `${formatDateOnly(iso)} · ${daysSinceText(days)}`;
+function nextDueLabel(
+  standards: WorkplaceStandards,
+  daysSince: number | null,
+  compliance: MemberStandardsCompliance | undefined,
+): string {
+  if (!standards.checkInRequired) return "—";
+  if (daysSince == null) return "Today";
+  const frequencyDays = frequencyToDays(standards.checkInFrequencyValue, standards.checkInFrequencyUnit);
+  const remaining = frequencyDays - daysSince;
+  if (compliance?.checkInStatus === "overdue" || remaining <= 0) return "Today";
+  if (remaining === 1) return "Tomorrow";
+  return `In ${remaining} days`;
 }
 
 function SectionCard({
   title,
   trailing,
   children,
-  flex,
+  bodyStyle,
 }: {
   title: string;
   trailing?: React.ReactNode;
   children: React.ReactNode;
-  flex?: number;
+  bodyStyle?: object;
 }) {
   return (
     <View
       style={{
-        flex: flex ?? undefined,
         backgroundColor: "white",
-        borderRadius: 14,
+        borderRadius: 12,
         borderWidth: 1,
-        borderColor: "#E0E7FF",
+        borderColor: "#E8ECFA",
         overflow: "hidden",
         shadowColor: "#0F172A",
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 2,
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 1 },
+        elevation: 1,
       }}
     >
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 6,
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: "#E8ECFA",
-          backgroundColor: "#FAFBFF",
+          gap: 4,
+          paddingHorizontal: 10,
+          paddingTop: 8,
+          paddingBottom: 5,
         }}
       >
-        <Text style={{ fontSize: 13, fontWeight: "800", color: "#0F172A", flex: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 12.5, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>
           {title}
         </Text>
         {trailing}
       </View>
-      <View style={{ flex: flex ? 1 : undefined, paddingHorizontal: 14, paddingVertical: 12 }}>
-        {children}
-      </View>
+      <View style={[{ paddingHorizontal: 10, paddingBottom: 8 }, bodyStyle]}>{children}</View>
     </View>
   );
 }
 
-function KpiCell({
+function SnapshotTile({
+  icon,
+  iconBg,
   label,
   value,
-  warning,
+  sub,
 }: {
+  icon: React.ReactNode;
+  iconBg: string;
   label: string;
   value: string;
-  warning?: boolean;
+  sub?: string;
 }) {
   return (
-    <View style={{ flex: 1, minWidth: 0 }}>
-      <Text
-        style={{
-          fontSize: 9,
-          fontWeight: "700",
-          color: "#94A3B8",
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-      <Text
-        style={{
-          fontSize: 15,
-          fontWeight: "800",
-          color: warning ? "#B91C1C" : "#0F172A",
-          marginTop: 3,
-        }}
-        numberOfLines={1}
-      >
+    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+        <View
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: 5,
+            backgroundColor: iconBg,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {icon}
+        </View>
+        <Text style={{ fontSize: 9, fontWeight: "600", color: "#94A3B8", flex: 1 }} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      <Text style={{ fontSize: 11.5, fontWeight: "800", color: "#0F172A" }} numberOfLines={1}>
         {value}
       </Text>
+      {sub ? (
+        <Text style={{ fontSize: 9, color: "#94A3B8", marginTop: -1 }} numberOfLines={1}>
+          {sub}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -154,8 +173,7 @@ function KpiCell({
 export function ProfileOverviewTab({
   teamId,
   memberUserId,
-  streak,
-  overdueFollowUpTasks,
+  memberName,
   workplaceStandards,
   standardsCompliance,
   daysSinceLastCheckIn,
@@ -164,51 +182,69 @@ export function ProfileOverviewTab({
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [activeGoals, setActiveGoals] = useState<DevelopmentGoal[]>([]);
-  const [lastOneOnOneDate, setLastOneOnOneDate] = useState<string | null>(null);
-  const [oneOnOneCount, setOneOnOneCount] = useState(0);
+  const [meetings, setMeetings] = useState<OneOnOneMeeting[]>([]);
+
+  const firstName = memberName.trim().split(/\s+/)[0] || memberName || "this teammate";
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
     setErr(null);
     try {
-      const [goals, meetings] = await Promise.all([
+      const [goals, meetingList] = await Promise.all([
         fetchDevelopmentGoals(teamId, memberUserId),
         fetchOneOnOneMeetings(teamId, memberUserId),
       ]);
-
       const active = goals
         .filter((goal) => goal.status === "active")
         .sort(
           (a, b) => new Date(lastUpdatedAt(b)).getTime() - new Date(lastUpdatedAt(a)).getTime(),
         );
       setActiveGoals(active);
-      const publishedMeetings = meetings.filter((meeting) => meeting.status !== "draft");
-      setOneOnOneCount(publishedMeetings.length);
-
-      const latestMeeting = latestPublishedCheckInForStandards(meetings, standards);
-      setLastOneOnOneDate(latestMeeting ? oneOnOnePublishedAt(latestMeeting) : null);
+      setMeetings(meetingList);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not load overview.");
       setActiveGoals([]);
-      setLastOneOnOneDate(null);
-      setOneOnOneCount(0);
+      setMeetings([]);
     } finally {
       setLoading(false);
     }
-  }, [memberUserId, teamId, standards.requiredCheckInTemplateId]);
+  }, [memberUserId, teamId]);
 
   useEffect(() => {
     void loadOverview();
   }, [loadOverview]);
+
+  const publishedMeetings = useMemo(
+    () => meetings.filter((meeting) => meeting.status !== "draft"),
+    [meetings],
+  );
+
+  const recentCheckIns = useMemo(() => {
+    return [...meetings]
+      .sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))
+      .slice(0, 4)
+      .map((meeting) => ({
+        id: meeting.id,
+        name: meeting.templateTitle?.trim() || "Check-in",
+      }));
+  }, [meetings]);
+
+  const latestMeeting = useMemo(
+    () => latestPublishedCheckInForStandards(meetings, standards),
+    [meetings, standards],
+  );
+  const lastOneOnOneDate = latestMeeting ? oneOnOnePublishedAt(latestMeeting) : null;
 
   const daysSinceOneOnOne = useMemo(() => {
     if (daysSinceLastCheckIn != null) return daysSinceLastCheckIn;
     return lastOneOnOneDate ? daysSinceDate(lastOneOnOneDate) : null;
   }, [daysSinceLastCheckIn, lastOneOnOneDate]);
 
-  const snapshotGoals = activeGoals.slice(0, 3);
-
-  if (loading && activeGoals.length === 0 && !err) {
+  const nextDue = nextDueLabel(standards, daysSinceOneOnOne, standardsCompliance);
+  const goalsSummary = standards.goalsRequired
+    ? `${standards.minimumActiveGoals} required`
+    : "Optional";
+  if (loading && activeGoals.length === 0 && meetings.length === 0 && !err) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color="#4361EE" />
@@ -217,176 +253,219 @@ export function ProfileOverviewTab({
   }
 
   return (
-    <View style={{ flex: 1, gap: 10 }}>
-      <SectionCard title="Member snapshot">
-        {err ? (
-          <Text style={{ fontSize: 12, color: "#DC2626" }}>{err}</Text>
-        ) : (
-          <View style={{ gap: 12 }}>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <KpiCell label="Active goals" value={loading ? "—" : String(activeGoals.length)} />
-              <KpiCell
-                label="Last check-in"
-                value={loading ? "—" : lastOneOnOneDate ? formatDateOnly(lastOneOnOneDate) : "None"}
-              />
-            </View>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <KpiCell
-                label="Days since"
-                value={loading ? "—" : lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—"}
-              />
-              <KpiCell label="Check-ins" value={loading ? "—" : String(oneOnOneCount)} />
-            </View>
-            {(streak != null && streak > 0) || (overdueFollowUpTasks != null && overdueFollowUpTasks > 0) ? (
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                {streak != null && streak > 0 ? <KpiCell label="Streak" value={`${streak}d`} /> : <View style={{ flex: 1 }} />}
-                {overdueFollowUpTasks != null && overdueFollowUpTasks > 0 ? (
-                  <KpiCell label="Overdue" value={String(overdueFollowUpTasks)} warning />
-                ) : (
-                  <View style={{ flex: 1 }} />
-                )}
-              </View>
-            ) : null}
-          </View>
-        )}
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {err ? (
+        <Text style={{ fontSize: 11, color: "#DC2626", paddingHorizontal: 2 }}>{err}</Text>
+      ) : null}
+
+      <SectionCard title="Performance snapshot">
+        <View style={{ flexDirection: "row", gap: 7 }}>
+          <SnapshotTile
+            icon={<Target size={9} color="#7C3AED" strokeWidth={2.4} />}
+            iconBg="#F3E8FF"
+            label="Goals"
+            value={`${activeGoals.length} Active`}
+          />
+          <SnapshotTile
+            icon={<Clock size={9} color="#EA580C" strokeWidth={2.4} />}
+            iconBg="#FFEDD5"
+            label="Check-in status"
+            value={
+              lastOneOnOneDate
+                ? daysSinceOneOnOne === 0
+                  ? "Today"
+                  : `${daysSinceOneOnOne ?? 0} days since`
+                : "Never"
+            }
+            sub={lastOneOnOneDate ? `Last ${formatDateOnly(lastOneOnOneDate)}` : "No check-in yet"}
+          />
+        </View>
       </SectionCard>
 
       <SectionCard
-        title="Standards status"
-        trailing={<StandardsStatusKey iconSize={14} />}
+        title="Development standards"
+        trailing={<StandardsStatusKey iconSize={13} />}
+        bodyStyle={{ paddingTop: 0 }}
       >
-        <View style={{ flexDirection: "row", gap: 16, marginBottom: 10 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
-              Check-in
-            </Text>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginTop: 2 }} numberOfLines={1}>
-              {standards.checkInRequired ? formatCheckInFrequencySummary(standards) : "Not required"}
-            </Text>
+        <View style={{ flexDirection: "row", gap: 8, alignItems: "stretch" }}>
+          <View style={{ flex: 1.15, minWidth: 0, paddingTop: 1 }}>
+            {recentCheckIns.length === 0 ? (
+              <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 16 }}>
+                No check-ins yet
+              </Text>
+            ) : (
+              <View>
+                {recentCheckIns.map((item, index) => {
+                  const isLatest = index === 0;
+                  const isLast = index === recentCheckIns.length - 1;
+                  return (
+                    <View
+                      key={item.id}
+                      style={{ flexDirection: "row", alignItems: "flex-start", minHeight: isLast ? 18 : 26 }}
+                    >
+                      <View style={{ width: 14, alignItems: "center", marginRight: 6 }}>
+                        <View
+                          style={{
+                            width: isLatest ? 8 : 6,
+                            height: isLatest ? 8 : 6,
+                            borderRadius: 4,
+                            marginTop: 3,
+                            backgroundColor: isLatest ? "#6366F1" : "#CBD5E1",
+                            borderWidth: isLatest ? 0 : 1.5,
+                            borderColor: "#E2E8F0",
+                          }}
+                        />
+                        {!isLast ? (
+                          <View
+                            style={{
+                              width: 1.5,
+                              flex: 1,
+                              minHeight: 10,
+                              backgroundColor: "#E2E8F0",
+                              marginTop: 2,
+                            }}
+                          />
+                        ) : null}
+                      </View>
+                      <Text
+                        style={{
+                          flex: 1,
+                          fontSize: 12,
+                          fontWeight: isLatest ? "700" : "500",
+                          color: isLatest ? "#4F46E5" : "#94A3B8",
+                          lineHeight: 16,
+                          paddingTop: 0,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
-              Goals
-            </Text>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginTop: 2 }} numberOfLines={1}>
-              {standards.goalsRequired
-                ? `${standards.minimumActiveGoals} active goal${standards.minimumActiveGoals === 1 ? "" : "s"}`
-                : "Not required"}
-            </Text>
+
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "#F8FAFC",
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: "#EEF2F6",
+              paddingHorizontal: 8,
+              paddingVertical: 6,
+              gap: 5,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+              <Calendar size={12} color="#94A3B8" strokeWidth={2} style={{ marginTop: 1 }} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "500" }}>Frequency</Text>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A", marginTop: 0 }} numberOfLines={1}>
+                  {formatCheckInFrequencySummary(standards)}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+              <Flag size={12} color="#94A3B8" strokeWidth={2} style={{ marginTop: 1 }} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "500" }}>Goals</Text>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A", marginTop: 0 }} numberOfLines={1}>
+                  {goalsSummary}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+              <Clock size={12} color="#94A3B8" strokeWidth={2} style={{ marginTop: 1 }} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "500" }}>Next due</Text>
+                <Text style={{ fontSize: 12, fontWeight: "800", color: "#0F172A", marginTop: 0 }} numberOfLines={1}>
+                  {nextDue}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        {standardsCompliance ? (
-          <>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-              {memberStandardsBadges(standardsCompliance, daysSinceOneOnOne).map((badge) => {
-                const colors = standardsBadgeColors(badge.variant);
-                return (
-                  <View
-                    key={badge.key}
-                    accessibilityLabel={badge.title}
-                    style={{
-                      backgroundColor: colors.bg,
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 999,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 9,
-                        fontWeight: "800",
-                        color: colors.text,
-                        letterSpacing: 0.4,
-                      }}
-                    >
-                      {badge.label.toUpperCase()}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-            <View style={{ marginTop: 8, gap: 2 }}>
-              {standardsCompliance.checkInStatus !== "not_required" ? (
-                <Text style={{ fontSize: 12, color: "#475569" }} numberOfLines={2}>
-                  {standardsCompliance.checkInActionText}
-                </Text>
-              ) : null}
-              {standardsCompliance.goalsStatus !== "not_required" ? (
-                <Text style={{ fontSize: 12, color: "#475569" }} numberOfLines={2}>
-                  {standardsCompliance.goalsActionText}
-                </Text>
-              ) : null}
-            </View>
-          </>
-        ) : null}
       </SectionCard>
 
-      <SectionCard
-        title="Development goals"
-        flex={1}
-        trailing={
-          activeGoals.length > 0 ? (
+      <SectionCard title="Development goals">
+        {activeGoals.length === 0 ? (
+          <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 2, gap: 8 }}>
             <View
               style={{
+                width: 30,
+                height: 30,
+                borderRadius: 15,
                 backgroundColor: "#EEF2FF",
-                borderRadius: 999,
-                minWidth: 20,
-                height: 20,
                 alignItems: "center",
                 justifyContent: "center",
-                paddingHorizontal: 6,
               }}
             >
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE" }}>{activeGoals.length}</Text>
+              <Target size={14} color="#6366F1" />
             </View>
-          ) : null
-        }
-      >
-        {activeGoals.length === 0 ? (
-          <Text style={{ fontSize: 13, color: "#94A3B8" }}>No active development goals.</Text>
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 11,
+                color: "#64748B",
+                lineHeight: 15,
+              }}
+              numberOfLines={2}
+            >
+              No active development goals. Create a goal to help {firstName} grow.
+            </Text>
+          </View>
         ) : (
-          <View style={{ gap: 0, flex: 1 }}>
-            {snapshotGoals.map((goal, index) => (
+          <View style={{ gap: 0 }}>
+            {activeGoals.slice(0, 3).map((goal, index) => (
               <View
                 key={goal.id}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  gap: 8,
-                  paddingVertical: 8,
+                  gap: 7,
+                  paddingVertical: 7,
                   borderTopWidth: index === 0 ? 0 : 1,
                   borderTopColor: "#F1F5F9",
                 }}
               >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>
-                    {goal.skill}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }} numberOfLines={1}>
-                    {formatUpdatedWithDays(lastUpdatedAt(goal))}
-                  </Text>
-                </View>
                 <View
                   style={{
-                    backgroundColor: "#DCFCE7",
-                    borderRadius: 6,
-                    paddingHorizontal: 7,
-                    paddingVertical: 2,
+                    width: 24,
+                    height: 24,
+                    borderRadius: 7,
+                    backgroundColor: "#EEF2FF",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
-                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#166534" }}>Active</Text>
+                  <Target size={12} color="#4361EE" />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>
+                    {goal.skill}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: "#94A3B8", marginTop: 0 }} numberOfLines={1}>
+                    Updated {formatDateOnly(lastUpdatedAt(goal))}
+                  </Text>
                 </View>
               </View>
             ))}
-            {activeGoals.length > snapshotGoals.length ? (
-              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
-                +{activeGoals.length - snapshotGoals.length} more on Growth
+            {activeGoals.length > 3 ? (
+              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                +{activeGoals.length - 3} more on Growth
               </Text>
             ) : null}
           </View>
         )}
       </SectionCard>
-    </View>
+    </ScrollView>
   );
 }

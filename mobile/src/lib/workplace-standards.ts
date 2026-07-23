@@ -96,6 +96,12 @@ export function formatCheckInFrequencySummary(standards: WorkplaceStandards): st
   return `Every ${value} ${unit}`;
 }
 
+export function frequencyToDays(value: number, unit: CheckInFrequencyUnit): number {
+  if (unit === "weeks") return value * 7;
+  if (unit === "months") return value * 30;
+  return value;
+}
+
 export const STANDARDS_BADGE_LEGEND: ReadonlyArray<{
   variant: StandardsBadgeVariant;
   label: string;

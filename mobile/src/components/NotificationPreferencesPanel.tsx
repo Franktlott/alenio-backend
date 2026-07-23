@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Pressable, Platform, Switch, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, Platform, Switch, ActivityIndicator, Linking } from "react-native";
 import * as Notifications from "expo-notifications";
 import {
   Check,
@@ -17,7 +17,12 @@ import {
 import type { LucideIcon } from "lucide-react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
-import { ensureAndroidChannelsForPreview, notificationPreviewDataKey } from "@/lib/notifications";
+import {
+  ensureAndroidChannelsForPreview,
+  getNotifStatus,
+  notificationPreviewDataKey,
+  registerForPushNotificationsAsync,
+} from "@/lib/notifications";
 
 export type NotifPrefs = {
   isAdmin?: boolean;
@@ -258,10 +263,26 @@ async function playNotifTonePreview(tone: string) {
 export function NotificationPreferencesPanel() {
   const queryClient = useQueryClient();
   const [toneExpanded, setToneExpanded] = React.useState(false);
+  const [retryingPush, setRetryingPush] = React.useState(false);
 
   const { data: notifPrefs, isLoading } = useQuery({
     queryKey: ["notification-preferences"],
     queryFn: () => api.get<NotifPrefs>("/api/notification-preferences"),
+  });
+
+  const { data: pushDelivery } = useQuery({
+    queryKey: ["notification-push-delivery"],
+    queryFn: async () => {
+      const [permission, status] = await Promise.all([
+        Notifications.getPermissionsAsync(),
+        getNotifStatus(),
+      ]);
+      return {
+        permission: permission.status,
+        statusMessage: status,
+      };
+    },
+    staleTime: 30_000,
   });
 
   const notifMutation = useMutation({
@@ -302,6 +323,22 @@ export function NotificationPreferencesPanel() {
   const selectedToneMeta =
     NOTIFICATION_TONES.find((t) => t.value === resolvedTone) ?? NOTIFICATION_TONES[0];
   const isAdmin = notifPrefs?.isAdmin === true;
+  const pushReady = notifPrefs?.hasToken === true && pushDelivery?.permission === "granted";
+  const pushBlocked =
+    pushDelivery?.permission === "denied" ||
+    pushDelivery?.statusMessage === "permission denied" ||
+    (!notifPrefs?.hasToken && pushDelivery?.permission !== "granted");
+
+  const retryPushRegistration = async () => {
+    setRetryingPush(true);
+    try {
+      await registerForPushNotificationsAsync();
+      await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
+      await queryClient.invalidateQueries({ queryKey: ["notification-push-delivery"] });
+    } finally {
+      setRetryingPush(false);
+    }
+  };
 
   if (isLoading && !notifPrefs) {
     return (
@@ -313,6 +350,65 @@ export function NotificationPreferencesPanel() {
 
   return (
     <View>
+      <SectionHeader title="Delivery" />
+      <View style={[UI.card, { paddingHorizontal: 12, paddingVertical: 12, marginBottom: 14 }]} testID="notif-delivery-card">
+        <Text style={UI.rowTitle}>
+          {pushReady ? "Push registered" : "Push not registered"}
+        </Text>
+        <Text style={[UI.rowDesc, { marginTop: 4 }]}>
+          {pushReady
+            ? "Alerts arrive when the app is in the background. While Alenio is open, banners are hidden on purpose — you’ll still get a badge update."
+            : pushDelivery?.permission === "denied"
+              ? "Notifications are turned off for Alenio in system settings. Enable them to receive alerts."
+              : "This device isn’t registered for push yet. Use a real device build (EAS), allow notifications, then retry."}
+        </Text>
+        {!pushReady ? (
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+            {pushBlocked && pushDelivery?.permission === "denied" ? (
+              <Pressable
+                onPress={() => void Linking.openSettings()}
+                testID="notif-open-system-settings"
+                style={{
+                  backgroundColor: C.navy,
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                }}
+              >
+                <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Open Settings</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={() => void retryPushRegistration()}
+              disabled={retryingPush}
+              testID="notif-retry-push-registration"
+              style={{
+                backgroundColor: pushDelivery?.permission === "denied" ? C.slateSoft : C.navy,
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 9,
+                borderWidth: pushDelivery?.permission === "denied" ? 1 : 0,
+                borderColor: C.line,
+              }}
+            >
+              {retryingPush ? (
+                <ActivityIndicator color={pushDelivery?.permission === "denied" ? C.navy : "#FFFFFF"} size="small" />
+              ) : (
+                <Text
+                  style={{
+                    color: pushDelivery?.permission === "denied" ? C.ink : "#FFFFFF",
+                    fontWeight: "700",
+                    fontSize: 13,
+                  }}
+                >
+                  Retry registration
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
+
       <SectionHeader title="Alert categories" />
       <View style={UI.card}>
         {WORKSPACE_ALERT_CATEGORIES.map((item, index) => (

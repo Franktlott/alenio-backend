@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   FlatList,
   ActivityIndicator,
   Image,
@@ -188,8 +189,10 @@ export default function CreateGroupScreen() {
             </Text>
           ) : null
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity
+        renderItem={({ item }) => {
+          const selected = isSelected(item.id);
+          return (
+          <Pressable
             testID={`user-item-${item.id}`}
             onPress={() => toggleUser(item)}
             className="flex-row items-center px-4 py-3"
@@ -223,14 +226,15 @@ export default function CreateGroupScreen() {
             <View
               className="w-6 h-6 rounded-full border-2 items-center justify-center"
               style={{
-                backgroundColor: isSelected(item.id) ? "#4361EE" : "transparent",
-                borderColor: isSelected(item.id) ? "#4361EE" : "#CBD5E1",
+                backgroundColor: selected ? "#4361EE" : "transparent",
+                borderColor: selected ? "#4361EE" : "#CBD5E1",
               }}
             >
-              {isSelected(item.id) ? <Check size={14} color="white" /> : null}
+              {selected ? <Check size={14} color="white" /> : null}
             </View>
-          </TouchableOpacity>
-        )}
+          </Pressable>
+          );
+        }}
       />
     </SafeAreaView>
   );

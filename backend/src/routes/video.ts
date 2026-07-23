@@ -14,6 +14,7 @@ type Variables = {
 };
 
 const videoRouter = new Hono<{ Variables: Variables }>();
+videoRouter.use("*", authGuard);
 
 function parseMeetingAssigneeIds(raw: string | null | undefined): string[] {
   if (!raw) return [];
@@ -36,6 +37,17 @@ function sanitizeRoomName(id: string): string {
   return `room-${id}`.replace(/[^a-zA-Z0-9-]/g, "-").slice(0, 40);
 }
 
+function isAllowedDailyRoomUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    return host === "daily.co" || host.endsWith(".daily.co");
+  } catch {
+    return false;
+  }
+}
+
 async function computeExp(roomId: string): Promise<number> {
   const event = await prisma.calendarEvent.findUnique({
     where: { id: roomId },
@@ -49,10 +61,147 @@ async function computeExp(roomId: string): Promise<number> {
   return Math.floor(Date.now() / 1000) + 86400;
 }
 
+/** Authorize room access by roomId shape used by mobile/web clients. */
+async function assertUserCanAccessVideoRoom(
+  userId: string,
+  roomId: string,
+): Promise<{ ok: true } | { ok: false; status: 403 | 404; message: string }> {
+  const calendarEvent = await prisma.calendarEvent.findUnique({
+    where: { id: roomId },
+    select: { id: true, teamId: true, reminderMinutes: true, isVideoMeeting: true },
+  });
+  if (calendarEvent) {
+    const membership = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId, teamId: calendarEvent.teamId } },
+      select: { userId: true },
+    });
+    if (!membership) {
+      return { ok: false, status: 403, message: "Not a team member" };
+    }
+    const assigneeIds = parseMeetingAssigneeIds(calendarEvent.reminderMinutes);
+    if (assigneeIds.length > 0 && !assigneeIds.includes(userId)) {
+      return { ok: false, status: 403, message: "Not invited to this meeting" };
+    }
+    return { ok: true };
+  }
+
+  if (roomId.startsWith("chat-")) {
+    const memberships = await prisma.teamMember.findMany({
+      where: { userId },
+      select: { teamId: true },
+    });
+    const matched = memberships.some((m) => roomId.startsWith(`chat-${m.teamId}-`));
+    if (!matched) {
+      return { ok: false, status: 403, message: "Not a team member" };
+    }
+    return { ok: true };
+  }
+
+  const teamMembership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId, teamId: roomId } },
+    select: { userId: true },
+  });
+  if (teamMembership) {
+    return { ok: true };
+  }
+
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId: roomId, userId } },
+    select: { userId: true },
+  });
+  if (participant) {
+    return { ok: true };
+  }
+
+  return { ok: false, status: 403, message: "Not allowed to join this room" };
+}
+
+async function ensurePrivateDailyRoom(
+  apiKey: string,
+  roomName: string,
+  exp: number,
+): Promise<{ url: string } | { error: string }> {
+  const getRes = await fetch(`https://api.daily.co/v1/rooms/${roomName}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+
+  if (getRes.ok) {
+    const room = (await getRes.json()) as { url: string };
+    await fetch(`https://api.daily.co/v1/rooms/${roomName}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        privacy: "private",
+        properties: { exp, enable_knocking: false, enable_screenshare: true, enable_chat: true },
+      }),
+    });
+    return { url: room.url };
+  }
+
+  const createRes = await fetch("https://api.daily.co/v1/rooms", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: roomName,
+      privacy: "private",
+      properties: {
+        enable_knocking: false,
+        enable_screenshare: true,
+        enable_chat: true,
+        exp,
+      },
+    }),
+  });
+
+  if (!createRes.ok) {
+    const err = await createRes.text();
+    return { error: `Failed to create room: ${err}` };
+  }
+
+  const room = (await createRes.json()) as { url: string };
+  return { url: room.url };
+}
+
+async function mintMeetingToken(
+  apiKey: string,
+  roomName: string,
+  opts: { userName: string; userId?: string; exp: number },
+): Promise<string | null> {
+  const tokenRes = await fetch("https://api.daily.co/v1/meeting-tokens", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      properties: {
+        room_name: roomName,
+        user_name: opts.userName,
+        ...(opts.userId ? { user_id: opts.userId } : {}),
+        exp: opts.exp,
+        enable_screenshare: true,
+        start_video_off: false,
+        start_audio_off: false,
+      },
+    }),
+  });
+
+  if (!tokenRes.ok) return null;
+  const tokenData = (await tokenRes.json()) as { token: string };
+  return tokenData.token ?? null;
+}
+
 videoRouter.post(
   "/room",
-  zValidator("json", z.object({ roomId: z.string(), userName: z.string().optional() })),
+  zValidator("json", z.object({ roomId: z.string().min(1), userName: z.string().optional() })),
   async (c) => {
+    const user = c.get("user")!;
     const { roomId, userName } = c.req.valid("json");
     const apiKey = env.DAILY_API_KEY;
 
@@ -60,61 +209,32 @@ videoRouter.post(
       return c.json({ error: { message: "Daily API key not configured", code: "NO_API_KEY" } }, 500);
     }
 
-    const roomName = sanitizeRoomName(roomId);
-    const exp = await computeExp(roomId);
-
-    // Get or create room
-    const getRes = await fetch(`https://api.daily.co/v1/rooms/${roomName}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    let roomUrl: string;
-
-    if (getRes.ok) {
-      const room = await getRes.json() as { url: string };
-      roomUrl = room.url;
-
-      // Update existing room with expiration
-      await fetch(`https://api.daily.co/v1/rooms/${roomName}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          properties: { exp },
-        }),
-      });
-    } else {
-      const createRes = await fetch("https://api.daily.co/v1/rooms", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: roomName,
-          privacy: "public",
-          properties: {
-            enable_knocking: false,
-            enable_screenshare: true,
-            enable_chat: true,
-            exp,
-          },
-        }),
-      });
-
-      if (!createRes.ok) {
-        const err = await createRes.text();
-        return c.json({ error: { message: `Failed to create room: ${err}`, code: "CREATE_FAILED" } }, 500);
-      }
-
-      const room = await createRes.json() as { url: string };
-      roomUrl = room.url;
+    const access = await assertUserCanAccessVideoRoom(user.id, roomId);
+    if (!access.ok) {
+      return c.json({ error: { message: access.message, code: "FORBIDDEN" } }, access.status);
     }
 
-    // Fire-and-forget: notify team members that a video call has started
-    const callInitiatorId = c.get("user")?.id ?? null;
+    const roomName = sanitizeRoomName(roomId);
+    const exp = await computeExp(roomId);
+    const roomResult = await ensurePrivateDailyRoom(apiKey, roomName, exp);
+    if ("error" in roomResult) {
+      return c.json({ error: { message: roomResult.error, code: "CREATE_FAILED" } }, 500);
+    }
+
+    const displayName = userName?.trim() || user.name || "Guest";
+    const token = await mintMeetingToken(apiKey, roomName, {
+      userName: displayName,
+      userId: user.id,
+      exp,
+    });
+    if (!token) {
+      return c.json(
+        { error: { message: "Failed to create meeting token", code: "TOKEN_FAILED" } },
+        500,
+      );
+    }
+
+    // Notify team only for calendar meetings the caller is allowed to join.
     void (async () => {
       const event = await prisma.calendarEvent.findUnique({
         where: { id: roomId },
@@ -125,7 +245,7 @@ videoRouter.post(
       const members = await prisma.teamMember.findMany({
         where: {
           teamId: event.teamId,
-          ...(callInitiatorId ? { userId: { not: callInitiatorId } } : {}),
+          userId: { not: user.id },
         },
         select: { userId: true },
       });
@@ -133,45 +253,21 @@ videoRouter.post(
       if (memberIds.length > 0) {
         await sendPushToUsers(
           memberIds,
-          userName ?? "Someone",
+          displayName,
           "📹 Started a video call — join now!",
           { teamId: event.teamId, type: "video_call" },
           "notifMeetings",
-          event.teamId
+          event.teamId,
         );
       }
     })();
 
-    // Create a meeting token so the user's name is pre-filled
-    const tokenRes = await fetch("https://api.daily.co/v1/meeting-tokens", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        properties: {
-          room_name: roomName,
-          user_name: userName ?? "Guest",
-          enable_screenshare: true,
-          start_video_off: false,
-          start_audio_off: false,
-        },
-      }),
-    });
-
-    if (!tokenRes.ok) {
-      // Fall back to no-token URL if token creation fails
-      return c.json({ data: { url: roomUrl, token: null } });
-    }
-
-    const tokenData = await tokenRes.json() as { token: string };
-    return c.json({ data: { url: roomUrl, token: tokenData.token } });
-  }
+    return c.json({ data: { url: roomResult.url, token } });
+  },
 );
 
 // GET /api/video/upcoming — returns video meetings starting within 60 min (for banner)
-videoRouter.get("/upcoming", authGuard, async (c) => {
+videoRouter.get("/upcoming", async (c) => {
   const user = c.get("user")!;
 
   const now = new Date();
@@ -186,7 +282,7 @@ videoRouter.get("/upcoming", authGuard, async (c) => {
 
   if (memberships.length === 0) return c.json({ data: [] });
 
-  const teamIds = memberships.map(m => m.teamId);
+  const teamIds = memberships.map((m) => m.teamId);
 
   // Get upcoming video meetings across all teams
   const events = await prisma.calendarEvent.findMany({
@@ -199,24 +295,25 @@ videoRouter.get("/upcoming", authGuard, async (c) => {
     orderBy: { startDate: "asc" },
   });
 
-  const result = events.map(event => {
-    const membership = memberships.find(m => m.teamId === event.teamId);
-    return {
-      event,
-      teamName: membership?.team.name ?? "",
-      userRole: membership?.role ?? "member",
-    };
-  }).filter((item) => {
-    const assigneeIds = parseMeetingAssigneeIds(item.event.reminderMinutes);
-    return assigneeIds.length === 0 || assigneeIds.includes(user.id);
-  });
+  const result = events
+    .map((event) => {
+      const membership = memberships.find((m) => m.teamId === event.teamId);
+      return {
+        event,
+        teamName: membership?.team.name ?? "",
+        userRole: membership?.role ?? "member",
+      };
+    })
+    .filter((item) => {
+      const assigneeIds = parseMeetingAssigneeIds(item.event.reminderMinutes);
+      return assigneeIds.length === 0 || assigneeIds.includes(user.id);
+    });
 
   return c.json({ data: result });
 });
 
 videoRouter.post(
   "/invite",
-  authGuard,
   zValidator(
     "json",
     z.object({
@@ -224,20 +321,63 @@ videoRouter.post(
       roomUrl: z.string().url(),
       roomName: z.string(),
       senderName: z.string(),
-    })
+      roomId: z.string().min(1).optional(),
+    }),
   ),
   async (c) => {
+    const user = c.get("user")!;
+
     if (!env.RESEND_API_KEY) {
       return c.json(
         { error: { message: "Email not configured", code: "NO_EMAIL_CONFIG" } },
-        503
+        503,
       );
     }
 
-    const { to, roomUrl, roomName, senderName } = c.req.valid("json");
+    const { to, roomUrl, roomName, senderName, roomId } = c.req.valid("json");
+
+    if (!isAllowedDailyRoomUrl(roomUrl)) {
+      return c.json(
+        { error: { message: "Invalid meeting link", code: "INVALID_ROOM_URL" } },
+        400,
+      );
+    }
+
+    if (roomId) {
+      const access = await assertUserCanAccessVideoRoom(user.id, roomId);
+      if (!access.ok) {
+        return c.json({ error: { message: access.message, code: "FORBIDDEN" } }, access.status);
+      }
+    } else {
+      // Without roomId, require the caller belongs to at least one workplace.
+      const membership = await prisma.teamMember.findFirst({
+        where: { userId: user.id },
+        select: { userId: true },
+      });
+      if (!membership) {
+        return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
+      }
+    }
+
+    let inviteUrl = roomUrl;
+    const apiKey = env.DAILY_API_KEY;
+    if (apiKey && roomId) {
+      const roomNameDaily = sanitizeRoomName(roomId);
+      const exp = await computeExp(roomId);
+      const guestToken = await mintMeetingToken(apiKey, roomNameDaily, {
+        userName: "Guest",
+        exp,
+      });
+      if (guestToken) {
+        const join = new URL(roomUrl);
+        join.searchParams.set("t", guestToken);
+        inviteUrl = join.toString();
+      }
+    }
+
     const logoUrl = `${env.BACKEND_URL}/static/alenio-logo.png`;
     const lotttechLogoUrl = `${env.BACKEND_URL}/static/lotttech-logo.png`;
-    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(roomName)}&details=${encodeURIComponent("Join via: " + roomUrl)}`;
+    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(roomName)}&details=${encodeURIComponent("Join via: " + inviteUrl)}`;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -287,7 +427,7 @@ videoRouter.post(
                   <!-- Join Video Call button -->
                   <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
                     <tr><td align="center" bgcolor="#5B7FFF" style="background:#5B7FFF;border-radius:13px;">
-                      <a href="${roomUrl}" style="display:block;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 0;text-align:center;border-radius:13px;">Join Video Call</a>
+                      <a href="${inviteUrl}" style="display:block;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 0;text-align:center;border-radius:13px;">Join Video Call</a>
                     </td></tr>
                   </table>
 
@@ -348,7 +488,7 @@ videoRouter.post(
       if (result.error) {
         return c.json(
           { error: { message: result.error.message, code: "EMAIL_SEND_FAILED" } },
-          500
+          500,
         );
       }
 
@@ -357,7 +497,7 @@ videoRouter.post(
       const message = err instanceof Error ? err.message : "Failed to send email";
       return c.json({ error: { message, code: "EMAIL_SEND_FAILED" } }, 500);
     }
-  }
+  },
 );
 
 export { videoRouter };

@@ -36,7 +36,7 @@ export default function NoWorkspaceWelcomeRoute() {
 
   if (!hasHydrated || isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: WELCOME_UI.pageBg, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ flex: 1, backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
         <StatusBar style="dark" />
         <ActivityIndicator size="large" color={WELCOME_UI.primary} />
       </View>
@@ -45,7 +45,7 @@ export default function NoWorkspaceWelcomeRoute() {
 
   if (teams && teams.length > 0) {
     return (
-      <View style={{ flex: 1, backgroundColor: WELCOME_UI.pageBg, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ flex: 1, backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
         <StatusBar style="dark" />
         <ActivityIndicator size="large" color={WELCOME_UI.primary} />
       </View>
@@ -53,7 +53,7 @@ export default function NoWorkspaceWelcomeRoute() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, width: "100%", backgroundColor: WELCOME_UI.pageBg }} edges={["top", "bottom"]}>
+    <SafeAreaView style={{ flex: 1, width: "100%", backgroundColor: "transparent" }} edges={["top", "bottom"]}>
       <StatusBar style="dark" />
       <NoWorkspaceWelcomeScreen />
     </SafeAreaView>

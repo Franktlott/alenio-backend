@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { Hash, Plus, Camera, X } from "lucide-react-native";
+import { Hash, Plus, Camera, ChevronRight, X } from "lucide-react-native";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -50,12 +50,30 @@ type Props = {
   fillHeight?: boolean;
   /** Section header label (defaults to "Spaces"). */
   title?: string;
+  /** Compact workspace landing-page treatment. */
+  workspaceHub?: boolean;
 };
 
 function topicActivityTime(topic: SpaceTopic): number {
   const raw = topic.lastMessage?.createdAt ?? topic.updatedAt ?? topic.createdAt ?? "";
   const time = raw ? new Date(raw).getTime() : 0;
   return Number.isFinite(time) ? time : 0;
+}
+
+function topicActivityLabel(topic: SpaceTopic): string {
+  const raw = topic.lastMessage?.createdAt ?? topic.updatedAt ?? topic.createdAt;
+  if (!raw) return "";
+  const time = new Date(raw).getTime();
+  if (!Number.isFinite(time)) return "";
+  const minutes = Math.floor((Date.now() - time) / 60000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days}d ago`;
+  return new Date(raw).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export function SpacesSection({
@@ -66,6 +84,7 @@ export function SpacesSection({
   compactEmpty = false,
   fillHeight = false,
   title = "Spaces",
+  workspaceHub = false,
 }: Props) {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
@@ -167,7 +186,7 @@ export function SpacesSection({
         marginTop: fillHeight ? 4 : compactEmpty ? 6 : 12,
         marginBottom: 6,
         flexDirection: "row",
-        alignItems: "flex-end",
+        alignItems: workspaceHub ? "center" : "flex-end",
         justifyContent: "space-between",
         gap: 12,
         flexShrink: 0,
@@ -176,18 +195,20 @@ export function SpacesSection({
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           style={{
-            fontSize: 11,
-            fontWeight: "700",
-            color: "#64748B",
-            letterSpacing: 0.8,
-            textTransform: "uppercase",
+            fontSize: workspaceHub ? 14 : 11,
+            fontWeight: workspaceHub ? "800" : "700",
+            color: workspaceHub ? "#0F172A" : "#64748B",
+            letterSpacing: workspaceHub ? -0.1 : 0.8,
+            textTransform: workspaceHub ? "none" : "uppercase",
             marginBottom: 2,
           }}
         >
           {title}
         </Text>
-        <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 16 }} numberOfLines={1}>
-          {topics.length === 0
+        <Text style={{ fontSize: workspaceHub ? 10 : 12, color: "#94A3B8", lineHeight: workspaceHub ? 13 : 16 }} numberOfLines={1}>
+          {workspaceHub
+            ? "Organize conversations by topic."
+            : topics.length === 0
             ? "Shared channels for projects and topics"
             : `${topics.length} active space${topics.length === 1 ? "" : "s"}`}
         </Text>
@@ -197,17 +218,23 @@ export function SpacesSection({
           testID="create-space-button"
           onPress={() => setShowCreate(true)}
           style={{
-            width: 32,
+            minWidth: workspaceHub ? undefined : 32,
             height: 32,
             borderRadius: 10,
-            backgroundColor: "#FFFFFF",
-            borderWidth: 1,
+            backgroundColor: workspaceHub ? "transparent" : "#FFFFFF",
+            borderWidth: workspaceHub ? 0 : 1,
             borderColor: "#E2E8F0",
             alignItems: "center",
             justifyContent: "center",
+            flexDirection: "row",
+            gap: 4,
+            paddingHorizontal: workspaceHub ? 4 : 0,
           }}
         >
-          <Plus size={15} color="#0F172A" />
+          <Plus size={workspaceHub ? 12 : 15} color={workspaceHub ? "#6D4CE8" : "#0F172A"} />
+          {workspaceHub ? (
+            <Text style={{ fontSize: 10, fontWeight: "700", color: "#6D4CE8" }}>New space</Text>
+          ) : null}
         </Pressable>
       ) : null}
     </View>
@@ -323,16 +350,36 @@ export function SpacesSection({
               : undefined
           }
           delayLongPress={350}
-          style={cardStyle}
+          style={[
+            cardStyle,
+            workspaceHub
+              ? {
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  marginBottom: 5,
+                  borderRadius: 12,
+                }
+              : null,
+          ]}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <SpaceAvatar name={topic.name} image={topic.image} color={topic.color} size={40} radius={12} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: workspaceHub ? 9 : 10 }}>
+            <SpaceAvatar
+              name={topic.name}
+              image={topic.image}
+              color={topic.color}
+              size={workspaceHub ? 34 : 40}
+              radius={workspaceHub ? 10 : 12}
+            />
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flexShrink: 1 }} numberOfLines={1}>
+                <Text style={{ fontSize: workspaceHub ? 12.5 : 14, fontWeight: "700", color: "#0F172A", flexShrink: 1 }} numberOfLines={1}>
                   {topic.name}
                 </Text>
-                {unread > 0 ? (
+                {workspaceHub ? (
+                  <Text style={{ fontSize: 9, color: "#94A3B8", flexShrink: 0 }}>
+                    {topicActivityLabel(topic)}
+                  </Text>
+                ) : unread > 0 ? (
                   <View
                     style={{
                       backgroundColor: "#EF4444",
@@ -363,12 +410,18 @@ export function SpacesSection({
                   </View>
                 ) : null}
               </View>
-              <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }} numberOfLines={1}>
-                {topic.lastMessage
-                  ? `${topic.lastMessage.sender.name ?? "Someone"}: ${topic.lastMessage.content ?? "Attachment"}`
-                  : "No posts yet"}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 }}>
+                <Text style={{ fontSize: workspaceHub ? 10.5 : 12, color: "#6B7280", flex: 1 }} numberOfLines={1}>
+                  {topic.lastMessage
+                    ? `${topic.lastMessage.sender.name ?? "Someone"}: ${topic.lastMessage.content ?? "Attachment"}`
+                    : topic.description || "No posts yet"}
+                </Text>
+                {workspaceHub && unread > 0 ? (
+                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#5B4DEE" }} />
+                ) : null}
+              </View>
             </View>
+            {workspaceHub ? <ChevronRight size={14} color="#C4B5FD" /> : null}
           </View>
         </Pressable>
       );

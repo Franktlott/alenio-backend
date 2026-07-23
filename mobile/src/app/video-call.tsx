@@ -11,8 +11,6 @@ import { ChevronLeft, Video, PhoneOff, Share2, Monitor, Mail, X, Check } from "l
 import { useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { api } from "@/lib/api/api";
-import { readJsonSafe } from "@/lib/api/api";
-import { getBackendUrl } from "@/lib/backend-url";
 
 const alenioLogo = require("@/assets/alenio-logo-white.png");
 
@@ -72,28 +70,30 @@ export default function VideoCallScreen() {
 
   useEffect(() => {
     async function fetchRoom() {
+      if (!roomId) {
+        setError("Missing room.");
+        setPhase("error");
+        return;
+      }
       try {
-        const res = await fetch(`${getBackendUrl()}/api/video/room`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId, userName }),
+        const data = await api.post<{ url: string; token: string }>("/api/video/room", {
+          roomId,
+          userName,
         });
-        const json = await readJsonSafe<{ data?: { url?: string; token?: string } }>(res);
-        if (!res.ok || !json?.data?.url) {
+        if (!data?.url || !data?.token) {
           setError("Could not start call.");
           setPhase("error");
           return;
         }
-        const { url, token } = json.data;
-        setShareUrl(url);
-        setCallUrl(token ? `${url}?t=${token}&prejoin=false` : `${url}?prejoin=false`);
+        setShareUrl(data.url);
+        setCallUrl(`${data.url}?t=${encodeURIComponent(data.token)}&prejoin=false`);
         setRoomReady(true);
       } catch {
         setError("Could not connect. Please try again.");
         setPhase("error");
       }
     }
-    fetchRoom();
+    void fetchRoom();
   }, [roomId, userName]);
 
   useEffect(() => {
@@ -122,6 +122,7 @@ export default function VideoCallScreen() {
         roomUrl: shareUrl,
         roomName: roomName ?? "Video Call",
         senderName: userName,
+        roomId,
       });
       setInviteSent(true);
       setTimeout(() => {

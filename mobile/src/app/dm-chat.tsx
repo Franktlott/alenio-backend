@@ -9,18 +9,20 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  Alert,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePaginatedDmMessages, flattenMessagePages } from "@/lib/chat-message-pagination";
 import { useChatListScroll } from "@/hooks/use-chat-scroll";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut, UserPlus, UserMinus, Crown, Shield, Pin } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut, UserPlus, UserMinus, Crown, Shield, Pin, ImagePlus } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { uploadFile } from "@/lib/upload";
-import { pickMedia, takePhoto } from "@/lib/file-picker";
+import { pickMedia, pickImage, takePhoto } from "@/lib/file-picker";
+import { toast } from "burnt";
 import { ChatMessage } from "@/components/ChatMessage";
 import { MessageActionSheet, type MessageAnchorLayout } from "@/components/MessageActionSheet";
 import { MessageLongPressRow } from "@/components/MessageLongPressRow";
@@ -46,7 +48,6 @@ import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import * as Haptics from "expo-haptics";
-import { toast } from "burnt";
 import { useMention } from "@/lib/useMention";
 import { SafeKeyboardAvoidingView, useSafeKeyboardVisible } from "@/lib/safe-keyboard-controller";
 import { dmOtherParticipant, resolveUserImageUrl, userInitials } from "@/lib/user-avatar";
@@ -77,6 +78,7 @@ function DmChatEmptyState({
   }));
 
   const displayName = user.name?.trim() || (isGroup ? "this group" : "your teammate");
+  const groupImageUri = isGroup ? resolveUserImageUrl(user.image) : null;
 
   return (
     <View
@@ -102,19 +104,29 @@ function DmChatEmptyState({
 
       <View style={{ marginBottom: 12, alignItems: "center" }}>
         {isGroup ? (
-          <View
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: "#EEF2FF",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 6,
-            }}
-          >
-            <Users size={18} color="#4361EE" />
-          </View>
+          groupImageUri ? (
+            <View style={{ marginBottom: 6 }}>
+              <Image
+                source={{ uri: groupImageUri }}
+                style={{ width: 40, height: 40, borderRadius: 20 }}
+                resizeMode="cover"
+              />
+            </View>
+          ) : (
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: "#EEF2FF",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 6,
+              }}
+            >
+              <Users size={18} color="#4361EE" />
+            </View>
+          )
         ) : (
           <View style={{ marginBottom: 6 }}>
             <UserAvatar
@@ -273,7 +285,7 @@ export default function DMChatScreen() {
       return {
         name: currentConversation?.name ?? recipientName ?? "Group",
         email: null as string | null,
-        image: null as string | null,
+        image: currentConversation?.image ?? (recipientImage?.trim() || null),
       };
     }
     const other = currentConversation ? dmOtherParticipant(currentConversation, currentUserId) : null;
@@ -283,6 +295,7 @@ export default function DMChatScreen() {
       image: recipientImage?.trim() || other?.image || null,
     };
   }, [currentConversation, currentUserId, isGroup, recipientImage, recipientName]);
+  const groupImageUri = isGroup ? resolveUserImageUrl(headerUser.image) : null;
   const mentionableUsers = (currentConversation?.participants ?? [])
     .filter((p) => p.id !== currentUserId)
     .map((p) => ({ id: p.id, name: p.name, image: p.image ?? null }));
@@ -290,6 +303,9 @@ export default function DMChatScreen() {
   const {
     messages,
     isLoading,
+    isError: messagesError,
+    error: messagesLoadError,
+    refetch: refetchMessages,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -441,6 +457,80 @@ export default function DMChatScreen() {
     },
   });
 
+  const updateGroupPhotoMutation = useMutation({
+    mutationFn: async (image: string | null) => {
+      return api.patch<Conversation>(`/api/dms/${conversationId}`, { image });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Conversation[]>(["dms"], (prev) =>
+        prev?.map((c) => (c.id === conversationId ? { ...c, image: updated.image ?? null, name: updated.name ?? c.name } : c)),
+      );
+      queryClient.invalidateQueries({ queryKey: ["dms"] });
+      toast({ title: "Group photo updated", preset: "done" });
+    },
+    onError: (err: Error) => {
+      Alert.alert("Could not update group photo", err.message || "Something went wrong. Try again.");
+    },
+  });
+
+  const openGroupPhotoPicker = () => {
+    setShowOptions(false);
+    const hasPhoto = !!currentConversation?.image;
+    const buttons: {
+      text: string;
+      style?: "cancel" | "destructive";
+      onPress?: () => void;
+    }[] = [
+      {
+        text: "Choose from library",
+        onPress: () => {
+          void (async () => {
+            try {
+              const file = await pickImage();
+              if (!file) return;
+              const uploaded = await uploadFile(file.uri, file.filename, file.mimeType);
+              updateGroupPhotoMutation.mutate(uploaded.url);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : "Something went wrong. Try again.";
+              if (message !== "cancelled") {
+                Alert.alert("Could not update group photo", message);
+              }
+            }
+          })();
+        },
+      },
+      {
+        text: "Take photo",
+        onPress: () => {
+          void (async () => {
+            try {
+              const file = await takePhoto();
+              if (!file) return;
+              const uploaded = await uploadFile(file.uri, file.filename, file.mimeType);
+              updateGroupPhotoMutation.mutate(uploaded.url);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : "Something went wrong. Try again.";
+              if (message !== "cancelled") {
+                Alert.alert("Could not update group photo", message);
+              }
+            }
+          })();
+        },
+      },
+    ];
+    if (hasPhoto) {
+      buttons.push({
+        text: "Remove photo",
+        style: "destructive",
+        onPress: () => updateGroupPhotoMutation.mutate(null),
+      });
+    }
+    buttons.push({ text: "Cancel", style: "cancel" });
+    setTimeout(() => {
+      Alert.alert("Group Photo", "Choose a photo for this group.", buttons);
+    }, 300);
+  };
+
   const openGroupManage = (mode: "add" | "remove" | "transfer" | "admins" | "members") => {
     setShowOptions(false);
     setTimeout(() => setGroupManageMode(mode), 300);
@@ -558,7 +648,7 @@ export default function DMChatScreen() {
   }, [messages]);
 
   return (
-    <SafeAreaView testID="dm-chat-screen" className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]}>
+    <SafeAreaView testID="dm-chat-screen" className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]}>
       <LinearGradient
         colors={["#4361EE", "#7C3AED"]}
         start={{ x: 0, y: 0 }}
@@ -571,7 +661,11 @@ export default function DMChatScreen() {
           </TouchableOpacity>
           <View className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-3 overflow-hidden">
             {isGroup ? (
-              <Users size={18} color="white" />
+              groupImageUri ? (
+                <Image source={{ uri: groupImageUri }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+              ) : (
+                <Users size={18} color="white" />
+              )
             ) : (
               <UserAvatar
                 user={headerUser}
@@ -733,6 +827,22 @@ export default function DMChatScreen() {
                     <Text style={bottomSheetMenu.rowMeta}>{groupParticipantCount}</Text>
                     <Users size={bottomSheetMenu.iconSize} color="#4361EE" />
                   </View>
+                </TouchableOpacity>
+              ) : null}
+              {isGroup && canManageGroupMembers ? (
+                <TouchableOpacity
+                  onPress={openGroupPhotoPicker}
+                  style={bottomSheetMenu.row}
+                  disabled={updateGroupPhotoMutation.isPending}
+                >
+                  <Text style={bottomSheetMenu.rowLabel}>
+                    {currentConversation?.image ? "Change Group Photo" : "Group Photo"}
+                  </Text>
+                  {updateGroupPhotoMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#4361EE" />
+                  ) : (
+                    <ImagePlus size={bottomSheetMenu.iconSize} color="#4361EE" />
+                  )}
                 </TouchableOpacity>
               ) : null}
               {isGroup && canManageGroupMembers ? (
@@ -901,6 +1011,31 @@ export default function DMChatScreen() {
         {isLoading ? (
           <View testID="dm-chat-loading" className="flex-1 items-center justify-center">
             <ActivityIndicator color="#4361EE" />
+          </View>
+        ) : messagesError && messages.length === 0 ? (
+          <View
+            testID="dm-chat-error"
+            style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#64748B", textAlign: "center" }}>
+              Couldn&apos;t load messages
+            </Text>
+            <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 8, textAlign: "center" }}>
+              {messagesLoadError instanceof Error ? messagesLoadError.message : "Please try again."}
+            </Text>
+            <TouchableOpacity
+              onPress={() => void refetchMessages()}
+              testID="dm-chat-error-retry"
+              style={{
+                marginTop: 16,
+                backgroundColor: "#4361EE",
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+              }}
+            >
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>Retry</Text>
+            </TouchableOpacity>
           </View>
         ) : messages.length === 0 ? (
           <DmChatEmptyState user={headerUser} isGroup={isGroup} />

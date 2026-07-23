@@ -182,7 +182,6 @@ function FixedTabBar({ state, navigation }: any) {
   }, [joinRequestQueries, goLoginRequestQueries]);
 
   const visibleRoutes = state.routes.filter((r: any) => {
-    if (r.name === "calendar") return false;
     const tab = ALL_TABS.find((t) => t.name === r.name);
     if (!tab) return false;
     if (tab.paidOnly && (!isPaid || !activeTeamId)) return false;
@@ -407,7 +406,7 @@ export default function AppLayout() {
 
   if (!teamsFetched || !teams || teams.length === 0) {
     return (
-      <View style={[styles.shell, { alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }]}>
+      <View style={[styles.shell, { alignItems: "center", justifyContent: "center", backgroundColor: "transparent" }]}>
         <ActivityIndicator size="large" color="#4361EE" />
       </View>
     );
@@ -418,13 +417,12 @@ export default function AppLayout() {
       <Tabs
         initialRouteName="chat"
         tabBar={(props) => <FixedTabBar {...props} />}
-        screenOptions={{ headerShown: false, animation: "none", sceneStyle: { backgroundColor: "#F2F3F7" } }}
+        screenOptions={{ headerShown: false, animation: "none", sceneStyle: { backgroundColor: "transparent" } }}
       >
         <Tabs.Screen name="activity" options={{}} />
         <Tabs.Screen name="chat" options={{}} />
         <Tabs.Screen name="execute" options={{ title: "Workspace" }} />
         <Tabs.Screen name="team" options={{ title: "Team" }} />
-        <Tabs.Screen name="calendar" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       </Tabs>
       <MeetingBanner />

@@ -81,7 +81,13 @@ function ensurePushTokenListener() {
 
 const PREVIEW_DATA_KEY = "alenioSoundPreview";
 
-/** Foreground behavior: hide normal pushes (token flow unchanged). Allow sound for Settings → sound preview only. */
+/**
+ * Foreground push policy (intentional product behavior):
+ * - While the app is open, remote pushes do not show a banner/list/sound.
+ * - Badge still updates; root layout may haptic + invalidate queries on receive.
+ * - Local tone previews from Notification settings are the only foreground banners.
+ * Requires a real device + EAS projectId (dev client / production build, not Expo Go alone).
+ */
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as Record<string, unknown> | undefined;
@@ -219,9 +225,12 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       | { projectId?: string }
       | undefined)?.projectId;
 
-    const projectIdFromEnv = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+    // eas.json production historically set EXPO_PUBLIC_VIBECODE_PROJECT_ID; prefer either name.
+    const projectIdFromEnv = (
+      process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? process.env.EXPO_PUBLIC_VIBECODE_PROJECT_ID
+    )?.trim();
 
-    // Fallback to the EAS project ID defined in app.json
+    // Last-resort fallback matching app.json extra.eas.projectId
     const HARDCODED_EAS_PROJECT_ID = "f40ec24d-0b09-4cc6-8746-805bd60e9ea2";
 
     const projectId = (projectIdFromExtra ?? projectIdFromEas ?? projectIdFromEnv ?? HARDCODED_EAS_PROJECT_ID)?.trim();

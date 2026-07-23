@@ -4,9 +4,7 @@ import { BarChart3 } from "lucide-react-native";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
-  alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
-import { SenecaIcon } from "@/components/seneca/SenecaIcon";
 
 export type TeamInsightsStatusKey = "open" | "dueToday" | "overdue";
 
@@ -26,8 +24,6 @@ type Props = {
   complianceMetrics: readonly ComplianceMetric[];
   onClose: () => void;
   onSelectStatus?: (key: TeamInsightsStatusKey) => void;
-  onViewReport?: () => void;
-  onAskSeneca?: () => void;
 };
 
 function StatusCircle({
@@ -96,8 +92,6 @@ export function TeamInsightsSheet({
   complianceMetrics,
   onClose,
   onSelectStatus,
-  onViewReport,
-  onAskSeneca,
 }: Props) {
   return (
     <AlenioBottomSheet
@@ -108,48 +102,6 @@ export function TeamInsightsSheet({
       showCloseButton
       compact
       testID="team-insights-sheet"
-      footer={
-        <View style={{ gap: 8 }}>
-          {onAskSeneca ? (
-            <Pressable
-              onPress={onAskSeneca}
-              style={[
-                alenioSheetStyles.primaryButton,
-                {
-                  backgroundColor: "#FFFFFF",
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                  minHeight: 42,
-                  paddingVertical: 11,
-                  borderRadius: 12,
-                  flexDirection: "row",
-                  gap: 8,
-                },
-              ]}
-              testID="team-insights-ask-seneca"
-            >
-              <SenecaIcon size={18} />
-              <Text style={[alenioSheetStyles.primaryButtonText, { color: "#0F172A", fontSize: 14 }]}>
-                Ask Seneca
-              </Text>
-            </Pressable>
-          ) : null}
-          {onViewReport ? (
-            <Pressable
-              onPress={onViewReport}
-              style={[
-                alenioSheetStyles.primaryButton,
-                { backgroundColor: "#EEF2FF", minHeight: 42, paddingVertical: 11, borderRadius: 12 },
-              ]}
-              testID="team-insights-view-report"
-            >
-              <Text style={[alenioSheetStyles.primaryButtonText, { color: "#4338CA", fontSize: 14 }]}>
-                View Detailed Report
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      }
     >
       <AlenioSheetCard tint="slate" compact>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}>

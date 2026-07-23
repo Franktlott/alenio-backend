@@ -48,9 +48,18 @@ const FEATURES = [
   },
 ] as const;
 
-function GradientText({ children, style }: { children: string; style?: object }) {
+function GradientText({
+  children,
+  style,
+}: {
+  children: string;
+  style?: object | object[];
+}) {
   return (
-    <MaskedView maskElement={<Text style={[style, { backgroundColor: "transparent" }]}>{children}</Text>}>
+    <MaskedView
+      style={{ flexShrink: 0 }}
+      maskElement={<Text style={[style, { backgroundColor: "transparent" }]}>{children}</Text>}
+    >
       <LinearGradient colors={[...GRADIENT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <Text style={[style, { opacity: 0 }]}>{children}</Text>
       </LinearGradient>
@@ -70,8 +79,16 @@ function WelcomeBackground() {
 }
 
 export default function WelcomeScreen() {
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const isShort = height < 780;
+  // Keep second line from overflowing on narrower phones (SF vs Roboto width differs).
+  const isNarrow = !isShort && width < 390;
+  const headlineStyle = [styles.headline, isShort && styles.headlineShort, isNarrow && styles.headlineNarrow];
+  const headlineGradientStyle = [
+    styles.headlineGradient,
+    isShort && styles.headlineShort,
+    isNarrow && styles.headlineNarrow,
+  ];
 
   return (
     <View style={styles.root}>
@@ -82,12 +99,16 @@ export default function WelcomeScreen() {
           <View style={styles.top}>
             <Image source={require("@/assets/alenio-logo.png")} style={styles.logo} resizeMode="contain" />
 
-            <View style={styles.headlineWrap}>
-              <Text style={[styles.headline, isShort && styles.headlineShort]}>Everything your </Text>
-              <GradientText style={[styles.headlineGradient, isShort && styles.headlineShort]}>
-                frontline team
-              </GradientText>
-              <Text style={[styles.headline, isShort && styles.headlineShort]}> needs to win.</Text>
+            {/* Explicit lines so iOS MaskedView cannot force uneven wraps. */}
+            <View style={styles.headlineWrap} testID="welcome-headline">
+              <View style={styles.headlineLine}>
+                <Text style={headlineStyle}>Built for the </Text>
+                <GradientText style={headlineGradientStyle}>frontline.</GradientText>
+              </View>
+              <View style={styles.headlineLine}>
+                <Text style={headlineStyle}>Designed for </Text>
+                <GradientText style={headlineGradientStyle}>execution.</GradientText>
+              </View>
             </View>
 
             <Text style={[styles.subheadline, isShort && styles.subheadlineShort]} numberOfLines={2}>
@@ -219,10 +240,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   headlineWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "flex-end",
     marginBottom: 8,
+  },
+  headlineLine: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "flex-end",
+    flexShrink: 1,
   },
   headline: {
     fontSize: 28,
@@ -230,16 +254,22 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     lineHeight: 34,
     letterSpacing: -0.6,
+    includeFontPadding: false,
   },
   headlineShort: {
     fontSize: 24,
     lineHeight: 30,
+  },
+  headlineNarrow: {
+    fontSize: 26,
+    lineHeight: 32,
   },
   headlineGradient: {
     fontSize: 28,
     fontWeight: "800",
     lineHeight: 34,
     letterSpacing: -0.6,
+    includeFontPadding: false,
   },
   subheadline: {
     fontSize: 14,

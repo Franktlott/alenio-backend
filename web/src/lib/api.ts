@@ -1640,7 +1640,7 @@ export function fetchUpcomingVideoMeetings() {
 }
 
 export function createVideoRoom(roomId: string, userName?: string | null) {
-  return apiPostJson<{ data: { url: string; token: string | null } }>("/api/video/room", {
+  return apiPostJson<{ data: { url: string; token: string } }>("/api/video/room", {
     roomId,
     userName: userName ?? undefined,
   }).then((r) => r.data);

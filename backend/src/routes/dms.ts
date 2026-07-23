@@ -10,7 +10,6 @@ import {
   assertParticipantsShareWorkspaceWithCreator,
   listGroupMemberCandidates,
   resolveGroupConversationContext,
-  userHasPaidTeamPlan,
 } from "../lib/group-conversation-workspace";
 import {
   canDeleteGroup,
@@ -93,6 +92,7 @@ dmsRouter.get("/", async (c) => {
           id: conv.id,
           isGroup: true,
           name: conv.name,
+          image: conv.image ?? null,
           participants: formatGroupParticipants(conv.participants),
           myRole: myGroupRole(conv.participants, user.id),
           recipient: null,
@@ -229,11 +229,6 @@ dmsRouter.post("/create-group", async (c) => {
     return c.json({ error: { message: "At least one participant is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  const hasPaidPlan = await userHasPaidTeamPlan(user.id);
-  if (!hasPaidPlan) {
-    return c.json({ error: { message: "Group chats require Alenio Team", code: "SUBSCRIPTION_REQUIRED" } }, 403);
-  }
-
   try {
     await assertParticipantsShareWorkspaceWithCreator(user.id, participantIds);
   } catch (err) {
@@ -274,6 +269,7 @@ dmsRouter.post("/create-group", async (c) => {
       id: conversation.id,
       isGroup: true,
       name: conversation.name,
+      image: conversation.image ?? null,
       participants: formatGroupParticipants(conversation.participants),
       myRole: "owner" as const,
       recipient: null,
@@ -283,6 +279,74 @@ dmsRouter.post("/create-group", async (c) => {
       updatedAt: conversation.updatedAt,
     },
   }, 201);
+});
+
+// PATCH /api/dms/:conversationId — update group name/photo (owner only)
+dmsRouter.patch("/:conversationId", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId } = c.req.param();
+  const body = await c.req.json<{ image?: string | null; name?: string }>();
+
+  const actor = await getGroupParticipant(conversationId, user.id);
+  if (!actor?.conversation.isGroup) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canManageGroupMembers(actor.role)) {
+    return c.json({ error: { message: "Only the group owner can update group details", code: "FORBIDDEN" } }, 403);
+  }
+
+  const data: { image?: string | null; name?: string } = {};
+  if (body.image !== undefined) {
+    if (body.image === null) {
+      data.image = null;
+    } else if (typeof body.image === "string" && body.image.trim()) {
+      data.image = body.image.trim();
+    } else {
+      return c.json({ error: { message: "Invalid image", code: "VALIDATION_ERROR" } }, 400);
+    }
+  }
+  if (typeof body.name === "string") {
+    const name = body.name.trim();
+    if (!name) {
+      return c.json({ error: { message: "Group name is required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    data.name = name;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return c.json({ error: { message: "Nothing to update", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const updated = await prisma.conversation.update({
+    where: { id: conversationId },
+    data,
+    include: {
+      participants: {
+        include: { user: { select: participantUserSelect } },
+      },
+    },
+  });
+
+  const workspaceContext = await resolveGroupConversationContext(
+    user.id,
+    updated.participants.map((participant) => participant.userId),
+  );
+
+  return c.json({
+    data: {
+      id: updated.id,
+      isGroup: true,
+      name: updated.name,
+      image: updated.image ?? null,
+      participants: formatGroupParticipants(updated.participants),
+      myRole: myGroupRole(updated.participants, user.id),
+      recipient: null,
+      workspaceContext,
+      lastMessage: null,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    },
+  });
 });
 
 // GET /api/dms/:conversationId/messages/pin

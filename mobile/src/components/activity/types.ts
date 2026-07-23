@@ -53,11 +53,6 @@ export type ActivityApiEvent = {
   reactions: ActivityReactions;
 };
 
-export type ActivityActionRoute = {
-  pathname: string;
-  params?: Record<string, string>;
-};
-
 export type ActivityFeedItem = {
   id: string;
   teamId?: string;
@@ -69,8 +64,6 @@ export type ActivityFeedItem = {
   timestamp: string;
   dateGroup: ActivityDateGroup;
   metadata: ActivityMetadata;
-  actionLabel?: string;
-  actionRoute?: ActivityActionRoute;
   reactions: ActivityReactions;
 };
 
@@ -200,7 +193,7 @@ function actorName(item: ActivityApiEvent): string {
   return item.user?.name ?? item.metadata?.userName ?? "Someone";
 }
 
-function mapTaskCompleted(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description" | "actionLabel" | "actionRoute"> {
+function mapTaskCompleted(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const title = item.metadata?.taskTitle ?? "Task completed";
   const description = item.metadata?.taskTitle
@@ -210,12 +203,10 @@ function mapTaskCompleted(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
   return {
     title,
     description,
-    actionLabel: "View Task",
-    actionRoute: { pathname: "/(app)/execute" },
   };
 }
 
-function mapTaskAssigned(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description" | "actionLabel" | "actionRoute"> {
+function mapTaskAssigned(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const count = item.metadata?.taskCount ?? 1;
 
@@ -223,8 +214,6 @@ function mapTaskAssigned(item: ActivityApiEvent): Pick<ActivityFeedItem, "title"
     return {
       title: `${count} tasks assigned`,
       description: `${name} was assigned ${count} tasks`,
-      actionLabel: "View Tasks",
-      actionRoute: { pathname: "/(app)/execute" },
     };
   }
 
@@ -236,12 +225,10 @@ function mapTaskAssigned(item: ActivityApiEvent): Pick<ActivityFeedItem, "title"
   return {
     title: taskTitle,
     description,
-    actionLabel: "View Task",
-    actionRoute: { pathname: "/(app)/execute" },
   };
 }
 
-function mapCalendarEvent(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description" | "actionLabel" | "actionRoute"> {
+function mapCalendarEvent(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const count = item.metadata?.eventCount ?? 1;
 
@@ -249,8 +236,6 @@ function mapCalendarEvent(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
     return {
       title: `${count} events added`,
       description: `${name} added ${count} events to the calendar`,
-      actionLabel: "Open Calendar",
-      actionRoute: { pathname: "/(app)/execute" },
     };
   }
 
@@ -262,32 +247,26 @@ function mapCalendarEvent(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
   return {
     title: eventTitle,
     description,
-    actionLabel: "Open Calendar",
-    actionRoute: { pathname: "/(app)/execute" },
   };
 }
 
-function mapMemberJoined(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description" | "actionLabel" | "actionRoute"> {
+function mapMemberJoined(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   return {
     title: `${name} joined`,
     description: `${name} joined the team`,
-    actionLabel: "Welcome",
-    actionRoute: { pathname: "/(app)/team" },
   };
 }
 
-function mapMemberRemoved(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description" | "actionLabel" | "actionRoute"> {
+function mapMemberRemoved(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   return {
     title: `${name} left`,
     description: `${name} left the team`,
-    actionLabel: "View Team",
-    actionRoute: { pathname: "/(app)/team" },
   };
 }
 
-function mapTaskMilestone(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description" | "actionLabel" | "actionRoute"> {
+function mapTaskMilestone(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const count = item.metadata?.count ?? 10;
   return {
@@ -296,7 +275,7 @@ function mapTaskMilestone(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
   };
 }
 
-function mapPersonalBest(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description" | "actionLabel" | "actionRoute"> {
+function mapPersonalBest(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const count = item.metadata?.count ?? 0;
   return {
@@ -305,7 +284,7 @@ function mapPersonalBest(item: ActivityApiEvent): Pick<ActivityFeedItem, "title"
   };
 }
 
-function mapCelebration(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description" | "actionLabel" | "actionRoute"> {
+function mapCelebration(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
   const fromName = item.user?.name ?? "Someone";
   const toName = item.metadata?.targetName ?? "a teammate";
   return {
@@ -318,7 +297,7 @@ function mapCelebration(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" 
 
 export function mapApiActivityToFeedItem(event: ActivityApiEvent): ActivityFeedItem {
   const metadata = event.metadata ?? {};
-  let mapped: Pick<ActivityFeedItem, "title" | "description" | "actionLabel" | "actionRoute">;
+  let mapped: Pick<ActivityFeedItem, "title" | "description">;
 
   switch (event.type) {
     case "task_completed":
@@ -360,8 +339,6 @@ export function mapApiActivityToFeedItem(event: ActivityApiEvent): ActivityFeedI
     timestamp: event.createdAt,
     dateGroup: getDateGroup(event.createdAt),
     metadata,
-    actionLabel: mapped.actionLabel,
-    actionRoute: mapped.actionRoute,
     reactions: event.reactions ?? {},
   };
 }

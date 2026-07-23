@@ -102,6 +102,8 @@ subscriptionRouter.get("/", async (c) => {
       stripeSubscriptionId: subscription.stripeSubscriptionId,
       hasStripeCustomer: !!subscription.stripeCustomerId?.trim(),
       hasStripeSubscription: !!subscription.stripeSubscriptionId?.trim(),
+      hasTeamFeatures: teamSubscriptionRowHasTeamFeatures(subscription),
+      hasGoFeatures: teamSubscriptionRowHasGoFeatures(subscription),
     },
   });
 });

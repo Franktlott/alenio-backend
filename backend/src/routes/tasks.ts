@@ -3,7 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
-import { getTeamSubscription } from "./subscription";
+import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "./subscription";
 import { logActivity } from "../lib/activity";
 import { isFeedbackTaskDescription } from "../lib/one-on-one-feedback";
 import {
@@ -419,7 +419,7 @@ tasksRouter.post("/", async (c) => {
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
   const subscription = await getTeamSubscription(teamId);
-  if (!["team", "pro", "operations"].includes(subscription.plan)) {
+  if (!teamSubscriptionRowHasTeamFeatures(subscription)) {
     return c.json({ error: { message: "Task manager requires a Pro or Operations plan", code: "SUBSCRIPTION_REQUIRED" } }, 403);
   }
 

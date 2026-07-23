@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import Svg, { Path } from "react-native-svg";
-import { Star, Users } from "lucide-react-native";
+import { Star } from "lucide-react-native";
 import Animated, {
   Easing,
   FadeInUp,
@@ -14,7 +14,6 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import type { ActivityFeedItem } from "./types";
@@ -34,7 +33,6 @@ type Props = {
   item: ActivityFeedItem;
   footer?: ReactNode;
   onLongPress?: () => void;
-  onCelebrate?: (item: ActivityFeedItem) => void;
   testID?: string;
 };
 
@@ -222,64 +220,7 @@ function AvatarFocal({
   );
 }
 
-function CelebratePill({
-  color,
-  onPress,
-  testID,
-}: {
-  color: string;
-  onPress: () => void;
-  testID?: string;
-}) {
-  const scale = useSharedValue(1);
-  const [burst, setBurst] = useState(false);
-
-  const btnStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePress = () => {
-    scale.value = withSequence(withSpring(0.92, { damping: 14 }), withSpring(1, { damping: 12 }));
-    setBurst(true);
-    setTimeout(() => setBurst(false), 700);
-    onPress();
-  };
-
-  return (
-    <View style={{ position: "relative" }}>
-      {burst ? (
-        <View style={styles.burstLayer} pointerEvents="none">
-          {["✦", "♥", "✧", "★", "+1"].map((char, i) => (
-            <Animated.Text
-              key={`${char}-${i}`}
-              entering={FadeInUp.delay(i * 40).duration(280)}
-              style={[
-                styles.burstChip,
-                {
-                  left: 8 + i * 10,
-                  top: -6 - (i % 3) * 8,
-                  color: i === 4 ? "#FFFFFF" : color,
-                },
-              ]}
-            >
-              {char}
-            </Animated.Text>
-          ))}
-        </View>
-      ) : null}
-
-      <Animated.View style={btnStyle}>
-        <Pressable onPress={handlePress} testID={testID} style={styles.celebrateBtn}>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,255,255,0.16)" }]} />
-          <Users size={12} color="#FFFFFF" strokeWidth={2.5} />
-          <Text style={styles.celebrateBtnText}>Celebrate</Text>
-        </Pressable>
-      </Animated.View>
-    </View>
-  );
-}
-
-export function CelebrationActivityCard({ item, footer, onLongPress, onCelebrate, testID }: Props) {
+export function CelebrationActivityCard({ item, footer, onLongPress, testID }: Props) {
   const theme = getCelebrationCardTheme(item.metadata.celebrationType);
   const Icon = theme.Icon;
   const fromName = item.actor?.name ?? "Someone";
@@ -372,17 +313,10 @@ export function CelebrationActivityCard({ item, footer, onLongPress, onCelebrate
               </View>
             </View>
 
-            {/* Reactions + Celebrate */}
+            {/* Reactions */}
             <View style={styles.footerRow}>
               <Image source={alenioIcon} style={styles.alenioMark} accessibilityLabel="Alenio" />
               <View style={styles.footerReactions}>{footer}</View>
-              {onCelebrate ? (
-                <CelebratePill
-                  color={theme.accent}
-                  onPress={() => onCelebrate(item)}
-                  testID={`${testID ?? item.id}-celebrate`}
-                />
-              ) : null}
             </View>
           </View>
         </View>

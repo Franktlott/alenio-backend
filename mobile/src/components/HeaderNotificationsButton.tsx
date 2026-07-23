@@ -327,7 +327,9 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
         onPress={() => setOpen(true)}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={badgeCount > 0 ? `Notifications, ${badgeCount} pending` : "Notifications"}
+        accessibilityLabel={
+          badgeCount > 0 ? `Approvals and requests, ${badgeCount} pending` : "Approvals and requests"
+        }
         testID={testID}
         style={({ pressed }) => ({
           width: 34,
@@ -366,8 +368,8 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
 
       <AlenioBottomSheet
         visible={open}
-        title="Notifications"
-        subtitle="Approvals and requests that need your attention"
+        title="Approvals & requests"
+        subtitle="Join requests, invites, and items that need your attention"
         onClose={() => setOpen(false)}
         compact
         showCloseButton

@@ -10,11 +10,10 @@ type Props = {
   item: ActivityFeedItem;
   footer?: ReactNode;
   onLongPress?: () => void;
-  onCelebrate?: (item: ActivityFeedItem) => void;
   testID?: string;
 };
 
-export function ActivityFeedCard({ item, footer, onLongPress, onCelebrate, testID }: Props) {
+export function ActivityFeedCard({ item, footer, onLongPress, testID }: Props) {
   const shared = {
     item,
     footer,
@@ -33,9 +32,9 @@ export function ActivityFeedCard({ item, footer, onLongPress, onCelebrate, testI
       return <TeamActivityCard {...shared} />;
     case "task_milestone":
     case "personal_best":
-      return <MilestoneActivityCard {...shared} onCelebrate={onCelebrate} />;
+      return <MilestoneActivityCard {...shared} />;
     case "celebration":
-      return <CelebrationActivityCard {...shared} onCelebrate={onCelebrate} />;
+      return <CelebrationActivityCard {...shared} />;
     default:
       return <TaskActivityCard {...shared} />;
   }

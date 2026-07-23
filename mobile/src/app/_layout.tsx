@@ -23,6 +23,7 @@ import Animated, {
   withDelay,
   runOnJS,
 } from 'react-native-reanimated';
+import { AppPageBackground } from '@/components/AppPageBackground';
 
 export const unstable_settings = {
   /** Run `index` first so session + `/api/me` gate to Chat or Sign-in stays consistent. */
@@ -258,9 +259,10 @@ function RootLayoutNav() {
   }, [hasBackendSession, session?.user?.id]);
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#F8F7FF' }}>
+      <AppPageBackground />
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
           <Stack.Screen name="index" />
           <Stack.Protected guard={hasBackendSession}>
             <Stack.Screen name="(app)" />

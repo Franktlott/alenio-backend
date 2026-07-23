@@ -1,13 +1,21 @@
 /** Store-safe copy: no external purchase links, prices tied to checkout, or payment provider names. */
 
-export function hasTeamPlan(sub?: { plan?: string | null } | null): boolean {
+const PAID_ACTIVE_STATUSES = ["active", "trialing", "past_due", "incomplete", "paused"] as const;
+
+/** Align with backend teamSubscriptionRowHasTeamFeatures (plan + paid-active status). */
+export function hasTeamPlan(
+  sub?: { plan?: string | null; status?: string | null; hasTeamFeatures?: boolean | null } | null,
+): boolean {
+  if (typeof sub?.hasTeamFeatures === "boolean") return sub.hasTeamFeatures;
   const plan = (sub?.plan ?? "free").trim().toLowerCase();
-  return plan === "team" || plan === "pro" || plan === "operations";
+  if (plan !== "team" && plan !== "pro" && plan !== "operations") return false;
+  const status = (sub?.status ?? "active").trim().toLowerCase();
+  return (PAID_ACTIVE_STATUSES as readonly string[]).includes(status);
 }
 
 /** Use live subscription when loaded; otherwise fall back to persisted workspace plan. */
 export function hasWorkspaceTaskAccess(
-  subscription: { plan?: string | null } | null | undefined,
+  subscription: { plan?: string | null; status?: string | null; hasTeamFeatures?: boolean | null } | null | undefined,
   persistedPlan: "free" | "team",
 ): boolean {
   if (subscription) return hasTeamPlan(subscription);
@@ -60,4 +68,4 @@ export function teamActiveMessage(isOwner: boolean): string {
 export const PAYWALL_TITLE = "Pro plan required";
 
 export const PAYWALL_BODY =
-  "Group chats are included with the Pro plan. View what is included in Workplace Access.";
+  "Tasks, Workspace, and Activity are included with the Pro plan. View what is included in Workplace Access.";

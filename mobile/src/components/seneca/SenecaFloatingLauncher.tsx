@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
-import { usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -18,8 +17,6 @@ import {
 const senecaIcon = require("@/assets/seneca-icon.png");
 
 const FAB_ABOVE_NAV_GAP = 12;
-/** Extra lift on Chat so Seneca clears the pin hint / empty-state copy. */
-const CHAT_FAB_EXTRA_LIFT = 28;
 /** Snug white ring around the mark — not flush to the edge. */
 const ICON_SIZE = Math.round(SENECA_FAB_SIZE * 0.78);
 
@@ -27,13 +24,8 @@ function canUseSeneca(role?: string | null): boolean {
   return role === "owner" || role === "team_leader";
 }
 
-function isChatRoute(pathname: string): boolean {
-  return pathname === "/chat" || pathname.endsWith("/chat");
-}
-
 export function SenecaFloatingLauncher() {
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
@@ -49,8 +41,7 @@ export function SenecaFloatingLauncher() {
 
   if (!showSeneca) return null;
 
-  const chatLift = isChatRoute(pathname) ? CHAT_FAB_EXTRA_LIFT : 0;
-  const padBottom = insets.bottom + TAB_BAR_HEIGHT + FAB_ABOVE_NAV_GAP + chatLift;
+  const padBottom = insets.bottom + TAB_BAR_HEIGHT + FAB_ABOVE_NAV_GAP;
   const padRight = Math.max(insets.right, SENECA_FAB_RIGHT_INSET);
 
   return (

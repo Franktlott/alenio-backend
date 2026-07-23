@@ -730,6 +730,7 @@ enum TopicMemberRole {
 model Conversation {
   id           String                    @id @default(cuid())
   name         String?
+  image        String?
   isGroup      Boolean                   @default(false)
   /** Workspace the group was created in (used to label cross-workspace chat lists). */
   teamId       String?

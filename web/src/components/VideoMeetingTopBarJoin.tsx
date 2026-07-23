@@ -62,9 +62,8 @@ export function VideoMeetingTopBarJoin({ selectedTeamId, user }: Props) {
     setJoinLoading(true);
     try {
       const room = await createVideoRoom(event.id, user?.name ?? user?.email ?? "Guest");
-      const call = room.token
-        ? `${room.url}?t=${encodeURIComponent(room.token)}&prejoin=false`
-        : `${room.url}?prejoin=false`;
+      if (!room.token) throw new Error("Could not start video call.");
+      const call = `${room.url}?t=${encodeURIComponent(room.token)}&prejoin=false`;
       setVideoTitle(event.title);
       setVideoUrl(call);
     } catch (err) {

@@ -346,7 +346,7 @@ export default function OnboardingScreen() {
           <FieldLabel>Workplace name</FieldLabel>
           <TextInput
             style={alenioSheetStyles.fieldInput}
-            placeholder="e.g. Engineering, Marketing"
+            placeholder="e.g. Retail Location #5427"
             placeholderTextColor="#94A3B8"
             value={teamName}
             onChangeText={(t) => {

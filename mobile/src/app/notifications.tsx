@@ -9,7 +9,7 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F1F5F9" }} testID="notifications-screen">
+    <View style={{ flex: 1, backgroundColor: "transparent" }} testID="notifications-screen">
       <View
         style={{
           paddingTop: insets.top + 4,
@@ -37,7 +37,7 @@ export default function NotificationsScreen() {
             <ArrowLeft size={20} color="#0F172A" strokeWidth={2.25} />
           </Pressable>
           <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", letterSpacing: -0.2 }}>
-            Notifications
+            Notification settings
           </Text>
         </View>
       </View>

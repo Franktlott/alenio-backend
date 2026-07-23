@@ -24,10 +24,13 @@ import {
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "@/lib/auth/use-session";
 import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
+import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { tabBarClearance, SENECA_FAB_SIZE, SENECA_FAB_RIGHT_INSET } from "@/lib/tab-bar";
 import { AppTabHeader } from "@/components/AppTabHeader";
 import type { Team } from "@/lib/types";
+import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import {
   ActivityIntroHeader,
   ActivityFeedCard,
@@ -82,7 +85,6 @@ function FeedItemCard({
   showPicker,
   onOpenPicker,
   onClosePicker,
-  onCelebrate,
   showHint,
   showWorkspaceLabel,
 }: {
@@ -92,7 +94,6 @@ function FeedItemCard({
   showPicker: boolean;
   onOpenPicker: () => void;
   onClosePicker: () => void;
-  onCelebrate?: () => void;
   showHint?: boolean;
   showWorkspaceLabel?: boolean;
 }) {
@@ -145,7 +146,6 @@ function FeedItemCard({
       <ActivityFeedCard
         item={item}
         onLongPress={onOpenPicker}
-        onCelebrate={onCelebrate ? () => onCelebrate() : undefined}
         footer={
           <ActivityReactionRow
             activityId={item.id}
@@ -186,11 +186,22 @@ export default function ActivityScreen() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const currentUserId = session?.user?.id;
+  const persistedPlan = useSubscriptionStore((s) => s.plan);
 
   const { data: teams = [] } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
   });
+
+  const { data: subscription, isFetched: subscriptionFetched } = useQuery({
+    queryKey: ["subscription", activeTeamId],
+    queryFn: () =>
+      api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
+        `/api/teams/${activeTeamId}/subscription`,
+      ),
+    enabled: !!activeTeamId,
+  });
+  const hasActivityAccess = hasWorkspaceTaskAccess(subscription, persistedPlan);
 
   const [showReactionHint, setShowReactionHint] = useState(false);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
@@ -361,14 +372,34 @@ export default function ActivityScreen() {
 
   if (!activeTeamId) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]}>
         <NoWorkspaceRedirect />
       </SafeAreaView>
     );
   }
 
+  if (!hasActivityAccess && !subscriptionFetched) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }} edges={["top"]}>
+        <ActivityIndicator color="#4361EE" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!hasActivityAccess && subscriptionFetched) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]} testID="activity-paywall-screen">
+        <ProFeatureLockedView
+          title="Pro plan required"
+          body="Activity is included with the Pro plan. View what is included in Workplace Access."
+          testID="activity-paywall"
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }} edges={[]} testID="activity-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={[]} testID="activity-screen">
       <AppTabHeader
         topInset={insets.top}
         testID="activity-header"
@@ -796,11 +827,6 @@ export default function ActivityScreen() {
                     showPicker={openPickerId === row.item.id}
                     onOpenPicker={() => setOpenPickerId(row.item.id)}
                     onClosePicker={() => setOpenPickerId(null)}
-                    onCelebrate={() => {
-                      setCelebrateTeamId(row.item.teamId || celebrateTeamIdResolved);
-                      setShowCelebrateModal(true);
-                      setCelebrateStep(1);
-                    }}
                     showHint={row.isFirstInFeed && showReactionHint}
                     showWorkspaceLabel={showWorkspaceLabels}
                   />

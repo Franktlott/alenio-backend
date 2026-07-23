@@ -230,7 +230,7 @@ export default function PlanOneOnOneScreen() {
 
   if (teamLoading && !resolvedRole) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", justifyContent: "center", alignItems: "center" }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator color="#4361EE" />
       </SafeAreaView>
     );
@@ -238,7 +238,7 @@ export default function PlanOneOnOneScreen() {
 
   if (!isOwnerOrLeader) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", justifyContent: "center", padding: 24 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent", justifyContent: "center", padding: 24 }}>
         <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", textAlign: "center" }}>
           Only leaders can schedule check-ins
         </Text>
@@ -250,7 +250,7 @@ export default function PlanOneOnOneScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="plan-one-on-one-modal">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]} testID="plan-one-on-one-modal">
       <LinearGradient colors={["#7C3AED", "#4361EE"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View
           style={{

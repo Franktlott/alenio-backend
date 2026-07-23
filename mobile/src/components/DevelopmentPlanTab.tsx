@@ -14,7 +14,16 @@ import {
 } from "react-native";
 import { toast } from "burnt";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, X, Target, ChevronDown, ChevronUp } from "lucide-react-native";
+import {
+  Plus,
+  X,
+  Target,
+  ChevronDown,
+  ChevronUp,
+  MoreVertical,
+  Pencil,
+  Trash2,
+} from "lucide-react-native";
 import {
   addDevelopmentGoalNote,
   createDevelopmentGoal,
@@ -29,18 +38,23 @@ import {
 } from "@/lib/member-profile-api";
 import { printDevelopmentPlan, downloadDevelopmentPlanPdf } from "@/lib/development-plan-print";
 import {
-  DEVELOPMENT_GOAL_ACTIVITY_KEY,
   goalStatusLabel,
   normalizeDevelopmentGoalStatus,
 } from "@/lib/development-goal-activity";
+import {
+  CreateDevelopmentGoalModal,
+  type CreateDevelopmentGoalPayload,
+} from "@/components/CreateDevelopmentGoalModal";
 
 type Props = {
   teamId: string;
   memberUserId: string;
   memberName: string;
+  memberImage?: string | null;
   managerName?: string | null;
   canCreate: boolean;
   canAddNotes: boolean;
+  autoOpenCreate?: boolean;
 };
 
 function formatWhen(iso: string): string {
@@ -176,18 +190,6 @@ function GrowthEmptyState({
             : `Set development goals for ${firstName}. Build skills, track action steps, and celebrate progress over time.`
           : `Development goals for ${firstName} will appear here once a leader adds them.`}
       </Text>
-      <Text
-        style={{
-          fontSize: 12,
-          color: "#94A3B8",
-          textAlign: "center",
-          lineHeight: 17,
-          maxWidth: 300,
-          marginBottom: canCreate && onStart ? 16 : 0,
-        }}
-      >
-        {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}
-      </Text>
       {canCreate && onStart ? (
         <Pressable
           onPress={onStart}
@@ -221,9 +223,11 @@ export function DevelopmentPlanTab({
   teamId,
   memberUserId,
   memberName,
+  memberImage = null,
   managerName = null,
   canCreate,
   canAddNotes,
+  autoOpenCreate = false,
 }: Props) {
   const insets = useSafeAreaInsets();
   const canUpdate = canCreate || canAddNotes;
@@ -233,10 +237,13 @@ export function DevelopmentPlanTab({
   const [closedOpen, setClosedOpen] = useState(false);
   const [inactiveOpen, setInactiveOpen] = useState(false);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
+  const [previewGoal, setPreviewGoal] = useState<DevelopmentGoal | null>(null);
+  const [goalActionMenu, setGoalActionMenu] = useState<DevelopmentGoal | null>(null);
   const [noteGoal, setNoteGoal] = useState<DevelopmentGoal | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteErr, setNoteErr] = useState<string | null>(null);
+  const autoCreateHandledRef = React.useRef(false);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [updateGoal, setUpdateGoal] = useState<DevelopmentGoal | null>(null);
@@ -311,10 +318,43 @@ export function DevelopmentPlanTab({
   };
 
   const openCreate = () => {
-    setSkill("");
-    setSteps([""]);
     setModalErr(null);
     setCreateOpen(true);
+  };
+
+  useEffect(() => {
+    if (!autoOpenCreate || !canCreate || autoCreateHandledRef.current || loading) return;
+    autoCreateHandledRef.current = true;
+    openCreate();
+  }, [autoOpenCreate, canCreate, loading]);
+
+  const onCreateGoalFromSheet = async (payload: CreateDevelopmentGoalPayload) => {
+    if (!payload.skill.trim()) {
+      setModalErr("Choose or enter a developmental skill.");
+      return;
+    }
+    if (payload.steps.length === 0) {
+      setModalErr("Add at least one action step.");
+      return;
+    }
+    setSaving(true);
+    setModalErr(null);
+    try {
+      const created = await createDevelopmentGoal(teamId, memberUserId, {
+        skill: payload.skill.trim(),
+        steps: payload.steps,
+      });
+      if (payload.managerNotes?.trim()) {
+        await addDevelopmentGoalNote(teamId, memberUserId, created.id, payload.managerNotes.trim());
+      }
+      toast({ title: "Goal created", preset: "done" });
+      closeModal();
+      await loadGoals();
+    } catch (e) {
+      setModalErr(e instanceof Error ? e.message : "Could not create goal.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openUpdate = (goal: DevelopmentGoal) => {
@@ -378,14 +418,7 @@ export function DevelopmentPlanTab({
     setSaving(true);
     setModalErr(null);
     try {
-      if (createOpen) {
-        await createDevelopmentGoal(teamId, memberUserId, {
-          skill: trimmedSkill,
-          steps: trimmedSteps,
-        });
-        toast({ title: "Goal created", preset: "done" });
-        closeModal();
-      } else if (updateGoal) {
+      if (updateGoal) {
         const skillOrStepsChanged =
           trimmedSkill !== updateGoal.skill ||
           JSON.stringify(trimmedSteps) !== JSON.stringify(updateGoal.steps);
@@ -484,6 +517,11 @@ export function DevelopmentPlanTab({
     ]);
   };
 
+  const openGoalMenu = (goal: DevelopmentGoal, closePreview = false) => {
+    if (closePreview) setPreviewGoal(null);
+    setGoalActionMenu(goal);
+  };
+
   const renderGoalRow = (goal: DevelopmentGoal, index: number) => {
     const status = normalizeDevelopmentGoalStatus(goal.status);
     const isClosed = status === "closed";
@@ -492,25 +530,21 @@ export function DevelopmentPlanTab({
     const latestNote = [...goal.notes].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     )[0];
-    const stepPreview =
-      goal.steps.length === 0
-        ? null
-        : goal.steps.length === 1
-          ? goal.steps[0]
-          : `${goal.steps[0]} · +${goal.steps.length - 1} more`;
-
     return (
-      <View
+      <Pressable
         key={goal.id}
+        onPress={() => setPreviewGoal(goal)}
         style={{
           flexDirection: "row",
           borderTopWidth: index === 0 ? 0 : 1,
           borderTopColor: "#F1F5F9",
           backgroundColor: "white",
         }}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${goal.skill} goal summary`}
       >
         <View style={{ width: 3, backgroundColor: accent }} />
-        <View style={{ flex: 1, paddingVertical: 12, paddingLeft: 12, paddingRight: 10 }}>
+        <View style={{ flex: 1, paddingVertical: 9, paddingLeft: 10, paddingRight: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -542,7 +576,7 @@ export function DevelopmentPlanTab({
                 </View>
               </View>
 
-              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 3, lineHeight: 16 }} numberOfLines={1}>
+              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2, lineHeight: 15 }} numberOfLines={1}>
                 {[
                   isClosed
                     ? `Closed ${formatWhen(goal.closedAt ?? lastUpdatedAt(goal))}`
@@ -560,18 +594,32 @@ export function DevelopmentPlanTab({
                 </Text>
               ) : null}
 
-              {stepPreview ? (
-                <Text style={{ marginTop: 6, fontSize: 12, color: "#475569", lineHeight: 16 }} numberOfLines={1}>
-                  Steps: {stepPreview}
-                </Text>
-              ) : null}
-
               {latestNote ? (
-                <Text style={{ marginTop: 4, fontSize: 12, color: "#64748B", lineHeight: 16 }} numberOfLines={2}>
+                <Text style={{ marginTop: 3, fontSize: 11, color: "#64748B", lineHeight: 15 }} numberOfLines={1}>
                   Latest: {latestNote.body}
                 </Text>
               ) : null}
             </View>
+            {canCreate ? (
+              <Pressable
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openGoalMenu(goal);
+                }}
+                hitSlop={10}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  backgroundColor: "#F8FAFC",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                testID={`goal-menu-${goal.id}`}
+              >
+                <MoreVertical size={15} color="#64748B" />
+              </Pressable>
+            ) : null}
           </View>
 
           {canUpdate ? (
@@ -580,9 +628,9 @@ export function DevelopmentPlanTab({
                 flexDirection: "row",
                 alignItems: "center",
                 flexWrap: "wrap",
-                gap: 12,
-                marginTop: 10,
-                paddingTop: 10,
+                gap: 14,
+                marginTop: 6,
+                paddingTop: 6,
                 borderTopWidth: 1,
                 borderTopColor: "#F8FAFC",
               }}
@@ -593,40 +641,17 @@ export function DevelopmentPlanTab({
                 </Pressable>
               ) : null}
 
-              {isClosed || isInactive ? (
-                <Pressable
-                  onPress={() => onReopen(goal)}
-                  disabled={statusSavingId === goal.id}
-                  hitSlop={6}
-                  testID={`reopen-goal-${goal.id}`}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>
-                    {statusSavingId === goal.id ? "…" : isInactive ? "Reactivate" : "Reopen"}
-                  </Text>
-                </Pressable>
-              ) : (
+              {!isClosed ? (
                 <Pressable onPress={() => onMarkComplete(goal)} disabled={statusSavingId === goal.id} hitSlop={6}>
                   <Text style={{ fontSize: 12, fontWeight: "700", color: "#166534" }}>
                     {statusSavingId === goal.id ? "…" : "Complete"}
                   </Text>
                 </Pressable>
-              )}
-
-              {canCreate && !isClosed ? (
-                <Pressable onPress={() => openUpdate(goal)} hitSlop={6}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B" }}>Edit</Text>
-                </Pressable>
-              ) : null}
-
-              {canCreate ? (
-                <Pressable onPress={() => onDelete(goal)} hitSlop={6}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#DC2626" }}>Delete</Text>
-                </Pressable>
               ) : null}
             </View>
           ) : null}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -690,45 +715,52 @@ export function DevelopmentPlanTab({
     ]);
   };
 
-  const modalVisible = createOpen || !!updateGoal;
+  const updateModalVisible = !!updateGoal;
+  const previewStatus = previewGoal
+    ? normalizeDevelopmentGoalStatus(previewGoal.status)
+    : null;
   const showCenteredEmpty = !loading && activeGoals.length === 0 && inactiveGoals.length === 0 && closedGoals.length === 0;
 
   return (
     <View style={{ gap: 14, flexGrow: showCenteredEmpty ? 1 : undefined }}>
-      {goals.length > 0 ? (
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
-          <Pressable
-            onPress={() => void onPrint()}
-            disabled={loading || printingPdf}
-            style={{
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              borderRadius: 8,
-              paddingHorizontal: 10,
-              paddingVertical: 7,
-              opacity: loading || printingPdf ? 0.55 : 1,
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>
-              {printingPdf ? "Printing…" : "Print"}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => void onDownloadPdf()}
-            disabled={loading || downloadingPdf}
-            style={{
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              borderRadius: 8,
-              paddingHorizontal: 10,
-              paddingVertical: 7,
-              opacity: loading || downloadingPdf ? 0.55 : 1,
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>
-              {downloadingPdf ? "Downloading…" : "Download PDF"}
-            </Text>
-          </Pressable>
+      {goals.length > 0 || canCreate ? (
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, flexWrap: "wrap" }}>
+          {goals.length > 0 ? (
+            <>
+              <Pressable
+                onPress={() => void onPrint()}
+                disabled={loading || printingPdf}
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderRadius: 9,
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
+                  opacity: loading || printingPdf ? 0.55 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>
+                  {printingPdf ? "Printing…" : "Print"}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void onDownloadPdf()}
+                disabled={loading || downloadingPdf}
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderRadius: 9,
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
+                  opacity: loading || downloadingPdf ? 0.55 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>
+                  {downloadingPdf ? "Downloading…" : "Download PDF"}
+                </Text>
+              </Pressable>
+            </>
+          ) : null}
           {canCreate ? (
             <Pressable
               onPress={openCreate}
@@ -736,11 +768,12 @@ export function DevelopmentPlanTab({
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 4,
-                backgroundColor: "#0F172A",
-                borderRadius: 8,
-                paddingHorizontal: 11,
+                backgroundColor: "#4361EE",
+                borderRadius: 9,
+                paddingHorizontal: 10,
                 paddingVertical: 7,
               }}
+              testID="new-development-goal-button"
             >
               <Plus size={14} color="white" />
               <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>New goal</Text>
@@ -779,9 +812,6 @@ export function DevelopmentPlanTab({
                 </Text>
                 <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{activeGoals.length}</Text>
               </View>
-              <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 17, marginTop: -2 }}>
-                {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}
-              </Text>
               {renderGoalList(activeGoals)}
             </View>
           )}
@@ -841,7 +871,453 @@ export function DevelopmentPlanTab({
       )}
 
       <Modal
-        visible={modalVisible}
+        visible={!!goalActionMenu}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setGoalActionMenu(null)}
+      >
+        <Pressable
+          onPress={() => setGoalActionMenu(null)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(15, 23, 42, 0.42)",
+            justifyContent: "flex-end",
+            paddingHorizontal: 12,
+            paddingBottom: Math.max(12, insets.bottom),
+          }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 16,
+              overflow: "hidden",
+              shadowColor: "#0F172A",
+              shadowOpacity: 0.16,
+              shadowRadius: 20,
+              shadowOffset: { width: 0, height: -4 },
+              elevation: 8,
+            }}
+          >
+            <View
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: "#DCE5F2",
+                alignSelf: "center",
+                marginTop: 8,
+                marginBottom: 4,
+              }}
+            />
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: "#EEF2F6",
+              }}
+            >
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  overflow: "hidden",
+                }}
+              >
+                <Image
+                  source={require("@/assets/alenio-icon.png")}
+                  style={{ width: 32, height: 32 }}
+                  resizeMode="cover"
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }} numberOfLines={1}>
+                  {goalActionMenu?.skill}
+                </Text>
+                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
+                  {goalActionMenu ? `Updated ${formatWhen(lastUpdatedAt(goalActionMenu))}` : ""}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setGoalActionMenu(null)}
+                hitSlop={10}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={15} color="#64748B" />
+              </Pressable>
+            </View>
+
+            {goalActionMenu ? (
+              <>
+                <Pressable
+                  onPress={() => {
+                    const goal = goalActionMenu;
+                    setGoalActionMenu(null);
+                    openUpdate(goal);
+                  }}
+                  style={{
+                    minHeight: 48,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#EEF2F6",
+                  }}
+                >
+                  <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: "#4361EE" }}>
+                    Edit
+                  </Text>
+                  <Pencil size={17} color="#4361EE" />
+                </Pressable>
+
+                {normalizeDevelopmentGoalStatus(goalActionMenu.status) !== "active" ? (
+                  <Pressable
+                    onPress={() => {
+                      const goal = goalActionMenu;
+                      setGoalActionMenu(null);
+                      onReopen(goal);
+                    }}
+                    style={{
+                      minHeight: 48,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingHorizontal: 16,
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#EEF2F6",
+                    }}
+                  >
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: "#4361EE" }}>
+                      {normalizeDevelopmentGoalStatus(goalActionMenu.status) === "inactive"
+                        ? "Reactivate"
+                        : "Reopen"}
+                    </Text>
+                    <Target size={17} color="#4361EE" />
+                  </Pressable>
+                ) : null}
+
+                <Pressable
+                  onPress={() => {
+                    const goal = goalActionMenu;
+                    setGoalActionMenu(null);
+                    onDelete(goal);
+                  }}
+                  style={{
+                    minHeight: 48,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 16,
+                  }}
+                >
+                  <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: "#EF4444" }}>
+                    Delete goal
+                  </Text>
+                  <Trash2 size={17} color="#EF4444" />
+                </Pressable>
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <CreateDevelopmentGoalModal
+        visible={createOpen}
+        memberName={memberName}
+        memberImage={memberImage}
+        saving={saving}
+        error={modalErr}
+        onClose={closeModal}
+        onCreate={(payload) => {
+          void onCreateGoalFromSheet(payload);
+        }}
+      />
+
+      <Modal
+        visible={!!previewGoal}
+        animationType="slide"
+        presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
+        onRequestClose={() => setPreviewGoal(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "#F8FAFC",
+            paddingTop: Platform.OS === "ios" ? 18 : insets.top + 8,
+            paddingBottom: insets.bottom,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 14,
+              paddingBottom: 10,
+              gap: 10,
+            }}
+          >
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                backgroundColor: "#EEF2FF",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Target size={16} color="#4F46E5" />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={{
+                  fontSize: 9,
+                  fontWeight: "700",
+                  color: "#818CF8",
+                  letterSpacing: 0.6,
+                  textTransform: "uppercase",
+                }}
+              >
+                Development goal
+              </Text>
+              <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }} numberOfLines={1}>
+                {previewGoal?.skill}
+              </Text>
+            </View>
+            {previewGoal && canCreate ? (
+              <Pressable
+                onPress={() => openGoalMenu(previewGoal, true)}
+                hitSlop={8}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MoreVertical size={16} color="#64748B" />
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={() => setPreviewGoal(null)}
+              hitSlop={10}
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 15,
+                backgroundColor: "#F1F5F9",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <X size={16} color="#64748B" />
+            </Pressable>
+          </View>
+
+          {previewGoal ? (
+            <>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 24, gap: 10 }}
+                showsVerticalScrollIndicator={false}
+              >
+                <View
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#E8ECFA",
+                    padding: 12,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View
+                      style={{
+                        backgroundColor:
+                          previewStatus === "closed"
+                            ? "#F1F5F9"
+                            : previewStatus === "inactive"
+                              ? "#FFEDD5"
+                              : "#ECFDF5",
+                        borderRadius: 999,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 9,
+                          fontWeight: "800",
+                          color:
+                            previewStatus === "closed"
+                              ? "#64748B"
+                              : previewStatus === "inactive"
+                                ? "#C2410C"
+                                : "#15803D",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        {goalStatusLabel(previewStatus ?? "active")}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: "#64748B", flex: 1 }} numberOfLines={1}>
+                      Updated {formatWhen(lastUpdatedAt(previewGoal))}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>
+                    Created by {previewGoal.createdBy ? displayUserName(previewGoal.createdBy) : "a team leader"}
+                  </Text>
+                </View>
+
+                <View
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#E8ECFA",
+                    padding: 12,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#0F172A", marginBottom: 8 }}>
+                    Action steps
+                  </Text>
+                  {previewGoal.steps.length > 0 ? (
+                    <View style={{ gap: 7 }}>
+                      {previewGoal.steps.map((step, index) => (
+                        <View key={`${index}-${step}`} style={{ flexDirection: "row", gap: 8 }}>
+                          <View
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: 9,
+                              backgroundColor: "#EEF2FF",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Text style={{ fontSize: 9, fontWeight: "800", color: "#4F46E5" }}>
+                              {index + 1}
+                            </Text>
+                          </View>
+                          <Text style={{ flex: 1, fontSize: 12, color: "#334155", lineHeight: 18 }}>
+                            {step}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: 12, color: "#94A3B8" }}>No action steps.</Text>
+                  )}
+                </View>
+
+                <View
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#E8ECFA",
+                    padding: 12,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#0F172A", marginBottom: 8 }}>
+                    Progress notes
+                  </Text>
+                  {previewGoal.notes.length > 0 ? (
+                    <View style={{ gap: 8 }}>
+                      {[...previewGoal.notes]
+                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                        .map((note) => (
+                          <View
+                            key={note.id}
+                            style={{
+                              backgroundColor: "#F8FAFC",
+                              borderRadius: 9,
+                              padding: 9,
+                            }}
+                          >
+                            <Text style={{ fontSize: 12, color: "#334155", lineHeight: 17 }}>
+                              {note.body}
+                            </Text>
+                            <Text style={{ fontSize: 10, color: "#94A3B8", marginTop: 4 }}>
+                              {formatWhen(note.createdAt)} · {displayUserName(note.createdBy)}
+                            </Text>
+                          </View>
+                        ))}
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: 12, color: "#94A3B8" }}>No progress notes yet.</Text>
+                  )}
+                </View>
+              </ScrollView>
+
+              {canUpdate && previewStatus !== "closed" ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 8,
+                    paddingHorizontal: 14,
+                    paddingTop: 8,
+                    paddingBottom: Math.max(8, insets.bottom),
+                    borderTopWidth: 1,
+                    borderTopColor: "#E8ECFA",
+                    backgroundColor: "#FFFFFF",
+                  }}
+                >
+                  <Pressable
+                    onPress={() => {
+                      const goal = previewGoal;
+                      setPreviewGoal(null);
+                      openAddNote(goal);
+                    }}
+                    style={{
+                      flex: 1,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: "#C7D2FE",
+                      paddingVertical: 11,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Add note</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const goal = previewGoal;
+                      setPreviewGoal(null);
+                      onMarkComplete(goal);
+                    }}
+                    style={{
+                      flex: 1,
+                      borderRadius: 10,
+                      backgroundColor: "#166534",
+                      paddingVertical: 11,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFFFFF" }}>Complete</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </>
+          ) : null}
+        </View>
+      </Modal>
+
+      <Modal
+        visible={updateModalVisible}
         animationType="slide"
         presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
         onRequestClose={closeModal}
@@ -865,9 +1341,7 @@ export function DevelopmentPlanTab({
               borderBottomColor: "#F1F5F9",
             }}
           >
-            <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
-              {createOpen ? "New developmental goal" : "Update goal"}
-            </Text>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>Update goal</Text>
             <Pressable onPress={closeModal} hitSlop={12}>
               <X size={22} color="#64748B" />
             </Pressable>

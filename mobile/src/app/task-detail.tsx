@@ -40,6 +40,9 @@ import {
   AlenioSheetCard,
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
+import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
+import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
+import { useSubscriptionStore } from "@/lib/state/subscription-store";
 
 function sameCalendarDay(a: Date | null, b: Date | null): boolean {
   if (!a && !b) return true;
@@ -81,16 +84,27 @@ export default function TaskDetailScreen() {
   feedbackCompletionActiveRef.current = feedbackCompletionActive;
   const promptCompleteTaskRef = useRef<() => void>(() => {});
 
+  const persistedPlan = useSubscriptionStore((s) => s.plan);
+  const { data: subscription, isFetched: subscriptionFetched } = useQuery({
+    queryKey: ["subscription", teamId],
+    queryFn: () =>
+      api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
+        `/api/teams/${teamId}/subscription`,
+      ),
+    enabled: !!teamId,
+  });
+  const hasTaskAccess = hasWorkspaceTaskAccess(subscription, persistedPlan);
+
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
     queryFn: () => api.get<Task>(`/api/teams/${teamId}/tasks/${taskId}`),
-    enabled: !!taskId && !!teamId,
+    enabled: !!taskId && !!teamId && hasTaskAccess,
   });
 
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
     queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
-    enabled: !!teamId,
+    enabled: !!teamId && hasTaskAccess,
   });
 
   const updateMutation = useMutation({
@@ -393,9 +407,45 @@ export default function TaskDetailScreen() {
     }
   };
 
+  if (!hasTaskAccess && !subscriptionFetched) {
+    return (
+      <SafeAreaView className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]} testID="loading-indicator">
+        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
+            <TouchableOpacity onPress={() => router.back()} testID="back-button">
+              <ArrowLeft size={22} color="white" />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color="#4361EE" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!hasTaskAccess && subscriptionFetched) {
+    return (
+      <SafeAreaView className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]} testID="task-detail-paywall-screen">
+        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
+            <TouchableOpacity onPress={() => router.back()} testID="back-button">
+              <ArrowLeft size={22} color="white" />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+        <ProFeatureLockedView
+          title="Pro plan required"
+          body="Task details are included with the Pro plan. View what is included in Workplace Access."
+          testID="task-detail-paywall"
+        />
+      </SafeAreaView>
+    );
+  }
+
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]} testID="loading-indicator">
+      <SafeAreaView className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]} testID="loading-indicator">
         <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
           <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
             <TouchableOpacity onPress={() => router.back()} testID="back-button">
@@ -412,14 +462,14 @@ export default function TaskDetailScreen() {
 
   if (!task) {
     return (
-      <SafeAreaView className="flex-1 bg-white dark:bg-slate-900 items-center justify-center">
+      <SafeAreaView className="flex-1 items-center justify-center" style={{ backgroundColor: "transparent" }}>
         <Text className="text-slate-500">Task not found</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]} testID="task-detail-screen" style={showFocusedFeedbackTask ? { backgroundColor: "#F8FAFC" } : undefined}>
+    <SafeAreaView className="flex-1" edges={["top"]} testID="task-detail-screen" style={{ backgroundColor: "transparent" }}>
       {/* Header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>

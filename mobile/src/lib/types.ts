@@ -157,6 +157,7 @@ export interface Conversation {
   id: string;
   isGroup: boolean;
   name?: string | null;
+  image?: string | null;
   participants?: ConversationParticipant[];
   myRole?: GroupParticipantRole | null;
   workspaceContext?: GroupWorkspaceContext | null;

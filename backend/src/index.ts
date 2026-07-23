@@ -70,6 +70,7 @@ import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection
 import { ensureTopicImageSchema } from "./lib/ensure-topic-image-schema";
 import { ensureNotificationPreferencesSchema } from "./lib/ensure-notification-preferences-schema";
 import { ensurePinnedMessageSchema } from "./lib/ensure-pinned-message-schema";
+import { ensureConversationImageSchema } from "./lib/ensure-conversation-image-schema";
 import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
 import { ensureWalksSchema } from "./lib/ensure-walks-schema";
 import { ensureBetterAuthSchema } from "./lib/ensure-better-auth-schema";
@@ -106,7 +107,7 @@ const startupSchemaReady = Promise.all([
   ensureOrgGoSchema(prisma),
   ensureSenecaStudioSchema(prisma),
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureTaskArchiveSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureConversationImageSchema(prisma), ensureTaskArchiveSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -129,6 +130,7 @@ const startupSchemaReady = Promise.all([
         ensureTopicImageSchema(prisma),
         ensureNotificationPreferencesSchema(prisma),
         ensurePinnedMessageSchema(prisma),
+        ensureConversationImageSchema(prisma),
         ensureTaskArchiveSchema(prisma),
       ]),
 ]);

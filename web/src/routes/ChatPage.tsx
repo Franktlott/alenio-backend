@@ -1041,7 +1041,8 @@ export function ChatPage() {
     setVideoLoading(true);
     try {
       const room = await createVideoRoom(chatVideoRoomId, me?.name ?? me?.email ?? "Guest");
-      const call = room.token ? `${room.url}?t=${encodeURIComponent(room.token)}&prejoin=false` : `${room.url}?prejoin=false`;
+      if (!room.token) throw new Error("Could not start video call.");
+      const call = `${room.url}?t=${encodeURIComponent(room.token)}&prejoin=false`;
       setVideoTitle(`${selectedTeamName} · ${channelLabel}`);
       setVideoUrl(call);
     } catch (err) {

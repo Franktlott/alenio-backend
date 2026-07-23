@@ -178,7 +178,7 @@ export default function CreateEventScreen() {
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="event-modal">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]} testID="event-modal">
       {/* Gradient header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>

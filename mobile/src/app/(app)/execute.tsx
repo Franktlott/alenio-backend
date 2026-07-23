@@ -22,7 +22,7 @@ const EVENT_MODAL_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.92);
 const MEETING_ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.62);
 const MEETING_DURATION_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.55);
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Plus, User, Users, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, Trash2, Pencil, RefreshCw, AlertTriangle, Search } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,6 +40,7 @@ import { earlierIncompleteSeriesTasks } from "@/lib/recurring-task";
 import { formatTaskDueDateLabel } from "@/lib/timezone";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { workspaceTaskClearance } from "@/lib/tab-bar";
+import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import { WorkspaceHeader } from "@/components/workspace/WorkspaceHeader";
 import { WorkspaceViewToggle, type WorkspaceViewMode } from "@/components/workspace/WorkspaceViewToggle";
 import { CalendarCard } from "@/components/workspace/CalendarCard";
@@ -285,7 +286,10 @@ export default function TasksScreen() {
 
   const { data: subscription, isFetched: subscriptionFetched } = useQuery({
     queryKey: ["subscription", activeTeamId],
-    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
+    queryFn: () =>
+      api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
+        `/api/teams/${activeTeamId}/subscription`,
+      ),
     enabled: !!activeTeamId,
   });
   const plan = useSubscriptionStore((s) => s.plan);
@@ -923,20 +927,28 @@ export default function TasksScreen() {
 
   if (!activeTeamId) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]}>
         <NoWorkspaceRedirect />
       </SafeAreaView>
     );
   }
 
-  if (!hasTaskAccess && subscriptionFetched) {
-    return <Redirect href="/(app)/team" />;
-  }
-
   if (!hasTaskAccess && !subscriptionFetched) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }} edges={["top"]}>
         <ActivityIndicator color="#4361EE" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!hasTaskAccess && subscriptionFetched) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]} testID="workspace-paywall-screen">
+        <ProFeatureLockedView
+          title="Pro plan required"
+          body="Workspace tasks and calendar are included with the Pro plan. View what is included in Workplace Access."
+          testID="workspace-paywall"
+        />
       </SafeAreaView>
     );
   }
@@ -959,14 +971,14 @@ export default function TasksScreen() {
 
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }} edges={[]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }} edges={[]}>
         <ActivityIndicator color="#4361EE" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="tasks-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={[]} testID="tasks-screen">
       <WorkspaceHeader
         topInset={insets.top}
         showAdd={!!activeTeamId}
