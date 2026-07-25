@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -13,9 +13,11 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowUp, Briefcase, ChevronRight, Lock, MoreHorizontal, X } from "lucide-react-native";
+import { ArrowUp, Briefcase, ChevronRight, Lock, MoreHorizontal, Printer, Share2, X } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "burnt";
 import { SenecaIcon } from "./SenecaIcon";
 import {
   fetchSenecaAsk,
@@ -30,6 +32,9 @@ import { SenecaCreateTaskCard } from "./SenecaCreateTaskCard";
 import { quickActionNavigate } from "@/lib/seneca-navigation";
 import { useTeamStore } from "@/lib/state/team-store";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import { api } from "@/lib/api/api";
+import type { Team } from "@/lib/types";
+import { printSenecaChat, shareSenecaChat } from "@/lib/seneca-chat-share";
 
 function ThinkingDots() {
   const [step, setStep] = useState(0);
@@ -98,7 +103,7 @@ function StickyAskBar({
   const canSend = value.trim().length > 0 && !disabled;
 
   return (
-    <View style={[styles.askBar, { paddingBottom: Math.max(bottomInset, 14) }]}>
+    <View style={[styles.askBar, { paddingBottom: Math.max(bottomInset, 8) }]}>
       <View style={styles.askBarDivider} />
       <View style={styles.askBarInner}>
         <TextInput
@@ -122,24 +127,18 @@ function StickyAskBar({
               end={{ x: 1, y: 1 }}
               style={styles.sendBtn}
             >
-              <ArrowUp size={18} color="#FFFFFF" strokeWidth={2.6} />
+              <ArrowUp size={16} color="#FFFFFF" strokeWidth={2.6} />
             </LinearGradient>
           ) : (
             <View style={[styles.sendBtn, styles.sendBtnDisabled]}>
-              <ArrowUp size={18} color="#94A3B8" strokeWidth={2.6} />
+              <ArrowUp size={16} color="#94A3B8" strokeWidth={2.6} />
             </View>
           )}
         </Pressable>
       </View>
       <View style={styles.privacyRow}>
-        <Lock size={11} color={COLORS.textSoft} strokeWidth={2.2} />
-        <Text style={styles.privacyText}>Private session · Workspace data remains secure</Text>
-      </View>
-      <Text style={styles.accuracyNote}>
-        AI-generated guidance may contain inaccuracies. Verify critical information before making decisions.
-      </Text>
-      <Text style={styles.settingsNote}>
-        Manage Seneca workspace settings at{" "}
+        <Lock size={10} color={COLORS.textSoft} strokeWidth={2.2} />
+        <Text style={styles.privacyText}>Private · Verify AI guidance · Settings at </Text>
         <Text
           style={styles.settingsLink}
           onPress={() => {
@@ -148,7 +147,7 @@ function StickyAskBar({
         >
           alenio.com
         </Text>
-      </Text>
+      </View>
     </View>
   );
 }
@@ -157,12 +156,22 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
   const insets = useSafeAreaInsets();
   const activeTeamIdFromStore = useTeamStore((s) => s.activeTeamId);
   const activeTeamId = teamIdProp ?? activeTeamIdFromStore ?? "";
+  const { data: teams = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    enabled: open,
+  });
+  const workspaceName = useMemo(
+    () => teams.find((team) => team.id === activeTeamId)?.name ?? "Workspace",
+    [teams, activeTeamId],
+  );
 
   const [chatMessages, setChatMessages] = useState<SenecaChatMessage[]>([]);
   const [askDraft, setAskDraft] = useState("");
   const [thinking, setThinking] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const chatScrollRef = useRef<ScrollView>(null);
   const stickToBottomRef = useRef(true);
 
@@ -339,6 +348,45 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
     quickActionNavigate(kind, activeTeamId);
   };
 
+  const shareMessages = useMemo(
+    () => chatMessages.map((message) => ({ role: message.role, text: message.text })),
+    [chatMessages],
+  );
+
+  const onShareChat = useCallback(async () => {
+    setMoreOpen(false);
+    setExporting(true);
+    try {
+      await shareSenecaChat(shareMessages, workspaceName);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      toast({
+        title: error instanceof Error ? error.message : "Could not share chat",
+        preset: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [shareMessages, workspaceName]);
+
+  const onPrintChat = useCallback(async () => {
+    setMoreOpen(false);
+    setExporting(true);
+    try {
+      await printSenecaChat(shareMessages, workspaceName);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      toast({
+        title: error instanceof Error ? error.message : "Could not print chat",
+        preset: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [shareMessages, workspaceName]);
+
+  const canExport = chatMessages.length > 0 && !thinking && !exporting;
+
   return (
     <Modal visible={open} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
       <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
@@ -346,24 +394,42 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
           <View style={styles.headerBar}>
             <View style={styles.header}>
               <View style={styles.headerIconWrap}>
-                <SenecaIcon size={32} />
+                <SenecaIcon size={24} />
               </View>
               <View style={styles.headerText}>
                 <View style={styles.headerTitleRow}>
                   <Text style={styles.headerTitle}>Seneca</Text>
                   <View style={styles.headerBadge}>
-                    <Text style={styles.headerBadgeText}>BETA mode</Text>
+                    <Text style={styles.headerBadgeText}>BETA</Text>
                   </View>
                 </View>
-                <Text style={styles.headerSubtitle}>Early access AI leadership assistant</Text>
+                <Text style={styles.headerSubtitle}>AI leadership assistant</Text>
               </View>
               <View style={styles.headerActions}>
+                <Pressable
+                  onPress={() => void onShareChat()}
+                  disabled={!canExport}
+                  style={[styles.headerIconBtn, !canExport && styles.headerIconBtnDisabled]}
+                  accessibilityLabel="Share Seneca chat"
+                  testID="seneca-share-button"
+                >
+                  <Share2 size={16} color={canExport ? COLORS.textMuted : COLORS.textSoft} />
+                </Pressable>
+                <Pressable
+                  onPress={() => void onPrintChat()}
+                  disabled={!canExport}
+                  style={[styles.headerIconBtn, !canExport && styles.headerIconBtnDisabled]}
+                  accessibilityLabel="Print Seneca chat"
+                  testID="seneca-print-button"
+                >
+                  <Printer size={16} color={canExport ? COLORS.textMuted : COLORS.textSoft} />
+                </Pressable>
                 <Pressable
                   onPress={() => setMoreOpen((value) => !value)}
                   style={[styles.headerIconBtn, moreOpen && styles.headerIconBtnActive]}
                   testID="seneca-more-menu"
                 >
-                  <MoreHorizontal size={18} color={moreOpen ? COLORS.brand : COLORS.textMuted} />
+                  <MoreHorizontal size={16} color={moreOpen ? COLORS.brand : COLORS.textMuted} />
                 </Pressable>
                 <Pressable
                   onPress={handleClose}
@@ -371,7 +437,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   style={styles.headerIconBtn}
                   testID="seneca-close-button"
                 >
-                  <X size={18} color={COLORS.textMuted} strokeWidth={2.2} />
+                  <X size={16} color={COLORS.textMuted} strokeWidth={2.2} />
                 </Pressable>
               </View>
             </View>
@@ -380,9 +446,27 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
             {moreOpen ? (
               <View style={styles.moreMenu}>
                 <Text style={styles.moreMenuLabel}>Quick actions</Text>
+                <Pressable
+                  style={styles.moreItem}
+                  onPress={() => void onShareChat()}
+                  disabled={!canExport}
+                  testID="seneca-more-share"
+                >
+                  <Text style={[styles.moreItemText, !canExport && styles.moreItemTextDisabled]}>Share chat</Text>
+                  <Share2 size={15} color={canExport ? COLORS.textSoft : COLORS.border} />
+                </Pressable>
+                <Pressable
+                  style={styles.moreItem}
+                  onPress={() => void onPrintChat()}
+                  disabled={!canExport}
+                  testID="seneca-more-print"
+                >
+                  <Text style={[styles.moreItemText, !canExport && styles.moreItemTextDisabled]}>Print chat</Text>
+                  <Printer size={15} color={canExport ? COLORS.textSoft : COLORS.border} />
+                </Pressable>
                 <Pressable style={styles.moreItem} onPress={() => onMoreAction("task")} testID="seneca-more-task">
                   <Text style={styles.moreItemText}>Create task</Text>
-                  <ChevronRight size={16} color={COLORS.textSoft} />
+                  <ChevronRight size={15} color={COLORS.textSoft} />
                 </Pressable>
                 <Pressable
                   style={styles.moreItem}
@@ -390,7 +474,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   testID="seneca-more-checklist"
                 >
                   <Text style={styles.moreItemText}>Create checklist</Text>
-                  <ChevronRight size={16} color={COLORS.textSoft} />
+                  <ChevronRight size={15} color={COLORS.textSoft} />
                 </Pressable>
                 <Pressable
                   style={[styles.moreItem, styles.moreItemLast]}
@@ -398,7 +482,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   testID="seneca-more-checkin"
                 >
                   <Text style={styles.moreItemText}>Schedule check-in</Text>
-                  <ChevronRight size={16} color={COLORS.textSoft} />
+                  <ChevronRight size={15} color={COLORS.textSoft} />
                 </Pressable>
               </View>
             ) : null}
@@ -422,12 +506,11 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
               ) : chatMessages.length === 0 && !thinking ? (
                 <View style={styles.welcomeCard}>
                   <View style={styles.welcomeIconWrap}>
-                    <Briefcase size={22} color={COLORS.brand} strokeWidth={2} />
+                    <Briefcase size={18} color={COLORS.brand} strokeWidth={2} />
                   </View>
-                  <Text style={styles.welcomeEyebrow}>BETA mode</Text>
-                  <Text style={styles.welcomeTitle}>How can I support your team today?</Text>
+                  <Text style={styles.welcomeTitle}>How can I support your team?</Text>
                   <Text style={styles.welcomeText}>
-                    Get coaching guidance, schedule check-ins, and prepare for leadership conversations.
+                    Coaching, check-ins, and leadership prep for this workspace.
                   </Text>
                 </View>
               ) : null}
@@ -442,7 +525,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                     <View style={styles.senecaAccent} />
                     <View style={styles.senecaBlockBody}>
                       <View style={styles.senecaBlockHead}>
-                        <SenecaIcon size={20} />
+                        <SenecaIcon size={16} />
                         <Text style={styles.senecaBlockName}>Seneca</Text>
                       </View>
                       <Text style={styles.senecaMessage}>{chatMessage.text}</Text>
@@ -483,7 +566,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   <View style={styles.senecaAccent} />
                   <View style={styles.senecaBlockBody}>
                     <View style={styles.senecaBlockHead}>
-                      <SenecaIcon size={20} />
+                      <SenecaIcon size={16} />
                       <Text style={styles.senecaBlockName}>Seneca</Text>
                     </View>
                     <ThinkingDots />
@@ -521,24 +604,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 14,
-    gap: 12,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 8,
+    gap: 8,
   },
   headerIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -547,11 +625,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   headerIconBtn: {
-    width: 36,
-    height: 36,
+    width: 30,
+    height: 30,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
+    borderRadius: 8,
     backgroundColor: COLORS.bg,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -560,78 +638,73 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.brandSoft,
     borderColor: COLORS.brandBorder,
   },
-  headerText: { flex: 1 },
+  headerIconBtnDisabled: {
+    opacity: 0.45,
+  },
+  headerText: { flex: 1, minWidth: 0 },
   headerTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
     flexWrap: "wrap",
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     color: COLORS.text,
     letterSpacing: -0.2,
   },
   headerBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 999,
     backgroundColor: "#FFF7ED",
     borderWidth: 1,
     borderColor: "#FDBA74",
   },
   headerBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "700",
     color: "#C2410C",
     letterSpacing: 0.3,
   },
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: 11,
     color: COLORS.textMuted,
-    marginTop: 3,
+    marginTop: 1,
     fontWeight: "500",
   },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 5,
   },
   moreMenu: {
-    marginHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 4,
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 2,
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
     overflow: "hidden",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
   },
   moreMenuLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
     color: COLORS.textSoft,
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 6,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   moreItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
@@ -639,143 +712,94 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   moreItemText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
     color: COLORS.text,
+  },
+  moreItemTextDisabled: {
+    color: COLORS.textSoft,
   },
   scroll: {
     flex: 1,
     minHeight: 0,
   },
   chatScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    gap: 16,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+    gap: 10,
     flexGrow: 1,
   },
   emptyCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 20,
+    padding: 14,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   emptyText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     color: COLORS.textMuted,
   },
   welcomeCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 24,
-    gap: 8,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    padding: 14,
+    gap: 4,
   },
   welcomeIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: COLORS.brandSoft,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 4,
+    marginBottom: 2,
     overflow: "hidden",
   },
-  welcomeEyebrow: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.brand,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
   welcomeTitle: {
-    fontSize: 22,
+    fontSize: 17,
     fontWeight: "700",
     color: COLORS.text,
-    letterSpacing: -0.3,
-    lineHeight: 28,
+    letterSpacing: -0.2,
+    lineHeight: 22,
   },
   welcomeText: {
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 18,
     color: COLORS.textMuted,
-    marginBottom: 4,
-  },
-  starterLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.textSoft,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    marginTop: 8,
-  },
-  starterList: {
-    gap: 8,
-  },
-  starterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-  },
-  starterChipText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.text,
-    paddingRight: 8,
   },
   userBubble: {
     alignSelf: "flex-end",
     maxWidth: "86%",
     backgroundColor: COLORS.brand,
-    borderRadius: 14,
+    borderRadius: 12,
     borderTopRightRadius: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    shadowColor: COLORS.brand,
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   userBubbleText: {
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 19,
     color: "#FFFFFF",
     fontWeight: "500",
   },
   senecaBlock: {
     flexDirection: "row",
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
     overflow: "hidden",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
   },
   senecaAccent: {
     width: 3,
@@ -783,90 +807,90 @@ const styles = StyleSheet.create({
   },
   senecaBlockBody: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
   },
   senecaBlockHead: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   senecaBlockName: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
     color: COLORS.brand,
     textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
   senecaMessage: {
-    fontSize: 15,
-    lineHeight: 23,
+    fontSize: 14,
+    lineHeight: 20,
     color: "#334155",
   },
   thinkingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   },
   thinkingDots: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
   },
   thinkingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: COLORS.brand,
   },
   thinkingText: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textMuted,
     fontWeight: "500",
   },
   errorText: {
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 18,
     color: "#DC2626",
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
     borderColor: "#FECACA",
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 8,
+    padding: 10,
   },
   askBar: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     paddingTop: 0,
     backgroundColor: COLORS.surface,
   },
   askBarDivider: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   askBarInner: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.bg,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 5,
+    paddingLeft: 12,
+    paddingRight: 5,
+    paddingVertical: 3,
   },
   askInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.text,
-    paddingVertical: 10,
-    paddingRight: 10,
+    paddingVertical: 8,
+    paddingRight: 8,
   },
   sendBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -877,36 +901,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    marginTop: 10,
-    paddingHorizontal: 8,
+    flexWrap: "wrap",
+    gap: 2,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
   privacyText: {
-    fontSize: 11,
-    color: COLORS.textSoft,
-    fontWeight: "500",
-  },
-  accuracyNote: {
-    marginTop: 5,
-    paddingHorizontal: 16,
     fontSize: 10,
-    lineHeight: 14,
     color: COLORS.textSoft,
     fontWeight: "500",
-    textAlign: "center",
-  },
-  settingsNote: {
-    marginTop: 6,
-    paddingHorizontal: 16,
-    fontSize: 11,
-    lineHeight: 15,
-    color: COLORS.textSoft,
-    fontWeight: "500",
-    textAlign: "center",
   },
   settingsLink: {
     color: "#4361EE",
     fontWeight: "700",
+    fontSize: 10,
     textDecorationLine: "underline",
   },
 });
