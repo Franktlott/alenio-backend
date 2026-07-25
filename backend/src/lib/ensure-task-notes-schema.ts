@@ -1,10 +1,14 @@
 import type { PrismaClient } from "@prisma/client";
 
+export type EnsureTaskNotesResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
 /** Creates the collaborative task-notes table if missing (idempotent). */
-export async function ensureTaskNotesSchema(prisma: PrismaClient): Promise<void> {
+export async function ensureTaskNotesSchema(prisma: PrismaClient): Promise<EnsureTaskNotesResult> {
   try {
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "TaskNote" (
+      CREATE TABLE IF NOT EXISTS public."TaskNote" (
         "id" TEXT NOT NULL,
         "taskId" TEXT NOT NULL,
         "body" TEXT NOT NULL,
@@ -17,29 +21,34 @@ export async function ensureTaskNotesSchema(prisma: PrismaClient): Promise<void>
 
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "TaskNote_taskId_createdAt_idx"
-        ON "TaskNote"("taskId", "createdAt");
+        ON public."TaskNote"("taskId", "createdAt");
     `);
 
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
-        ALTER TABLE "TaskNote"
+        ALTER TABLE public."TaskNote"
           ADD CONSTRAINT "TaskNote_taskId_fkey"
-          FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+          FOREIGN KEY ("taskId") REFERENCES public."Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);
 
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
-        ALTER TABLE "TaskNote"
+        ALTER TABLE public."TaskNote"
           ADD CONSTRAINT "TaskNote_createdById_fkey"
-          FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+          FOREIGN KEY ("createdById") REFERENCES public."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
       EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);
 
     console.log("[startup] task notes database table ensured");
+    return { ok: true };
   } catch (err) {
     console.error("[startup] ensureTaskNotesSchema failed:", err);
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }

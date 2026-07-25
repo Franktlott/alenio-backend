@@ -197,7 +197,17 @@ app.get("/api/walks-schema-check", async (c) => {
 
 /** Diagnostics + force-sync for collaborative task notes. */
 app.get("/api/task-notes-schema-check", async (c) => {
-  await ensureTaskNotesSchema(prisma);
+  const ensure = await ensureTaskNotesSchema(prisma);
+  if (!ensure.ok) {
+    return c.json(
+      {
+        buildMarker: env.BACKEND_BUILD_MARKER,
+        ready: false,
+        error: ensure.error,
+      },
+      500,
+    );
+  }
   try {
     const count = await prisma.taskNote.count();
     return c.json({
