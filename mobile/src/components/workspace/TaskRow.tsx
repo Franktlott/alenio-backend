@@ -98,18 +98,42 @@ export function TaskRow({ task, onToggle, onPress, onLongPress, showSeparator = 
         </Pressable>
 
         <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-          <Text
-            numberOfLines={1}
-            style={{
-              fontSize: WS.title,
-              fontWeight: "600",
-              color: isDone ? WS.faint : WS.ink,
-              textDecorationLine: isDone ? "line-through" : "none",
-              lineHeight: 16,
-            }}
-          >
-            {task.title}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text
+              numberOfLines={1}
+              style={{
+                flexShrink: 1,
+                fontSize: WS.title,
+                fontWeight: "600",
+                color: isDone ? WS.faint : WS.ink,
+                textDecorationLine: isDone ? "line-through" : "none",
+                lineHeight: 16,
+              }}
+            >
+              {task.title}
+            </Text>
+            {task.isJoint ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 3,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 8,
+                  backgroundColor: "#EEF2FF",
+                  borderWidth: 1,
+                  borderColor: "#C7D2FE",
+                }}
+                testID={`joint-task-list-badge-${task.id}`}
+              >
+                <Text style={{ fontSize: 9, lineHeight: 10 }}>🤝</Text>
+                <Text style={{ fontSize: 8, lineHeight: 10, fontWeight: "800", color: "#4F46E5", letterSpacing: 0.2 }}>
+                  JOINT
+                </Text>
+              </View>
+            ) : null}
+          </View>
           <View style={{ flexDirection: "row", alignItems: "center", marginTop: 1 }}>
             <Text numberOfLines={1} style={{ fontSize: WS.body, color: statusColor, lineHeight: 14 }}>
               {statusText}
