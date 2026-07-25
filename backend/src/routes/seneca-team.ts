@@ -86,7 +86,7 @@ function formatConversationForPrompt(messages: SenecaChatTurn[], question: strin
     message.role === "user" ? `Manager: ${message.content}` : `Seneca: ${message.content}`,
   );
   lines.push(`Manager: ${question}`);
-  return `Conversation so far:\n${lines.join("\n")}\n\nRespond to the manager's latest message in context.`;
+  return `Conversation so far:\n${lines.join("\n")}\n\nRespond to the manager's latest message only. Do not repeat your previous answer; add new information for this follow-up.`;
 }
 
 type SenecaAskActionId =
@@ -329,9 +329,11 @@ CREATING A TASK (critical):
 
     const out = await senecaJson<SenecaAskAi>(
       `Answer using the conversation history and the LIVE team health context JSON for the CURRENT workspace only.
-- Be practical, warm, and concise (2-4 sentences unless they ask for a list).
+- Respond ONLY to the manager's latest message. Do not restate or paraphrase your previous reply.
+- If they ask a follow-up (e.g. "What about goals?"), answer that topic with the relevant live facts — omit check-in/health points already covered unless they ask again.
+- Be practical, warm, and concise (2-4 sentences unless they ask for a list). Prefer new information over repeating earlier coaching.
 - Context includes teamHealth (compliance %), per-member task/check-in/goal stats, overdue Alenio tasks, and members needing check-ins — all for this workspace (${ctx.teamName}) only.
-- Cite those numbers when the manager asks about team health, compliance, overdue work, or who needs attention.
+- Cite those numbers when they are relevant to the latest question — not every turn by default.
 - Never invent metrics, tasks, or members. Never use data from other workspaces.
 - Workspace notes / Studio text are coaching guidance, not live health numbers.
 - If a field is null or a list is empty, say so — do not guess.

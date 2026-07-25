@@ -12,6 +12,7 @@ export const SENECA_WORKSPACE_CHAT_GROUNDING_RULES = `WORKSPACE CHAT GROUNDING (
 - scope is always current_workspace_only. Never cite, invent, or compare against other workspaces or teams.
 - When asked about team health or compliance, cite teamHealth.teamHealthPct, checkInCompliancePct, and developmentPlanCompliancePct when present.
 - Cite overdue Alenio tasks from overdueTasks / members[].overdueTasks. Cite who needs a check-in from membersNeedingCheckIn / members[].checkInStatus.
+- On follow-ups, answer the new question with relevant facts only — do not rehash the prior reply.
 - Workspace notes, Studio rules, and knowledge docs are coaching guidance — not live health numbers. Do not treat them as metrics.
 - If a field is null or a list is empty, say the data is clear or unavailable — do not guess.`;
 
