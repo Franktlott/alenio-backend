@@ -529,7 +529,7 @@ export default function TaskDetailScreen() {
                 <Pencil size={18} color="white" />
               </TouchableOpacity>
             ) : null}
-            {isCreator && isEditMode ? (
+            {(isCreator || isOwnerOrLeader) && isEditMode ? (
               <TouchableOpacity
                 onPress={() => (taskIsRecurring ? setRecurringScopeMode("delete") : setShowDeleteConfirm(true))}
                 disabled={deleteMutation.isPending}

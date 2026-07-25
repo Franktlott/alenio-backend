@@ -1385,8 +1385,21 @@ tasksRouter.delete("/:taskId", async (c) => {
   });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
 
-  if (task.creatorId !== user.id) {
-    return c.json({ error: { message: "Only the task creator can delete this task", code: "FORBIDDEN" } }, 403);
+  const canDelete =
+    task.creatorId === user.id ||
+    membership.role === "owner" ||
+    membership.role === "admin" ||
+    membership.role === "team_leader";
+  if (!canDelete) {
+    return c.json(
+      {
+        error: {
+          message: "Only the task creator or a workspace leader can delete this task",
+          code: "FORBIDDEN",
+        },
+      },
+      403,
+    );
   }
 
   await deleteTaskWithScope(prisma, task, scope);
