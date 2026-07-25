@@ -97,7 +97,6 @@ function SectionHeader({
 }
 
 function ChatEmptyState({
-  image,
   title,
   body,
   primaryLabel = "Add",
@@ -106,7 +105,6 @@ function ChatEmptyState({
   onSecondary,
   testID,
 }: {
-  image: number;
   title: string;
   body: string;
   primaryLabel?: string;
@@ -127,12 +125,44 @@ function ChatEmptyState({
         paddingVertical: 14,
       }}
     >
-      <Image
-        source={image}
-        style={{ width: 72, height: 72, marginBottom: 8, alignSelf: "center" }}
-        resizeMode="contain"
-        accessibilityIgnoresInvertColors
-      />
+      <View
+        style={{
+          width: 72,
+          height: 72,
+          marginBottom: 10,
+          alignSelf: "center",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 22,
+          backgroundColor: "#EEF2FF",
+          borderWidth: 1,
+          borderColor: "#DDE4FF",
+          shadowColor: "#4338CA",
+          shadowOffset: { width: 0, height: 5 },
+          shadowOpacity: 0.12,
+          shadowRadius: 10,
+          elevation: 3,
+        }}
+      >
+        <MessageCircle size={32} color="#4F46E5" strokeWidth={2} />
+        <View
+          style={{
+            position: "absolute",
+            right: -4,
+            bottom: -4,
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#4361EE",
+            borderWidth: 3,
+            borderColor: "#FFFFFF",
+          }}
+        >
+          <Plus size={12} color="#FFFFFF" strokeWidth={3} />
+        </View>
+      </View>
       <Text
         style={{
           fontSize: 14,
@@ -741,7 +771,6 @@ export default function ChatScreen() {
             ) : conversations.length === 0 ? (
               <ChatEmptyState
                 testID="conversations-empty-state"
-                image={require("@/assets/dm-empty-start.png")}
                 title="No messages yet"
                 body={'No conversations yet. Tap “+ Add” to message a teammate.'}
                 primaryLabel="Add"
@@ -750,7 +779,6 @@ export default function ChatScreen() {
             ) : sortedUnpinnedDms.length === 0 ? (
               <ChatEmptyState
                 testID="conversations-all-pinned-empty"
-                image={require("@/assets/dm-empty-start.png")}
                 title="All pinned above"
                 body="Your conversations are in Pinned. Tap “+ Add” to start a new one."
                 primaryLabel="Add"
