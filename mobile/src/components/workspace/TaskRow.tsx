@@ -35,6 +35,7 @@ export function TaskRow({ task, onToggle, onPress, onLongPress, showSeparator = 
   const isDone = task.status === "done";
   const isLocked = isDone && isFeedbackTaskDescription(task.description);
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
+  const assignees = (task.assignments ?? []).map((assignment) => assignment.user);
   const assignee = task.assignments?.[0]?.user;
   const due = task.dueDate ? new Date(task.dueDate) : null;
   const completed = task.completedAt ? new Date(task.completedAt) : null;
@@ -150,7 +151,80 @@ export function TaskRow({ task, onToggle, onPress, onLongPress, showSeparator = 
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          {assignee ? (
+          {task.isJoint ? (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", paddingLeft: 5 }}
+              testID={`joint-task-assignees-${task.id}`}
+            >
+              {assignees.length > 0 ? (
+                <>
+                  {assignees.slice(0, 2).map((jointAssignee, index) => (
+                    <View
+                      key={`${jointAssignee.id}-${index}`}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        marginLeft: index === 0 ? 0 : -6,
+                        borderRadius: 11,
+                        borderWidth: 1.5,
+                        borderColor: "#FFFFFF",
+                        backgroundColor: jointAssignee.image ? "#E2E8F0" : avatarColor(jointAssignee.name),
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {jointAssignee.image ? (
+                        <Image
+                          source={{ uri: jointAssignee.image }}
+                          style={{ width: 22, height: 22 }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text style={{ color: "white", fontSize: 7, fontWeight: "800" }}>
+                          {initials(jointAssignee.name)}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                  {assignees.length > 2 ? (
+                    <View
+                      style={{
+                        width: 22,
+                        height: 22,
+                        marginLeft: -6,
+                        borderRadius: 11,
+                        borderWidth: 1.5,
+                        borderColor: "#FFFFFF",
+                        backgroundColor: "#4338CA",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ color: "#FFFFFF", fontSize: 7, fontWeight: "800" }}>
+                        +{assignees.length - 2}
+                      </Text>
+                    </View>
+                  ) : null}
+                </>
+              ) : (
+                <View
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    backgroundColor: "#EEF2FF",
+                    borderWidth: 1,
+                    borderColor: "#C7D2FE",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 10 }}>🤝</Text>
+                </View>
+              )}
+            </View>
+          ) : assignee ? (
             <View
               style={{
                 width: 20,
