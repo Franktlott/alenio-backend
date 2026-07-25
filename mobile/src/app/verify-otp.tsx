@@ -1,18 +1,10 @@
 import React, { useState } from "react";
 import {
-  View,
   Text,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
-  Image,
-  ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { getAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
@@ -25,6 +17,15 @@ import { completeMobileAuthEntry } from "@/lib/auth/complete-auth-entry";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 import { getBackendUrl } from "@/lib/backend-url";
 import { safeFetch } from "@/lib/auth/safe-fetch";
+import {
+  AUTH_CODE_INPUT_CLASS,
+  AuthField,
+  AuthHeading,
+  AuthMessage,
+  AuthPrimaryButton,
+  AuthScreen,
+  AuthTextLink,
+} from "@/components/auth/AuthScreen";
 
 /** Better Auth defaults to 6; some projects use longer OTPs. */
 const OTP_MIN_LEN = 6;
@@ -157,84 +158,70 @@ export default function VerifyOtp() {
 
   if (!email.trim()) {
     return (
-      <View className="flex-1 bg-white dark:bg-slate-900 items-center justify-center px-6" testID="verify-otp-missing-email">
-        <Text className="text-slate-600 dark:text-slate-300 text-center mb-6">Missing email. Go back to sign in and try again.</Text>
-        <TouchableOpacity
-          className="bg-indigo-600 rounded-xl py-3.5 px-8"
+      <AuthScreen testID="verify-otp-missing-email">
+        <AuthHeading
+          title="Email required"
+          subtitle="Missing email. Go back to sign in and try again."
+        />
+        <AuthPrimaryButton
+          label="Back to sign in"
+          loading={false}
           onPress={() => router.replace("/sign-in")}
           testID="verify-otp-back-sign-in"
-        >
-          <Text className="text-white font-semibold">Back to sign in</Text>
-        </TouchableOpacity>
-      </View>
+        />
+      </AuthScreen>
     );
   }
 
   return (
-    <View className="flex-1 bg-white dark:bg-slate-900">
-      <StatusBar style="light" />
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <SafeAreaView edges={["top"]}>
-          <View className="items-center py-10 px-6">
-            <Image source={require("@/assets/alenio-logo-white.png")} style={{ width: 200, height: 72 }} resizeMode="contain" />
-            <Text className="text-white/80 text-base mt-2">Verify your email</Text>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+    <AuthScreen testID="verify-otp-screen" scrollTestID="verify-otp-scroll">
+      <AuthHeading
+        title="Verify your email"
+        subtitle={
+          <>
+            We sent a verification code to{" "}
+            <Text className="font-semibold text-[#172033]" selectable testID="verify-otp-email-display">
+              {email.trim().toLowerCase()}
+            </Text>
+          </>
+        }
+      />
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 24 }}
-          keyboardShouldPersistTaps="handled"
-          testID="verify-otp-scroll"
-        >
-          <Text className="text-lg text-slate-600 dark:text-slate-300 mb-2">
-            We sent a verification code to
-          </Text>
-          <Text className="text-base font-semibold text-slate-900 dark:text-white mb-8" selectable testID="verify-otp-email-display">
-            {email.trim().toLowerCase()}
-          </Text>
-
-          <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Verification code</Text>
-          <TextInput
-            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white tracking-widest text-center"
-            placeholder="••••••"
-            placeholderTextColor="#94A3B8"
-            keyboardType="number-pad"
-            maxLength={OTP_MAX_LEN}
-            value={otp}
-            onChangeText={(t) => {
-              setOtp(t.replace(/\D/g, "").slice(0, OTP_MAX_LEN));
-              setError(null);
-            }}
-            returnKeyType="done"
-            onSubmitEditing={handleVerify}
-            testID="verify-otp-input"
-          />
+          <AuthField label="Verification code">
+            <TextInput
+              className={AUTH_CODE_INPUT_CLASS}
+              placeholder="••••••"
+              placeholderTextColor="#98A1B2"
+              keyboardType="number-pad"
+              maxLength={OTP_MAX_LEN}
+              value={otp}
+              onChangeText={(t) => {
+                setOtp(t.replace(/\D/g, "").slice(0, OTP_MAX_LEN));
+                setError(null);
+              }}
+              returnKeyType="done"
+              onSubmitEditing={handleVerify}
+              testID="verify-otp-input"
+            />
+          </AuthField>
 
           {error ? (
-            <Text className="text-red-500 text-sm mt-4" testID="verify-otp-error">
-              {error}
-            </Text>
+            <AuthMessage tone="error" testID="verify-otp-error">{error}</AuthMessage>
           ) : null}
           {resendHint ? (
-            <Text className="text-emerald-600 text-sm mt-3" testID="verify-otp-resend-hint">
-              {resendHint}
-            </Text>
+            <AuthMessage tone="success" testID="verify-otp-resend-hint">{resendHint}</AuthMessage>
           ) : null}
 
-          <TouchableOpacity
-            className="bg-indigo-600 rounded-xl py-4 items-center mt-8"
+          <AuthPrimaryButton
+            label="Verify and continue"
+            loading={loading}
             onPress={handleVerify}
             disabled={loading}
             testID="verify-otp-submit"
-          >
-            {loading ? <ActivityIndicator color="white" /> : <Text className="text-white font-semibold text-base">Verify and continue</Text>}
-          </TouchableOpacity>
+          />
 
           <TouchableOpacity
-            className="mt-4 py-3 items-center"
+            className="mt-4 items-center py-3"
             onPress={handleResend}
             disabled={resendLoading}
             testID="verify-otp-resend"
@@ -242,15 +229,16 @@ export default function VerifyOtp() {
             {resendLoading ? (
               <ActivityIndicator color="#6366F1" />
             ) : (
-              <Text className="text-indigo-600 font-medium text-base">Resend code</Text>
+              <Text className="text-[14px] font-medium text-[#4F35D9]">Resend code</Text>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity className="mt-6 py-2 items-center" onPress={() => router.replace("/sign-in")} testID="verify-otp-cancel">
-            <Text className="text-slate-500 text-sm">Back to sign in</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+          <AuthTextLink
+            label="Back to sign in"
+            onPress={() => router.replace("/sign-in")}
+            testID="verify-otp-cancel"
+            className="mt-2"
+          />
+    </AuthScreen>
   );
 }

@@ -72,6 +72,7 @@ import { ensureNotificationPreferencesSchema } from "./lib/ensure-notification-p
 import { ensurePinnedMessageSchema } from "./lib/ensure-pinned-message-schema";
 import { ensureConversationImageSchema } from "./lib/ensure-conversation-image-schema";
 import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
+import { ensureTaskNotesSchema } from "./lib/ensure-task-notes-schema";
 import { ensureWalksSchema } from "./lib/ensure-walks-schema";
 import { ensureBetterAuthSchema } from "./lib/ensure-better-auth-schema";
 import { ensureOrganizationSchema } from "./lib/ensure-organization-schema";
@@ -107,7 +108,7 @@ const startupSchemaReady = Promise.all([
   ensureOrgGoSchema(prisma),
   ensureSenecaStudioSchema(prisma),
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureConversationImageSchema(prisma), ensureTaskArchiveSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureConversationImageSchema(prisma), ensureTaskArchiveSchema(prisma), ensureTaskNotesSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -132,6 +133,7 @@ const startupSchemaReady = Promise.all([
         ensurePinnedMessageSchema(prisma),
         ensureConversationImageSchema(prisma),
         ensureTaskArchiveSchema(prisma),
+        ensureTaskNotesSchema(prisma),
       ]),
 ]);
 

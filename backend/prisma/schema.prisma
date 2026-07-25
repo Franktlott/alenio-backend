@@ -32,6 +32,7 @@ model User {
   oneOnOneMeetingsCreated OneOnOneMeeting[] @relation("OneOnOneMeetingCreator")
   developmentGoalsCreated DevelopmentGoal[] @relation("DevelopmentGoalCreator")
   developmentGoalNotesCreated DevelopmentGoalNote[] @relation("DevelopmentGoalNoteCreator")
+  taskNotesCreated TaskNote[] @relation("TaskNoteCreator")
   phoneNumber   String?
   phoneNumberVerified Boolean @default(false)
   pushToken     String?
@@ -459,6 +460,7 @@ model Task {
   assignments    TaskAssignment[]
   recurrenceRule RecurrenceRule?
   subtasks       Subtask[]
+  notes          TaskNote[]
 
   oneOnOneMeetingId String?
   oneOnOneMeeting   OneOnOneMeeting? @relation(fields: [oneOnOneMeetingId], references: [id], onDelete: SetNull)
@@ -640,6 +642,19 @@ model DevelopmentGoalNote {
   createdAt   DateTime        @default(now())
 
   @@index([goalId])
+}
+
+model TaskNote {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  body        String
+  createdById String
+  createdBy   User     @relation("TaskNoteCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([taskId, createdAt])
 }
 
 model Message {

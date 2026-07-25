@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff } from "lucide-react-native";
+import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react-native";
 import {
   View,
   Text,
@@ -19,7 +19,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
-import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "@/lib/legal-constants";
 import { useQueryClient } from "@tanstack/react-query";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 import { setPendingJoinCode } from "@/lib/auth/pending-join-code";
@@ -203,7 +202,7 @@ export default function SignIn() {
       <AuthLoadingScreen
         activeIndex={activeIndex}
         allDone={allDone}
-        exiting={exiting && !bootstrapError}
+        exiting={Boolean(exiting && !bootstrapError)}
         error={bootstrapError}
         onBackToSignIn={() => {
           setBootstrapping(false);
@@ -219,51 +218,93 @@ export default function SignIn() {
   }
 
   return (
-    <View className="flex-1 bg-white dark:bg-slate-900">
+    <View className="flex-1 bg-[#F7F7FF]" testID="sign-in-screen">
       <StatusBar style="light" />
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <LinearGradient
+        colors={["#1769F5", "#7138EF"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0.65 }}
+        style={{ height: 330 }}
+      >
         <SafeAreaView edges={["top"]}>
-          <View className="items-center py-10 px-6">
+          <View className="items-center px-6 pt-7">
             <Image
               source={require("@/assets/alenio-logo-white.png")}
-              style={{ width: 200, height: 72 }}
+              style={{ width: 210, height: 76 }}
               resizeMode="contain"
             />
-            <Text className="text-white/80 text-base mt-2">Connect. Execute. Elevate.</Text>
+            <Text className="mt-1 text-center text-[17px] leading-[23px] text-white">
+              Your frontline{"\n"}operations platform.
+            </Text>
           </View>
         </SafeAreaView>
       </LinearGradient>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 310,
+          left: -28,
+          right: -28,
+          height: 100,
+          borderTopLeftRadius: 70,
+          borderTopRightRadius: 70,
+          backgroundColor: "#F7F7FF",
+        }}
+      />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="flex-1"
+        style={{ marginTop: -82 }}
+      >
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16 }}
+          contentContainerStyle={{ paddingHorizontal: 23, paddingBottom: 44 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <>
-              <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+          <View
+            className="rounded-[15px] bg-white px-9 pb-10 pt-11"
+            style={{
+              shadowColor: "#30315F",
+              shadowOffset: { width: 0, height: 7 },
+              shadowOpacity: 0.14,
+              shadowRadius: 16,
+              elevation: 8,
+            }}
+          >
+              <Text className="mb-1 text-[27px] font-bold leading-[34px] text-[#172033]">
                 Welcome back
               </Text>
-              <Text className="text-slate-500 dark:text-slate-400 text-base mb-8">
+              <Text className="mb-8 text-[16px] leading-6 text-[#687386]">
                 Sign in to your account
               </Text>
 
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email address</Text>
-                <TextInput
-                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
-                  placeholder="you@example.com"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  value={email}
-                  editable={!inviteToken}
-                  onChangeText={(t) => { setEmail(t); setError(null); }}
-                  returnKeyType="next"
-                  testID="email-input"
-                />
+              <View className="mb-5">
+                <Text className="mb-2 text-[13px] font-semibold text-[#344054]">Email address</Text>
+                <View className="relative justify-center">
+                  <Mail
+                    size={20}
+                    color="#593CE6"
+                    strokeWidth={1.9}
+                    style={{ position: "absolute", left: 16, zIndex: 1 }}
+                  />
+                  <TextInput
+                    className="h-[54px] rounded-[10px] border border-[#CED2DB] bg-white pl-[50px] pr-4 text-[15px] text-[#172033]"
+                    placeholder="you@example.com"
+                    placeholderTextColor="#98A1B2"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    value={email}
+                    editable={!inviteToken}
+                    onChangeText={(t) => { setEmail(t); setError(null); }}
+                    returnKeyType="next"
+                    testID="email-input"
+                  />
+                </View>
                 {inviteToken && emailFromInvite ? (
                   <Text className="text-xs text-slate-400 mt-2">
                     This invite is locked to {emailFromInvite.trim().toLowerCase()}.
@@ -272,13 +313,19 @@ export default function SignIn() {
               </View>
 
               <View className="mb-2">
-                <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</Text>
-                <View style={{ position: "relative" }}>
+                <Text className="mb-2 text-[13px] font-semibold text-[#344054]">Password</Text>
+                <View className="relative justify-center">
+                  <LockKeyhole
+                    size={20}
+                    color="#593CE6"
+                    strokeWidth={1.9}
+                    style={{ position: "absolute", left: 16, zIndex: 1 }}
+                  />
                   <TextInput
-                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+                    className="h-[54px] rounded-[10px] border border-[#CED2DB] bg-white pl-[50px] text-[15px] text-[#172033]"
                     style={{ paddingRight: 48 }}
                     placeholder="••••••••"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#172033"
                     secureTextEntry={!showPassword}
                     autoComplete="password"
                     value={password}
@@ -292,45 +339,60 @@ export default function SignIn() {
                     style={{ position: "absolute", right: 14, top: 0, bottom: 0, justifyContent: "center" }}
                     testID="toggle-password-visibility"
                   >
-                    {showPassword ? <EyeOff size={18} color="#94A3B8" /> : <Eye size={18} color="#94A3B8" />}
+                    {showPassword ? <EyeOff size={20} color="#98A1B2" /> : <Eye size={20} color="#98A1B2" />}
                   </TouchableOpacity>
                 </View>
               </View>
 
               <TouchableOpacity
                 onPress={() => router.push("/forgot-password")}
-                className="self-end mb-6 py-1"
+                className="mb-6 self-start py-1"
                 testID="forgot-password-link"
               >
-                <Text className="text-sm text-indigo-600 font-medium">Forgot password?</Text>
+                <Text className="text-[13px] font-medium text-[#4F35D9]">Forgot password?</Text>
               </TouchableOpacity>
 
               {error ? (
                 <Text className="text-red-500 text-sm mb-4" testID="error-message">{error}</Text>
               ) : null}
 
-              <TouchableOpacity
-                className="bg-indigo-600 rounded-xl py-4 items-center"
-                onPress={handleSignIn}
-                disabled={loading || microsoftLoading}
-                activeOpacity={0.8}
-                testID="sign-in-button"
+              <LinearGradient
+                colors={["#7137EA", "#4333E6"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  height: 54,
+                  borderRadius: 10,
+                  shadowColor: "#5337E4",
+                  shadowOffset: { width: 0, height: 5 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 5,
+                }}
               >
-                {loading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="text-white font-semibold text-base">Sign In</Text>
-                )}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  className="flex-1 items-center justify-center rounded-[10px]"
+                  onPress={handleSignIn}
+                  disabled={loading || microsoftLoading}
+                  activeOpacity={0.82}
+                  testID="sign-in-button"
+                >
+                  {loading ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text className="text-[16px] font-semibold text-white">Sign In</Text>
+                  )}
+                </TouchableOpacity>
+              </LinearGradient>
 
-              <View className="flex-row items-center my-5">
-                <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-                <Text className="mx-3 text-xs text-slate-400 uppercase">or</Text>
-                <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+              <View className="my-6 flex-row items-center">
+                <View className="h-px flex-1 bg-[#E2E4EA]" />
+                <Text className="mx-3 text-[10px] font-medium uppercase text-[#7F8796]">or</Text>
+                <View className="h-px flex-1 bg-[#E2E4EA]" />
               </View>
 
               <TouchableOpacity
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-4 items-center"
+                className="h-[54px] flex-row items-center justify-center rounded-[10px] border border-[#E0E2E8] bg-white"
                 onPress={handleMicrosoft}
                 disabled={loading || microsoftLoading}
                 activeOpacity={0.8}
@@ -339,33 +401,39 @@ export default function SignIn() {
                 {microsoftLoading ? (
                   <ActivityIndicator color="#4361EE" />
                 ) : (
-                  <Text className="text-slate-900 dark:text-white font-semibold text-base">
-                    Continue with Microsoft
-                  </Text>
+                  <>
+                    <View className="mr-5 h-[22px] w-[22px] flex-row flex-wrap gap-[2px]">
+                      <View className="h-[10px] w-[10px] bg-[#F25022]" />
+                      <View className="h-[10px] w-[10px] bg-[#7FBA00]" />
+                      <View className="h-[10px] w-[10px] bg-[#00A4EF]" />
+                      <View className="h-[10px] w-[10px] bg-[#FFB900]" />
+                    </View>
+                    <Text className="text-[16px] font-medium text-[#172033]">Continue with Microsoft</Text>
+                  </>
                 )}
               </TouchableOpacity>
 
-              <View className="flex-row justify-center items-center mt-6">
-                <Text className="text-slate-500 text-sm">Don't have an account? </Text>
+              <View className="mt-8 flex-row items-center justify-center">
+                <Text className="text-[14px] text-[#687386]">Don't have an account? </Text>
                 <TouchableOpacity onPress={() => router.push("/sign-up")} testID="sign-up-link">
-                  <Text className="text-indigo-600 text-sm font-medium">Sign up</Text>
+                  <Text className="text-[14px] font-medium text-[#4F35D9]">Sign up</Text>
                 </TouchableOpacity>
               </View>
 
-              <View className="flex-row justify-center flex-wrap mt-6 gap-1">
-                <Text className="text-xs text-slate-400">By continuing you agree to our</Text>
+              <View className="mt-8 flex-row flex-wrap justify-center gap-1">
+                <Text className="text-[11px] text-[#7F8796]">By continuing you agree to our</Text>
                 <TouchableOpacity onPress={() => router.push("/terms-of-service")} testID="terms-link">
-                  <Text className="text-xs text-indigo-500 font-medium">Terms of Service</Text>
+                  <Text className="text-[11px] font-medium text-[#4F35D9]">Terms of Service</Text>
                 </TouchableOpacity>
-                <Text className="text-xs text-slate-400">and</Text>
+                <Text className="text-[11px] text-[#7F8796]">and</Text>
                 <TouchableOpacity onPress={() => router.push("/privacy-policy")} testID="privacy-link">
-                  <Text className="text-xs text-indigo-500 font-medium">Privacy Policy</Text>
+                  <Text className="text-[11px] font-medium text-[#4F35D9]">Privacy Policy</Text>
                 </TouchableOpacity>
               </View>
-              <Text className="text-[10px] text-slate-400 text-center mt-2 px-4">
-                {LEGAL_APP_NAME} is operated by {LEGAL_COMPANY_NAME}. Parent company: {LEGAL_PARENT_COMPANY_NAME}.
+              <Text className="mt-7 text-center text-[11px] text-[#8C94A3]">
+                © 2026 Alenio Insights
               </Text>
-          </>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

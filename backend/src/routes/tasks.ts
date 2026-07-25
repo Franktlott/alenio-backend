@@ -58,6 +58,35 @@ async function getMembership(userId: string, teamId: string) {
   });
 }
 
+const taskNoteAuthorSelect = {
+  id: true,
+  name: true,
+  email: true,
+  image: true,
+} as const;
+
+function validateTaskNoteBody(value: unknown): { body: string } | { error: string } {
+  if (typeof value !== "string" || !value.trim()) return { error: "Note is required" };
+  const body = value.trim();
+  if (body.length > 5000) return { error: "Note must be 5,000 characters or fewer" };
+  return { body };
+}
+
+function canModerateTaskNote(
+  role: string,
+  userId: string,
+  taskCreatorId: string,
+  noteCreatorId: string,
+): boolean {
+  return (
+    noteCreatorId === userId ||
+    taskCreatorId === userId ||
+    role === "owner" ||
+    role === "admin" ||
+    role === "team_leader"
+  );
+}
+
 type RecurrenceBody = {
   type: string;
   occurrenceCount?: number;
@@ -938,6 +967,156 @@ tasksRouter.get("/monthly-completion", async (c) => {
   });
 
   return c.json({ data: result });
+});
+
+// GET /api/teams/:teamId/tasks/:taskId/notes
+tasksRouter.get("/:taskId/notes", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const task = await prisma.task.findFirst({ where: { id: taskId, teamId }, select: { id: true } });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+
+  const notes = await prisma.taskNote.findMany({
+    where: { taskId },
+    orderBy: { createdAt: "asc" },
+    include: { createdBy: { select: taskNoteAuthorSelect } },
+  });
+
+  return c.json({ data: notes });
+});
+
+// POST /api/teams/:teamId/tasks/:taskId/notes
+tasksRouter.post("/:taskId/notes", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, teamId },
+    select: {
+      id: true,
+      title: true,
+      incognito: true,
+      creatorId: true,
+      assignments: { select: { userId: true } },
+    },
+  });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+
+  const isParticipant =
+    task.creatorId === user.id || task.assignments.some((assignment) => assignment.userId === user.id);
+  if (!isParticipant) {
+    return c.json(
+      { error: { message: "Only the task creator or an assignee can add notes", code: "FORBIDDEN" } },
+      403,
+    );
+  }
+
+  const payload = (await c.req.json().catch(() => null)) as { body?: unknown } | null;
+  const validated = validateTaskNoteBody(payload?.body);
+  if ("error" in validated) {
+    return c.json({ error: { message: validated.error, code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const note = await prisma.taskNote.create({
+    data: { taskId, body: validated.body, createdById: user.id },
+    include: { createdBy: { select: taskNoteAuthorSelect } },
+  });
+
+  const recipientIds = [
+    ...new Set([task.creatorId, ...task.assignments.map((assignment) => assignment.userId)]),
+  ].filter((id) => id !== user.id);
+  if (recipientIds.length > 0) {
+    const notificationBody = task.incognito
+      ? "A new note was added to a private task."
+      : `${task.title}: ${validated.body.slice(0, 120)}`;
+    void sendPushToUsers(
+      recipientIds,
+      user.name ?? "Task update",
+      notificationBody,
+      { taskId, teamId, type: "task_note_added" },
+      "notifTaskAssigned",
+      teamId,
+    );
+  }
+
+  return c.json({ data: note }, 201);
+});
+
+// PATCH /api/teams/:teamId/tasks/:taskId/notes/:noteId
+tasksRouter.patch("/:taskId/notes/:noteId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId, noteId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, teamId },
+    select: { id: true, creatorId: true },
+  });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+
+  const existing = await prisma.taskNote.findFirst({ where: { id: noteId, taskId } });
+  if (!existing) return c.json({ error: { message: "Note not found", code: "NOT_FOUND" } }, 404);
+  if (!canModerateTaskNote(membership.role, user.id, task.creatorId, existing.createdById)) {
+    return c.json({ error: { message: "You cannot edit this note", code: "FORBIDDEN" } }, 403);
+  }
+
+  const payload = (await c.req.json().catch(() => null)) as { body?: unknown } | null;
+  const validated = validateTaskNoteBody(payload?.body);
+  if ("error" in validated) {
+    return c.json({ error: { message: validated.error, code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const note = await prisma.taskNote.update({
+    where: { id: noteId },
+    data: { body: validated.body },
+    include: { createdBy: { select: taskNoteAuthorSelect } },
+  });
+  return c.json({ data: note });
+});
+
+// DELETE /api/teams/:teamId/tasks/:taskId/notes/:noteId
+tasksRouter.delete("/:taskId/notes/:noteId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId, noteId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, teamId },
+    select: { id: true, creatorId: true },
+  });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+
+  const existing = await prisma.taskNote.findFirst({ where: { id: noteId, taskId } });
+  if (!existing) return c.json({ error: { message: "Note not found", code: "NOT_FOUND" } }, 404);
+  if (!canModerateTaskNote(membership.role, user.id, task.creatorId, existing.createdById)) {
+    return c.json({ error: { message: "You cannot delete this note", code: "FORBIDDEN" } }, 403);
+  }
+
+  await prisma.taskNote.delete({ where: { id: noteId } });
+  return c.body(null, 204);
 });
 
 // GET /api/teams/:teamId/tasks/:taskId

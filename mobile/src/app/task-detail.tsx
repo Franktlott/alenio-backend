@@ -43,6 +43,7 @@ import {
 import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { TaskNotesSection } from "@/components/tasks/TaskNotesSection";
 
 function sameCalendarDay(a: Date | null, b: Date | null): boolean {
   if (!a && !b) return true;
@@ -965,6 +966,15 @@ export default function TaskDetailScreen() {
           )}
         </View>
         ) : null}
+
+        <TaskNotesSection
+          teamId={teamId}
+          taskId={taskId}
+          isJoint={task.isJoint === true}
+          currentUserId={currentUserId}
+          canWrite={isCreator || isSelfAssigned}
+          canModerate={isCreator || isOwnerOrLeader}
+        />
 
         {/* Recurring series chain */}
         {!showFocusedFeedbackTask && seriesId ? (

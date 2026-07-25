@@ -1,15 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Eye, EyeOff } from "lucide-react-native";
+import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from "lucide-react-native";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
-  Image,
-  ScrollView,
 } from "react-native";
 import { clearAccessToken, setAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { sendEmailVerificationOtp, signUpWithEmailPassword } from "@/lib/auth/auth-api";
@@ -18,9 +14,6 @@ import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { setPendingSignUp } from "@/lib/auth/pending-signup";
 import { formatAuthFlowError, isEmailAlreadyRegisteredError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
 import { cancelMobileAuthQueries, clearSignedOutMark, markSessionSignedOut } from "@/lib/auth/use-session";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
@@ -32,6 +25,14 @@ import {
 } from "@/lib/auth/microsoft-auth";
 import { navigateToMobileHomeWithRetry } from "@/lib/auth/auth-entry";
 import { AuthLoadingScreen, useAuthLoadingSequence } from "@/components/auth-loading";
+import {
+  AUTH_INPUT_CLASS,
+  AuthField,
+  AuthHeading,
+  AuthMessage,
+  AuthPrimaryButton,
+  AuthScreen,
+} from "@/components/auth/AuthScreen";
 
 export default function SignUp() {
   const params = useLocalSearchParams<{ email?: string | string[]; inviteToken?: string | string[] }>();
@@ -213,7 +214,7 @@ export default function SignUp() {
       <AuthLoadingScreen
         activeIndex={activeIndex}
         allDone={allDone}
-        exiting={exiting && !bootstrapError}
+        exiting={Boolean(exiting && !bootstrapError)}
         error={bootstrapError}
         onBackToSignIn={() => {
           setBootstrapping(false);
@@ -228,38 +229,15 @@ export default function SignUp() {
     );
   }
 
-  const header = (
-    <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-      <SafeAreaView edges={["top"]}>
-        <View className="items-center py-10 px-6">
-          <Image source={require("@/assets/alenio-logo-white.png")} style={{ width: 200, height: 72 }} resizeMode="contain" />
-          <Text className="text-white/80 text-base mt-2">Connect. Execute. Elevate.</Text>
-        </View>
-      </SafeAreaView>
-    </LinearGradient>
-  );
-
   return (
-    <View className="flex-1 bg-white dark:bg-slate-900">
-      <StatusBar style="light" />
-      {header}
+    <AuthScreen testID="sign-up-screen">
+      <AuthHeading title="Create account" subtitle="Join Alenio and get started" />
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Create account</Text>
-          <Text className="text-slate-500 dark:text-slate-400 text-base mb-8">Join Alenio and get started</Text>
-
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Full name</Text>
+          <AuthField label="Full name" icon={<UserRound size={20} color="#593CE6" strokeWidth={1.9} />}>
             <TextInput
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+              className={AUTH_INPUT_CLASS}
               placeholder="Your name"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#98A1B2"
               autoCapitalize="words"
               autoComplete="name"
               value={name}
@@ -267,14 +245,13 @@ export default function SignUp() {
               returnKeyType="next"
               testID="name-input"
             />
-          </View>
+          </AuthField>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email address</Text>
+          <AuthField label="Email address" icon={<Mail size={20} color="#593CE6" strokeWidth={1.9} />}>
             <TextInput
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+              className={AUTH_INPUT_CLASS}
               placeholder="you@example.com"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#98A1B2"
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
@@ -289,16 +266,15 @@ export default function SignUp() {
                 This invite is locked to {emailFromInvite.trim().toLowerCase()}.
               </Text>
             ) : null}
-          </View>
+          </AuthField>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</Text>
+          <AuthField label="Password" icon={<LockKeyhole size={20} color="#593CE6" strokeWidth={1.9} />}>
             <View style={{ position: "relative" }}>
               <TextInput
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+                className={AUTH_INPUT_CLASS}
                 style={{ paddingRight: 48 }}
                 placeholder="••••••••"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#172033"
                 secureTextEntry={!showPassword}
                 autoComplete="new-password"
                 value={password}
@@ -310,16 +286,19 @@ export default function SignUp() {
                 {showPassword ? <EyeOff size={18} color="#94A3B8" /> : <Eye size={18} color="#94A3B8" />}
               </TouchableOpacity>
             </View>
-          </View>
+          </AuthField>
 
-          <View className="mb-6">
-            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Confirm password</Text>
+          <AuthField
+            label="Confirm password"
+            icon={<LockKeyhole size={20} color="#593CE6" strokeWidth={1.9} />}
+            className="mb-6"
+          >
             <View style={{ position: "relative" }}>
               <TextInput
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+                className={AUTH_INPUT_CLASS}
                 style={{ paddingRight: 48 }}
                 placeholder="••••••••"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#172033"
                 secureTextEntry={!showConfirmPassword}
                 autoComplete="new-password"
                 value={confirmPassword}
@@ -332,28 +311,26 @@ export default function SignUp() {
                 {showConfirmPassword ? <EyeOff size={18} color="#94A3B8" /> : <Eye size={18} color="#94A3B8" />}
               </TouchableOpacity>
             </View>
-          </View>
+          </AuthField>
 
-          {error ? <Text className="text-red-500 text-sm mb-4" testID="error-message">{error}</Text> : null}
+          {error ? <AuthMessage tone="error" testID="error-message">{error}</AuthMessage> : null}
 
-          <TouchableOpacity
-            className="bg-indigo-600 rounded-xl py-4 items-center"
+          <AuthPrimaryButton
+            label="Create Account"
+            loading={loading}
             onPress={handleSignUp}
             disabled={loading || microsoftLoading}
-            activeOpacity={0.8}
             testID="create-account-button"
-          >
-            {loading ? <ActivityIndicator color="white" /> : <Text className="text-white font-semibold text-base">Create Account</Text>}
-          </TouchableOpacity>
+          />
 
-          <View className="flex-row items-center my-5">
-            <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-            <Text className="mx-3 text-xs text-slate-400 uppercase">or</Text>
-            <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+          <View className="my-6 flex-row items-center">
+            <View className="h-px flex-1 bg-[#E2E4EA]" />
+            <Text className="mx-3 text-[10px] font-medium uppercase text-[#7F8796]">or</Text>
+            <View className="h-px flex-1 bg-[#E2E4EA]" />
           </View>
 
           <TouchableOpacity
-            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-4 items-center"
+            className="h-[54px] flex-row items-center justify-center rounded-[10px] border border-[#E0E2E8] bg-white"
             onPress={handleMicrosoft}
             disabled={loading || microsoftLoading}
             activeOpacity={0.8}
@@ -362,34 +339,39 @@ export default function SignUp() {
             {microsoftLoading ? (
               <ActivityIndicator color="#4361EE" />
             ) : (
-              <Text className="text-slate-900 dark:text-white font-semibold text-base">
-                Continue with Microsoft
-              </Text>
+              <>
+                <View className="mr-5 h-[22px] w-[22px] flex-row flex-wrap gap-[2px]">
+                  <View className="h-[10px] w-[10px] bg-[#F25022]" />
+                  <View className="h-[10px] w-[10px] bg-[#7FBA00]" />
+                  <View className="h-[10px] w-[10px] bg-[#00A4EF]" />
+                  <View className="h-[10px] w-[10px] bg-[#FFB900]" />
+                </View>
+                <Text className="text-[16px] font-medium text-[#172033]">Continue with Microsoft</Text>
+              </>
             )}
           </TouchableOpacity>
 
-          <View className="flex-row justify-center items-center mt-6">
-            <Text className="text-slate-500 text-sm">Already have an account? </Text>
+          <View className="mt-8 flex-row items-center justify-center">
+            <Text className="text-[14px] text-[#687386]">Already have an account? </Text>
             <TouchableOpacity onPress={() => router.push("/sign-in")} testID="sign-in-link">
-              <Text className="text-indigo-600 text-sm font-medium">Sign in</Text>
+              <Text className="text-[14px] font-medium text-[#4F35D9]">Sign in</Text>
             </TouchableOpacity>
           </View>
 
-          <View className="flex-row justify-center flex-wrap mt-6 gap-1">
-            <Text className="text-xs text-slate-400">By continuing you agree to our</Text>
+          <View className="mt-8 flex-row flex-wrap justify-center gap-1">
+            <Text className="text-[11px] text-[#7F8796]">By continuing you agree to our</Text>
             <TouchableOpacity onPress={() => router.push("/terms-of-service")} testID="terms-link">
-              <Text className="text-xs text-indigo-500 font-medium">Terms of Service</Text>
+              <Text className="text-[11px] font-medium text-[#4F35D9]">Terms of Service</Text>
             </TouchableOpacity>
-            <Text className="text-xs text-slate-400">and</Text>
+            <Text className="text-[11px] text-[#7F8796]">and</Text>
             <TouchableOpacity onPress={() => router.push("/privacy-policy")} testID="privacy-link">
-              <Text className="text-xs text-indigo-500 font-medium">Privacy Policy</Text>
+              <Text className="text-[11px] font-medium text-[#4F35D9]">Privacy Policy</Text>
             </TouchableOpacity>
           </View>
-          <Text className="text-[10px] text-slate-400 text-center mt-2 px-4">
+          <Text className="mt-3 px-4 text-center text-[10px] text-[#8C94A3]">
             {LEGAL_APP_NAME} is operated by {LEGAL_COMPANY_NAME}. Parent company: {LEGAL_PARENT_COMPANY_NAME}.
           </Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+          <Text className="mt-5 text-center text-[11px] text-[#8C94A3]">© 2026 Alenio Insights</Text>
+    </AuthScreen>
   );
 }

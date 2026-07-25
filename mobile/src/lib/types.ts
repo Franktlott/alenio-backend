@@ -81,6 +81,16 @@ export interface Task {
   isJoint?: boolean;
 }
 
+export interface TaskNote {
+  id: string;
+  taskId: string;
+  body: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: User;
+}
+
 export interface MessageReaction {
   id: string;
   emoji: string;
