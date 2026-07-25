@@ -972,7 +972,7 @@ export default function TaskDetailScreen() {
           taskId={taskId}
           isJoint={task.isJoint === true}
           currentUserId={currentUserId}
-          canWrite={isCreator || isSelfAssigned}
+          canWrite={isCreator || isSelfAssigned || isOwnerOrLeader}
           canModerate={isCreator || isOwnerOrLeader}
         />
 

@@ -1016,10 +1016,19 @@ tasksRouter.post("/:taskId/notes", async (c) => {
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
 
   const isParticipant =
-    task.creatorId === user.id || task.assignments.some((assignment) => assignment.userId === user.id);
+    task.creatorId === user.id ||
+    task.assignments.some((assignment) => assignment.userId === user.id) ||
+    membership.role === "owner" ||
+    membership.role === "admin" ||
+    membership.role === "team_leader";
   if (!isParticipant) {
     return c.json(
-      { error: { message: "Only the task creator or an assignee can add notes", code: "FORBIDDEN" } },
+      {
+        error: {
+          message: "Only the task creator, an assignee, or a workspace leader can add notes",
+          code: "FORBIDDEN",
+        },
+      },
       403,
     );
   }
