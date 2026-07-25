@@ -62,6 +62,7 @@ export type MemberStandardsCompliance = {
 export type MemberStatsRow = {
   activeTasks: number;
   overdueTasks: number;
+  dueSoonTasks?: number;
   completedTasks: number;
   streak: number;
   personalBestStreak?: number;

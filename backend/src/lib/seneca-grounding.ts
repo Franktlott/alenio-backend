@@ -6,6 +6,15 @@ export const SENECA_DATA_GROUNDING_RULES = `DATA GROUNDING (critical):
 - If the last check-in mentioned external overdue items (training, Workday Learning, compliance courses, etc.) and they are NOT listed in alenioOverdueTasks or openFollowUps, suggest the manager check whether support is still needed — do not assert they are still overdue.
 - When memberStats.overdueTasks > 0, cite the count and titles from alenioOverdueTasks as current Alenio overdue work.`;
 
+/** Extra rules for workspace Seneca chat (live team health for the current team only). */
+export const SENECA_WORKSPACE_CHAT_GROUNDING_RULES = `WORKSPACE CHAT GROUNDING (critical):
+- Live facts for THIS workspace only are in the team health JSON: teamHealth, members[], overdueTasks, membersNeedingCheckIn, development goal alerts.
+- scope is always current_workspace_only. Never cite, invent, or compare against other workspaces or teams.
+- When asked about team health or compliance, cite teamHealth.teamHealthPct, checkInCompliancePct, and developmentPlanCompliancePct when present.
+- Cite overdue Alenio tasks from overdueTasks / members[].overdueTasks. Cite who needs a check-in from membersNeedingCheckIn / members[].checkInStatus.
+- Workspace notes, Studio rules, and knowledge docs are coaching guidance — not live health numbers. Do not treat them as metrics.
+- If a field is null or a list is empty, say the data is clear or unavailable — do not guess.`;
+
 const EXTERNAL_SYSTEM_PATTERN =
   /\b(workday|work\s*day(?:\s+learning)?|cornerstone|docebo|linkedin\s*learning|udemy|skillsoft|absorb|lms|hris|adp|paylocity|ultipro|ukg|kronos|e-?learning|compliance\s+training|mandatory\s+training)\b/i;
 

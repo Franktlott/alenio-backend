@@ -1814,6 +1814,7 @@ export function putGoLeaderPin(teamId: string, pin: string) {
 export type TeamMemberStatsRow = {
   activeTasks: number;
   overdueTasks: number;
+  dueSoonTasks?: number;
   completedTasks: number;
   streak: number;
   personalBestStreak: number;

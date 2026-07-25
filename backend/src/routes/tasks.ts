@@ -678,6 +678,7 @@ tasksRouter.get("/member-stats", async (c) => {
     {
       activeTasks: number;
       overdueTasks: number;
+      dueSoonTasks: number;
       completedTasks: number;
       streak: number;
       personalBestStreak: number;
@@ -696,15 +697,24 @@ tasksRouter.get("/member-stats", async (c) => {
   for (const [userId, tasks] of Object.entries(userTasks)) {
     let activeTasks = 0;
     let overdueTasks = 0;
+    let dueSoonTasks = 0;
     let completedTasks = 0;
     let openFollowUpTasks = 0;
     let overdueFollowUpTasks = 0;
+
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     for (const t of tasks) {
       if (t.status !== "done") {
         activeTasks++;
         const isOverdue = !!(t.dueDate && t.dueDate < now);
         if (isOverdue) overdueTasks++;
+        else if (t.dueDate) {
+          const dueDay = new Date(t.dueDate.getFullYear(), t.dueDate.getMonth(), t.dueDate.getDate());
+          const daysUntilDue = Math.round((dueDay.getTime() - todayStart.getTime()) / 86_400_000);
+          // Due today through 3 days out (matches web TASK_DUE_SOON_DAYS = 3, includes today)
+          if (daysUntilDue >= 0 && daysUntilDue <= 3) dueSoonTasks++;
+        }
         const isCheckInFollowUp =
           !!t.oneOnOneMeetingId && t.oneOnOneMeeting?.status === "published";
         if (isCheckInFollowUp) {
@@ -722,6 +732,7 @@ tasksRouter.get("/member-stats", async (c) => {
     statsMap[userId] = {
       activeTasks,
       overdueTasks,
+      dueSoonTasks,
       completedTasks,
       streak,
       personalBestStreak: 0,
@@ -737,6 +748,7 @@ tasksRouter.get("/member-stats", async (c) => {
   const emptyStats = (streak: number) => ({
     activeTasks: 0,
     overdueTasks: 0,
+    dueSoonTasks: 0,
     completedTasks: 0,
     streak,
     personalBestStreak: 0,

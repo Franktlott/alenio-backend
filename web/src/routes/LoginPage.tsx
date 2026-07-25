@@ -205,17 +205,9 @@ export function LoginPage() {
           </div>
           <form onSubmit={onSubmit}>
           {sessionExpired ? (
-            <div className="auth-session-notice" role="status" data-testid="login-session-notice">
-              <span className="auth-session-notice-icon" aria-hidden="true">
-                ⏱
-              </span>
-              <div>
-                <p className="auth-session-notice-title">Your session has ended</p>
-                <p className="auth-session-notice-copy">
-                  For your security, you were signed out after a period of inactivity. Sign in to continue.
-                </p>
-              </div>
-            </div>
+            <p className="auth-session-notice-quiet" role="status" data-testid="login-session-notice">
+              Signed out after inactivity — sign in to continue.
+            </p>
           ) : null}
           <label className="auth-label" htmlFor="email">
             Email address
@@ -267,25 +259,53 @@ export function LoginPage() {
           <div className="auth-v2-divider" aria-hidden="true">
             <span>or</span>
           </div>
-          <button
-            type="button"
-            className="auth-btn-secondary"
-            disabled={loading || microsoftLoading || ssoLoading}
-            onClick={() => void onCompanySso()}
-            data-testid="login-company-sso"
-            style={{ marginBottom: "0.65rem" }}
-          >
-            {ssoLoading ? "Checking SSO…" : "Continue with company SSO"}
-          </button>
-          <button
-            type="button"
-            className="auth-btn-secondary auth-btn-microsoft"
-            disabled={loading || microsoftLoading || ssoLoading}
-            onClick={() => void onMicrosoft()}
-            data-testid="login-microsoft"
-          >
-            {microsoftLoading ? "Redirecting…" : "Continue with Microsoft"}
-          </button>
+          <div className="auth-provider-stack">
+            <button
+              type="button"
+              className="auth-provider-btn"
+              disabled={loading || microsoftLoading || ssoLoading}
+              onClick={() => void onCompanySso()}
+              data-testid="login-company-sso"
+            >
+              {ssoLoading ? (
+                "Checking SSO…"
+              ) : (
+                <>
+                  <svg className="auth-provider-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M3 21h18M6 21V8l6-4 6 4v13M9 21v-6h6v6M10 11h.01M14 11h.01"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span>Continue with company SSO</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              className="auth-provider-btn"
+              disabled={loading || microsoftLoading || ssoLoading}
+              onClick={() => void onMicrosoft()}
+              data-testid="login-microsoft"
+            >
+              {microsoftLoading ? (
+                "Redirecting…"
+              ) : (
+                <>
+                  <svg className="auth-provider-icon auth-provider-icon--ms" width="18" height="18" viewBox="0 0 21 21" aria-hidden>
+                    <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                    <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                    <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                    <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                  </svg>
+                  <span>Continue with Microsoft</span>
+                </>
+              )}
+            </button>
+          </div>
           <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>
             <Link to="/sign-up" className="auth-v2-inline-link" data-testid="login-sign-up-link">
               Create account

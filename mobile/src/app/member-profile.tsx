@@ -614,6 +614,9 @@ export default function MemberProfileScreen() {
               memberName={displayName}
               streak={stats?.streak}
               overdueFollowUpTasks={stats?.overdueFollowUpTasks}
+              activeTasks={stats?.activeTasks ?? 0}
+              dueSoonTasks={stats?.dueSoonTasks ?? 0}
+              overdueTasks={stats?.overdueTasks ?? 0}
               workplaceStandards={workplaceStandards}
               standardsCompliance={stats?.standardsCompliance}
               daysSinceLastCheckIn={stats?.daysSinceLastOneOnOne}

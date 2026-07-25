@@ -23,7 +23,11 @@ export function TeamPage() {
     return <EnterprisePageLoading label="Loading your team" />;
   }
 
-  const activeTeam = teams.find((t) => t.id === selectedTeamId) ?? null;
+  const resolvedTeamId =
+    selectedTeamId && teams.some((t) => t.id === selectedTeamId)
+      ? selectedTeamId
+      : (teams[0]?.id ?? "");
+  const activeTeam = teams.find((t) => t.id === resolvedTeamId) ?? null;
   const teamFeaturesUnlocked = activeTeam?.hasTeamFeatures !== false;
 
   if (activeTeam && !teamFeaturesUnlocked) {
@@ -38,7 +42,7 @@ export function TeamPage() {
     <div className="enterprise-tab-shell enterprise-team-page-shell" data-testid="team-screen">
       <TeamTabPanel
         teams={teams}
-        selectedTeamId={selectedTeamId}
+        selectedTeamId={resolvedTeamId}
         me={me}
         onTeamsRefresh={refreshMeAndTeams}
         onWorkspaceSwitchLoading={setWorkspaceOverlayLoading}

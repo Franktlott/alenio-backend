@@ -13,7 +13,7 @@ import { getBrowserTimeZone } from "../lib/timezone";
 import { hasMobileWebPreferred } from "../lib/app-links";
 import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
-import { enterpriseNavTitle, enterpriseTeamNavTitle } from "../lib/enterprise-nav";
+import { enterpriseTeamNavTitle } from "../lib/enterprise-nav";
 import { isEnterpriseOrgAdmin, isEnterpriseOrgMember, isKnownEnterpriseWorkspace } from "../lib/enterprise-org";
 import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
@@ -275,18 +275,6 @@ export function EnterpriseShellLayout() {
   const enterpriseOrgAdmin = isEnterpriseOrgAdmin(me);
   const goNavLabel = enterpriseOrgAdmin ? "Dashboard" : "Alenio Go";
   const topBarPageTitle = `${greetingForHour(new Date().getHours())}, ${viewerName} 👋`;
-  const topBarPageSubtitle =
-    activeNav === "team"
-      ? "Review goals and what’s next for this teammate."
-      : activeNav === "chat"
-        ? undefined
-        : activeNav === "workspaces"
-          ? "Corporate Workspaces"
-          : activeNav === "users"
-            ? "Organization users"
-            : activeNav === "go" && enterpriseOrgAdmin
-              ? "Enterprise Dashboard"
-              : enterpriseNavTitle(activeNav);
   const hasNoTeams = teams !== null && teams.length === 0;
   const isSettingsRoute =
     location.pathname.startsWith("/settings") || location.pathname.startsWith("/profile");
@@ -498,7 +486,6 @@ export function EnterpriseShellLayout() {
           <DashboardTopBar
             user={me ?? null}
             pageTitle={topBarPageTitle}
-            pageSubtitle={topBarPageSubtitle}
             selectedTeamId={shellSelectedTeamId}
           />
         }

@@ -773,7 +773,7 @@ export function EnterpriseLayout({
             <span className="enterprise-nav-icon">
               <IconSettings />
             </span>
-            <span className="enterprise-nav-label">Settings</span>
+            <span className="enterprise-nav-label">User Settings</span>
           </Link>
           <button
             type="button"

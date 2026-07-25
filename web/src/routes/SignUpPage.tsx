@@ -300,15 +300,29 @@ export function SignUpPage() {
           <div className="auth-v2-divider" aria-hidden="true">
             <span>or</span>
           </div>
-          <button
-            type="button"
-            className="auth-btn-secondary auth-btn-microsoft"
-            disabled={loading || microsoftLoading}
-            onClick={() => void onMicrosoft()}
-            data-testid="sign-up-microsoft"
-          >
-            {microsoftLoading ? "Redirecting…" : "Continue with Microsoft"}
-          </button>
+          <div className="auth-provider-stack">
+            <button
+              type="button"
+              className="auth-provider-btn"
+              disabled={loading || microsoftLoading}
+              onClick={() => void onMicrosoft()}
+              data-testid="sign-up-microsoft"
+            >
+              {microsoftLoading ? (
+                "Redirecting…"
+              ) : (
+                <>
+                  <svg className="auth-provider-icon auth-provider-icon--ms" width="18" height="18" viewBox="0 0 21 21" aria-hidden>
+                    <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                    <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                    <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                    <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                  </svg>
+                  <span>Continue with Microsoft</span>
+                </>
+              )}
+            </button>
+          </div>
           <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>
             By continuing, you agree to {LEGAL_COMPANY_NAME}&apos;s (parent company: {LEGAL_PARENT_COMPANY_NAME}){" "}
             <Link to="/terms" className="auth-v2-inline-link">

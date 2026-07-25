@@ -8,8 +8,9 @@ import { senecaAvailable, senecaJson, senecaUnavailableMessage } from "../lib/se
 import { assembleForWorkspaceTeam } from "../lib/seneca-prompt-assembly";
 import { workspaceOwner } from "../lib/seneca-config-service";
 import { env } from "../env";
-import { buildSenecaChatContext, senecaChatContextToPrompt } from "../lib/seneca-chat-context";
+import { buildSenecaWorkspaceContext, senecaWorkspaceContextToPrompt } from "../lib/seneca-workspace-context";
 import type { SenecaWorkspaceContext } from "../lib/seneca-workspace-context";
+import { SENECA_WORKSPACE_CHAT_GROUNDING_RULES } from "../lib/seneca-grounding";
 import { normalizeCheckInTemplateDraft } from "../lib/seneca-normalize";
 import {
   buildPlanConfirmationMessage,
@@ -199,7 +200,7 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
     return c.json({ error: { message: "Only managers can use Seneca" } }, 403);
   }
 
-  const ctx = await buildSenecaChatContext(teamId, user.id);
+  const ctx = await buildSenecaWorkspaceContext(teamId, user.id);
   const manager = await prisma.user.findUnique({
     where: { id: user.id },
     select: { timezone: true },
@@ -318,17 +319,22 @@ CREATING A TASK (critical):
         templateKey: "general_coaching",
         requestContext: conversationPrompt,
       });
-      assembledSystemPrompt = assembledMeta.systemPrompt;
+      assembledSystemPrompt = [
+        assembledMeta.systemPrompt,
+        SENECA_WORKSPACE_CHAT_GROUNDING_RULES,
+      ].join("\n\n");
     } catch {
-      assembledSystemPrompt = undefined;
+      assembledSystemPrompt = SENECA_WORKSPACE_CHAT_GROUNDING_RULES;
     }
 
     const out = await senecaJson<SenecaAskAi>(
-      `Answer using the conversation history and the light team context below (team name and member names only).
+      `Answer using the conversation history and the LIVE team health context JSON for the CURRENT workspace only.
 - Be practical, warm, and concise (2-4 sentences unless they ask for a list).
-- You do NOT have access to live tasks, metrics, overdue work, or check-in history unless the manager tells you in chat.
-- Do not invent tasks, overdue items, or performance data.
-- For leadership coaching, give actionable advice grounded in what the manager shares.
+- Context includes teamHealth (compliance %), per-member task/check-in/goal stats, overdue Alenio tasks, and members needing check-ins — all for this workspace (${ctx.teamName}) only.
+- Cite those numbers when the manager asks about team health, compliance, overdue work, or who needs attention.
+- Never invent metrics, tasks, or members. Never use data from other workspaces.
+- Workspace notes / Studio text are coaching guidance, not live health numbers.
+- If a field is null or a list is empty, say so — do not guess.
 - Use team member names from context when scheduling check-ins.
 ${schedulingRules}
 
@@ -344,6 +350,7 @@ Return JSON:
       cancelIntent
         ? JSON.stringify(
             {
+              scope: "current_workspace_only",
               teamName: ctx.teamName,
               members: ctx.members.map((member) => member.name),
               upcomingPlannedCheckIns: upcomingPlanned.map((event) => ({
@@ -354,7 +361,7 @@ Return JSON:
             null,
             2,
           )
-        : senecaChatContextToPrompt(ctx),
+        : senecaWorkspaceContextToPrompt(ctx),
       assembledSystemPrompt ? { systemPrompt: assembledSystemPrompt } : undefined,
     );
 

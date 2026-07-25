@@ -17,7 +17,7 @@ import {
   uploadProfilePhoto,
   type WebTeamRow,
 } from "../lib/api";
-import { pickEnterpriseTeamId, switchEnterpriseWorkspace } from "../lib/enterprise-selected-team";
+import { pickEnterpriseTeamId, setPersistedEnterpriseTeamId, switchEnterpriseWorkspace } from "../lib/enterprise-selected-team";
 import { isEnterpriseOrgMember } from "../lib/enterprise-org";
 import { senecaStudioAccess } from "../lib/seneca-studio-api";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "../lib/timezone";

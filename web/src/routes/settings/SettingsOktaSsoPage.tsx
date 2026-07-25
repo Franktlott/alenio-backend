@@ -192,7 +192,7 @@ export function SettingsOktaSsoPage() {
     <div className="enterprise-tab-shell seneca-studio-page" data-testid="settings-okta-sso">
       <div className="seneca-studio-page-inner">
         <nav className="seneca-studio-breadcrumb" aria-label="Breadcrumb">
-          <Link to="/settings">Settings</Link>
+          <Link to="/settings">User Settings</Link>
           <span aria-hidden>›</span>
           <span>Okta SSO</span>
         </nav>

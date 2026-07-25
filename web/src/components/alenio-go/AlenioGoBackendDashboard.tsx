@@ -59,9 +59,9 @@ export function AlenioGoBackendDashboard({
   );
   const [wsmOpen, setWsmOpen] = useState(() => {
     try {
-      return sessionStorage.getItem(WSM_PANEL_KEY) !== "0";
+      return sessionStorage.getItem(WSM_PANEL_KEY) === "1";
     } catch {
-      return true;
+      return false;
     }
   });
   const [heroImage, setHeroImage] = useState<string | null>(null);
@@ -203,6 +203,15 @@ export function AlenioGoBackendDashboard({
     }
   }
 
+  function closeWsmPanel() {
+    setWsmOpen(false);
+    try {
+      sessionStorage.setItem(WSM_PANEL_KEY, "0");
+    } catch {
+      /* ignore */
+    }
+  }
+
   function toggleWsmPanel() {
     setWsmOpen((open) => {
       const next = !open;
@@ -214,6 +223,15 @@ export function AlenioGoBackendDashboard({
       return next;
     });
   }
+
+  useEffect(() => {
+    if (!wsmOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeWsmPanel();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [wsmOpen]);
 
   return (
     <div
@@ -354,17 +372,18 @@ export function AlenioGoBackendDashboard({
 
       {canManage && teamId ? (
         <>
+          {wsmOpen ? (
+            <button
+              type="button"
+              className="go-wsm-backdrop"
+              aria-label="Close workspace modules"
+              onClick={closeWsmPanel}
+            />
+          ) : null}
           <GoWorkspaceModulesTab open={wsmOpen} onToggle={toggleWsmPanel} />
           <GoWorkspaceModulesPanel
             open={wsmOpen}
-            onClose={() => {
-              setWsmOpen(false);
-              try {
-                sessionStorage.setItem(WSM_PANEL_KEY, "0");
-              } catch {
-                /* ignore */
-              }
-            }}
+            onClose={closeWsmPanel}
             teamId={teamId}
             modulesByKey={modulesByKey}
             onModulesChange={applyModulesByKey}

@@ -20,7 +20,7 @@ export function SettingsAiHubPage() {
     <div className="enterprise-tab-shell seneca-studio-page" data-testid="settings-ai-hub">
       <div className="seneca-studio-page-inner">
         <nav className="seneca-studio-breadcrumb" aria-label="Breadcrumb">
-          <Link to="/settings">Settings</Link>
+          <Link to="/settings">User Settings</Link>
           <span aria-hidden>›</span>
           <span>AI</span>
         </nav>

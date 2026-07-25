@@ -12,37 +12,78 @@ type HealthSwatch = {
   description: string;
 };
 
+/** Labels match TeamMemberRow check-in / goals / tasks status copy. */
 const HEALTH_LEGEND: HealthSwatch[] = [
   {
-    key: "good",
-    color: "#047857",
+    key: "checked_in",
+    color: "#128A52",
     bg: "#ECFDF5",
     border: "#A7F3D0",
-    label: "Green",
-    description: "Check-in is current, or goals meet the workplace minimum.",
+    label: "Checked in",
+    description: "Check-in is current within the workplace schedule.",
   },
   {
-    key: "attention",
-    color: "#B45309",
+    key: "due_soon",
+    color: "#D97706",
     bg: "#FFFBEB",
     border: "#FDE68A",
-    label: "Amber",
-    description: "Check-in is due soon and needs attention.",
+    label: "Due soon",
+    description: "Check-in window is nearly up and needs attention.",
   },
   {
-    key: "critical",
-    color: "#B91C1C",
+    key: "not_started",
+    color: "#D97706",
+    bg: "#FFFBEB",
+    border: "#FDE68A",
+    label: "Not started",
+    description: "No check-in on record yet.",
+  },
+  {
+    key: "overdue",
+    color: "#E02424",
     bg: "#FEF2F2",
     border: "#FECACA",
-    label: "Red",
-    description: "Check-in is overdue or missing, or goals are below the required minimum.",
+    label: "Overdue",
+    description: "Last check-in is past the workplace schedule.",
   },
   {
-    key: "neutral",
-    color: "#475569",
+    key: "goals",
+    color: "#6D5CE7",
+    bg: "#F5F3FF",
+    border: "#DDD6FE",
+    label: "Goals",
+    description: "Purple when active goals are below the workplace minimum.",
+  },
+  {
+    key: "tasks_done",
+    color: "#128A52",
+    bg: "#ECFDF5",
+    border: "#A7F3D0",
+    label: "Tasks done",
+    description: "Number completed this month. Green when there are completions and nothing late.",
+  },
+  {
+    key: "tasks_open",
+    color: "#64748B",
     bg: "#F8FAFC",
     border: "#E2E8F0",
-    label: "Grey",
+    label: "Open",
+    description: "Tasks still in progress. Clear means none open.",
+  },
+  {
+    key: "tasks_late",
+    color: "#D97706",
+    bg: "#FFFBEB",
+    border: "#FDE68A",
+    label: "Late",
+    description: "Amber when some open tasks are late; red when all open are late or none done yet.",
+  },
+  {
+    key: "optional",
+    color: "#64748B",
+    bg: "#F8FAFC",
+    border: "#E2E8F0",
+    label: "Optional",
     description: "Not required for this workplace standard.",
   },
 ];
@@ -51,7 +92,8 @@ function ColorSample({ item }: { item: HealthSwatch }) {
   return (
     <View
       style={{
-        width: 72,
+        minWidth: 88,
+        maxWidth: 104,
         flexShrink: 0,
         paddingHorizontal: 8,
         paddingVertical: 5,
@@ -63,7 +105,9 @@ function ColorSample({ item }: { item: HealthSwatch }) {
         justifyContent: "center",
       }}
     >
-      <Text style={{ fontSize: 11, fontWeight: "700", color: item.color, lineHeight: 14 }}>{item.label}</Text>
+      <Text style={{ fontSize: 11, fontWeight: "700", color: item.color, lineHeight: 14, textAlign: "center" }}>
+        {item.label}
+      </Text>
     </View>
   );
 }
@@ -134,7 +178,7 @@ export function StandardsStatusKey({ iconSize = 13 }: { iconSize?: number }) {
                   </Text>
                   <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827", marginTop: 2 }}>Status key</Text>
                   <Text style={{ fontSize: 11, color: "#667085", marginTop: 2, lineHeight: 14 }}>
-                    Check-in and Goals colors show each member’s standards health.
+                    What each check-in, goals, and tasks status means on the team list.
                   </Text>
                 </View>
                 <Pressable
@@ -154,7 +198,7 @@ export function StandardsStatusKey({ iconSize = 13 }: { iconSize?: number }) {
               </View>
 
               <ScrollView
-                style={{ maxHeight: 300 }}
+                style={{ maxHeight: 420 }}
                 contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 4 }}
                 showsVerticalScrollIndicator={false}
               >

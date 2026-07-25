@@ -23,7 +23,14 @@ import {
   Trash2,
   ChevronLeft,
   ChevronDown,
+  ChevronRight,
   Plus,
+  Copy,
+  Users,
+  CalendarClock,
+  Target,
+  HeartPulse,
+  BarChart3,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -661,13 +668,24 @@ export default function TeamScreen() {
   };
 
   const handleCopyCode = async () => {
-    if (team?.inviteCode) await Clipboard.setStringAsync(team.inviteCode);
+    if (!team?.inviteCode) return;
+    await Clipboard.setStringAsync(team.inviteCode);
+    toast({ title: "Invite code copied", preset: "done" });
   };
 
   const handleShareCode = () => {
     if (team?.inviteCode) {
       Share.share({ message: `Join my team "${team.name}" on Alenio! Use invite code: ${team.inviteCode}` });
     }
+  };
+
+  const handleInvitePress = () => {
+    if (isOwnerOrLeader) {
+      setAddMemberError(null);
+      setAddMemberOpen(true);
+      return;
+    }
+    handleShareCode();
   };
 
   // Derived overview stats from actual team tasks
@@ -696,6 +714,40 @@ export default function TeamScreen() {
     memberStats,
     workplaceStandards,
   });
+
+  const managedMembers = useMemo(
+    () => members.filter((member) => member.role !== "owner"),
+    [members],
+  );
+
+  const checkInsDueCount = useMemo(() => {
+    if (!memberStats) return 0;
+    return managedMembers.filter((member) => {
+      const status = memberStats[member.userId]?.standardsCompliance?.checkInStatus;
+      return status === "due_soon" || status === "overdue";
+    }).length;
+  }, [managedMembers, memberStats]);
+
+  const activeGoalsCount = useMemo(() => {
+    if (!memberStats) return 0;
+    return managedMembers.reduce((sum, member) => {
+      const row = memberStats[member.userId];
+      if (typeof row?.activeDevGoals === "number") return sum + row.activeDevGoals;
+      const display = row?.standardsCompliance?.goalsDisplay ?? "";
+      const match = display.match(/^\s*(\d+)\s*\/\s*\d+\s*$/);
+      if (match) return sum + Number(match[1]);
+      return sum;
+    }, 0);
+  }, [managedMembers, memberStats]);
+
+  const teamHealthPct = useMemo(() => {
+    const values = [
+      teamCompliance.checkInCompliancePct,
+      teamCompliance.developmentPlanCompliancePct,
+    ].filter((value): value is number => typeof value === "number");
+    if (values.length === 0) return null;
+    return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+  }, [teamCompliance.checkInCompliancePct, teamCompliance.developmentPlanCompliancePct]);
 
   const totalOpen = overviewSourceTasks.filter((t) => !isTaskDone(t)).length;
   const openTasks = overviewSourceTasks
@@ -909,94 +961,246 @@ export default function TeamScreen() {
 
       <View style={{ flex: 1, minHeight: 0, paddingBottom: TAB_BAR_CLEARANCE }}>
         {/* ── Team info card (fixed) ── */}
-        <View style={{
-          marginHorizontal: 12,
-          marginTop: 12,
-          borderRadius: 20,
-          overflow: "hidden",
-          shadowColor: "#4361EE",
-          shadowOpacity: 0.3,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 5,
-        }}>
+        <View
+          style={{
+            marginHorizontal: 12,
+            marginTop: 12,
+            borderRadius: 18,
+            overflow: "hidden",
+            shadowColor: "#4361EE",
+            shadowOpacity: 0.28,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 5,
+          }}
+        >
           <LinearGradient
             colors={["#4361EE", "#7C3AED"]}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{ paddingVertical: 12, paddingHorizontal: 14 }}
+            end={{ x: 1, y: 1 }}
+            style={{ paddingTop: 12, paddingBottom: isPaid ? 10 : 12, paddingHorizontal: 12 }}
           >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            {/* Avatar */}
-            <TouchableOpacity
-              onPress={() => isOwnerOrLeader ? setPhotoMenuOpen(true) : undefined}
-              disabled={uploadingTeamImage}
-              testID="team-photo-button"
-              style={{ position: "relative" }}
-            >
-              <View style={{
-                width: 64,
-                height: 64,
-                borderRadius: 32,
-                backgroundColor: "rgba(255,255,255,0.22)",
-                alignItems: "center",
-                justifyContent: "center",
-                overflow: "hidden",
-              }}>
-                {uploadingTeamImage ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <WorkspaceTeamAvatar
-                    team={{ name: team?.name ?? "Workspace", image: team?.image ?? null }}
-                    size={64}
-                    radius={32}
-                    backgroundColor="rgba(255,255,255,0.22)"
-                    textColor="#FFFFFF"
-                    borderColor="transparent"
-                  />
-                )}
-              </View>
-              {isOwnerOrLeader ? (
-                <View style={{
-                  position: "absolute", bottom: 1, right: 1,
-                  width: 20, height: 20, borderRadius: 10,
-                  backgroundColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center",
-                  borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)",
-                }}>
-                  <Camera size={10} color="white" />
-                </View>
-              ) : null}
-            </TouchableOpacity>
-
-            {/* Middle: team name (primary) + invite code + subtitle */}
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{ fontSize: 20, fontWeight: "800", color: "white", letterSpacing: -0.3 }}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => (isOwnerOrLeader ? setPhotoMenuOpen(true) : undefined)}
+                disabled={uploadingTeamImage}
+                testID="team-photo-button"
+                style={{ position: "relative" }}
               >
-                {team?.name ?? "Team"}
-              </Text>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "rgba(255,255,255,0.92)", letterSpacing: 2, marginTop: 6 }}>
-                {team?.inviteCode}
-              </Text>
-              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 3 }}>
-                Share this code to invite team members
-              </Text>
-            </View>
+                <View
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    backgroundColor: "rgba(255,255,255,0.22)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                  }}
+                >
+                  {uploadingTeamImage ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <WorkspaceTeamAvatar
+                      team={{ name: team?.name ?? "Workspace", image: team?.image ?? null }}
+                      size={52}
+                      radius={26}
+                      backgroundColor="rgba(255,255,255,0.22)"
+                      textColor="#FFFFFF"
+                      borderColor="transparent"
+                    />
+                  )}
+                </View>
+                {isOwnerOrLeader ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      right: 0,
+                      width: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      backgroundColor: "rgba(255,255,255,0.32)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1.5,
+                      borderColor: "rgba(255,255,255,0.55)",
+                    }}
+                  >
+                    <Camera size={9} color="white" />
+                  </View>
+                ) : null}
+              </TouchableOpacity>
 
-            {/* Right: icon buttons */}
-            <View style={{ gap: 8 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{ fontSize: 17, fontWeight: "800", color: "white", letterSpacing: -0.2 }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                >
+                  {team?.name ?? "Team"}
+                </Text>
+                <Pressable
+                  onPress={() => void handleCopyCode()}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3, alignSelf: "flex-start" }}
+                  testID="copy-invite-code"
+                  hitSlop={8}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: "rgba(255,255,255,0.94)",
+                      letterSpacing: 1.6,
+                    }}
+                  >
+                    {team?.inviteCode}
+                  </Text>
+                  <Copy size={12} color="rgba(255,255,255,0.85)" />
+                </Pressable>
+                <Text style={{ fontSize: 10, color: "rgba(255,255,255,0.68)", marginTop: 2 }} numberOfLines={1}>
+                  Share this code to invite team members
+                </Text>
+              </View>
+
               <Pressable
-                onPress={handleShareCode}
-                style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" }}
+                onPress={handleInvitePress}
+                style={{ alignItems: "center", gap: 3, flexShrink: 0 }}
                 testID="share-invite-code"
               >
-                <UserPlus size={20} color="white" />
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: "rgba(255,255,255,0.22)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <UserPlus size={18} color="white" />
+                </View>
+                <Text style={{ fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.92)" }}>Invite</Text>
               </Pressable>
             </View>
-          </View>
+
+            {isPaid ? (
+              <>
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: "rgba(255,255,255,0.18)",
+                    marginTop: 10,
+                    marginBottom: 8,
+                  }}
+                />
+                <View style={{ flexDirection: "row", alignItems: "stretch" }}>
+                  {(
+                    [
+                      {
+                        key: "members",
+                        icon: Users,
+                        value: String(members.length),
+                        label: "Members",
+                        color: "#E9D5FF",
+                      },
+                      {
+                        key: "checkInsDue",
+                        icon: CalendarClock,
+                        value: String(checkInsDueCount),
+                        label: "Check-ins Due",
+                        color: "#FCD34D",
+                      },
+                      {
+                        key: "activeGoals",
+                        icon: Target,
+                        value: String(activeGoalsCount),
+                        label: "Active Goals",
+                        color: "#DDD6FE",
+                      },
+                      {
+                        key: "teamHealth",
+                        icon: HeartPulse,
+                        value: teamHealthPct == null ? "—" : `${teamHealthPct}%`,
+                        label: "Team Health",
+                        color: "#6EE7B7",
+                      },
+                    ] as const
+                  ).map((stat, index) => {
+                    const Icon = stat.icon;
+                    return (
+                      <React.Fragment key={stat.key}>
+                        {index > 0 ? (
+                          <View
+                            style={{
+                              width: 1,
+                              backgroundColor: "rgba(255,255,255,0.16)",
+                              marginVertical: 2,
+                            }}
+                          />
+                        ) : null}
+                        <View style={{ flex: 1, alignItems: "center", paddingHorizontal: 2 }}>
+                          <Icon size={12} color={stat.color} />
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              fontWeight: "800",
+                              color: "white",
+                              marginTop: 3,
+                              lineHeight: 16,
+                            }}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.8}
+                          >
+                            {stat.value}
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 8,
+                              fontWeight: "600",
+                              color: "rgba(255,255,255,0.72)",
+                              marginTop: 1,
+                              textAlign: "center",
+                            }}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.85}
+                          >
+                            {stat.label}
+                          </Text>
+                        </View>
+                      </React.Fragment>
+                    );
+                  })}
+                </View>
+
+                <Pressable
+                  onPress={() => setInsightsOpen(true)}
+                  style={{
+                    marginTop: 9,
+                    minHeight: 36,
+                    borderRadius: 18,
+                    backgroundColor: "rgba(255,255,255,0.18)",
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                  testID="team-health-overview-button"
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <BarChart3 size={14} color="white" />
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>
+                      Team Health Overview
+                    </Text>
+                  </View>
+                  <ChevronRight size={16} color="rgba(255,255,255,0.9)" />
+                </Pressable>
+              </>
+            ) : null}
           </LinearGradient>
         </View>
 
@@ -1017,7 +1221,7 @@ export default function TeamScreen() {
             title="Team Members"
             titleAccessory={isPaid ? <StandardsStatusKey iconSize={12} /> : undefined}
             action={
-              isOwnerOrLeader || isPaid || isOwner ? (
+              isOwnerOrLeader || isOwner ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
                   {isOwnerOrLeader && pendingApprovalCount > 0 ? (
                     <Pressable
@@ -1047,16 +1251,9 @@ export default function TeamScreen() {
                   ) : null}
                   {isOwner ? (
                     <ProfileToolbarButton
-                      label="Settings"
+                      label="Workplace Settings"
                       onPress={() => setStandardsOpen(true)}
                       testID="workplace-settings-button"
-                    />
-                  ) : null}
-                  {isPaid ? (
-                    <ProfileToolbarButton
-                      label="Insights"
-                      onPress={() => setInsightsOpen(true)}
-                      testID="team-insights-button"
                     />
                   ) : null}
                 </View>
@@ -1077,47 +1274,70 @@ export default function TeamScreen() {
                 }
                 testID="members-list"
               >
-                {showMemberSkeletons ? (
-                  Array.from({ length: 4 }, (_, index) => (
-                    <TeamMemberRowSkeleton key={`member-skeleton-${index}`} paid={isPaid} />
-                  ))
-                ) : (
-                  sortedMembers.map((item: TeamMember) => {
-                    const stats = memberStats?.[item.userId];
-                    const compliance = stats?.standardsCompliance;
-                    const isCurrentUser = memberMatchesUserId(item, myId, myEmail);
-                    const hasProfilePermission = canViewMemberProfile(item.userId, item.role);
-                    const canOpenProfile = hasProfilePermission;
-                    const canOpenManagement = !isPaid && canManageMember(item.userId, item.role);
-                    const isPressable = canOpenProfile || canOpenManagement;
+                {showMemberSkeletons || sortedMembers.length > 0 ? (
+                  <View
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: "#E6EAF0",
+                      overflow: "hidden",
+                      shadowColor: "#0F172A",
+                      shadowOpacity: 0.04,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: 1,
+                    }}
+                  >
+                    {showMemberSkeletons
+                      ? Array.from({ length: 4 }, (_, index) => (
+                          <TeamMemberRowSkeleton
+                            key={`member-skeleton-${index}`}
+                            paid={isPaid}
+                            showDivider={index < 3}
+                          />
+                        ))
+                      : sortedMembers.map((item: TeamMember, index) => {
+                          const stats = memberStats?.[item.userId];
+                          const compliance = stats?.standardsCompliance;
+                          const isCurrentUser = memberMatchesUserId(item, myId, myEmail);
+                          const hasProfilePermission = canViewMemberProfile(item.userId, item.role);
+                          const canOpenProfile = hasProfilePermission;
+                          const canOpenManagement = !isPaid && canManageMember(item.userId, item.role);
+                          const isPressable = canOpenProfile || canOpenManagement;
 
-                    return (
-                      <TeamMemberRow
-                        key={item.id}
-                        name={item.user.name ?? "Member"}
-                        role={item.role}
-                        image={item.user.image}
-                        isCurrentUser={isCurrentUser}
-                        showMetrics={isPaid}
-                        hasProfilePermission={hasProfilePermission}
-                        checkInValue={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
-                        goalsValue={compliance?.goalsDisplay ?? "—"}
-                        checkInStatus={compliance?.checkInStatus}
-                        goalsStatus={compliance?.goalsStatus}
-                        onPress={
-                          isPressable
-                            ? () =>
-                                router.push({
-                                  pathname: "/member-profile",
-                                  params: { teamId: activeTeamId ?? "", memberUserId: item.userId },
-                                })
-                            : undefined
-                        }
-                        testID={`member-row-${item.userId}`}
-                      />
-                    );
-                  })
-                )}
+                          return (
+                            <TeamMemberRow
+                              key={item.id}
+                              name={item.user.name ?? "Member"}
+                              role={item.role}
+                              image={item.user.image}
+                              isCurrentUser={isCurrentUser}
+                              showMetrics={isPaid}
+                              hasProfilePermission={hasProfilePermission}
+                              checkInValue={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
+                              goalsValue={compliance?.goalsDisplay ?? "—"}
+                              completedTasks={stats?.completedTasks ?? 0}
+                              activeTasks={stats?.activeTasks ?? 0}
+                              overdueTasks={stats?.overdueTasks ?? 0}
+                              checkInStatus={compliance?.checkInStatus}
+                              goalsStatus={compliance?.goalsStatus}
+                              showDivider={index < sortedMembers.length - 1}
+                              onPress={
+                                isPressable
+                                  ? () =>
+                                      router.push({
+                                        pathname: "/member-profile",
+                                        params: { teamId: activeTeamId ?? "", memberUserId: item.userId },
+                                      })
+                                  : undefined
+                              }
+                              testID={`member-row-${item.userId}`}
+                            />
+                          );
+                        })}
+                  </View>
+                ) : null}
 
                 {!showMemberSkeletons && sortedMembers.length === 0 ? (
                   <View style={{ paddingVertical: 32, alignItems: "center", paddingHorizontal: 16 }}>
@@ -1185,23 +1405,6 @@ export default function TeamScreen() {
           </ProfileSection>
         </View>
 
-        <Text
-          testID="team-members-hint"
-          style={{
-            flexShrink: 0,
-            textAlign: "center",
-            fontSize: 11,
-            lineHeight: 15,
-            color: "#94A3B8",
-            paddingHorizontal: 24,
-            paddingTop: 6,
-            paddingBottom: 8,
-          }}
-        >
-          {isPaid
-            ? "Tap a member to view their profile and standards."
-            : "Tap a member to view their profile."}
-        </Text>
       </View>
 
       {/* ── Team photo action sheet ─────────────────────────────────── */}

@@ -265,10 +265,15 @@ export function GoWorkspaceModulesPanel({ open, onClose, teamId, modulesByKey, o
     }
   }
 
-  if (!open) return null;
-
   return (
-    <aside id="go-workspace-modules-panel" className="go-wsm-panel" data-testid="go-workspace-modules-panel" aria-label="Workspace modules">
+    <aside
+      id="go-workspace-modules-panel"
+      className={`go-wsm-panel${open ? " go-wsm-panel--open" : ""}`}
+      data-testid="go-workspace-modules-panel"
+      aria-label="Workspace modules"
+      aria-hidden={!open}
+      inert={!open ? true : undefined}
+    >
       <header className="go-wsm-header">
         <div>
           <h2 className="go-wsm-title">Workspace modules</h2>
@@ -410,9 +415,15 @@ export function GoWorkspaceModulesTab({ open, onToggle }: { open: boolean; onTog
       data-testid="go-workspace-modules-tab"
       title={open ? "Hide workspace modules" : "Show workspace modules"}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-        {open ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
-      </svg>
+      <span className="go-wsm-tab-icon" aria-hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+        </svg>
+      </span>
+      <span className="go-wsm-tab-label">Modules</span>
     </button>
   );
 }

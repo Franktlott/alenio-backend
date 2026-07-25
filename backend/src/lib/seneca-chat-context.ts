@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import type { SenecaWorkspaceContext, SenecaWorkspaceMemberRow } from "./seneca-workspace-context";
+import { emptyTeamHealth } from "./seneca-workspace-context";
 
 function roleLabel(role: string): string {
   if (role === "owner") return "Owner";
@@ -42,12 +43,14 @@ export async function buildSenecaChatContext(
     activeDevelopmentGoalsCount: 0,
     developmentGoalsNearingInactive: [],
     inactiveDevelopmentGoals: [],
+    teamHealth: emptyTeamHealth(),
   };
 }
 
 export function senecaChatContextToPrompt(ctx: SenecaWorkspaceContext): string {
   return JSON.stringify(
     {
+      scope: "current_workspace_only",
       teamName: ctx.teamName,
       managerName: ctx.managerName,
       members: ctx.members.map((member) => ({

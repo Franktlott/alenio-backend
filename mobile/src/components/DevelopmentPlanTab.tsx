@@ -38,9 +38,15 @@ import {
 } from "@/lib/member-profile-api";
 import { printDevelopmentPlan, downloadDevelopmentPlanPdf } from "@/lib/development-plan-print";
 import {
+  goalDaysUntilInactive,
   goalStatusLabel,
+  isGoalNearingInactive,
   normalizeDevelopmentGoalStatus,
 } from "@/lib/development-goal-activity";
+import {
+  extractGoalDuePriorityFromNotes,
+  latestCoachingNotePreview,
+} from "@/lib/development-goal-presets";
 import {
   CreateDevelopmentGoalModal,
   type CreateDevelopmentGoalPayload,
@@ -522,14 +528,23 @@ export function DevelopmentPlanTab({
     setGoalActionMenu(goal);
   };
 
-  const renderGoalRow = (goal: DevelopmentGoal, index: number) => {
+  const renderGoalRow = (
+    goal: DevelopmentGoal,
+    index: number,
+    section: "active" | "inactive" | "closed",
+  ) => {
     const status = normalizeDevelopmentGoalStatus(goal.status);
     const isClosed = status === "closed";
     const isInactive = status === "inactive";
     const accent = isClosed ? "#94A3B8" : isInactive ? "#F59E0B" : "#4361EE";
-    const latestNote = [...goal.notes].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    )[0];
+    const showStatusBadge = section !== "active";
+    const duePriority = extractGoalDuePriorityFromNotes(goal.notes);
+    const latestPreview = latestCoachingNotePreview(goal.notes);
+    const nearingInactive = !isClosed && !isInactive && isGoalNearingInactive(goal);
+    const daysUntilInactive = nearingInactive ? goalDaysUntilInactive(goal) : null;
+    const stepCount = goal.steps?.length ?? 0;
+    const noteCount = goal.notes.length;
+
     return (
       <Pressable
         key={goal.id}
@@ -544,59 +559,117 @@ export function DevelopmentPlanTab({
         accessibilityLabel={`View ${goal.skill} goal summary`}
       >
         <View style={{ width: 3, backgroundColor: accent }} />
-        <View style={{ flex: 1, paddingVertical: 9, paddingLeft: 10, paddingRight: 8 }}>
+        <View style={{ flex: 1, paddingVertical: 12, paddingLeft: 12, paddingRight: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text
-                  style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", letterSpacing: -0.2, flexShrink: 1 }}
+                  style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", letterSpacing: -0.2, flexShrink: 1 }}
                   numberOfLines={1}
                 >
                   {goal.skill}
                 </Text>
-                <View
-                  style={{
-                    backgroundColor: isClosed ? "#F1F5F9" : isInactive ? "#FFEDD5" : "#F1F5F9",
-                    borderRadius: 4,
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                  }}
-                >
-                  <Text
+                {showStatusBadge ? (
+                  <View
                     style={{
-                      fontSize: 9,
-                      fontWeight: "800",
-                      letterSpacing: 0.5,
-                      textTransform: "uppercase",
-                      color: isClosed ? "#64748B" : isInactive ? "#C2410C" : "#475569",
+                      backgroundColor: isClosed ? "#F1F5F9" : "#FFEDD5",
+                      borderRadius: 4,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
                     }}
                   >
-                    {goalStatusLabel(status)}
-                  </Text>
-                </View>
+                    <Text
+                      style={{
+                        fontSize: 9,
+                        fontWeight: "800",
+                        letterSpacing: 0.5,
+                        textTransform: "uppercase",
+                        color: isClosed ? "#64748B" : "#C2410C",
+                      }}
+                    >
+                      {goalStatusLabel(status)}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
 
-              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2, lineHeight: 15 }} numberOfLines={1}>
+              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 3, lineHeight: 15 }} numberOfLines={1}>
                 {[
                   isClosed
                     ? `Closed ${formatWhen(goal.closedAt ?? lastUpdatedAt(goal))}`
                     : `Updated ${formatWhen(lastUpdatedAt(goal))}`,
-                  goal.createdBy ? displayUserName(goal.createdBy) : null,
-                  goal.notes.length > 0 ? `${goal.notes.length} note${goal.notes.length === 1 ? "" : "s"}` : "No notes",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
+                  noteCount > 0 ? `${noteCount} note${noteCount === 1 ? "" : "s"}` : "No notes",
+                ].join(" · ")}
               </Text>
 
+              {duePriority || stepCount > 0 ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                  {duePriority ? (
+                    <View
+                      style={{
+                        backgroundColor: "#F8FAFC",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                        borderRadius: 6,
+                        paddingHorizontal: 7,
+                        paddingVertical: 3,
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#475569" }}>
+                        Due {duePriority.dueLabel}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {duePriority ? (
+                    <View
+                      style={{
+                        backgroundColor: "#F8FAFC",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                        borderRadius: 6,
+                        paddingHorizontal: 7,
+                        paddingVertical: 3,
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#475569" }}>
+                        {duePriority.priorityLabel}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {stepCount > 0 ? (
+                    <View
+                      style={{
+                        backgroundColor: "#EEF2FF",
+                        borderWidth: 1,
+                        borderColor: "#E0E7FF",
+                        borderRadius: 6,
+                        paddingHorizontal: 7,
+                        paddingVertical: 3,
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: "#4361EE" }}>
+                        {stepCount} step{stepCount === 1 ? "" : "s"}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {nearingInactive && daysUntilInactive != null ? (
+                <Text style={{ marginTop: 8, fontSize: 12, color: "#B45309", lineHeight: 16 }} numberOfLines={1}>
+                  Inactive in {daysUntilInactive} day{daysUntilInactive === 1 ? "" : "s"}
+                </Text>
+              ) : null}
+
               {isInactive ? (
-                <Text style={{ marginTop: 6, fontSize: 12, color: "#B45309", lineHeight: 16 }} numberOfLines={2}>
+                <Text style={{ marginTop: 8, fontSize: 12, color: "#B45309", lineHeight: 16 }} numberOfLines={2}>
                   Inactive after {goal.daysSinceActivity ?? 0} days. Add a progress note to reactivate.
                 </Text>
               ) : null}
 
-              {latestNote ? (
-                <Text style={{ marginTop: 3, fontSize: 11, color: "#64748B", lineHeight: 15 }} numberOfLines={1}>
-                  Latest: {latestNote.body}
+              {latestPreview ? (
+                <Text style={{ marginTop: 6, fontSize: 12, color: "#64748B", lineHeight: 16 }} numberOfLines={2}>
+                  Latest: {latestPreview}
                 </Text>
               ) : null}
             </View>
@@ -627,23 +700,22 @@ export function DevelopmentPlanTab({
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                flexWrap: "wrap",
-                gap: 14,
-                marginTop: 6,
-                paddingTop: 6,
+                gap: 16,
+                marginTop: 10,
+                paddingTop: 10,
                 borderTopWidth: 1,
-                borderTopColor: "#F8FAFC",
+                borderTopColor: "#F1F5F9",
               }}
             >
               {!isClosed ? (
                 <Pressable onPress={() => openAddNote(goal)} hitSlop={6} testID={`add-progress-note-${goal.id}`}>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>Add note</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#4361EE" }}>Add note</Text>
                 </Pressable>
               ) : null}
 
               {!isClosed ? (
                 <Pressable onPress={() => onMarkComplete(goal)} disabled={statusSavingId === goal.id} hitSlop={6}>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#166534" }}>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#166534" }}>
                     {statusSavingId === goal.id ? "…" : "Complete"}
                   </Text>
                 </Pressable>
@@ -655,7 +727,10 @@ export function DevelopmentPlanTab({
     );
   };
 
-  const renderGoalList = (list: DevelopmentGoal[]) => (
+  const renderGoalList = (
+    list: DevelopmentGoal[],
+    section: "active" | "inactive" | "closed",
+  ) => (
     <View
       style={{
         backgroundColor: "white",
@@ -663,9 +738,10 @@ export function DevelopmentPlanTab({
         borderWidth: 1,
         borderColor: "#E2E8F0",
         overflow: "hidden",
+        ...(section === "active" ? { flex: 1, minHeight: 140 } : null),
       }}
     >
-      {list.map((goal, index) => renderGoalRow(goal, index))}
+      {list.map((goal, index) => renderGoalRow(goal, index, section))}
     </View>
   );
 
@@ -722,7 +798,7 @@ export function DevelopmentPlanTab({
   const showCenteredEmpty = !loading && activeGoals.length === 0 && inactiveGoals.length === 0 && closedGoals.length === 0;
 
   return (
-    <View style={{ gap: 14, flexGrow: showCenteredEmpty ? 1 : undefined }}>
+    <View style={{ gap: 14, flex: 1, flexGrow: 1 }}>
       {goals.length > 0 || canCreate ? (
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, flexWrap: "wrap" }}>
           {goals.length > 0 ? (
@@ -785,7 +861,7 @@ export function DevelopmentPlanTab({
       {loading ? (
         <ActivityIndicator color="#4361EE" style={{ marginVertical: 24 }} />
       ) : (
-        <>
+        <View style={{ flex: 1, gap: 14 }}>
           {activeGoals.length === 0 ? (
             <View style={showCenteredEmpty ? { flexGrow: 1, justifyContent: "center" } : undefined}>
               <GrowthEmptyState
@@ -797,7 +873,7 @@ export function DevelopmentPlanTab({
               />
             </View>
           ) : (
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 8, flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <Text
                   style={{
@@ -812,7 +888,7 @@ export function DevelopmentPlanTab({
                 </Text>
                 <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{activeGoals.length}</Text>
               </View>
-              {renderGoalList(activeGoals)}
+              {renderGoalList(activeGoals, "active")}
             </View>
           )}
 
@@ -838,7 +914,7 @@ export function DevelopmentPlanTab({
                 </View>
                 {inactiveOpen ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
               </Pressable>
-              {inactiveOpen ? renderGoalList(inactiveGoals) : null}
+              {inactiveOpen ? renderGoalList(inactiveGoals, "inactive") : null}
             </View>
           ) : null}
 
@@ -864,10 +940,10 @@ export function DevelopmentPlanTab({
                 </View>
                 {closedOpen ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
               </Pressable>
-              {closedOpen ? renderGoalList(closedGoals) : null}
+              {closedOpen ? renderGoalList(closedGoals, "closed") : null}
             </View>
           ) : null}
-        </>
+        </View>
       )}
 
       <Modal

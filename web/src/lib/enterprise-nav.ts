@@ -9,7 +9,7 @@ export const ENTERPRISE_NAV_TITLES: Record<EnterpriseNavId, string> = {
   users: "Users",
   team: "Team",
   plan: "Billing",
-  settings: "Settings",
+  settings: "User Settings",
   admin: "Admin",
 };
 

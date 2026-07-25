@@ -5,6 +5,8 @@ import {
   Calendar,
   Clock,
   Flag,
+  ListChecks,
+  AlertCircle,
 } from "lucide-react-native";
 import {
   fetchDevelopmentGoals,
@@ -33,6 +35,9 @@ type Props = {
   memberName: string;
   streak?: number;
   overdueFollowUpTasks?: number;
+  activeTasks?: number;
+  dueSoonTasks?: number;
+  overdueTasks?: number;
   workplaceStandards?: WorkplaceStandards;
   standardsCompliance?: MemberStandardsCompliance;
   daysSinceLastCheckIn?: number | null;
@@ -85,26 +90,33 @@ function SectionCard({
   trailing,
   children,
   bodyStyle,
+  style,
+  bodyFill,
 }: {
   title: string;
   trailing?: React.ReactNode;
   children: React.ReactNode;
   bodyStyle?: object;
+  style?: object;
+  bodyFill?: boolean;
 }) {
   return (
     <View
-      style={{
-        backgroundColor: "white",
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#E8ECFA",
-        overflow: "hidden",
-        shadowColor: "#0F172A",
-        shadowOpacity: 0.03,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: 1 },
-        elevation: 1,
-      }}
+      style={[
+        {
+          backgroundColor: "white",
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#E8ECFA",
+          overflow: "hidden",
+          shadowColor: "#0F172A",
+          shadowOpacity: 0.03,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: 1 },
+          elevation: 1,
+        },
+        style,
+      ]}
     >
       <View
         style={{
@@ -121,7 +133,15 @@ function SectionCard({
         </Text>
         {trailing}
       </View>
-      <View style={[{ paddingHorizontal: 10, paddingBottom: 8 }, bodyStyle]}>{children}</View>
+      <View
+        style={[
+          { paddingHorizontal: 10, paddingBottom: 8 },
+          bodyFill ? { flex: 1 } : null,
+          bodyStyle,
+        ]}
+      >
+        {children}
+      </View>
     </View>
   );
 }
@@ -174,6 +194,9 @@ export function ProfileOverviewTab({
   teamId,
   memberUserId,
   memberName,
+  activeTasks = 0,
+  dueSoonTasks = 0,
+  overdueTasks = 0,
   workplaceStandards,
   standardsCompliance,
   daysSinceLastCheckIn,
@@ -255,7 +278,7 @@ export function ProfileOverviewTab({
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
+      contentContainerStyle={{ flexGrow: 1, gap: 6, paddingBottom: 4 }}
       showsVerticalScrollIndicator={false}
     >
       {err ? (
@@ -282,6 +305,32 @@ export function ProfileOverviewTab({
                 : "Never"
             }
             sub={lastOneOnOneDate ? `Last ${formatDateOnly(lastOneOnOneDate)}` : "No check-in yet"}
+          />
+        </View>
+      </SectionCard>
+
+      <SectionCard title="Task overview">
+        <View style={{ flexDirection: "row", gap: 7 }}>
+          <SnapshotTile
+            icon={<ListChecks size={9} color="#4361EE" strokeWidth={2.4} />}
+            iconBg="#EEF2FF"
+            label="Open"
+            value={String(Math.max(0, activeTasks))}
+            sub={activeTasks === 0 ? "Clear" : "In progress"}
+          />
+          <SnapshotTile
+            icon={<Clock size={9} color={dueSoonTasks > 0 ? "#D97706" : "#64748B"} strokeWidth={2.4} />}
+            iconBg={dueSoonTasks > 0 ? "#FFFBEB" : "#F8FAFC"}
+            label="Due soon"
+            value={String(Math.max(0, dueSoonTasks))}
+            sub="Within 3 days"
+          />
+          <SnapshotTile
+            icon={<AlertCircle size={9} color={overdueTasks > 0 ? "#E02424" : "#64748B"} strokeWidth={2.4} />}
+            iconBg={overdueTasks > 0 ? "#FEF2F2" : "#F8FAFC"}
+            label="Overdue"
+            value={String(Math.max(0, overdueTasks))}
+            sub={overdueTasks > 0 ? "Needs attention" : "None late"}
           />
         </View>
       </SectionCard>
@@ -395,9 +444,18 @@ export function ProfileOverviewTab({
 
       </SectionCard>
 
-      <SectionCard title="Development goals">
+      <SectionCard title="Development goals" style={{ flex: 1, minHeight: 120 }} bodyFill>
         {activeGoals.length === 0 ? (
-          <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 2, gap: 8 }}>
+          <View
+            style={{
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              paddingVertical: 8,
+              gap: 8,
+            }}
+          >
             <View
               style={{
                 width: 30,
@@ -423,7 +481,7 @@ export function ProfileOverviewTab({
             </Text>
           </View>
         ) : (
-          <View style={{ gap: 0 }}>
+          <View style={{ flex: 1, gap: 0 }}>
             {activeGoals.slice(0, 3).map((goal, index) => (
               <View
                 key={goal.id}

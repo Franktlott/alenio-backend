@@ -550,7 +550,7 @@ export function SenecaStudioPage({
               </>
             ) : (
               <>
-                <Link to="/settings">Settings</Link>
+                <Link to="/settings">User Settings</Link>
                 <span aria-hidden>›</span>
                 <Link to="/settings/ai">AI</Link>
                 <span aria-hidden>›</span>

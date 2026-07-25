@@ -124,3 +124,63 @@ export function buildManagerNotesPayload(input: {
   if (!notes) return meta;
   return `${meta}\n\n${notes}`;
 }
+
+const GOAL_BOOTSTRAP_META_RE =
+  /^Due (.+?) · Priority (Low|Normal|High)(?:\n\n([\s\S]*))?$/i;
+
+export type ParsedGoalBootstrapNote = {
+  dueLabel: string;
+  priorityLabel: string;
+  coachingBody: string | null;
+};
+
+/** Parse create-time Due/Priority note (optional coaching body after blank line). */
+export function parseGoalBootstrapNote(body: string): ParsedGoalBootstrapNote | null {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(GOAL_BOOTSTRAP_META_RE);
+  if (!match) return null;
+  const coaching = match[3]?.trim() || null;
+  const rawPriority = match[2]!.trim().toLowerCase();
+  const priorityLabel =
+    rawPriority === "low" ? "Low" : rawPriority === "high" ? "High" : "Normal";
+  return {
+    dueLabel: match[1]!.trim(),
+    priorityLabel,
+    coachingBody: coaching,
+  };
+}
+
+export function isGoalBootstrapMetaOnly(body: string): boolean {
+  const parsed = parseGoalBootstrapNote(body);
+  return !!parsed && !parsed.coachingBody;
+}
+
+export function extractGoalDuePriorityFromNotes(
+  notes: Array<{ body: string }>,
+): { dueLabel: string; priorityLabel: string } | null {
+  for (const note of notes) {
+    const parsed = parseGoalBootstrapNote(note.body);
+    if (parsed) {
+      return { dueLabel: parsed.dueLabel, priorityLabel: parsed.priorityLabel };
+    }
+  }
+  return null;
+}
+
+/** Newest coaching preview, skipping pure Due/Priority bootstrap notes. */
+export function latestCoachingNotePreview(notes: Array<{ body: string; createdAt: string }>): string | null {
+  const sorted = [...notes].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  for (const note of sorted) {
+    const parsed = parseGoalBootstrapNote(note.body);
+    if (parsed) {
+      if (parsed.coachingBody) return parsed.coachingBody;
+      continue;
+    }
+    const body = note.body.trim();
+    if (body) return body;
+  }
+  return null;
+}

@@ -29,15 +29,6 @@ function roleChevron() {
   );
 }
 
-function searchIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m16.5 16.5 4 4" />
-    </svg>
-  );
-}
-
 export function DashboardTopBar({
   user,
   pageTitle,
@@ -53,7 +44,7 @@ export function DashboardTopBar({
 
   return (
     <header
-      className={`enterprise-topbar${isGo ? " enterprise-topbar--go" : ""} enterprise-topbar--with-subtitle`}
+      className={`enterprise-topbar${isGo ? " enterprise-topbar--go" : ""}${pageSubtitle ? " enterprise-topbar--with-subtitle" : ""}`}
       data-testid="dashboard-topbar"
     >
       <div className="enterprise-topbar-context" data-testid="topbar-context">
@@ -65,31 +56,10 @@ export function DashboardTopBar({
         ) : (
           <div className="enterprise-topbar-context-copy">
             <h1 className="enterprise-topbar-title">{pageTitle}</h1>
-            <p
-              className={`enterprise-topbar-subtitle${pageSubtitle ? "" : " enterprise-topbar-subtitle--spacer"}`}
-              aria-hidden={pageSubtitle ? undefined : true}
-            >
-              {pageSubtitle ?? "\u00a0"}
-            </p>
+            {pageSubtitle ? <p className="enterprise-topbar-subtitle">{pageSubtitle}</p> : null}
           </div>
         )}
       </div>
-
-      {!isGo ? (
-        <div className="enterprise-topbar-search" aria-label="Search coming soon">
-          <span className="enterprise-topbar-search-icon" aria-hidden>
-            {searchIcon()}
-          </span>
-          <input
-            type="search"
-            placeholder="Search Alenio"
-            aria-label="Search Alenio (coming soon)"
-            readOnly
-            tabIndex={-1}
-          />
-          <kbd className="enterprise-topbar-search-shortcut">⌘ K</kbd>
-        </div>
-      ) : null}
 
       <div className="enterprise-topbar-actions">
         {!isGo ? <VideoMeetingTopBarJoin selectedTeamId={selectedTeamId} user={user} /> : null}

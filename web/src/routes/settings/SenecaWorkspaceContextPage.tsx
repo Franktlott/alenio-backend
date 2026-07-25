@@ -230,7 +230,7 @@ export function SenecaWorkspaceContextPage() {
     <div className="enterprise-tab-shell seneca-studio-page" data-testid="seneca-workspace-context-page">
       <div className="seneca-studio-page-inner seneca-studio-page-inner--narrow">
         <nav className="seneca-studio-breadcrumb" aria-label="Breadcrumb">
-          <Link to="/settings">Settings</Link>
+          <Link to="/settings">User Settings</Link>
           <span aria-hidden>›</span>
           <Link to="/settings/ai">AI</Link>
           <span aria-hidden>›</span>

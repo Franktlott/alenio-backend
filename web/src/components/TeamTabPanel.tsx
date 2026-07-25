@@ -526,8 +526,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     queryFn: () => fetchTeamCore(selectedTeamId, shellRole),
     enabled: !!selectedTeamId,
     staleTime: 60_000,
-    refetchOnMount: false,
-    refetchInterval: 60_000,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
+    refetchInterval: paneActive ? 60_000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -567,7 +568,24 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         : null;
   const [actionErr, setActionErr] = useState<string | null>(null);
   const displayErr = actionErr ?? loadErr;
-  const showInitialLoading = paneActive && teamCoreQuery.isPending && !teamCoreQuery.data;
+  /** Use isLoading (pending + fetching), not isPending — RQ v5 keeps isPending true when idle/paused with no data. */
+  const showInitialLoading = paneActive && teamCoreQuery.isLoading;
+
+  useEffect(() => {
+    if (!paneActive || !selectedTeamId) return;
+    if (teamCoreQuery.data || teamCoreQuery.isFetching || teamCoreQuery.isLoading) return;
+    if (!teamCoreQuery.isPending && !teamCoreQuery.isError) return;
+    void teamCoreQuery.refetch();
+  }, [
+    paneActive,
+    selectedTeamId,
+    teamCoreQuery.data,
+    teamCoreQuery.isFetching,
+    teamCoreQuery.isLoading,
+    teamCoreQuery.isPending,
+    teamCoreQuery.isError,
+    teamCoreQuery.refetch,
+  ]);
 
   const reloadTeamContext = useCallback(async () => {
     if (!selectedTeamId) return;
@@ -861,9 +879,29 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   }
 
   if (!teamDetail) {
+    const stuckIdle = teamCoreQuery.isPending && !teamCoreQuery.isFetching;
     return (
-      <div className="enterprise-team-tab">
-        <p className="enterprise-muted">{loadErr ?? "Team not found."}</p>
+      <div className="enterprise-team-tab enterprise-team-tab-loading-host">
+        <div className="enterprise-team-load-fallback" role="alert">
+          <p className="enterprise-muted">
+            {loadErr
+              ? loadErr
+              : teamCoreQuery.isPaused
+                ? "Waiting for a network connection…"
+                : stuckIdle
+                  ? "Team didn’t finish loading."
+                  : "Team not found."}
+          </p>
+          <button
+            type="button"
+            className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
+            onClick={() => {
+              void teamCoreQuery.refetch();
+            }}
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
