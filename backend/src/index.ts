@@ -195,6 +195,29 @@ app.get("/api/walks-schema-check", async (c) => {
   });
 });
 
+/** Diagnostics + force-sync for collaborative task notes. */
+app.get("/api/task-notes-schema-check", async (c) => {
+  await ensureTaskNotesSchema(prisma);
+  try {
+    const count = await prisma.taskNote.count();
+    return c.json({
+      buildMarker: env.BACKEND_BUILD_MARKER,
+      ready: true,
+      count,
+    });
+  } catch (err) {
+    console.error("[task-notes-schema-check] failed", err);
+    return c.json(
+      {
+        buildMarker: env.BACKEND_BUILD_MARKER,
+        ready: false,
+        error: err instanceof Error ? err.message : String(err),
+      },
+      500,
+    );
+  }
+});
+
 /** Diagnostics: neon_auth schema tables readable for Better Auth? */
 app.get("/api/auth-schema-check", async (c) => {
   const ensure = await ensureBetterAuthSchema(prisma);

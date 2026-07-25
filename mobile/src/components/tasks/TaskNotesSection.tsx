@@ -152,7 +152,10 @@ export function TaskNotesSection({
           className="rounded-xl border border-red-100 bg-red-50 px-3 py-3"
           testID="task-notes-error"
         >
-          <Text className="text-xs text-red-600">Notes could not load. Tap to try again.</Text>
+          <Text className="text-xs text-red-600">
+            Notes could not load
+            {notesQuery.error instanceof Error ? `: ${notesQuery.error.message}` : "."} Tap to try again.
+          </Text>
         </Pressable>
       ) : notes.length === 0 ? (
         <View className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4" testID="task-notes-empty">
