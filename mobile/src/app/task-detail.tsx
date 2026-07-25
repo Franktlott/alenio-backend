@@ -18,7 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check, Plus, Square, CheckSquare, Pencil, AlertTriangle } from "lucide-react-native";
+import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check, Plus, Square, CheckSquare, Pencil, AlertTriangle, CalendarDays, Clock3, CheckCircle2, ChevronRight } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { toast } from "burnt";
@@ -213,6 +213,19 @@ export default function TaskDetailScreen() {
   const taskIsRecurring = !!task && isRecurringTask(task);
   const seriesId = task?.recurrenceSeriesId ?? null;
   const originalDueDate = task?.dueDate ? new Date(task.dueDate) : null;
+  const displayedDueDate = isEditMode ? draftDueDate : originalDueDate;
+  const displayedDueLabel = displayedDueDate
+    ? formatTaskDueDateLabel(displayedDueDate, userTimeZone)
+    : "No due date";
+  const displayedDueToday = displayedDueDate
+    ? sameCalendarDay(displayedDueDate, new Date())
+    : false;
+  const displayedDueOverdue = Boolean(
+    displayedDueDate &&
+      !displayedDueToday &&
+      !isCompleted &&
+      displayedDueDate.getTime() < Date.now(),
+  );
 
   const { data: seriesTasksData, isPending: seriesTasksPending } = useQuery({
     queryKey: ["series-tasks", teamId, seriesId],
@@ -613,6 +626,212 @@ export default function TaskDetailScreen() {
               <Text style={{ fontSize: 11, fontWeight: "700", color: "white", letterSpacing: 0.3 }}>Joint Task</Text>
             </View>
           </View>
+        ) : null}
+
+        {!showFocusedFeedbackTask ? (
+          <View
+            style={{
+              marginBottom: 18,
+              borderRadius: 16,
+              backgroundColor: "#FFFFFF",
+              borderWidth: 1,
+              borderColor: "#E8EAF6",
+              overflow: "hidden",
+              shadowColor: "#312E81",
+              shadowOffset: { width: 0, height: 5 },
+              shadowOpacity: 0.08,
+              shadowRadius: 14,
+              elevation: 3,
+            }}
+            testID="task-timeline-card"
+          >
+            <LinearGradient
+              colors={["#4361EE", "#7C3AED"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ height: 3 }}
+            />
+            <View style={{ flexDirection: "row", alignItems: "stretch", paddingVertical: 14 }}>
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 10 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 11,
+                    backgroundColor: "#EEF2FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <CalendarDays size={17} color="#4F46E5" strokeWidth={2.2} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 9, fontWeight: "800", color: "#94A3B8", letterSpacing: 0.9 }}>
+                    CREATED
+                  </Text>
+                  <Text style={{ marginTop: 3, fontSize: 13, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+                    {new Date(task.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ width: 1, marginVertical: 2, backgroundColor: "#EEF2F7" }} />
+
+              <TouchableOpacity
+                disabled={!isEditMode}
+                onPress={() => setShowDatePicker(true)}
+                activeOpacity={isEditMode ? 0.65 : 1}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 10 }}
+                testID="edit-due-date-button"
+              >
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 11,
+                    backgroundColor: displayedDueOverdue
+                      ? "#FEF2F2"
+                      : displayedDueToday
+                        ? "#FFF7ED"
+                        : "#F5F3FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Clock3
+                    size={17}
+                    color={displayedDueOverdue ? "#EF4444" : displayedDueToday ? "#EA580C" : "#7C3AED"}
+                    strokeWidth={2.2}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 9, fontWeight: "800", color: "#94A3B8", letterSpacing: 0.9 }}>
+                    DUE DATE
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 3,
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: displayedDueOverdue
+                        ? "#DC2626"
+                        : displayedDueToday
+                          ? "#EA580C"
+                          : displayedDueDate
+                            ? "#0F172A"
+                            : "#94A3B8",
+                    }}
+                    numberOfLines={1}
+                  >
+                    {displayedDueToday ? "Today" : displayedDueLabel}
+                  </Text>
+                </View>
+                {isEditMode ? <ChevronRight size={15} color="#A5B4FC" /> : null}
+              </TouchableOpacity>
+            </View>
+
+            {task.completedAt ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 7,
+                  paddingHorizontal: 14,
+                  paddingVertical: 9,
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: "#E2E8F0",
+                  backgroundColor: "#F0FDF4",
+                }}
+              >
+                <CheckCircle2 size={14} color="#059669" strokeWidth={2.4} />
+                <Text style={{ flex: 1, fontSize: 11, fontWeight: "600", color: "#047857" }}>
+                  Completed{" "}
+                  {new Date(task.completedAt).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!showFocusedFeedbackTask && isEditMode && Platform.OS === "ios" ? (
+          <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
+            <View style={{ flex: 1, justifyContent: "flex-end" }}>
+              <Pressable
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15,23,42,0.35)" }}
+                onPress={() => setShowDatePicker(false)}
+              />
+              <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: Math.max(insets.bottom, 16) }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                    <Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Due Date</Text>
+                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                    <Text style={{ color: "#4361EE", fontSize: 15, fontWeight: "700" }}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={draftDueDate ?? new Date()}
+                  mode="date"
+                  display="inline"
+                  minimumDate={isRegularMember ? new Date() : undefined}
+                  onChange={(_e, date) => {
+                    if (!date) return;
+                    const next = new Date(date);
+                    next.setHours(23, 59, 59, 0);
+                    setDraftDueDate(next);
+                  }}
+                  testID="edit-date-time-picker"
+                  style={{ alignSelf: "center", marginHorizontal: 8 }}
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    setDraftDueDate(null);
+                    setShowDatePicker(false);
+                  }}
+                  style={{
+                    marginHorizontal: 20,
+                    marginTop: 4,
+                    marginBottom: 4,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    alignItems: "center",
+                  }}
+                  testID="clear-due-date-sheet-button"
+                >
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>Clear date</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        ) : !showFocusedFeedbackTask && isEditMode && showDatePicker ? (
+          <DateTimePicker
+            value={draftDueDate ?? new Date()}
+            mode="date"
+            display="calendar"
+            minimumDate={isRegularMember ? new Date() : undefined}
+            onChange={(_e, date) => {
+              setShowDatePicker(false);
+              if (!date) return;
+              const next = new Date(date);
+              next.setHours(23, 59, 59, 0);
+              setDraftDueDate(next);
+            }}
+            testID="edit-date-time-picker"
+          />
         ) : null}
 
         {feedbackContext && feedbackMeta ? (
@@ -1020,185 +1239,6 @@ export default function TaskDetailScreen() {
               </View>
             )}
           </View>
-        ) : null}
-
-        {/* Due date */}
-        {!showFocusedFeedbackTask && isEditMode ? (
-          <View className="mb-4">
-            <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 8 }}>Due date</Text>
-            <TouchableOpacity
-              onPress={() => setShowDatePicker(true)}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                borderRadius: 12,
-                borderWidth: 1.5,
-                borderColor: draftDueDate ? "#4361EE" : "#E2E8F0",
-                backgroundColor: draftDueDate ? "#4361EE0D" : "#F8FAFC",
-              }}
-              testID="edit-due-date-button"
-            >
-              <Text style={{ fontSize: 16, marginRight: 10 }}>📅</Text>
-              <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: draftDueDate ? "#4361EE" : "#94A3B8" }}>
-                {draftDueDate
-                  ? draftDueDate.toLocaleDateString("en-US", {
-                      weekday: "short",
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    })
-                  : "Select a due date"}
-              </Text>
-              {draftDueDate ? (
-                <TouchableOpacity
-                  onPress={() => setDraftDueDate(null)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  testID="clear-due-date-button"
-                >
-                  <Text style={{ color: "#94A3B8", fontSize: 15 }}>✕</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={{ color: "#94A3B8" }}>›</Text>
-              )}
-            </TouchableOpacity>
-
-            {Platform.OS === "ios" ? (
-              <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
-                <View style={{ flex: 1, justifyContent: "flex-end" }}>
-                  <Pressable
-                    style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15,23,42,0.35)" }}
-                    onPress={() => setShowDatePicker(false)}
-                  />
-                  <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: Math.max(insets.bottom, 16) }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                        <Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text>
-                      </TouchableOpacity>
-                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Due Date</Text>
-                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                        <Text style={{ color: "#4361EE", fontSize: 15, fontWeight: "700" }}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <DateTimePicker
-                      value={draftDueDate ?? new Date()}
-                      mode="date"
-                      display="inline"
-                      minimumDate={isRegularMember ? new Date() : undefined}
-                      onChange={(_e, date) => {
-                        if (!date) return;
-                        const next = new Date(date);
-                        next.setHours(23, 59, 59, 0);
-                        setDraftDueDate(next);
-                      }}
-                      testID="edit-date-time-picker"
-                      style={{ alignSelf: "center", marginHorizontal: 8 }}
-                    />
-                    <TouchableOpacity
-                      onPress={() => {
-                        setDraftDueDate(null);
-                        setShowDatePicker(false);
-                      }}
-                      style={{
-                        marginHorizontal: 20,
-                        marginTop: 4,
-                        marginBottom: 4,
-                        paddingVertical: 12,
-                        borderRadius: 12,
-                        backgroundColor: "#F8FAFC",
-                        borderWidth: 1,
-                        borderColor: "#E2E8F0",
-                        alignItems: "center",
-                      }}
-                      testID="clear-due-date-sheet-button"
-                    >
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>Clear date</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </Modal>
-            ) : showDatePicker ? (
-              <DateTimePicker
-                value={draftDueDate ?? new Date()}
-                mode="date"
-                display="calendar"
-                minimumDate={isRegularMember ? new Date() : undefined}
-                onChange={(_e, date) => {
-                  setShowDatePicker(false);
-                  if (!date) return;
-                  const next = new Date(date);
-                  next.setHours(23, 59, 59, 0);
-                  setDraftDueDate(next);
-                }}
-                testID="edit-date-time-picker"
-              />
-            ) : null}
-          </View>
-        ) : !showFocusedFeedbackTask && task.dueDate && !isCompleted ? (() => {
-          const overdue = isTaskOverdue(task);
-          const dueLabel = formatTaskDueDateLabel(task.dueDate, userTimeZone);
-          const dueToday =
-            !overdue &&
-            task.dueDate &&
-            formatTaskDueDateLabel(task.dueDate, userTimeZone) === formatTaskDueDateLabel(new Date(), userTimeZone);
-          return (
-            <View className="mb-4 flex-row items-center">
-              <View
-                className="flex-row items-center px-3 py-2 rounded-xl"
-                style={{ backgroundColor: overdue ? "#FEF2F2" : dueToday ? "#FFF7ED" : "#F8FAFC", gap: 6 }}
-              >
-                <Text style={{ fontSize: 14 }}>{overdue ? "⚠️" : "📅"}</Text>
-                {dueToday ? (
-                  <Text className="text-sm font-medium" style={{ color: "#EA580C" }}>Due today</Text>
-                ) : (
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Text className="text-sm font-medium" style={{ color: "#0F172A" }}>Due </Text>
-                    <Text className="text-sm font-medium" style={{ color: "#0F172A" }}>{dueLabel}</Text>
-                  </View>
-                )}
-                {overdue ? (
-                  <Text className="text-xs font-semibold" style={{ color: "#EF4444" }}>Overdue</Text>
-                ) : null}
-              </View>
-            </View>
-          );
-        })() : null}
-
-        {/* Meta */}
-        {!showFocusedFeedbackTask ? (
-        <View className="mt-2 pt-4 border-t border-slate-100 dark:border-slate-800" style={{ gap: 6 }}>
-          <Text className="text-xs text-slate-400">
-            Created {new Date(task.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-          </Text>
-          {task.dueDate ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={{ fontSize: 11, color: "#94A3B8" }}>⏱</Text>
-              <Text className="text-xs" style={{ color: "#0F172A" }}>
-                Due {formatTaskDueDateLabel(task.dueDate, userTimeZone)}
-              </Text>
-            </View>
-          ) : null}
-          {task.completedAt ? (() => {
-            const completedOverdue = task.completedAt && task.dueDate
-              ? new Date(task.completedAt) > new Date(task.dueDate)
-              : false;
-            return (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ fontSize: 11, color: completedOverdue ? "#F97316" : "#10B981" }}>✓</Text>
-                <Text className="text-xs">
-                  <Text style={{ color: completedOverdue ? "#F97316" : "#10B981" }}>
-                    {completedOverdue ? "Completed overdue" : "Completed"}
-                  </Text>
-                  {" "}
-                  <Text style={{ color: "#0F172A" }}>
-                    {new Date(task.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
-                  </Text>
-                </Text>
-              </View>
-            );
-          })() : null}
-        </View>
         ) : null}
 
         <View style={{ height: 32 }} />
