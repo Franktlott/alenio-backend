@@ -59,7 +59,7 @@ function SectionHeader({
   right,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   right?: React.ReactNode;
 }) {
   return (
@@ -87,9 +87,11 @@ function SectionHeader({
         >
           {title}
         </Text>
-        <Text style={{ fontSize: 11, color: "#94A3B8", lineHeight: 14 }} numberOfLines={1}>
-          {subtitle}
-        </Text>
+        {subtitle ? (
+          <Text style={{ fontSize: 11, color: "#94A3B8", lineHeight: 14 }} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
       {right}
     </View>
@@ -642,11 +644,7 @@ export default function ChatScreen() {
         <View style={{ flexShrink: 0, paddingTop: 6, paddingBottom: 2 }} testID="pinned-conversations-section">
           <SectionHeader
             title="Pinned"
-            subtitle={
-              pinnedConversations.length > 0
-                ? "Hold a circle to unpin"
-                : "Quick access at the top"
-            }
+            subtitle={pinnedConversations.length > 0 ? "Hold a circle to unpin" : undefined}
           />
           {pinnedConversations.length > 0 ? (
             <View
