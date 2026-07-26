@@ -75,8 +75,12 @@ export function OwnershipTransferModal({
       onStarted();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Transfer failed.";
-      if (/password|reauth|TRANSFER/i.test(msg)) {
+      // Only offer TRANSFER confirm when the server says this account has no password.
+      if (/typing TRANSFER|SSO reauthentication/i.test(msg)) {
         setUseSsoConfirm(true);
+        setPassword("");
+      } else {
+        setUseSsoConfirm(false);
       }
       onError(msg);
     } finally {
@@ -260,20 +264,14 @@ export function OwnershipTransferModal({
                     autoComplete="current-password"
                     placeholder="Password"
                   />
-                  <button
-                    type="button"
-                    className="enterprise-member-manage-secondary-btn"
-                    style={{ marginTop: 10 }}
-                    disabled={busy}
-                    onClick={() => setUseSsoConfirm(true)}
-                  >
-                    I use SSO / no password
-                  </button>
+                  <p className="enterprise-muted" style={{ fontSize: 12, marginTop: 8 }}>
+                    Required for accounts with email/password login.
+                  </p>
                 </>
               ) : (
                 <>
                   <p className="enterprise-muted" style={{ fontSize: 13 }}>
-                    Type <strong>TRANSFER</strong> to confirm (SSO reauthentication).
+                    This account uses SSO. Type <strong>TRANSFER</strong> to confirm.
                   </p>
                   <input
                     type="text"
@@ -287,7 +285,6 @@ export function OwnershipTransferModal({
                 </>
               )}
             </section>
-
             {error ? (
               <p className="enterprise-form-error enterprise-member-manage-error" role="alert">
                 {error}
