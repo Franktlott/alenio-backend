@@ -201,12 +201,22 @@ app.get("/api/app-version", (c) => {
     return null;
   };
 
+  const bulletsRaw = read("MOBILE_UPDATE_BULLETS");
+  const bullets = bulletsRaw
+    ? bulletsRaw
+        .split(bulletsRaw.includes("\n") ? "\n" : "|")
+        .map((line) => line.trim())
+        .filter(Boolean)
+    : [];
+
   return c.json({
     data: {
       latestVersion: read("MOBILE_LATEST_VERSION"),
       minimumVersion: read("MOBILE_MINIMUM_VERSION") || "0.0.0",
       iosStoreUrl: read("IOS_APP_STORE_URL"),
       androidStoreUrl: read("ANDROID_PLAY_STORE_URL"),
+      updateTitle: read("MOBILE_UPDATE_TITLE"),
+      bullets,
     },
   });
 });

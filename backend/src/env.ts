@@ -63,6 +63,15 @@ const envSchema = z.object({
    * Keep at 0.0.0 (or unset) until you need to force an upgrade.
    */
   MOBILE_MINIMUM_VERSION: z.string().optional().default("0.0.0"),
+  /**
+   * Optional title shown on the soft “Update available” modal (defaults on client).
+   */
+  MOBILE_UPDATE_TITLE: z.string().optional(),
+  /**
+   * Bullets for the update prompt. Use newlines or `|` between items.
+   * Old app builds fetch these from the API (local whats-new.ts cannot update them).
+   */
+  MOBILE_UPDATE_BULLETS: z.string().optional(),
   // Daily.co video
   DAILY_API_KEY: z.string().optional(),
   /** Optional: web Team/Pro checkout and customer portal (secret key and price id below) */

@@ -90,6 +90,8 @@ export function AppReleaseGate({ enabled }: { enabled: boolean }) {
           minimumVersion: "0.0.0",
           iosStoreUrl: null,
           androidStoreUrl: null,
+          updateTitle: null,
+          bullets: [],
         }}
         currentVersion={currentVersion}
         onDismiss={

@@ -10,11 +10,23 @@ export type WhatsNewEntry = {
 
 /**
  * Write 2–5 short bullets here whenever you bump expo.version in app.json.
- * Users see this once after upgrading to that version.
+ *
+ * - After users update: shown once by the What’s New modal for that version.
+ * - On the “Update available” prompt: used as a fallback when Railway has no
+ *   MOBILE_UPDATE_BULLETS yet. Old production installs need Railway bullets.
  */
 export const WHATS_NEW_BY_VERSION: Record<string, WhatsNewEntry> = {
   "1.0.03": {
     title: "What’s new in Alenio",
+    bullets: [
+      "Pin important chat messages and jump back to them anytime",
+      "Photos you remove from chats and profiles are cleaned up from storage",
+      "Clearer group member management for owners and admins",
+    ],
+  },
+  // Dev / test: matches MOBILE_LATEST_VERSION=9.9.9 so the update modal shows bullets locally.
+  "9.9.9": {
+    title: "What’s new in this update",
     bullets: [
       "Pin important chat messages and jump back to them anytime",
       "Photos you remove from chats and profiles are cleaned up from storage",
