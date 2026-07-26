@@ -1,6 +1,24 @@
 import { z } from "zod";
 import { applyEnvFromWeb } from "./lib/web-env";
 
+/**
+ * Railway (and some paste flows) occasionally create env keys with trailing spaces
+ * (e.g. "OPENAI_API_KEY " / "MOBILE_LATEST_VERSION "). Copy trimmed aliases so Zod sees them.
+ */
+function normalizeProcessEnvKeyAliases(): void {
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    const trimmedKey = key.trim();
+    if (!trimmedKey || trimmedKey === key) continue;
+    const existing = process.env[trimmedKey];
+    if (existing === undefined || !String(existing).trim()) {
+      process.env[trimmedKey] = value;
+    }
+  }
+}
+
+normalizeProcessEnvKeyAliases();
+
 /** Pull DATABASE_URL from web/.env when present (same DB as the web app). */
 applyEnvFromWeb();
 

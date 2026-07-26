@@ -189,12 +189,24 @@ app.get("/health", (c) => c.json(buildHealthPayload()));
 
 /** Public mobile version gate — soft update nudge + optional force minimum. */
 app.get("/api/app-version", (c) => {
+  // Prefer live process.env (trimmed) so Railway key typos with trailing spaces still work.
+  const read = (name: keyof typeof env | string) => {
+    const fromEnv = (env as Record<string, string | undefined>)[name];
+    if (fromEnv?.trim()) return fromEnv.trim();
+    const direct = process.env[name]?.trim();
+    if (direct) return direct;
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key.trim() === name && value?.trim()) return value.trim();
+    }
+    return null;
+  };
+
   return c.json({
     data: {
-      latestVersion: env.MOBILE_LATEST_VERSION?.trim() || null,
-      minimumVersion: env.MOBILE_MINIMUM_VERSION?.trim() || "0.0.0",
-      iosStoreUrl: env.IOS_APP_STORE_URL?.trim() || null,
-      androidStoreUrl: env.ANDROID_PLAY_STORE_URL?.trim() || null,
+      latestVersion: read("MOBILE_LATEST_VERSION"),
+      minimumVersion: read("MOBILE_MINIMUM_VERSION") || "0.0.0",
+      iosStoreUrl: read("IOS_APP_STORE_URL"),
+      androidStoreUrl: read("ANDROID_PLAY_STORE_URL"),
     },
   });
 });
