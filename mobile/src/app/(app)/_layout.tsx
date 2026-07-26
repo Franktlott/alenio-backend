@@ -22,6 +22,7 @@ import { useEffect, useMemo } from "react";
 import type { CalendarEvent, Conversation, Team, Task } from "@/lib/types";
 import MeetingBanner from "@/components/MeetingBanner";
 import { SenecaFloatingLauncher } from "@/components/seneca/SenecaFloatingLauncher";
+import { AppReleaseGate } from "@/components/AppReleaseGate";
 import { NO_WORKSPACE_WELCOME_PATH, resolveActiveTeamId } from "@/lib/no-workspace-routing";
 import { realtimeClient, userRealtimeChannel } from "@/lib/realtime-client";
 
@@ -408,6 +409,7 @@ export default function AppLayout() {
     return (
       <View style={[styles.shell, { alignItems: "center", justifyContent: "center", backgroundColor: "transparent" }]}>
         <ActivityIndicator size="large" color="#4361EE" />
+        <AppReleaseGate enabled={!!session?.user} />
       </View>
     );
   }
@@ -427,6 +429,7 @@ export default function AppLayout() {
       </Tabs>
       <MeetingBanner />
       <SenecaFloatingLauncher />
+      <AppReleaseGate enabled={!!session?.user} />
     </View>
   );
 }

@@ -140,7 +140,7 @@ const startupSchemaReady = Promise.all([
 ]);
 
 function isFastPublicPath(path: string): boolean {
-  return path === "/health";
+  return path === "/health" || path === "/api/app-version";
 }
 
 function buildHealthPayload() {
@@ -186,6 +186,18 @@ const BACKEND_BUILD_MARKER = env.BACKEND_BUILD_MARKER;
 
 // Fast health for Railway — must not wait on schema/auth startup work.
 app.get("/health", (c) => c.json(buildHealthPayload()));
+
+/** Public mobile version gate — soft update nudge + optional force minimum. */
+app.get("/api/app-version", (c) => {
+  return c.json({
+    data: {
+      latestVersion: env.MOBILE_LATEST_VERSION?.trim() || null,
+      minimumVersion: env.MOBILE_MINIMUM_VERSION?.trim() || "0.0.0",
+      iosStoreUrl: env.IOS_APP_STORE_URL?.trim() || null,
+      androidStoreUrl: env.ANDROID_PLAY_STORE_URL?.trim() || null,
+    },
+  });
+});
 
 /** Diagnostics + force-sync for Walk Builder tables (public schema). */
 app.get("/api/walks-schema-check", async (c) => {

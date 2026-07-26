@@ -35,6 +35,16 @@ const envSchema = z.object({
   /** Optional: linked from team invite emails */
   IOS_APP_STORE_URL: z.string().optional(),
   ANDROID_PLAY_STORE_URL: z.string().optional(),
+  /**
+   * Latest mobile store version (e.g. 1.0.04). Soft "update available" when the app is behind.
+   * Leave unset to disable soft update prompts.
+   */
+  MOBILE_LATEST_VERSION: z.string().optional(),
+  /**
+   * Minimum supported mobile version. Below this, the app shows a blocking update screen.
+   * Keep at 0.0.0 (or unset) until you need to force an upgrade.
+   */
+  MOBILE_MINIMUM_VERSION: z.string().optional().default("0.0.0"),
   // Daily.co video
   DAILY_API_KEY: z.string().optional(),
   /** Optional: web Team/Pro checkout and customer portal (secret key and price id below) */
