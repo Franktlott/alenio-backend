@@ -24,7 +24,16 @@ export type SenecaWorkspaceMemberRow = {
   daysSinceLastOneOnOne: number | null;
   activeDevGoals: number;
   checkInStatus?: MemberStandardsCompliance["checkInStatus"];
+  /** Clear risk label for Seneca — distinguishes never checked in from truly overdue. */
+  checkInRisk?: "no_check_in_yet" | "overdue" | "due_soon" | "on_track" | "not_required";
+  checkInActionText?: string;
   goalsStatus?: MemberStandardsCompliance["goalsStatus"];
+};
+
+export type SenecaMemberCheckInNeed = {
+  name: string;
+  reason: "no_check_in_yet" | "overdue" | "due_soon";
+  daysSinceLastOneOnOne: number | null;
 };
 
 export type SenecaStaleDevelopmentGoal = {
@@ -86,7 +95,9 @@ export type SenecaWorkspaceContext = {
   managerName: string | null;
   members: SenecaWorkspaceMemberRow[];
   overdueTasks: Array<{ title: string; assigneeNames: string[]; dueDate: string | null }>;
-  membersNeedingCheckIn: Array<{ name: string; daysSinceLastOneOnOne: number }>;
+  membersNeedingCheckIn: SenecaMemberCheckInNeed[];
+  /** Count of published check-ins represented in lastCheckIns (0 = none ever for this roster snapshot). */
+  publishedCheckInCount: number;
   activeDevelopmentGoalsCount: number;
   developmentGoalsNearingInactive: SenecaStaleDevelopmentGoal[];
   inactiveDevelopmentGoals: SenecaStaleDevelopmentGoal[];
@@ -170,7 +181,12 @@ function priorityRank(priority: string): number {
 /** Empty enrichment lists for lightweight / roster-only contexts. */
 export function emptySenecaWorkspaceEnrichment(): Pick<
   SenecaWorkspaceContext,
-  "upcomingCalendar" | "lastCheckIns" | "openTasks" | "activeGoalDetails" | "recentWins"
+  | "upcomingCalendar"
+  | "lastCheckIns"
+  | "openTasks"
+  | "activeGoalDetails"
+  | "recentWins"
+  | "publishedCheckInCount"
 > {
   return {
     upcomingCalendar: [],
@@ -178,6 +194,7 @@ export function emptySenecaWorkspaceEnrichment(): Pick<
     openTasks: [],
     activeGoalDetails: [],
     recentWins: [],
+    publishedCheckInCount: 0,
   };
 }
 
@@ -433,6 +450,17 @@ export async function buildSenecaWorkspaceContext(
       daysSinceLastOneOnOne,
       activeDevGoals,
       checkInStatus: compliance.checkInStatus,
+      checkInRisk:
+        compliance.checkInStatus === "not_required"
+          ? "not_required"
+          : daysSinceLastOneOnOne === null && compliance.checkInStatus === "overdue"
+            ? "no_check_in_yet"
+            : compliance.checkInStatus === "overdue"
+              ? "overdue"
+              : compliance.checkInStatus === "due_soon"
+                ? "due_soon"
+                : "on_track",
+      checkInActionText: compliance.checkInActionText,
       goalsStatus: compliance.goalsStatus,
     };
   });
@@ -599,18 +627,29 @@ export async function buildSenecaWorkspaceContext(
         : Math.round(healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length),
   };
 
-  const membersNeedingCheckIn = memberRows
+  const membersNeedingCheckIn: SenecaMemberCheckInNeed[] = memberRows
     .filter((row) => {
       const raw = members.find((m) => m.userId === row.userId);
       if (!raw || raw.role === "owner") return false;
       if (!workplaceStandards.checkInRequired) return false;
-      return row.checkInStatus === "overdue" || row.checkInStatus === "due_soon";
+      return row.checkInRisk === "no_check_in_yet" || row.checkInRisk === "overdue" || row.checkInRisk === "due_soon";
     })
     .map((m) => ({
       name: m.name,
-      daysSinceLastOneOnOne: m.daysSinceLastOneOnOne ?? 999,
+      reason: (m.checkInRisk === "due_soon"
+        ? "due_soon"
+        : m.checkInRisk === "overdue"
+          ? "overdue"
+          : "no_check_in_yet") as SenecaMemberCheckInNeed["reason"],
+      daysSinceLastOneOnOne: m.daysSinceLastOneOnOne,
     }))
-    .sort((a, b) => b.daysSinceLastOneOnOne - a.daysSinceLastOneOnOne)
+    .sort((a, b) => {
+      const rank = (reason: SenecaMemberCheckInNeed["reason"]) =>
+        reason === "overdue" ? 0 : reason === "no_check_in_yet" ? 1 : 2;
+      const rankDiff = rank(a.reason) - rank(b.reason);
+      if (rankDiff !== 0) return rankDiff;
+      return (b.daysSinceLastOneOnOne ?? -1) - (a.daysSinceLastOneOnOne ?? -1);
+    })
     .slice(0, 8);
 
   return {
@@ -619,6 +658,7 @@ export async function buildSenecaWorkspaceContext(
     members: memberRows,
     overdueTasks: [...overdueTaskMap.values()].slice(0, 10),
     membersNeedingCheckIn,
+    publishedCheckInCount: lastCheckIns.length,
     activeDevelopmentGoalsCount: [...devGoalCountByUser.values()].reduce((sum, n) => sum + n, 0),
     developmentGoalsNearingInactive: goalAlerts.nearingInactive
       .filter((alert) => memberUserIds.has(alert.memberUserId))
@@ -650,8 +690,11 @@ export function senecaWorkspaceContextToPrompt(ctx: SenecaWorkspaceContext): str
         activeTasks: member.activeTasks,
         completedTasksThisMonth: member.completedTasksThisMonth,
         daysSinceLastOneOnOne: member.daysSinceLastOneOnOne,
+        hasPublishedCheckIn: member.daysSinceLastOneOnOne !== null,
         activeDevGoals: member.activeDevGoals,
         checkInStatus: member.checkInStatus,
+        checkInRisk: member.checkInRisk,
+        checkInActionText: member.checkInActionText,
         goalsStatus: member.goalsStatus,
       })),
       overdueTasks: ctx.overdueTasks,
@@ -663,6 +706,8 @@ export function senecaWorkspaceContextToPrompt(ctx: SenecaWorkspaceContext): str
         dueDate: task.dueDate,
         overdue: task.overdue,
       })),
+      publishedCheckInCount: ctx.publishedCheckInCount,
+      noPublishedCheckInsYet: ctx.publishedCheckInCount === 0,
       membersNeedingCheckIn: ctx.membersNeedingCheckIn,
       upcomingCalendar: ctx.upcomingCalendar,
       lastCheckIns: ctx.lastCheckIns.map((checkIn) => ({

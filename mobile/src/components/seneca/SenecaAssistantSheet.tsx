@@ -9,12 +9,27 @@ import {
   StyleSheet,
   Keyboard,
   Linking,
+  useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowUp, Briefcase, ChevronRight, Lock, MoreHorizontal, Printer, Share2, X } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import {
+  ArrowUp,
+  CheckSquare,
+  ChevronRight,
+  ClipboardList,
+  History,
+  Lock,
+  MessagesSquare,
+  MoreHorizontal,
+  Paperclip,
+  Printer,
+  Share2,
+  Sparkles,
+  UserCog,
+  X,
+} from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "burnt";
@@ -35,26 +50,88 @@ import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { api } from "@/lib/api/api";
 import type { Team } from "@/lib/types";
 import { printSenecaChat, shareSenecaChat } from "@/lib/seneca-chat-share";
+import { ME_QUERY_KEY, fetchMeUser } from "@/lib/auth/me-query";
 
-function ThinkingDots() {
-  const [step, setStep] = useState(0);
+const COLORS = {
+  bg: "#FFFFFF",
+  surface: "#FFFFFF",
+  surfaceSoft: "#F8FAFC",
+  surfaceMute: "#F1F5F9",
+  border: "#E8EDF3",
+  borderLight: "#EEF2F6",
+  text: "#0F172A",
+  textMuted: "#64748B",
+  textSoft: "#94A3B8",
+  brand: "#6D28D9",
+  brandBright: "#7C3AED",
+  brandSoft: "#F3E8FF",
+  brandBorder: "#E9D5FF",
+  send: "#7C3AED",
+};
+
+type PreparingKind = "default" | "coach" | "oneOnOne" | "checkIns" | "plan";
+
+function preparingLabel(kind: PreparingKind): string {
+  switch (kind) {
+    case "coach":
+      return "Considering your leadership approach…";
+    case "oneOnOne":
+      return "Building your talking points…";
+    case "checkIns":
+      return "Reviewing recent check-ins…";
+    case "plan":
+      return "Drafting your plan…";
+    default:
+      return "Preparing guidance…";
+  }
+}
+
+function resolvePreparingKind(question: string): PreparingKind {
+  const q = question.toLowerCase();
+  if (/\b(1:1|1-1|one[- ]?on[- ]?one|talking points|prepare.*(check[- ]?in|meeting))\b/.test(q)) {
+    return "oneOnOne";
+  }
+  if (/\b(check[- ]?ins?|recent check|team trends|summarize.*check)\b/.test(q)) {
+    return "checkIns";
+  }
+  if (/\b(task|checklist|assign|follow[- ]?up|plan for|create a)\b/.test(q)) {
+    return "plan";
+  }
+  if (/\b(coach|feedback|leadership|engage|motivat)\b/.test(q)) {
+    return "coach";
+  }
+  return "default";
+}
+
+function timeBasedGreeting(date = new Date()): string {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function firstNameFrom(name?: string | null): string {
+  const trimmed = name?.trim();
+  if (!trimmed) return "there";
+  return trimmed.split(/\s+/)[0] ?? "there";
+}
+
+function PreparingStatus({ kind }: { kind: PreparingKind }) {
+  const [pulse, setPulse] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => setStep((s) => (s + 1) % 3), 380);
+    const id = setInterval(() => setPulse((value) => (value + 1) % 3), 420);
     return () => clearInterval(id);
   }, []);
 
+  const opacity = 0.45 + pulse * 0.27;
+
   return (
-    <View style={styles.thinkingRow} testID="seneca-thinking" accessibilityLabel="preparing guidance">
-      <View style={styles.thinkingDots}>
-        {[0, 1, 2].map((i) => (
-          <View
-            key={i}
-            style={[styles.thinkingDot, { opacity: step === i ? 1 : 0.28 }]}
-          />
-        ))}
+    <View style={styles.thinkingRow} testID="seneca-thinking" accessibilityLabel={preparingLabel(kind)}>
+      <View style={[styles.thinkingSparkle, { opacity }]}>
+        <Sparkles size={13} color={COLORS.brandBright} strokeWidth={2.2} />
       </View>
-      <Text style={styles.thinkingText}>preparing guidance...</Text>
+      <Text style={styles.thinkingText}>{preparingLabel(kind)}</Text>
     </View>
   );
 }
@@ -74,18 +151,48 @@ type SenecaChatMessage = {
   createTaskProposal?: SenecaCreateTaskProposal | null;
 };
 
-const COLORS = {
-  bg: "#F4F6F8",
-  surface: "#FFFFFF",
-  border: "#E2E8F0",
-  borderLight: "#EEF2F6",
-  text: "#0F172A",
-  textMuted: "#64748B",
-  textSoft: "#94A3B8",
-  brand: "#4361EE",
-  brandSoft: "#EEF2FF",
-  brandBorder: "#C7D2FE",
+type QuickAction = {
+  id: "coach" | "prepare_1on1" | "review_checkins" | "create_task";
+  title: string;
+  description: string;
+  prompt: string;
+  Icon: typeof UserCog;
 };
+
+const QUICK_ACTIONS: QuickAction[] = [
+  {
+    id: "coach",
+    title: "Coach me",
+    description: "Get advice on a leadership challenge",
+    prompt:
+      "Using this workspace's live data, who needs coaching most this week and why? Name specific people, cite overdue tasks / check-in status / goal risk, and give me 2 concrete coaching moves I can take.",
+    Icon: UserCog,
+  },
+  {
+    id: "prepare_1on1",
+    title: "Prepare a 1:1",
+    description: "Build talking points for your 1:1",
+    prompt:
+      "Who should I check in with next in this workspace? Use membersNeedingCheckIn, upcomingCalendar, openTasks, and lastCheckIns. Give talking points from their last check-in notes plus current overdue/open work, then offer to schedule the 1:1.",
+    Icon: MessagesSquare,
+  },
+  {
+    id: "review_checkins",
+    title: "Review check-ins",
+    description: "Analyze progress and team trends",
+    prompt:
+      "Summarize check-in status for this workspace right now. If noPublishedCheckInsYet is true, say there are no published check-ins yet (not that everyone is overdue). Otherwise separate no_check_in_yet vs overdue vs due_soon, note lastCheckIns highlights when present, and give the top 3 actions for this week.",
+    Icon: ClipboardList,
+  },
+  {
+    id: "create_task",
+    title: "Create a task",
+    description: "Build a task or checklist",
+    prompt:
+      "Based on overdue tasks and last-check-in follow-ups in this workspace, draft the top 1–2 follow-up tasks I should assign. Include assignee names, clear titles, and suggested due dates, then ask me to confirm.",
+    Icon: CheckSquare,
+  },
+];
 
 function StickyAskBar({
   value,
@@ -103,42 +210,51 @@ function StickyAskBar({
   const canSend = value.trim().length > 0 && !disabled;
 
   return (
-    <View style={[styles.askBar, { paddingBottom: Math.max(bottomInset, 8) }]}>
-      <View style={styles.askBarDivider} />
-      <View style={styles.askBarInner}>
+    <View style={[styles.askBar, { paddingBottom: Math.max(bottomInset, 10) }]}>
+      <View style={styles.askComposer}>
         <TextInput
           style={styles.askInput}
-          placeholder="Ask a leadership question…"
+          placeholder="Ask Seneca anything…"
           placeholderTextColor={COLORS.textSoft}
           value={value}
           onChangeText={onChange}
-          returnKeyType="send"
-          onSubmitEditing={() => {
-            if (canSend) onSend();
-          }}
+          multiline
+          maxLength={4000}
+          returnKeyType="default"
+          blurOnSubmit={false}
           editable={!disabled}
           testID="seneca-ask-input"
         />
-        <Pressable onPress={onSend} disabled={!canSend} testID="seneca-ask-submit">
-          {canSend ? (
-            <LinearGradient
-              colors={["#4361EE", "#7C3AED"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.sendBtn}
-            >
-              <ArrowUp size={16} color="#FFFFFF" strokeWidth={2.6} />
-            </LinearGradient>
-          ) : (
-            <View style={[styles.sendBtn, styles.sendBtnDisabled]}>
-              <ArrowUp size={16} color="#94A3B8" strokeWidth={2.6} />
-            </View>
-          )}
-        </Pressable>
+        <View style={styles.askComposerFooter}>
+          <Pressable
+            onPress={() =>
+              toast({
+                title: "Attachments coming soon",
+                preset: "none",
+              })
+            }
+            disabled={disabled}
+            hitSlop={8}
+            accessibilityLabel="Add attachment"
+            testID="seneca-attach-button"
+            style={styles.attachBtn}
+          >
+            <Paperclip size={18} color={COLORS.textSoft} strokeWidth={2.1} />
+          </Pressable>
+          <Pressable
+            onPress={onSend}
+            disabled={!canSend}
+            testID="seneca-ask-submit"
+            accessibilityLabel="Send message"
+            style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+          >
+            <ArrowUp size={16} color="#FFFFFF" strokeWidth={2.6} />
+          </Pressable>
+        </View>
       </View>
       <View style={styles.privacyRow}>
         <Lock size={10} color={COLORS.textSoft} strokeWidth={2.2} />
-        <Text style={styles.privacyText}>Private · Verify AI guidance · Settings at </Text>
+        <Text style={styles.privacyText}> Private · AI guidance · Settings · </Text>
         <Text
           style={styles.settingsLink}
           onPress={() => {
@@ -154,6 +270,7 @@ function StickyAskBar({
 
 export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const activeTeamIdFromStore = useTeamStore((s) => s.activeTeamId);
   const activeTeamId = teamIdProp ?? activeTeamIdFromStore ?? "";
   const { data: teams = [] } = useQuery({
@@ -161,14 +278,34 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
     queryFn: () => api.get<Team[]>("/api/teams"),
     enabled: open,
   });
+  const { data: me } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () => fetchMeUser(),
+    enabled: open,
+  });
+
   const workspaceName = useMemo(
     () => teams.find((team) => team.id === activeTeamId)?.name ?? "Workspace",
     [teams, activeTeamId],
   );
+  const userFirstName = firstNameFrom(me?.name);
+  const greeting = timeBasedGreeting();
+
+  const suggestedPrompts = useMemo(
+    () => [
+      `Who is most at risk in ${workspaceName} this week, and what should I do first?`,
+      `Summarize overdue work and check-in gaps for ${workspaceName}.`,
+      `Which follow-up tasks should I assign from recent check-ins in ${workspaceName}?`,
+    ],
+    [workspaceName],
+  );
+
+  const actionCardWidth = Math.max(140, Math.floor((windowWidth - 24 - 10) / 2));
 
   const [chatMessages, setChatMessages] = useState<SenecaChatMessage[]>([]);
   const [askDraft, setAskDraft] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [preparingKind, setPreparingKind] = useState<PreparingKind>("default");
   const [chatError, setChatError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -195,6 +332,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
     setChatMessages([]);
     setAskDraft("");
     setThinking(false);
+    setPreparingKind("default");
     setChatError(null);
     setMoreOpen(false);
   }, []);
@@ -210,7 +348,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
   }, [open, resetChat]);
 
   const runAsk = useCallback(
-    (question: string) => {
+    (question: string, kindOverride?: PreparingKind) => {
       if (!activeTeamId) return;
 
       const trimmed = question.trim();
@@ -227,9 +365,11 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
       };
 
       setChatMessages((prev) => [...prev, userMessage]);
+      setPreparingKind(kindOverride ?? resolvePreparingKind(trimmed));
       setThinking(true);
       setChatError(null);
       setAskDraft("");
+      setMoreOpen(false);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
       void (async () => {
@@ -348,6 +488,19 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
     quickActionNavigate(kind, activeTeamId);
   };
 
+  const onQuickAction = (action: QuickAction) => {
+    if (!activeTeamId || thinking) return;
+    const kind: PreparingKind =
+      action.id === "coach"
+        ? "coach"
+        : action.id === "prepare_1on1"
+          ? "oneOnOne"
+          : action.id === "review_checkins"
+            ? "checkIns"
+            : "plan";
+    runAsk(action.prompt, kind);
+  };
+
   const shareMessages = useMemo(
     () => chatMessages.map((message) => ({ role: message.role, text: message.text })),
     [chatMessages],
@@ -385,7 +538,15 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
     }
   }, [shareMessages, workspaceName]);
 
+  const onHistoryPress = useCallback(() => {
+    toast({
+      title: "Chat history coming soon",
+      preset: "none",
+    });
+  }, []);
+
   const canExport = chatMessages.length > 0 && !thinking && !exporting;
+  const showHome = !!activeTeamId && chatMessages.length === 0 && !thinking && !chatError;
 
   return (
     <Modal visible={open} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
@@ -394,16 +555,11 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
           <View style={styles.headerBar}>
             <View style={styles.header}>
               <View style={styles.headerIconWrap}>
-                <SenecaIcon size={24} />
+                <SenecaIcon size={28} />
               </View>
               <View style={styles.headerText}>
-                <View style={styles.headerTitleRow}>
-                  <Text style={styles.headerTitle}>Seneca</Text>
-                  <View style={styles.headerBadge}>
-                    <Text style={styles.headerBadgeText}>BETA</Text>
-                  </View>
-                </View>
-                <Text style={styles.headerSubtitle}>AI leadership assistant</Text>
+                <Text style={styles.headerTitle}>Seneca</Text>
+                <Text style={styles.headerSubtitle}>AI Leadership Assistant</Text>
               </View>
               <View style={styles.headerActions}>
                 <Pressable
@@ -413,23 +569,23 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   accessibilityLabel="Share Seneca chat"
                   testID="seneca-share-button"
                 >
-                  <Share2 size={16} color={canExport ? COLORS.textMuted : COLORS.textSoft} />
+                  <Share2 size={15} color={canExport ? COLORS.textMuted : COLORS.textSoft} strokeWidth={2.1} />
                 </Pressable>
                 <Pressable
-                  onPress={() => void onPrintChat()}
-                  disabled={!canExport}
-                  style={[styles.headerIconBtn, !canExport && styles.headerIconBtnDisabled]}
-                  accessibilityLabel="Print Seneca chat"
-                  testID="seneca-print-button"
+                  onPress={onHistoryPress}
+                  style={styles.headerIconBtn}
+                  accessibilityLabel="Chat history"
+                  testID="seneca-history-button"
                 >
-                  <Printer size={16} color={canExport ? COLORS.textMuted : COLORS.textSoft} />
+                  <History size={15} color={COLORS.textMuted} strokeWidth={2.1} />
                 </Pressable>
                 <Pressable
                   onPress={() => setMoreOpen((value) => !value)}
                   style={[styles.headerIconBtn, moreOpen && styles.headerIconBtnActive]}
+                  accessibilityLabel="More actions"
                   testID="seneca-more-menu"
                 >
-                  <MoreHorizontal size={16} color={moreOpen ? COLORS.brand : COLORS.textMuted} />
+                  <MoreHorizontal size={15} color={moreOpen ? COLORS.brandBright : COLORS.textMuted} strokeWidth={2.1} />
                 </Pressable>
                 <Pressable
                   onPress={handleClose}
@@ -437,56 +593,123 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   style={styles.headerIconBtn}
                   testID="seneca-close-button"
                 >
-                  <X size={16} color={COLORS.textMuted} strokeWidth={2.2} />
+                  <X size={15} color={COLORS.textMuted} strokeWidth={2.2} />
                 </Pressable>
               </View>
             </View>
           </View>
 
-            {moreOpen ? (
-              <View style={styles.moreMenu}>
-                <Text style={styles.moreMenuLabel}>Quick actions</Text>
-                <Pressable
-                  style={styles.moreItem}
-                  onPress={() => void onShareChat()}
-                  disabled={!canExport}
-                  testID="seneca-more-share"
-                >
-                  <Text style={[styles.moreItemText, !canExport && styles.moreItemTextDisabled]}>Share chat</Text>
-                  <Share2 size={15} color={canExport ? COLORS.textSoft : COLORS.border} />
-                </Pressable>
-                <Pressable
-                  style={styles.moreItem}
-                  onPress={() => void onPrintChat()}
-                  disabled={!canExport}
-                  testID="seneca-more-print"
-                >
-                  <Text style={[styles.moreItemText, !canExport && styles.moreItemTextDisabled]}>Print chat</Text>
-                  <Printer size={15} color={canExport ? COLORS.textSoft : COLORS.border} />
-                </Pressable>
-                <Pressable style={styles.moreItem} onPress={() => onMoreAction("task")} testID="seneca-more-task">
-                  <Text style={styles.moreItemText}>Create task</Text>
-                  <ChevronRight size={15} color={COLORS.textSoft} />
-                </Pressable>
-                <Pressable
-                  style={styles.moreItem}
-                  onPress={() => onMoreAction("checklist")}
-                  testID="seneca-more-checklist"
-                >
-                  <Text style={styles.moreItemText}>Create checklist</Text>
-                  <ChevronRight size={15} color={COLORS.textSoft} />
-                </Pressable>
-                <Pressable
-                  style={[styles.moreItem, styles.moreItemLast]}
-                  onPress={() => onMoreAction("check_in")}
-                  testID="seneca-more-checkin"
-                >
-                  <Text style={styles.moreItemText}>Schedule check-in</Text>
-                  <ChevronRight size={15} color={COLORS.textSoft} />
-                </Pressable>
-              </View>
-            ) : null}
+          {moreOpen ? (
+            <View style={styles.moreMenu}>
+              <Text style={styles.moreMenuLabel}>Quick actions</Text>
+              <Pressable
+                style={styles.moreItem}
+                onPress={() => void onShareChat()}
+                disabled={!canExport}
+                testID="seneca-more-share"
+              >
+                <Text style={[styles.moreItemText, !canExport && styles.moreItemTextDisabled]}>Share chat</Text>
+                <Share2 size={15} color={canExport ? COLORS.textSoft : COLORS.border} />
+              </Pressable>
+              <Pressable
+                style={styles.moreItem}
+                onPress={() => void onPrintChat()}
+                disabled={!canExport}
+                testID="seneca-more-print"
+              >
+                <Text style={[styles.moreItemText, !canExport && styles.moreItemTextDisabled]}>Print chat</Text>
+                <Printer size={15} color={canExport ? COLORS.textSoft : COLORS.border} />
+              </Pressable>
+              <Pressable style={styles.moreItem} onPress={() => onMoreAction("task")} testID="seneca-more-task">
+                <Text style={styles.moreItemText}>Create task</Text>
+                <ChevronRight size={15} color={COLORS.textSoft} />
+              </Pressable>
+              <Pressable
+                style={styles.moreItem}
+                onPress={() => onMoreAction("checklist")}
+                testID="seneca-more-checklist"
+              >
+                <Text style={styles.moreItemText}>Create checklist</Text>
+                <ChevronRight size={15} color={COLORS.textSoft} />
+              </Pressable>
+              <Pressable
+                style={[styles.moreItem, styles.moreItemLast]}
+                onPress={() => onMoreAction("check_in")}
+                testID="seneca-more-checkin"
+              >
+                <Text style={styles.moreItemText}>Schedule check-in</Text>
+                <ChevronRight size={15} color={COLORS.textSoft} />
+              </Pressable>
+            </View>
+          ) : null}
 
+          {showHome ? (
+            <View style={styles.homePane} testID="seneca-home">
+              <View style={styles.welcomeSection}>
+                <View style={styles.welcomeSparkle}>
+                  <Sparkles size={14} color={COLORS.brandBright} strokeWidth={2.2} />
+                </View>
+                <Text style={styles.welcomeGreeting} accessibilityRole="header">
+                  {greeting}, <Text style={styles.welcomeName}>{userFirstName}</Text>
+                </Text>
+                <Text style={styles.welcomeSupport} numberOfLines={2}>
+                  Helping leaders coach, recognize, and develop their teams.
+                </Text>
+              </View>
+
+              <View style={styles.actionGrid}>
+                {QUICK_ACTIONS.map((action) => {
+                  const Icon = action.Icon;
+                  return (
+                    <Pressable
+                      key={action.id}
+                      onPress={() => onQuickAction(action)}
+                      style={[styles.actionCard, { width: actionCardWidth }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={action.title}
+                      testID={`seneca-quick-${action.id}`}
+                    >
+                      <View style={styles.actionCardTop}>
+                        <View style={styles.actionIconWrap}>
+                          <Icon size={14} color={COLORS.brandBright} strokeWidth={2.15} />
+                        </View>
+                        <ChevronRight size={13} color={COLORS.textSoft} strokeWidth={2.2} />
+                      </View>
+                      <Text style={styles.actionTitle}>{action.title}</Text>
+                      <Text style={styles.actionDescription} numberOfLines={2}>
+                        {action.description}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={styles.tryAskingSection}>
+                <View style={styles.tryAskingHeader}>
+                  <View style={styles.tryAskingLine} />
+                  <Text style={styles.tryAskingLabel}>Try asking</Text>
+                  <View style={styles.tryAskingLine} />
+                </View>
+                <View style={styles.tryAskingList}>
+                  {suggestedPrompts.map((prompt) => (
+                    <Pressable
+                      key={prompt}
+                      onPress={() => runAsk(prompt)}
+                      style={styles.tryAskingPill}
+                      accessibilityRole="button"
+                      accessibilityLabel={prompt}
+                      testID="seneca-suggested-prompt"
+                    >
+                      <Sparkles size={12} color={COLORS.brandBright} strokeWidth={2.2} />
+                      <Text style={styles.tryAskingText} numberOfLines={1}>
+                        {prompt}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+          ) : (
             <ScrollView
               ref={chatScrollRef}
               style={styles.scroll}
@@ -503,16 +726,6 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   <Text style={styles.emptyTitle}>Workspace required</Text>
                   <Text style={styles.emptyText}>Join a workspace to chat with Seneca.</Text>
                 </View>
-              ) : chatMessages.length === 0 && !thinking ? (
-                <View style={styles.welcomeCard}>
-                  <View style={styles.welcomeIconWrap}>
-                    <Briefcase size={18} color={COLORS.brand} strokeWidth={2} />
-                  </View>
-                  <Text style={styles.welcomeTitle}>How can I support your team?</Text>
-                  <Text style={styles.welcomeText}>
-                    Coaching, check-ins, and leadership prep for this workspace.
-                  </Text>
-                </View>
               ) : null}
 
               {chatMessages.map((chatMessage) =>
@@ -522,40 +735,41 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   </View>
                 ) : (
                   <View key={chatMessage.id} style={styles.senecaBlock}>
-                    <View style={styles.senecaAccent} />
                     <View style={styles.senecaBlockBody}>
                       <View style={styles.senecaBlockHead}>
-                        <SenecaIcon size={16} />
+                        <View style={styles.senecaBlockAvatar}>
+                          <SenecaIcon size={16} />
+                        </View>
                         <Text style={styles.senecaBlockName}>Seneca</Text>
                       </View>
                       <Text style={styles.senecaMessage}>{chatMessage.text}</Text>
 
-                    {chatMessage.cancelProposal && activeTeamId ? (
-                      <SenecaCancelCheckInCard
-                        teamId={activeTeamId}
-                        proposal={chatMessage.cancelProposal}
-                        onCancelled={(summary) => onCheckInCancelled(chatMessage.id, summary)}
-                        onDismiss={() => dismissCancelProposal(chatMessage.id)}
-                      />
-                    ) : null}
+                      {chatMessage.cancelProposal && activeTeamId ? (
+                        <SenecaCancelCheckInCard
+                          teamId={activeTeamId}
+                          proposal={chatMessage.cancelProposal}
+                          onCancelled={(summary) => onCheckInCancelled(chatMessage.id, summary)}
+                          onDismiss={() => dismissCancelProposal(chatMessage.id)}
+                        />
+                      ) : null}
 
-                    {chatMessage.planProposal && activeTeamId ? (
-                      <SenecaPlanCheckInCard
-                        teamId={activeTeamId}
-                        proposal={chatMessage.planProposal}
-                        onSaved={(summary) => onPlanCheckInSaved(chatMessage.id, summary)}
-                        onDismiss={() => dismissPlanProposal(chatMessage.id)}
-                      />
-                    ) : null}
+                      {chatMessage.planProposal && activeTeamId ? (
+                        <SenecaPlanCheckInCard
+                          teamId={activeTeamId}
+                          proposal={chatMessage.planProposal}
+                          onSaved={(summary) => onPlanCheckInSaved(chatMessage.id, summary)}
+                          onDismiss={() => dismissPlanProposal(chatMessage.id)}
+                        />
+                      ) : null}
 
-                    {chatMessage.createTaskProposal && activeTeamId ? (
-                      <SenecaCreateTaskCard
-                        teamId={activeTeamId}
-                        proposal={chatMessage.createTaskProposal}
-                        onSaved={(summary) => onTaskCreated(chatMessage.id, summary)}
-                        onDismiss={() => dismissCreateTaskProposal(chatMessage.id)}
-                      />
-                    ) : null}
+                      {chatMessage.createTaskProposal && activeTeamId ? (
+                        <SenecaCreateTaskCard
+                          teamId={activeTeamId}
+                          proposal={chatMessage.createTaskProposal}
+                          onSaved={(summary) => onTaskCreated(chatMessage.id, summary)}
+                          onDismiss={() => dismissCreateTaskProposal(chatMessage.id)}
+                        />
+                      ) : null}
                     </View>
                   </View>
                 ),
@@ -563,13 +777,14 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
 
               {thinking ? (
                 <View style={styles.senecaBlock}>
-                  <View style={styles.senecaAccent} />
                   <View style={styles.senecaBlockBody}>
                     <View style={styles.senecaBlockHead}>
-                      <SenecaIcon size={16} />
+                      <View style={styles.senecaBlockAvatar}>
+                        <SenecaIcon size={16} />
+                      </View>
                       <Text style={styles.senecaBlockName}>Seneca</Text>
                     </View>
-                    <ThinkingDots />
+                    <PreparingStatus kind={preparingKind} />
                   </View>
                 </View>
               ) : null}
@@ -580,15 +795,16 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                 </Text>
               ) : null}
             </ScrollView>
+          )}
 
-            <StickyAskBar
-              value={askDraft}
-              onChange={setAskDraft}
-              onSend={onAskSubmit}
-              disabled={thinking || !activeTeamId}
-              bottomInset={insets.bottom}
-            />
-          </SafeKeyboardAvoidingView>
+          <StickyAskBar
+            value={askDraft}
+            onChange={setAskDraft}
+            onSend={onAskSubmit}
+            disabled={thinking || !activeTeamId}
+            bottomInset={insets.bottom}
+          />
+        </SafeKeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -602,35 +818,35 @@ const styles = StyleSheet.create({
   },
   headerBar: {
     backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.border,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingTop: 4,
-    paddingBottom: 8,
-    gap: 8,
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    paddingBottom: 10,
+    gap: 10,
   },
   headerIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#FFFFFF",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   headerIconBtn: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: COLORS.bg,
+    borderRadius: 10,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -642,34 +858,14 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   headerText: { flex: 1, minWidth: 0 },
-  headerTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
     color: COLORS.text,
-    letterSpacing: -0.2,
-  },
-  headerBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: "#FFF7ED",
-    borderWidth: 1,
-    borderColor: "#FDBA74",
-  },
-  headerBadgeText: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: "#C2410C",
-    letterSpacing: 0.3,
+    letterSpacing: -0.25,
   },
   headerSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textMuted,
     marginTop: 1,
     fontWeight: "500",
@@ -677,14 +873,14 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 6,
   },
   moreMenu: {
     marginHorizontal: 12,
     marginTop: 8,
     marginBottom: 2,
     backgroundColor: COLORS.surface,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
     overflow: "hidden",
@@ -696,7 +892,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textTransform: "uppercase",
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: 4,
   },
   moreItem: {
@@ -704,8 +900,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+    paddingVertical: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.borderLight,
   },
   moreItemLast: {
@@ -725,20 +921,142 @@ const styles = StyleSheet.create({
   },
   chatScrollContent: {
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 10,
-    gap: 10,
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 12,
     flexGrow: 1,
   },
-  emptyCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 10,
+  homePane: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 4,
+    justifyContent: "space-between",
+  },
+  welcomeSection: {
+    alignItems: "center",
+    paddingHorizontal: 8,
+    gap: 4,
+  },
+  welcomeSparkle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: COLORS.brandSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  welcomeGreeting: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: COLORS.text,
+    letterSpacing: -0.4,
+    textAlign: "center",
+    lineHeight: 28,
+  },
+  welcomeName: {
+    color: COLORS.brandBright,
+    fontWeight: "700",
+  },
+  welcomeSupport: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.textMuted,
+    textAlign: "center",
+    maxWidth: 300,
+    paddingHorizontal: 6,
+  },
+  actionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "space-between",
+  },
+  actionCard: {
+    backgroundColor: COLORS.surfaceSoft,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 14,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
+    minHeight: 92,
+  },
+  actionCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  actionIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: COLORS.brandSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.text,
+    letterSpacing: -0.15,
+    marginBottom: 2,
+  },
+  actionDescription: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: COLORS.textMuted,
+  },
+  tryAskingSection: {
+    gap: 8,
+  },
+  tryAskingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  tryAskingLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+  },
+  tryAskingLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: COLORS.textSoft,
+  },
+  tryAskingList: {
+    gap: 6,
+  },
+  tryAskingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: COLORS.surfaceMute,
+    borderRadius: 999,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  tryAskingText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.text,
+    fontWeight: "500",
+  },
+  emptyCard: {
+    backgroundColor: COLORS.surfaceSoft,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
   },
   emptyTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
     color: COLORS.text,
     marginBottom: 4,
@@ -748,80 +1066,54 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: COLORS.textMuted,
   },
-  welcomeCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    gap: 4,
-  },
-  welcomeIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: COLORS.brandSoft,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 2,
-    overflow: "hidden",
-  },
-  welcomeTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: COLORS.text,
-    letterSpacing: -0.2,
-    lineHeight: 22,
-  },
-  welcomeText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: COLORS.textMuted,
-  },
   userBubble: {
     alignSelf: "flex-end",
     maxWidth: "86%",
-    backgroundColor: COLORS.brand,
-    borderRadius: 12,
-    borderTopRightRadius: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: COLORS.brandBright,
+    borderRadius: 16,
+    borderTopRightRadius: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   userBubbleText: {
     fontSize: 14,
-    lineHeight: 19,
+    lineHeight: 20,
     color: "#FFFFFF",
     fontWeight: "500",
   },
   senecaBlock: {
-    flexDirection: "row",
-    backgroundColor: COLORS.surface,
-    borderRadius: 10,
+    backgroundColor: COLORS.surfaceSoft,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
     overflow: "hidden",
   },
-  senecaAccent: {
-    width: 3,
-    backgroundColor: COLORS.brand,
-  },
   senecaBlockBody: {
-    flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 6,
+    paddingVertical: 12,
+    gap: 8,
   },
   senecaBlockHead: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
+  },
+  senecaBlockAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   senecaBlockName: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
-    color: COLORS.brand,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    color: COLORS.brandBright,
+    letterSpacing: 0.2,
   },
   senecaMessage: {
     fontSize: 14,
@@ -833,18 +1125,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  thinkingDots: {
-    flexDirection: "row",
+  thinkingSparkle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.brandSoft,
     alignItems: "center",
-    gap: 4,
-  },
-  thinkingDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: COLORS.brand,
+    justifyContent: "center",
   },
   thinkingText: {
+    flex: 1,
     fontSize: 13,
     color: COLORS.textMuted,
     fontWeight: "500",
@@ -856,46 +1146,63 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
     borderColor: "#FECACA",
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 10,
   },
   askBar: {
     paddingHorizontal: 12,
-    paddingTop: 0,
-    backgroundColor: COLORS.surface,
-  },
-  askBarDivider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginBottom: 8,
-  },
-  askBarInner: {
-    flexDirection: "row",
-    alignItems: "center",
+    paddingTop: 8,
     backgroundColor: COLORS.bg,
-    borderRadius: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: COLORS.borderLight,
+  },
+  askComposer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
-    paddingLeft: 12,
-    paddingRight: 5,
-    paddingVertical: 3,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+    minHeight: 72,
   },
   askInput: {
-    flex: 1,
+    minHeight: 32,
+    maxHeight: 88,
     fontSize: 14,
+    lineHeight: 20,
     color: COLORS.text,
-    paddingVertical: 8,
-    paddingRight: 8,
+    padding: 0,
+    textAlignVertical: "top",
   },
-  sendBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  askComposerFooter: {
+    marginTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  attachBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },
+  sendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.send,
+  },
   sendBtnDisabled: {
-    backgroundColor: COLORS.borderLight,
+    backgroundColor: "#C4B5FD",
   },
   privacyRow: {
     flexDirection: "row",
@@ -903,7 +1210,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexWrap: "wrap",
     gap: 2,
-    marginTop: 6,
+    marginTop: 8,
     paddingHorizontal: 4,
   },
   privacyText: {
@@ -912,9 +1219,8 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   settingsLink: {
-    color: "#4361EE",
-    fontWeight: "700",
+    color: "#6366F1",
+    fontWeight: "600",
     fontSize: 10,
-    textDecorationLine: "underline",
   },
 });
