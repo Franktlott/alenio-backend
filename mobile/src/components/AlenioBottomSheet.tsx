@@ -33,6 +33,8 @@ type Props = {
   bodyHeightRatio?: number;
   /** Show vertical scroll indicator (useful for tall forms). */
   showScrollIndicator?: boolean;
+  /** When false, body does not scroll (content should fit). Default true. */
+  scrollEnabled?: boolean;
 };
 
 function SheetContent({
@@ -47,6 +49,7 @@ function SheetContent({
   showCloseButton = false,
   bodyHeightRatio,
   showScrollIndicator = false,
+  scrollEnabled = true,
 }: Omit<Props, "visible" | "asScreen">) {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
@@ -106,12 +109,13 @@ function SheetContent({
               compact ? styles.bodyContentCompact : null,
               styles.bodyContentGrow,
             ]}
-            showsVerticalScrollIndicator={showScrollIndicator}
+            scrollEnabled={scrollEnabled}
+            showsVerticalScrollIndicator={scrollEnabled && showScrollIndicator}
             indicatorStyle="black"
             keyboardShouldPersistTaps="handled"
-            bounces
-            alwaysBounceVertical={showScrollIndicator}
-            nestedScrollEnabled
+            bounces={scrollEnabled && showScrollIndicator}
+            alwaysBounceVertical={scrollEnabled && showScrollIndicator}
+            nestedScrollEnabled={scrollEnabled}
             scrollEventThrottle={16}
           >
             {children}
