@@ -22913,9 +22913,9 @@ body:has(.temps-module) .seneca-drawer-backdrop {
   width: 52px;
   height: 52px;
   border-radius: 8px;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid var(--border);
+  background: #eef2ff;
+  color: #4361ee;
+  border: 1px solid #c7d2fe;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -22932,6 +22932,18 @@ body:has(.temps-module) .seneca-drawer-backdrop {
   font-size: 1rem;
   font-weight: 700;
   line-height: 1;
+}
+
+.enterprise-edit-ws-photo-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #c7d2fe;
+  color: #4361ee;
 }
 
 .enterprise-edit-ws-fields {
@@ -55182,4 +55194,178 @@ a.go-mod-btn {
   align-items: center;
   text-decoration: none;
   width: auto;
+}
+
+/* —— Ownership transfer Stripe return —— */
+.ownership-return {
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 20px;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(67, 97, 238, 0.14), transparent 55%),
+    radial-gradient(900px 480px at 85% 100%, rgba(99, 102, 241, 0.08), transparent 50%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+}
+.ownership-return-glow {
+  position: absolute;
+  inset: 18% auto auto 50%;
+  transform: translateX(-50%);
+  width: min(92vw, 560px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(67, 97, 238, 0.18) 0%, transparent 68%);
+  pointer-events: none;
+  filter: blur(8px);
+}
+.ownership-return-panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+  padding: 36px 32px 32px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 24px 48px -28px rgba(15, 23, 42, 0.28),
+    0 8px 20px -12px rgba(67, 97, 238, 0.18);
+  backdrop-filter: blur(10px);
+  text-align: center;
+  animation: ownership-return-in 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes ownership-return-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ownership-return-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+  color: #0f172a;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.ownership-return-brand img {
+  border-radius: 9px;
+  box-shadow: 0 6px 14px -8px rgba(67, 97, 238, 0.55);
+}
+.ownership-return-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+}
+.ownership-return-icon--working {
+  background: #eef2ff;
+  color: #4338ca;
+}
+.ownership-return-icon--done {
+  background: #ecfdf5;
+  color: #047857;
+}
+.ownership-return-icon--paused {
+  background: #eef2ff;
+  color: #4338ca;
+}
+.ownership-return-icon--error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.ownership-return-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2.5px solid rgba(67, 97, 238, 0.22);
+  border-top-color: #4338ca;
+  animation: ownership-return-spin 0.7s linear infinite;
+}
+@keyframes ownership-return-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ownership-return-eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6366f1;
+}
+.ownership-return-title {
+  margin: 0 0 10px;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 750;
+  color: #0f172a;
+}
+.ownership-return-body {
+  margin: 0 auto;
+  max-width: 34ch;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #64748b;
+}
+.ownership-return-actions {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.ownership-return-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.7rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid #3730a3;
+  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
+  color: #fff !important;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  text-decoration: none !important;
+  box-shadow: 0 10px 22px -12px rgba(67, 97, 238, 0.75);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.ownership-return-primary:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+.ownership-return-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0.55rem 1rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155 !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none !important;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.ownership-return-secondary:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
