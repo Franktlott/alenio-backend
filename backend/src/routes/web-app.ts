@@ -750,7 +750,9 @@ webRouter.delete("/api/tasks/:id", async (c) => {
     }
   }
   const { deleteTaskWithScope } = await import("../lib/recurrence-series");
+  const { deleteStorageObjectByUrlIfOwned } = await import("../lib/firebase-storage");
   await deleteTaskWithScope(prisma, task, scope);
+  await deleteStorageObjectByUrlIfOwned(task.attachmentUrl);
   return c.json({ data: { ok: true } });
 });
 
