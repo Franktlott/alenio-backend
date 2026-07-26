@@ -3,6 +3,8 @@ import { webPublicBaseUrl } from "./web-public-url";
 export type OwnershipTransferEmailKind =
   | "started"
   | "accepted"
+  | "accepted_new_owner"
+  | "accepted_previous_owner"
   | "declined"
   | "canceled_by_owner"
   | "canceled_recipient_left"
@@ -105,6 +107,7 @@ function copyFor(input: OwnershipTransferEmailInput): Copy {
         ],
       };
     case "accepted":
+      // Legacy shared copy — prefer role-specific kinds below.
       return {
         subject: `Ownership transferred — ${teamName}`,
         eyebrow: "Ownership transferred",
@@ -121,6 +124,43 @@ function copyFor(input: OwnershipTransferEmailInput): Copy {
           { label: "Workspace", value: teamName },
           { label: "Previous owner", value: fromName },
           { label: "New owner", value: toName },
+        ],
+      };
+    case "accepted_new_owner":
+      return {
+        subject: `You’re the new owner of ${teamName}`,
+        eyebrow: "Congratulations",
+        title: `You’re the new owner`,
+        intro: `${teamName} is yours to lead. ${fromName} transferred ownership to you — you now have full administrative control, and billing for this workspace is on you.`,
+        steps: [
+          "Open Team to review members and roles",
+          "Confirm billing looks right on your account",
+          "Lead the workspace with confidence — your team is ready",
+        ],
+        footerNote: "You’re receiving this because you just became the workspace owner.",
+        primaryCtaLabel: "Open your workspace",
+        detailRows: [
+          { label: "Workspace", value: teamName },
+          { label: "Transferred from", value: fromName },
+          { label: "Your role", value: "Owner" },
+        ],
+      };
+    case "accepted_previous_owner":
+      return {
+        subject: `Transfer complete — ${toName} now owns ${teamName}`,
+        eyebrow: "Transfer complete",
+        title: `Ownership has moved to ${toName}`,
+        intro: `You’re all set. Ownership of ${teamName} has transferred to ${toName}. They’re now responsible for administration and billing. Your access follows the role chosen when you started the transfer.`,
+        steps: [
+          "Open Team if you want to confirm your updated role",
+          "No further action is needed unless you still manage this workspace",
+        ],
+        footerNote: "You’re receiving this because you requested this ownership transfer.",
+        primaryCtaLabel: "Open Team",
+        detailRows: [
+          { label: "Workspace", value: teamName },
+          { label: "New owner", value: toName },
+          { label: "Previous owner", value: fromName },
         ],
       };
     case "declined":

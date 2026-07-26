@@ -593,17 +593,30 @@ async function applyAcceptedTransfer(
 
   const teamName = transfer.team.name;
   const newName = transfer.toUser.name ?? "New owner";
-  await notifyUsers({
-    userIds: [transfer.fromUserId, transfer.toUserId],
-    title: "Ownership transferred",
-    body: `${newName} is now the owner of ${teamName}.`,
-    emailKind: "accepted",
+  const fromName = transfer.fromUser.name ?? "Previous owner";
+  const teamImage = transfer.team.image;
+  const notifyBase = {
     teamName,
-    teamImage: transfer.team.image,
-    fromName: transfer.fromUser.name ?? "Previous owner",
+    teamImage,
+    fromName,
     toName: newName,
     billingPath: transfer.billingPath,
     data: { type: "ownership_transfer_accepted", teamId: transfer.teamId, transferId: transfer.id },
+  } as const;
+
+  await notifyUsers({
+    ...notifyBase,
+    userIds: [transfer.toUserId],
+    title: "You’re the new owner",
+    body: `${teamName} is yours to lead.`,
+    emailKind: "accepted_new_owner",
+  });
+  await notifyUsers({
+    ...notifyBase,
+    userIds: [transfer.fromUserId],
+    title: "Ownership transferred",
+    body: `${newName} is now the owner of ${teamName}.`,
+    emailKind: "accepted_previous_owner",
   });
 
   const fresh = await prisma.ownershipTransfer.findUnique({
