@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -52,15 +52,11 @@ function SheetContent({
   const bottomPad = Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
   const windowH = Dimensions.get("window").height;
   const ratio = bodyHeightRatio ?? (compact ? 0.5 : 0.58);
-  // Cap height so header + scroll + footer fit; use measured content when shorter.
-  const reservedChrome = (compact ? 168 : 200) + bottomPad + insets.top * 0.25;
-  const bodyCap = Math.max(
-    160,
+  const reservedChrome = (compact ? 152 : 188) + bottomPad + Math.min(insets.top, 20);
+  const bodyMaxHeight = Math.max(
+    180,
     Math.min(Math.round(windowH * ratio), Math.round(windowH - reservedChrome)),
   );
-  const [contentH, setContentH] = useState(0);
-  const bodyHeight =
-    contentH > 0 ? Math.min(Math.ceil(contentH), bodyCap) : bodyCap;
 
   return (
     <View style={styles.backdrop} testID={testID}>
@@ -70,8 +66,8 @@ function SheetContent({
         style={styles.avoider}
         keyboardVerticalOffset={0}
       >
-        <Pressable
-          onPress={(e) => e.stopPropagation?.()}
+        {/* View (not Pressable) so ScrollView can receive pan gestures */}
+        <View
           style={[
             styles.sheet,
             compact ? styles.sheetCompact : null,
@@ -104,25 +100,24 @@ function SheetContent({
             ) : null}
           </View>
           <ScrollView
-            style={[styles.bodyScroll, { height: bodyHeight }]}
+            style={[styles.bodyScroll, { maxHeight: bodyMaxHeight }]}
             contentContainerStyle={[
               styles.bodyContent,
               compact ? styles.bodyContentCompact : null,
               styles.bodyContentGrow,
             ]}
             showsVerticalScrollIndicator={showScrollIndicator}
+            indicatorStyle="black"
             keyboardShouldPersistTaps="handled"
-            bounces={showScrollIndicator}
+            bounces
+            alwaysBounceVertical={showScrollIndicator}
             nestedScrollEnabled
-            onContentSizeChange={(_w, h) => {
-              const next = Math.ceil(h);
-              setContentH((prev) => (prev === next ? prev : next));
-            }}
+            scrollEventThrottle={16}
           >
             {children}
           </ScrollView>
           {footer ? <View style={[styles.footer, compact ? styles.footerCompact : null]}>{footer}</View> : null}
-        </Pressable>
+        </View>
       </SafeKeyboardAvoidingView>
     </View>
   );
