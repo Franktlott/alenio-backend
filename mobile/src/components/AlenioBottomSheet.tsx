@@ -102,27 +102,35 @@ function SheetContent({
               </Pressable>
             ) : null}
           </View>
-          <ScrollView
-            style={[
-              styles.bodyScroll,
-              scrollEnabled ? { maxHeight: bodyMaxHeight } : null,
-            ]}
-            contentContainerStyle={[
-              styles.bodyContent,
-              compact ? styles.bodyContentCompact : null,
-              styles.bodyContentGrow,
-            ]}
-            scrollEnabled={scrollEnabled}
-            showsVerticalScrollIndicator={scrollEnabled && showScrollIndicator}
-            indicatorStyle="black"
-            keyboardShouldPersistTaps="handled"
-            bounces={scrollEnabled && showScrollIndicator}
-            alwaysBounceVertical={scrollEnabled && showScrollIndicator}
-            nestedScrollEnabled={scrollEnabled}
-            scrollEventThrottle={16}
-          >
-            {children}
-          </ScrollView>
+          {scrollEnabled ? (
+            <ScrollView
+              style={[styles.bodyScroll, { maxHeight: bodyMaxHeight }]}
+              contentContainerStyle={[
+                styles.bodyContent,
+                compact ? styles.bodyContentCompact : null,
+                styles.bodyContentGrow,
+              ]}
+              showsVerticalScrollIndicator={showScrollIndicator}
+              indicatorStyle="black"
+              keyboardShouldPersistTaps="handled"
+              bounces={showScrollIndicator}
+              alwaysBounceVertical={showScrollIndicator}
+              nestedScrollEnabled
+              scrollEventThrottle={16}
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            <View
+              style={[
+                styles.bodyContent,
+                compact ? styles.bodyContentCompact : null,
+                { paddingBottom: compact ? 8 : 10 },
+              ]}
+            >
+              {children}
+            </View>
+          )}
           {footer ? <View style={[styles.footer, compact ? styles.footerCompact : null]}>{footer}</View> : null}
         </View>
       </SafeKeyboardAvoidingView>

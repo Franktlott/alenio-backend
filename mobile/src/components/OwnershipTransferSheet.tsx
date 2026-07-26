@@ -73,50 +73,24 @@ function ChoiceRow({
       onPress={onPress}
       disabled={disabled}
       testID={testID}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        gap: 9,
-        alignItems: "center",
-        paddingVertical: 8,
-        paddingHorizontal: 10,
-        borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
-        borderBottomColor: "#E2E8F0",
-        backgroundColor: selected ? "#F5F3FF" : "#FFFFFF",
-        opacity: disabled ? 0.55 : pressed ? 0.9 : 1,
-      })}
+      style={({ pressed }) => [
+        styles.choiceRow,
+        !last ? styles.choiceRowBorder : null,
+        selected ? styles.choiceRowSelected : null,
+        { opacity: disabled ? 0.55 : pressed ? 0.9 : 1 },
+      ]}
     >
-      <View
-        style={{
-          width: 17,
-          height: 17,
-          borderRadius: 9,
-          borderWidth: 1.75,
-          borderColor: selected ? "#4338CA" : "#CBD5E1",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: selected ? "#4338CA" : "#FFF",
-          flexShrink: 0,
-        }}
-      >
-        {selected ? <Check size={10} color="#FFF" strokeWidth={3.5} /> : null}
+      <View style={[styles.radio, selected ? styles.radioSelected : null]}>
+        {selected ? <Check size={11} color="#FFF" strokeWidth={3.5} /> : null}
       </View>
-      <Text style={{ flex: 1, fontSize: 13, fontWeight: "650", color: "#0F172A" }} numberOfLines={1}>
-        {title}
-      </Text>
-      {recommended ? (
-        <View
-          style={{
-            paddingHorizontal: 5,
-            paddingVertical: 1,
-            borderRadius: 4,
-            backgroundColor: selected ? "#DDD6FE" : "#EEF2FF",
-          }}
-        >
-          <Text style={{ fontSize: 8, fontWeight: "800", color: "#4338CA", letterSpacing: 0.3 }}>
-            RECOMMENDED
-          </Text>
-        </View>
-      ) : null}
+      <View style={styles.choiceCopy}>
+        <Text style={styles.choiceTitle}>{title}</Text>
+        {recommended ? (
+          <View style={[styles.badge, selected ? styles.badgeSelected : null]}>
+            <Text style={styles.badgeText}>RECOMMENDED</Text>
+          </View>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -178,34 +152,13 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
 
   const footer =
     step === "success" ? (
-      <Pressable
-        onPress={onClose}
-        testID="ownership-transfer-done"
-        style={{
-          paddingVertical: 12,
-          borderRadius: 11,
-          backgroundColor: "#4338CA",
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ fontWeight: "700", color: "#FFF", fontSize: 14 }}>Done</Text>
+      <Pressable onPress={onClose} testID="ownership-transfer-done" style={styles.primaryBtn}>
+        <Text style={styles.primaryBtnText}>Done</Text>
       </Pressable>
     ) : step === "review" ? (
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <Pressable
-          onPress={onClose}
-          disabled={busy}
-          style={{
-            flex: 1,
-            paddingVertical: 12,
-            borderRadius: 11,
-            borderWidth: 1,
-            borderColor: "#E2E8F0",
-            backgroundColor: "#FFF",
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ fontWeight: "650", color: "#334155", fontSize: 14 }}>Cancel</Text>
+      <View style={styles.footerRow}>
+        <Pressable onPress={onClose} disabled={busy} style={styles.secondaryBtn}>
+          <Text style={styles.secondaryBtnText}>Cancel</Text>
         </Pressable>
         <Pressable
           onPress={() => {
@@ -214,56 +167,35 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
           }}
           disabled={busy}
           testID="ownership-transfer-continue"
-          style={{
-            flex: 1.2,
-            paddingVertical: 12,
-            borderRadius: 11,
-            backgroundColor: "#4338CA",
-            alignItems: "center",
-          }}
+          style={[styles.primaryBtn, styles.primaryBtnFlex]}
         >
-          <Text style={{ fontWeight: "700", color: "#FFF", fontSize: 14 }}>Continue</Text>
+          <Text style={styles.primaryBtnText}>Continue</Text>
         </Pressable>
       </View>
     ) : (
-      <View style={{ flexDirection: "row", gap: 8 }}>
+      <View style={styles.footerRow}>
         <Pressable
           onPress={() => {
             setError(null);
             setStep("review");
           }}
           disabled={busy}
-          style={{
-            flex: 1,
-            paddingVertical: 12,
-            borderRadius: 11,
-            borderWidth: 1,
-            borderColor: "#E2E8F0",
-            backgroundColor: "#FFF",
-            alignItems: "center",
-          }}
+          style={styles.secondaryBtn}
         >
-          <Text style={{ fontWeight: "650", color: "#334155", fontSize: 14 }}>Back</Text>
+          <Text style={styles.secondaryBtnText}>Back</Text>
         </Pressable>
         <Pressable
           onPress={() => void submit()}
           disabled={busy || !canSubmitConfirm}
           testID="ownership-transfer-submit"
-          style={{
-            flex: 1.2,
-            paddingVertical: 12,
-            borderRadius: 11,
-            backgroundColor: busy || !canSubmitConfirm ? "#A5B4FC" : "#4338CA",
-            alignItems: "center",
-            flexDirection: "row",
-            justifyContent: "center",
-            gap: 8,
-          }}
+          style={[
+            styles.primaryBtn,
+            styles.primaryBtnFlex,
+            busy || !canSubmitConfirm ? styles.primaryBtnDisabled : null,
+          ]}
         >
           {busy ? <ActivityIndicator color="#FFF" /> : null}
-          <Text style={{ fontWeight: "700", color: "#FFF", fontSize: 14 }}>
-            {busy ? "Sending…" : "Send request"}
-          </Text>
+          <Text style={styles.primaryBtnText}>{busy ? "Sending…" : "Send request"}</Text>
         </Pressable>
       </View>
     );
@@ -292,13 +224,13 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
       footer={footer}
       testID="ownership-transfer-sheet"
       compact
-      sheetStyle={{ maxHeight: "88%" }}
+      sheetStyle={{ maxHeight: "92%" }}
       scrollEnabled={false}
       showScrollIndicator={false}
     >
       {step === "success" ? (
-        <AlenioSheetCard compact style={{ paddingVertical: 10 }}>
-          <Text style={{ fontSize: 13, color: "#334155", lineHeight: 18 }}>
+        <AlenioSheetCard compact style={{ paddingVertical: 12 }}>
+          <Text style={styles.bodyCopy}>
             You’ll keep your chosen role until they accept. They must add a different card than yours to finish.
             Your plan stays the same.
           </Text>
@@ -306,27 +238,9 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
       ) : null}
 
       {step === "review" && member ? (
-        <View style={{ gap: 8 }}>
-          <Text
-            style={{
-              fontSize: 10,
-              fontWeight: "700",
-              color: "#64748B",
-              letterSpacing: 0.6,
-              textTransform: "uppercase",
-            }}
-          >
-            Your role after they accept
-          </Text>
-          <View
-            style={{
-              borderRadius: 11,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              backgroundColor: "#FFFFFF",
-              overflow: "hidden",
-            }}
-          >
+        <View style={styles.reviewStack}>
+          <Text style={styles.sectionLabel}>Your role after they accept</Text>
+          <View style={styles.choiceGroup}>
             {DISPOSITIONS.map((opt, i) => (
               <ChoiceRow
                 key={opt.value}
@@ -341,46 +255,29 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
             ))}
           </View>
 
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              borderRadius: 11,
-              borderWidth: 1,
-              borderColor: "#E0E7FF",
-              backgroundColor: "#F8FAFF",
-              paddingHorizontal: 10,
-              paddingVertical: 9,
-            }}
-            testID="ownership-billing-replace-required"
-          >
-            <CreditCard size={14} color="#4338CA" />
-            <Text style={{ flex: 1, fontSize: 12, color: "#334155", lineHeight: 16 }}>
-              <Text style={{ fontWeight: "700", color: "#0F172A" }}>They add a different card.</Text>
-              {" "}Your card comes off after setup.
+          <View style={styles.billingNote} testID="ownership-billing-replace-required">
+            <CreditCard size={15} color="#4338CA" />
+            <Text style={styles.billingCopy}>
+              <Text style={styles.billingStrong}>They add a different card. </Text>
+              Your card comes off after setup.
             </Text>
           </View>
 
-          {error ? (
-            <Text style={{ fontSize: 12, color: "#DC2626", fontWeight: "600" }}>{error}</Text>
-          ) : null}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
       ) : null}
 
       {step === "confirm" ? (
-        <View style={{ gap: 8 }}>
+        <View style={styles.reviewStack}>
           <AlenioSheetCard tint="slate" compact>
-            <Text style={{ fontSize: 13, color: "#334155", lineHeight: 18 }}>
+            <Text style={styles.bodyCopy}>
               They have 7 days to accept, then must add a different card than the one on file.
             </Text>
           </AlenioSheetCard>
 
           {!useSsoConfirm ? (
             <AlenioSheetCard tint="slate" compact>
-              <Text style={{ fontSize: 12, fontWeight: "650", color: "#334155", marginBottom: 6 }}>
-                Account password
-              </Text>
+              <Text style={styles.fieldLabel}>Account password</Text>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
@@ -391,21 +288,12 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
                 placeholder="Password"
                 placeholderTextColor="#94A3B8"
                 testID="ownership-transfer-password"
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                  backgroundColor: "#FFF",
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  fontSize: 14,
-                  color: "#0F172A",
-                }}
+                style={styles.input}
               />
             </AlenioSheetCard>
           ) : (
             <AlenioSheetCard tint="slate" compact>
-              <Text style={{ fontSize: 13, color: "#334155", lineHeight: 18, marginBottom: 6 }}>
+              <Text style={[styles.bodyCopy, { marginBottom: 8 }]}>
                 SSO account — type <Text style={{ fontWeight: "700" }}>TRANSFER</Text> to confirm.
               </Text>
               <TextInput
@@ -417,24 +305,176 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
                 placeholder="TRANSFER"
                 placeholderTextColor="#94A3B8"
                 testID="ownership-transfer-phrase"
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                  backgroundColor: "#FFF",
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  fontSize: 14,
-                  color: "#0F172A",
-                }}
+                style={styles.input}
               />
             </AlenioSheetCard>
           )}
-          {error ? (
-            <Text style={{ fontSize: 12, color: "#DC2626", fontWeight: "600" }}>{error}</Text>
-          ) : null}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
       ) : null}
     </AlenioBottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  reviewStack: {
+    gap: 12,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+    letterSpacing: 0.55,
+    textTransform: "uppercase",
+  },
+  choiceGroup: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+  },
+  choiceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+    minHeight: 48,
+    backgroundColor: "#FFFFFF",
+  },
+  choiceRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E2E8F0",
+  },
+  choiceRowSelected: {
+    backgroundColor: "#F5F3FF",
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.75,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    marginRight: 12,
+  },
+  radioSelected: {
+    borderColor: "#4338CA",
+    backgroundColor: "#4338CA",
+  },
+  choiceCopy: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    minWidth: 0,
+  },
+  choiceTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: "#EEF2FF",
+  },
+  badgeSelected: {
+    backgroundColor: "#DDD6FE",
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#4338CA",
+    letterSpacing: 0.3,
+  },
+  billingNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E0E7FF",
+    backgroundColor: "#F8FAFF",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  billingCopy: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#475569",
+  },
+  billingStrong: {
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  bodyCopy: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#334155",
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#334155",
+    marginBottom: 7,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFF",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: "#0F172A",
+  },
+  errorText: {
+    fontSize: 12,
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+  footerRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  secondaryBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFF",
+    alignItems: "center",
+  },
+  secondaryBtnText: {
+    fontWeight: "600",
+    color: "#334155",
+    fontSize: 14,
+  },
+  primaryBtn: {
+    paddingVertical: 13,
+    borderRadius: 11,
+    backgroundColor: "#4338CA",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  primaryBtnFlex: {
+    flex: 1.15,
+  },
+  primaryBtnDisabled: {
+    backgroundColor: "#A5B4FC",
+  },
+  primaryBtnText: {
+    fontWeight: "700",
+    color: "#FFF",
+    fontSize: 14,
+  },
+});
