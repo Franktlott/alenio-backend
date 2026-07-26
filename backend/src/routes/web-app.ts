@@ -4,6 +4,7 @@ import { getSessionFromHeaders } from "../auth";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { cleanupWorkspaceMemberDeparture } from "../lib/workspace-member-departure";
+import { assertNoPendingRecipientRemoval } from "../lib/ownership-transfer";
 import { materializeRecurringTasksForTeam, parseCalendarDueDate } from "../lib/recurrence-series";
 import { archiveOldCompletedTasksForTeam } from "../lib/task-archive";
 import { isValidTimeZone, resolveTimeZone } from "../lib/timezone";
@@ -361,6 +362,10 @@ webRouter.delete("/api/teams/:id/members/:userId", async (c) => {
   }
   if (["owner", "team_leader"].includes(targetMembership.role)) {
     return c.json({ error: { message: "Cannot remove an owner or team leader" } }, 403);
+  }
+  const pendingRecipientErr = await assertNoPendingRecipientRemoval(id, memberId);
+  if (pendingRecipientErr) {
+    return c.json({ error: { message: pendingRecipientErr.message, code: pendingRecipientErr.code } }, 409);
   }
   await cleanupWorkspaceMemberDeparture(prisma, id, memberId);
 

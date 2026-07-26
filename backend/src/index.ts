@@ -66,6 +66,7 @@ import { ensureGoFrontendSettingsSchema } from "./lib/ensure-go-frontend-setting
 import { ensureGoLeaderPinSchema } from "./lib/ensure-go-leader-pin-schema";
 import { ensureWorkspaceModulesSchema } from "./lib/ensure-workspace-modules-schema";
 import { ensureSubscriptionCancelSchema } from "./lib/ensure-subscription-cancel-schema";
+import { ensureOwnershipTransferSchema } from "./lib/ensure-ownership-transfer-schema";
 import { ensureConversationTeamSchema } from "./lib/ensure-conversation-team-schema";
 import { ensureGroupParticipantRolesSchema } from "./lib/ensure-group-participant-roles-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
@@ -110,7 +111,7 @@ const startupSchemaReady = Promise.all([
   ensureOrgGoSchema(prisma),
   ensureSenecaStudioSchema(prisma),
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureConversationImageSchema(prisma), ensureTaskArchiveSchema(prisma), ensureTaskNotesSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureOwnershipTransferSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureConversationImageSchema(prisma), ensureTaskArchiveSchema(prisma), ensureTaskNotesSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -128,6 +129,7 @@ const startupSchemaReady = Promise.all([
         ensureWorkspaceModulesSchema(prisma),
         ensureWalksSchema(prisma),
         ensureSubscriptionCancelSchema(prisma),
+        ensureOwnershipTransferSchema(prisma),
         ensureConversationTeamSchema(prisma),
         ensureGroupParticipantRolesSchema(prisma),
         ensureTopicImageSchema(prisma),
@@ -1435,6 +1437,16 @@ async function runCleanup() {
     }
   } catch (err) {
     console.error("[cleanup] Error during cleanup:", err);
+  }
+
+  try {
+    const { expirePendingOwnershipTransfers } = await import("./lib/ownership-transfer");
+    const expired = await expirePendingOwnershipTransfers();
+    if (expired > 0) {
+      console.log(`[cleanup] Expired ${expired} ownership transfer(s)`);
+    }
+  } catch (err) {
+    console.error("[cleanup] Ownership transfer expiry failed:", err);
   }
 
   // Orphan generic uploads (picked then never sent) — daily, after a 7-day grace period.

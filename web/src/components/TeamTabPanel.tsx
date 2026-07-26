@@ -7,6 +7,7 @@ import { AlenioWorkspaceLoading } from "./AlenioWorkspaceLoading";
 import { PendingInvitesModal } from "./PendingInvitesModal";
 import { PendingCalendarEventsModal } from "./PendingCalendarEventsModal";
 import { TeamMemberManageModal } from "./TeamMemberManageModal";
+import { OwnershipTransferModal } from "./OwnershipTransferModal";
 import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
 import { WorkplaceStandardsModal, mergeWorkplaceStandards } from "./WorkplaceStandardsModal";
@@ -27,7 +28,12 @@ import {
   rejectTeamJoinRequest,
   removeTeamMemberApi,
   setTeamMemberRole,
-  transferTeamOwnership,
+  fetchPendingOwnershipTransfer,
+  acceptOwnershipTransfer,
+  completeOwnershipTransferPayment,
+  declineOwnershipTransfer,
+  cancelOwnershipTransfer,
+  type OwnershipTransferRow,
   type TeamMemberStatsMap,
   type WebMeUser,
   type WebTeamDetail,
@@ -604,6 +610,10 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [memberModalErr, setMemberModalErr] = useState<string | null>(null);
   const [rolePick, setRolePick] = useState<"member" | "team_leader">("member");
   const [modalBusy, setModalBusy] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<WebTeamMemberRow | null>(null);
+  const [pendingTransfer, setPendingTransfer] = useState<OwnershipTransferRow | null>(null);
+  const [pendingTransferBusy, setPendingTransferBusy] = useState(false);
+  const [pendingTransferErr, setPendingTransferErr] = useState<string | null>(null);
 
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
@@ -819,23 +829,29 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     }
   };
 
-  const onTransferOwnership = async () => {
+  const onTransferOwnership = () => {
     if (!selectedTeamId || !memberModal || teamDetail?.myRole !== "owner" || memberModal.userId === myId) return;
-    if (!window.confirm(`Make ${memberModal.user.name ?? "this member"} the team owner? You will become a member.`)) return;
-    setModalBusy(true);
     setMemberModalErr(null);
-    try {
-      await transferTeamOwnership(selectedTeamId, memberModal.userId);
-      setMemberModal(null);
-      setMemberModalErr(null);
-      await reloadTeamContext();
-      await onTeamsRefresh();
-    } catch (e) {
-      setMemberModalErr(e instanceof Error ? e.message : "Transfer failed.");
-    } finally {
-      setModalBusy(false);
-    }
+    setTransferTarget(memberModal);
+    setMemberModal(null);
   };
+
+  const refreshPendingTransfer = useCallback(async () => {
+    if (!selectedTeamId) {
+      setPendingTransfer(null);
+      return;
+    }
+    try {
+      const row = await fetchPendingOwnershipTransfer(selectedTeamId);
+      setPendingTransfer(row);
+    } catch {
+      setPendingTransfer(null);
+    }
+  }, [selectedTeamId]);
+
+  useEffect(() => {
+    void refreshPendingTransfer();
+  }, [refreshPendingTransfer, teamDetail?.id]);
 
   const onRemoveMember = async () => {
     if (!selectedTeamId || !memberModal) return;
@@ -1033,6 +1049,111 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 </span>
               </button>
             </div>
+          ) : null}
+
+          {pendingTransfer ? (
+            <section className="enterprise-team-pending-panel" aria-label="Pending ownership transfer">
+              <header className="enterprise-team-pending-head">
+                <div className="enterprise-team-pending-head-copy">
+                  <h3 className="enterprise-team-pending-title">Ownership transfer pending</h3>
+                  <p className="enterprise-team-pending-sub">
+                    {pendingTransfer.fromUser.name ?? "Owner"} → {pendingTransfer.toUser.name ?? "Member"} · expires{" "}
+                    {new Date(pendingTransfer.expiresAt).toLocaleDateString()}
+                    {pendingTransfer.awaitingPaymentMethod ? " · awaiting payment method" : ""}
+                  </p>
+                </div>
+              </header>
+              {pendingTransferErr ? (
+                <p className="enterprise-form-error" role="alert">
+                  {pendingTransferErr}
+                </p>
+              ) : null}
+              <div className="enterprise-team-pending-actions" style={{ padding: "0 12px 12px", gap: 8, display: "flex" }}>
+                {pendingTransfer.toUserId === myId ? (
+                  <>
+                    <button
+                      type="button"
+                      className="enterprise-team-pending-btn enterprise-team-pending-btn-ghost"
+                      disabled={pendingTransferBusy}
+                      onClick={async () => {
+                        if (!selectedTeamId) return;
+                        setPendingTransferBusy(true);
+                        setPendingTransferErr(null);
+                        try {
+                          await declineOwnershipTransfer(selectedTeamId, pendingTransfer.id);
+                          await refreshPendingTransfer();
+                        } catch (e) {
+                          setPendingTransferErr(e instanceof Error ? e.message : "Could not decline.");
+                        } finally {
+                          setPendingTransferBusy(false);
+                        }
+                      }}
+                    >
+                      Decline
+                    </button>
+                    <button
+                      type="button"
+                      className="enterprise-modal-primary-btn"
+                      disabled={pendingTransferBusy}
+                      onClick={async () => {
+                        if (!selectedTeamId) return;
+                        setPendingTransferBusy(true);
+                        setPendingTransferErr(null);
+                        try {
+                          if (pendingTransfer.awaitingPaymentMethod) {
+                            const done = await completeOwnershipTransferPayment(selectedTeamId, pendingTransfer.id);
+                            if (done.data.completed) {
+                              await refreshPendingTransfer();
+                              await reloadTeamContext();
+                              await onTeamsRefresh();
+                            }
+                          } else {
+                            const res = await acceptOwnershipTransfer(selectedTeamId, pendingTransfer.id);
+                            if (res.data.paymentSetupUrl) {
+                              window.location.href = res.data.paymentSetupUrl;
+                              return;
+                            }
+                            if (res.data.completed) {
+                              await refreshPendingTransfer();
+                              await reloadTeamContext();
+                              await onTeamsRefresh();
+                            }
+                          }
+                        } catch (e) {
+                          setPendingTransferErr(e instanceof Error ? e.message : "Could not accept.");
+                        } finally {
+                          setPendingTransferBusy(false);
+                        }
+                      }}
+                    >
+                      {pendingTransfer.awaitingPaymentMethod ? "Complete transfer" : "Accept"}
+                    </button>
+                  </>
+                ) : null}
+                {pendingTransfer.fromUserId === myId ? (
+                  <button
+                    type="button"
+                    className="enterprise-team-pending-btn enterprise-team-pending-btn-ghost"
+                    disabled={pendingTransferBusy}
+                    onClick={async () => {
+                      if (!selectedTeamId) return;
+                      setPendingTransferBusy(true);
+                      setPendingTransferErr(null);
+                      try {
+                        await cancelOwnershipTransfer(selectedTeamId, pendingTransfer.id);
+                        await refreshPendingTransfer();
+                      } catch (e) {
+                        setPendingTransferErr(e instanceof Error ? e.message : "Could not cancel.");
+                      } finally {
+                        setPendingTransferBusy(false);
+                      }
+                    }}
+                  >
+                    Cancel transfer
+                  </button>
+                ) : null}
+              </div>
+            </section>
           ) : null}
 
           {manageJoin && incoming.length > 0 ? (
@@ -1537,6 +1658,25 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           onSaveRole={() => void onSaveRole()}
           onTransferOwnership={() => void onTransferOwnership()}
           onRemoveMember={() => void onRemoveMember()}
+        />
+      ) : null}
+
+      {transferTarget && selectedTeamId ? (
+        <OwnershipTransferModal
+          teamId={selectedTeamId}
+          member={transferTarget}
+          busy={modalBusy}
+          error={memberModalErr}
+          onBusy={setModalBusy}
+          onError={setMemberModalErr}
+          onClose={() => {
+            setTransferTarget(null);
+            setMemberModalErr(null);
+          }}
+          onStarted={() => {
+            void refreshPendingTransfer();
+            void reloadTeamContext();
+          }}
         />
       ) : null}
 

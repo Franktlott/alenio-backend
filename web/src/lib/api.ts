@@ -1893,10 +1893,88 @@ export function setTeamMemberRole(teamId: string, userId: string, role: "member"
   );
 }
 
-export function transferTeamOwnership(teamId: string, userId: string) {
-  return apiPostJson<{ data: { success: boolean } }>(
+export type OwnershipTransferDisposition =
+  | "WORKSPACE_ADMIN"
+  | "MANAGER"
+  | "MEMBER"
+  | "REMOVE";
+
+export type OwnershipBillingPath = "KEEP_PAYMENT_METHOD" | "REPLACE_PAYMENT_METHOD";
+
+export type OwnershipTransferRow = {
+  id: string;
+  teamId: string;
+  teamName: string;
+  fromUserId: string;
+  toUserId: string;
+  status: string;
+  previousOwnerDisposition: string;
+  billingPath: string;
+  awaitingPaymentMethod: boolean;
+  expiresAt: string;
+  acceptedAt: string | null;
+  canceledAt: string | null;
+  createdAt: string;
+  fromUser: { id: string; name: string | null; email: string | null; image: string | null };
+  toUser: { id: string; name: string | null; email: string | null; image: string | null };
+};
+
+export function initiateOwnershipTransfer(
+  teamId: string,
+  body: {
+    toUserId: string;
+    previousOwnerDisposition: OwnershipTransferDisposition;
+    billingPath: OwnershipBillingPath;
+    password?: string;
+    confirmPhrase?: string;
+  },
+) {
+  return apiPostJson<{ data: OwnershipTransferRow }>(
     `/api/teams/${encodeURIComponent(teamId)}/transfer-ownership`,
-    { userId },
+    body,
+  );
+}
+
+/** @deprecated Use initiateOwnershipTransfer */
+export function transferTeamOwnership(teamId: string, userId: string) {
+  return initiateOwnershipTransfer(teamId, {
+    toUserId: userId,
+    previousOwnerDisposition: "WORKSPACE_ADMIN",
+    billingPath: "KEEP_PAYMENT_METHOD",
+    confirmPhrase: "TRANSFER",
+  });
+}
+
+export function fetchPendingOwnershipTransfer(teamId: string) {
+  return apiGetJson<{ data: OwnershipTransferRow | null }>(
+    `/api/teams/${encodeURIComponent(teamId)}/transfer-ownership/pending`,
+  ).then((r) => r.data);
+}
+
+export function acceptOwnershipTransfer(teamId: string, transferId: string) {
+  return apiPostJson<{
+    data: { transfer: OwnershipTransferRow; paymentSetupUrl: string | null; completed: boolean };
+  }>(`/api/teams/${encodeURIComponent(teamId)}/transfer-ownership/${encodeURIComponent(transferId)}/accept`, {});
+}
+
+export function completeOwnershipTransferPayment(teamId: string, transferId: string) {
+  return apiPostJson<{ data: { transfer: OwnershipTransferRow; completed: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/transfer-ownership/${encodeURIComponent(transferId)}/complete-payment`,
+    {},
+  );
+}
+
+export function declineOwnershipTransfer(teamId: string, transferId: string) {
+  return apiPostJson<{ data: OwnershipTransferRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/transfer-ownership/${encodeURIComponent(transferId)}/decline`,
+    {},
+  );
+}
+
+export function cancelOwnershipTransfer(teamId: string, transferId: string) {
+  return apiPostJson<{ data: OwnershipTransferRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/transfer-ownership/${encodeURIComponent(transferId)}/cancel`,
+    {},
   );
 }
 

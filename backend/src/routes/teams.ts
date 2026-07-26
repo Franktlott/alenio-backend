@@ -37,6 +37,17 @@ import {
   listFormerWorkspaceMembers,
 } from "../lib/workspace-member-departure";
 import {
+  acceptOwnershipTransfer,
+  assertNoPendingRecipientRemoval,
+  cancelOwnershipTransfer,
+  cancelPendingTransferIfRecipientLeaves,
+  completeOwnershipTransferPayment,
+  declineOwnershipTransfer,
+  getPendingTransferForTeam,
+  initiateOwnershipTransfer,
+  serializeOwnershipTransfer,
+} from "../lib/ownership-transfer";
+import {
   canManageModules,
   getModuleDefinition,
   getWorkspaceModule,
@@ -385,12 +396,14 @@ teamsRouter.delete("/:teamId/leave", async (c) => {
       {
         error: {
           message: "Workspace owners cannot leave. Transfer ownership to another member first, or delete the workspace.",
-          code: "FORBIDDEN",
+          code: "OWNER_MUST_TRANSFER",
         },
       },
       403,
     );
   }
+
+  await cancelPendingTransferIfRecipientLeaves(teamId, user.id);
 
   await cleanupWorkspaceMemberDeparture(prisma, teamId, user.id);
 
@@ -919,6 +932,14 @@ teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
     return c.json({ error: { message: "Cannot remove an owner or team leader", code: "FORBIDDEN" } }, 403);
   }
 
+  const pendingRecipientErr = await assertNoPendingRecipientRemoval(teamId, memberId);
+  if (pendingRecipientErr) {
+    return c.json(
+      { error: { message: pendingRecipientErr.message, code: pendingRecipientErr.code } },
+      pendingRecipientErr.status as 409,
+    );
+  }
+
   await cleanupWorkspaceMemberDeparture(prisma, teamId, memberId);
 
   await prisma.teamMember.delete({
@@ -971,42 +992,111 @@ teamsRouter.patch("/:teamId/members/:userId/role", async (c) => {
   return c.json({ data: updated });
 });
 
-// Transfer team ownership to another member
+// GET /api/teams/:teamId/transfer-ownership/pending
+teamsRouter.get("/:teamId/transfer-ownership/pending", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const pending = await getPendingTransferForTeam(teamId);
+  if (!pending) return c.json({ data: null });
+
+  if (pending.fromUserId !== user.id && pending.toUserId !== user.id && membership.role !== "owner") {
+    return c.json({ data: null });
+  }
+
+  return c.json({ data: serializeOwnershipTransfer(pending) });
+});
+
+// POST /api/teams/:teamId/transfer-ownership — initiate pending transfer (owner + reauth)
 teamsRouter.post("/:teamId/transfer-ownership", async (c) => {
   const user = c.get("user")!;
   const { teamId } = c.req.param();
-  const { userId: newOwnerId } = await c.req.json<{ userId: string }>();
+  const body = await c.req.json().catch(() => ({})) as {
+    userId?: string;
+    toUserId?: string;
+    previousOwnerDisposition?: string;
+    billingPath?: string;
+    password?: string;
+    confirmPhrase?: string;
+  };
 
-  // Caller must be current owner
-  const caller = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: user.id, teamId } },
-  });
-  if (!caller || caller.role !== "owner") {
-    return c.json({ error: { message: "Only the owner can transfer ownership" } }, 403);
+  const toUserId = (body.toUserId ?? body.userId ?? "").trim();
+  if (!toUserId) {
+    return c.json({ error: { message: "toUserId is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  // Target must be an existing member and not already the owner
-  const target = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: newOwnerId, teamId } },
+  const result = await initiateOwnershipTransfer({
+    teamId,
+    fromUserId: user.id,
+    fromUserEmail: user.email,
+    toUserId,
+    previousOwnerDisposition: body.previousOwnerDisposition ?? "WORKSPACE_ADMIN",
+    billingPath: body.billingPath ?? "KEEP_PAYMENT_METHOD",
+    password: body.password,
+    confirmPhrase: body.confirmPhrase,
   });
-  if (!target) return c.json({ error: { message: "Member not found" } }, 404);
-  if (target.role === "owner") {
-    return c.json({ error: { message: "Member is already the owner" } }, 400);
+
+  if ("error" in result) {
+    return c.json({ error: { message: result.error.message, code: result.error.code } }, result.error.status as 400);
   }
+  return c.json({ data: result.data }, 201);
+});
 
-  // Atomically promote new owner and demote current owner
-  await prisma.$transaction([
-    prisma.teamMember.update({
-      where: { userId_teamId: { userId: newOwnerId, teamId } },
-      data: { role: "owner" },
-    }),
-    prisma.teamMember.update({
-      where: { userId_teamId: { userId: user.id, teamId } },
-      data: { role: "member" },
-    }),
-  ]);
+// POST /api/teams/:teamId/transfer-ownership/:transferId/accept
+teamsRouter.post("/:teamId/transfer-ownership/:transferId/accept", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, transferId } = c.req.param();
+  const result = await acceptOwnershipTransfer({ transferId, teamId, userId: user.id });
+  if ("error" in result) {
+    return c.json({ error: { message: result.error.message, code: result.error.code } }, result.error.status as 400);
+  }
+  return c.json({
+    data: {
+      transfer: result.data,
+      paymentSetupUrl: result.paymentSetupUrl ?? null,
+      completed: !result.paymentSetupUrl,
+    },
+  });
+});
 
-  return c.json({ data: { success: true } });
+// POST /api/teams/:teamId/transfer-ownership/:transferId/complete-payment
+teamsRouter.post("/:teamId/transfer-ownership/:transferId/complete-payment", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, transferId } = c.req.param();
+  const result = await completeOwnershipTransferPayment({ transferId, teamId, userId: user.id });
+  if ("error" in result) {
+    return c.json({ error: { message: result.error.message, code: result.error.code } }, result.error.status as 400);
+  }
+  return c.json({ data: { transfer: result.data, completed: true } });
+});
+
+// POST /api/teams/:teamId/transfer-ownership/:transferId/decline
+teamsRouter.post("/:teamId/transfer-ownership/:transferId/decline", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, transferId } = c.req.param();
+  const result = await declineOwnershipTransfer({ transferId, teamId, userId: user.id });
+  if ("error" in result) {
+    return c.json({ error: { message: result.error.message, code: result.error.code } }, result.error.status as 400);
+  }
+  return c.json({ data: result.data });
+});
+
+// POST /api/teams/:teamId/transfer-ownership/:transferId/cancel
+teamsRouter.post("/:teamId/transfer-ownership/:transferId/cancel", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, transferId } = c.req.param();
+  const result = await cancelOwnershipTransfer({ transferId, teamId, userId: user.id });
+  if ("error" in result) {
+    return c.json({ error: { message: result.error.message, code: result.error.code } }, result.error.status as 400);
+  }
+  return c.json({ data: result.data });
 });
 
 const workplaceAlertBodySchema = z.object({

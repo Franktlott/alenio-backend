@@ -67,6 +67,8 @@ model User {
   organizationMemberships OrganizationMembership[]
   organizationScimUsers OrganizationScimUser[]
   organizationSignupInvitesAccepted OrganizationSignupInvite[]
+  ownershipTransfersFrom OwnershipTransfer[] @relation("OwnershipTransferFrom")
+  ownershipTransfersTo OwnershipTransfer[] @relation("OwnershipTransferTo")
 }
 
 model Session {
@@ -336,6 +338,7 @@ model Team {
   workspaceModules WorkspaceModule[]
   moduleTestSessions ModuleTestSession[]
   chatPins TeamChatPin[]
+  ownershipTransfers OwnershipTransfer[]
 
   @@index([organizationId])
 }
@@ -419,6 +422,34 @@ model TeamSubscription {
   cancelAtPeriodEnd    Boolean   @default(false)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+}
+
+/** Pending / completed workspace ownership transfers (accept flow). */
+model OwnershipTransfer {
+  id                        String    @id @default(cuid())
+  teamId                    String
+  team                      Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  fromUserId                String
+  fromUser                  User      @relation("OwnershipTransferFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId                  String
+  toUser                    User      @relation("OwnershipTransferTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  /** PENDING | ACCEPTED | DECLINED | CANCELED | EXPIRED */
+  status                    String    @default("PENDING")
+  /** WORKSPACE_ADMIN | MANAGER | MEMBER | REMOVE */
+  previousOwnerDisposition  String
+  /** KEEP_PAYMENT_METHOD | REPLACE_PAYMENT_METHOD */
+  billingPath               String    @default("KEEP_PAYMENT_METHOD")
+  /** True when REPLACE path still needs recipient to finish payment method setup. */
+  awaitingPaymentMethod     Boolean   @default(false)
+  expiresAt                 DateTime
+  acceptedAt                DateTime?
+  canceledAt                DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([teamId, status])
+  @@index([toUserId, status])
+  @@index([expiresAt])
 }
 
 model TeamMember {

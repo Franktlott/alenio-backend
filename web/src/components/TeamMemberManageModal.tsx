@@ -117,7 +117,8 @@ export function TeamMemberManageModal({
             <section className="enterprise-member-manage-section enterprise-member-manage-section--divider">
               <h4 className="enterprise-member-manage-section-title">Workspace ownership</h4>
               <p className="enterprise-member-manage-section-sub">
-                Transfer full ownership of this workspace. You will become a member.
+                Transfer full ownership of this workspace. They must accept within 7 days. Billing responsibility
+                transfers with ownership; your plan stays the same.
               </p>
               <button
                 type="button"
@@ -125,7 +126,7 @@ export function TeamMemberManageModal({
                 disabled={busy}
                 onClick={() => void onTransferOwnership()}
               >
-                Transfer ownership
+                Transfer Workspace Ownership
               </button>
             </section>
           ) : null}
