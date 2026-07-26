@@ -45,6 +45,10 @@ export function fetchIncomingOwnershipTransfers() {
   return api.get<OwnershipTransfer[]>("/api/ownership-transfers/mine");
 }
 
+export function fetchOutgoingOwnershipTransfers() {
+  return api.get<OwnershipTransfer[]>("/api/ownership-transfers/outgoing");
+}
+
 export function fetchPendingOwnershipTransfer(teamId: string) {
   return api.get<OwnershipTransfer | null>(`/api/teams/${teamId}/transfer-ownership/pending`);
 }

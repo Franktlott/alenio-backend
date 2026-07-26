@@ -589,6 +589,7 @@ export default function TeamScreen() {
   const refreshOwnershipTransfer = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["ownership-transfer-pending", activeTeamId] });
     queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
+    queryClient.invalidateQueries({ queryKey: ["ownership-transfers-outgoing"] });
     queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
     queryClient.invalidateQueries({ queryKey: ["teams"] });
   }, [activeTeamId, queryClient]);

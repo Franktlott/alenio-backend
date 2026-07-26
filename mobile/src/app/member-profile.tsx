@@ -952,6 +952,7 @@ export default function MemberProfileScreen() {
         onStarted={() => {
           queryClient.invalidateQueries({ queryKey: ["ownership-transfer-pending", teamId] });
           queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
+          queryClient.invalidateQueries({ queryKey: ["ownership-transfers-outgoing"] });
           toast({ title: "Transfer request sent", preset: "done" });
         }}
       />

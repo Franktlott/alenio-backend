@@ -27,9 +27,11 @@ import {
 } from "@/lib/team-invites-api";
 import {
   acceptOwnershipTransfer,
+  cancelOwnershipTransfer,
   completeOwnershipTransferPayment,
   declineOwnershipTransfer,
   fetchIncomingOwnershipTransfers,
+  fetchOutgoingOwnershipTransfers,
   openOwnershipCelebration,
   type OwnershipTransfer,
 } from "@/lib/ownership-transfer-api";
@@ -217,6 +219,13 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
     refetchInterval: 25_000,
   });
 
+  const { data: outgoingOwnershipTransfers = [] } = useQuery({
+    queryKey: ["ownership-transfers-outgoing"],
+    queryFn: () => fetchOutgoingOwnershipTransfers(),
+    staleTime: 15_000,
+    refetchInterval: 25_000,
+  });
+
   const { data: pendingEvents = [] } = useQuery({
     queryKey: ["calendar-events-pending", activeTeamId],
     queryFn: () => api.get<PendingEvent[]>(`/api/teams/${activeTeamId}/events/pending`),
@@ -275,7 +284,8 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
     openInvites.length +
     outgoingPending.length +
     pendingEvents.length +
-    ownershipTransfers.length;
+    ownershipTransfers.length +
+    outgoingOwnershipTransfers.length;
 
   const approveJoin = useMutation({
     mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
@@ -393,6 +403,20 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] }),
   });
 
+  const cancelOutgoingOwnership = useMutation({
+    mutationFn: (row: OwnershipTransfer) => cancelOwnershipTransfer(row.teamId, row.id),
+    onMutate: (row) => setBusyId(row.id),
+    onSettled: () => setBusyId(null),
+    onSuccess: (_data, row) => {
+      queryClient.invalidateQueries({ queryKey: ["ownership-transfers-outgoing"] });
+      queryClient.invalidateQueries({ queryKey: ["ownership-transfer-pending", row.teamId] });
+      queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
+    },
+    onError: (err: Error) => {
+      Alert.alert("Ownership transfer", err.message || "Could not cancel this transfer.");
+    },
+  });
+
   const empty = badgeCount === 0;
 
   return (
@@ -479,7 +503,8 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
               You&apos;re all caught up
             </Text>
             <Text style={{ fontSize: 12, color: "#64748B", textAlign: "center", marginTop: 4, lineHeight: 17 }}>
-              Join requests, ownership transfers, Alenio Go logins, invites, and calendar approvals will show up here.
+              Join requests, ownership transfers you send or receive, Alenio Go logins, invites, and calendar
+              approvals will show up here.
             </Text>
           </AlenioSheetCard>
         ) : null}
@@ -527,6 +552,79 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
                       Tap ✓ to add a different card (previous owner’s card won’t work)
                     </Text>
                   ) : null}
+                </AlenioSheetCard>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {outgoingOwnershipTransfers.length > 0 ? (
+          <View style={{ gap: 6 }}>
+            <SectionLabel>Transfers you started</SectionLabel>
+            {outgoingOwnershipTransfers.map((row) => {
+              const toName = row.toUser.name ?? row.toUser.email ?? "Member";
+              return (
+                <AlenioSheetCard key={`out-${row.id}`} compact>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: "#F5F3FF",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Crown size={15} color="#7C3AED" />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+                        Waiting on {toName}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: "#64748B" }} numberOfLines={2}>
+                        Ownership of {row.teamName}
+                        {row.awaitingPaymentMethod ? " · awaiting their card" : ""}
+                        {" · "}
+                        {formatOwnershipExpiry(row.expiresAt)}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => {
+                        Alert.alert(
+                          "Cancel transfer?",
+                          `${toName} will no longer be able to accept ownership of ${row.teamName}.`,
+                          [
+                            { text: "Keep waiting", style: "cancel" },
+                            {
+                              text: "Cancel transfer",
+                              style: "destructive",
+                              onPress: () => cancelOutgoingOwnership.mutate(row),
+                            },
+                          ],
+                        );
+                      }}
+                      disabled={busyId === row.id}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                        backgroundColor: "#F8FAFC",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                        opacity: busyId === row.id ? 0.5 : 1,
+                        minWidth: 72,
+                        alignItems: "center",
+                      }}
+                      testID={`notif-ownership-outgoing-cancel-${row.id}`}
+                    >
+                      {busyId === row.id ? (
+                        <ActivityIndicator size="small" color="#64748B" />
+                      ) : (
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748B" }}>Cancel</Text>
+                      )}
+                    </Pressable>
+                  </View>
                 </AlenioSheetCard>
               );
             })}

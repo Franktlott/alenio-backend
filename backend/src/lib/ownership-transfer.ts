@@ -287,6 +287,16 @@ export async function listIncomingOwnershipTransfers(userId: string) {
   return rows.map(serializeOwnershipTransfer);
 }
 
+/** Pending transfers the current user started (still awaiting recipient). */
+export async function listOutgoingOwnershipTransfers(userId: string) {
+  const rows = await prisma.ownershipTransfer.findMany({
+    where: { fromUserId: userId, status: "PENDING" },
+    include: transferInclude,
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(serializeOwnershipTransfer);
+}
+
 export async function getPendingTransferForTeam(teamId: string) {
   return prisma.ownershipTransfer.findFirst({
     where: { teamId, status: "PENDING" },
