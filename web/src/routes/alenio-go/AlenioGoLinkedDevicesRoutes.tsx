@@ -17,7 +17,7 @@ function LinkedDevicesLayout() {
         id: "access",
         label: "Link & access",
         to: "/go/devices",
-        badge: canManage && approvals.total > 0 ? approvals.total : undefined,
+        badge: canManage && approvals.approvalCount > 0 ? approvals.approvalCount : undefined,
       },
     ];
     if (canManage) {
@@ -25,7 +25,7 @@ function LinkedDevicesLayout() {
       items.push({ id: "display", label: "Tablet display", to: "/go/devices/display" });
     }
     return items;
-  }, [approvals.total, canManage]);
+  }, [approvals.approvalCount, canManage]);
 
   return (
     <GoBackendModuleShell

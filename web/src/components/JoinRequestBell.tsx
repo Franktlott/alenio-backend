@@ -13,6 +13,7 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
   const {
     joinRows,
     goRows,
+    ownershipRows,
     total,
     loadErr,
     busyKey,
@@ -21,6 +22,8 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
     onRejectJoin,
     onApproveGo,
     onRejectGo,
+    onAcceptOwnership,
+    onDeclineOwnership,
   } = usePendingApprovals({ pollMs: 45_000 });
 
   useEffect(() => {
@@ -65,19 +68,22 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
       {open ? (
         <div className="enterprise-join-requests-panel" role="dialog" aria-label="Pending approvals">
           <div className="enterprise-join-requests-panel-head">
-            <span className="enterprise-join-requests-panel-title">Approvals</span>
-            <span className="enterprise-join-requests-panel-sub">Teams you manage</span>
+            <span className="enterprise-join-requests-panel-title">Notifications</span>
+            <span className="enterprise-join-requests-panel-sub">Approvals and ownership requests</span>
           </div>
           <PendingApprovalsPanel
             variant="dropdown"
             joinRows={joinRows}
             goRows={goRows}
+            ownershipRows={ownershipRows}
             loadErr={loadErr}
             busyKey={busyKey}
             onApproveJoin={onApproveJoin}
             onRejectJoin={onRejectJoin}
             onApproveGo={onApproveGo}
             onRejectGo={onRejectGo}
+            onAcceptOwnership={onAcceptOwnership}
+            onDeclineOwnership={onDeclineOwnership}
           />
         </div>
       ) : null}

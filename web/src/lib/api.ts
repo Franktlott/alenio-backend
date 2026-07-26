@@ -1951,6 +1951,12 @@ export function fetchPendingOwnershipTransfer(teamId: string) {
   ).then((r) => r.data);
 }
 
+export function fetchIncomingOwnershipTransfers() {
+  return apiGetJson<{ data: OwnershipTransferRow[] }>("/api/ownership-transfers/mine").then(
+    (r) => r.data ?? [],
+  );
+}
+
 export function acceptOwnershipTransfer(teamId: string, transferId: string) {
   return apiPostJson<{
     data: { transfer: OwnershipTransferRow; paymentSetupUrl: string | null; completed: boolean };

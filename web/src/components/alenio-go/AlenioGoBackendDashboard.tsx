@@ -175,10 +175,10 @@ export function AlenioGoBackendDashboard({
     () =>
       goBackendAdminTiles({
         canManage,
-        pendingCount: approvals.total,
+        pendingCount: approvals.approvalCount,
         modulesByKey,
       }),
-    [canManage, approvals.total, modulesByKey],
+    [canManage, approvals.approvalCount, modulesByKey],
   );
   const quickActions = goBackendQuickActions({
     inviteCode,
@@ -259,9 +259,9 @@ export function AlenioGoBackendDashboard({
             </div>
             <div className="go-dash-stat-col">
               <span
-                className={`go-dash-stat-value${approvals.total > 0 ? " go-dash-stat-value--amber" : " go-dash-stat-value--green"}`}
+                className={`go-dash-stat-value${approvals.approvalCount > 0 ? " go-dash-stat-value--amber" : " go-dash-stat-value--green"}`}
               >
-                {canManage ? approvals.total : "—"}
+                {canManage ? approvals.approvalCount : "—"}
               </span>
               <span className="go-dash-stat-label">Pending approvals</span>
             </div>

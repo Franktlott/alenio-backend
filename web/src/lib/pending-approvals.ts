@@ -15,6 +15,10 @@ export function formatApprovalDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function approvalBusyKey(kind: "join" | "go", teamId: string, requestId: string): string {
+export function approvalBusyKey(
+  kind: "join" | "go" | "ownership",
+  teamId: string,
+  requestId: string,
+): string {
   return `${kind}:${teamId}:${requestId}`;
 }

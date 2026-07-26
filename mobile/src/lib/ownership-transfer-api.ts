@@ -23,6 +23,10 @@ export type OwnershipTransfer = {
   toUser: { id: string; name: string | null; email: string | null; image: string | null };
 };
 
+export function fetchIncomingOwnershipTransfers() {
+  return api.get<OwnershipTransfer[]>("/api/ownership-transfers/mine");
+}
+
 export function fetchPendingOwnershipTransfer(teamId: string) {
   return api.get<OwnershipTransfer | null>(`/api/teams/${teamId}/transfer-ownership/pending`);
 }

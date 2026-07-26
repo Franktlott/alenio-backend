@@ -112,8 +112,8 @@ export function LinkedDevicesAccessPanel({ teamId, teamName, inviteCode, canMana
           <div className="go-backend-module-panel go-backend-panel-card" id="go-device-approvals">
             <div className="go-backend-module-panel-badge-row">
               <h2 className="go-backend-devices-section-title">Pending approval</h2>
-              {approvals.total > 0 ? (
-                <span className="enterprise-alenio-go-approvals-count">{approvals.total} pending</span>
+              {approvals.approvalCount > 0 ? (
+                <span className="enterprise-alenio-go-approvals-count">{approvals.approvalCount} pending</span>
               ) : null}
             </div>
             <p className="go-backend-devices-section-sub enterprise-muted">

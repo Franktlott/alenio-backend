@@ -129,6 +129,15 @@ function dispositionToRole(disposition: string): "team_leader" | "member" | "rem
   return "team_leader"; // WORKSPACE_ADMIN | MANAGER
 }
 
+export async function listIncomingOwnershipTransfers(userId: string) {
+  const rows = await prisma.ownershipTransfer.findMany({
+    where: { toUserId: userId, status: "PENDING" },
+    include: transferInclude,
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(serializeOwnershipTransfer);
+}
+
 export async function getPendingTransferForTeam(teamId: string) {
   return prisma.ownershipTransfer.findFirst({
     where: { teamId, status: "PENDING" },

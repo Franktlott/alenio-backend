@@ -5,10 +5,12 @@ import {
   type PendingGoLoginRow,
   type PendingJoinRow,
 } from "../lib/pending-approvals";
+import type { OwnershipTransferRow } from "../lib/api";
 
 type Props = {
   joinRows: PendingJoinRow[];
   goRows: PendingGoLoginRow[];
+  ownershipRows?: OwnershipTransferRow[];
   loadErr: string | null;
   busyKey: string | null;
   loading?: boolean;
@@ -18,16 +20,20 @@ type Props = {
   onRejectJoin: (teamId: string, requestId: string) => Promise<void>;
   onApproveGo: (teamId: string, requestId: string) => Promise<void>;
   onRejectGo: (teamId: string, requestId: string) => Promise<void>;
+  onAcceptOwnership?: (teamId: string, transferId: string) => Promise<void>;
+  onDeclineOwnership?: (teamId: string, transferId: string) => Promise<void>;
 };
 
 function ApprovalActions({
   busy,
   onDecline,
   onApprove,
+  approveLabel = "Approve",
 }: {
   busy: boolean;
   onDecline: () => void;
   onApprove: () => void;
+  approveLabel?: string;
 }) {
   return (
     <div className="enterprise-join-requests-actions">
@@ -45,7 +51,7 @@ function ApprovalActions({
         disabled={busy}
         onClick={onApprove}
       >
-        {busy ? "…" : "Approve"}
+        {busy ? "…" : approveLabel}
       </button>
     </div>
   );
@@ -54,6 +60,7 @@ function ApprovalActions({
 export function PendingApprovalsPanel({
   joinRows,
   goRows,
+  ownershipRows = [],
   loadErr,
   busyKey,
   loading = false,
@@ -63,8 +70,10 @@ export function PendingApprovalsPanel({
   onRejectJoin,
   onApproveGo,
   onRejectGo,
+  onAcceptOwnership,
+  onDeclineOwnership,
 }: Props) {
-  const empty = joinRows.length === 0 && goRows.length === 0;
+  const empty = joinRows.length === 0 && goRows.length === 0 && ownershipRows.length === 0;
   const isPage = variant === "page";
 
   if (loading && empty) {
@@ -85,6 +94,32 @@ export function PendingApprovalsPanel({
 
   return (
     <ul className={`enterprise-join-requests-list${isPage ? " enterprise-join-requests-list--page" : ""}`}>
+      {ownershipRows.map((r) => {
+        const key = approvalBusyKey("ownership", r.teamId, r.id);
+        const busy = busyKey === key;
+        const fromName = r.fromUser.name?.trim() || r.fromUser.email?.trim() || "The owner";
+        return (
+          <li key={`ownership-${r.id}`} className="enterprise-join-requests-item">
+            <div className="enterprise-join-requests-item-text">
+              {isPage ? <span className="enterprise-approvals-kind">Ownership transfer</span> : null}
+              <strong>Become owner of {r.teamName}</strong>
+              <span className="enterprise-muted enterprise-join-requests-meta">
+                {fromName} wants to transfer ownership to you
+                {r.awaitingPaymentMethod ? " · add payment method to finish" : ""}
+                {isPage ? <> · expires {formatApprovalDate(r.expiresAt)}</> : null}
+              </span>
+            </div>
+            {onAcceptOwnership && onDeclineOwnership ? (
+              <ApprovalActions
+                busy={busy}
+                onDecline={() => void onDeclineOwnership(r.teamId, r.id)}
+                onApprove={() => void onAcceptOwnership(r.teamId, r.id)}
+                approveLabel={r.awaitingPaymentMethod ? "Complete" : "Accept"}
+              />
+            ) : null}
+          </li>
+        );
+      })}
       {goRows.map((r) => {
         const key = approvalBusyKey("go", r.teamId, r.id);
         const busy = busyKey === key;

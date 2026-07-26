@@ -5,9 +5,10 @@ import {
   Pressable,
   ActivityIndicator,
   Image,
+  Alert,
 } from "react-native";
 import { useQueries, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, Smartphone, UserPlus, Mail, Settings, X } from "lucide-react-native";
+import { Bell, Check, Crown, Smartphone, UserPlus, Mail, Settings, X } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -23,6 +24,13 @@ import {
   resendTeamInvite,
   type TeamInvite,
 } from "@/lib/team-invites-api";
+import {
+  acceptOwnershipTransfer,
+  completeOwnershipTransferPayment,
+  declineOwnershipTransfer,
+  fetchIncomingOwnershipTransfers,
+  type OwnershipTransfer,
+} from "@/lib/ownership-transfer-api";
 
 type JoinRequest = {
   id: string;
@@ -185,6 +193,13 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
     refetchInterval: 30_000,
   });
 
+  const { data: ownershipTransfers = [] } = useQuery({
+    queryKey: ["ownership-transfers-mine"],
+    queryFn: () => fetchIncomingOwnershipTransfers(),
+    staleTime: 15_000,
+    refetchInterval: 25_000,
+  });
+
   const { data: pendingEvents = [] } = useQuery({
     queryKey: ["calendar-events-pending", activeTeamId],
     queryFn: () => api.get<PendingEvent[]>(`/api/teams/${activeTeamId}/events/pending`),
@@ -242,7 +257,8 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
     goRequests.length +
     openInvites.length +
     outgoingPending.length +
-    pendingEvents.length;
+    pendingEvents.length +
+    ownershipTransfers.length;
 
   const approveJoin = useMutation({
     mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
@@ -317,6 +333,37 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
     onMutate: (event) => setBusyId(event.id),
     onSettled: () => setBusyId(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calendar-events-pending"] }),
+  });
+
+  const acceptOwnership = useMutation({
+    mutationFn: async (row: OwnershipTransfer) => {
+      if (row.awaitingPaymentMethod) {
+        return completeOwnershipTransferPayment(row.teamId, row.id);
+      }
+      const res = await acceptOwnershipTransfer(row.teamId, row.id);
+      if (res.paymentSetupUrl) {
+        // Card setup is web-only for now.
+        throw new Error("Open Alenio on the web to add a payment method and finish this transfer.");
+      }
+      return res;
+    },
+    onMutate: (row) => setBusyId(row.id),
+    onSettled: () => setBusyId(null),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+      setOpen(false);
+    },
+    onError: (err: Error) => {
+      Alert.alert("Ownership transfer", err.message || "Could not accept this transfer.");
+    },
+  });
+
+  const declineOwnership = useMutation({
+    mutationFn: (row: OwnershipTransfer) => declineOwnershipTransfer(row.teamId, row.id),
+    onMutate: (row) => setBusyId(row.id),
+    onSettled: () => setBusyId(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] }),
   });
 
   const empty = badgeCount === 0;
@@ -405,9 +452,51 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
               You&apos;re all caught up
             </Text>
             <Text style={{ fontSize: 12, color: "#64748B", textAlign: "center", marginTop: 4, lineHeight: 17 }}>
-              Join requests, Alenio Go logins, invites, and calendar approvals will show up here.
+              Join requests, ownership transfers, Alenio Go logins, invites, and calendar approvals will show up here.
             </Text>
           </AlenioSheetCard>
+        ) : null}
+
+        {ownershipTransfers.length > 0 ? (
+          <View style={{ gap: 6 }}>
+            <SectionLabel>Ownership transfers</SectionLabel>
+            {ownershipTransfers.map((row) => {
+              const fromName = row.fromUser.name ?? row.fromUser.email ?? "Owner";
+              return (
+                <AlenioSheetCard key={row.id} compact>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: "#EEF2FF",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Crown size={15} color="#4361EE" />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+                        Become owner of {row.teamName}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: "#64748B" }} numberOfLines={2}>
+                        {fromName} wants to transfer ownership
+                        {row.awaitingPaymentMethod ? " · finish payment on web" : ""} · {formatDate(row.expiresAt)}
+                      </Text>
+                    </View>
+                    <ActionPair
+                      busy={busyId === row.id}
+                      testIdPrefix={`notif-ownership-${row.id}`}
+                      onApprove={() => acceptOwnership.mutate(row)}
+                      onDecline={() => declineOwnership.mutate(row)}
+                    />
+                  </View>
+                </AlenioSheetCard>
+              );
+            })}
+          </View>
         ) : null}
 
         {joinRequests.length > 0 ? (
