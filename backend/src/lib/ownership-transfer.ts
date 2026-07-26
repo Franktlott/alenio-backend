@@ -13,6 +13,10 @@ import {
   getStripeClient,
   isStripePortalConfigured,
 } from "./stripe-billing";
+import {
+  buildOwnershipTransferEmail,
+  type OwnershipTransferEmailKind,
+} from "./ownership-transfer-email";
 
 export const OWNERSHIP_TRANSFER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -36,7 +40,7 @@ type ServiceError = { message: string; code: string; status: number };
 const transferInclude = {
   fromUser: { select: { id: true, name: true, email: true, image: true } },
   toUser: { select: { id: true, name: true, email: true, image: true } },
-  team: { select: { id: true, name: true } },
+  team: { select: { id: true, name: true, image: true } },
 } as const;
 
 function parseJsonStringArray(raw: string | null | undefined): string[] {
@@ -199,8 +203,13 @@ async function notifyUsers(opts: {
   userIds: string[];
   title: string;
   body: string;
-  emailSubject: string;
-  emailHtml: string;
+  emailKind: OwnershipTransferEmailKind;
+  teamName: string;
+  teamImage?: string | null;
+  fromName: string;
+  toName: string;
+  expiresAt?: Date | string | null;
+  billingPath?: string | null;
   data?: Record<string, unknown>;
 }) {
   const unique = [...new Set(opts.userIds.filter(Boolean))];
@@ -220,12 +229,24 @@ async function notifyUsers(opts: {
     });
     const resend = new Resend(env.RESEND_API_KEY);
     for (const u of users) {
-      if (!u.email?.trim()) continue;
+      const email = u.email?.trim();
+      if (!email) continue;
+      const mail = buildOwnershipTransferEmail({
+        kind: opts.emailKind,
+        toEmail: email,
+        teamName: opts.teamName,
+        teamImage: opts.teamImage,
+        fromName: opts.fromName,
+        toName: opts.toName,
+        expiresAt: opts.expiresAt,
+        billingPath: opts.billingPath,
+      });
       await resend.emails.send({
         from: env.FROM_EMAIL,
-        to: u.email,
-        subject: opts.emailSubject,
-        html: opts.emailHtml,
+        to: email,
+        subject: mail.subject,
+        html: mail.html,
+        text: mail.text,
       });
     }
   } catch (err) {
@@ -304,8 +325,11 @@ export async function cancelPendingTransferIfRecipientLeaves(
     userIds: [pending.fromUserId],
     title: "Ownership transfer canceled",
     body: `The ownership transfer for ${teamName} was canceled because the recipient left the workspace.`,
-    emailSubject: `Ownership transfer canceled — ${teamName}`,
-    emailHtml: `<p>The ownership transfer for <strong>${escapeHtml(teamName)}</strong> was canceled because the recipient left the workspace.</p>`,
+    emailKind: "canceled_recipient_left",
+    teamName,
+    teamImage: updated.team.image,
+    fromName: updated.fromUser.name ?? "The owner",
+    toName: updated.toUser.name ?? updated.toUser.email ?? "The recipient",
     data: { type: "ownership_transfer_canceled", teamId, transferId: pending.id },
   });
 }
@@ -452,8 +476,13 @@ export async function initiateOwnershipTransfer(opts: {
     userIds: [opts.toUserId],
     title: "Ownership transfer request",
     body: `${fromName} wants to transfer ownership of ${teamName} to you. You have 7 days to accept.`,
-    emailSubject: `Ownership transfer request — ${teamName}`,
-    emailHtml: `<p><strong>${escapeHtml(fromName)}</strong> wants to transfer ownership of <strong>${escapeHtml(teamName)}</strong> to you.</p><p>Open Alenio to accept or decline. This request expires in 7 days.</p>`,
+    emailKind: "started",
+    teamName,
+    teamImage: created.team.image,
+    fromName,
+    toName: created.toUser.name ?? created.toUser.email ?? "You",
+    expiresAt: created.expiresAt,
+    billingPath: created.billingPath,
     data: { type: "ownership_transfer_started", teamId: opts.teamId, transferId: created.id },
   });
 
@@ -550,8 +579,12 @@ async function applyAcceptedTransfer(
     userIds: [transfer.fromUserId, transfer.toUserId],
     title: "Ownership transferred",
     body: `${newName} is now the owner of ${teamName}.`,
-    emailSubject: `Ownership transferred — ${teamName}`,
-    emailHtml: `<p><strong>${escapeHtml(newName)}</strong> is now the Workspace Owner of <strong>${escapeHtml(teamName)}</strong>.</p><p>Administrative control and billing responsibility have been transferred.</p>`,
+    emailKind: "accepted",
+    teamName,
+    teamImage: transfer.team.image,
+    fromName: transfer.fromUser.name ?? "Previous owner",
+    toName: newName,
+    billingPath: transfer.billingPath,
     data: { type: "ownership_transfer_accepted", teamId: transfer.teamId, transferId: transfer.id },
   });
 
@@ -888,8 +921,11 @@ export async function declineOwnershipTransfer(opts: {
     userIds: [transfer.fromUserId],
     title: "Ownership transfer declined",
     body: `${transfer.toUser.name ?? "The recipient"} declined ownership of ${transfer.team.name}.`,
-    emailSubject: `Ownership transfer declined — ${transfer.team.name}`,
-    emailHtml: `<p>The ownership transfer for <strong>${escapeHtml(transfer.team.name)}</strong> was declined.</p>`,
+    emailKind: "declined",
+    teamName: transfer.team.name,
+    teamImage: transfer.team.image,
+    fromName: transfer.fromUser.name ?? "The owner",
+    toName: transfer.toUser.name ?? transfer.toUser.email ?? "The recipient",
     data: { type: "ownership_transfer_declined", teamId: opts.teamId, transferId: transfer.id },
   });
 
@@ -932,8 +968,11 @@ export async function cancelOwnershipTransfer(opts: {
     userIds: [transfer.toUserId],
     title: "Ownership transfer canceled",
     body: `The ownership transfer for ${transfer.team.name} was canceled.`,
-    emailSubject: `Ownership transfer canceled — ${transfer.team.name}`,
-    emailHtml: `<p>The ownership transfer for <strong>${escapeHtml(transfer.team.name)}</strong> was canceled by the owner.</p>`,
+    emailKind: "canceled_by_owner",
+    teamName: transfer.team.name,
+    teamImage: transfer.team.image,
+    fromName: transfer.fromUser.name ?? "The owner",
+    toName: transfer.toUser.name ?? transfer.toUser.email ?? "You",
     data: { type: "ownership_transfer_canceled", teamId: opts.teamId, transferId: transfer.id },
   });
 
@@ -966,8 +1005,12 @@ async function expireTransfer(transferId: string) {
     userIds: [transfer.fromUserId, transfer.toUserId],
     title: "Ownership transfer expired",
     body: `The ownership transfer for ${transfer.team.name} expired.`,
-    emailSubject: `Ownership transfer expired — ${transfer.team.name}`,
-    emailHtml: `<p>The ownership transfer for <strong>${escapeHtml(transfer.team.name)}</strong> expired after 7 days.</p>`,
+    emailKind: "expired",
+    teamName: transfer.team.name,
+    teamImage: transfer.team.image,
+    fromName: transfer.fromUser.name ?? "The owner",
+    toName: transfer.toUser.name ?? transfer.toUser.email ?? "The recipient",
+    expiresAt: transfer.expiresAt,
     data: { type: "ownership_transfer_expired", teamId: transfer.teamId, transferId: transfer.id },
   });
 }
@@ -981,12 +1024,4 @@ export async function expirePendingOwnershipTransfers(): Promise<number> {
     await expireTransfer(row.id);
   }
   return due.length;
-}
-
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
