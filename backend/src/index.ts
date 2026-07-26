@@ -50,6 +50,7 @@ import {
   isFirebaseStorageConfigured,
   uploadFileToFirebaseStorage,
 } from "./lib/firebase-storage";
+import { cleanupOrphanUserUploads } from "./lib/orphan-upload-cleanup";
 import { syncPrismaSchemaOnStartup } from "./lib/sync-prisma-schema";
 import { ensureOneOnOneSchema } from "./lib/ensure-one-on-one-schema";
 import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schema";
@@ -1354,7 +1355,10 @@ app.route("/api/admin-mobile", adminApiRouter);
 app.route("/web", webRouter);
 
 // ── Auto-cleanup job ────────────────────────────────────────────
-// Deletes old calendar events and completed tasks past retention windows.
+// Deletes old calendar events / completed tasks, and purges orphan chat uploads.
+let lastOrphanUploadCleanupAt = 0;
+const ORPHAN_UPLOAD_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
 async function runCleanup() {
   const eventsCutoff = new Date();
   eventsCutoff.setDate(eventsCutoff.getDate() - 45);
@@ -1367,6 +1371,16 @@ async function runCleanup() {
       where: { startDate: { lt: eventsCutoff } },
     });
 
+    // Collect attachments before wiping old completed tasks so storage can be cleaned.
+    const oldCompletedTasks = await prisma.task.findMany({
+      where: {
+        status: "done",
+        completedAt: { not: null, lt: completedTasksCutoff },
+        attachmentUrl: { not: null },
+      },
+      select: { attachmentUrl: true },
+    });
+
     // Delete only completed tasks older than 7 months.
     // This keeps active/in-progress tasks intact and preserves short-term history.
     const deletedTasks = await prisma.task.deleteMany({
@@ -1376,15 +1390,37 @@ async function runCleanup() {
       },
     });
 
+    if (oldCompletedTasks.length > 0) {
+      await Promise.all(
+        oldCompletedTasks.map((row) => deleteStorageObjectByUrlIfOwned(row.attachmentUrl)),
+      );
+    }
+
     if (deletedEvents.count > 0 || deletedTasks.count > 0) {
       console.log(`[cleanup] Removed ${deletedEvents.count} events >45d and ${deletedTasks.count} completed tasks >7mo`);
     }
   } catch (err) {
     console.error("[cleanup] Error during cleanup:", err);
   }
+
+  // Orphan generic uploads (picked then never sent) — daily, after a 7-day grace period.
+  const now = Date.now();
+  if (now - lastOrphanUploadCleanupAt >= ORPHAN_UPLOAD_CLEANUP_INTERVAL_MS) {
+    lastOrphanUploadCleanupAt = now;
+    try {
+      const orphan = await cleanupOrphanUserUploads();
+      if (orphan.scanned > 0 || orphan.deleted > 0) {
+        console.log(
+          `[cleanup] Orphan uploads scanned=${orphan.scanned} deleted=${orphan.deleted} keptReferenced=${orphan.referencedSkipped} keptRecent=${orphan.tooNewSkipped} errors=${orphan.errors}`,
+        );
+      }
+    } catch (err) {
+      console.error("[cleanup] Orphan upload cleanup failed:", err);
+    }
+  }
 }
 
-// Run once on startup, then every 24 hours
+// Run once on startup, then hourly (orphan uploads still only once per day).
 runCleanup();
 setInterval(runCleanup, 60 * 60 * 1000);
 

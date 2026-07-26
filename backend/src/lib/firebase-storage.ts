@@ -159,6 +159,13 @@ function parseObjectFromStorageUrl(url: string): { bucketId: string; objectPath:
   return null;
 }
 
+/** Public helper: resolve an Alenio-owned Storage object path from a download URL. */
+export function parseOwnedStorageObjectFromUrl(
+  url: string,
+): { bucketId: string; objectPath: string } | null {
+  return parseObjectFromStorageUrl(url.trim());
+}
+
 export async function readStorageObjectByUrl(
   url: string,
 ): Promise<{ bytes: Buffer; contentType: string } | null> {
@@ -371,5 +378,68 @@ export async function deleteAllUserStorageObjects(userId: string): Promise<void>
     } catch {
       /* try next bucket alias */
     }
+  }
+}
+
+export type UserUploadObject = {
+  bucketId: string;
+  objectPath: string;
+  /** Epoch ms when the object was uploaded (filename timestamp preferred). */
+  uploadedAtMs: number;
+};
+
+/**
+ * Lists objects under users/.../uploads/ across configured buckets.
+ * Used by orphan cleanup — never includes profile/team/go slots.
+ */
+export async function listUserUploadObjects(): Promise<UserUploadObject[]> {
+  if (!hasFirebaseStorageConfig()) return [];
+  if (!ensureFirebaseStorageInitialized()) return [];
+
+  const out: UserUploadObject[] = [];
+  const seen = new Set<string>();
+
+  for (const bucketId of bucketCandidates()) {
+    try {
+      const bucket = getStorage().bucket(bucketId);
+      const [files] = await bucket.getFiles({ prefix: "users/" });
+      for (const file of files) {
+        const objectPath = file.name;
+        if (!/\/uploads\//.test(objectPath)) continue;
+        const key = `${normalizeBucketName(bucketId)}:${objectPath}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const fromName = objectPath.match(/\/uploads\/(\d{10,})-/);
+        let uploadedAtMs = fromName ? Number(fromName[1]) : NaN;
+        if (!Number.isFinite(uploadedAtMs)) {
+          const created = file.metadata?.timeCreated;
+          uploadedAtMs = created ? Date.parse(created) : 0;
+        }
+        out.push({ bucketId, objectPath, uploadedAtMs });
+      }
+      // First successful listing wins (aliases usually mirror the same objects).
+      return out;
+    } catch {
+      /* try next bucket */
+    }
+  }
+
+  return out;
+}
+
+export async function deleteStorageObjectByPath(
+  bucketId: string,
+  objectPath: string,
+): Promise<boolean> {
+  if (!objectPath?.trim()) return false;
+  if (!hasFirebaseStorageConfig()) return false;
+  if (!ensureFirebaseStorageInitialized()) return false;
+
+  try {
+    await getStorage().bucket(bucketId).file(objectPath).delete({ ignoreNotFound: true });
+    return true;
+  } catch {
+    return false;
   }
 }
