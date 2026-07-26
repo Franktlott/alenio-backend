@@ -1924,14 +1924,17 @@ export function initiateOwnershipTransfer(
   body: {
     toUserId: string;
     previousOwnerDisposition: OwnershipTransferDisposition;
-    billingPath: OwnershipBillingPath;
+    billingPath?: OwnershipBillingPath;
     password?: string;
     confirmPhrase?: string;
   },
 ) {
   return apiPostJson<{ data: OwnershipTransferRow }>(
     `/api/teams/${encodeURIComponent(teamId)}/transfer-ownership`,
-    body,
+    {
+      ...body,
+      billingPath: body.billingPath ?? "REPLACE_PAYMENT_METHOD",
+    },
   );
 }
 
@@ -1940,7 +1943,7 @@ export function transferTeamOwnership(teamId: string, userId: string) {
   return initiateOwnershipTransfer(teamId, {
     toUserId: userId,
     previousOwnerDisposition: "WORKSPACE_ADMIN",
-    billingPath: "KEEP_PAYMENT_METHOD",
+    billingPath: "REPLACE_PAYMENT_METHOD",
     confirmPhrase: "TRANSFER",
   });
 }

@@ -15,7 +15,6 @@ import {
 } from "@/components/AlenioBottomSheet";
 import {
   initiateOwnershipTransfer,
-  type OwnershipBillingPath,
   type OwnershipTransferDisposition,
 } from "@/lib/ownership-transfer-api";
 
@@ -54,23 +53,6 @@ const DISPOSITIONS: {
     value: "REMOVE",
     label: "Leave the workspace",
     hint: "Removed automatically when they accept",
-  },
-];
-
-const BILLING: {
-  value: OwnershipBillingPath;
-  label: string;
-  hint: string;
-}[] = [
-  {
-    value: "KEEP_PAYMENT_METHOD",
-    label: "Keep the card on file",
-    hint: "Current card stays · billing contact updates to them",
-  },
-  {
-    value: "REPLACE_PAYMENT_METHOD",
-    label: "They add a different card",
-    hint: "Same card won’t finish the transfer",
   },
 ];
 
@@ -189,7 +171,6 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
   const displayName = member?.user.name?.trim() || member?.user.email?.trim() || "this member";
   const [step, setStep] = useState<"review" | "confirm" | "success">("review");
   const [disposition, setDisposition] = useState<OwnershipTransferDisposition>("WORKSPACE_ADMIN");
-  const [billingPath, setBillingPath] = useState<OwnershipBillingPath>("KEEP_PAYMENT_METHOD");
   const [password, setPassword] = useState("");
   const [confirmPhrase, setConfirmPhrase] = useState("");
   const [useSsoConfirm, setUseSsoConfirm] = useState(false);
@@ -199,7 +180,6 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
   const reset = () => {
     setStep("review");
     setDisposition("WORKSPACE_ADMIN");
-    setBillingPath("KEEP_PAYMENT_METHOD");
     setPassword("");
     setConfirmPhrase("");
     setUseSsoConfirm(false);
@@ -219,7 +199,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
       await initiateOwnershipTransfer(teamId, {
         toUserId: member.userId,
         previousOwnerDisposition: disposition,
-        billingPath,
+        billingPath: "REPLACE_PAYMENT_METHOD",
         ...(useSsoConfirm ? { confirmPhrase: "TRANSFER" } : { password }),
       });
       setStep("success");
@@ -349,7 +329,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
           ? `${displayName} has 7 days to accept`
           : step === "confirm"
             ? `Confirm offering ownership to ${displayName}`
-            : "Choose their role for you and how billing should move"
+            : "Choose your role after they accept — they’ll add their own card to finish"
       }
       onClose={() => {
         if (!busy) onClose();
@@ -381,11 +361,8 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
               <Text style={{ fontSize: 11, fontWeight: "700", color: "#4338CA" }}>Expires in 7 days</Text>
             </View>
             <Text style={{ fontSize: 13, color: "#334155", lineHeight: 19 }}>
-              You’ll keep your chosen role until they accept
-              {billingPath === "REPLACE_PAYMENT_METHOD"
-                ? ". They must add a different card than yours to finish"
-                : ""}
-              . Your plan stays the same.
+              You’ll keep your chosen role until they accept. They must add a different card than yours to
+              finish. Your plan stays the same.
             </Text>
           </View>
         </AlenioSheetCard>
@@ -474,24 +451,26 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
 
           <View>
             <SectionLabel>Billing</SectionLabel>
-            <ChoiceGroup>
-              {BILLING.map((opt, i) => (
-                <ChoiceRow
-                  key={opt.value}
-                  selected={billingPath === opt.value}
-                  title={opt.label}
-                  hint={opt.hint}
-                  disabled={busy}
-                  onPress={() => setBillingPath(opt.value)}
-                  testID={
-                    opt.value === "KEEP_PAYMENT_METHOD"
-                      ? "ownership-billing-keep"
-                      : "ownership-billing-replace"
-                  }
-                  last={i === BILLING.length - 1}
-                />
-              ))}
-            </ChoiceGroup>
+            <View
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#E0E7FF",
+                backgroundColor: "#F8FAFF",
+                paddingHorizontal: 12,
+                paddingVertical: 11,
+                gap: 4,
+              }}
+              testID="ownership-billing-replace-required"
+            >
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>
+                They add a different card
+              </Text>
+              <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 15 }}>
+                Your card comes off the workspace after they finish setup. Same card won’t complete the
+                transfer.
+              </Text>
+            </View>
           </View>
 
           {error ? (
@@ -505,11 +484,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
           <AlenioSheetCard tint="slate" compact>
             <Text style={{ fontSize: 13, color: "#334155", lineHeight: 18 }}>
               Offer ownership to <Text style={{ fontWeight: "700", color: "#0F172A" }}>{displayName}</Text>.
-              They have 7 days to accept
-              {billingPath === "REPLACE_PAYMENT_METHOD"
-                ? ", then must add a different card than the one on file"
-                : ""}
-              .
+              They have 7 days to accept, then must add a different card than the one on file.
             </Text>
           </AlenioSheetCard>
 

@@ -413,7 +413,8 @@ export async function initiateOwnershipTransfer(opts: {
   fromUserEmail: string | null | undefined;
   toUserId: string;
   previousOwnerDisposition: string;
-  billingPath: string;
+  /** Ignored for Stripe workspaces — server always requires REPLACE. Kept for API compat. */
+  billingPath?: string;
   password?: string;
   confirmPhrase?: string;
 }): Promise<{ data: ReturnType<typeof serializeOwnershipTransfer> } | { error: ServiceError }> {
@@ -430,9 +431,6 @@ export async function initiateOwnershipTransfer(opts: {
   }
   if (!DISPOSITIONS.includes(opts.previousOwnerDisposition as OwnershipDisposition)) {
     return { error: { message: "Invalid previous owner disposition", code: "VALIDATION_ERROR", status: 400 } };
-  }
-  if (!BILLING_PATHS.includes(opts.billingPath as OwnershipBillingPath)) {
-    return { error: { message: "Invalid billing path", code: "VALIDATION_ERROR", status: 400 } };
   }
 
   const caller = await prisma.teamMember.findUnique({
@@ -469,10 +467,12 @@ export async function initiateOwnershipTransfer(opts: {
 
   const sub = await getTeamSubscription(opts.teamId);
   const provider = billingProviderFromSubscription(sub);
-  let billingPath = opts.billingPath;
-  if (provider === "none" || sub.plan === "free") {
-    billingPath = "KEEP_PAYMENT_METHOD";
-  }
+  // Paid Stripe workspaces always require the new owner to add a different card.
+  // Free / App Store billing has nothing to swap — accept can finish without Checkout.
+  const billingPath: OwnershipBillingPath =
+    provider === "stripe" || Boolean(sub.stripeCustomerId?.trim()) || Boolean(sub.stripeSubscriptionId?.trim())
+      ? "REPLACE_PAYMENT_METHOD"
+      : "KEEP_PAYMENT_METHOD";
 
   const created = await prisma.ownershipTransfer.create({
     data: {

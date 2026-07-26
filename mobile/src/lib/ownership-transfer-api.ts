@@ -58,12 +58,15 @@ export function initiateOwnershipTransfer(
   body: {
     toUserId: string;
     previousOwnerDisposition: OwnershipTransferDisposition;
-    billingPath: OwnershipBillingPath;
+    billingPath?: OwnershipBillingPath;
     password?: string;
     confirmPhrase?: string;
   },
 ) {
-  return api.post<OwnershipTransfer>(`/api/teams/${teamId}/transfer-ownership`, body);
+  return api.post<OwnershipTransfer>(`/api/teams/${teamId}/transfer-ownership`, {
+    ...body,
+    billingPath: body.billingPath ?? "REPLACE_PAYMENT_METHOD",
+  });
 }
 
 export function acceptOwnershipTransfer(

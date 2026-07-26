@@ -1038,7 +1038,7 @@ teamsRouter.post("/:teamId/transfer-ownership", async (c) => {
     fromUserEmail: user.email,
     toUserId,
     previousOwnerDisposition: body.previousOwnerDisposition ?? "WORKSPACE_ADMIN",
-    billingPath: body.billingPath ?? "KEEP_PAYMENT_METHOD",
+    billingPath: body.billingPath,
     password: body.password,
     confirmPhrase: body.confirmPhrase,
   });

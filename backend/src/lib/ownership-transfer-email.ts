@@ -84,7 +84,7 @@ function copyFor(input: OwnershipTransferEmailInput): Copy {
         subject: `${fromName} wants to transfer ownership of ${teamName}`,
         eyebrow: "Ownership transfer",
         title: `Become owner of ${teamName}`,
-        intro: `${fromName} invited you to take ownership of ${teamName}. Administrative control and billing responsibility move to you when you accept.`,
+        intro: `${fromName} invited you to take ownership of ${teamName}. Administrative control and billing responsibility move to you when you accept${replaceBilling ? " — you’ll add your own card to finish" : ""}.`,
         steps: [
           "Open Alenio on web or mobile",
           "Open Notifications (bell) to review the request",
@@ -101,8 +101,8 @@ function copyFor(input: OwnershipTransferEmailInput): Copy {
           {
             label: "Billing",
             value: replaceBilling
-              ? "You’ll add a different payment method"
-              : "Existing payment method stays on the workspace",
+              ? "You’ll add a different payment method (required)"
+              : "No card change needed for this workspace plan",
           },
         ],
       };

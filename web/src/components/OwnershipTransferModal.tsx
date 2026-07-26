@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { WebTeamMemberRow } from "../lib/api";
 import {
   initiateOwnershipTransfer,
-  type OwnershipBillingPath,
   type OwnershipTransferDisposition,
 } from "../lib/api";
 import { UserAvatar } from "./UserAvatar";
@@ -54,7 +53,6 @@ export function OwnershipTransferModal({
   const displayName = member.user.name ?? member.user.email ?? "this member";
   const [step, setStep] = useState<"review" | "confirm" | "success">("review");
   const [disposition, setDisposition] = useState<OwnershipTransferDisposition>("WORKSPACE_ADMIN");
-  const [billingPath, setBillingPath] = useState<OwnershipBillingPath>("KEEP_PAYMENT_METHOD");
   const [password, setPassword] = useState("");
   const [confirmPhrase, setConfirmPhrase] = useState("");
   const [useSsoConfirm, setUseSsoConfirm] = useState(false);
@@ -68,7 +66,7 @@ export function OwnershipTransferModal({
       await initiateOwnershipTransfer(teamId, {
         toUserId: member.userId,
         previousOwnerDisposition: disposition,
-        billingPath,
+        billingPath: "REPLACE_PAYMENT_METHOD",
         ...(useSsoConfirm ? { confirmPhrase: "TRANSFER" } : { password }),
       });
       setStep("success");
@@ -108,12 +106,12 @@ export function OwnershipTransferModal({
               ✓ Transfer request sent
             </h3>
             <p className="enterprise-member-manage-section-sub">
-              <strong>{displayName}</strong> has 7 days to accept. You’ll see ownership change after they accept
-              {billingPath === "REPLACE_PAYMENT_METHOD" ? " and complete payment setup" : ""}.
+              <strong>{displayName}</strong> has 7 days to accept and complete payment setup. You’ll see ownership
+              change after they finish.
             </p>
             <p className="enterprise-muted" style={{ marginTop: 8 }}>
-              Administrative control and billing responsibility move when they accept. Your current plan stays
-              unchanged.
+              Administrative control and billing responsibility move when they accept. They must add a different
+              card than yours. Your current plan stays unchanged.
             </p>
             <div className="enterprise-member-manage-actions" style={{ marginTop: 16 }}>
               <button type="button" className="enterprise-modal-primary-btn" onClick={onClose}>
@@ -165,52 +163,31 @@ export function OwnershipTransferModal({
 
             <section className="enterprise-member-manage-section enterprise-member-manage-section--divider">
               <h4 className="enterprise-member-manage-section-title">Billing</h4>
-              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer", marginBottom: 8 }}>
-                <input
-                  type="radio"
-                  name="billing"
-                  checked={billingPath === "KEEP_PAYMENT_METHOD"}
-                  onChange={() => setBillingPath("KEEP_PAYMENT_METHOD")}
-                  disabled={busy}
-                />
-                <span>
-                  <strong style={{ display: "block", fontSize: 13 }}>Keep existing payment method</strong>
-                  <span className="enterprise-muted" style={{ fontSize: 12 }}>
-                    Same Stripe subscription and card; billing contact updates to the new owner.
-                  </span>
+              <div
+                style={{
+                  borderRadius: 10,
+                  border: "1px solid #E0E7FF",
+                  background: "#F8FAFF",
+                  padding: "12px 14px",
+                }}
+              >
+                <strong style={{ display: "block", fontSize: 13, color: "#0F172A" }}>
+                  New owner must add a different card
+                </strong>
+                <span className="enterprise-muted" style={{ fontSize: 12, display: "block", marginTop: 4 }}>
+                  Your card comes off the workspace after they finish setup. Reusing the same card won’t complete
+                  the transfer. Free workspaces skip this step.
                 </span>
-              </label>
-              <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
-                <input
-                  type="radio"
-                  name="billing"
-                  checked={billingPath === "REPLACE_PAYMENT_METHOD"}
-                  onChange={() => setBillingPath("REPLACE_PAYMENT_METHOD")}
-                  disabled={busy}
-                />
-                <span>
-                  <strong style={{ display: "block", fontSize: 13 }}>New owner must add a payment method</strong>
-                  <span className="enterprise-muted" style={{ fontSize: 12 }}>
-                    They add a new card in Stripe Checkout. Ownership finishes only after we verify it isn’t the
-                    existing card; old cards are removed.
-                  </span>
-                </span>
-              </label>
+              </div>
             </section>
 
             <section className="enterprise-member-manage-section enterprise-member-manage-section--divider">
               <h4 className="enterprise-member-manage-section-title">Review</h4>
               <ul className="enterprise-muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.5 }}>
                 <li>Workspace ownership will transfer to {displayName} after they accept (within 7 days).</li>
-                <li>Billing responsibility will transfer.</li>
+                <li>They must add a different card before ownership completes (paid Stripe workspaces).</li>
                 <li>Current plan will remain unchanged.</li>
-                <li>Existing subscription remains active.</li>
                 <li>{dispositionLabel}</li>
-                <li>
-                  {billingPath === "KEEP_PAYMENT_METHOD"
-                    ? "Existing payment method will be kept."
-                    : "New owner must add a different card before ownership completes."}
-                </li>
               </ul>
             </section>
 
