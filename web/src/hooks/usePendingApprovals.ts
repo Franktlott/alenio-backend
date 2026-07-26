@@ -150,7 +150,11 @@ export function usePendingApprovals(options?: { pollMs?: number; teamId?: string
     try {
       const row = ownershipRows.find((r) => r.id === transferId);
       if (row?.awaitingPaymentMethod) {
-        await completeOwnershipTransferPayment(teamId, transferId);
+        const res = await completeOwnershipTransferPayment(teamId, transferId);
+        if (!res.data.completed && res.data.paymentSetupUrl) {
+          window.location.href = res.data.paymentSetupUrl;
+          return;
+        }
       } else {
         const res = await acceptOwnershipTransfer(teamId, transferId);
         if (res.data.paymentSetupUrl) {

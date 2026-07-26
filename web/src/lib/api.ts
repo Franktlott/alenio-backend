@@ -1963,10 +1963,20 @@ export function acceptOwnershipTransfer(teamId: string, transferId: string) {
   }>(`/api/teams/${encodeURIComponent(teamId)}/transfer-ownership/${encodeURIComponent(transferId)}/accept`, {});
 }
 
-export function completeOwnershipTransferPayment(teamId: string, transferId: string) {
-  return apiPostJson<{ data: { transfer: OwnershipTransferRow; completed: boolean } }>(
+export function completeOwnershipTransferPayment(
+  teamId: string,
+  transferId: string,
+  opts?: { sessionId?: string },
+) {
+  return apiPostJson<{
+    data: {
+      transfer: OwnershipTransferRow;
+      completed: boolean;
+      paymentSetupUrl: string | null;
+    };
+  }>(
     `/api/teams/${encodeURIComponent(teamId)}/transfer-ownership/${encodeURIComponent(transferId)}/complete-payment`,
-    {},
+    opts?.sessionId ? { sessionId: opts.sessionId } : {},
   );
 }
 

@@ -52,11 +52,18 @@ export function acceptOwnershipTransfer(teamId: string, transferId: string) {
   }>(`/api/teams/${teamId}/transfer-ownership/${transferId}/accept`, {});
 }
 
-export function completeOwnershipTransferPayment(teamId: string, transferId: string) {
-  return api.post<{ transfer: OwnershipTransfer; completed: boolean }>(
-    `/api/teams/${teamId}/transfer-ownership/${transferId}/complete-payment`,
-    {},
-  );
+export function completeOwnershipTransferPayment(
+  teamId: string,
+  transferId: string,
+  opts?: { sessionId?: string },
+) {
+  return api.post<{
+    transfer: OwnershipTransfer;
+    completed: boolean;
+    paymentSetupUrl: string | null;
+  }>(`/api/teams/${teamId}/transfer-ownership/${transferId}/complete-payment`, {
+    ...(opts?.sessionId ? { sessionId: opts.sessionId } : {}),
+  });
 }
 
 export function declineOwnershipTransfer(teamId: string, transferId: string) {

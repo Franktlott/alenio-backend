@@ -12,6 +12,9 @@ export async function ensureOwnershipTransferSchema(prisma: PrismaClient): Promi
       "previousOwnerDisposition" TEXT NOT NULL,
       "billingPath" TEXT NOT NULL DEFAULT 'KEEP_PAYMENT_METHOD',
       "awaitingPaymentMethod" BOOLEAN NOT NULL DEFAULT false,
+      "priorPaymentMethodIds" TEXT,
+      "priorCardFingerprints" TEXT,
+      "stripeSetupSessionId" TEXT,
       "expiresAt" TIMESTAMP(3) NOT NULL,
       "acceptedAt" TIMESTAMP(3),
       "canceledAt" TIMESTAMP(3),
@@ -60,5 +63,12 @@ export async function ensureOwnershipTransferSchema(prisma: PrismaClient): Promi
   await prisma.$executeRawUnsafe(`
     CREATE UNIQUE INDEX IF NOT EXISTS "OwnershipTransfer_one_pending_per_team"
     ON "OwnershipTransfer" ("teamId") WHERE "status" = 'PENDING';
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "OwnershipTransfer"
+      ADD COLUMN IF NOT EXISTS "priorPaymentMethodIds" TEXT,
+      ADD COLUMN IF NOT EXISTS "priorCardFingerprints" TEXT,
+      ADD COLUMN IF NOT EXISTS "stripeSetupSessionId" TEXT;
   `);
 }

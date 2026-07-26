@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Linking,
 } from "react-native";
 import { useQueries, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, Crown, Smartphone, UserPlus, Mail, Settings, X } from "lucide-react-native";
@@ -338,21 +339,24 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
   const acceptOwnership = useMutation({
     mutationFn: async (row: OwnershipTransfer) => {
       if (row.awaitingPaymentMethod) {
-        return completeOwnershipTransferPayment(row.teamId, row.id);
+        const res = await completeOwnershipTransferPayment(row.teamId, row.id);
+        if (!res.completed && res.paymentSetupUrl) {
+          await Linking.openURL(res.paymentSetupUrl);
+        }
+        return res;
       }
       const res = await acceptOwnershipTransfer(row.teamId, row.id);
       if (res.paymentSetupUrl) {
-        // Card setup is web-only for now.
-        throw new Error("Open Alenio on the web to add a payment method and finish this transfer.");
+        await Linking.openURL(res.paymentSetupUrl);
       }
       return res;
     },
     onMutate: (row) => setBusyId(row.id),
     onSettled: () => setBusyId(null),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
       queryClient.invalidateQueries({ queryKey: ["teams"] });
-      setOpen(false);
+      if (res.completed) setOpen(false);
     },
     onError: (err: Error) => {
       Alert.alert("Ownership transfer", err.message || "Could not accept this transfer.");
@@ -483,7 +487,7 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
                       </Text>
                       <Text style={{ fontSize: 11, color: "#64748B" }} numberOfLines={2}>
                         {fromName} wants to transfer ownership
-                        {row.awaitingPaymentMethod ? " · finish payment on web" : ""} · {formatDate(row.expiresAt)}
+                        {row.awaitingPaymentMethod ? " · add your card to finish" : ""} · {formatDate(row.expiresAt)}
                       </Text>
                     </View>
                     <ActionPair

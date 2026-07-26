@@ -1106,6 +1106,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                               await refreshPendingTransfer();
                               await reloadTeamContext();
                               await onTeamsRefresh();
+                            } else if (done.data.paymentSetupUrl) {
+                              window.location.href = done.data.paymentSetupUrl;
+                              return;
                             }
                           } else {
                             const res = await acceptOwnershipTransfer(selectedTeamId, pendingTransfer.id);
@@ -1126,7 +1129,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                         }
                       }}
                     >
-                      {pendingTransfer.awaitingPaymentMethod ? "Complete transfer" : "Accept"}
+                      {pendingTransfer.awaitingPaymentMethod ? "Add card" : "Accept"}
                     </button>
                   </>
                 ) : null}

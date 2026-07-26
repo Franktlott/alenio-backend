@@ -6,6 +6,7 @@ import {
   getStripeClient,
   stripeCustomerIdOfSubscription,
 } from "../lib/stripe-billing";
+import { completeOwnershipTransferFromSetupSession } from "../lib/ownership-transfer";
 
 export async function handleStripeWebhook(c: Context): Promise<Response> {
   const secret = env.STRIPE_WEBHOOK_SECRET?.trim();
@@ -34,6 +35,10 @@ export async function handleStripeWebhook(c: Context): Promise<Response> {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode === "setup") {
+          await completeOwnershipTransferFromSetupSession(session);
+          break;
+        }
         if (session.mode !== "subscription") break;
         const teamId =
           session.metadata?.team_id?.trim() ||
@@ -52,9 +57,11 @@ export async function handleStripeWebhook(c: Context): Promise<Response> {
         }
         const customerRaw = session.customer;
         const customerIdFromSession =
-          typeof customerRaw === "string" ? customerRaw : customerRaw && "id" in customerRaw
-            ? (customerRaw as { id: string }).id
-            : null;
+          typeof customerRaw === "string"
+            ? customerRaw
+            : customerRaw && "id" in customerRaw
+              ? (customerRaw as { id: string }).id
+              : null;
         const subscription = await stripe.subscriptions.retrieve(subId, {
           expand: ["items.data"],
         });

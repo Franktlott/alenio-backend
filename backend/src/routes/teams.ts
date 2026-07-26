@@ -1070,11 +1070,24 @@ teamsRouter.post("/:teamId/transfer-ownership/:transferId/accept", async (c) => 
 teamsRouter.post("/:teamId/transfer-ownership/:transferId/complete-payment", async (c) => {
   const user = c.get("user")!;
   const { teamId, transferId } = c.req.param();
-  const result = await completeOwnershipTransferPayment({ transferId, teamId, userId: user.id });
+  const body = (await c.req.json().catch(() => ({}))) as { sessionId?: string; checkoutSessionId?: string };
+  const checkoutSessionId = (body.checkoutSessionId ?? body.sessionId ?? "").trim() || null;
+  const result = await completeOwnershipTransferPayment({
+    transferId,
+    teamId,
+    userId: user.id,
+    checkoutSessionId,
+  });
   if ("error" in result) {
     return c.json({ error: { message: result.error.message, code: result.error.code } }, result.error.status as 400);
   }
-  return c.json({ data: { transfer: result.data, completed: true } });
+  return c.json({
+    data: {
+      transfer: result.data,
+      completed: result.completed,
+      paymentSetupUrl: result.completed ? null : result.paymentSetupUrl,
+    },
+  });
 });
 
 // POST /api/teams/:teamId/transfer-ownership/:transferId/decline

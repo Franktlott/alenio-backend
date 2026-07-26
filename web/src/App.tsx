@@ -29,6 +29,7 @@ import { EnterpriseOrgGoStubPage } from "./routes/alenio-go/EnterpriseOrgGoStubP
 import { ActivityPage } from "./routes/ActivityPage";
 import { AdminPage } from "./routes/AdminPage";
 import { BillingPage } from "./routes/BillingPage";
+import { OwnershipTransferReturnPage } from "./routes/OwnershipTransferReturnPage";
 import { ChatPage } from "./routes/ChatPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { DashboardPage } from "./routes/DashboardPage";
@@ -213,6 +214,7 @@ export default function App() {
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/billing" element={<BillingPage />} />
+          <Route path="/ownership-transfer" element={<OwnershipTransferReturnPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/settings" element={<ProfilePage />} />

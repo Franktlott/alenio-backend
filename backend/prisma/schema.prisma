@@ -441,6 +441,12 @@ model OwnershipTransfer {
   billingPath               String    @default("KEEP_PAYMENT_METHOD")
   /** True when REPLACE path still needs recipient to finish payment method setup. */
   awaitingPaymentMethod     Boolean   @default(false)
+  /** JSON string[] of Stripe payment method ids present when REPLACE setup started. */
+  priorPaymentMethodIds     String?
+  /** JSON string[] of card fingerprints present when REPLACE setup started. */
+  priorCardFingerprints     String?
+  /** Last Stripe Checkout setup session id for REPLACE verification. */
+  stripeSetupSessionId      String?
   expiresAt                 DateTime
   acceptedAt                DateTime?
   canceledAt                DateTime?

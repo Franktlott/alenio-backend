@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import type Stripe from "stripe";
 import { prisma } from "../prisma";
 import { env } from "../env";
 import { verifyEmailPassword } from "../auth";
@@ -21,6 +22,8 @@ export type OwnershipDisposition = (typeof DISPOSITIONS)[number];
 export const BILLING_PATHS = ["KEEP_PAYMENT_METHOD", "REPLACE_PAYMENT_METHOD"] as const;
 export type OwnershipBillingPath = (typeof BILLING_PATHS)[number];
 
+export const OWNERSHIP_TRANSFER_SETUP_PURPOSE = "ownership_transfer_pm";
+
 export type OwnershipTransferAuditEvent =
   | "ownership_transfer_started"
   | "ownership_transfer_accepted"
@@ -35,6 +38,113 @@ const transferInclude = {
   toUser: { select: { id: true, name: true, email: true, image: true } },
   team: { select: { id: true, name: true } },
 } as const;
+
+function parseJsonStringArray(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+async function snapshotCustomerPaymentMethods(customerId: string): Promise<{
+  ids: string[];
+  fingerprints: string[];
+}> {
+  const stripe = getStripeClient()!;
+  const pms = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 100 });
+  const ids: string[] = [];
+  const fingerprints: string[] = [];
+  for (const pm of pms.data) {
+    ids.push(pm.id);
+    const fp = pm.card?.fingerprint?.trim();
+    if (fp) fingerprints.push(fp);
+  }
+  return { ids, fingerprints: [...new Set(fingerprints)] };
+}
+
+async function findVerifiedReplacementPaymentMethod(opts: {
+  customerId: string;
+  priorIds: string[];
+  priorFingerprints: string[];
+  preferredPaymentMethodId?: string | null;
+}): Promise<string | null> {
+  const stripe = getStripeClient()!;
+  const priorIdSet = new Set(opts.priorIds);
+  const priorFpSet = new Set(opts.priorFingerprints);
+
+  const isNew = (pm: Stripe.PaymentMethod) => {
+    if (priorIdSet.has(pm.id)) return false;
+    const fp = pm.card?.fingerprint?.trim();
+    if (fp && priorFpSet.has(fp)) return false;
+    return true;
+  };
+
+  if (opts.preferredPaymentMethodId) {
+    try {
+      const preferred = await stripe.paymentMethods.retrieve(opts.preferredPaymentMethodId);
+      const customer =
+        typeof preferred.customer === "string" ? preferred.customer : preferred.customer?.id;
+      if (customer === opts.customerId && isNew(preferred)) {
+        return preferred.id;
+      }
+    } catch {
+      // fall through to list
+    }
+  }
+
+  const pms = await stripe.paymentMethods.list({ customer: opts.customerId, type: "card", limit: 100 });
+  const match = pms.data.find(isNew);
+  return match?.id ?? null;
+}
+
+async function createOwnershipTransferSetupCheckout(opts: {
+  teamId: string;
+  transferId: string;
+  userId: string;
+  customerId: string;
+}): Promise<{ url: string; sessionId: string } | { error: ServiceError }> {
+  const stripe = getStripeClient();
+  const base = billingReturnBaseUrl();
+  if (!stripe || !base) {
+    return { error: { message: "Billing is not configured", code: "NOT_CONFIGURED", status: 503 } };
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "setup",
+    customer: opts.customerId,
+    payment_method_types: ["card"],
+    success_url: `${base}/ownership-transfer?teamId=${encodeURIComponent(opts.teamId)}&transferId=${encodeURIComponent(opts.transferId)}&billing=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${base}/ownership-transfer?teamId=${encodeURIComponent(opts.teamId)}&transferId=${encodeURIComponent(opts.transferId)}&billing=cancel`,
+    metadata: {
+      purpose: OWNERSHIP_TRANSFER_SETUP_PURPOSE,
+      transfer_id: opts.transferId,
+      team_id: opts.teamId,
+      user_id: opts.userId,
+    },
+  });
+
+  if (!session.url) {
+    return { error: { message: "Could not start payment method setup", code: "STRIPE_ERROR", status: 502 } };
+  }
+  return { url: session.url, sessionId: session.id };
+}
+
+async function detachPriorPaymentMethods(priorIds: string[], keepId: string) {
+  const stripe = getStripeClient();
+  if (!stripe) return;
+  for (const id of priorIds) {
+    if (!id || id === keepId) continue;
+    try {
+      await stripe.paymentMethods.detach(id);
+    } catch (err) {
+      console.warn("[ownership-transfer] detach prior payment method failed:", id, err);
+    }
+  }
+}
 
 export function serializeOwnershipTransfer(
   row: Awaited<ReturnType<typeof getPendingTransferForTeam>> extends infer T
@@ -493,7 +603,7 @@ export async function acceptOwnershipTransfer(opts: {
       if (!isStripePortalConfigured()) {
         return {
           error: {
-            message: "Billing portal is not available. Keep the existing payment method or try again later.",
+            message: "Card setup is not available. Keep the existing payment method or try again later.",
             code: "NOT_CONFIGURED",
             status: 503,
           },
@@ -506,23 +616,45 @@ export async function acceptOwnershipTransfer(opts: {
           error: { message: "No billing profile for this workplace yet.", code: "NO_CUSTOMER", status: 400 },
         };
       }
-      const base = billingReturnBaseUrl();
-      if (!base || !getStripeClient()) {
-        return { error: { message: "Billing is not configured", code: "NOT_CONFIGURED", status: 503 } };
+
+      // Already mid-setup: do not re-snapshot (would include a newly added card as "prior").
+      if (transfer.awaitingPaymentMethod) {
+        const checkout = await createOwnershipTransferSetupCheckout({
+          teamId: opts.teamId,
+          transferId: transfer.id,
+          userId: opts.userId,
+          customerId,
+        });
+        if ("error" in checkout) return { error: checkout.error };
+        const pending = await prisma.ownershipTransfer.update({
+          where: { id: transfer.id },
+          data: { stripeSetupSessionId: checkout.sessionId },
+          include: transferInclude,
+        });
+        return {
+          data: serializeOwnershipTransfer(pending),
+          paymentSetupUrl: checkout.url,
+        };
       }
+
+      const snapshot = await snapshotCustomerPaymentMethods(customerId);
+      const checkout = await createOwnershipTransferSetupCheckout({
+        teamId: opts.teamId,
+        transferId: transfer.id,
+        userId: opts.userId,
+        customerId,
+      });
+      if ("error" in checkout) return { error: checkout.error };
 
       await prisma.ownershipTransfer.update({
         where: { id: transfer.id },
-        data: { awaitingPaymentMethod: true },
+        data: {
+          awaitingPaymentMethod: true,
+          priorPaymentMethodIds: JSON.stringify(snapshot.ids),
+          priorCardFingerprints: JSON.stringify(snapshot.fingerprints),
+          stripeSetupSessionId: checkout.sessionId,
+        },
       });
-
-      const portal = await getStripeClient()!.billingPortal.sessions.create({
-        customer: customerId,
-        return_url: `${base}/ownership-transfer?teamId=${encodeURIComponent(opts.teamId)}&transferId=${encodeURIComponent(transfer.id)}&billing=return`,
-      });
-      if (!portal.url) {
-        return { error: { message: "Could not start payment method setup", code: "STRIPE_ERROR", status: 502 } };
-      }
 
       const pending = await prisma.ownershipTransfer.findUnique({
         where: { id: transfer.id },
@@ -530,7 +662,7 @@ export async function acceptOwnershipTransfer(opts: {
       });
       return {
         data: pending ? serializeOwnershipTransfer(pending) : serializeOwnershipTransfer(transfer),
-        paymentSetupUrl: portal.url,
+        paymentSetupUrl: checkout.url,
       };
     }
   }
@@ -540,13 +672,28 @@ export async function acceptOwnershipTransfer(opts: {
   return { data: result.data };
 }
 
-export async function completeOwnershipTransferPayment(opts: {
+type CompletePaymentResult =
+  | {
+      data: ReturnType<typeof serializeOwnershipTransfer>;
+      completed: true;
+    }
+  | {
+      data: ReturnType<typeof serializeOwnershipTransfer>;
+      completed: false;
+      paymentSetupUrl: string;
+    }
+  | { error: ServiceError };
+
+async function verifyAndCompleteOwnershipTransferPayment(opts: {
   transferId: string;
   teamId: string;
   userId: string;
-}): Promise<{ data: ReturnType<typeof serializeOwnershipTransfer> } | { error: ServiceError }> {
+  checkoutSessionId?: string | null;
+  preferredPaymentMethodId?: string | null;
+}): Promise<CompletePaymentResult> {
   const transfer = await prisma.ownershipTransfer.findFirst({
     where: { id: opts.transferId, teamId: opts.teamId, status: "PENDING" },
+    include: transferInclude,
   });
   if (!transfer) {
     return { error: { message: "Transfer not found", code: "NOT_FOUND", status: 404 } };
@@ -557,37 +704,152 @@ export async function completeOwnershipTransferPayment(opts: {
   if (!transfer.awaitingPaymentMethod) {
     return { error: { message: "This transfer is not awaiting payment setup", code: "VALIDATION_ERROR", status: 400 } };
   }
+  if (transfer.expiresAt.getTime() <= Date.now()) {
+    await expireTransfer(transfer.id);
+    return { error: { message: "This transfer has expired", code: "TRANSFER_EXPIRED", status: 410 } };
+  }
 
   const sub = await getTeamSubscription(opts.teamId);
   const customerId = sub.stripeCustomerId?.trim();
-  if (!customerId || !getStripeClient()) {
+  const stripe = getStripeClient();
+  if (!customerId || !stripe) {
     return { error: { message: "Billing profile missing", code: "NO_CUSTOMER", status: 400 } };
   }
 
-  const customer = await getStripeClient()!.customers.retrieve(customerId);
-  if (customer.deleted) {
-    return { error: { message: "Billing profile missing", code: "NO_CUSTOMER", status: 400 } };
-  }
-  const defaultPm =
-    typeof customer.invoice_settings?.default_payment_method === "string"
-      ? customer.invoice_settings.default_payment_method
-      : customer.invoice_settings?.default_payment_method?.id;
-  if (!defaultPm) {
-    const pms = await getStripeClient()!.paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
-    if (pms.data.length === 0) {
-      return {
-        error: {
-          message: "Add a payment method in Stripe before completing the transfer.",
-          code: "PAYMENT_METHOD_REQUIRED",
-          status: 400,
-        },
-      };
+  let preferredPmId = opts.preferredPaymentMethodId?.trim() || null;
+  const sessionId = opts.checkoutSessionId?.trim() || transfer.stripeSetupSessionId?.trim() || null;
+  if (!preferredPmId && sessionId) {
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ["setup_intent"],
+      });
+      if (
+        session.metadata?.purpose === OWNERSHIP_TRANSFER_SETUP_PURPOSE &&
+        session.metadata?.transfer_id === transfer.id &&
+        session.status === "complete"
+      ) {
+        const setupIntent = session.setup_intent;
+        if (setupIntent && typeof setupIntent !== "string") {
+          const pm = setupIntent.payment_method;
+          preferredPmId = typeof pm === "string" ? pm : pm?.id ?? null;
+        }
+      }
+    } catch (err) {
+      console.warn("[ownership-transfer] setup session retrieve failed:", err);
     }
+  }
+
+  const priorIds = parseJsonStringArray(transfer.priorPaymentMethodIds);
+  const priorFingerprints = parseJsonStringArray(transfer.priorCardFingerprints);
+  const newPmId = await findVerifiedReplacementPaymentMethod({
+    customerId,
+    priorIds,
+    priorFingerprints,
+    preferredPaymentMethodId: preferredPmId,
+  });
+
+  if (!newPmId) {
+    const checkout = await createOwnershipTransferSetupCheckout({
+      teamId: opts.teamId,
+      transferId: transfer.id,
+      userId: opts.userId,
+      customerId,
+    });
+    if ("error" in checkout) return { error: checkout.error };
+
+    const updated = await prisma.ownershipTransfer.update({
+      where: { id: transfer.id },
+      data: { stripeSetupSessionId: checkout.sessionId },
+      include: transferInclude,
+    });
+    return {
+      data: serializeOwnershipTransfer(updated),
+      completed: false,
+      paymentSetupUrl: checkout.url,
+    };
+  }
+
+  try {
+    await stripe.customers.update(customerId, {
+      invoice_settings: { default_payment_method: newPmId },
+    });
+  } catch (err) {
+    console.warn("[ownership-transfer] set default payment method failed:", err);
+    return {
+      error: {
+        message: "Could not set the new payment method as default. Try again.",
+        code: "STRIPE_ERROR",
+        status: 502,
+      },
+    };
   }
 
   const result = await applyAcceptedTransfer(transfer.id, opts.userId);
   if ("error" in result) return result;
-  return { data: result.data };
+
+  await detachPriorPaymentMethods(priorIds, newPmId);
+  return { data: result.data, completed: true };
+}
+
+export async function completeOwnershipTransferPayment(opts: {
+  transferId: string;
+  teamId: string;
+  userId: string;
+  checkoutSessionId?: string | null;
+}): Promise<CompletePaymentResult> {
+  return verifyAndCompleteOwnershipTransferPayment(opts);
+}
+
+/** Webhook / trusted path: complete REPLACE transfer after Checkout setup succeeds. */
+export async function completeOwnershipTransferFromSetupSession(
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  if (session.mode !== "setup") return;
+  if (session.metadata?.purpose !== OWNERSHIP_TRANSFER_SETUP_PURPOSE) return;
+
+  const transferId = session.metadata?.transfer_id?.trim();
+  const teamId = session.metadata?.team_id?.trim();
+  const userId = session.metadata?.user_id?.trim();
+  if (!transferId || !teamId || !userId) {
+    console.warn("[ownership-transfer] setup webhook missing metadata", session.id);
+    return;
+  }
+
+  const existing = await prisma.ownershipTransfer.findFirst({
+    where: { id: transferId, teamId },
+    select: { status: true, toUserId: true },
+  });
+  if (!existing || existing.status !== "PENDING") return;
+  if (existing.toUserId !== userId) {
+    console.warn("[ownership-transfer] setup webhook user mismatch", session.id);
+    return;
+  }
+
+  let preferredPmId: string | null = null;
+  const setupRef = session.setup_intent;
+  if (setupRef && typeof setupRef !== "string") {
+    const pm = setupRef.payment_method;
+    preferredPmId = typeof pm === "string" ? pm : pm?.id ?? null;
+  } else if (typeof setupRef === "string" && getStripeClient()) {
+    try {
+      const setupIntent = await getStripeClient()!.setupIntents.retrieve(setupRef);
+      const pm = setupIntent.payment_method;
+      preferredPmId = typeof pm === "string" ? pm : pm?.id ?? null;
+    } catch (err) {
+      console.warn("[ownership-transfer] setup intent retrieve failed:", err);
+    }
+  }
+
+  const result = await verifyAndCompleteOwnershipTransferPayment({
+    transferId,
+    teamId,
+    userId,
+    checkoutSessionId: session.id,
+    preferredPaymentMethodId: preferredPmId,
+  });
+  if ("error" in result) {
+    console.warn("[ownership-transfer] setup webhook complete failed:", result.error);
+  }
 }
 
 export async function declineOwnershipTransfer(opts: {

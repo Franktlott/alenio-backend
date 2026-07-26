@@ -191,7 +191,8 @@ export function OwnershipTransferModal({
                 <span>
                   <strong style={{ display: "block", fontSize: 13 }}>New owner must add a payment method</strong>
                   <span className="enterprise-muted" style={{ fontSize: 12 }}>
-                    Ownership completes only after they add their card. No new subscription is created.
+                    They add a new card in Stripe Checkout. Ownership finishes only after we verify it isn’t the
+                    existing card; old cards are removed.
                   </span>
                 </span>
               </label>
@@ -208,7 +209,7 @@ export function OwnershipTransferModal({
                 <li>
                   {billingPath === "KEEP_PAYMENT_METHOD"
                     ? "Existing payment method will be kept."
-                    : "New owner must add a payment method before ownership completes."}
+                    : "New owner must add a different card before ownership completes."}
                 </li>
               </ul>
             </section>

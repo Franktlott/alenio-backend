@@ -105,7 +105,7 @@ export function PendingApprovalsPanel({
               <strong>Become owner of {r.teamName}</strong>
               <span className="enterprise-muted enterprise-join-requests-meta">
                 {fromName} wants to transfer ownership to you
-                {r.awaitingPaymentMethod ? " · add payment method to finish" : ""}
+                {r.awaitingPaymentMethod ? " · add your card to finish" : ""}
                 {isPage ? <> · expires {formatApprovalDate(r.expiresAt)}</> : null}
               </span>
             </div>
@@ -114,7 +114,7 @@ export function PendingApprovalsPanel({
                 busy={busy}
                 onDecline={() => void onDeclineOwnership(r.teamId, r.id)}
                 onApprove={() => void onAcceptOwnership(r.teamId, r.id)}
-                approveLabel={r.awaitingPaymentMethod ? "Complete" : "Accept"}
+                approveLabel={r.awaitingPaymentMethod ? "Add card" : "Accept"}
               />
             ) : null}
           </li>
