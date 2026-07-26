@@ -1,7 +1,7 @@
 import * as Application from "expo-application";
+import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Linking, Platform } from "react-native";
-import { getWhatsNewForVersion } from "@/lib/whats-new";
+import { Alert, Linking, Platform } from "react-native";
 
 const SOFT_UPDATE_DISMISSED_KEY = "app_update_soft_dismissed_version";
 
@@ -12,7 +12,7 @@ export type AppVersionInfo = {
   androidStoreUrl: string | null;
   /** Optional title from the backend for the update prompt. */
   updateTitle?: string | null;
-  /** Release bullets from the backend (preferred for old builds). */
+  /** Release bullets from Railway (MOBILE_UPDATE_BULLETS). */
   bullets?: string[] | null;
 };
 
@@ -32,17 +32,48 @@ export function getInstalledAppVersion(): string {
   return Application.nativeApplicationVersion?.trim() || "0.0.0";
 }
 
+function androidPackageName(): string | null {
+  return (
+    Application.applicationId?.trim() ||
+    Constants.expoConfig?.android?.package?.trim() ||
+    null
+  );
+}
+
+/** Prefer Railway store URLs; fall back to Play package / App Store search. */
 export function getStoreUrl(info: AppVersionInfo): string | null {
-  if (Platform.OS === "ios") return info.iosStoreUrl?.trim() || null;
-  if (Platform.OS === "android") return info.androidStoreUrl?.trim() || null;
+  if (Platform.OS === "ios") {
+    const configured = info.iosStoreUrl?.trim();
+    if (configured) return configured;
+    return "https://apps.apple.com/search?term=Alenio";
+  }
+  if (Platform.OS === "android") {
+    const configured = info.androidStoreUrl?.trim();
+    if (configured) return configured;
+    const pkg = androidPackageName();
+    if (pkg) return `https://play.google.com/store/apps/details?id=${encodeURIComponent(pkg)}`;
+    return "https://play.google.com/store/search?q=Alenio&c=apps";
+  }
   return info.iosStoreUrl?.trim() || info.androidStoreUrl?.trim() || null;
 }
 
 export async function openAppStore(info: AppVersionInfo): Promise<void> {
   const url = getStoreUrl(info);
-  if (!url) return;
-  const can = await Linking.canOpenURL(url);
-  if (can) await Linking.openURL(url);
+  if (!url) {
+    Alert.alert(
+      "Update Alenio",
+      "Open the App Store or Play Store and search for Alenio to install the latest version.",
+    );
+    return;
+  }
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert(
+      "Couldn’t open the store",
+      "Open the App Store or Play Store and search for Alenio to update.",
+    );
+  }
 }
 
 export function isBelowMinimum(current: string, info: AppVersionInfo): boolean {
@@ -56,28 +87,14 @@ export function isBehindLatest(current: string, info: AppVersionInfo): boolean {
   return compareAppVersions(current, latest) < 0;
 }
 
-/**
- * Prefer backend bullets (reach old installs). Fall back to local whats-new.ts
- * when the latest version entry exists in this JS bundle (dev / OTA).
- */
+/** Release notes for the update prompt — Railway MOBILE_UPDATE_* only. */
 export function resolveUpdateNotes(info: AppVersionInfo): {
   title: string | null;
   bullets: string[];
 } {
-  const fromApi = (info.bullets ?? []).map((b) => b.trim()).filter(Boolean);
-  if (fromApi.length > 0) {
-    return {
-      title: info.updateTitle?.trim() || null,
-      bullets: fromApi,
-    };
-  }
-  const latest = info.latestVersion?.trim();
-  if (!latest) return { title: null, bullets: [] };
-  const local = getWhatsNewForVersion(latest);
-  if (!local) return { title: info.updateTitle?.trim() || null, bullets: [] };
   return {
-    title: info.updateTitle?.trim() || local.title,
-    bullets: local.bullets,
+    title: info.updateTitle?.trim() || null,
+    bullets: (info.bullets ?? []).map((b) => b.trim()).filter(Boolean),
   };
 }
 

@@ -1,8 +1,8 @@
-import React from "react";
-import { Modal, Pressable, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Download } from "lucide-react-native";
 import type { AppVersionInfo } from "@/lib/app-version";
-import { getStoreUrl, openAppStore, resolveUpdateNotes } from "@/lib/app-version";
+import { openAppStore, resolveUpdateNotes } from "@/lib/app-version";
 
 type Props = {
   visible: boolean;
@@ -13,9 +13,19 @@ type Props = {
 };
 
 export function AppUpdateModal({ visible, forced, info, currentVersion, onDismiss }: Props) {
-  const hasStoreLink = !!getStoreUrl(info);
   const latest = info.latestVersion?.trim() || "a newer version";
   const notes = resolveUpdateNotes(info);
+  const [openingStore, setOpeningStore] = useState(false);
+
+  const handleUpdateNow = async () => {
+    if (openingStore) return;
+    setOpeningStore(true);
+    try {
+      await openAppStore(info);
+    } finally {
+      setOpeningStore(false);
+    }
+  };
 
   return (
     <Modal
@@ -57,22 +67,18 @@ export function AppUpdateModal({ visible, forced, info, currentVersion, onDismis
             </ScrollView>
           ) : null}
 
-          {hasStoreLink ? (
-            <TouchableOpacity
-              onPress={() => {
-                void openAppStore(info);
-              }}
-              className="bg-indigo-600 rounded-2xl py-3.5 items-center"
-              activeOpacity={0.85}
-              testID="app-update-open-store"
-            >
-              <Text className="text-white font-semibold text-base">Update now</Text>
-            </TouchableOpacity>
-          ) : (
-            <Text className="text-sm text-slate-500 text-center mb-2">
-              Open the App Store or Play Store and update Alenio.
-            </Text>
-          )}
+          <TouchableOpacity
+            onPress={() => {
+              void handleUpdateNow();
+            }}
+            className="bg-indigo-600 rounded-2xl py-3.5 items-center flex-row justify-center gap-2"
+            activeOpacity={0.85}
+            disabled={openingStore}
+            testID="app-update-open-store"
+          >
+            {openingStore ? <ActivityIndicator color="#fff" /> : null}
+            <Text className="text-white font-semibold text-base">Update now</Text>
+          </TouchableOpacity>
 
           {!forced ? (
             <TouchableOpacity
@@ -81,7 +87,7 @@ export function AppUpdateModal({ visible, forced, info, currentVersion, onDismis
               activeOpacity={0.7}
               testID="app-update-later"
             >
-              <Text className="text-slate-500 font-medium text-base">Not now</Text>
+              <Text className="text-slate-500 font-medium text-base">Later</Text>
             </TouchableOpacity>
           ) : null}
         </Pressable>
