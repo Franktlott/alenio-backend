@@ -1,4 +1,41 @@
-import React from "react";
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  Modal,
+  Pressable,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Platform,
+  Dimensions,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { X } from "lucide-react-native";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+
+type Props = {
+  visible?: boolean;
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  asScreen?: boolean;
+  testID?: string;
+  sheetStyle?: StyleProp<ViewStyle>;
+  compact?: boolean;
+  /** Show an X in the header (useful for form sheets like feedback). */
+  showCloseButton?: boolean;
+  /** Fraction of window height for scroll body (default 0.58, compact 0.5). */
+  bodyHeightRatio?: number;
+  /** Show vertical scroll indicator (useful for tall forms). */
+  showScrollIndicator?: boolean;
+};
+
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -52,12 +89,15 @@ function SheetContent({
   const bottomPad = Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
   const windowH = Dimensions.get("window").height;
   const ratio = bodyHeightRatio ?? (compact ? 0.5 : 0.58);
-  // Cap against remaining viewport so header + scroll + footer never clip mid-card.
+  // Cap height so header + scroll + footer fit; use measured content when shorter.
   const reservedChrome = (compact ? 168 : 200) + bottomPad + insets.top * 0.25;
-  const bodyMaxHeight = Math.max(
+  const bodyCap = Math.max(
     160,
     Math.min(Math.round(windowH * ratio), Math.round(windowH - reservedChrome)),
   );
+  const [contentH, setContentH] = useState(0);
+  const bodyHeight =
+    contentH > 0 ? Math.min(Math.ceil(contentH), bodyCap) : bodyCap;
 
   return (
     <View style={styles.backdrop} testID={testID}>
@@ -101,7 +141,7 @@ function SheetContent({
             ) : null}
           </View>
           <ScrollView
-            style={[styles.bodyScroll, { maxHeight: bodyMaxHeight }]}
+            style={[styles.bodyScroll, { height: bodyHeight }]}
             contentContainerStyle={[
               styles.bodyContent,
               compact ? styles.bodyContentCompact : null,
@@ -110,6 +150,11 @@ function SheetContent({
             showsVerticalScrollIndicator={showScrollIndicator}
             keyboardShouldPersistTaps="handled"
             bounces={showScrollIndicator}
+            nestedScrollEnabled
+            onContentSizeChange={(_w, h) => {
+              const next = Math.ceil(h);
+              setContentH((prev) => (prev === next ? prev : next));
+            }}
           >
             {children}
           </ScrollView>

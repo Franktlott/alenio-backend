@@ -99,11 +99,11 @@ function RadioRow({
       testID={testID}
       style={({ pressed }) => ({
         flexDirection: "row",
-        gap: 10,
+        gap: 8,
         alignItems: "flex-start",
-        paddingVertical: 11,
-        paddingHorizontal: 12,
-        borderRadius: 12,
+        paddingVertical: 9,
+        paddingHorizontal: 11,
+        borderRadius: 11,
         borderWidth: 1.5,
         borderColor: selected ? "#818CF8" : "#E2E8F0",
         backgroundColor: selected ? "#EEF2FF" : "#FFFFFF",
@@ -112,9 +112,9 @@ function RadioRow({
     >
       <View
         style={{
-          width: 20,
-          height: 20,
-          borderRadius: 10,
+          width: 18,
+          height: 18,
+          borderRadius: 9,
           marginTop: 1,
           borderWidth: 2,
           borderColor: selected ? "#4338CA" : "#CBD5E1",
@@ -124,7 +124,7 @@ function RadioRow({
           flexShrink: 0,
         }}
       >
-        {selected ? <Check size={12} color="#FFF" strokeWidth={3} /> : null}
+        {selected ? <Check size={11} color="#FFF" strokeWidth={3} /> : null}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
@@ -133,7 +133,7 @@ function RadioRow({
             <View
               style={{
                 paddingHorizontal: 6,
-                paddingVertical: 2,
+                paddingVertical: 1,
                 borderRadius: 999,
                 backgroundColor: selected ? "#C7D2FE" : "#EEF2FF",
               }}
@@ -144,7 +144,7 @@ function RadioRow({
             </View>
           ) : null}
         </View>
-        <Text style={{ fontSize: 12, color: "#64748B", marginTop: 3, lineHeight: 16 }}>{hint}</Text>
+        <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2, lineHeight: 15 }}>{hint}</Text>
       </View>
     </Pressable>
   );
@@ -327,8 +327,9 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
       showCloseButton
       footer={footer}
       testID="ownership-transfer-sheet"
+      compact
       sheetStyle={{ maxHeight: "94%" }}
-      bodyHeightRatio={step === "success" || step === "confirm" ? 0.42 : 0.62}
+      bodyHeightRatio={step === "success" || step === "confirm" ? 0.38 : 0.72}
       showScrollIndicator={step === "review"}
     >
       {step === "success" ? (
@@ -361,8 +362,8 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
       ) : null}
 
       {step === "review" && member ? (
-        <View style={{ gap: 12 }}>
-          <AlenioSheetCard>
+        <View style={{ gap: 10 }}>
+          <AlenioSheetCard compact>
             <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
               <AlenioSheetIcon color="#4338CA" compact>
                 {member.user.image ? (
@@ -397,23 +398,23 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
               flexDirection: "row",
               alignItems: "center",
               gap: 8,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              borderRadius: 12,
+              paddingHorizontal: 11,
+              paddingVertical: 8,
+              borderRadius: 11,
               backgroundColor: "#F8FAFC",
               borderWidth: 1,
               borderColor: "#E2E8F0",
             }}
           >
-            <Clock size={14} color="#64748B" />
-            <Text style={{ flex: 1, fontSize: 12, color: "#475569", lineHeight: 17 }}>
+            <Clock size={13} color="#64748B" />
+            <Text style={{ flex: 1, fontSize: 12, color: "#475569", lineHeight: 16 }}>
               They have <Text style={{ fontWeight: "700", color: "#0F172A" }}>7 days</Text> to accept.
               You can cancel anytime before then.
             </Text>
           </View>
 
           <SectionLabel>Your role after they accept</SectionLabel>
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: 6 }}>
             {DISPOSITIONS.map((opt) => (
               <RadioRow
                 key={opt.value}
@@ -429,7 +430,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
           </View>
 
           <SectionLabel>Billing</SectionLabel>
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: 6 }}>
             <RadioRow
               selected={billingPath === "KEEP_PAYMENT_METHOD"}
               title="Keep the card on file"
@@ -449,10 +450,10 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
           </View>
 
           <AlenioSheetCard tint="slate" compact>
-            <Text style={{ fontSize: 12, fontWeight: "750", color: "#0F172A", marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: "750", color: "#0F172A", marginBottom: 6 }}>
               Summary
             </Text>
-            <View style={{ gap: 6 }}>
+            <View style={{ gap: 5 }}>
               {[
                 `Offer ownership to ${displayName}`,
                 "Expires in 7 days if not accepted",
@@ -464,7 +465,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
               ].map((line) => (
                 <View key={line} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
                   <Text style={{ color: "#6366F1", fontWeight: "800", marginTop: 1 }}>·</Text>
-                  <Text style={{ flex: 1, fontSize: 12, color: "#475569", lineHeight: 17 }}>{line}</Text>
+                  <Text style={{ flex: 1, fontSize: 12, color: "#475569", lineHeight: 16 }}>{line}</Text>
                 </View>
               ))}
             </View>
