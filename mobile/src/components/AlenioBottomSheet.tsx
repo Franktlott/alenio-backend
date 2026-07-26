@@ -50,8 +50,14 @@ function SheetContent({
 }: Omit<Props, "visible" | "asScreen">) {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
+  const windowH = Dimensions.get("window").height;
   const ratio = bodyHeightRatio ?? (compact ? 0.5 : 0.58);
-  const bodyMaxHeight = Math.round(Dimensions.get("window").height * ratio);
+  // Cap against remaining viewport so header + scroll + footer never clip mid-card.
+  const reservedChrome = (compact ? 168 : 200) + bottomPad + insets.top * 0.25;
+  const bodyMaxHeight = Math.max(
+    160,
+    Math.min(Math.round(windowH * ratio), Math.round(windowH - reservedChrome)),
+  );
 
   return (
     <View style={styles.backdrop} testID={testID}>
@@ -399,12 +405,12 @@ const styles = StyleSheet.create({
   bodyContent: {
     gap: 8,
     paddingTop: 10,
-    paddingBottom: 2,
+    paddingBottom: 12,
   },
   bodyContentCompact: {
     gap: 6,
     paddingTop: 8,
-    paddingBottom: 2,
+    paddingBottom: 10,
   },
   bodyContentGrow: {
     flexGrow: 0,
@@ -419,13 +425,14 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     gap: 8,
+    overflow: "visible" as const,
   },
   cardCompact: {
     borderRadius: 10,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 10,
     gap: 6,
   },

@@ -328,12 +328,12 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
       footer={footer}
       testID="ownership-transfer-sheet"
       sheetStyle={{ maxHeight: "94%" }}
-      bodyHeightRatio={0.78}
-      showScrollIndicator
+      bodyHeightRatio={step === "success" || step === "confirm" ? 0.42 : 0.62}
+      showScrollIndicator={step === "review"}
     >
       {step === "success" ? (
-        <AlenioSheetCard>
-          <View style={{ gap: 10 }}>
+        <AlenioSheetCard style={{ paddingVertical: 14, paddingBottom: 16 }}>
+          <View style={{ gap: 12 }}>
             <View
               style={{
                 flexDirection: "row",
@@ -343,16 +343,16 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
                 paddingHorizontal: 10,
                 paddingVertical: 6,
                 borderRadius: 999,
-                backgroundColor: "#EEF2FF",
+                backgroundColor: "#E0E7FF",
               }}
             >
               <Clock size={13} color="#4338CA" />
               <Text style={{ fontSize: 12, fontWeight: "700", color: "#4338CA" }}>Expires in 7 days</Text>
             </View>
-            <Text style={{ fontSize: 13, color: "#334155", lineHeight: 19 }}>
+            <Text style={{ fontSize: 13, color: "#334155", lineHeight: 20, paddingBottom: 2 }}>
               You’ll stay in your chosen role until they accept
               {billingPath === "REPLACE_PAYMENT_METHOD"
-                ? ", and they must add a different card than yours to finish"
+                ? ". They must add a different card than yours to finish"
                 : ""}
               . Your plan stays the same.
             </Text>
