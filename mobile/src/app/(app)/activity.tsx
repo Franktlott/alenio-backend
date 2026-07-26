@@ -640,8 +640,37 @@ export default function ActivityScreen() {
             </AlenioSheetCard>
 
             {teamMembersLoading ? (
-              <View style={{ alignItems: "center", paddingVertical: 24 }}>
-                <ActivityIndicator color="#4361EE" />
+              <View style={{ gap: 8, paddingVertical: 4 }} accessibilityLabel="Loading teammates">
+                {[0, 1, 2, 3].map((i) => (
+                  <View
+                    key={i}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      borderRadius: 14,
+                      backgroundColor: "#FFFFFF",
+                      borderWidth: 1,
+                      borderColor: "#E6EAF0",
+                    }}
+                  >
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#E2E8F0" }} />
+                    <View
+                      style={{
+                        height: 12,
+                        borderRadius: 999,
+                        backgroundColor: "#E2E8F0",
+                        width: i % 2 === 0 ? "55%" : "42%",
+                      }}
+                    />
+                  </View>
+                ))}
+                <View style={{ alignItems: "center", paddingTop: 10, gap: 8 }}>
+                  <ActivityIndicator color="#4361EE" />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B" }}>Loading teammates…</Text>
+                </View>
               </View>
             ) : teamMembers.length === 0 ? (
               <AlenioSheetCard tint="slate" compact>

@@ -326,7 +326,25 @@ export function TeamActivityPanel({ teams, currentUserId }: Props) {
                   </label>
                 ) : null}
                 {teamMembersLoading ? (
-                  <p className="enterprise-muted">Loading teammates…</p>
+                  <div
+                    className="enterprise-activity-celebrate-loading"
+                    role="status"
+                    aria-live="polite"
+                    aria-busy="true"
+                  >
+                    <ul className="enterprise-activity-member-list enterprise-activity-member-list--skeleton" aria-hidden>
+                      {Array.from({ length: 4 }, (_, i) => (
+                        <li key={i} className="enterprise-activity-member-skel">
+                          <span className="enterprise-activity-member-skel-av" />
+                          <span className="enterprise-activity-member-skel-line" />
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="enterprise-activity-celebrate-loading-label">
+                      <span className="enterprise-activity-celebrate-spinner" aria-hidden />
+                      Loading teammates…
+                    </p>
+                  </div>
                 ) : teamMembers.length === 0 ? (
                   <div className="enterprise-activity-celebrate-empty">
                     <span className="enterprise-activity-celebrate-empty-emoji">🎉</span>
