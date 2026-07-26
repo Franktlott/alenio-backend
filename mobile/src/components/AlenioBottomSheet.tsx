@@ -31,6 +31,8 @@ type Props = {
   showCloseButton?: boolean;
   /** Fraction of window height for scroll body (default 0.58, compact 0.5). */
   bodyHeightRatio?: number;
+  /** Show vertical scroll indicator (useful for tall forms). */
+  showScrollIndicator?: boolean;
 };
 
 function SheetContent({
@@ -44,6 +46,7 @@ function SheetContent({
   compact = false,
   showCloseButton = false,
   bodyHeightRatio,
+  showScrollIndicator = false,
 }: Omit<Props, "visible" | "asScreen">) {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
@@ -98,9 +101,9 @@ function SheetContent({
               compact ? styles.bodyContentCompact : null,
               styles.bodyContentGrow,
             ]}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={showScrollIndicator}
             keyboardShouldPersistTaps="handled"
-            bounces={false}
+            bounces={showScrollIndicator}
           >
             {children}
           </ScrollView>
