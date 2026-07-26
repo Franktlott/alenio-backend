@@ -43,6 +43,7 @@ import {
   type WebTeamMemberRow,
   type WebTeamRow,
 } from "../lib/api";
+import { formatOwnershipExpiry } from "../lib/pending-approvals";
 import {
   checkInDueSoonStartDays,
   formatCheckInFrequencySummary,
@@ -1057,8 +1058,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 <div className="enterprise-team-pending-head-copy">
                   <h3 className="enterprise-team-pending-title">Ownership transfer pending</h3>
                   <p className="enterprise-team-pending-sub">
-                    {pendingTransfer.fromUser.name ?? "Owner"} → {pendingTransfer.toUser.name ?? "Member"} · expires{" "}
-                    {new Date(pendingTransfer.expiresAt).toLocaleDateString()}
+                    {pendingTransfer.fromUser.name ?? "Owner"} → {pendingTransfer.toUser.name ?? "Member"}
+                    {" · "}
+                    {formatOwnershipExpiry(pendingTransfer.expiresAt)}
                     {pendingTransfer.awaitingPaymentMethod ? " · awaiting payment method" : ""}
                   </p>
                 </div>

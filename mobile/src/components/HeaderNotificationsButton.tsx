@@ -68,6 +68,21 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function formatOwnershipExpiry(iso: string) {
+  const end = new Date(iso);
+  if (Number.isNaN(end.getTime())) return "Expires soon";
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfEnd = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  const days = Math.round((startOfEnd.getTime() - startOfToday.getTime()) / (24 * 60 * 60 * 1000));
+  const dateLabel = end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (days < 0) return `Expired ${dateLabel}`;
+  if (days === 0) return "Expires today";
+  if (days === 1) return "Expires tomorrow";
+  if (days <= 7) return `Expires in ${days} days (${dateLabel})`;
+  return `Expires ${dateLabel}`;
+}
+
 function ActionPair({
   busy,
   onDecline,
@@ -487,7 +502,9 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
                       </Text>
                       <Text style={{ fontSize: 11, color: "#64748B" }} numberOfLines={2}>
                         {fromName} wants to transfer ownership
-                        {row.awaitingPaymentMethod ? " · add your card to finish" : ""} · {formatDate(row.expiresAt)}
+                        {row.awaitingPaymentMethod ? " · add your card to finish" : ""}
+                        {" · "}
+                        {formatOwnershipExpiry(row.expiresAt)}
                       </Text>
                     </View>
                     <ActionPair

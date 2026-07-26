@@ -1,6 +1,7 @@
 import {
   approvalBusyKey,
   formatApprovalDate,
+  formatOwnershipExpiry,
   joinRequesterLabel,
   type PendingGoLoginRow,
   type PendingJoinRow,
@@ -106,7 +107,8 @@ export function PendingApprovalsPanel({
               <span className="enterprise-muted enterprise-join-requests-meta">
                 {fromName} wants to transfer ownership to you
                 {r.awaitingPaymentMethod ? " · add your card to finish" : ""}
-                {isPage ? <> · expires {formatApprovalDate(r.expiresAt)}</> : null}
+                {" · "}
+                {formatOwnershipExpiry(r.expiresAt)}
               </span>
             </div>
             {onAcceptOwnership && onDeclineOwnership ? (
