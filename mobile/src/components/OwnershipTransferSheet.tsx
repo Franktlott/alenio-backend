@@ -293,7 +293,6 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
       testID="ownership-transfer-sheet"
       compact
       sheetStyle={{ maxHeight: "88%" }}
-      bodyHeightRatio={step === "review" ? 0.42 : 0.34}
       scrollEnabled={false}
       showScrollIndicator={false}
     >
@@ -345,7 +344,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
           <View
             style={{
               flexDirection: "row",
-              alignItems: "flex-start",
+              alignItems: "center",
               gap: 8,
               borderRadius: 11,
               borderWidth: 1,
@@ -356,15 +355,11 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
             }}
             testID="ownership-billing-replace-required"
           >
-            <CreditCard size={14} color="#4338CA" style={{ marginTop: 1 }} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>
-                They add a different card
-              </Text>
-              <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 14, marginTop: 1 }}>
-                Your card comes off after setup. Same card won’t finish.
-              </Text>
-            </View>
+            <CreditCard size={14} color="#4338CA" />
+            <Text style={{ flex: 1, fontSize: 12, color: "#334155", lineHeight: 16 }}>
+              <Text style={{ fontWeight: "700", color: "#0F172A" }}>They add a different card.</Text>
+              {" "}Your card comes off after setup.
+            </Text>
           </View>
 
           {error ? (

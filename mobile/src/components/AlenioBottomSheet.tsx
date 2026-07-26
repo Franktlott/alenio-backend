@@ -103,7 +103,10 @@ function SheetContent({
             ) : null}
           </View>
           <ScrollView
-            style={[styles.bodyScroll, { maxHeight: bodyMaxHeight }]}
+            style={[
+              styles.bodyScroll,
+              scrollEnabled ? { maxHeight: bodyMaxHeight } : null,
+            ]}
             contentContainerStyle={[
               styles.bodyContent,
               compact ? styles.bodyContentCompact : null,
