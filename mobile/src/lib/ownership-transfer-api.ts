@@ -1,4 +1,5 @@
 import { api } from "@/lib/api/api";
+import { router } from "expo-router";
 
 export type OwnershipTransferDisposition =
   | "WORKSPACE_ADMIN"
@@ -22,6 +23,23 @@ export type OwnershipTransfer = {
   fromUser: { id: string; name: string | null; email: string | null; image: string | null };
   toUser: { id: string; name: string | null; email: string | null; image: string | null };
 };
+
+/** Full-screen “You’re the new owner” celebration (no Stripe return needed). */
+export function openOwnershipCelebration(opts: {
+  teamId: string;
+  transferId: string;
+  teamName?: string | null;
+}) {
+  router.push({
+    pathname: "/ownership-transfer",
+    params: {
+      teamId: opts.teamId,
+      transferId: opts.transferId,
+      celebrate: "1",
+      ...(opts.teamName?.trim() ? { teamName: opts.teamName.trim() } : {}),
+    },
+  });
+}
 
 export function fetchIncomingOwnershipTransfers() {
   return api.get<OwnershipTransfer[]>("/api/ownership-transfers/mine");

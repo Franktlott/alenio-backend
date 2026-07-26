@@ -30,6 +30,7 @@ import {
   completeOwnershipTransferPayment,
   declineOwnershipTransfer,
   fetchIncomingOwnershipTransfers,
+  openOwnershipCelebration,
   type OwnershipTransfer,
 } from "@/lib/ownership-transfer-api";
 
@@ -358,20 +359,27 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
         if (!res.completed && res.paymentSetupUrl) {
           await Linking.openURL(res.paymentSetupUrl);
         }
-        return res;
+        return { res, row };
       }
       const res = await acceptOwnershipTransfer(row.teamId, row.id, { returnToApp: true });
       if (res.paymentSetupUrl) {
         await Linking.openURL(res.paymentSetupUrl);
       }
-      return res;
+      return { res, row };
     },
     onMutate: (row) => setBusyId(row.id),
     onSettled: () => setBusyId(null),
-    onSuccess: (res) => {
+    onSuccess: ({ res, row }) => {
       queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
       queryClient.invalidateQueries({ queryKey: ["teams"] });
-      if (res.completed) setOpen(false);
+      if (res.completed) {
+        setOpen(false);
+        openOwnershipCelebration({
+          teamId: row.teamId,
+          transferId: row.id,
+          teamName: res.transfer?.teamName ?? row.teamName,
+        });
+      }
     },
     onError: (err: Error) => {
       Alert.alert("Ownership transfer", err.message || "Could not accept this transfer.");

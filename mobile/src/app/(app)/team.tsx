@@ -75,6 +75,7 @@ import {
   completeOwnershipTransferPayment,
   declineOwnershipTransfer,
   fetchPendingOwnershipTransfer,
+  openOwnershipCelebration,
 } from "@/lib/ownership-transfer-api";
 import {
   cancelTeamInvite,
@@ -1296,7 +1297,11 @@ export default function TeamScreen() {
                   );
                   if (done.completed) {
                     refreshOwnershipTransfer();
-                    toast({ title: "You’re now the owner", preset: "done" });
+                    openOwnershipCelebration({
+                      teamId: activeTeamId,
+                      transferId: pendingOwnershipTransfer.id,
+                      teamName: done.transfer?.teamName ?? pendingOwnershipTransfer.teamName,
+                    });
                   } else if (done.paymentSetupUrl) {
                     await Linking.openURL(done.paymentSetupUrl);
                   }
@@ -1309,7 +1314,11 @@ export default function TeamScreen() {
                     refreshOwnershipTransfer();
                   } else if (res.completed) {
                     refreshOwnershipTransfer();
-                    toast({ title: "You’re now the owner", preset: "done" });
+                    openOwnershipCelebration({
+                      teamId: activeTeamId,
+                      transferId: pendingOwnershipTransfer.id,
+                      teamName: res.transfer?.teamName ?? pendingOwnershipTransfer.teamName,
+                    });
                   }
                 }
               } catch (e) {

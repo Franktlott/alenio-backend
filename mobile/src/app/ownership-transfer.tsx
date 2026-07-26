@@ -230,22 +230,45 @@ export default function OwnershipTransferReturnScreen() {
     transferId?: string | string[];
     billing?: string | string[];
     session_id?: string | string[];
+    celebrate?: string | string[];
+    teamName?: string | string[];
   }>();
   const teamId = paramOne(params.teamId);
   const transferId = paramOne(params.transferId);
   const billing = paramOne(params.billing);
   const sessionId = paramOne(params.session_id);
+  const celebrate = paramOne(params.celebrate) === "1";
+  const teamNameParam = paramOne(params.teamName);
   const { data: session, isLoading: sessionLoading } = useSession();
   const queryClient = useQueryClient();
   const ran = useRef(false);
-  const [status, setStatus] = useState<Status>("working");
+  const [status, setStatus] = useState<Status>(celebrate ? "done" : "working");
   const [message, setMessage] = useState("");
   const [setupUrl, setSetupUrl] = useState<string | null>(null);
-  const [teamName, setTeamName] = useState<string | null>(null);
+  const [teamName, setTeamName] = useState<string | null>(teamNameParam || null);
 
   useEffect(() => {
     if (ran.current || sessionLoading) return;
     if (!session?.user) return;
+
+    const finishOk = (name?: string | null) => {
+      if (teamId) {
+        void queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
+        void queryClient.invalidateQueries({ queryKey: ["ownership-transfer-pending", teamId] });
+        void queryClient.invalidateQueries({ queryKey: ["teams"] });
+      }
+      if (name?.trim()) setTeamName(name.trim());
+      setStatus("done");
+      setTimeout(() => router.replace("/(app)/team"), HOLD_MS);
+    };
+
+    // Accept without card change — show celebration immediately.
+    if (celebrate) {
+      ran.current = true;
+      finishOk(teamNameParam || null);
+      return;
+    }
+
     if (!teamId || !transferId) {
       ran.current = true;
       setStatus("error");
@@ -253,15 +276,6 @@ export default function OwnershipTransferReturnScreen() {
       return;
     }
     ran.current = true;
-
-    const finishOk = (name?: string | null) => {
-      void queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
-      void queryClient.invalidateQueries({ queryKey: ["ownership-transfer-pending", teamId] });
-      void queryClient.invalidateQueries({ queryKey: ["teams"] });
-      if (name?.trim()) setTeamName(name.trim());
-      setStatus("done");
-      setTimeout(() => router.replace("/(app)/team"), HOLD_MS);
-    };
 
     if (billing === "cancel") {
       setStatus("canceled");
@@ -302,7 +316,17 @@ export default function OwnershipTransferReturnScreen() {
         setMessage(e instanceof Error ? e.message : "Could not finish the transfer.");
       }
     })();
-  }, [billing, queryClient, session?.user, sessionLoading, sessionId, teamId, transferId]);
+  }, [
+    billing,
+    celebrate,
+    queryClient,
+    session?.user,
+    sessionLoading,
+    sessionId,
+    teamId,
+    teamNameParam,
+    transferId,
+  ]);
 
   if (sessionLoading) {
     return (
