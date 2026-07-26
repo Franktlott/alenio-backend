@@ -82,8 +82,9 @@ type Props = {
   /** Sidebar + page label for `/team` — "Profile" for regular members. */
   teamNavLabel?: string;
   /**
-   * No workspace yet — only Alenio Go (+ Admin if platform admin), Settings, and Sign out.
+   * No workspace yet — Settings, Sign out, plus Admin / enterprise org nav when applicable.
    * Hides Chat / Workspace / Team / Billing and the workspace switcher.
+   * Alenio Go stays off until an Operations workspace (or enterprise org membership).
    */
   setupNavMode?: boolean;
   /** Enterprise: start SSO-style boot before switching workspace (tabs settle under overlay). */

@@ -290,11 +290,11 @@ export function EnterpriseShellLayout() {
     !effectiveTeamId ||
     teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures !== false;
   /**
-   * Alenio Go: enterprise org members always; otherwise Operations workspace or no-team setup.
+   * Alenio Go: enterprise org members always; otherwise Operations workspaces only
+   * (never during self-serve no-workspace setup).
    */
   const showGoNav =
     enterpriseMember ||
-    hasNoTeams ||
     (teams !== null &&
       !!effectiveTeamId &&
       teams.find((t) => t.id === effectiveTeamId)?.hasGoFeatures === true);
