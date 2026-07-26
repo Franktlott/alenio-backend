@@ -34,11 +34,13 @@ type Props = {
 const DISPOSITIONS: {
   value: OwnershipTransferDisposition;
   label: string;
+  note?: string;
   recommended?: boolean;
 }[] = [
   {
     value: "WORKSPACE_ADMIN",
     label: "Stay as Workspace Admin",
+    note: "You’ll stay as a team leader after they accept.",
     recommended: true,
   },
   {
@@ -54,6 +56,7 @@ const DISPOSITIONS: {
 function ChoiceRow({
   selected,
   title,
+  note,
   recommended,
   onPress,
   disabled,
@@ -62,13 +65,14 @@ function ChoiceRow({
 }: {
   selected: boolean;
   title: string;
+  note?: string;
   recommended?: boolean;
   onPress: () => void;
   disabled?: boolean;
   testID?: string;
   last?: boolean;
 }) {
-  const label = recommended ? `${title} · Recommended` : title;
+  const a11y = [title, recommended ? "Recommended" : null, note].filter(Boolean).join(". ");
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -76,15 +80,15 @@ function ChoiceRow({
       activeOpacity={0.75}
       accessibilityRole="radio"
       accessibilityState={{ selected, disabled: !!disabled }}
-      accessibilityLabel={label}
+      accessibilityLabel={a11y}
       testID={testID}
       style={{
         flexDirection: "row",
-        alignItems: "center",
+        alignItems: "flex-start",
         alignSelf: "stretch",
         width: "100%",
         minHeight: 52,
-        paddingVertical: 14,
+        paddingVertical: 13,
         paddingHorizontal: 14,
         backgroundColor: selected ? "#EEF2FF" : "#FFFFFF",
         borderBottomWidth: last ? 0 : 1,
@@ -103,17 +107,28 @@ function ChoiceRow({
           alignItems: "center",
           justifyContent: "center",
           marginRight: 12,
+          marginTop: 1,
         }}
       >
         {selected ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}
       </View>
-      <Text
-        className="text-slate-900 text-[15px] font-semibold"
-        style={{ flex: 1, color: "#0F172A", fontSize: 15, fontWeight: "600" }}
-        numberOfLines={2}
-      >
-        {label}
-      </Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          className="text-slate-900 text-[15px] font-semibold"
+          style={{ color: "#0F172A", fontSize: 15, fontWeight: "600" }}
+          numberOfLines={2}
+        >
+          {recommended ? `${title} · Recommended` : title}
+        </Text>
+        {note ? (
+          <Text
+            className="text-slate-500 text-[12px]"
+            style={{ color: "#64748B", fontSize: 12, lineHeight: 16, marginTop: 3 }}
+          >
+            {note}
+          </Text>
+        ) : null}
+      </View>
     </TouchableOpacity>
   );
 }
@@ -284,6 +299,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
                 key={opt.value}
                 selected={disposition === opt.value}
                 title={opt.label}
+                note={opt.note}
                 recommended={opt.recommended}
                 disabled={busy}
                 onPress={() => setDisposition(opt.value)}
