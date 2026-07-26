@@ -45,7 +45,7 @@ function ThinkingDots() {
   }, []);
 
   return (
-    <View style={styles.thinkingRow} testID="seneca-thinking" accessibilityLabel="Thinking">
+    <View style={styles.thinkingRow} testID="seneca-thinking" accessibilityLabel="preparing guidance">
       <View style={styles.thinkingDots}>
         {[0, 1, 2].map((i) => (
           <View
@@ -54,7 +54,7 @@ function ThinkingDots() {
           />
         ))}
       </View>
-      <Text style={styles.thinkingText}>Thinking</Text>
+      <Text style={styles.thinkingText}>preparing guidance...</Text>
     </View>
   );
 }

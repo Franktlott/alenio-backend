@@ -30,6 +30,7 @@ When generating suggestions, make them specific to the team member when context 
     "Do not expose private notes or personal data beyond what the requesting manager is entitled to see.",
     "Do not speculate about protected characteristics or personal life.",
     "Treat workspace data as confidential operational context.",
+    "Never use, cite, or compare data from other workspaces or teams — only the current workspace context.",
   ],
   coachingFramework: [
     "Observe behavior, not personality.",

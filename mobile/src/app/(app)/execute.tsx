@@ -87,7 +87,9 @@ import {
   videoMeetingEndFromDuration,
 } from "@/lib/video-meeting-duration";
 
-const EXTERNAL_BUSY_COLOR = "#94A3B8";
+import { CALENDAR_EVENT_COLORS, resolveCalendarEventColor } from "@/lib/calendar-event-colors";
+
+const EXTERNAL_BUSY_COLOR = CALENDAR_EVENT_COLORS.outlook;
 
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
@@ -125,7 +127,6 @@ export default function TasksScreen() {
   const [eventDescription, setEventDescription] = useState("");
   const [eventStart, setEventStart] = useState<Date>(new Date());
   const [eventEnd, setEventEnd] = useState<Date>(new Date());
-  const [eventColor, setEventColor] = useState("#4361EE");
   const [eventIsHidden, setEventIsHidden] = useState(true);
   const [meetingAssigneeIds, setMeetingAssigneeIds] = useState<string[]>([]);
   const [showMeetingAssigneeDropdown, setShowMeetingAssigneeDropdown] = useState(false);
@@ -577,7 +578,7 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
       setShowEventModal(false);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true);
+      setEventTitle(""); setEventDescription(""); setEventIsHidden(true);
       setMeetingAssigneeIds([]);
       setShowMeetingAssigneeDropdown(false);
     },
@@ -591,7 +592,7 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
       setShowEventModal(false);
       setEditingEvent(null);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true);
+      setEventTitle(""); setEventDescription(""); setEventIsHidden(true);
       setMeetingAssigneeIds([]);
       setShowMeetingAssigneeDropdown(false);
     },
@@ -606,7 +607,7 @@ export default function TasksScreen() {
       setShowEventModal(false);
       setEditingEvent(null);
       setConfirmDeleteEvent(false);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true);
+      setEventTitle(""); setEventDescription(""); setEventIsHidden(true);
       setMeetingAssigneeIds([]);
       setShowMeetingAssigneeDropdown(false);
     },
@@ -623,8 +624,7 @@ export default function TasksScreen() {
       ? (() => { const [y, m, day] = selectedDay.split("-").map(Number); return new Date(y, m - 1, day); })()
       : new Date();
     setEventTitle(""); setEventDescription("");
-    setEventStart(d); setEventEnd(d);
-    setEventColor("#4361EE"); setEventIsHidden(false); setFormError(null); setConfirmDeleteEvent(false);
+    setEventStart(d); setEventEnd(d); setEventIsHidden(false); setFormError(null); setConfirmDeleteEvent(false);
     setMeetingAssigneeIds([]);
     setShowMeetingAssigneeDropdown(false);
     setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowDurationPicker(false);
@@ -640,8 +640,7 @@ export default function TasksScreen() {
       ? (() => { const [y, m, day] = selectedDay.split("-").map(Number); return new Date(y, m - 1, day); })()
       : new Date();
     setEventTitle(""); setEventDescription("");
-    setEventStart(d); setEventEnd(d);
-    setEventColor("#4361EE"); setEventIsHidden(true); setFormError(null); setConfirmDeleteEvent(false);
+    setEventStart(d); setEventEnd(d); setEventIsHidden(true); setFormError(null); setConfirmDeleteEvent(false);
     setMeetingAssigneeIds([]);
     setShowMeetingAssigneeDropdown(false);
     setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowDurationPicker(false);
@@ -662,8 +661,7 @@ export default function TasksScreen() {
       : now;
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
-    setMeetingDurationMinutes(60);
-    setEventColor("#4361EE"); setEventIsHidden(true); setFormError(null); setConfirmDeleteEvent(false);
+    setMeetingDurationMinutes(60); setEventIsHidden(true); setFormError(null); setConfirmDeleteEvent(false);
     setMeetingAssigneeIds([]);
     setShowMeetingAssigneeDropdown(false);
     setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowDurationPicker(false);
@@ -683,7 +681,6 @@ export default function TasksScreen() {
     } else {
       setMeetingDurationMinutes(60);
     }
-    setEventColor(ev.color);
     setEventIsHidden(ev.isHidden ?? false);
     setMeetingAssigneeIds(ev.assigneeIds ?? []);
     setFormError(null);
@@ -691,10 +688,6 @@ export default function TasksScreen() {
     setShowMeetingAssigneeDropdown(false);
     setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowDurationPicker(false);
     setShowEventModal(true);
-  };
-
-  const openEventDetails = (ev: CalendarEvent) => {
-    openEditEventModal(ev, { readOnly: !canManageEvent(ev) });
   };
 
   const confirmAndDeleteEvent = (ev: CalendarEvent) => {
@@ -713,10 +706,7 @@ export default function TasksScreen() {
   };
 
   const openEventActions = (ev: CalendarEvent) => {
-    if (!canManageEvent(ev)) {
-      openEventDetails(ev);
-      return;
-    }
+    if (!canManageEvent(ev)) return;
     setConfirmDeleteActionEvent(false);
     setActionMenuEvent(ev);
   };
@@ -758,7 +748,11 @@ export default function TasksScreen() {
           description: eventDescription.trim() || undefined,
           startDate: eventStart.toISOString(),
           endDate: end.toISOString(),
-          color: eventColor,
+          color: resolveCalendarEventColor({
+            isHidden: eventIsHidden,
+            isVideoMeeting: isOwnerOrLeader && isMeeting,
+            isOneOnOne: editingEvent?.isOneOnOne === true,
+          }),
           allDay: !isMeeting,
           isHidden: eventIsHidden,
           isVideoMeeting: isOwnerOrLeader && isMeeting,
@@ -771,7 +765,10 @@ export default function TasksScreen() {
         description: eventDescription.trim() || undefined,
         startDate: eventStart.toISOString(),
         endDate: end.toISOString(),
-        color: eventColor,
+        color: resolveCalendarEventColor({
+          isHidden: eventIsHidden,
+          isVideoMeeting: isOwnerOrLeader && isMeeting,
+        }),
         allDay: !isMeeting,
         isHidden: eventIsHidden,
         isVideoMeeting: isOwnerOrLeader && isMeeting,
@@ -1019,7 +1016,6 @@ export default function TasksScreen() {
               fillRemaining
               canManageEvent={canManageEvent}
               onEventLongPress={openEventActions}
-              onEventPress={openEventDetails}
               onTaskPress={(task) =>
                 router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })
               }
@@ -1611,7 +1607,7 @@ export default function TasksScreen() {
           <AlenioSheetOption
             icon={<CalendarDays size={16} color="white" />}
             iconColor="#7C3AED"
-            title="Team calendar event"
+            title="Calendar Event"
             subtitle="Add a public event for the whole team"
             onPress={() => {
               setShowAddModal(false);
@@ -1993,22 +1989,6 @@ export default function TasksScreen() {
                   Public events are sent to your team leader or owner for approval.
                 </Text>
               ) : null}
-
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 10 }}>Color</Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
-                {["#4361EE", "#7C3AED", "#EC4899", "#EF4444", "#F59E0B", "#10B981", "#06B6D4", "#64748B"].map((c) => (
-                  <Pressable
-                    key={c}
-                    onPress={() => {
-                      if (eventModalReadOnly) return;
-                      setEventColor(c);
-                    }}
-                    style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c, alignItems: "center", justifyContent: "center", borderWidth: eventColor === c ? 3 : 0, borderColor: "white", shadowColor: eventColor === c ? c : "transparent", shadowOpacity: 0.5, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: eventColor === c ? 4 : 0, opacity: eventModalReadOnly && eventColor !== c ? 0.45 : 1 }}
-                  >
-                    {eventColor === c ? <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>✓</Text> : null}
-                  </Pressable>
-                ))}
-              </View>
 
               {eventModalReadOnly ? (
                 <TouchableOpacity

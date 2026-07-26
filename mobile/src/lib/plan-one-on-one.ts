@@ -1,6 +1,7 @@
 import type { Href } from "expo-router";
+import { ONE_ON_ONE_EVENT_COLOR } from "@/lib/calendar-event-colors";
 
-export const ONE_ON_ONE_EVENT_COLOR = "#7C3AED";
+export { ONE_ON_ONE_EVENT_COLOR };
 export const ONE_ON_ONE_DURATION_OPTIONS = [30, 45, 60] as const;
 export const ONE_ON_ONE_DEFAULT_DURATION_MINUTES = 45;
 export const ONE_ON_ONE_REMINDER_MINUTES = [15];

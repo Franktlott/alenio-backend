@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import type { SenecaWorkspaceContext, SenecaWorkspaceMemberRow } from "./seneca-workspace-context";
-import { emptyTeamHealth } from "./seneca-workspace-context";
+import { emptySenecaWorkspaceEnrichment, emptyTeamHealth } from "./seneca-workspace-context";
 
 function roleLabel(role: string): string {
   if (role === "owner") return "Owner";
@@ -14,6 +14,10 @@ export async function buildSenecaChatContext(
   teamId: string,
   managerUserId: string,
 ): Promise<SenecaWorkspaceContext> {
+  if (!teamId) {
+    throw new Error("buildSenecaChatContext requires teamId");
+  }
+
   const [team, members] = await Promise.all([
     prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }),
     prisma.teamMember.findMany({
@@ -44,6 +48,7 @@ export async function buildSenecaChatContext(
     developmentGoalsNearingInactive: [],
     inactiveDevelopmentGoals: [],
     teamHealth: emptyTeamHealth(),
+    ...emptySenecaWorkspaceEnrichment(),
   };
 }
 

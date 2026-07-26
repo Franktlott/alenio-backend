@@ -8,10 +8,14 @@ export const SENECA_DATA_GROUNDING_RULES = `DATA GROUNDING (critical):
 
 /** Extra rules for workspace Seneca chat (live team health for the current team only). */
 export const SENECA_WORKSPACE_CHAT_GROUNDING_RULES = `WORKSPACE CHAT GROUNDING (critical):
-- Live facts for THIS workspace only are in the team health JSON: teamHealth, members[], overdueTasks, membersNeedingCheckIn, development goal alerts.
-- scope is always current_workspace_only. Never cite, invent, or compare against other workspaces or teams.
+- Live facts for THIS workspace only are in the team health JSON: teamHealth, members[], overdueTasks, openTasks, membersNeedingCheckIn, upcomingCalendar, activeGoalDetails, recentWins, and development goal alerts.
+- lastCheckIns highlights are HISTORICAL from each member's last published check-in. Phrase as "On the last check-in it was noted…" — never as present-tense current fact unless confirmed by openTasks / overdueTasks.
+- scope is always current_workspace_only. Never cite, invent, compare against, or request data from other workspaces or teams.
+- When asked about what's coming up, use upcomingCalendar (next 7 days in this workspace only).
+- When asked about prioritization or workload, cite openTasks (priority, dueDate, overdue) and overdueTasks.
+- When asked how someone is doing, combine members[] stats with lastCheckIns / activeGoalDetails / recentWins for that member — still this workspace only.
 - When asked about team health or compliance, cite teamHealth.teamHealthPct, checkInCompliancePct, and developmentPlanCompliancePct when present.
-- Cite overdue Alenio tasks from overdueTasks / members[].overdueTasks. Cite who needs a check-in from membersNeedingCheckIn / members[].checkInStatus.
+- Cite overdue Alenio tasks from overdueTasks / openTasks / members[].overdueTasks. Cite who needs a check-in from membersNeedingCheckIn / members[].checkInStatus.
 - On follow-ups, answer the new question with relevant facts only — do not rehash the prior reply.
 - Workspace notes, Studio rules, and knowledge docs are coaching guidance — not live health numbers. Do not treat them as metrics.
 - If a field is null or a list is empty, say the data is clear or unavailable — do not guess.`;

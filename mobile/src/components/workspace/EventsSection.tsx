@@ -4,11 +4,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import {
   Clock,
+  Gift,
   Users,
   Video,
   UserRound,
   ClipboardList,
   Plus,
+  Lock,
 } from "lucide-react-native";
 import type { CalendarEvent, Task } from "@/lib/types";
 import type { USFederalHoliday } from "@/lib/us-federal-holidays";
@@ -19,6 +21,7 @@ import {
 import { isWithinMeetingTimeFrame } from "@/lib/video-meeting-join";
 import { tabBarClearance } from "@/lib/tab-bar";
 import { WS } from "./workspace-ui";
+import { resolveCalendarEventColor } from "@/lib/calendar-event-colors";
 
 const EVENT_CARD_HEIGHT = 44;
 const SECTION_HORIZONTAL_PADDING = WS.pageGutter;
@@ -35,6 +38,8 @@ type EventRow = {
   kind: "holiday" | "event" | "task";
   isVideoMeeting?: boolean;
   isOneOnOne?: boolean;
+  /** True when only the creator (or meeting invitees) can see it. */
+  isPrivate?: boolean;
   startDate?: string;
   endDate?: string | null;
   canManage?: boolean;
@@ -144,14 +149,16 @@ function DayListEventCard({
   onJoin?: () => void;
 }) {
   const Icon = row.kind === "holiday"
-    ? Clock
+    ? Gift
     : row.kind === "task" || row.badgeTone === "task"
       ? ClipboardList
       : row.isOneOnOne
         ? UserRound
         : row.isVideoMeeting
           ? Video
-          : Users;
+          : row.isPrivate
+            ? Lock
+            : Users;
   const iconBg =
     row.kind === "holiday"
       ? "#FEF2F2"
@@ -276,7 +283,16 @@ function buildEventRows(
     const timed = eventShowsScheduledTime(ev);
     const isExternal = ev.isExternal === true;
     const isOneOnOne = !isExternal && ev.isOneOnOne === true;
-    const badge = isExternal ? "Outlook" : isOneOnOne ? "1:1" : ev.isVideoMeeting ? "Meeting" : "Event";
+    const isPrivate = isExternal ? true : ev.isHidden === true;
+    const visibilityLabel = isPrivate ? "Private" : "Public";
+    const kindLabel = isExternal
+      ? "Outlook"
+      : ev.isVideoMeeting
+        ? "Video meeting"
+        : isOneOnOne
+          ? "Check-in"
+          : "Calendar event";
+    const badge = isExternal ? "Outlook" : isOneOnOne ? "1:1" : ev.isVideoMeeting ? "Meeting" : isPrivate ? "Private" : "Public";
     const badgeTone = isExternal
       ? ("outlook" as const)
       : isOneOnOne
@@ -284,19 +300,24 @@ function buildEventRows(
         : ("meeting" as const);
     const timeLabel = timed ? formatEventTimeRange(ev.startDate, ev.endDate).split("–")[0]?.trim() || "All day" : "All day";
     const canManage = isExternal ? false : canManageEvent ? canManageEvent(ev) : true;
+    const detail = ev.description?.trim();
     return {
       key: ev.id,
       title: ev.title,
-      subtitle: isExternal
-        ? "Private · Outlook"
-        : ev.description?.trim() || (ev.isVideoMeeting ? "Video meeting" : isOneOnOne ? "Check-in" : "Calendar event"),
-      accentColor: isExternal ? "#94A3B8" : ev.color,
+      subtitle: detail ? `${visibilityLabel} · ${detail}` : `${visibilityLabel} · ${kindLabel}`,
+        accentColor: resolveCalendarEventColor({
+          isExternal,
+          isOneOnOne,
+          isVideoMeeting: ev.isVideoMeeting,
+          isHidden: isPrivate,
+        }),
       badge,
       badgeTone,
       timeLabel,
       kind: "event" as const,
       isVideoMeeting: ev.isVideoMeeting,
       isOneOnOne,
+      isPrivate,
       startDate: ev.startDate,
       endDate: ev.endDate ?? null,
       canManage,

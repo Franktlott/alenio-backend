@@ -1,45 +1,58 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { Info, Video, UserRound, X } from "lucide-react-native";
+import { ClipboardList, Gift, Info, Video, UserRound, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CALENDAR_EVENT_COLORS } from "@/lib/calendar-event-colors";
 
 type KeyItem = {
   id: string;
   title: string;
   description: string;
-  preview: "eventBar" | "video" | "taskDot" | "holidayDot" | "multi" | "checkIn";
+  preview: "publicBar" | "privateBar" | "video" | "task" | "holiday" | "multi" | "checkIn" | "outlookBar";
 };
 
 const CALENDAR_ICON_KEY: KeyItem[] = [
   {
-    id: "event",
-    title: "Calendar event",
-    description: "Colored bar for a team or personal event.",
-    preview: "eventBar",
+    id: "public",
+    title: "Public event",
+    description: "Blue bar — visible to the whole team.",
+    preview: "publicBar",
+  },
+  {
+    id: "private",
+    title: "Private event",
+    description: "Gray bar — only you (or invitees) can see it.",
+    preview: "privateBar",
   },
   {
     id: "meeting",
     title: "Virtual meeting",
-    description: "Video icon means a join link is included.",
+    description: "Indigo bar with a video icon when a join link is included.",
     preview: "video",
   },
   {
     id: "checkIn",
     title: "Check-in",
-    description: "Person icon for one-on-one check-ins.",
+    description: "Green accent with a person icon for one-on-ones.",
     preview: "checkIn",
+  },
+  {
+    id: "outlook",
+    title: "Outlook busy",
+    description: "Slate bar for external calendar busy blocks.",
+    preview: "outlookBar",
   },
   {
     id: "task",
     title: "Task due",
-    description: "Blue dot under a date with due tasks.",
-    preview: "taskDot",
+    description: "Clipboard icon below a date with due tasks.",
+    preview: "task",
   },
   {
     id: "holiday",
     title: "Holiday",
-    description: "Red dot marks a holiday.",
-    preview: "holidayDot",
+    description: "Gift icon below a holiday date.",
+    preview: "holiday",
   },
   {
     id: "multi",
@@ -49,58 +62,75 @@ const CALENDAR_ICON_KEY: KeyItem[] = [
   },
 ];
 
+function ColorBar({ color }: { color: string }) {
+  return (
+    <View
+      style={{
+        width: 28,
+        height: 9,
+        borderRadius: 3,
+        backgroundColor: `${color}26`,
+        borderWidth: 1,
+        borderColor: `${color}40`,
+      }}
+    />
+  );
+}
+
+function IconBadge({
+  backgroundColor,
+  children,
+}: {
+  backgroundColor: string;
+  children: ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
 function KeyPreview({ kind }: { kind: KeyItem["preview"] }) {
-  if (kind === "eventBar") {
-    return (
-      <View
-        style={{
-          width: 28,
-          height: 9,
-          borderRadius: 3,
-          backgroundColor: "#4361EE26",
-          borderWidth: 1,
-          borderColor: "#4361EE40",
-        }}
-      />
-    );
-  }
+  if (kind === "publicBar") return <ColorBar color={CALENDAR_EVENT_COLORS.public} />;
+  if (kind === "privateBar") return <ColorBar color={CALENDAR_EVENT_COLORS.private} />;
+  if (kind === "outlookBar") return <ColorBar color={CALENDAR_EVENT_COLORS.outlook} />;
   if (kind === "video") {
     return (
-      <View
-        style={{
-          width: 24,
-          height: 24,
-          borderRadius: 12,
-          backgroundColor: "#EEF2FF",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Video size={12} color="#4361EE" strokeWidth={2.25} />
-      </View>
+      <IconBadge backgroundColor="#EEF2FF">
+        <Video size={12} color={CALENDAR_EVENT_COLORS.meeting} strokeWidth={2.25} />
+      </IconBadge>
     );
   }
   if (kind === "checkIn") {
     return (
-      <View
-        style={{
-          width: 24,
-          height: 24,
-          borderRadius: 12,
-          backgroundColor: "#ECFDF5",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <UserRound size={12} color="#047857" strokeWidth={2.25} />
-      </View>
+      <IconBadge backgroundColor="#ECFDF5">
+        <UserRound size={12} color={CALENDAR_EVENT_COLORS.checkIn} strokeWidth={2.25} />
+      </IconBadge>
     );
   }
-  if (kind === "taskDot") {
-    return <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#4361EE" }} />;
+  if (kind === "task") {
+    return (
+      <IconBadge backgroundColor="#FFF7ED">
+        <ClipboardList size={12} color={CALENDAR_EVENT_COLORS.task} strokeWidth={2.25} />
+      </IconBadge>
+    );
   }
-  if (kind === "holidayDot") {
-    return <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#EF4444" }} />;
+  if (kind === "holiday") {
+    return (
+      <IconBadge backgroundColor="#FEF2F2">
+        <Gift size={12} color={CALENDAR_EVENT_COLORS.holiday} strokeWidth={2.25} />
+      </IconBadge>
+    );
   }
   return (
     <View
@@ -108,12 +138,12 @@ function KeyPreview({ kind }: { kind: KeyItem["preview"] }) {
         width: 20,
         height: 20,
         borderRadius: 10,
-        backgroundColor: "#4361EE26",
+        backgroundColor: `${CALENDAR_EVENT_COLORS.public}26`,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Text style={{ color: "#4361EE", fontSize: 9, fontWeight: "700" }}>3</Text>
+      <Text style={{ color: CALENDAR_EVENT_COLORS.public, fontSize: 9, fontWeight: "700" }}>3</Text>
     </View>
   );
 }
@@ -122,7 +152,7 @@ export function CalendarIconKey({ iconSize = 13 }: { iconSize?: number }) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const sheetHeight = Math.min(Math.round(windowHeight * 0.62), 420);
+  const sheetHeight = Math.min(Math.round(windowHeight * 0.68), 480);
 
   return (
     <>

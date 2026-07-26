@@ -26,6 +26,7 @@ import {
   formatVideoMeetingEndPreview,
   videoMeetingEndFromDuration,
 } from "@/lib/video-meeting-duration";
+import { resolveCalendarEventColor } from "@/lib/calendar-event-colors";
 
 type CalendarEvent = {
   id: string;
@@ -43,19 +44,16 @@ type CalendarEvent = {
   approvalStatus?: "pending" | "approved" | "rejected";
 };
 
-const EVENT_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
-
 export default function CreateEventScreen() {
   const {
     teamId, startDate, eventId, eventTitle: initialTitle, eventDescription: initialDescription,
-    eventColor: initialColor, eventEndDate, eventIsHidden, eventIsVideoMeeting, myRole,
+    eventEndDate, eventIsHidden, eventIsVideoMeeting, myRole,
   } = useLocalSearchParams<{
     teamId: string;
     startDate?: string;
     eventId?: string;
     eventTitle?: string;
     eventDescription?: string;
-    eventColor?: string;
     eventEndDate?: string;
     eventIsHidden?: string;
     eventIsVideoMeeting?: string;
@@ -78,7 +76,6 @@ export default function CreateEventScreen() {
   const [eventDescription, setEventDescription] = useState(initialDescription ?? "");
   const [eventStart, setEventStart] = useState<Date>(defaultStart);
   const [eventEnd, setEventEnd] = useState<Date>(defaultEnd);
-  const [eventColor, setEventColor] = useState(initialColor ?? "#4361EE");
   const [isHidden, setIsHidden] = useState(() => {
     if (eventIsHidden !== undefined) return eventIsHidden === "true";
     return !isOwnerOrLeader;
@@ -162,7 +159,10 @@ export default function CreateEventScreen() {
       description: eventDescription.trim() || undefined,
       startDate: eventStart.toISOString(),
       endDate: end.toISOString(),
-      color: eventColor,
+      color: resolveCalendarEventColor({
+        isHidden,
+        isVideoMeeting: isOwnerOrLeader && isVideoMeeting,
+      }),
       allDay: !isVideoMeeting,
       isHidden,
       isVideoMeeting: isOwnerOrLeader && isVideoMeeting,
@@ -527,31 +527,6 @@ export default function CreateEventScreen() {
           ) : null}
           </>
         ) : null}
-
-        {/* Color picker */}
-        <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 10 }}>Color</Text>
-        <View style={{ flexDirection: "row", gap: 10, marginBottom: 24 }}>
-          {EVENT_COLORS.map((color) => (
-            <Pressable
-              key={color}
-              onPress={() => setEventColor(color)}
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                backgroundColor: color,
-                borderWidth: eventColor === color ? 3 : 0,
-                borderColor: "white",
-                shadowColor: color,
-                shadowOpacity: eventColor === color ? 0.5 : 0,
-                shadowRadius: 4,
-                shadowOffset: { width: 0, height: 0 },
-                elevation: eventColor === color ? 4 : 0,
-              }}
-              testID={`color-swatch-${color}`}
-            />
-          ))}
-        </View>
 
         {formError ? (
           <Text style={{ color: "#EF4444", fontSize: 13, marginBottom: 12 }} testID="form-error">

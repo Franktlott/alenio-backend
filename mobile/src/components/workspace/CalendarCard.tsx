@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { ChevronLeft, ChevronRight, Video } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, ClipboardList, Gift, Video } from "lucide-react-native";
 import type { CalendarEvent, Task } from "@/lib/types";
 import type { USFederalHoliday } from "@/lib/us-federal-holidays";
 import { isSameDay, startOfDay, toLocalIso } from "./workspace-utils";
 import { WS } from "./workspace-ui";
+import { CALENDAR_EVENT_COLORS, resolveCalendarEventColor } from "@/lib/calendar-event-colors";
 import { CalendarIconKey } from "./CalendarIconKey";
 
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -14,11 +15,13 @@ const MONTH_NAMES = [
 ];
 
 /** Compact Workspace calendar — keep card short so agenda fits on screen */
-const DAY_CELL_HEIGHT = 20;
-const DAY_CIRCLE_SIZE = 20;
-const EVENT_SLOT_HEIGHT = 13;
-const EVENT_PILL_HEIGHT = 11;
+const DAY_CELL_HEIGHT = 22;
+const DAY_CIRCLE_SIZE = 22;
+const EVENT_SLOT_HEIGHT = 16;
+const EVENT_PILL_HEIGHT = 14;
 const WEEK_ROW_HEIGHT = DAY_CELL_HEIGHT + EVENT_SLOT_HEIGHT + 1;
+const MARKER_SIZE = 14;
+const MARKER_ICON = 9;
 
 type WeekBar = { id: string; title: string; color: string; startCol: number; endCol: number; isVideoMeeting?: boolean };
 
@@ -26,6 +29,55 @@ function softTint(hex: string, alpha = "26"): string {
   const clean = hex.replace("#", "");
   if (clean.length === 6) return `#${clean}${alpha}`;
   return hex;
+}
+
+function DayTypeMarker({ kind }: { kind: "task" | "holiday" }) {
+  const isHoliday = kind === "holiday";
+  return (
+    <View
+      style={{
+        width: MARKER_SIZE,
+        height: MARKER_SIZE,
+        borderRadius: MARKER_SIZE / 2,
+        backgroundColor: isHoliday ? "#FEE2E2" : "#FFEDD5",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {isHoliday ? (
+        <Gift size={MARKER_ICON} color={CALENDAR_EVENT_COLORS.holiday} strokeWidth={2.4} />
+      ) : (
+        <ClipboardList size={MARKER_ICON} color={CALENDAR_EVENT_COLORS.task} strokeWidth={2.4} />
+      )}
+    </View>
+  );
+}
+
+function DayTypeMarkers({
+  hasTasks,
+  isHoliday,
+  inMonth,
+}: {
+  hasTasks: boolean;
+  isHoliday: boolean;
+  inMonth: boolean;
+}) {
+  const show = inMonth && (hasTasks || isHoliday);
+  return (
+    <View
+      style={{
+        flex: 1,
+        height: EVENT_PILL_HEIGHT,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+      }}
+    >
+      {show && isHoliday ? <DayTypeMarker kind="holiday" /> : null}
+      {show && hasTasks ? <DayTypeMarker kind="task" /> : null}
+    </View>
+  );
 }
 
 function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBar[][] {
@@ -48,7 +100,7 @@ function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBa
     bars.push({
       id: event.id,
       title: event.title,
-      color: event.color,
+      color: resolveCalendarEventColor(event),
       startCol,
       endCol,
       isVideoMeeting: event.isVideoMeeting,
@@ -110,7 +162,7 @@ export function CalendarCard({
       const existing = dayEventMap.get(iso);
       dayEventMap.set(iso, {
         count: (existing?.count ?? 0) + 1,
-        color: existing?.color ?? ev.color,
+        color: existing?.color ?? resolveCalendarEventColor(ev),
         title: existing?.title ?? ev.title,
       });
       cur.setDate(cur.getDate() + 1);
@@ -232,8 +284,6 @@ export function CalendarCard({
                   const inMonth = day.getMonth() === viewMonth;
                   const isToday = isSameDay(day, today);
                   const isSelected = selectedDay === iso;
-                  const hasTasks = taskDays.has(iso);
-                  const isHoliday = holidays.some((h) => isSameDay(h.date, day));
                   return (
                     <TouchableOpacity
                       key={`${iso}-${colIdx}`}
@@ -257,7 +307,7 @@ export function CalendarCard({
                       >
                         <Text
                           style={{
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: isToday || isSelected ? "700" : "500",
                             color: isSelected
                               ? "white"
@@ -271,14 +321,6 @@ export function CalendarCard({
                           {day.getDate()}
                         </Text>
                       </View>
-                      <View style={{ position: "absolute", bottom: 1, flexDirection: "row", gap: 2, alignItems: "center" }}>
-                        {hasTasks && !isSelected && inMonth ? (
-                          <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#4361EE" }} />
-                        ) : null}
-                        {isHoliday && !isSelected && inMonth ? (
-                          <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#EF4444" }} />
-                        ) : null}
-                      </View>
                     </TouchableOpacity>
                   );
                 })}
@@ -288,156 +330,164 @@ export function CalendarCard({
                 onLayout={(e) => setWeekRowWidth(e.nativeEvent.layout.width)}
                 style={{ height: EVENT_SLOT_HEIGHT, justifyContent: "center" }}
               >
-                {tracks.length > 0 ? (
-                  <View style={{ flexDirection: "row", height: EVENT_PILL_HEIGHT, position: "relative", alignItems: "center" }}>
-                    {week.map((day, colIdx) => {
-                      const track0 = tracks[0] ?? [];
-                      const bar = track0.find((b) => b.startCol <= colIdx && b.endCol >= colIdx);
-                      const iso = toLocalIso(day);
-                      const evInfo = dayEventMap.get(iso);
-                      if (!bar) {
-                        if (evInfo && evInfo.count === 1) {
-                          return (
-                            <View
-                              key={colIdx}
-                              style={{
-                                flex: 1,
-                                height: EVENT_PILL_HEIGHT,
-                                backgroundColor: softTint(evInfo.color),
-                                borderRadius: 4,
-                                marginHorizontal: 2,
-                              }}
-                            />
-                          );
-                        }
-                        if (evInfo && evInfo.count > 1) {
-                          return (
-                            <View key={colIdx} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                              <View
-                                style={{
-                                  width: 14,
-                                  height: 14,
-                                  borderRadius: 7,
-                                  backgroundColor: softTint(evInfo.color, "40"),
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                <Text style={{ color: evInfo.color, fontSize: 8, fontWeight: "700", lineHeight: 14 }}>
-                                  {evInfo.count}
-                                </Text>
-                              </View>
-                            </View>
-                          );
-                        }
-                        return <View key={colIdx} style={{ flex: 1 }} />;
+                <View style={{ flexDirection: "row", height: EVENT_PILL_HEIGHT, position: "relative", alignItems: "center" }}>
+                  {week.map((day, colIdx) => {
+                    const track0 = tracks[0] ?? [];
+                    const bar = track0.find((b) => b.startCol <= colIdx && b.endCol >= colIdx);
+                    const iso = toLocalIso(day);
+                    const inMonth = day.getMonth() === viewMonth;
+                    const hasTasks = taskDays.has(iso);
+                    const isHoliday = holidays.some((h) => isSameDay(h.date, day));
+                    const evInfo = dayEventMap.get(iso);
+                    if (!bar) {
+                      if (evInfo && evInfo.count === 1) {
+                        return (
+                          <View
+                            key={colIdx}
+                            style={{
+                              flex: 1,
+                              height: EVENT_PILL_HEIGHT,
+                              backgroundColor: softTint(evInfo.color),
+                              borderRadius: 4,
+                              marginHorizontal: 2,
+                            }}
+                          />
+                        );
                       }
-                      const evCount = evInfo?.count ?? 1;
-                      if (evCount > 1) {
+                      if (evInfo && evInfo.count > 1) {
                         return (
                           <View key={colIdx} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                             <View
                               style={{
-                                width: 14,
-                                height: 14,
-                                borderRadius: 7,
-                                backgroundColor: softTint(evInfo?.color ?? bar.color, "40"),
+                                width: MARKER_SIZE,
+                                height: MARKER_SIZE,
+                                borderRadius: MARKER_SIZE / 2,
+                                backgroundColor: softTint(evInfo.color, "40"),
                                 alignItems: "center",
                                 justifyContent: "center",
                               }}
                             >
-                              <Text style={{ color: evInfo?.color ?? bar.color, fontSize: 8, fontWeight: "700", lineHeight: 14 }}>
-                                {evCount}
+                              <Text style={{ color: evInfo.color, fontSize: 8, fontWeight: "700", lineHeight: MARKER_SIZE }}>
+                                {evInfo.count}
                               </Text>
                             </View>
                           </View>
                         );
                       }
-                      const isStart = colIdx === bar.startCol;
-                      const isEnd = colIdx === bar.endCol;
                       return (
-                        <View
+                        <DayTypeMarkers
                           key={colIdx}
-                          style={{
-                            flex: 1,
-                            height: EVENT_PILL_HEIGHT,
-                            backgroundColor: softTint(bar.color),
-                            borderTopLeftRadius: isStart ? 4 : 0,
-                            borderBottomLeftRadius: isStart ? 4 : 0,
-                            borderTopRightRadius: isEnd ? 4 : 0,
-                            borderBottomRightRadius: isEnd ? 4 : 0,
-                            marginLeft: isStart ? 2 : 0,
-                            marginRight: isEnd ? 2 : 0,
-                          }}
+                          hasTasks={hasTasks}
+                          isHoliday={isHoliday}
+                          inMonth={inMonth}
                         />
                       );
-                    })}
-
-                    {weekRowWidth > 0 &&
-                      (tracks[0] ?? []).map((bar) => {
-                        const colWidth = weekRowWidth / 7;
-                        let effectiveEndCol = bar.startCol - 1;
-                        for (let col = bar.startCol; col <= bar.endCol; col++) {
-                          const d = week[col];
-                          const count = d ? (dayEventMap.get(toLocalIso(d))?.count ?? 1) : 1;
-                          if (count > 1) break;
-                          effectiveEndCol = col;
-                        }
-                        if (effectiveEndCol < bar.startCol) return null;
-                        const titleWidth = (effectiveEndCol - bar.startCol + 1) * colWidth - 4;
-                        const showTitle = titleWidth >= 40;
-                        return (
+                    }
+                    const evCount = evInfo?.count ?? 1;
+                    if (evCount > 1) {
+                      return (
+                        <View key={colIdx} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                           <View
-                            key={`t-${bar.id}`}
-                            pointerEvents="none"
                             style={{
-                              position: "absolute",
-                              left: bar.startCol * colWidth + 2,
-                              width: titleWidth,
-                              top: 0,
-                              height: EVENT_PILL_HEIGHT,
+                              width: MARKER_SIZE,
+                              height: MARKER_SIZE,
+                              borderRadius: MARKER_SIZE / 2,
+                              backgroundColor: softTint(evInfo?.color ?? bar.color, "40"),
+                              alignItems: "center",
                               justifyContent: "center",
-                              overflow: "hidden",
                             }}
                           >
-                            {showTitle ? (
-                              <View
-                                style={{
-                                  height: EVENT_PILL_HEIGHT,
-                                  flexDirection: "row",
-                                  alignItems: "center",
-                                  paddingHorizontal: 3,
-                                }}
-                              >
-                                {bar.isVideoMeeting ? (
-                                  <Video size={8} color={bar.color} style={{ marginRight: 2 }} />
-                                ) : null}
-                                <Text
-                                  style={{
-                                    color: bar.color,
-                                    fontSize: 8,
-                                    fontWeight: "700",
-                                    lineHeight: EVENT_PILL_HEIGHT,
-                                    includeFontPadding: false,
-                                    textAlignVertical: "center",
-                                    flex: 1,
-                                  }}
-                                  numberOfLines={1}
-                                  allowFontScaling={false}
-                                >
-                                  {bar.title}
-                                </Text>
-                              </View>
-                            ) : bar.isVideoMeeting ? (
-                              <View style={{ height: EVENT_PILL_HEIGHT, alignItems: "center", justifyContent: "center" }}>
-                                <Video size={8} color={bar.color} />
-                              </View>
-                            ) : null}
+                            <Text style={{ color: evInfo?.color ?? bar.color, fontSize: 8, fontWeight: "700", lineHeight: MARKER_SIZE }}>
+                              {evCount}
+                            </Text>
                           </View>
-                        );
-                      })}
-                  </View>
-                ) : null}
+                        </View>
+                      );
+                    }
+                    const isStart = colIdx === bar.startCol;
+                    const isEnd = colIdx === bar.endCol;
+                    return (
+                      <View
+                        key={colIdx}
+                        style={{
+                          flex: 1,
+                          height: EVENT_PILL_HEIGHT,
+                          backgroundColor: softTint(bar.color),
+                          borderTopLeftRadius: isStart ? 4 : 0,
+                          borderBottomLeftRadius: isStart ? 4 : 0,
+                          borderTopRightRadius: isEnd ? 4 : 0,
+                          borderBottomRightRadius: isEnd ? 4 : 0,
+                          marginLeft: isStart ? 2 : 0,
+                          marginRight: isEnd ? 2 : 0,
+                        }}
+                      />
+                    );
+                  })}
+
+                  {weekRowWidth > 0 &&
+                    (tracks[0] ?? []).map((bar) => {
+                      const colWidth = weekRowWidth / 7;
+                      let effectiveEndCol = bar.startCol - 1;
+                      for (let col = bar.startCol; col <= bar.endCol; col++) {
+                        const d = week[col];
+                        const count = d ? (dayEventMap.get(toLocalIso(d))?.count ?? 1) : 1;
+                        if (count > 1) break;
+                        effectiveEndCol = col;
+                      }
+                      if (effectiveEndCol < bar.startCol) return null;
+                      const titleWidth = (effectiveEndCol - bar.startCol + 1) * colWidth - 4;
+                      const showTitle = titleWidth >= 40;
+                      return (
+                        <View
+                          key={`t-${bar.id}`}
+                          pointerEvents="none"
+                          style={{
+                            position: "absolute",
+                            left: bar.startCol * colWidth + 2,
+                            width: titleWidth,
+                            top: 0,
+                            height: EVENT_PILL_HEIGHT,
+                            justifyContent: "center",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {showTitle ? (
+                            <View
+                              style={{
+                                height: EVENT_PILL_HEIGHT,
+                                flexDirection: "row",
+                                alignItems: "center",
+                                paddingHorizontal: 3,
+                              }}
+                            >
+                              {bar.isVideoMeeting ? (
+                                <Video size={9} color={bar.color} style={{ marginRight: 2 }} />
+                              ) : null}
+                              <Text
+                                style={{
+                                  color: bar.color,
+                                  fontSize: 9,
+                                  fontWeight: "700",
+                                  lineHeight: EVENT_PILL_HEIGHT,
+                                  includeFontPadding: false,
+                                  textAlignVertical: "center",
+                                  flex: 1,
+                                }}
+                                numberOfLines={1}
+                                allowFontScaling={false}
+                              >
+                                {bar.title}
+                              </Text>
+                            </View>
+                          ) : bar.isVideoMeeting ? (
+                            <View style={{ height: EVENT_PILL_HEIGHT, alignItems: "center", justifyContent: "center" }}>
+                              <Video size={9} color={bar.color} />
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                </View>
               </View>
             </View>
           );
