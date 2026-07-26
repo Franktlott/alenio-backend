@@ -514,6 +514,11 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
                       onDecline={() => declineOwnership.mutate(row)}
                     />
                   </View>
+                  {row.awaitingPaymentMethod ? (
+                    <Text style={{ fontSize: 10, color: "#6366F1", fontWeight: "650", marginTop: 8 }}>
+                      Tap ✓ to open card setup
+                    </Text>
+                  ) : null}
                 </AlenioSheetCard>
               );
             })}

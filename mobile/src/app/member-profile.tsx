@@ -45,6 +45,7 @@ import {
 } from "@/components/profile/ProfileEnterpriseUI";
 import { DevelopmentToolsLockedCard } from "@/components/DevelopmentToolsLockedCard";
 import { resolveUserImageUrl } from "@/lib/user-avatar";
+import { OwnershipTransferSheet } from "@/components/OwnershipTransferSheet";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
 const FORMER_MEMBER_TABS = ["Check-In"] as const;
@@ -159,6 +160,7 @@ export default function MemberProfileScreen() {
     params.startCheckIn === "1" ? "Check-In" : parseTab(params.tab),
   );
   const [manageOpen, setManageOpen] = useState(false);
+  const [ownershipTransferOpen, setOwnershipTransferOpen] = useState(false);
   const [startCheckInToken, setStartCheckInToken] = useState(() =>
     params.startCheckIn === "1" ? 1 : 0,
   );
@@ -874,6 +876,22 @@ export default function MemberProfileScreen() {
                       </>
                     ) : null}
 
+                    {member && myRole === "owner" && member.role !== "owner" ? (
+                      <>
+                        <ManageActionRow
+                          icon={Crown}
+                          title="Transfer workspace ownership"
+                          subtitle="They must accept within 7 days. Billing moves with ownership."
+                          onPress={() => {
+                            setManageOpen(false);
+                            setOwnershipTransferOpen(true);
+                          }}
+                          testID="transfer-workspace-ownership"
+                        />
+                        <ProfileDivider inset />
+                      </>
+                    ) : null}
+
                     {member && (myRole === "owner" || myRole === "team_leader") && member.role !== "owner" ? (
                       <ManageActionRow
                         icon={UserMinus}
@@ -914,6 +932,29 @@ export default function MemberProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <OwnershipTransferSheet
+        visible={ownershipTransferOpen}
+        teamId={teamId ?? ""}
+        member={
+          member
+            ? {
+                userId: member.userId,
+                user: {
+                  name: member.user.name ?? null,
+                  email: member.user.email ?? null,
+                  image: member.user.image ?? null,
+                },
+              }
+            : null
+        }
+        onClose={() => setOwnershipTransferOpen(false)}
+        onStarted={() => {
+          queryClient.invalidateQueries({ queryKey: ["ownership-transfer-pending", teamId] });
+          queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
+          toast({ title: "Transfer request sent", preset: "done" });
+        }}
+      />
     </SafeAreaView>
   );
 }

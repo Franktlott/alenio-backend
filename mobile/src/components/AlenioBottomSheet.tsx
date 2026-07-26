@@ -29,6 +29,8 @@ type Props = {
   compact?: boolean;
   /** Show an X in the header (useful for form sheets like feedback). */
   showCloseButton?: boolean;
+  /** Fraction of window height for scroll body (default 0.58, compact 0.5). */
+  bodyHeightRatio?: number;
 };
 
 function SheetContent({
@@ -41,10 +43,12 @@ function SheetContent({
   sheetStyle,
   compact = false,
   showCloseButton = false,
+  bodyHeightRatio,
 }: Omit<Props, "visible" | "asScreen">) {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
-  const bodyMaxHeight = Math.round(Dimensions.get("window").height * (compact ? 0.5 : 0.58));
+  const ratio = bodyHeightRatio ?? (compact ? 0.5 : 0.58);
+  const bodyMaxHeight = Math.round(Dimensions.get("window").height * ratio);
 
   return (
     <View style={styles.backdrop} testID={testID}>

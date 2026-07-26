@@ -12,6 +12,7 @@ import {
   Modal,
   RefreshControl,
   Dimensions,
+  Linking,
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -67,6 +68,14 @@ import { WorkplaceStandardsSheet } from "@/components/WorkplaceStandardsSheet";
 import { AppTabHeader } from "@/components/AppTabHeader";
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { UserAvatar } from "@/components/UserAvatar";
+import { OwnershipTransferPendingBanner } from "@/components/OwnershipTransferPendingBanner";
+import {
+  acceptOwnershipTransfer,
+  cancelOwnershipTransfer,
+  completeOwnershipTransferPayment,
+  declineOwnershipTransfer,
+  fetchPendingOwnershipTransfer,
+} from "@/lib/ownership-transfer-api";
 import {
   cancelTeamInvite,
   fetchTeamInvites,
@@ -565,6 +574,24 @@ export default function TeamScreen() {
     refetchInterval: 30000,
   });
 
+  const { data: pendingOwnershipTransfer = null } = useQuery({
+    queryKey: ["ownership-transfer-pending", activeTeamId],
+    queryFn: () => fetchPendingOwnershipTransfer(activeTeamId!),
+    enabled: !!activeTeamId && !!myId,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
+  const [ownershipBusy, setOwnershipBusy] = useState(false);
+  const [ownershipErr, setOwnershipErr] = useState<string | null>(null);
+
+  const refreshOwnershipTransfer = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["ownership-transfer-pending", activeTeamId] });
+    queryClient.invalidateQueries({ queryKey: ["ownership-transfers-mine"] });
+    queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+    queryClient.invalidateQueries({ queryKey: ["teams"] });
+  }, [activeTeamId, queryClient]);
+
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [pendingInvitesOpen, setPendingInvitesOpen] = useState(false);
@@ -742,12 +769,17 @@ export default function TeamScreen() {
 
   const teamHealthPct = useMemo(() => {
     const values = [
-      teamCompliance.checkInCompliancePct,
-      teamCompliance.developmentPlanCompliancePct,
+      workplaceStandards.checkInRequired ? teamCompliance.checkInCompliancePct : null,
+      workplaceStandards.goalsRequired ? teamCompliance.developmentPlanCompliancePct : null,
     ].filter((value): value is number => typeof value === "number");
     if (values.length === 0) return null;
     return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
-  }, [teamCompliance.checkInCompliancePct, teamCompliance.developmentPlanCompliancePct]);
+  }, [
+    teamCompliance.checkInCompliancePct,
+    teamCompliance.developmentPlanCompliancePct,
+    workplaceStandards.checkInRequired,
+    workplaceStandards.goalsRequired,
+  ]);
 
   const totalOpen = overviewSourceTasks.filter((t) => !isTaskDone(t)).length;
   const openTasks = overviewSourceTasks
@@ -768,33 +800,51 @@ export default function TeamScreen() {
   const totalOverdue = overdueTasks.length;
   const overviewComplianceMetrics = showTeamOverview
     ? ([
-        {
-          key: "checkIn",
-          value: formatTeamCompliancePercent(teamCompliance.checkInCompliancePct),
-          label: "Check-in compliance",
-          color: teamComplianceColor(teamCompliance.checkInCompliancePct),
-        },
-        {
-          key: "devPlan",
-          value: formatTeamCompliancePercent(teamCompliance.developmentPlanCompliancePct),
-          label: "Development plan compliance",
-          color: teamComplianceColor(teamCompliance.developmentPlanCompliancePct),
-        },
-      ] as const)
+        workplaceStandards.checkInRequired
+          ? {
+              key: "checkIn",
+              value: formatTeamCompliancePercent(teamCompliance.checkInCompliancePct),
+              label: "Check-in compliance",
+              color: teamComplianceColor(teamCompliance.checkInCompliancePct),
+            }
+          : null,
+        workplaceStandards.goalsRequired
+          ? {
+              key: "devPlan",
+              value: formatTeamCompliancePercent(teamCompliance.developmentPlanCompliancePct),
+              label: "Development plan compliance",
+              color: teamComplianceColor(teamCompliance.developmentPlanCompliancePct),
+            }
+          : null,
+      ].filter(Boolean) as ReadonlyArray<{
+        key: string;
+        value: string;
+        label: string;
+        color: string;
+      }>)
     : ([
-        {
-          key: "checkIn",
-          value: formatDaysSinceCheckIn(myMemberStats?.daysSinceLastOneOnOne),
-          label: "Last check-in",
-          color: personalCheckInMetricColor(myCompliance?.checkInStatus),
-        },
-        {
-          key: "goals",
-          value: myCompliance?.goalsDisplay ?? "—",
-          label: "Goals",
-          color: personalGoalsMetricColor(myCompliance?.goalsStatus),
-        },
-      ] as const);
+        workplaceStandards.checkInRequired
+          ? {
+              key: "checkIn",
+              value: formatDaysSinceCheckIn(myMemberStats?.daysSinceLastOneOnOne),
+              label: "Last check-in",
+              color: personalCheckInMetricColor(myCompliance?.checkInStatus),
+            }
+          : null,
+        workplaceStandards.goalsRequired
+          ? {
+              key: "goals",
+              value: myCompliance?.goalsDisplay ?? "—",
+              label: "Goals",
+              color: personalGoalsMetricColor(myCompliance?.goalsStatus),
+            }
+          : null,
+      ].filter(Boolean) as ReadonlyArray<{
+        key: string;
+        value: string;
+        label: string;
+        color: string;
+      }>);
 
   const overviewSheetTasks =
     overviewTasksSheet === "open"
@@ -1105,20 +1155,24 @@ export default function TeamScreen() {
                         label: "Members",
                         color: "#E9D5FF",
                       },
-                      {
-                        key: "checkInsDue",
-                        icon: CalendarClock,
-                        value: String(checkInsDueCount),
-                        label: "Check-ins Due",
-                        color: "#FCD34D",
-                      },
-                      {
-                        key: "activeGoals",
-                        icon: Target,
-                        value: String(activeGoalsCount),
-                        label: "Active Goals",
-                        color: "#DDD6FE",
-                      },
+                      workplaceStandards.checkInRequired
+                        ? {
+                            key: "checkInsDue",
+                            icon: CalendarClock,
+                            value: String(checkInsDueCount),
+                            label: "Check-ins Due",
+                            color: "#FCD34D",
+                          }
+                        : null,
+                      workplaceStandards.goalsRequired
+                        ? {
+                            key: "activeGoals",
+                            icon: Target,
+                            value: String(activeGoalsCount),
+                            label: "Active Goals",
+                            color: "#DDD6FE",
+                          }
+                        : null,
                       {
                         key: "teamHealth",
                         icon: HeartPulse,
@@ -1127,10 +1181,12 @@ export default function TeamScreen() {
                         color: "#6EE7B7",
                       },
                     ] as const
-                  ).map((stat, index) => {
-                    const Icon = stat.icon;
+                  )
+                    .filter(Boolean)
+                    .map((stat, index) => {
+                    const Icon = stat!.icon;
                     return (
-                      <React.Fragment key={stat.key}>
+                      <React.Fragment key={stat!.key}>
                         {index > 0 ? (
                           <View
                             style={{
@@ -1141,7 +1197,7 @@ export default function TeamScreen() {
                           />
                         ) : null}
                         <View style={{ flex: 1, alignItems: "center", paddingHorizontal: 2 }}>
-                          <Icon size={12} color={stat.color} />
+                          <Icon size={12} color={stat!.color} />
                           <Text
                             style={{
                               fontSize: 14,
@@ -1154,7 +1210,7 @@ export default function TeamScreen() {
                             adjustsFontSizeToFit
                             minimumFontScale={0.8}
                           >
-                            {stat.value}
+                            {stat!.value}
                           </Text>
                           <Text
                             style={{
@@ -1168,7 +1224,7 @@ export default function TeamScreen() {
                             adjustsFontSizeToFit
                             minimumFontScale={0.85}
                           >
-                            {stat.label}
+                            {stat!.label}
                           </Text>
                         </View>
                       </React.Fragment>
@@ -1206,6 +1262,75 @@ export default function TeamScreen() {
 
 
         {/* ── Team Members ───── */}
+        {pendingOwnershipTransfer &&
+        (pendingOwnershipTransfer.fromUserId === myId || pendingOwnershipTransfer.toUserId === myId) ? (
+          <OwnershipTransferPendingBanner
+            transfer={pendingOwnershipTransfer}
+            myUserId={myId}
+            busy={ownershipBusy}
+            error={ownershipErr}
+            onDecline={async () => {
+              if (!activeTeamId) return;
+              setOwnershipBusy(true);
+              setOwnershipErr(null);
+              try {
+                await declineOwnershipTransfer(activeTeamId, pendingOwnershipTransfer.id);
+                refreshOwnershipTransfer();
+                toast({ title: "Transfer declined", preset: "done" });
+              } catch (e) {
+                setOwnershipErr(e instanceof Error ? e.message : "Could not decline.");
+              } finally {
+                setOwnershipBusy(false);
+              }
+            }}
+            onAccept={async () => {
+              if (!activeTeamId) return;
+              setOwnershipBusy(true);
+              setOwnershipErr(null);
+              try {
+                if (pendingOwnershipTransfer.awaitingPaymentMethod) {
+                  const done = await completeOwnershipTransferPayment(
+                    activeTeamId,
+                    pendingOwnershipTransfer.id,
+                  );
+                  if (done.completed) {
+                    refreshOwnershipTransfer();
+                    toast({ title: "You’re now the owner", preset: "done" });
+                  } else if (done.paymentSetupUrl) {
+                    await Linking.openURL(done.paymentSetupUrl);
+                  }
+                } else {
+                  const res = await acceptOwnershipTransfer(activeTeamId, pendingOwnershipTransfer.id);
+                  if (res.paymentSetupUrl) {
+                    await Linking.openURL(res.paymentSetupUrl);
+                    refreshOwnershipTransfer();
+                  } else if (res.completed) {
+                    refreshOwnershipTransfer();
+                    toast({ title: "You’re now the owner", preset: "done" });
+                  }
+                }
+              } catch (e) {
+                setOwnershipErr(e instanceof Error ? e.message : "Could not accept.");
+              } finally {
+                setOwnershipBusy(false);
+              }
+            }}
+            onCancel={async () => {
+              if (!activeTeamId) return;
+              setOwnershipBusy(true);
+              setOwnershipErr(null);
+              try {
+                await cancelOwnershipTransfer(activeTeamId, pendingOwnershipTransfer.id);
+                refreshOwnershipTransfer();
+                toast({ title: "Transfer canceled", preset: "done" });
+              } catch (e) {
+                setOwnershipErr(e instanceof Error ? e.message : "Could not cancel.");
+              } finally {
+                setOwnershipBusy(false);
+              }
+            }}
+          />
+        ) : null}
         <View
           style={{
             flex: 1,
@@ -1322,6 +1447,8 @@ export default function TeamScreen() {
                               overdueTasks={stats?.overdueTasks ?? 0}
                               checkInStatus={compliance?.checkInStatus}
                               goalsStatus={compliance?.goalsStatus}
+                              showCheckInMetric={workplaceStandards.checkInRequired}
+                              showGoalsMetric={workplaceStandards.goalsRequired}
                               showDivider={index < sortedMembers.length - 1}
                               onPress={
                                 isPressable
