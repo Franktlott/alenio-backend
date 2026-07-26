@@ -5,10 +5,9 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  Image,
   StyleSheet,
 } from "react-native";
-import { Crown, Check, Clock } from "lucide-react-native";
+import { Check, CreditCard } from "lucide-react-native";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
@@ -35,49 +34,26 @@ type Props = {
 const DISPOSITIONS: {
   value: OwnershipTransferDisposition;
   label: string;
-  hint: string;
   recommended?: boolean;
 }[] = [
   {
     value: "WORKSPACE_ADMIN",
     label: "Stay as Workspace Admin",
-    hint: "Remain a team leader after they accept",
     recommended: true,
   },
   {
     value: "MEMBER",
     label: "Become a Member",
-    hint: "Keep access without admin controls",
   },
   {
     value: "REMOVE",
     label: "Leave the workspace",
-    hint: "Removed automatically when they accept",
   },
 ];
-
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <Text
-      style={{
-        fontSize: 10,
-        fontWeight: "700",
-        color: "#64748B",
-        letterSpacing: 0.7,
-        textTransform: "uppercase",
-        marginBottom: 6,
-        marginTop: 2,
-      }}
-    >
-      {children}
-    </Text>
-  );
-}
 
 function ChoiceRow({
   selected,
   title,
-  hint,
   recommended,
   onPress,
   disabled,
@@ -86,7 +62,6 @@ function ChoiceRow({
 }: {
   selected: boolean;
   title: string;
-  hint: string;
   recommended?: boolean;
   onPress: () => void;
   disabled?: boolean;
@@ -100,10 +75,10 @@ function ChoiceRow({
       testID={testID}
       style={({ pressed }) => ({
         flexDirection: "row",
-        gap: 10,
+        gap: 9,
         alignItems: "center",
-        paddingVertical: 10,
-        paddingHorizontal: 12,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
         borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
         borderBottomColor: "#E2E8F0",
         backgroundColor: selected ? "#F5F3FF" : "#FFFFFF",
@@ -112,8 +87,8 @@ function ChoiceRow({
     >
       <View
         style={{
-          width: 18,
-          height: 18,
+          width: 17,
+          height: 17,
           borderRadius: 9,
           borderWidth: 1.75,
           borderColor: selected ? "#4338CA" : "#CBD5E1",
@@ -125,45 +100,24 @@ function ChoiceRow({
       >
         {selected ? <Check size={10} color="#FFF" strokeWidth={3.5} /> : null}
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontSize: 13, fontWeight: "650", color: "#0F172A" }}>{title}</Text>
-          {recommended ? (
-            <View
-              style={{
-                paddingHorizontal: 5,
-                paddingVertical: 1,
-                borderRadius: 4,
-                backgroundColor: selected ? "#DDD6FE" : "#EEF2FF",
-              }}
-            >
-              <Text style={{ fontSize: 8, fontWeight: "800", color: "#4338CA", letterSpacing: 0.3 }}>
-                RECOMMENDED
-              </Text>
-            </View>
-          ) : null}
+      <Text style={{ flex: 1, fontSize: 13, fontWeight: "650", color: "#0F172A" }} numberOfLines={1}>
+        {title}
+      </Text>
+      {recommended ? (
+        <View
+          style={{
+            paddingHorizontal: 5,
+            paddingVertical: 1,
+            borderRadius: 4,
+            backgroundColor: selected ? "#DDD6FE" : "#EEF2FF",
+          }}
+        >
+          <Text style={{ fontSize: 8, fontWeight: "800", color: "#4338CA", letterSpacing: 0.3 }}>
+            RECOMMENDED
+          </Text>
         </View>
-        <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1, lineHeight: 14 }} numberOfLines={1}>
-          {hint}
-        </Text>
-      </View>
+      ) : null}
     </Pressable>
-  );
-}
-
-function ChoiceGroup({ children }: { children: React.ReactNode }) {
-  return (
-    <View
-      style={{
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        backgroundColor: "#FFFFFF",
-        overflow: "hidden",
-      }}
-    >
-      {children}
-    </View>
   );
 }
 
@@ -328,8 +282,8 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
         step === "success"
           ? `${displayName} has 7 days to accept`
           : step === "confirm"
-            ? `Confirm offering ownership to ${displayName}`
-            : "Choose your role after they accept — they’ll add their own card to finish"
+            ? `Offer ownership to ${displayName}`
+            : `To ${displayName} · they add their card · 7 days`
       }
       onClose={() => {
         if (!busy) onClose();
@@ -338,137 +292,77 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
       footer={footer}
       testID="ownership-transfer-sheet"
       compact
-      sheetStyle={{ maxHeight: "92%" }}
-      bodyHeightRatio={step === "success" || step === "confirm" ? 0.36 : 0.78}
-      showScrollIndicator={step === "review"}
+      sheetStyle={{ maxHeight: "88%" }}
+      bodyHeightRatio={step === "review" ? 0.42 : 0.34}
+      scrollEnabled={false}
+      showScrollIndicator={false}
     >
       {step === "success" ? (
-        <AlenioSheetCard compact style={{ paddingVertical: 12 }}>
-          <View style={{ gap: 10 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 7,
-                alignSelf: "flex-start",
-                paddingHorizontal: 9,
-                paddingVertical: 5,
-                borderRadius: 999,
-                backgroundColor: "#E0E7FF",
-              }}
-            >
-              <Clock size={12} color="#4338CA" />
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#4338CA" }}>Expires in 7 days</Text>
-            </View>
-            <Text style={{ fontSize: 13, color: "#334155", lineHeight: 19 }}>
-              You’ll keep your chosen role until they accept. They must add a different card than yours to
-              finish. Your plan stays the same.
-            </Text>
-          </View>
+        <AlenioSheetCard compact style={{ paddingVertical: 10 }}>
+          <Text style={{ fontSize: 13, color: "#334155", lineHeight: 18 }}>
+            You’ll keep your chosen role until they accept. They must add a different card than yours to finish.
+            Your plan stays the same.
+          </Text>
         </AlenioSheetCard>
       ) : null}
 
       {step === "review" && member ? (
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: 8 }}>
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: "700",
+              color: "#64748B",
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+            }}
+          >
+            Your role after they accept
+          </Text>
+          <View
+            style={{
+              borderRadius: 11,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              backgroundColor: "#FFFFFF",
+              overflow: "hidden",
+            }}
+          >
+            {DISPOSITIONS.map((opt, i) => (
+              <ChoiceRow
+                key={opt.value}
+                selected={disposition === opt.value}
+                title={opt.label}
+                recommended={opt.recommended}
+                disabled={busy}
+                onPress={() => setDisposition(opt.value)}
+                testID={`ownership-disposition-${opt.value}`}
+                last={i === DISPOSITIONS.length - 1}
+              />
+            ))}
+          </View>
+
           <View
             style={{
               flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              padding: 11,
-              borderRadius: 12,
+              alignItems: "flex-start",
+              gap: 8,
+              borderRadius: 11,
               borderWidth: 1,
               borderColor: "#E0E7FF",
               backgroundColor: "#F8FAFF",
+              paddingHorizontal: 10,
+              paddingVertical: 9,
             }}
+            testID="ownership-billing-replace-required"
           >
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: "#4338CA",
-                alignItems: "center",
-                justifyContent: "center",
-                overflow: "hidden",
-              }}
-            >
-              {member.user.image ? (
-                <Image
-                  source={{ uri: member.user.image }}
-                  style={{ width: 36, height: 36 }}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Crown size={16} color="#FFF" />
-              )}
-            </View>
+            <CreditCard size={14} color="#4338CA" style={{ marginTop: 1 }} />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontSize: 9, fontWeight: "800", color: "#6366F1", letterSpacing: 0.6 }}>
-                NEW OWNER
-              </Text>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", marginTop: 1 }} numberOfLines={1}>
-                {displayName}
-              </Text>
-              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }} numberOfLines={1}>
-                {member.user.email ?? "Workspace member"}
-              </Text>
-            </View>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                paddingHorizontal: 8,
-                paddingVertical: 5,
-                borderRadius: 8,
-                backgroundColor: "#EEF2FF",
-              }}
-            >
-              <Clock size={11} color="#4338CA" />
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "#4338CA" }}>7 days</Text>
-            </View>
-          </View>
-
-          <View>
-            <SectionLabel>Your role after they accept</SectionLabel>
-            <ChoiceGroup>
-              {DISPOSITIONS.map((opt, i) => (
-                <ChoiceRow
-                  key={opt.value}
-                  selected={disposition === opt.value}
-                  title={opt.label}
-                  hint={opt.hint}
-                  recommended={opt.recommended}
-                  disabled={busy}
-                  onPress={() => setDisposition(opt.value)}
-                  testID={`ownership-disposition-${opt.value}`}
-                  last={i === DISPOSITIONS.length - 1}
-                />
-              ))}
-            </ChoiceGroup>
-          </View>
-
-          <View>
-            <SectionLabel>Billing</SectionLabel>
-            <View
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#E0E7FF",
-                backgroundColor: "#F8FAFF",
-                paddingHorizontal: 12,
-                paddingVertical: 11,
-                gap: 4,
-              }}
-              testID="ownership-billing-replace-required"
-            >
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>
                 They add a different card
               </Text>
-              <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 15 }}>
-                Your card comes off the workspace after they finish setup. Same card won’t complete the
-                transfer.
+              <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 14, marginTop: 1 }}>
+                Your card comes off after setup. Same card won’t finish.
               </Text>
             </View>
           </View>
@@ -480,17 +374,16 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
       ) : null}
 
       {step === "confirm" ? (
-        <View style={{ gap: 10 }}>
+        <View style={{ gap: 8 }}>
           <AlenioSheetCard tint="slate" compact>
             <Text style={{ fontSize: 13, color: "#334155", lineHeight: 18 }}>
-              Offer ownership to <Text style={{ fontWeight: "700", color: "#0F172A" }}>{displayName}</Text>.
               They have 7 days to accept, then must add a different card than the one on file.
             </Text>
           </AlenioSheetCard>
 
           {!useSsoConfirm ? (
             <AlenioSheetCard tint="slate" compact>
-              <Text style={{ fontSize: 12, fontWeight: "650", color: "#334155", marginBottom: 7 }}>
+              <Text style={{ fontSize: 12, fontWeight: "650", color: "#334155", marginBottom: 6 }}>
                 Account password
               </Text>
               <TextInput
@@ -517,7 +410,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
             </AlenioSheetCard>
           ) : (
             <AlenioSheetCard tint="slate" compact>
-              <Text style={{ fontSize: 13, color: "#334155", lineHeight: 18, marginBottom: 7 }}>
+              <Text style={{ fontSize: 13, color: "#334155", lineHeight: 18, marginBottom: 6 }}>
                 SSO account — type <Text style={{ fontWeight: "700" }}>TRANSFER</Text> to confirm.
               </Text>
               <TextInput
