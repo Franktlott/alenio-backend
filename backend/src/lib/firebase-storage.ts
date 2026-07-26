@@ -241,6 +241,17 @@ export async function deleteReplacedStorageObject(
   await deleteStorageObjectByUrlIfOwned(prev);
 }
 
+/** Best-effort batch delete for chat media / photo URLs. Dedupes and ignores empties. */
+export async function deleteOwnedStorageUrls(
+  urls: Array<string | null | undefined>,
+): Promise<void> {
+  const unique = Array.from(
+    new Set(urls.map((url) => url?.trim()).filter((url): url is string => Boolean(url))),
+  );
+  if (unique.length === 0) return;
+  await Promise.all(unique.map((url) => deleteStorageObjectByUrlIfOwned(url)));
+}
+
 export type UploadSlot = "generic" | "profile" | "team" | "go_alert_sound" | "go_walk_photo";
 
 export async function uploadFileToFirebaseStorage(params: {

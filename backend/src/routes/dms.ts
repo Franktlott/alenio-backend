@@ -19,7 +19,7 @@ import {
   canTransferGroupOwnership,
   formatGroupParticipants,
 } from "../lib/group-conversation-roles";
-import { deleteReplacedStorageObject, deleteStorageObjectByUrlIfOwned } from "../lib/firebase-storage";
+import { deleteReplacedStorageObject, deleteOwnedStorageUrls, deleteStorageObjectByUrlIfOwned } from "../lib/firebase-storage";
 import type { ConversationParticipantRole } from "@prisma/client";
 
 type Variables = {
@@ -1137,11 +1137,10 @@ dmsRouter.post("/:conversationId/leave", async (c) => {
   });
 
   if (conversation.isGroup && isLastParticipant) {
-    await Promise.all(
-      [conversation.image, ...mediaRows.map((row) => row.mediaUrl)].map((url) =>
-        deleteStorageObjectByUrlIfOwned(url),
-      ),
-    );
+    await deleteOwnedStorageUrls([
+      conversation.image,
+      ...mediaRows.map((row) => row.mediaUrl),
+    ]);
   }
 
   return new Response(null, { status: 204 });
@@ -1169,7 +1168,7 @@ dmsRouter.delete("/:conversationId", async (c) => {
   ];
 
   await prisma.conversation.delete({ where: { id: conversationId } });
-  await Promise.all(urlsToDelete.map((url) => deleteStorageObjectByUrlIfOwned(url)));
+  await deleteOwnedStorageUrls(urlsToDelete);
   return new Response(null, { status: 204 });
 });
 

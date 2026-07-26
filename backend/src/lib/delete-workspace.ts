@@ -1,5 +1,5 @@
 import { prisma } from "../prisma";
-import { deleteStorageObjectByUrlIfOwned } from "./firebase-storage";
+import { deleteOwnedStorageUrls } from "./firebase-storage";
 
 /**
  * Permanently removes a workspace and its dependent rows.
@@ -11,6 +11,43 @@ export async function deleteWorkspaceCompletely(teamId: string): Promise<void> {
     select: { id: true, image: true },
   });
   if (!team) return;
+
+  // Collect owned media before rows are wiped so storage can be cleaned after.
+  const [teamMessages, teamTopics, teamTasks, conversations] = await Promise.all([
+    prisma.message.findMany({
+      where: { teamId, mediaUrl: { not: null } },
+      select: { mediaUrl: true },
+    }),
+    prisma.topic.findMany({
+      where: { teamId, image: { not: null } },
+      select: { image: true },
+    }),
+    prisma.task.findMany({
+      where: { teamId, attachmentUrl: { not: null } },
+      select: { attachmentUrl: true },
+    }),
+    prisma.conversation.findMany({
+      where: { teamId },
+      select: { id: true, image: true },
+    }),
+  ]);
+  const conversationIds = conversations.map((c) => c.id);
+  const dmMedia =
+    conversationIds.length > 0
+      ? await prisma.directMessage.findMany({
+          where: { conversationId: { in: conversationIds }, mediaUrl: { not: null } },
+          select: { mediaUrl: true },
+        })
+      : [];
+
+  const storageUrls = [
+    team.image,
+    ...teamMessages.map((row) => row.mediaUrl),
+    ...teamTopics.map((row) => row.image),
+    ...teamTasks.map((row) => row.attachmentUrl),
+    ...conversations.map((row) => row.image),
+    ...dmMedia.map((row) => row.mediaUrl),
+  ];
 
   await prisma.$transaction(
     async (tx) => {
@@ -32,20 +69,20 @@ export async function deleteWorkspaceCompletely(teamId: string): Promise<void> {
         where: { teamId },
         select: { id: true },
       });
-      const conversationIds = conversations.map((c) => c.id);
-      if (conversationIds.length > 0) {
+      const conversationIdsInTx = conversations.map((c) => c.id);
+      if (conversationIdsInTx.length > 0) {
         await tx.directMessageReaction.deleteMany({
-          where: { directMessage: { conversationId: { in: conversationIds } } },
+          where: { directMessage: { conversationId: { in: conversationIdsInTx } } },
         });
         await tx.directMessage.updateMany({
-          where: { conversationId: { in: conversationIds } },
+          where: { conversationId: { in: conversationIdsInTx } },
           data: { replyToId: null },
         });
-        await tx.directMessage.deleteMany({ where: { conversationId: { in: conversationIds } } });
+        await tx.directMessage.deleteMany({ where: { conversationId: { in: conversationIdsInTx } } });
         await tx.conversationParticipant.deleteMany({
-          where: { conversationId: { in: conversationIds } },
+          where: { conversationId: { in: conversationIdsInTx } },
         });
-        await tx.conversation.deleteMany({ where: { id: { in: conversationIds } } });
+        await tx.conversation.deleteMany({ where: { id: { in: conversationIdsInTx } } });
       }
 
       await tx.teamActivityReaction.deleteMany({
@@ -118,7 +155,7 @@ export async function deleteWorkspaceCompletely(teamId: string): Promise<void> {
     { timeout: 120_000 },
   );
 
-  await deleteStorageObjectByUrlIfOwned(team.image ?? undefined).catch((err) => {
+  await deleteOwnedStorageUrls(storageUrls).catch((err) => {
     console.warn("[delete-workspace] storage cleanup failed:", err);
   });
 }
