@@ -35,43 +35,6 @@ type Props = {
   showScrollIndicator?: boolean;
 };
 
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  Modal,
-  Pressable,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Platform,
-  Dimensions,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X } from "lucide-react-native";
-import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
-
-type Props = {
-  visible?: boolean;
-  title: string;
-  subtitle?: string;
-  onClose: () => void;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-  asScreen?: boolean;
-  testID?: string;
-  sheetStyle?: StyleProp<ViewStyle>;
-  compact?: boolean;
-  /** Show an X in the header (useful for form sheets like feedback). */
-  showCloseButton?: boolean;
-  /** Fraction of window height for scroll body (default 0.58, compact 0.5). */
-  bodyHeightRatio?: number;
-  /** Show vertical scroll indicator (useful for tall forms). */
-  showScrollIndicator?: boolean;
-};
-
 function SheetContent({
   title,
   subtitle,
