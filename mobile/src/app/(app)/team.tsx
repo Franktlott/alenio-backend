@@ -1292,6 +1292,7 @@ export default function TeamScreen() {
                   const done = await completeOwnershipTransferPayment(
                     activeTeamId,
                     pendingOwnershipTransfer.id,
+                    { returnToApp: true },
                   );
                   if (done.completed) {
                     refreshOwnershipTransfer();
@@ -1300,7 +1301,9 @@ export default function TeamScreen() {
                     await Linking.openURL(done.paymentSetupUrl);
                   }
                 } else {
-                  const res = await acceptOwnershipTransfer(activeTeamId, pendingOwnershipTransfer.id);
+                  const res = await acceptOwnershipTransfer(activeTeamId, pendingOwnershipTransfer.id, {
+                    returnToApp: true,
+                  });
                   if (res.paymentSetupUrl) {
                     await Linking.openURL(res.paymentSetupUrl);
                     refreshOwnershipTransfer();

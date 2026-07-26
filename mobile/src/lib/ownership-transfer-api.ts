@@ -44,18 +44,24 @@ export function initiateOwnershipTransfer(
   return api.post<OwnershipTransfer>(`/api/teams/${teamId}/transfer-ownership`, body);
 }
 
-export function acceptOwnershipTransfer(teamId: string, transferId: string) {
+export function acceptOwnershipTransfer(
+  teamId: string,
+  transferId: string,
+  opts?: { returnToApp?: boolean },
+) {
   return api.post<{
     transfer: OwnershipTransfer;
     paymentSetupUrl: string | null;
     completed: boolean;
-  }>(`/api/teams/${teamId}/transfer-ownership/${transferId}/accept`, {});
+  }>(`/api/teams/${teamId}/transfer-ownership/${transferId}/accept`, {
+    ...(opts?.returnToApp ? { returnToApp: true } : {}),
+  });
 }
 
 export function completeOwnershipTransferPayment(
   teamId: string,
   transferId: string,
-  opts?: { sessionId?: string },
+  opts?: { sessionId?: string; returnToApp?: boolean },
 ) {
   return api.post<{
     transfer: OwnershipTransfer;
@@ -63,6 +69,7 @@ export function completeOwnershipTransferPayment(
     paymentSetupUrl: string | null;
   }>(`/api/teams/${teamId}/transfer-ownership/${transferId}/complete-payment`, {
     ...(opts?.sessionId ? { sessionId: opts.sessionId } : {}),
+    ...(opts?.returnToApp ? { returnToApp: true } : {}),
   });
 }
 

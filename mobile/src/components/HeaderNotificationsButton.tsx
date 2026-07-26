@@ -354,13 +354,13 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
   const acceptOwnership = useMutation({
     mutationFn: async (row: OwnershipTransfer) => {
       if (row.awaitingPaymentMethod) {
-        const res = await completeOwnershipTransferPayment(row.teamId, row.id);
+        const res = await completeOwnershipTransferPayment(row.teamId, row.id, { returnToApp: true });
         if (!res.completed && res.paymentSetupUrl) {
           await Linking.openURL(res.paymentSetupUrl);
         }
         return res;
       }
-      const res = await acceptOwnershipTransfer(row.teamId, row.id);
+      const res = await acceptOwnershipTransfer(row.teamId, row.id, { returnToApp: true });
       if (res.paymentSetupUrl) {
         await Linking.openURL(res.paymentSetupUrl);
       }

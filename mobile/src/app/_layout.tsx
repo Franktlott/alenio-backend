@@ -354,6 +354,7 @@ function RootLayoutNav() {
           </Stack.Protected>
           <Stack.Screen name="invite/[token]" />
           <Stack.Screen name="join/[code]" />
+          <Stack.Screen name="ownership-transfer" options={{ headerShown: false }} />
           <Stack.Screen name="privacy-policy" />
           <Stack.Screen name="terms-of-service" />
         </Stack>

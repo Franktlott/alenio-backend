@@ -605,6 +605,37 @@ app.get("/open-invite", (c) => {
 </body></html>`);
 });
 
+// Stripe Checkout return for ownership transfer card setup on mobile → app deep link
+app.get("/open-ownership-transfer", (c) => {
+  const teamId = c.req.query("teamId")?.trim() ?? "";
+  const transferId = c.req.query("transferId")?.trim() ?? "";
+  const billing = c.req.query("billing")?.trim() ?? "";
+  const sessionId = c.req.query("session_id")?.trim() ?? "";
+  if (!teamId || !transferId) return c.text("Missing transfer details", 400);
+
+  const q = new URLSearchParams({ teamId, transferId });
+  if (billing) q.set("billing", billing);
+  if (sessionId) q.set("session_id", sessionId);
+
+  const deepLink = `${appEnv.APP_SCHEME}://ownership-transfer?${q.toString()}`;
+  const webFallbackBase = (appEnv.WEB_PUBLIC_URL ?? appEnv.BACKEND_URL).replace(/\/$/, "");
+  const webFallback = `${webFallbackBase}/ownership-transfer?${q.toString()}`;
+  return c.html(`<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="refresh" content="0;url=${deepLink}">
+<title>Returning to Alenio…</title></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;text-align:center;padding:40px;background:#F8FAFC;color:#0F172A;">
+<p style="font-size:16px;font-weight:600;">Returning to the Alenio app…</p>
+<p style="margin-top:16px;font-size:14px;color:#64748B;">
+  <a href="${deepLink}" style="color:#4361EE;font-weight:600;">Tap here if the app doesn't open</a>
+</p>
+<p style="margin-top:12px;font-size:13px;color:#94A3B8;">
+  <a href="${webFallback}" style="color:#64748B;">Continue on web instead</a>
+</p>
+</body></html>`);
+});
+
 // Static assets
 app.get("/static/:filename", async (c) => {
   const { filename } = c.req.param();

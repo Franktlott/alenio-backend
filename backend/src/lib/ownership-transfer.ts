@@ -110,24 +110,42 @@ async function createOwnershipTransferSetupCheckout(opts: {
   transferId: string;
   userId: string;
   customerId: string;
+  /** Mobile: return via HTTPS bridge → app deep link. Web: stay on enterprise return page. */
+  returnToApp?: boolean;
 }): Promise<{ url: string; sessionId: string } | { error: ServiceError }> {
   const stripe = getStripeClient();
-  const base = billingReturnBaseUrl();
-  if (!stripe || !base) {
+  const webBase = billingReturnBaseUrl();
+  if (!stripe || !webBase) {
     return { error: { message: "Billing is not configured", code: "NOT_CONFIGURED", status: 503 } };
   }
+
+  const q = new URLSearchParams({
+    teamId: opts.teamId,
+    transferId: opts.transferId,
+  });
+  const successQuery = `${q.toString()}&billing=success&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelQuery = `${q.toString()}&billing=cancel`;
+
+  const backendBase = env.BACKEND_URL.replace(/\/$/, "");
+  const success_url = opts.returnToApp
+    ? `${backendBase}/open-ownership-transfer?${successQuery}`
+    : `${webBase}/ownership-transfer?${successQuery}`;
+  const cancel_url = opts.returnToApp
+    ? `${backendBase}/open-ownership-transfer?${cancelQuery}`
+    : `${webBase}/ownership-transfer?${cancelQuery}`;
 
   const session = await stripe.checkout.sessions.create({
     mode: "setup",
     customer: opts.customerId,
     payment_method_types: ["card"],
-    success_url: `${base}/ownership-transfer?teamId=${encodeURIComponent(opts.teamId)}&transferId=${encodeURIComponent(opts.transferId)}&billing=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${base}/ownership-transfer?teamId=${encodeURIComponent(opts.teamId)}&transferId=${encodeURIComponent(opts.transferId)}&billing=cancel`,
+    success_url,
+    cancel_url,
     metadata: {
       purpose: OWNERSHIP_TRANSFER_SETUP_PURPOSE,
       transfer_id: opts.transferId,
       team_id: opts.teamId,
       user_id: opts.userId,
+      return_to_app: opts.returnToApp ? "1" : "0",
     },
   });
 
@@ -602,6 +620,8 @@ export async function acceptOwnershipTransfer(opts: {
   transferId: string;
   teamId: string;
   userId: string;
+  /** Mobile Checkout should return via /open-ownership-transfer → app deep link. */
+  returnToApp?: boolean;
 }): Promise<
   | { data: ReturnType<typeof serializeOwnershipTransfer>; paymentSetupUrl?: string }
   | { error: ServiceError }
@@ -657,6 +677,7 @@ export async function acceptOwnershipTransfer(opts: {
           transferId: transfer.id,
           userId: opts.userId,
           customerId,
+          returnToApp: opts.returnToApp,
         });
         if ("error" in checkout) return { error: checkout.error };
         const pending = await prisma.ownershipTransfer.update({
@@ -676,6 +697,7 @@ export async function acceptOwnershipTransfer(opts: {
         transferId: transfer.id,
         userId: opts.userId,
         customerId,
+        returnToApp: opts.returnToApp,
       });
       if ("error" in checkout) return { error: checkout.error };
 
@@ -723,12 +745,26 @@ async function verifyAndCompleteOwnershipTransferPayment(opts: {
   userId: string;
   checkoutSessionId?: string | null;
   preferredPaymentMethodId?: string | null;
+  returnToApp?: boolean;
 }): Promise<CompletePaymentResult> {
   const transfer = await prisma.ownershipTransfer.findFirst({
     where: { id: opts.transferId, teamId: opts.teamId, status: "PENDING" },
     include: transferInclude,
   });
   if (!transfer) {
+    // Webhook may have already finished the transfer while the user was in Stripe.
+    const alreadyDone = await prisma.ownershipTransfer.findFirst({
+      where: {
+        id: opts.transferId,
+        teamId: opts.teamId,
+        status: "ACCEPTED",
+        toUserId: opts.userId,
+      },
+      include: transferInclude,
+    });
+    if (alreadyDone) {
+      return { data: serializeOwnershipTransfer(alreadyDone), completed: true };
+    }
     return { error: { message: "Transfer not found", code: "NOT_FOUND", status: 404 } };
   }
   if (transfer.toUserId !== opts.userId) {
@@ -787,6 +823,7 @@ async function verifyAndCompleteOwnershipTransferPayment(opts: {
       transferId: transfer.id,
       userId: opts.userId,
       customerId,
+      returnToApp: opts.returnToApp,
     });
     if ("error" in checkout) return { error: checkout.error };
 
@@ -829,6 +866,7 @@ export async function completeOwnershipTransferPayment(opts: {
   teamId: string;
   userId: string;
   checkoutSessionId?: string | null;
+  returnToApp?: boolean;
 }): Promise<CompletePaymentResult> {
   return verifyAndCompleteOwnershipTransferPayment(opts);
 }

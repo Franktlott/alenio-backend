@@ -1053,7 +1053,13 @@ teamsRouter.post("/:teamId/transfer-ownership", async (c) => {
 teamsRouter.post("/:teamId/transfer-ownership/:transferId/accept", async (c) => {
   const user = c.get("user")!;
   const { teamId, transferId } = c.req.param();
-  const result = await acceptOwnershipTransfer({ transferId, teamId, userId: user.id });
+  const body = (await c.req.json().catch(() => ({}))) as { returnToApp?: boolean };
+  const result = await acceptOwnershipTransfer({
+    transferId,
+    teamId,
+    userId: user.id,
+    returnToApp: body.returnToApp === true,
+  });
   if ("error" in result) {
     return c.json({ error: { message: result.error.message, code: result.error.code } }, result.error.status as 400);
   }
@@ -1070,13 +1076,18 @@ teamsRouter.post("/:teamId/transfer-ownership/:transferId/accept", async (c) => 
 teamsRouter.post("/:teamId/transfer-ownership/:transferId/complete-payment", async (c) => {
   const user = c.get("user")!;
   const { teamId, transferId } = c.req.param();
-  const body = (await c.req.json().catch(() => ({}))) as { sessionId?: string; checkoutSessionId?: string };
+  const body = (await c.req.json().catch(() => ({}))) as {
+    sessionId?: string;
+    checkoutSessionId?: string;
+    returnToApp?: boolean;
+  };
   const checkoutSessionId = (body.checkoutSessionId ?? body.sessionId ?? "").trim() || null;
   const result = await completeOwnershipTransferPayment({
     transferId,
     teamId,
     userId: user.id,
     checkoutSessionId,
+    returnToApp: body.returnToApp === true,
   });
   if ("error" in result) {
     return c.json({ error: { message: result.error.message, code: result.error.code } }, result.error.status as 400);
