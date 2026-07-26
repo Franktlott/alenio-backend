@@ -21,6 +21,7 @@ import {
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
 import { createWorkspaceForAuthUser } from "../lib/create-workspace";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken } from "../lib/team-name";
+import { deleteReplacedStorageObject } from "../lib/firebase-storage";
 import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
 import {
   canApproveCalendarEvent,
@@ -300,6 +301,13 @@ webRouter.patch("/api/teams/:id", async (c) => {
       { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
       409,
     );
+  }
+  if (hasImage) {
+    const existing = await prisma.team.findUnique({
+      where: { id },
+      select: { image: true },
+    });
+    await deleteReplacedStorageObject(existing?.image, body.image ?? null);
   }
   let team;
   try {

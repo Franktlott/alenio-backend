@@ -1,23 +1,18 @@
 export const SENECA_ICON = "/seneca-icon.png";
 
-/** Public asset ratio (174×276). `size` is the rendered height. */
-const SENECA_LOGO_ASPECT = 174 / 276;
-
+/** Enterprise Seneca mark is a square disc (1:1). `size` is width and height. */
 type IconProps = {
   size?: number;
   className?: string;
 };
 
 export function SenecaIcon({ size = 20, className }: IconProps) {
-  const height = size;
-  const width = Math.round(size * SENECA_LOGO_ASPECT);
-
   return (
     <img
       src={SENECA_ICON}
       alt=""
-      width={width}
-      height={height}
+      width={size}
+      height={size}
       className={className ? `seneca-icon ${className}` : "seneca-icon"}
       aria-hidden
     />

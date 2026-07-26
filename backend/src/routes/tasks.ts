@@ -22,6 +22,7 @@ import {
 import { isValidTimeZone, resolveTimeZone } from "../lib/timezone";
 import { normalizeTaskStatus } from "../lib/task-status";
 import { archiveCutoffDate, archiveOldCompletedTasksForTeam } from "../lib/task-archive";
+import { deleteStorageObjectByUrlIfOwned } from "../lib/firebase-storage";
 import {
   buildDevelopmentGoalActivityAlerts,
   reconcileInactiveDevelopmentGoals,
@@ -1415,6 +1416,7 @@ tasksRouter.delete("/:taskId", async (c) => {
   }
 
   await deleteTaskWithScope(prisma, task, scope);
+  await deleteStorageObjectByUrlIfOwned(task.attachmentUrl);
   return c.body(null, 204);
 });
 

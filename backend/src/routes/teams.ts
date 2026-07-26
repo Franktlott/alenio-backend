@@ -22,6 +22,7 @@ import {
   canManageGoLoginRequests,
   findTeamByInviteCode,
 } from "../lib/go-login-requests";
+import { deleteReplacedStorageObject } from "../lib/firebase-storage";
 import {
   canManageWorkplaceAlerts,
   createWorkplaceAlert,
@@ -328,6 +329,14 @@ teamsRouter.patch("/:teamId", async (c) => {
       { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
       409,
     );
+  }
+
+  if (body.image !== undefined) {
+    const existing = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { image: true },
+    });
+    await deleteReplacedStorageObject(existing?.image, body.image);
   }
 
   let team;

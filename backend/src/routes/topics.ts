@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { deleteReplacedStorageObject, deleteStorageObjectByUrlIfOwned } from "../lib/firebase-storage";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -377,17 +378,28 @@ topicsRouter.patch("/:teamId/topics/:topicId", async (c) => {
     }
   }
 
+  const nextImage =
+    body.image === null
+      ? null
+      : typeof body.image === "string"
+        ? body.image.trim() || null
+        : undefined;
+
+  if (nextImage !== undefined) {
+    const existing = await prisma.topic.findFirst({
+      where: { id: topicId, teamId },
+      select: { image: true },
+    });
+    await deleteReplacedStorageObject(existing?.image, nextImage);
+  }
+
   const topic = await prisma.topic.update({
     where: { id: topicId, teamId },
     data: {
       ...(body.name?.trim() ? { name: body.name.trim() } : {}),
       ...(body.description !== undefined ? { description: body.description?.trim() || null } : {}),
       ...(body.color ? { color: body.color } : {}),
-      ...(body.image === null
-        ? { image: null }
-        : typeof body.image === "string"
-          ? { image: body.image.trim() || null }
-          : {}),
+      ...(nextImage !== undefined ? { image: nextImage } : {}),
       ...(body.icon?.trim() ? { icon: body.icon.trim().slice(0, 40) } : {}),
       ...(body.privacy === "open" || body.privacy === "private" ? { privacy: body.privacy } : {}),
       ...(typeof body.autoAddWorkspaceMembers === "boolean"
@@ -415,7 +427,13 @@ topicsRouter.delete("/:teamId/topics/:topicId", async (c) => {
     return c.json({ error: { message: "Only owners and leaders can delete spaces", code: "FORBIDDEN" } }, 403);
   }
 
+  const existing = await prisma.topic.findFirst({
+    where: { id: topicId, teamId },
+    select: { image: true },
+  });
+
   await prisma.topic.delete({ where: { id: topicId, teamId } });
+  await deleteStorageObjectByUrlIfOwned(existing?.image);
 
   return c.body(null, 204);
 });

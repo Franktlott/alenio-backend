@@ -38991,8 +38991,8 @@ button.enterprise-profile-legal-link {
   right: 1.25rem;
   bottom: 1.25rem;
   z-index: 150;
-  width: 3.75rem;
-  height: 3.75rem;
+  width: 3rem;
+  height: 3rem;
   padding: 0;
   border: none;
   border-radius: 50%;
@@ -39002,11 +39002,12 @@ button.enterprise-profile-legal-link {
   align-items: center;
   justify-content: center;
   transition: transform 0.2s ease, filter 0.2s ease;
+  box-shadow: 0 4px 14px rgba(49, 46, 129, 0.28);
 }
 
 .seneca-floating-launcher:hover {
-  transform: scale(1.06);
-  filter: brightness(1.08);
+  transform: scale(1.05);
+  filter: brightness(1.05);
 }
 
 .seneca-floating-launcher:focus-visible {
@@ -39015,13 +39016,7 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-floating-launcher__ring {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  background: var(--seneca-ring);
-  opacity: 0.55;
-  animation: seneca-float-ring 3s linear infinite;
-  z-index: 0;
+  display: none;
 }
 
 .seneca-floating-launcher__icon {
@@ -39030,9 +39025,9 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-floating-launcher__icon.seneca-icon {
-  height: 3.5rem;
-  filter: drop-shadow(0 4px 14px rgba(99, 102, 241, 0.45));
-  animation: seneca-icon-glow-pulse 2.8s ease-in-out infinite;
+  height: 3rem;
+  width: 3rem;
+  filter: none;
 }
 
 /* Seneca assistant drawer (floating launcher) */

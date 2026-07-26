@@ -9,7 +9,7 @@ export type GroupParticipantWithRole = {
 };
 
 export function canManageGroupMembers(role: ConversationParticipantRole | null | undefined): boolean {
-  return role === "owner";
+  return role === "owner" || role === "admin";
 }
 
 export function canDeleteGroup(role: ConversationParticipantRole | null | undefined): boolean {
@@ -24,12 +24,15 @@ export function canManageGroupAdmins(role: ConversationParticipantRole | null | 
   return role === "owner";
 }
 
+/** Owners can remove admins/members; admins can remove members only. Nobody can remove the owner. */
 export function canRemoveGroupParticipant(
   actorRole: ConversationParticipantRole,
   targetRole: ConversationParticipantRole,
 ): boolean {
-  if (actorRole !== "owner") return false;
-  return targetRole !== "owner";
+  if (targetRole === "owner") return false;
+  if (actorRole === "owner") return true;
+  if (actorRole === "admin") return targetRole === "member";
+  return false;
 }
 
 export function formatGroupParticipants(

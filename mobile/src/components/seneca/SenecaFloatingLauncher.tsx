@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { SenecaAssistantSheet } from "./SenecaAssistantSheet";
+import { SenecaIcon } from "./SenecaIcon";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import { api } from "@/lib/api/api";
@@ -14,11 +15,7 @@ import {
   TAB_BAR_HEIGHT,
 } from "@/lib/tab-bar";
 
-const senecaIcon = require("@/assets/seneca-icon.png");
-
 const FAB_ABOVE_NAV_GAP = 12;
-/** Snug white ring around the mark — not flush to the edge. */
-const ICON_SIZE = Math.round(SENECA_FAB_SIZE * 0.78);
 
 function canUseSeneca(role?: string | null): boolean {
   return role === "owner" || role === "team_leader";
@@ -64,14 +61,7 @@ export function SenecaFloatingLauncher() {
           style={({ pressed }) => [styles.shadowWrap, pressed && styles.buttonPressed]}
           testID="seneca-floating-launcher"
         >
-          <View style={styles.circle}>
-            <Image
-              source={senecaIcon}
-              style={styles.icon}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-            />
-          </View>
+          <SenecaIcon size={SENECA_FAB_SIZE} style={styles.icon} />
         </Pressable>
       </View>
       <SenecaAssistantSheet
@@ -99,28 +89,16 @@ const styles = StyleSheet.create({
     width: SENECA_FAB_SIZE,
     height: SENECA_FAB_SIZE,
     borderRadius: SENECA_FAB_SIZE / 2,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
+    shadowColor: "#312E81",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
     elevation: 8,
   },
-  circle: {
-    width: SENECA_FAB_SIZE,
-    height: SENECA_FAB_SIZE,
-    borderRadius: SENECA_FAB_SIZE / 2,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
   icon: {
-    width: ICON_SIZE,
-    height: ICON_SIZE,
+    borderRadius: SENECA_FAB_SIZE / 2,
   },
   buttonPressed: {
-    transform: [{ scale: 0.97 }],
+    transform: [{ scale: 0.96 }],
   },
 });

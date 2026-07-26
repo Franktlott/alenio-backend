@@ -230,6 +230,17 @@ export async function deleteStorageObjectByUrlIfOwned(url: string | null | undef
   }
 }
 
+/** Delete the previous owned file when an image/media URL is cleared or replaced. */
+export async function deleteReplacedStorageObject(
+  previousUrl: string | null | undefined,
+  nextUrl: string | null | undefined,
+): Promise<void> {
+  const prev = previousUrl?.trim() || "";
+  const next = nextUrl?.trim() || "";
+  if (!prev || prev === next) return;
+  await deleteStorageObjectByUrlIfOwned(prev);
+}
+
 export type UploadSlot = "generic" | "profile" | "team" | "go_alert_sound" | "go_walk_photo";
 
 export async function uploadFileToFirebaseStorage(params: {

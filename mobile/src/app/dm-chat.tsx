@@ -5,18 +5,20 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
+  Pressable,
   Platform,
   ActivityIndicator,
   Modal,
   Image,
   Alert,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePaginatedDmMessages, flattenMessagePages } from "@/lib/chat-message-pagination";
 import { useChatListScroll } from "@/hooks/use-chat-scroll";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut, UserPlus, UserMinus, Crown, Shield, Pin, ImagePlus } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut, UserPlus, UserMinus, Crown, Shield, Pin, ImagePlus, ChevronRight } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -54,7 +56,12 @@ import { dmOtherParticipant, resolveUserImageUrl, userInitials } from "@/lib/use
 import { UserAvatar } from "@/components/UserAvatar";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 import { GroupManageModals } from "@/components/GroupManageModals";
-import { bottomSheetMenu } from "@/lib/bottom-sheet-menu-styles";
+import {
+  ProfileCard,
+  ProfileDivider,
+  ProfileMenuRow,
+  PROFILE_UI,
+} from "@/components/profile/ProfileEnterpriseUI";
 
 function DmChatEmptyState({
   user,
@@ -274,7 +281,7 @@ export default function DMChatScreen() {
   const groupParticipants = currentConversation?.participants ?? [];
   const groupParticipantCount = groupParticipants.length;
   const myGroupRole: GroupParticipantRole = currentConversation?.myRole ?? groupParticipants.find((p) => p.id === currentUserId)?.role ?? "member";
-  const canManageGroupMembers = myGroupRole === "owner";
+  const canManageGroupMembers = myGroupRole === "owner" || myGroupRole === "admin";
   const canDeleteGroup = myGroupRole === "owner";
   const canManageGroupAdmins = myGroupRole === "owner";
   const canLeaveGroup = !isGroup || myGroupRole !== "owner";
@@ -808,118 +815,195 @@ export default function DMChatScreen() {
 
       {/* Conversation options sheet */}
       <Modal visible={showOptions} transparent animationType="slide" onRequestClose={() => setShowOptions(false)}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setShowOptions(false)}>
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <View style={bottomSheetMenu.sheet}>
-              <View style={bottomSheetMenu.handleWrap}>
-                <View style={bottomSheetMenu.handle} />
-              </View>
-              <Text style={bottomSheetMenu.sectionLabel}>
-                {isGroup ? "Group Options" : "Conversation Options"}
-              </Text>
-              {isGroup ? (
-                <TouchableOpacity
-                  onPress={() => openGroupManage("members")}
-                  style={bottomSheetMenu.row}
-                >
-                  <Text style={bottomSheetMenu.rowLabel}>Members</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={bottomSheetMenu.rowMeta}>{groupParticipantCount}</Text>
-                    <Users size={bottomSheetMenu.iconSize} color="#4361EE" />
-                  </View>
-                </TouchableOpacity>
-              ) : null}
-              {isGroup && canManageGroupMembers ? (
-                <TouchableOpacity
-                  onPress={openGroupPhotoPicker}
-                  style={bottomSheetMenu.row}
-                  disabled={updateGroupPhotoMutation.isPending}
-                >
-                  <Text style={bottomSheetMenu.rowLabel}>
-                    {currentConversation?.image ? "Change Group Photo" : "Group Photo"}
-                  </Text>
-                  {updateGroupPhotoMutation.isPending ? (
-                    <ActivityIndicator size="small" color="#4361EE" />
-                  ) : (
-                    <ImagePlus size={bottomSheetMenu.iconSize} color="#4361EE" />
-                  )}
-                </TouchableOpacity>
-              ) : null}
-              {isGroup && canManageGroupMembers ? (
-                <TouchableOpacity
-                  onPress={() => openGroupManage("add")}
-                  style={bottomSheetMenu.row}
-                >
-                  <Text style={bottomSheetMenu.rowLabel}>Add Members</Text>
-                  <UserPlus size={bottomSheetMenu.iconSize} color="#4361EE" />
-                </TouchableOpacity>
-              ) : null}
-              {isGroup && canManageGroupMembers ? (
-                <TouchableOpacity
-                  onPress={() => openGroupManage("remove")}
-                  style={bottomSheetMenu.row}
-                >
-                  <Text style={bottomSheetMenu.rowLabel}>Remove Members</Text>
-                  <UserMinus size={bottomSheetMenu.iconSize} color="#EF4444" />
-                </TouchableOpacity>
-              ) : null}
-              {isGroup && canManageGroupAdmins ? (
-                <TouchableOpacity
-                  onPress={() => openGroupManage("admins")}
-                  style={bottomSheetMenu.row}
-                >
-                  <Text style={bottomSheetMenu.rowLabel}>Manage Admins</Text>
-                  <Shield size={bottomSheetMenu.iconSize} color="#4361EE" />
-                </TouchableOpacity>
-              ) : null}
-              {isGroup && canDeleteGroup ? (
-                <TouchableOpacity
-                  onPress={() => openGroupManage("transfer")}
-                  style={bottomSheetMenu.row}
-                >
-                  <Text style={bottomSheetMenu.rowLabel}>Transfer Ownership</Text>
-                  <Crown size={bottomSheetMenu.iconSize} color="#F59E0B" />
-                </TouchableOpacity>
-              ) : null}
-              {isGroup && canDeleteGroup ? (
-                <TouchableOpacity
-                  onPress={() => { setShowOptions(false); setTimeout(() => setShowConvDeleteConfirm(true), 300); }}
-                  style={bottomSheetMenu.row}
-                >
-                  <Text style={bottomSheetMenu.rowLabelDestructive}>Delete Group</Text>
-                  <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
-                </TouchableOpacity>
-              ) : null}
-              {!isGroup ? (
-                <TouchableOpacity
-                  onPress={() => { setShowOptions(false); setTimeout(() => setShowConvDeleteConfirm(true), 300); }}
-                  style={bottomSheetMenu.row}
-                >
-                  <Text style={bottomSheetMenu.rowLabelDestructive}>Delete Conversation</Text>
-                  <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
-                </TouchableOpacity>
-              ) : null}
-              {isGroup && canLeaveGroup ? (
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowOptions(false);
-                    setTimeout(() => setShowLeaveConfirm(true), 300);
-                  }}
-                  style={bottomSheetMenu.row}
-                >
-                  <Text style={bottomSheetMenu.rowLabelWarning}>Leave Group</Text>
-                  <LogOut size={bottomSheetMenu.iconSize} color="#F59E0B" />
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity
-                onPress={() => setShowOptions(false)}
-                style={bottomSheetMenu.footer}
-              >
-                <Text style={bottomSheetMenu.footerText}>Cancel</Text>
-              </TouchableOpacity>
+        <View style={{ flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" }}>
+          <Pressable style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} onPress={() => setShowOptions(false)} />
+          <View
+            style={{
+              backgroundColor: "#F8FAFC",
+              marginHorizontal: 10,
+              marginBottom: 28,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              overflow: "hidden",
+              maxHeight: "82%",
+            }}
+          >
+            <View style={{ paddingTop: 10, paddingBottom: 4, alignItems: "center" }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1" }} />
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+
+            <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <View style={{ paddingHorizontal: 16, paddingBottom: 14, flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+              <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                <Text style={PROFILE_UI.sectionLabel}>{isGroup ? "Manage group" : "Conversation"}</Text>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+                  {isGroup ? (currentConversation?.name ?? headerUser.name) : headerUser.name}
+                </Text>
+                {isGroup ? (
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    {groupParticipantCount} {groupParticipantCount === 1 ? "member" : "members"}
+                    {" · "}
+                    {myGroupRole === "owner" ? "Owner" : myGroupRole === "admin" ? "Admin" : "Member"}
+                    {groupWorkspace ? ` · ${groupWorkspace}` : ""}
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>Direct message settings</Text>
+                )}
+              </View>
+              <Pressable
+                onPress={() => setShowOptions(false)}
+                hitSlop={8}
+                style={({ pressed }) => ({
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: pressed ? "#E2E8F0" : "#FFFFFF",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  marginTop: 2,
+                })}
+                accessibilityLabel="Close"
+              >
+                <X size={16} color="#64748B" strokeWidth={2.2} />
+              </Pressable>
+            </View>
+
+            <View style={{ paddingHorizontal: 12, paddingBottom: 16, gap: 12 }}>
+              {isGroup ? (
+                <>
+                  <View>
+                    <Text style={[PROFILE_UI.sectionLabel, { marginBottom: 6, paddingHorizontal: 2 }]}>People</Text>
+                    <ProfileCard>
+                      <ProfileMenuRow
+                        icon={Users}
+                        title="Members"
+                        subtitle="View everyone in this group"
+                        trailing={
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                            <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B" }}>{groupParticipantCount}</Text>
+                            <ChevronRight size={16} color="#94A3B8" />
+                          </View>
+                        }
+                        showChevron={false}
+                        onPress={() => openGroupManage("members")}
+                      />
+                      {canManageGroupMembers ? (
+                        <>
+                          <ProfileDivider inset />
+                          <ProfileMenuRow
+                            icon={UserPlus}
+                            title="Add members"
+                            subtitle="Invite people from your workspaces"
+                            onPress={() => openGroupManage("add")}
+                          />
+                          <ProfileDivider inset />
+                          <ProfileMenuRow
+                            icon={UserMinus}
+                            title="Remove members"
+                            subtitle="Remove people from this group"
+                            onPress={() => openGroupManage("remove")}
+                          />
+                        </>
+                      ) : null}
+                    </ProfileCard>
+                  </View>
+
+                  {canManageGroupMembers || canManageGroupAdmins || canDeleteGroup ? (
+                    <View>
+                      <Text style={[PROFILE_UI.sectionLabel, { marginBottom: 6, paddingHorizontal: 2 }]}>Administration</Text>
+                      <ProfileCard>
+                        {canManageGroupMembers ? (
+                          <ProfileMenuRow
+                            icon={ImagePlus}
+                            title={currentConversation?.image ? "Change group photo" : "Group photo"}
+                            subtitle={updateGroupPhotoMutation.isPending ? "Uploading…" : "Update the group image"}
+                            trailing={
+                              updateGroupPhotoMutation.isPending ? (
+                                <ActivityIndicator size="small" color="#64748B" />
+                              ) : undefined
+                            }
+                            showChevron={!updateGroupPhotoMutation.isPending}
+                            onPress={updateGroupPhotoMutation.isPending ? undefined : openGroupPhotoPicker}
+                          />
+                        ) : null}
+                        {canManageGroupMembers && canManageGroupAdmins ? <ProfileDivider inset /> : null}
+                        {canManageGroupAdmins ? (
+                          <ProfileMenuRow
+                            icon={Shield}
+                            title="Manage admins"
+                            subtitle="Grant or revoke admin access"
+                            onPress={() => openGroupManage("admins")}
+                          />
+                        ) : null}
+                        {canManageGroupAdmins && canDeleteGroup ? <ProfileDivider inset /> : null}
+                        {canDeleteGroup ? (
+                          <ProfileMenuRow
+                            icon={Crown}
+                            title="Transfer ownership"
+                            subtitle="Make someone else the group owner"
+                            onPress={() => openGroupManage("transfer")}
+                          />
+                        ) : null}
+                      </ProfileCard>
+                    </View>
+                  ) : null}
+
+                  {canDeleteGroup || canLeaveGroup ? (
+                    <View>
+                      <Text style={[PROFILE_UI.sectionLabel, { marginBottom: 6, paddingHorizontal: 2 }]}>Danger zone</Text>
+                      <ProfileCard>
+                        {canLeaveGroup ? (
+                          <ProfileMenuRow
+                            icon={LogOut}
+                            title="Leave group"
+                            subtitle="You will lose access to this conversation"
+                            onPress={() => {
+                              setShowOptions(false);
+                              setTimeout(() => setShowLeaveConfirm(true), 300);
+                            }}
+                          />
+                        ) : null}
+                        {canLeaveGroup && canDeleteGroup ? <ProfileDivider inset /> : null}
+                        {canDeleteGroup ? (
+                          <ProfileMenuRow
+                            icon={Trash2}
+                            title="Delete group"
+                            subtitle="Permanently delete for everyone"
+                            destructive
+                            onPress={() => {
+                              setShowOptions(false);
+                              setTimeout(() => setShowConvDeleteConfirm(true), 300);
+                            }}
+                          />
+                        ) : null}
+                      </ProfileCard>
+                    </View>
+                  ) : null}
+                </>
+              ) : (
+                <View>
+                  <Text style={[PROFILE_UI.sectionLabel, { marginBottom: 6, paddingHorizontal: 2 }]}>Danger zone</Text>
+                  <ProfileCard>
+                    <ProfileMenuRow
+                      icon={Trash2}
+                      title="Delete conversation"
+                      subtitle="Remove this chat for everyone"
+                      destructive
+                      onPress={() => {
+                        setShowOptions(false);
+                        setTimeout(() => setShowConvDeleteConfirm(true), 300);
+                      }}
+                    />
+                  </ProfileCard>
+                </View>
+              )}
+            </View>
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
 
       {isGroup ? (
@@ -927,6 +1011,7 @@ export default function DMChatScreen() {
           conversationId={conversationId}
           participants={groupParticipants}
           currentUserId={currentUserId}
+          myRole={myGroupRole}
           mode={groupManageMode}
           onClose={() => setGroupManageMode(null)}
         />

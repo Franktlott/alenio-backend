@@ -5,6 +5,7 @@ import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { publishTeamMessageCreated, publishUserInboxUpdated, publishTeamPinUpdated } from "../lib/realtime-hub";
 import { MAX_CHAT_PINS } from "../lib/ensure-pinned-message-schema";
+import { deleteStorageObjectByUrlIfOwned } from "../lib/firebase-storage";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -537,6 +538,7 @@ messagesRouter.delete("/:messageId", async (c) => {
   });
 
   await prisma.message.delete({ where: { id: messageId } });
+  await deleteStorageObjectByUrlIfOwned(message.mediaUrl);
   if (pinCleared.count > 0) {
     const pins = await prisma.teamChatPin.findMany({
       where: { teamId, channelKey },

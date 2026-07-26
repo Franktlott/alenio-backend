@@ -45,6 +45,7 @@ import { syncAppUserFromAuth } from "./lib/ensure-app-user";
 import { deleteAppUserCompletely } from "./lib/delete-app-user";
 import { assertAccountDeletionAllowed, getAccountDeletionReadiness } from "./lib/account-deletion-readiness";
 import {
+  deleteReplacedStorageObject,
   deleteStorageObjectByUrlIfOwned,
   isFirebaseStorageConfigured,
   uploadFileToFirebaseStorage,
@@ -893,6 +894,14 @@ app.patch("/api/profile", async (c) => {
 
   const body = await c.req.json();
   const { name, image, timezone } = body;
+
+  if (image !== undefined) {
+    const current = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { image: true },
+    });
+    await deleteReplacedStorageObject(current?.image, image);
+  }
 
   const updated = await prisma.user.update({
     where: { id: user.id },

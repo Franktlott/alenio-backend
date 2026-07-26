@@ -102,7 +102,7 @@ export default function CreateGroupScreen() {
               className="text-base font-semibold"
               style={{ color: canCreate ? "#4361EE" : "#94A3B8" }}
             >
-              Create
+              {selectedUsers.length > 0 ? `Create (${selectedUsers.length})` : "Create"}
             </Text>
           )}
         </TouchableOpacity>
@@ -124,28 +124,19 @@ export default function CreateGroupScreen() {
             autoFocus
           />
         </View>
+        {selectedUsers.length > 0 ? (
+          <Text
+            testID="selected-people-summary"
+            className="mt-2 text-sm text-slate-600 dark:text-slate-300"
+            numberOfLines={2}
+          >
+            {selectedUsers.length} {selectedUsers.length === 1 ? "person" : "people"}:{" "}
+            {selectedUsers.map((u) => u.name ?? u.email ?? "Member").join(", ")}
+          </Text>
+        ) : (
+          <Text className="mt-2 text-sm text-slate-400">Select people from the list below</Text>
+        )}
       </View>
-
-      {selectedUsers.length > 0 ? (
-        <View
-          className="px-4 py-2 flex-row flex-wrap border-b border-slate-100 dark:border-slate-800"
-          style={{ gap: 8 }}
-        >
-          {selectedUsers.map((u) => (
-            <TouchableOpacity
-              key={u.id}
-              onPress={() => toggleUser(u)}
-              className="flex-row items-center bg-indigo-100 dark:bg-indigo-900 rounded-full px-3 py-1"
-              style={{ gap: 6 }}
-            >
-              <Text className="text-indigo-700 dark:text-indigo-300 text-sm font-medium">
-                {u.name ?? u.email ?? "Member"}
-              </Text>
-              <X size={12} color="#6366F1" />
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
 
       <View className="px-4 py-3">
         <View

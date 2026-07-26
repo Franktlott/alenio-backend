@@ -392,11 +392,6 @@ export default function ChatScreen() {
     });
   };
 
-  const shortName = (name: string) => {
-    const first = name.trim().split(/\s+/)[0];
-    return first || name;
-  };
-
   const renderPinnedCircle = (conv: Conversation) => {
     const unreadCount = getDmUnreadCount(dmUnreadCounts, conv.id);
     const isGroup = conv.isGroup;
@@ -404,7 +399,6 @@ export default function ChatScreen() {
     const displayName = isGroup
       ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").filter(Boolean).join(", ") ?? "Group")
       : (otherUser?.name?.trim() || otherUser?.email?.trim() || "Chat");
-    const label = shortName(displayName);
 
     return (
       <Pressable
@@ -530,10 +524,18 @@ export default function ChatScreen() {
           )}
         </View>
         <Text
-          style={{ fontSize: 10, fontWeight: "600", color: "#334155", textAlign: "center", width: "100%" }}
-          numberOfLines={1}
+          style={{
+            fontSize: 10,
+            fontWeight: "600",
+            color: "#334155",
+            textAlign: "center",
+            width: "100%",
+            lineHeight: 12,
+          }}
+          numberOfLines={2}
+          ellipsizeMode="tail"
         >
-          {label}
+          {displayName}
         </Text>
       </Pressable>
     );

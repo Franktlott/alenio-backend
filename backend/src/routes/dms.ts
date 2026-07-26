@@ -19,6 +19,7 @@ import {
   canTransferGroupOwnership,
   formatGroupParticipants,
 } from "../lib/group-conversation-roles";
+import { deleteReplacedStorageObject, deleteStorageObjectByUrlIfOwned } from "../lib/firebase-storage";
 import type { ConversationParticipantRole } from "@prisma/client";
 
 type Variables = {
@@ -38,7 +39,7 @@ async function getGroupParticipant(
   return prisma.conversationParticipant.findUnique({
     where: { conversationId_userId: { conversationId, userId } },
     include: {
-      conversation: { select: { id: true, isGroup: true } },
+      conversation: { select: { id: true, isGroup: true, image: true } },
     },
   });
 }
@@ -292,7 +293,7 @@ dmsRouter.patch("/:conversationId", async (c) => {
     return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
   }
   if (!canManageGroupMembers(actor.role)) {
-    return c.json({ error: { message: "Only the group owner can update group details", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Only group owners and admins can update group details", code: "FORBIDDEN" } }, 403);
   }
 
   const data: { image?: string | null; name?: string } = {};
@@ -315,6 +316,10 @@ dmsRouter.patch("/:conversationId", async (c) => {
 
   if (Object.keys(data).length === 0) {
     return c.json({ error: { message: "Nothing to update", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  if (data.image !== undefined) {
+    await deleteReplacedStorageObject(actor.conversation.image, data.image);
   }
 
   const updated = await prisma.conversation.update({
@@ -787,6 +792,7 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
   });
 
   await prisma.directMessage.delete({ where: { id: messageId } });
+  await deleteStorageObjectByUrlIfOwned(message.mediaUrl);
   if (pinCleared.count > 0) {
     const pins = await prisma.conversationPin.findMany({
       where: { conversationId },
@@ -836,7 +842,7 @@ dmsRouter.post("/:conversationId/members", async (c) => {
     return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
   }
   if (!canManageGroupMembers(actor.role)) {
-    return c.json({ error: { message: "Only the group owner can add members", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Only group owners and admins can add members", code: "FORBIDDEN" } }, 403);
   }
 
   const uniqueIds = Array.from(new Set(participantIds.filter((id) => id && id !== user.id)));
@@ -905,7 +911,7 @@ dmsRouter.delete("/:conversationId/members/:userId", async (c) => {
     return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
   }
   if (!canManageGroupMembers(actor.role)) {
-    return c.json({ error: { message: "Only the group owner can remove members", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Only group owners and admins can remove members", code: "FORBIDDEN" } }, 403);
   }
 
   const target = await prisma.conversationParticipant.findUnique({
@@ -1072,7 +1078,7 @@ dmsRouter.post("/:conversationId/leave", async (c) => {
 
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { id: true, isGroup: true },
+    select: { id: true, isGroup: true, image: true },
   });
   if (!conversation) {
     return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
@@ -1095,6 +1101,14 @@ dmsRouter.post("/:conversationId/leave", async (c) => {
   const remainingBeforeLeave = await prisma.conversationParticipant.count({ where: { conversationId } });
   const isLastParticipant = remainingBeforeLeave <= 1;
 
+  const mediaRows =
+    conversation.isGroup && isLastParticipant
+      ? await prisma.directMessage.findMany({
+          where: { conversationId, mediaUrl: { not: null } },
+          select: { mediaUrl: true },
+        })
+      : [];
+
   await prisma.$transaction(async (tx) => {
     await tx.conversationParticipant.delete({
       where: { conversationId_userId: { conversationId, userId: user.id } },
@@ -1116,6 +1130,14 @@ dmsRouter.post("/:conversationId/leave", async (c) => {
     }
   });
 
+  if (conversation.isGroup && isLastParticipant) {
+    await Promise.all(
+      [conversation.image, ...mediaRows.map((row) => row.mediaUrl)].map((url) =>
+        deleteStorageObjectByUrlIfOwned(url),
+      ),
+    );
+  }
+
   return new Response(null, { status: 204 });
 });
 
@@ -1131,7 +1153,17 @@ dmsRouter.delete("/:conversationId", async (c) => {
     return c.json({ error: { message: "Only the group owner can delete the group", code: "FORBIDDEN" } }, 403);
   }
 
+  const mediaRows = await prisma.directMessage.findMany({
+    where: { conversationId, mediaUrl: { not: null } },
+    select: { mediaUrl: true },
+  });
+  const urlsToDelete = [
+    participant.conversation.image,
+    ...mediaRows.map((row) => row.mediaUrl),
+  ];
+
   await prisma.conversation.delete({ where: { id: conversationId } });
+  await Promise.all(urlsToDelete.map((url) => deleteStorageObjectByUrlIfOwned(url)));
   return new Response(null, { status: 204 });
 });
 

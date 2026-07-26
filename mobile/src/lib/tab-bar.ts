@@ -15,7 +15,7 @@ export function tabBarClearance(bottomInset: number, extra = 16): number {
 }
 
 /** Workspace task list: tab bar + Seneca FAB so content is not covered. */
-export const SENECA_FAB_SIZE = 56;
+export const SENECA_FAB_SIZE = 48;
 export const SENECA_FAB_RIGHT_INSET = 16;
 
 export function workspaceTaskClearance(bottomInset: number): number {

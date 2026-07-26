@@ -17,7 +17,7 @@ export function SenecaFloatingLauncher() {
         data-testid="seneca-floating-launcher"
       >
         <span className="seneca-floating-launcher__ring" aria-hidden />
-        <SenecaIcon size={56} className="seneca-floating-launcher__icon" />
+        <SenecaIcon size={48} className="seneca-floating-launcher__icon" />
       </button>
       <SenecaAssistantDrawer open={open} onClose={() => setOpen(false)} />
     </>
