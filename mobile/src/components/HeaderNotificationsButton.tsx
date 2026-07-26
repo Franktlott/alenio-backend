@@ -502,7 +502,7 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
                       </Text>
                       <Text style={{ fontSize: 11, color: "#64748B" }} numberOfLines={2}>
                         {fromName} wants to transfer ownership
-                        {row.awaitingPaymentMethod ? " · add your card to finish" : ""}
+                        {row.awaitingPaymentMethod ? " · previous owner’s card still on file — add yours" : ""}
                         {" · "}
                         {formatOwnershipExpiry(row.expiresAt)}
                       </Text>
@@ -516,7 +516,7 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
                   </View>
                   {row.awaitingPaymentMethod ? (
                     <Text style={{ fontSize: 10, color: "#6366F1", fontWeight: "650", marginTop: 8 }}>
-                      Tap ✓ to open card setup
+                      Tap ✓ to add a different card (previous owner’s card won’t work)
                     </Text>
                   ) : null}
                 </AlenioSheetCard>

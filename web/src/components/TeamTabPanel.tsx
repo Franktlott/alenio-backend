@@ -1061,7 +1061,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                     {pendingTransfer.fromUser.name ?? "Owner"} → {pendingTransfer.toUser.name ?? "Member"}
                     {" · "}
                     {formatOwnershipExpiry(pendingTransfer.expiresAt)}
-                    {pendingTransfer.awaitingPaymentMethod ? " · awaiting payment method" : ""}
+                    {pendingTransfer.awaitingPaymentMethod ? " · previous owner’s card still on file" : ""}
                   </p>
                 </div>
               </header>
@@ -1131,7 +1131,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                         }
                       }}
                     >
-                      {pendingTransfer.awaitingPaymentMethod ? "Add card" : "Accept"}
+                      {pendingTransfer.awaitingPaymentMethod ? "Add different card" : "Accept"}
                     </button>
                   </>
                 ) : null}

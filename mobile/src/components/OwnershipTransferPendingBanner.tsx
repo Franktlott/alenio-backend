@@ -78,7 +78,7 @@ export function OwnershipTransferPendingBanner({
             {fromName} → {toName}
             {" · "}
             {formatOwnershipExpiry(transfer.expiresAt)}
-            {transfer.awaitingPaymentMethod ? " · awaiting payment method" : ""}
+            {transfer.awaitingPaymentMethod ? " · previous owner’s card still on file" : ""}
           </Text>
         </View>
       </View>
@@ -119,7 +119,7 @@ export function OwnershipTransferPendingBanner({
             >
               {busy ? <ActivityIndicator color="#FFF" size="small" /> : null}
               <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFF" }}>
-                {transfer.awaitingPaymentMethod ? "Add card" : "Accept"}
+                {transfer.awaitingPaymentMethod ? "Add different card" : "Accept"}
               </Text>
             </Pressable>
           </>

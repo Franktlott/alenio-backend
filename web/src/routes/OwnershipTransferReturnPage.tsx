@@ -68,13 +68,13 @@ function copyFor(status: Status, message: string): { eyebrow: string; title: str
     return {
       eyebrow: "Setup paused",
       title: "Card setup was canceled",
-      body: "Ownership hasn’t transferred yet. Add your card whenever you’re ready — the request stays open.",
+      body: "Ownership hasn’t transferred yet. The card on file is still the previous owner’s — you’ll need to add a different card to finish.",
     };
   }
   if (status === "needs_card") {
     return {
       eyebrow: "One more step",
-      title: "Add a new payment method",
+      title: "Add your own card",
       body: message,
     };
   }
@@ -143,7 +143,7 @@ export function OwnershipTransferReturnPage() {
         }
         setStatus("needs_card");
         setMessage(
-          "We need a card that isn’t already on this workspace. Add yours to finish becoming owner.",
+          "The card on file is still the previous owner’s. Add a different card in your name to finish becoming owner — reusing the same card won’t work.",
         );
         setSetupUrl(res.data.paymentSetupUrl);
       } catch (e) {
@@ -180,7 +180,7 @@ export function OwnershipTransferReturnPage() {
         <div className="ownership-return-actions">
           {showPrimary && primaryHref ? (
             <a className="ownership-return-primary" href={primaryHref}>
-              {status === "canceled" ? "Continue card setup" : "Add payment method"}
+              Add a different card
             </a>
           ) : null}
           {status === "working" || status === "done" ? null : (
