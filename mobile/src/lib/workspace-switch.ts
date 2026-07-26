@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import type { Team, Task, CalendarEvent } from "@/lib/types";
-import { hasTeamPlan } from "@/lib/plan-access-copy";
+import { hasTeamPlan, toPersistedPlan } from "@/lib/plan-access-copy";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 
 function removeTeamScopedQueries(queryClient: QueryClient, teamId: string) {
@@ -108,7 +108,7 @@ export async function performWorkspaceSwitch(
     }),
   ]);
 
-  useSubscriptionStore.getState().setPlan(hasTeamPlan(subscription) ? "team" : "free");
+  useSubscriptionStore.getState().setPlan(toPersistedPlan(subscription));
 
   if (hasTeamPlan(subscription)) {
     await Promise.all([

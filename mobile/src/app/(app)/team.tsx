@@ -85,6 +85,7 @@ import {
   type TeamInvite,
 } from "@/lib/team-invites-api";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { isPersistedPaidPlan } from "@/lib/plan-access-copy";
 import { tabBarClearance } from "@/lib/tab-bar";
 import Svg, { Path, Circle, Line, Text as SvgText, Polyline } from "react-native-svg";
 
@@ -295,7 +296,7 @@ export default function TeamScreen() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const plan = useSubscriptionStore((s) => s.plan);
-  const isPaid = plan === "team";
+  const isPaid = isPersistedPaidPlan(plan);
 
   // Prefer /api/me — same backend identity as team membership. Auth session can lag or disagree.
   const { data: meProfile } = useQuery({
@@ -1398,6 +1399,13 @@ export default function TeamScreen() {
               ) : undefined
             }
           >
+            {!showMemberSkeletons && sortedMembers.length > 0 ? (
+              <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 8, marginTop: -2 }}>
+                {isOwnerOrLeader
+                  ? "Tap a teammate to open their profile"
+                  : "Tap your name to open your profile"}
+              </Text>
+            ) : null}
             <ScrollView
                 ref={membersListRef}
                 style={{ flex: 1, minHeight: 0 }}

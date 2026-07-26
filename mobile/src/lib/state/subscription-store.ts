@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { PersistedPlan } from "@/lib/plan-access-copy";
+import { isPersistedPaidPlan } from "@/lib/plan-access-copy";
 
-export type Plan = "free" | "team";
+export type Plan = PersistedPlan;
 
 interface SubscriptionStore {
   plan: Plan;
@@ -22,11 +24,10 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
     {
       name: "alenio-subscription-store",
       storage: createJSONStorage(() => AsyncStorage),
-      // Normalize legacy "pro" value to "team" when reading from AsyncStorage
+      // Normalize legacy / API plan strings to free | team (team = Pro+ features).
       onRehydrateStorage: () => (state) => {
-        if (state && (state.plan as string) === "pro") {
-          state.plan = "team";
-        }
+        if (!state) return;
+        state.plan = isPersistedPaidPlan(state.plan) ? "team" : "free";
       },
     }
   )

@@ -86,14 +86,22 @@ const PANEL_ACTION_CARD_STYLE = {
 
 const FREE_INCLUDED = ["Activity feed", "Team chat", "Team members"] as const;
 
-const TEAM_FEATURES = [
+const PRO_FEATURES = [
   "Tasks & action items",
-  "Team calendar",
+  "Seneca AI coaching",
+  "Check-ins & development plans",
+  "Team calendar & Outlook sync",
   "Metrics & dashboards",
-  "Workflow execution",
   "Performance insights",
   "Celebrations & shoutouts",
   "Priority support",
+] as const;
+
+const OPERATIONS_FEATURES = [
+  "Everything in Pro",
+  "Alenio Go (checklists & walks)",
+  "Temperature checks",
+  "Shift briefings & cascades",
 ] as const;
 
 type TeamListItem = {
@@ -777,7 +785,7 @@ function ComparePlansModal({
                 }}
               >
                 <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>Free</Text>
-                <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Chat and team basics</Text>
+                <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Chat, activity, and team</Text>
                 {FREE_INCLUDED.map((label) => (
                   <FeatureRow key={label} label={label} accent="#0284C7" />
                 ))}
@@ -792,12 +800,45 @@ function ComparePlansModal({
                   padding: 12,
                 }}
               >
-                <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>Team</Text>
-                <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Execution and insights</Text>
-                {TEAM_FEATURES.map((label) => (
+                <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>Pro</Text>
+                <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Lead and execute</Text>
+                {PRO_FEATURES.map((label) => (
                   <FeatureRow key={label} label={label} accent={TEAM_ACCENT} />
                 ))}
               </View>
+            </View>
+            <View
+              style={{
+                marginTop: 10,
+                backgroundColor: "#F8FAFC",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                padding: 12,
+                opacity: 0.72,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>Operations</Text>
+                <View
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 999,
+                    backgroundColor: "#E2E8F0",
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: "#64748B", letterSpacing: 0.3 }}>
+                    COMING SOON
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                Alenio Go for floor ops — not available for self-serve yet
+              </Text>
+              {OPERATIONS_FEATURES.map((label) => (
+                <FeatureRow key={label} label={label} accent="#64748B" />
+              ))}
             </View>
           </ScrollView>
           <TouchableOpacity

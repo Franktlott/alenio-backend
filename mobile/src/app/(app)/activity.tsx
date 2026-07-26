@@ -24,13 +24,14 @@ import {
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "@/lib/auth/use-session";
 import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
-import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { tabBarClearance, SENECA_FAB_SIZE, SENECA_FAB_RIGHT_INSET } from "@/lib/tab-bar";
 import { AppTabHeader } from "@/components/AppTabHeader";
 import type { Team } from "@/lib/types";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
+import { hasWorkspaceTaskAccess, PAYWALL_TITLE } from "@/lib/plan-access-copy";
+import { router } from "expo-router";
+import { toast } from "burnt";
 import {
   ActivityIntroHeader,
   ActivityFeedCard,
@@ -193,7 +194,7 @@ export default function ActivityScreen() {
     queryFn: () => api.get<Team[]>("/api/teams"),
   });
 
-  const { data: subscription, isFetched: subscriptionFetched } = useQuery({
+  const { data: subscription } = useQuery({
     queryKey: ["subscription", activeTeamId],
     queryFn: () =>
       api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
@@ -201,7 +202,7 @@ export default function ActivityScreen() {
       ),
     enabled: !!activeTeamId,
   });
-  const hasActivityAccess = hasWorkspaceTaskAccess(subscription, persistedPlan);
+  const hasCelebrateAccess = hasWorkspaceTaskAccess(subscription, persistedPlan);
 
   const [showReactionHint, setShowReactionHint] = useState(false);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
@@ -312,6 +313,15 @@ export default function ActivityScreen() {
   const showWorkspaceLabels = workspaceFilter === "all" && teams.length > 1;
 
   const openCelebrate = () => {
+    if (!hasCelebrateAccess) {
+      toast({
+        title: PAYWALL_TITLE,
+        message: "Celebrations are included with Pro. Manage access on the web.",
+        preset: "error",
+      });
+      router.push("/account-hub");
+      return;
+    }
     setCelebrateTeamId(workspaceFilter !== "all" ? workspaceFilter : activeTeamId ?? teams[0]?.id ?? "");
     setShowCelebrateModal(true);
     setCelebrateStep(1);
@@ -374,26 +384,6 @@ export default function ActivityScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]}>
         <NoWorkspaceRedirect />
-      </SafeAreaView>
-    );
-  }
-
-  if (!hasActivityAccess && !subscriptionFetched) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }} edges={["top"]}>
-        <ActivityIndicator color="#4361EE" />
-      </SafeAreaView>
-    );
-  }
-
-  if (!hasActivityAccess && subscriptionFetched) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]} testID="activity-paywall-screen">
-        <ProFeatureLockedView
-          title="Pro plan required"
-          body="Activity is included with the Pro plan. View what is included in Workplace Access."
-          testID="activity-paywall"
-        />
       </SafeAreaView>
     );
   }
@@ -872,32 +862,34 @@ export default function ActivityScreen() {
             />
           )}
 
-          <TouchableOpacity
-            testID="celebrate-button"
-            onPress={openCelebrate}
-            accessibilityLabel="Celebrate"
-            activeOpacity={0.9}
-            style={{
-              position: "absolute",
-              right: SENECA_FAB_RIGHT_INSET,
-              // Sit above the global Seneca FAB so the two don't overlap
-              bottom: tabBarClearance(insets.bottom, 12) + SENECA_FAB_SIZE + 10,
-              width: SENECA_FAB_SIZE,
-              height: SENECA_FAB_SIZE,
-              borderRadius: SENECA_FAB_SIZE / 2,
-              backgroundColor: "#4361EE",
-              alignItems: "center",
-              justifyContent: "center",
-              shadowColor: "#1E293B",
-              shadowOpacity: 0.2,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 6,
-              zIndex: 20,
-            }}
-          >
-            <Plus size={28} color="white" strokeWidth={2.5} />
-          </TouchableOpacity>
+          {hasCelebrateAccess ? (
+            <TouchableOpacity
+              testID="celebrate-button"
+              onPress={openCelebrate}
+              accessibilityLabel="Celebrate"
+              activeOpacity={0.9}
+              style={{
+                position: "absolute",
+                right: SENECA_FAB_RIGHT_INSET,
+                // Sit above the global Seneca FAB so the two don't overlap
+                bottom: tabBarClearance(insets.bottom, 12) + SENECA_FAB_SIZE + 10,
+                width: SENECA_FAB_SIZE,
+                height: SENECA_FAB_SIZE,
+                borderRadius: SENECA_FAB_SIZE / 2,
+                backgroundColor: "#4361EE",
+                alignItems: "center",
+                justifyContent: "center",
+                shadowColor: "#1E293B",
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 6,
+                zIndex: 20,
+              }}
+            >
+              <Plus size={28} color="white" strokeWidth={2.5} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       )}
     </SafeAreaView>

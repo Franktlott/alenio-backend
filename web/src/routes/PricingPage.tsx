@@ -24,11 +24,11 @@ export function PricingPage() {
             </li>
             <li>
               <strong>Pro</strong> unlocks tasks, Seneca AI coaching, check-ins, development plans, calendar, Outlook
-              sync, metrics, and core workspace features on web and mobile — $39.99 per workspace / month.
+              sync, metrics, celebrations, and core workspace features on web and mobile — $39.99 per workspace / month.
             </li>
             <li>
               <strong>Operations</strong> includes everything in Pro plus Alenio Go (checklists, temperature checks,
-              briefings, walks, and execution tools) — $69.99 per workspace / month.
+              briefings, walks, and execution tools) — $69.99 per workspace / month. Self-serve checkout is coming soon.
             </li>
             <li>Subscriptions are billed per workspace on the web. Only the workspace owner can upgrade or manage billing.</li>
           </ul>

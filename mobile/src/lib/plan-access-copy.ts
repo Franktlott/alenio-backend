@@ -2,6 +2,9 @@
 
 const PAID_ACTIVE_STATUSES = ["active", "trialing", "past_due", "incomplete", "paused"] as const;
 
+/** Persisted mobile store values: "team" means Pro+ features unlocked (includes Operations). */
+export type PersistedPlan = "free" | "team";
+
 /** Align with backend teamSubscriptionRowHasTeamFeatures (plan + paid-active status). */
 export function hasTeamPlan(
   sub?: { plan?: string | null; status?: string | null; hasTeamFeatures?: boolean | null } | null,
@@ -13,13 +16,26 @@ export function hasTeamPlan(
   return (PAID_ACTIVE_STATUSES as readonly string[]).includes(status);
 }
 
+/** True when the local subscription store marks Pro / Operations features unlocked. */
+export function isPersistedPaidPlan(plan: string | null | undefined): boolean {
+  const p = (plan ?? "free").trim().toLowerCase();
+  return p === "team" || p === "pro" || p === "operations";
+}
+
+/** Normalize any API / legacy plan string into the mobile subscription store shape. */
+export function toPersistedPlan(
+  sub?: { plan?: string | null; status?: string | null; hasTeamFeatures?: boolean | null } | null,
+): PersistedPlan {
+  return hasTeamPlan(sub) ? "team" : "free";
+}
+
 /** Use live subscription when loaded; otherwise fall back to persisted workspace plan. */
 export function hasWorkspaceTaskAccess(
   subscription: { plan?: string | null; status?: string | null; hasTeamFeatures?: boolean | null } | null | undefined,
-  persistedPlan: "free" | "team",
+  persistedPlan: string | null | undefined,
 ): boolean {
   if (subscription) return hasTeamPlan(subscription);
-  return persistedPlan === "team";
+  return isPersistedPaidPlan(persistedPlan);
 }
 
 export const PLAN_SCREEN_TITLE = "Workplace Access";
@@ -68,4 +84,4 @@ export function teamActiveMessage(isOwner: boolean): string {
 export const PAYWALL_TITLE = "Pro plan required";
 
 export const PAYWALL_BODY =
-  "Tasks, Workspace, and Activity are included with the Pro plan. View what is included in Workplace Access.";
+  "Tasks and Workspace are included with the Pro plan. View what is included in Workplace Access.";

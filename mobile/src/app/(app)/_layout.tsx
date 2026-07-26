@@ -16,7 +16,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore, buildDmLastReadMap } from "@/lib/state/unread-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { hasTeamPlan } from "@/lib/plan-access-copy";
+import { isPersistedPaidPlan, toPersistedPlan } from "@/lib/plan-access-copy";
 import { useTaskStore } from "@/lib/state/task-store";
 import { useEffect, useMemo } from "react";
 import type { CalendarEvent, Conversation, Team, Task } from "@/lib/types";
@@ -31,7 +31,7 @@ export const unstable_settings = {
 };
 
 const ALL_TABS = [
-  { name: "activity", label: "Activity", Icon: Activity, paidOnly: true },
+  { name: "activity", label: "Activity", Icon: Activity, paidOnly: false },
   { name: "chat", label: "Chat", Icon: MessageCircle, paidOnly: false },
   { name: "execute", label: "Workspace", Icon: CheckSquare, paidOnly: true },
   { name: "team", label: "Team", Icon: Users, paidOnly: false },
@@ -45,8 +45,7 @@ function FixedTabBar({ state, navigation }: any) {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
   const plan = useSubscriptionStore((s) => s.plan);
-  const isPro = useSubscriptionStore((s) => s.isPro);
-  const isPaid = plan === "team";
+  const isPaid = isPersistedPaidPlan(plan);
   const acknowledgedCounts = useTaskStore((s) => s.acknowledgedCounts);
   const acknowledgedEventCounts = useTaskStore((s) => s.acknowledgedEventCounts);
 
@@ -214,7 +213,7 @@ function FixedTabBar({ state, navigation }: any) {
       });
       return;
     }
-    if (routeName === "activity" && isPaid) {
+    if (routeName === "activity") {
       void queryClient.prefetchQuery({
         queryKey: ["activity", "all"],
         queryFn: () => api.get<unknown[]>(`/api/activity`),
@@ -364,7 +363,10 @@ export default function AppLayout() {
   // Keep plan in sync with server
   const { data: subscription } = useQuery({
     queryKey: ["subscription", activeTeamId],
-    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
+    queryFn: () =>
+      api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
+        `/api/teams/${activeTeamId}/subscription`,
+      ),
     enabled: !!activeTeamId,
     staleTime: 1000 * 60 * 5,
   });
@@ -390,7 +392,7 @@ export default function AppLayout() {
       return;
     }
     if (subscription) {
-      setPlan(hasTeamPlan(subscription) ? "team" : "free");
+      setPlan(toPersistedPlan(subscription));
     }
   }, [subscription, activeTeamId, setPlan]);
 
@@ -402,8 +404,8 @@ export default function AppLayout() {
     }
   }, [teams, activeTeamId, setActiveTeamId]);
 
-  // Free plan only gets chat, team, profile (paid tabs filtered in FixedTabBar)
-  const isPaid = plan === "team";
+  // Free: Activity + Chat + Team + Profile. Pro+: also Workspace.
+  const isPaid = isPersistedPaidPlan(plan);
 
   if (!teamsFetched || !teams || teams.length === 0) {
     return (

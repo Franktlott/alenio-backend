@@ -141,11 +141,11 @@ export function workspaceSubscriptionLine(
   return planStatusLabel(sub.plan, sub.status);
 }
 
-/** Full plan name for badges (Free / Team / Operations). */
-export function planBadgeLabel(plan: string | null | undefined): "Free" | "Team" | "Operations" {
+/** Full plan name for badges (Free / Pro / Operations). */
+export function planBadgeLabel(plan: string | null | undefined): "Free" | "Pro" | "Operations" {
   const p = (plan ?? "free").trim().toLowerCase();
   if (p === "operations") return "Operations";
-  if (p === "team" || p === "pro") return "Team";
+  if (p === "team" || p === "pro") return "Pro";
   return "Free";
 }
 
@@ -278,10 +278,10 @@ export function planStatusLabel(plan: string, status: string): string {
   }
   const tier = tierFromPlan(plan);
   if (tier === "team") {
-    if (status === "past_due") return "Team — payment issue";
-    if (status === "trialing") return "Team — trial";
-    if (status === "canceled") return "Team — canceled";
-    return "Team plan active";
+    if (status === "past_due") return "Pro — payment issue";
+    if (status === "trialing") return "Pro — trial";
+    if (status === "canceled") return "Pro — canceled";
+    return "Pro plan active";
   }
   return "Free plan";
 }

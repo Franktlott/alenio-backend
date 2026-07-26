@@ -9,6 +9,8 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import { api } from "@/lib/api/api";
 import type { Team } from "@/lib/types";
+import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { hasTeamPlan, isPersistedPaidPlan } from "@/lib/plan-access-copy";
 import {
   SENECA_FAB_RIGHT_INSET,
   SENECA_FAB_SIZE,
@@ -25,6 +27,7 @@ export function SenecaFloatingLauncher() {
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const persistedPlan = useSubscriptionStore((s) => s.plan);
   const { data: session } = useSession();
 
   const { data: teams } = useQuery({
@@ -33,8 +36,20 @@ export function SenecaFloatingLauncher() {
     enabled: !!session?.user,
   });
 
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription", activeTeamId],
+    queryFn: () =>
+      api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
+        `/api/teams/${activeTeamId}/subscription`,
+      ),
+    enabled: !!activeTeamId && !!session?.user,
+    staleTime: 1000 * 60 * 5,
+  });
+
   const activeRole = teams?.find((t) => t.id === activeTeamId)?.role;
-  const showSeneca = !!session?.user && !!activeTeamId && canUseSeneca(activeRole);
+  const hasProAccess = subscription ? hasTeamPlan(subscription) : isPersistedPaidPlan(persistedPlan);
+  const showSeneca =
+    !!session?.user && !!activeTeamId && canUseSeneca(activeRole) && hasProAccess;
 
   if (!showSeneca) return null;
 

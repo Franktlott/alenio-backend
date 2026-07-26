@@ -33,6 +33,7 @@ import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { isLeaderRole, memberMatchesUserId } from "@/lib/member-identity";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { isPersistedPaidPlan } from "@/lib/plan-access-copy";
 import type { Team, TeamMember, TeamRole } from "@/lib/types";
 import { ProfileOverviewTab } from "@/components/ProfileOverviewTab";
 import { DevelopmentPlanTab } from "@/components/DevelopmentPlanTab";
@@ -145,7 +146,7 @@ export default function MemberProfileScreen() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const plan = useSubscriptionStore((s) => s.plan);
-  const isPaid = plan === "team";
+  const isPaid = isPersistedPaidPlan(plan);
 
   const { data: meProfile } = useQuery({
     queryKey: ME_QUERY_KEY,

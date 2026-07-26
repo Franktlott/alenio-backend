@@ -15,7 +15,7 @@ import { loadWebCheckoutConfig, peekWebCheckoutConfig, type WebCheckoutConfig } 
 import { LEGAL_CONTACT_EMAIL } from "../lib/legal-constants";
 import { OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED } from "../lib/plan-catalog";
 
-const FREE_FEATURES = ["Activity feed", "Team chat", "Team members (limited)"] as const;
+const FREE_FEATURES = ["Activity feed", "Team chat", "Team members"] as const;
 const PRO_CARD_FEATURES = [
   "Tasks & action items",
   "Seneca AI coaching",
@@ -444,7 +444,7 @@ export function BillingPage() {
               <h2 id="billing-free-heading" className="billing-card-name">
                 Free
               </h2>
-              <p className="billing-card-tag">Get started at no cost</p>
+              <p className="billing-card-tag">Chat, activity, and team</p>
             </div>
             <p className="billing-card-price">
               $0 <span>forever</span>
