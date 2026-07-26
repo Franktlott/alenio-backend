@@ -125,7 +125,7 @@ function SheetContent({
               style={[
                 styles.bodyContent,
                 compact ? styles.bodyContentCompact : null,
-                { paddingBottom: compact ? 8 : 10 },
+                { paddingBottom: compact ? 8 : 10, width: "100%", alignSelf: "stretch" },
               ]}
             >
               {children}

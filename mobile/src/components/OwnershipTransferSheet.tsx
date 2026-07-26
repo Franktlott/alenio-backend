@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  Pressable,
+  TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
@@ -68,30 +68,53 @@ function ChoiceRow({
   testID?: string;
   last?: boolean;
 }) {
+  const label = recommended ? `${title} · Recommended` : title;
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
+      activeOpacity={0.75}
+      accessibilityRole="radio"
+      accessibilityState={{ selected, disabled: !!disabled }}
+      accessibilityLabel={label}
       testID={testID}
-      style={({ pressed }) => [
-        styles.choiceRow,
-        !last ? styles.choiceRowBorder : null,
-        selected ? styles.choiceRowSelected : null,
-        { opacity: disabled ? 0.55 : pressed ? 0.9 : 1 },
-      ]}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        alignSelf: "stretch",
+        width: "100%",
+        minHeight: 52,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        backgroundColor: selected ? "#EEF2FF" : "#FFFFFF",
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: "#E2E8F0",
+        opacity: disabled ? 0.5 : 1,
+      }}
     >
-      <View style={[styles.radio, selected ? styles.radioSelected : null]}>
-        {selected ? <Check size={11} color="#FFF" strokeWidth={3.5} /> : null}
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          borderWidth: 2,
+          borderColor: selected ? "#4338CA" : "#CBD5E1",
+          backgroundColor: selected ? "#4338CA" : "#FFFFFF",
+          alignItems: "center",
+          justifyContent: "center",
+          marginRight: 12,
+        }}
+      >
+        {selected ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}
       </View>
-      <View style={styles.choiceCopy}>
-        <Text style={styles.choiceTitle}>{title}</Text>
-        {recommended ? (
-          <View style={[styles.badge, selected ? styles.badgeSelected : null]}>
-            <Text style={styles.badgeText}>RECOMMENDED</Text>
-          </View>
-        ) : null}
-      </View>
-    </Pressable>
+      <Text
+        className="text-slate-900 text-[15px] font-semibold"
+        style={{ flex: 1, color: "#0F172A", fontSize: 15, fontWeight: "600" }}
+        numberOfLines={2}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -152,15 +175,19 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
 
   const footer =
     step === "success" ? (
-      <Pressable onPress={onClose} testID="ownership-transfer-done" style={styles.primaryBtn}>
-        <Text style={styles.primaryBtnText}>Done</Text>
-      </Pressable>
+      <TouchableOpacity onPress={onClose} testID="ownership-transfer-done" style={styles.primaryBtn} activeOpacity={0.85}>
+        <Text className="text-white text-[14px] font-bold" style={styles.primaryBtnText}>
+          Done
+        </Text>
+      </TouchableOpacity>
     ) : step === "review" ? (
       <View style={styles.footerRow}>
-        <Pressable onPress={onClose} disabled={busy} style={styles.secondaryBtn}>
-          <Text style={styles.secondaryBtnText}>Cancel</Text>
-        </Pressable>
-        <Pressable
+        <TouchableOpacity onPress={onClose} disabled={busy} style={styles.secondaryBtn} activeOpacity={0.85}>
+          <Text className="text-slate-700 text-[14px] font-semibold" style={styles.secondaryBtnText}>
+            Cancel
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           onPress={() => {
             setError(null);
             setStep("confirm");
@@ -168,23 +195,29 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
           disabled={busy}
           testID="ownership-transfer-continue"
           style={[styles.primaryBtn, styles.primaryBtnFlex]}
+          activeOpacity={0.85}
         >
-          <Text style={styles.primaryBtnText}>Continue</Text>
-        </Pressable>
+          <Text className="text-white text-[14px] font-bold" style={styles.primaryBtnText}>
+            Continue
+          </Text>
+        </TouchableOpacity>
       </View>
     ) : (
       <View style={styles.footerRow}>
-        <Pressable
+        <TouchableOpacity
           onPress={() => {
             setError(null);
             setStep("review");
           }}
           disabled={busy}
           style={styles.secondaryBtn}
+          activeOpacity={0.85}
         >
-          <Text style={styles.secondaryBtnText}>Back</Text>
-        </Pressable>
-        <Pressable
+          <Text className="text-slate-700 text-[14px] font-semibold" style={styles.secondaryBtnText}>
+            Back
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           onPress={() => void submit()}
           disabled={busy || !canSubmitConfirm}
           testID="ownership-transfer-submit"
@@ -193,10 +226,13 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
             styles.primaryBtnFlex,
             busy || !canSubmitConfirm ? styles.primaryBtnDisabled : null,
           ]}
+          activeOpacity={0.85}
         >
           {busy ? <ActivityIndicator color="#FFF" /> : null}
-          <Text style={styles.primaryBtnText}>{busy ? "Sending…" : "Send request"}</Text>
-        </Pressable>
+          <Text className="text-white text-[14px] font-bold" style={styles.primaryBtnText}>
+            {busy ? "Sending…" : "Send request"}
+          </Text>
+        </TouchableOpacity>
       </View>
     );
 
@@ -230,7 +266,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
     >
       {step === "success" ? (
         <AlenioSheetCard compact style={{ paddingVertical: 12 }}>
-          <Text style={styles.bodyCopy}>
+          <Text className="text-slate-700 text-[13px]" style={styles.bodyCopy}>
             You’ll keep your chosen role until they accept. They must add a different card than yours to finish.
             Your plan stays the same.
           </Text>
@@ -239,7 +275,9 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
 
       {step === "review" && member ? (
         <View style={styles.reviewStack}>
-          <Text style={styles.sectionLabel}>Your role after they accept</Text>
+          <Text className="text-slate-500 text-[11px] font-bold uppercase" style={styles.sectionLabel}>
+            Your role after they accept
+          </Text>
           <View style={styles.choiceGroup}>
             {DISPOSITIONS.map((opt, i) => (
               <ChoiceRow
@@ -257,27 +295,35 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
 
           <View style={styles.billingNote} testID="ownership-billing-replace-required">
             <CreditCard size={15} color="#4338CA" />
-            <Text style={styles.billingCopy}>
-              <Text style={styles.billingStrong}>They add a different card. </Text>
+            <Text className="text-slate-600 text-[13px] flex-1" style={styles.billingCopy}>
+              <Text className="text-slate-900 font-bold" style={styles.billingStrong}>
+                They add a different card.{" "}
+              </Text>
               Your card comes off after setup.
             </Text>
           </View>
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? (
+            <Text className="text-red-600 text-[12px] font-semibold" style={styles.errorText}>
+              {error}
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
       {step === "confirm" ? (
         <View style={styles.reviewStack}>
           <AlenioSheetCard tint="slate" compact>
-            <Text style={styles.bodyCopy}>
+            <Text className="text-slate-700 text-[13px]" style={styles.bodyCopy}>
               They have 7 days to accept, then must add a different card than the one on file.
             </Text>
           </AlenioSheetCard>
 
           {!useSsoConfirm ? (
             <AlenioSheetCard tint="slate" compact>
-              <Text style={styles.fieldLabel}>Account password</Text>
+              <Text className="text-slate-700 text-[12px] font-semibold" style={styles.fieldLabel}>
+                Account password
+              </Text>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
@@ -293,8 +339,8 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
             </AlenioSheetCard>
           ) : (
             <AlenioSheetCard tint="slate" compact>
-              <Text style={[styles.bodyCopy, { marginBottom: 8 }]}>
-                SSO account — type <Text style={{ fontWeight: "700" }}>TRANSFER</Text> to confirm.
+              <Text className="text-slate-700 text-[13px]" style={[styles.bodyCopy, { marginBottom: 8 }]}>
+                SSO account — type <Text className="font-bold">TRANSFER</Text> to confirm.
               </Text>
               <TextInput
                 value={confirmPhrase}
@@ -309,7 +355,11 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
               />
             </AlenioSheetCard>
           )}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? (
+            <Text className="text-red-600 text-[12px] font-semibold" style={styles.errorText}>
+              {error}
+            </Text>
+          ) : null}
         </View>
       ) : null}
     </AlenioBottomSheet>
@@ -318,6 +368,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
 
 const styles = StyleSheet.create({
   reviewStack: {
+    width: "100%",
     gap: 12,
   },
   sectionLabel: {
@@ -328,71 +379,15 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   choiceGroup: {
+    width: "100%",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
     overflow: "hidden",
   },
-  choiceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 13,
-    paddingHorizontal: 12,
-    minHeight: 48,
-    backgroundColor: "#FFFFFF",
-  },
-  choiceRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E2E8F0",
-  },
-  choiceRowSelected: {
-    backgroundColor: "#F5F3FF",
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.75,
-    borderColor: "#CBD5E1",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    marginRight: 12,
-  },
-  radioSelected: {
-    borderColor: "#4338CA",
-    backgroundColor: "#4338CA",
-  },
-  choiceCopy: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-    minWidth: 0,
-  },
-  choiceTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0F172A",
-  },
-  badge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: "#EEF2FF",
-  },
-  badgeSelected: {
-    backgroundColor: "#DDD6FE",
-  },
-  badgeText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#4338CA",
-    letterSpacing: 0.3,
-  },
   billingNote: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
