@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
-import { Crown } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Crown, Clock } from "lucide-react-native";
 import type { OwnershipTransfer } from "@/lib/ownership-transfer-api";
 
 function formatOwnershipExpiry(iso: string) {
@@ -28,7 +29,7 @@ type Props = {
   onCancel: () => void;
 };
 
-/** Pending ownership transfer strip for Team (sender + recipient). */
+/** Pending ownership transfer card for Team (sender + recipient). */
 export function OwnershipTransferPendingBanner({
   transfer,
   myUserId,
@@ -42,106 +43,167 @@ export function OwnershipTransferPendingBanner({
   const isSender = !!myUserId && transfer.fromUserId === myUserId;
   const fromName = transfer.fromUser.name?.trim() || transfer.fromUser.email?.trim() || "Owner";
   const toName = transfer.toUser.name?.trim() || transfer.toUser.email?.trim() || "Member";
+  const expiryLabel = formatOwnershipExpiry(transfer.expiresAt);
+  const end = new Date(transfer.expiresAt);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfEnd = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  const daysLeft = Number.isNaN(end.getTime())
+    ? 7
+    : Math.max(0, Math.round((startOfEnd.getTime() - startOfToday.getTime()) / (24 * 60 * 60 * 1000)));
+  const chipLabel =
+    daysLeft === 0 ? "Today" : daysLeft === 1 ? "1 day" : `${daysLeft} days`;
 
   return (
     <View
       style={{
         marginHorizontal: 16,
-        marginBottom: 12,
-        borderRadius: 14,
+        marginTop: 16,
+        marginBottom: 4,
+        borderRadius: 16,
+        backgroundColor: "#FFFFFF",
         borderWidth: 1,
-        borderColor: "#C7D2FE",
-        backgroundColor: "#EEF2FF",
-        padding: 14,
-        gap: 10,
+        borderColor: "#E0E7FF",
+        overflow: "hidden",
+        shadowColor: "#312E81",
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 3,
       }}
       accessibilityLabel="Pending ownership transfer"
     >
-      <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
+      <LinearGradient
+        colors={["#4338CA", "#6366F1"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
         <View
           style={{
-            width: 36,
-            height: 36,
+            width: 34,
+            height: 34,
             borderRadius: 10,
-            backgroundColor: "#4338CA",
+            backgroundColor: "rgba(255,255,255,0.18)",
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Crown size={16} color="#FFF" />
+          <Crown size={16} color="#FFFFFF" />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 14, fontWeight: "750", color: "#0F172A" }}>
-            Ownership transfer pending
+          <Text style={{ fontSize: 10, fontWeight: "800", color: "rgba(255,255,255,0.75)", letterSpacing: 0.5 }}>
+            OWNERSHIP
           </Text>
-          <Text style={{ fontSize: 12, color: "#475569", marginTop: 3, lineHeight: 17 }}>
-            {fromName} → {toName}
-            {" · "}
-            {formatOwnershipExpiry(transfer.expiresAt)}
-            {transfer.awaitingPaymentMethod ? " · previous owner’s card still on file" : ""}
+          <Text style={{ fontSize: 15, fontWeight: "750", color: "#FFFFFF", marginTop: 1 }} numberOfLines={1}>
+            Transfer pending
           </Text>
         </View>
-      </View>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            paddingHorizontal: 9,
+            paddingVertical: 5,
+            borderRadius: 999,
+            backgroundColor: "rgba(255,255,255,0.16)",
+          }}
+        >
+          <Clock size={12} color="#FFFFFF" />
+          <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }} numberOfLines={1}>
+            {chipLabel}
+          </Text>
+        </View>
+      </LinearGradient>
 
-      {error ? (
-        <Text style={{ fontSize: 12, color: "#DC2626", fontWeight: "600" }}>{error}</Text>
-      ) : null}
+      <View style={{ padding: 14, gap: 12 }}>
+        <View style={{ gap: 4 }}>
+          <Text style={{ fontSize: 13, fontWeight: "650", color: "#0F172A", lineHeight: 18 }}>
+            {fromName}
+            <Text style={{ color: "#94A3B8", fontWeight: "600" }}> → </Text>
+            {toName}
+          </Text>
+          <Text style={{ fontSize: 12, color: "#64748B", lineHeight: 17 }}>
+            {expiryLabel}
+            {transfer.awaitingPaymentMethod
+              ? " · Previous owner’s card is still on file"
+              : isSender
+                ? " · Waiting for them to accept"
+                : " · Accept to become workspace owner"}
+          </Text>
+        </View>
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {isRecipient ? (
-          <>
+        {error ? (
+          <Text style={{ fontSize: 12, color: "#DC2626", fontWeight: "600" }}>{error}</Text>
+        ) : null}
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {isRecipient ? (
+            <>
+              <Pressable
+                onPress={onDecline}
+                disabled={busy}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 11,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  backgroundColor: "#F8FAFC",
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "650", color: "#334155" }}>Decline</Text>
+              </Pressable>
+              <Pressable
+                onPress={onAccept}
+                disabled={busy}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 11,
+                  backgroundColor: "#4338CA",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  shadowColor: "#4338CA",
+                  shadowOpacity: 0.28,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 4 },
+                }}
+              >
+                {busy ? <ActivityIndicator color="#FFF" size="small" /> : null}
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFF" }}>
+                  {transfer.awaitingPaymentMethod ? "Add different card" : "Accept"}
+                </Text>
+              </Pressable>
+            </>
+          ) : null}
+          {isSender ? (
             <Pressable
-              onPress={onDecline}
+              onPress={onCancel}
               disabled={busy}
               style={{
                 paddingHorizontal: 14,
-                paddingVertical: 9,
-                borderRadius: 10,
+                paddingVertical: 10,
+                borderRadius: 11,
                 borderWidth: 1,
                 borderColor: "#E2E8F0",
-                backgroundColor: "#FFF",
+                backgroundColor: "#F8FAFC",
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: "650", color: "#334155" }}>Decline</Text>
-            </Pressable>
-            <Pressable
-              onPress={onAccept}
-              disabled={busy}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 9,
-                borderRadius: 10,
-                backgroundColor: "#4338CA",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              {busy ? <ActivityIndicator color="#FFF" size="small" /> : null}
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFF" }}>
-                {transfer.awaitingPaymentMethod ? "Add different card" : "Accept"}
+              <Text style={{ fontSize: 13, fontWeight: "650", color: "#334155" }}>
+                {busy ? "Canceling…" : "Cancel transfer"}
               </Text>
             </Pressable>
-          </>
-        ) : null}
-        {isSender ? (
-          <Pressable
-            onPress={onCancel}
-            disabled={busy}
-            style={{
-              paddingHorizontal: 14,
-              paddingVertical: 9,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              backgroundColor: "#FFF",
-            }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "650", color: "#334155" }}>
-              {busy ? "Canceling…" : "Cancel transfer"}
-            </Text>
-          </Pressable>
-        ) : null}
+          ) : null}
+        </View>
       </View>
     </View>
   );

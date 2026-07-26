@@ -1261,7 +1261,7 @@ export default function TeamScreen() {
         </View>
 
 
-        {/* ── Team Members ───── */}
+        {/* ── Ownership transfer + Team Members ───── */}
         {pendingOwnershipTransfer &&
         (pendingOwnershipTransfer.fromUserId === myId || pendingOwnershipTransfer.toUserId === myId) ? (
           <OwnershipTransferPendingBanner
