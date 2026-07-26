@@ -150,7 +150,19 @@ function computeAnchorPositions(
       screenWidth - reactionPillWidth - EDGE_PADDING
     )
   );
-  const actionsTop = bubbleTop + bubbleHeight + BUBBLE_TO_MENU_GAP;
+  const actionsTopUnclamped = bubbleTop + bubbleHeight + BUBBLE_TO_MENU_GAP;
+  let actionsTop = actionsTopUnclamped;
+  if (actionsTop + cardHeight > maxBottom) {
+    actionsTop = Math.max(minTop, maxBottom - cardHeight);
+  }
+  // Tall media: prefer parking the menu above the bubble so every action stays visible.
+  if (actionsTop < bubbleTop + bubbleHeight && bubbleHeight > screenHeight * 0.35) {
+    const aboveBubble = bubbleTop - BUBBLE_TO_MENU_GAP - cardHeight;
+    if (aboveBubble >= minTop + REACTION_PILL_HEIGHT + STACK_GAP) {
+      actionsTop = aboveBubble;
+    }
+  }
+
   const actionsLeft = alignRight
     ? Math.max(EDGE_PADDING, bubbleLeft + layout.width - ACTION_CARD_WIDTH)
     : Math.max(EDGE_PADDING, bubbleLeft);

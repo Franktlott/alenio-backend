@@ -1361,7 +1361,12 @@ export default function DMChatScreen() {
             icon: Trash2,
             destructive: true,
             separatorBefore: true,
-            hidden: messageMenu?.message.senderId !== currentUserId,
+            hidden: !(
+              !!messageMenu &&
+              !!currentUserId &&
+              (messageMenu.message.senderId === currentUserId ||
+                (isGroup && (myGroupRole === "owner" || myGroupRole === "admin")))
+            ),
             onPress: () => {
               if (messageMenu) setDeleteTarget(messageMenu.message);
             },

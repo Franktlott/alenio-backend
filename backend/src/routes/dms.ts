@@ -776,6 +776,7 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
 
   const participant = await prisma.conversationParticipant.findUnique({
     where: { conversationId_userId: { conversationId, userId: user.id } },
+    include: { conversation: { select: { isGroup: true } } },
   });
   if (!participant) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
 
@@ -783,7 +784,12 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
   if (!message || message.conversationId !== conversationId) {
     return c.json({ error: { message: "Message not found", code: "NOT_FOUND" } }, 404);
   }
-  if (message.senderId !== user.id) {
+
+  const isOwnMessage = message.senderId === user.id;
+  const canModerateGroup =
+    participant.conversation.isGroup &&
+    (participant.role === "owner" || participant.role === "admin");
+  if (!isOwnMessage && !canModerateGroup) {
     return c.json({ error: { message: "Cannot delete someone else's message", code: "FORBIDDEN" } }, 403);
   }
 
