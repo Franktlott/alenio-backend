@@ -13,6 +13,7 @@ import {
 } from "../lib/api";
 import { loadWebCheckoutConfig, peekWebCheckoutConfig, type WebCheckoutConfig } from "../lib/checkout-config-cache";
 import { LEGAL_CONTACT_EMAIL } from "../lib/legal-constants";
+import { OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED } from "../lib/plan-catalog";
 
 const FREE_FEATURES = ["Activity feed", "Team chat", "Team members (limited)"] as const;
 const PRO_CARD_FEATURES = [
@@ -303,6 +304,7 @@ export function BillingPage() {
   const canCheckoutPro =
     isOwner && !!sub && !mobileManaged && currentPlanTier === "free" && proCheckoutReady;
   const canCheckoutOperations =
+    OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED &&
     isOwner &&
     !!sub &&
     !mobileManaged &&
@@ -516,8 +518,15 @@ export function BillingPage() {
           </article>
 
           <article
-            className={`billing-card${currentPlanTier === "operations" ? " billing-card--current" : ""}`}
+            className={`billing-card${currentPlanTier === "operations" ? " billing-card--current" : ""}${
+              currentPlanTier !== "operations" && !OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED
+                ? " billing-card--coming-soon"
+                : ""
+            }`}
             aria-labelledby="billing-ops-heading"
+            aria-disabled={
+              currentPlanTier !== "operations" && !OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? true : undefined
+            }
           >
             <div className="billing-card-head">
               <div className="billing-card-name-row">
@@ -526,6 +535,9 @@ export function BillingPage() {
                 </h2>
                 <AlenioGoLogo variant="nav" className="billing-go-logo" />
                 <span className="billing-badge billing-badge--ops">Go</span>
+                {currentPlanTier !== "operations" && !OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? (
+                  <span className="billing-badge billing-badge--coming-soon">Coming soon</span>
+                ) : null}
               </div>
               <p className="billing-card-tag">Advanced tools for high performing teams</p>
             </div>
@@ -544,6 +556,10 @@ export function BillingPage() {
             {currentPlanTier === "operations" ? (
               <button type="button" className="billing-cta billing-cta--current" disabled>
                 Current plan
+              </button>
+            ) : !OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? (
+              <button type="button" className="billing-cta billing-cta--coming-soon" disabled>
+                Coming soon
               </button>
             ) : (
               <button

@@ -85,6 +85,15 @@ export async function createTeamCheckoutSession(opts: {
   plan?: StripeCheckoutPlan;
 }): Promise<BillingCheckoutResult> {
   const checkoutPlan: StripeCheckoutPlan = opts.plan === "operations" ? "operations" : "pro";
+  if (checkoutPlan === "operations") {
+    return {
+      error: {
+        message: "Operations is coming soon. Self-serve checkout is not available yet.",
+        code: "COMING_SOON",
+      },
+      status: 503,
+    };
+  }
   if (!isStripeCheckoutPlanConfigured(checkoutPlan)) {
     return {
       error: {

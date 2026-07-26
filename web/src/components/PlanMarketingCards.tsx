@@ -7,6 +7,7 @@ import {
   OPERATIONS_FEATURES,
   OPERATIONS_PRICE_AMOUNT,
   OPERATIONS_PRICE_PERIOD,
+  OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED,
   PRO_BEST_FOR,
   PRO_FEATURES,
   PRO_PRICE_AMOUNT,
@@ -115,10 +116,21 @@ export function PlanMarketingCards({ className = "" }: Props) {
         <p className="site-pricing-cta-note">Cancel anytime · Secure checkout on web</p>
       </section>
 
-      <section className="site-pricing-card site-pricing-card-enterprise" aria-labelledby="pricing-operations-heading">
-        <h2 id="pricing-operations-heading" className="site-pricing-card-title">
-          Operations
-        </h2>
+      <section
+        className={`site-pricing-card site-pricing-card-enterprise${
+          OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? "" : " site-pricing-card--coming-soon"
+        }`}
+        aria-labelledby="pricing-operations-heading"
+        aria-disabled={OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? undefined : true}
+      >
+        <div className="site-pricing-card-title-row">
+          <h2 id="pricing-operations-heading" className="site-pricing-card-title">
+            Operations
+          </h2>
+          {!OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? (
+            <span className="site-pricing-coming-soon-badge">Coming soon</span>
+          ) : null}
+        </div>
         <p className="site-pricing-card-tagline">{OPERATIONS_BEST_FOR}</p>
         <div className="site-pricing-price">
           <span className="site-pricing-price-amount site-pricing-price-amount-enterprise">{OPERATIONS_PRICE_AMOUNT}</span>
@@ -135,10 +147,21 @@ export function PlanMarketingCards({ className = "" }: Props) {
             </li>
           ))}
         </ul>
-        <Link to="/sign-up" className="site-v2-btn site-v2-btn-primary site-pricing-cta">
-          Start with Operations
-        </Link>
-        <p className="site-pricing-cta-note">Includes Alenio Go · Secure checkout on web</p>
+        {OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? (
+          <>
+            <Link to="/sign-up" className="site-v2-btn site-v2-btn-primary site-pricing-cta">
+              Start with Operations
+            </Link>
+            <p className="site-pricing-cta-note">Includes Alenio Go · Secure checkout on web</p>
+          </>
+        ) : (
+          <>
+            <button type="button" className="site-v2-btn site-pricing-cta site-pricing-cta--coming-soon" disabled>
+              Coming soon
+            </button>
+            <p className="site-pricing-cta-note">Self-serve Operations is not available yet</p>
+          </>
+        )}
       </section>
     </div>
   );

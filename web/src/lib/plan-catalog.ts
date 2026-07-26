@@ -44,6 +44,9 @@ export const PRO_PRICE_PERIOD = "per workspace / month";
 export const OPERATIONS_PRICE_AMOUNT = "$69.99";
 export const OPERATIONS_PRICE_PERIOD = "per workspace / month";
 
+/** Flip to true when Operations self-serve checkout is ready for customers. */
+export const OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED = false;
+
 /** @deprecated Prefer PRO_* — kept for any lingering imports during rename. */
 export const TEAM_FEATURES = PRO_FEATURES;
 export const TEAM_PRICE_AMOUNT = PRO_PRICE_AMOUNT;

@@ -37719,6 +37719,43 @@ button.enterprise-profile-legal-link {
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
 }
 
+.site-pricing-card--coming-soon {
+  opacity: 0.55;
+  filter: grayscale(0.35);
+  pointer-events: none;
+  user-select: none;
+}
+
+.site-pricing-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.site-pricing-coming-soon-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.site-pricing-cta--coming-soon {
+  width: 100%;
+  justify-content: center;
+  background: #e2e8f0 !important;
+  color: #64748b !important;
+  border: 1px solid #cbd5e1 !important;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .site-pricing-price-amount-enterprise {
   color: #0f172a;
 }
@@ -42951,6 +42988,27 @@ button.enterprise-profile-legal-link {
 
 .billing-card--current:not(.billing-card--pro) {
   border-color: #c7d2fe;
+}
+
+.billing-card--coming-soon {
+  opacity: 0.55;
+  filter: grayscale(0.35);
+  background: #f8fafc;
+  pointer-events: none;
+  user-select: none;
+}
+
+.billing-badge--coming-soon {
+  background: #e2e8f0;
+  color: #475569;
+  letter-spacing: 0.04em;
+}
+
+.billing-cta--coming-soon {
+  background: #e2e8f0;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+  cursor: not-allowed;
 }
 
 .billing-badge {
