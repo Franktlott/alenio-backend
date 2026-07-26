@@ -31,7 +31,7 @@ import { completeOwnershipTransferPayment } from "@/lib/ownership-transfer-api";
 
 type Status = "working" | "done" | "needs_card" | "canceled" | "error";
 
-const HOLD_MS = 4200;
+const HOLD_MS = 6000;
 
 function paramOne(v: string | string[] | undefined): string {
   if (typeof v === "string") return v.trim();
