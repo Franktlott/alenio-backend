@@ -21,7 +21,9 @@ import {
   SlidersHorizontal,
 } from "lucide-react-native";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Image as ExpoImage } from "expo-image";
 import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
+import { resolveUserImageUrl } from "@/lib/user-avatar";
 import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { tabBarClearance, SENECA_FAB_SIZE, SENECA_FAB_VISIBLE_SIZE } from "@/lib/tab-bar";
@@ -200,6 +202,13 @@ export default function ActivityScreen() {
   const currentUserId = authReady?.me?.id ?? session?.user?.id;
   const persistedPlan = useSubscriptionStore((s) => s.plan);
 
+  useEffect(() => {
+    const uri = resolveUserImageUrl(authReady?.me?.image);
+    if (uri) {
+      void ExpoImage.prefetch(uri);
+    }
+  }, [authReady?.me?.image]);
+
   const { data: teams = [] } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
@@ -314,13 +323,13 @@ export default function ActivityScreen() {
       workspaceFilteredActivities
         .map(mapApiActivityToFeedItem)
         .map((item) =>
-          item.actor?.id === authReady?.me?.id
+          item.actor?.id && authReady?.me?.id && item.actor.id === authReady.me.id
             ? {
                 ...item,
                 actor: {
                   ...item.actor,
-                  name: authReady.me.name,
-                  image: authReady.me.image,
+                  name: authReady.me.name || item.actor.name,
+                  image: authReady.me.image ?? item.actor.image,
                 },
               }
             : item,
@@ -962,12 +971,16 @@ export default function ActivityScreen() {
           ) : (
             <FlatList
               data={listRows}
-              keyExtractor={(row, index) => {
+              keyExtractor={(row) => {
                 if (row.kind === "empty-filter") return "empty-filter";
                 if (row.kind === "section") return `section-${row.section.group}`;
                 if (row.kind === "group") return row.group.id;
-                return `item-${row.item.id}-${index}`;
+                return `item-${row.item.id}`;
               }}
+              extraData={authReady?.me?.image ?? null}
+              initialNumToRender={12}
+              windowSize={8}
+              removeClippedSubviews={false}
               renderItem={({ item: row, index }) => {
                 if (row.kind === "empty-filter") {
                   return (

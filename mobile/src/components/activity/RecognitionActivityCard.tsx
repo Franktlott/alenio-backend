@@ -32,6 +32,7 @@ export function RecognitionActivityCard({
         timestamp={item.timestamp}
         description={item.description ?? `${actorName} recognized a teammate`}
         metadata="Recognition"
+        avatarResetKey={item.id}
       />
     </ActivityCardShell>
   );

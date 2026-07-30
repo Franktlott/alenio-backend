@@ -22,6 +22,8 @@ type Props = {
   /** Bottom-right action (ghost button, etc.) */
   action?: ReactNode;
   children?: ReactNode;
+  /** Activity row id — keeps FlatList recycled avatars from sticking on initials */
+  avatarResetKey?: string | number | null;
 };
 
 export function ActivityCardBody({
@@ -35,6 +37,7 @@ export function ActivityCardBody({
   metadata,
   action,
   children,
+  avatarResetKey,
 }: Props) {
   const displayName = memberName ?? actor.name;
   const headline = description ?? displayName;
@@ -62,6 +65,7 @@ export function ActivityCardBody({
         radius={ACTIVITY_LAYOUT.avatarSize / 2}
         backgroundColor={ACTIVITY_COLORS.slate100}
         textColor={ACTIVITY_COLORS.slate500}
+        resetKey={avatarResetKey}
       />
 
       <View style={{ flex: 1, minWidth: 0 }}>

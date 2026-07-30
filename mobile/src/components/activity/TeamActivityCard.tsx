@@ -35,6 +35,7 @@ export function TeamActivityCard({ item, footer, onLongPress, testID }: Props) {
         timestamp={item.timestamp}
         memberName={actorName}
         description={description}
+        avatarResetKey={item.id}
       />
     </ActivityCardShell>
   );

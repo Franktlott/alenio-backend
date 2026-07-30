@@ -54,6 +54,7 @@ export function GroupedActivityRow({
           radius={14}
           backgroundColor="#FFFFFF"
           textColor="#64748B"
+          resetKey={group.id}
         />
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>

@@ -11,7 +11,8 @@
     "db:push": "bun run sync-env && bunx prisma db push",
     "studio": "bunx prisma studio",
     "typecheck": "tsc --noEmit",
-    "test": "bun test src/lib/walks src/lib/dm-pair-key.test.ts",
+    "test": "bun test src/lib/walks src/lib/dm-pair-key.test.ts src/lib/merge-users.test.ts",
+    "test:merge-users": "MERGE_INTEGRATION=1 bun test src/lib/merge-users.integration.test.ts",
     "test:seneca-focus": "bun test src/lib/seneca-focus-engine.test.ts",
     "ensure:seneca-focus": "bun run scripts/ensure-seneca-team-brief.ts",
     "seed:cooler-walk": "bun run scripts/seed-cooler-walk.ts"

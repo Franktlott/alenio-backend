@@ -51,6 +51,7 @@ export function EventActivityCard({ item, footer, onLongPress, testID }: Props) 
         memberName={actorName}
         description={description}
         metadata={metadata}
+        avatarResetKey={item.id}
       />
     </ActivityCardShell>
   );

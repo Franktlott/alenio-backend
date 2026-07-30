@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,11 +9,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { router, useFocusEffect } from "expo-router";
 import { Search, X } from "lucide-react-native";
-import { router } from "expo-router";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
-import { useSession } from "@/lib/auth/use-session";
+import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { User, Team } from "@/lib/types";
 import { resolveUserImageUrl } from "@/lib/user-avatar";
@@ -21,6 +21,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 
 export default function NewDMScreen() {
   const { data: session } = useSession();
+  const { data: authReady } = useMobileAuthReady();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -35,7 +36,16 @@ export default function NewDMScreen() {
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
     enabled: !!activeTeamId,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!activeTeamId) return;
+      void queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+    }, [activeTeamId, queryClient]),
+  );
 
   const {
     data: searchResults = [],
@@ -72,13 +82,40 @@ export default function NewDMScreen() {
     },
   });
 
-  const currentUserId = session?.user?.id ?? "";
-  const teamMembers: User[] = (team?.members ?? [])
-    .filter((m) => m.userId !== currentUserId)
-    .map((m) => m.user);
+  const currentUserId = authReady?.me?.id ?? session?.user?.id ?? "";
+  const meImage = authReady?.me?.image ?? session?.user?.image ?? null;
+
+  const withLiveImage = useCallback(
+    (user: User): User => {
+      if (!user?.id) return user;
+      if (user.id === currentUserId && meImage) {
+        return { ...user, image: meImage };
+      }
+      return {
+        ...user,
+        image: user.image ?? null,
+      };
+    },
+    [currentUserId, meImage],
+  );
+
+  const teamMembers: User[] = useMemo(
+    () =>
+      (team?.members ?? [])
+        .filter((m) => m.userId !== currentUserId && m.user?.id !== currentUserId)
+        .map((m) =>
+          withLiveImage({
+            id: m.user.id,
+            name: m.user.name,
+            email: m.user.email,
+            image: m.user.image ?? null,
+          }),
+        ),
+    [team?.members, currentUserId, withLiveImage],
+  );
 
   const displayUsers = searchQuery.trim().length >= 2
-    ? searchResults.filter((u) => u.id !== currentUserId)
+    ? searchResults.filter((u) => u.id !== currentUserId).map(withLiveImage)
     : teamMembers;
 
   return (
@@ -178,6 +215,8 @@ export default function NewDMScreen() {
           testID="dm-user-list"
           data={displayUsers}
           keyExtractor={(item) => item.id}
+          extraData={meImage}
+          removeClippedSubviews={false}
           ListHeaderComponent={
             !searchQuery.trim() ? (
               <Text className="px-4 pt-3 pb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
@@ -207,6 +246,7 @@ export default function NewDMScreen() {
                 textColor="#FFFFFF"
                 fontSize={14}
                 style={{ marginRight: 12 }}
+                resetKey={item.id}
               />
               <View className="flex-1">
                 <Text className="font-semibold text-slate-900 dark:text-white">{item.name}</Text>

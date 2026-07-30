@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { env } from "../env";
 import { prisma } from "../prisma";
 import { createEmailPasswordUser } from "../auth";
+import { findDuplicateUserCandidates, mergeUserAccounts, MergeUsersError } from "../lib/merge-users";
 
 const adminRouter = new Hono();
 
@@ -218,6 +219,48 @@ adminRouter.post("/api/promote-user", async (c) => {
   });
 });
 
+// Accounts that look like the same person twice (photo/history split across two records)
+adminRouter.get("/api/duplicate-users", async (c) => {
+  const candidates = await findDuplicateUserCandidates();
+  return c.json({ data: candidates });
+});
+
+// Fold one account into another. Send dryRun first to see exactly what would move.
+adminRouter.post("/api/merge-users", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as {
+    sourceId?: string;
+    targetId?: string;
+    dryRun?: boolean;
+    force?: boolean;
+  };
+  const sourceId = body.sourceId?.trim();
+  const targetId = body.targetId?.trim();
+  if (!sourceId || !targetId) {
+    return c.json({ error: "sourceId and targetId are required" }, 400);
+  }
+
+  try {
+    const report = await mergeUserAccounts({
+      sourceId,
+      targetId,
+      dryRun: body.dryRun !== false,
+      force: body.force === true,
+    });
+    if (!report.dryRun) {
+      console.warn(
+        `[admin] merged user ${report.source.id} (${report.source.email}) into ${report.target.id} (${report.target.email}): ${report.rowsMoved} rows moved, ${report.rowsDropped} dropped`,
+      );
+    }
+    return c.json({ data: report });
+  } catch (err) {
+    if (err instanceof MergeUsersError) {
+      return c.json({ error: err.message, code: err.code }, 400);
+    }
+    console.error("[admin] merge-users failed", err);
+    return c.json({ error: "Merge failed. Nothing was changed." }, 500);
+  }
+});
+
 // Serve the admin dashboard HTML
 adminRouter.get("/", (c) => {
   const html = `<!DOCTYPE html>
@@ -296,6 +339,32 @@ adminRouter.get("/", (c) => {
 
     .tab-content { display: none; }
     .tab-content.active { display: block; }
+
+    /* Duplicate accounts */
+    .dupe-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .dupe-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .dupe-card .hint { color: #94a3b8; font-size: 13px; margin-bottom: 16px; }
+    .dupe-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid #334155; border-radius: 10px; margin-bottom: 10px; cursor: pointer; }
+    .dupe-row.chosen { border-color: #6366f1; background: #232f4b; }
+    .dupe-row input { margin-top: 4px; accent-color: #6366f1; }
+    .dupe-row .who { flex: 1; }
+    .dupe-row .who strong { font-size: 14px; }
+    .dupe-row .who div { color: #94a3b8; font-size: 12px; margin-top: 3px; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; margin-left: 6px; }
+    .pill-live { background: #064e3b; color: #34d399; }
+    .pill-photo { background: #1e3a5f; color: #60a5fa; }
+    .pill-nophoto { background: #3b2f12; color: #fbbf24; }
+    .dupe-actions { display: flex; gap: 10px; margin-top: 14px; }
+    .btn-sm { padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
+    .btn-secondary { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
+    .btn-secondary:hover { border-color: #6366f1; color: #fff; }
+    .btn-danger { background: #b91c1c; color: #fff; }
+    .btn-danger:hover { background: #991b1b; }
+    .btn-sm:disabled { opacity: 0.5; cursor: default; }
+    .merge-report { margin-top: 14px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 14px; font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #cbd5e1; display: none; }
+    .merge-report.visible { display: block; }
+    .merge-report.bad { border-color: #b91c1c; color: #fca5a5; }
+    .empty-state { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; text-align: center; color: #94a3b8; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -344,6 +413,7 @@ adminRouter.get("/", (c) => {
       <button class="tab active" onclick="switchTab('users')">Users</button>
       <button class="tab" onclick="switchTab('teams')">Teams</button>
       <button class="tab" onclick="switchTab('tasks')">Tasks</button>
+      <button class="tab" onclick="switchTab('duplicates')">Duplicate People</button>
     </div>
 
     <!-- Users Tab -->
@@ -392,6 +462,15 @@ adminRouter.get("/", (c) => {
           <tbody id="tasks-body"></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- Duplicate People Tab -->
+    <div class="tab-content" id="tab-duplicates">
+      <div class="section-title">
+        Accounts sharing a name — one person with two records
+        <button class="btn-sm btn-secondary" style="margin-left:12px" onclick="loadDuplicates()">Refresh</button>
+      </div>
+      <div id="duplicates-list"><div class="loading">Loading...</div></div>
     </div>
   </div>
 </div>
@@ -509,11 +588,139 @@ adminRouter.get("/", (c) => {
     document.getElementById('tasks-table').style.display = 'table';
   }
 
+  let duplicateGroups = [];
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  }
+
+  // The record the person actually signs in with is the one to keep; a live session is the
+  // strongest signal, then an uploaded photo, then how much of the workspace it holds.
+  function keepScore(account) {
+    return (account.activeSessions > 0 ? 100 : 0) + (account.image ? 10 : 0) + Math.min(account.counts.teams, 9);
+  }
+
+  function recommendedIndex(group) {
+    let best = 0;
+    group.accounts.forEach((account, index) => {
+      if (keepScore(account) > keepScore(group.accounts[best])) best = index;
+    });
+    return best;
+  }
+
+  function renderAccount(groupIndex, accountIndex, account, checked) {
+    const pills = [
+      account.activeSessions > 0 ? '<span class="pill pill-live">signed in now</span>' : '',
+      account.image ? '<span class="pill pill-photo">has photo</span>' : '<span class="pill pill-nophoto">no photo</span>',
+    ].join('');
+    const counts = [
+      account.counts.teams + ' workspaces',
+      account.counts.activities + ' activity rows',
+      (account.counts.teamMessages + account.counts.directMessages) + ' messages',
+      account.counts.taskAssignments + ' assigned tasks',
+    ].join(' · ');
+    const teams = account.teams.map(t => escapeHtml(t.teamName) + ' (' + escapeHtml(t.role) + ')').join(', ') || 'no workspaces';
+
+    return \`<label class="dupe-row \${checked ? 'chosen' : ''}" id="dupe-row-\${groupIndex}-\${accountIndex}">
+      <input type="radio" name="keep-\${groupIndex}" value="\${accountIndex}" \${checked ? 'checked' : ''} onchange="chooseKeep(\${groupIndex}, \${accountIndex})" />
+      <div class="who">
+        <strong>\${escapeHtml(account.email)}</strong>\${pills}
+        <div>\${counts}</div>
+        <div>\${teams}</div>
+        <div>created \${fmt(account.createdAt)} · id \${escapeHtml(account.id)}</div>
+      </div>
+    </label>\`;
+  }
+
+  function renderGroup(group, groupIndex) {
+    const keep = recommendedIndex(group);
+    const shared = group.sharedTeamIds.length > 0 ? ' They share a workspace, so this person appears twice in that roster.' : '';
+    return \`<div class="dupe-card">
+      <h3>\${escapeHtml(group.accounts[0].name)}</h3>
+      <div class="hint">\${group.accounts.length} records share this name.\${shared} Keep the account this person signs in with — everything else (workspaces, chats, tasks, activity, photo) moves onto it.</div>
+      \${group.accounts.map((account, index) => renderAccount(groupIndex, index, account, index === keep)).join('')}
+      <div class="dupe-actions">
+        <button class="btn-sm btn-secondary" onclick="runMerge(\${groupIndex}, true)">Preview changes</button>
+        <button class="btn-sm btn-danger" onclick="runMerge(\${groupIndex}, false)">Merge for real</button>
+      </div>
+      <div class="merge-report" id="dupe-report-\${groupIndex}"></div>
+    </div>\`;
+  }
+
+  function chooseKeep(groupIndex, accountIndex) {
+    duplicateGroups[groupIndex].accounts.forEach((_, index) => {
+      const row = document.getElementById('dupe-row-' + groupIndex + '-' + index);
+      if (row) row.classList.toggle('chosen', index === accountIndex);
+    });
+  }
+
+  async function loadDuplicates() {
+    const container = document.getElementById('duplicates-list');
+    container.innerHTML = '<div class="loading">Loading...</div>';
+    duplicateGroups = (await apiFetch('duplicate-users')) || [];
+    if (duplicateGroups.length === 0) {
+      container.innerHTML = '<div class="empty-state">No duplicate accounts found — every person has a single record.</div>';
+      return;
+    }
+    container.innerHTML = duplicateGroups.map(renderGroup).join('');
+  }
+
+  function formatReport(report) {
+    const lines = [];
+    lines.push((report.dryRun ? 'PREVIEW  ' : 'MERGED  ') + report.source.email + '  ->  ' + report.target.email);
+    lines.push('  rows moved: ' + report.rowsMoved + '   duplicate rows dropped: ' + report.rowsDropped);
+    const filled = Object.keys(report.profileUpdates || {});
+    if (filled.length) lines.push('  copied onto the kept account: ' + filled.join(', '));
+    if (report.teamRoleUpgrades.length) lines.push('  workspace role kept: ' + report.teamRoleUpgrades.map(u => u.from + ' -> ' + u.to).join(', '));
+    if (report.conversationsDeleted) lines.push('  empty duplicate chats removed: ' + report.conversationsDeleted);
+    if (report.dmPairKeysRepaired) lines.push('  chat links repaired: ' + report.dmPairKeysRepaired);
+    for (const table of report.tables) {
+      lines.push('    ' + table.model + '.' + table.column + ': ' + table.moved + ' moved' + (table.droppedConflicts ? ', ' + table.droppedConflicts + ' dropped' : ''));
+    }
+    return lines.join('\\n');
+  }
+
+  async function runMerge(groupIndex, dryRun) {
+    const group = duplicateGroups[groupIndex];
+    const checked = document.querySelector('input[name="keep-' + groupIndex + '"]:checked');
+    if (!checked) return;
+    const target = group.accounts[Number(checked.value)];
+    const sources = group.accounts.filter((_, index) => index !== Number(checked.value));
+    const report = document.getElementById('dupe-report-' + groupIndex);
+
+    if (!dryRun && !confirm('Merge ' + sources.length + ' account(s) into ' + target.email + '?\\n\\nThe other record(s) will be deleted. This cannot be undone.')) return;
+
+    report.className = 'merge-report visible';
+    report.textContent = dryRun ? 'Checking…' : 'Merging…';
+
+    const lines = [];
+    for (const source of sources) {
+      const res = await fetch('/admin/api/merge-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw },
+        body: JSON.stringify({ sourceId: source.id, targetId: target.id, dryRun: dryRun }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        report.className = 'merge-report visible bad';
+        report.textContent = lines.concat([source.email + ': ' + (json.error || 'merge failed')]).join('\\n\\n');
+        return;
+      }
+      lines.push(formatReport(json.data));
+    }
+
+    report.textContent = lines.join('\\n\\n') + (dryRun
+      ? '\\n\\nNothing has changed yet. Press "Merge for real" to apply.'
+      : '\\n\\nDone. Press Refresh to reload this list.');
+    if (!dryRun) { loadStats(); loadUsers(); }
+  }
+
   function loadAll() {
     loadStats();
     loadUsers();
     loadTeams();
     loadTasks();
+    loadDuplicates();
   }
 
   function switchTab(name) {

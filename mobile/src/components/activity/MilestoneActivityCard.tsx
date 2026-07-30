@@ -39,6 +39,7 @@ export function MilestoneActivityCard({ item, footer, onLongPress, testID }: Pro
         memberName={actorName}
         description={description}
         metadata={isPersonalBest ? "Keep it up" : "Great work"}
+        avatarResetKey={item.id}
       />
     </ActivityCardShell>
   );
