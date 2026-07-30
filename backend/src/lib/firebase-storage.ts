@@ -245,6 +245,20 @@ export async function deleteReplacedStorageObject(
   const prev = previousUrl?.trim() || "";
   const next = nextUrl?.trim() || "";
   if (!prev || prev === next) return;
+
+  // Profile (and other fixed-slot) uploads overwrite the same object path with a new
+  // download token. Deleting by the old URL would remove the file we just wrote.
+  const prevObject = parseObjectFromStorageUrl(prev);
+  const nextObject = next ? parseObjectFromStorageUrl(next) : null;
+  if (
+    prevObject &&
+    nextObject &&
+    prevObject.bucketId === nextObject.bucketId &&
+    prevObject.objectPath === nextObject.objectPath
+  ) {
+    return;
+  }
+
   await deleteStorageObjectByUrlIfOwned(prev);
 }
 
