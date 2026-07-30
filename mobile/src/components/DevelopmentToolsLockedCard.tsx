@@ -66,7 +66,7 @@ export function DevelopmentToolsLockedCard({
         backgroundColor: "#FFFFFF",
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: "#E8ECF1",
+        borderColor: "#F1F5F9",
         overflow: "hidden",
       }}
     >

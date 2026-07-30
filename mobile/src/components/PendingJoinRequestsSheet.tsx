@@ -6,10 +6,10 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, Smartphone, UserPlus, X } from "lucide-react-native";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export type JoinRequestRow = {
   id: string;
@@ -216,25 +216,14 @@ export function PendingJoinRequestsSheet({
                       }}
                       testID={`join-request-row-${req.id}`}
                     >
-                      <View
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
-                          backgroundColor: "#EEF2FF",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {req.user?.image ? (
-                          <Image source={{ uri: req.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-                        ) : (
-                          <Text style={{ fontSize: 14, fontWeight: "800", color: "#4361EE" }}>
-                            {name[0]?.toUpperCase() ?? "?"}
-                          </Text>
-                        )}
-                      </View>
+                      <UserAvatar
+                        user={req.user ?? { name, email, image: null }}
+                        size={36}
+                        radius={18}
+                        backgroundColor="#EEF2FF"
+                        textColor="#4361EE"
+                        fontSize={14}
+                      />
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
                           {name}

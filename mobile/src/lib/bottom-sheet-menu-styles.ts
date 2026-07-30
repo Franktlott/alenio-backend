@@ -99,7 +99,7 @@ export const bottomSheetMenu = {
     marginBottom: 8,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     paddingHorizontal: 10,
     gap: 8,

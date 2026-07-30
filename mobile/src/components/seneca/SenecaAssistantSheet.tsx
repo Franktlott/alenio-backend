@@ -558,7 +558,12 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                 <SenecaIcon size={28} />
               </View>
               <View style={styles.headerText}>
-                <Text style={styles.headerTitle}>Seneca</Text>
+                <View style={styles.headerTitleRow}>
+                  <Text style={styles.headerTitle}>Seneca</Text>
+                  <View style={styles.headerBadge}>
+                    <Text style={styles.headerBadgeText}>BETA</Text>
+                  </View>
+                </View>
                 <Text style={styles.headerSubtitle}>AI Leadership Assistant</Text>
               </View>
               <View style={styles.headerActions}>
@@ -858,11 +863,31 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   headerText: { flex: 1, minWidth: 0 },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
   headerTitle: {
     fontSize: 17,
     fontWeight: "700",
     color: COLORS.text,
     letterSpacing: -0.25,
+  },
+  headerBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FDBA74",
+  },
+  headerBadgeText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#C2410C",
+    letterSpacing: 0.3,
   },
   headerSubtitle: {
     fontSize: 12,

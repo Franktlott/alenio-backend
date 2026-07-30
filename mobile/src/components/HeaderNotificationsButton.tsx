@@ -4,7 +4,6 @@ import {
   Text,
   Pressable,
   ActivityIndicator,
-  Image,
   Alert,
   Linking,
 } from "react-native";
@@ -14,6 +13,7 @@ import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
@@ -430,9 +430,9 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
         }
         testID={testID}
         style={({ pressed }) => ({
-          width: 34,
-          height: 34,
-          borderRadius: 17,
+          width: 32,
+          height: 32,
+          borderRadius: 16,
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: "rgba(255,255,255,0.16)",
@@ -444,12 +444,12 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
           <View
             style={{
               position: "absolute",
-              top: 2,
-              right: 2,
-              minWidth: 16,
-              height: 16,
-              borderRadius: 8,
-              paddingHorizontal: 4,
+              top: 0,
+              right: 0,
+              minWidth: 14,
+              height: 14,
+              borderRadius: 7,
+              paddingHorizontal: 3,
               backgroundColor: "#EF4444",
               alignItems: "center",
               justifyContent: "center",
@@ -637,23 +637,14 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
             {joinRequests.map((req) => (
               <AlenioSheetCard key={req.id} compact>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: "#EEF2FF",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {req.user?.image ? (
-                      <Image source={{ uri: req.user.image }} style={{ width: 32, height: 32 }} />
-                    ) : (
-                      <UserPlus size={15} color="#4361EE" />
-                    )}
-                  </View>
+                  <UserAvatar
+                    user={req.user ?? { name: "Someone", email: null, image: null }}
+                    size={32}
+                    radius={16}
+                    backgroundColor="#EEF2FF"
+                    textColor="#4361EE"
+                    fontSize={12}
+                  />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
                       {req.user?.name ?? "Someone"}

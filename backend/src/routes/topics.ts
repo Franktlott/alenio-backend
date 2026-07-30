@@ -59,12 +59,12 @@ topicsRouter.get("/:teamId/topics", async (c) => {
     },
     orderBy: { updatedAt: "desc" },
     include: {
-      createdBy: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true, image: true } },
       _count: { select: { messages: true, members: true } },
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        include: { sender: { select: { id: true, name: true } } },
+        include: { sender: { select: { id: true, name: true, image: true } } },
       },
       members: {
         where: { userId: user.id },
@@ -209,7 +209,7 @@ topicsRouter.post("/:teamId/topics", async (c) => {
     return tx.topic.findUniqueOrThrow({
       where: { id: created.id },
       include: {
-        createdBy: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true, image: true } },
         _count: { select: { messages: true, members: true } },
       },
     });
@@ -409,7 +409,7 @@ topicsRouter.patch("/:teamId/topics/:topicId", async (c) => {
       ...(body.archived === false ? { archivedAt: null } : {}),
     },
     include: {
-      createdBy: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true, image: true } },
       _count: { select: { messages: true, members: true } },
     },
   });

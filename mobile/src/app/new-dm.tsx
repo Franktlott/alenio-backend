@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,6 +17,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { User, Team } from "@/lib/types";
 import { resolveUserImageUrl } from "@/lib/user-avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export default function NewDMScreen() {
   const { data: session } = useSession();
@@ -199,15 +199,15 @@ export default function NewDMScreen() {
               disabled={dmMutation.isPending}
               className="flex-row items-center px-4 py-3"
             >
-              <View className="w-10 h-10 rounded-full bg-indigo-500 items-center justify-center mr-3 overflow-hidden">
-                {item.image ? (
-                  <Image source={{ uri: item.image }} style={{ width: 40, height: 40 }} resizeMode="cover" />
-                ) : (
-                  <Text className="text-white font-bold text-sm">
-                    {item.name?.[0]?.toUpperCase() ?? "?"}
-                  </Text>
-                )}
-              </View>
+              <UserAvatar
+                user={item}
+                size={40}
+                radius={20}
+                backgroundColor="#6366F1"
+                textColor="#FFFFFF"
+                fontSize={14}
+                style={{ marginRight: 12 }}
+              />
               <View className="flex-1">
                 <Text className="font-semibold text-slate-900 dark:text-white">{item.name}</Text>
                 <Text className="text-xs text-slate-500">{item.email}</Text>

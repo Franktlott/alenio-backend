@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import type { AppUser } from "../auth";
+import { shouldSyncAuthImage } from "./auth-image-sync";
 
 export type SyncMatchedBy = "auth_user_id" | "email" | "created";
 
@@ -74,11 +75,9 @@ export async function syncAppUserFromAuth(authUser: AppUser): Promise<{
       if (authUser.name && authUser.name !== byId.name) {
         updates.name = authUser.name;
       }
-      if (authUser.image !== undefined && authUser.image !== byId.image) {
-        // Never wipe an uploaded app photo with a null/empty auth image (e.g. Microsoft OAuth strips photos).
-        if (authUser.image) {
-          updates.image = authUser.image;
-        }
+      if (shouldSyncAuthImage(byId.id, byId.image, authUser.image)) {
+        // Keep provider photos fresh, but never replace a user-uploaded app photo.
+        updates.image = authUser.image!;
       }
       // Merge platform admin from a legacy email-keyed row onto the Neon-id session row.
       if (!byId.isAdmin && byEmail && byEmail.id !== byId.id && byEmail.isAdmin) {
@@ -106,10 +105,8 @@ export async function syncAppUserFromAuth(authUser: AppUser): Promise<{
       // Keep profile fields fresh even when bound via email.
       const updates: { name?: string; image?: string | null } = {};
       if (authUser.name && authUser.name !== byEmail.name) updates.name = authUser.name;
-      if (authUser.image !== undefined && authUser.image !== byEmail.image) {
-        if (authUser.image) {
-          updates.image = authUser.image;
-        }
+      if (shouldSyncAuthImage(byEmail.id, byEmail.image, authUser.image)) {
+        updates.image = authUser.image!;
       }
       if (Object.keys(updates).length > 0) {
         user = await prisma.user.update({

@@ -1,5 +1,6 @@
 import { View, Text, Pressable } from "react-native";
 import { CalendarDays, ListTodo } from "lucide-react-native";
+import { colors, radii, space } from "@/theme";
 import { WS } from "./workspace-ui";
 
 export type WorkspaceViewMode = "calendar" | "tasks";
@@ -30,13 +31,13 @@ export function WorkspaceViewToggle({
   return (
     <View
       style={{
-        marginHorizontal: WS.pageGutter,
-        marginTop: WS.sectionGap,
-        marginBottom: 4,
+        marginHorizontal: WS.pageGutter + 8,
+        marginTop: space.sm,
+        marginBottom: space.xs,
         flexDirection: "row",
-        backgroundColor: WS.chipBg,
-        borderRadius: 10,
-        padding: 3,
+        backgroundColor: colors.surfaceSecondary,
+        borderRadius: radii.card,
+        padding: 2,
       }}
       testID="workspace-view-toggle"
     >
@@ -52,16 +53,16 @@ export function WorkspaceViewToggle({
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
-              gap: 5,
-              borderRadius: 8,
-              paddingVertical: 7,
-              backgroundColor: selected ? WS.accent : "transparent",
+              gap: 4,
+              borderRadius: radii.sm,
+              paddingVertical: 5,
+              backgroundColor: selected ? colors.brand : "transparent",
             }}
             testID={`workspace-view-${key}`}
             accessibilityLabel={showBadge ? `${label}, ${badge} new` : label}
           >
             <View style={{ position: "relative" }}>
-              <Icon size={14} color={selected ? "#FFFFFF" : WS.muted} strokeWidth={2.25} />
+              <Icon size={12} color={selected ? "#FFFFFF" : colors.textSecondary} strokeWidth={2.25} />
               {showBadge ? (
                 <View
                   style={{
@@ -71,12 +72,12 @@ export function WorkspaceViewToggle({
                     minWidth: 14,
                     height: 14,
                     borderRadius: 7,
-                    backgroundColor: "#EF4444",
+                    backgroundColor: colors.error,
                     alignItems: "center",
                     justifyContent: "center",
                     paddingHorizontal: 3,
                     borderWidth: 1.5,
-                    borderColor: selected ? WS.accent : WS.chipBg,
+                    borderColor: selected ? colors.brand : colors.surfaceSecondary,
                   }}
                   testID={`workspace-view-${key}-badge`}
                 >
@@ -88,9 +89,10 @@ export function WorkspaceViewToggle({
             </View>
             <Text
               style={{
-                fontSize: WS.control,
+                fontSize: 11,
+                lineHeight: 14,
                 fontWeight: WS.controlWeight,
-                color: selected ? "#FFFFFF" : WS.muted,
+                color: selected ? "#FFFFFF" : colors.textSecondary,
               }}
             >
               {label}

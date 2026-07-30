@@ -8,7 +8,6 @@ import {
   FlatList,
   TextInput,
   ActivityIndicator,
-  Image,
   Alert,
   type ListRenderItemInfo,
 } from "react-native";
@@ -17,8 +16,8 @@ import { Search, X, Check, UserMinus, Crown, Shield } from "lucide-react-native"
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import type { ConversationParticipant, GroupMemberCandidate, GroupParticipantRole } from "@/lib/types";
-import { resolveUserImageUrl } from "@/lib/user-avatar";
 import { bottomSheetMenu, bottomSheetSectionLabel } from "@/lib/bottom-sheet-menu-styles";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type GroupMembersResponse = {
   participants: ConversationParticipant[];
@@ -276,16 +275,16 @@ export function GroupManageModals({ conversationId, participants, currentUserId,
     participant: ConversationParticipant,
     action?: React.ReactNode,
   ) => {
-    const imageUrl = resolveUserImageUrl(participant.image);
     return (
       <View style={bottomSheetMenu.listRow}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={bottomSheetMenu.avatar} />
-        ) : (
-          <View style={bottomSheetMenu.avatarFallback}>
-            <Text style={{ color: "#4361EE", fontWeight: "700", fontSize: 13 }}>{participant.name?.[0]?.toUpperCase() ?? "?"}</Text>
-          </View>
-        )}
+        <UserAvatar
+          user={participant}
+          size={bottomSheetMenu.avatar.width}
+          radius={bottomSheetMenu.avatar.borderRadius}
+          backgroundColor="#EEF2FF"
+          textColor="#4361EE"
+          fontSize={13}
+        />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={bottomSheetMenu.memberName} numberOfLines={1}>
             {participant.name ?? participant.email ?? "Member"}
@@ -365,16 +364,16 @@ export function GroupManageModals({ conversationId, participants, currentUserId,
                   bounces
                   renderItem={({ item }) => {
                     const selected = selectedUsers.some((u) => u.id === item.id);
-                    const imageUrl = resolveUserImageUrl(item.image);
                     return (
                       <TouchableOpacity onPress={() => toggleUser(item)} style={bottomSheetMenu.listRow}>
-                        {imageUrl ? (
-                          <Image source={{ uri: imageUrl }} style={bottomSheetMenu.avatar} />
-                        ) : (
-                          <View style={bottomSheetMenu.avatarFallback}>
-                            <Text style={{ color: "#4361EE", fontWeight: "700", fontSize: 13 }}>{item.name?.[0]?.toUpperCase() ?? "?"}</Text>
-                          </View>
-                        )}
+                        <UserAvatar
+                          user={item}
+                          size={bottomSheetMenu.avatar.width}
+                          radius={bottomSheetMenu.avatar.borderRadius}
+                          backgroundColor="#EEF2FF"
+                          textColor="#4361EE"
+                          fontSize={13}
+                        />
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={bottomSheetMenu.memberName} numberOfLines={1}>{item.name ?? item.email}</Text>
                           <Text style={bottomSheetMenu.memberMeta} numberOfLines={1}>{item.workspaceLabel}</Text>

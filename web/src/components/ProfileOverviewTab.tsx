@@ -255,24 +255,28 @@ export function ProfileOverviewTab({
   const recognitionOk = givenCount + receivedCount > 0;
 
   const healthChecks = [
-    {
-      key: "checkins",
-      label: "Check-ins on schedule",
-      ok: Boolean(checkInsOk && publishedMeetings.length > 0),
-      detail:
-        publishedMeetings.length === 0
-          ? "No check-in yet"
-          : standardsCompliance?.checkInActionText ?? "On track",
-    },
-    {
-      key: "goals",
-      label: "Active development goals",
-      ok: Boolean(goalsOk && (!standards.goalsRequired || activeGoals.length > 0)),
-      detail:
-        activeGoals.length === 0
-          ? "No active goals"
-          : standardsCompliance?.goalsActionText ?? `${activeGoals.length} active`,
-    },
+    standards.checkInRequired
+      ? {
+          key: "checkins",
+          label: "Check-ins on schedule",
+          ok: Boolean(checkInsOk && publishedMeetings.length > 0),
+          detail:
+            publishedMeetings.length === 0
+              ? "No check-in yet"
+              : standardsCompliance?.checkInActionText ?? "On track",
+        }
+      : null,
+    standards.goalsRequired
+      ? {
+          key: "goals",
+          label: "Active development goals",
+          ok: Boolean(goalsOk && (!standards.goalsRequired || activeGoals.length > 0)),
+          detail:
+            activeGoals.length === 0
+              ? "No active goals"
+              : standardsCompliance?.goalsActionText ?? `${activeGoals.length} active`,
+        }
+      : null,
     {
       key: "recognition",
       label: "Recognition activity",
@@ -285,7 +289,12 @@ export function ProfileOverviewTab({
       ok: false,
       detail: "Coming soon",
     },
-  ];
+  ].filter(Boolean) as Array<{
+    key: string;
+    label: string;
+    ok: boolean;
+    detail: string;
+  }>;
 
   const healthScore = (() => {
     const applicable = healthChecks.filter((c) => c.key !== "feedback");
@@ -294,30 +303,34 @@ export function ProfileOverviewTab({
   })();
 
   const performanceCells = [
-    {
-      key: "checkins",
-      label: "Check-ins",
-      value: String(publishedMeetings.length),
-      pill:
-        publishedMeetings.length === 0
-          ? { text: "None yet", tone: "muted" as const }
-          : nextCheckIn.tone === "danger"
-            ? { text: "Overdue", tone: "danger" as const }
-            : nextCheckIn.tone === "warn"
-              ? { text: "Due soon", tone: "warn" as const }
-              : { text: "On track", tone: "ok" as const },
-    },
-    {
-      key: "goals",
-      label: "Goals",
-      value: String(activeGoals.length),
-      pill:
-        standards.goalsRequired && activeGoals.length < standards.minimumActiveGoals
-          ? { text: "Needs goals", tone: "danger" as const }
-          : activeGoals.length === 0
-            ? { text: "None", tone: "muted" as const }
-            : { text: "Active", tone: "ok" as const },
-    },
+    standards.checkInRequired
+      ? {
+          key: "checkins",
+          label: "Check-ins",
+          value: String(publishedMeetings.length),
+          pill:
+            publishedMeetings.length === 0
+              ? { text: "None yet", tone: "muted" as const }
+              : nextCheckIn.tone === "danger"
+                ? { text: "Overdue", tone: "danger" as const }
+                : nextCheckIn.tone === "warn"
+                  ? { text: "Due soon", tone: "warn" as const }
+                  : { text: "On track", tone: "ok" as const },
+        }
+      : null,
+    standards.goalsRequired
+      ? {
+          key: "goals",
+          label: "Goals",
+          value: String(activeGoals.length),
+          pill:
+            standards.goalsRequired && activeGoals.length < standards.minimumActiveGoals
+              ? { text: "Needs goals", tone: "danger" as const }
+              : activeGoals.length === 0
+                ? { text: "None", tone: "muted" as const }
+                : { text: "Active", tone: "ok" as const },
+        }
+      : null,
     {
       key: "recognition",
       label: "Recognition",
@@ -333,11 +346,17 @@ export function ProfileOverviewTab({
       value: "0",
       pill: { text: "Pending", tone: "muted" as const },
     },
-  ];
+  ].filter(Boolean) as Array<{
+    key: string;
+    label: string;
+    value: string;
+    pill: { text: string; tone: "muted" | "danger" | "warn" | "ok" };
+  }>;
 
   return (
     <div className="enterprise-mo">
       <section className="enterprise-mo-kpi-strip" aria-label="Key metrics">
+        {standards.goalsRequired ? (
         <article className="enterprise-mo-kpi">
           <span className="enterprise-mo-kpi-icon" aria-hidden>
             <IconTarget />
@@ -354,6 +373,8 @@ export function ProfileOverviewTab({
             </p>
           </div>
         </article>
+        ) : null}
+        {standards.checkInRequired ? (
         <article className="enterprise-mo-kpi">
           <span className="enterprise-mo-kpi-icon" aria-hidden>
             <IconCalendar />
@@ -366,6 +387,7 @@ export function ProfileOverviewTab({
             <p className="enterprise-mo-kpi-hint">{loading ? "…" : nextCheckIn.hint}</p>
           </div>
         </article>
+        ) : null}
         <article className="enterprise-mo-kpi">
           <span className="enterprise-mo-kpi-icon" aria-hidden>
             <IconTrophy />
@@ -415,6 +437,7 @@ export function ProfileOverviewTab({
             </div>
           </section>
 
+          {standards.goalsRequired ? (
           <section className="enterprise-mo-card">
             <header className="enterprise-mo-card-head">
               <h2 className="enterprise-mo-card-title">Development Goals</h2>
@@ -456,6 +479,7 @@ export function ProfileOverviewTab({
               </div>
             ) : null}
           </section>
+          ) : null}
         </div>
 
         <aside className="enterprise-mo-col-side">

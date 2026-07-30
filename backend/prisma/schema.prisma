@@ -69,6 +69,8 @@ model User {
   organizationSignupInvitesAccepted OrganizationSignupInvite[]
   ownershipTransfersFrom OwnershipTransfer[] @relation("OwnershipTransferFrom")
   ownershipTransfersTo OwnershipTransfer[] @relation("OwnershipTransferTo")
+  senecaFocusBriefs SenecaTeamBrief[] @relation("SenecaBriefGeneratedFor")
+  senecaFocusEvents SenecaTeamBriefEvent[] @relation("SenecaBriefEventActor")
 }
 
 model Session {
@@ -339,8 +341,28 @@ model Team {
   moduleTestSessions ModuleTestSession[]
   chatPins TeamChatPin[]
   ownershipTransfers OwnershipTransfer[]
+  healthSnapshots TeamHealthSnapshot[]
+  senecaFocusBriefs SenecaTeamBrief[]
+  senecaFocusEvents SenecaTeamBriefEvent[]
 
   @@index([organizationId])
+}
+
+model TeamHealthSnapshot {
+  id              String   @id @default(cuid())
+  teamId          String
+  snapshotDate    String
+  timezone        String
+  teamHealthPct   Int
+  checkInPct      Int?
+  goalsPct        Int?
+  tasksPct        Int
+  memberCount     Int
+  capturedAt      DateTime @default(now())
+  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, snapshotDate])
+  @@index([teamId, capturedAt])
 }
 
 /// Per-workspace lifecycle + operating mode for an Alenio module.
@@ -787,6 +809,8 @@ model Conversation {
   /** Workspace the group was created in (used to label cross-workspace chat lists). */
   teamId       String?
   team         Team?                     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  /** Sorted userIdA:userIdB for 1:1 DMs; unique so find-or-create is race-safe. */
+  dmPairKey    String?                   @unique
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
@@ -1703,5 +1727,63 @@ model SenecaGenerationFeedback {
   createdBy    String?
   createdAt    DateTime @default(now())
   generation   SenecaGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+}
+
+/// Deterministic manager focus persisted with its permission-safe facts and optional grounded copy.
+model SenecaTeamBrief {
+  id                   String    @id @default(cuid())
+  teamId               String
+  generatedForUserId   String
+  localDate            String
+  timezone             String
+  category             String
+  impact               String
+  status               String    @default("generated")
+  score                 Float
+  confidence            Float
+  estimatedMinutes     Int
+  affectedCount        Int
+  affectedMemberIds    Json      @default("[]")
+  candidateJson        Json
+  candidatesJson       Json
+  sourceMetricsJson    Json
+  materialFingerprint String
+  copyJson             Json
+  copySource           String    @default("deterministic")
+  projectedHealthPct   Int?
+  generatedAt          DateTime  @default(now())
+  expiresAt            DateTime
+  completedAt          DateTime?
+  completedByUserId    String?
+  refreshAvailableAt   DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  team         Team                   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  generatedFor User                   @relation("SenecaBriefGeneratedFor", fields: [generatedForUserId], references: [id], onDelete: Cascade)
+  events       SenecaTeamBriefEvent[]
+
+  @@index([teamId, generatedForUserId, localDate, status])
+  @@index([teamId, materialFingerprint])
+  @@index([expiresAt])
+}
+
+/// Dedicated lifecycle audit trail for manager focus brief events.
+model SenecaTeamBriefEvent {
+  id          String   @id @default(cuid())
+  briefId     String?
+  teamId      String
+  actorUserId String?
+  type        String
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  brief SenecaTeamBrief? @relation(fields: [briefId], references: [id], onDelete: SetNull)
+  team  Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  actor User?            @relation("SenecaBriefEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([briefId, createdAt])
+  @@index([teamId, type, createdAt])
+  @@index([actorUserId, createdAt])
 }
 

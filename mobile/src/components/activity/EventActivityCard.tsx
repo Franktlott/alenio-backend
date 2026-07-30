@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CalendarDays } from "lucide-react-native";
 import type { ActivityFeedItem } from "./types";
-import { getActivityTintTokens, getActivityTypeLabel } from "./activity-ui";
+import { getActivityTintTokens } from "./activity-ui";
 import { ActivityCardShell } from "./ActivityCardShell";
 import { ActivityCardBody } from "./ActivityCardBody";
 
@@ -27,7 +27,7 @@ export function EventActivityCard({ item, footer, onLongPress, testID }: Props) 
   const eventTitle = item.metadata.eventTitle ?? item.metadata.eventTitles?.[0] ?? item.title;
 
   const description =
-    eventCount > 1 ? `Added ${eventCount} events` : `Added '${eventTitle}'`;
+    eventCount > 1 ? `${actorName} added ${eventCount} events` : `${actorName} added “${eventTitle}”`;
 
   const metadata = item.metadata.startDate
     ? formatEventDateTime(item.metadata.startDate, item.metadata.allDay)
@@ -44,7 +44,7 @@ export function EventActivityCard({ item, footer, onLongPress, testID }: Props) 
     >
       <ActivityCardBody
         actor={item.actor ?? { name: actorName }}
-        label={getActivityTypeLabel(item.type, { eventCount })}
+        label="Calendar"
         LabelIcon={CalendarDays}
         tint={tint}
         timestamp={item.timestamp}

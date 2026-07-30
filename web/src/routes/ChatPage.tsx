@@ -1,4 +1,4 @@
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ClipboardEvent,
   type KeyboardEvent,
@@ -15,7 +15,7 @@ import { TeamActivityPanel } from "../components/activity/TeamActivityPanel";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { useEnterprisePaneActive } from "./EnterpriseKeepAliveOutlet";
 import { queryKeys } from "../lib/query-keys";
-import { CreateChannelModal, CreateGroupModal, NewDmModal } from "../components/ChatCreateModals";
+import { CreateGroupModal, NewDmModal } from "../components/ChatCreateModals";
 import {
   ChatMessageActionSheet,
   ChatMessageBodyInteractive,
@@ -29,33 +29,20 @@ import { linkifyText } from "../lib/linkify";
 import { normalizeMessageList } from "../lib/chat-message-pagination";
 import {
   createGroupDm,
-  createTeamPoll,
-  createTeamTopic,
-  deleteTeamTopic,
-  createVideoRoom,
   deleteDmMessage,
   deleteDmConversation,
   leaveDmConversation,
-  deleteTeamMessage,
   fetchDmConversations,
   fetchDmMessages,
-  fetchTeamMessages,
-  fetchTeamPolls,
-  fetchTeamTopics,
   fetchWebTeam,
   findOrCreateDm,
-  patchTeamMessage,
   postDmMessage,
-  postTeamMessage,
   toggleDmMessageReaction,
-  toggleTeamMessageReaction,
   uploadChatMedia,
-  voteTeamPoll,
   type ApiPoll,
   type DmConversation,
   type DirectChatMessage,
   type TeamChatMessage,
-  type TeamTopic,
 } from "../lib/api";
 
 const MESSAGE_REFRESH_MS = 4000;
@@ -75,14 +62,6 @@ function mediaFileFromClipboard(data: DataTransfer | null): File | null {
   }
   return null;
 }
-
-const POLL_DURATION_OPTIONS = [
-  { label: "1 hour", value: 1 },
-  { label: "6 hours", value: 6 },
-  { label: "24 hours", value: 24 },
-  { label: "3 days", value: 72 },
-  { label: "7 days", value: 168 },
-] as const;
 
 function initialsFromUser(user: { name: string | null; email: string | null }): string {
   const n = user.name?.trim() || user.email?.trim() || "";
@@ -167,15 +146,6 @@ function IconCompose() {
   );
 }
 
-function IconGear() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function IconUsers() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -247,14 +217,6 @@ function IconGroup() {
   );
 }
 
-function IconPoll() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M5 20V10M12 20V4M19 20v-7" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function conversationRecencyMs(c: DmConversation): number {
   const last = c.lastMessage?.createdAt;
   if (last) {
@@ -268,7 +230,7 @@ function conversationRecencyMs(c: DmConversation): number {
 export function ChatPage() {
   const queryClient = useQueryClient();
   const paneActive = useEnterprisePaneActive();
-  const { me, teams, selectedTeamId: workspaceTeamId, refreshMeAndTeams } = useEnterpriseShell();
+  const { me, teams, selectedTeamId: workspaceTeamId } = useEnterpriseShell();
   const [params, setParams] = useSearchParams();
   const liveTeamId = params.get("teamId")?.trim() ?? "";
   const liveTopicId = params.get("topicId")?.trim() ?? "";
@@ -278,34 +240,15 @@ export function ChatPage() {
     topicId: liveTopicId,
     conversationId: liveConversationId,
   });
-  const teamIdFromUrl = paneActive ? liveTeamId : frozenChatUrl.current.teamId;
-  const topicIdFromUrl = paneActive ? liveTopicId : frozenChatUrl.current.topicId;
   const conversationIdFromUrl = paneActive ? liveConversationId : frozenChatUrl.current.conversationId;
-  // Chat can browse any location without changing the app-wide workspace.
-  const selectedTeamId =
-    teamIdFromUrl && teams?.some((team) => team.id === teamIdFromUrl)
-      ? teamIdFromUrl
-      : workspaceTeamId;
 
   useEffect(() => {
     if (!paneActive) return;
-    // Sidebar links to bare `/chat` — restore the last channel/DM instead of wiping it.
-    const hasLiveSelection = Boolean(liveTopicId || liveConversationId || liveTeamId);
+    const hasLiveSelection = Boolean(liveConversationId);
     if (!hasLiveSelection) {
       const frozen = frozenChatUrl.current;
-      if (frozen.conversationId || frozen.topicId || frozen.teamId || selectedTeamId) {
-        setParams(
-          frozen.conversationId
-            ? {
-                ...(frozen.teamId || selectedTeamId ? { teamId: frozen.teamId || selectedTeamId } : {}),
-                conversationId: frozen.conversationId,
-              }
-            : {
-                teamId: frozen.teamId || selectedTeamId,
-                topicId: frozen.topicId || "general",
-              },
-          { replace: true },
-        );
+      if (frozen.conversationId) {
+        setParams({ conversationId: frozen.conversationId }, { replace: true });
       }
       return;
     }
@@ -314,7 +257,7 @@ export function ChatPage() {
       topicId: liveTopicId,
       conversationId: liveConversationId,
     };
-  }, [paneActive, liveTeamId, liveTopicId, liveConversationId, selectedTeamId, setParams]);
+  }, [paneActive, liveTeamId, liveTopicId, liveConversationId, setParams]);
 
   const [sendErr, setSendErr] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -325,23 +268,11 @@ export function ChatPage() {
     previewUrl: string;
     isVideo: boolean;
   } | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoTitle, setVideoTitle] = useState("");
-  const [videoLoading, setVideoLoading] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
-  const [pollModalOpen, setPollModalOpen] = useState(false);
-  const [pollQuestion, setPollQuestion] = useState("");
-  const [pollOptionDrafts, setPollOptionDrafts] = useState<string[]>(["", ""]);
-  const [pollDurationHours, setPollDurationHours] = useState(24);
-  const [pollSaving, setPollSaving] = useState(false);
-  const [pollVoteId, setPollVoteId] = useState<string | null>(null);
-  const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [newDmOpen, setNewDmOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
   const [createErr, setCreateErr] = useState<string | null>(null);
-  const [deleteChannelTopic, setDeleteChannelTopic] = useState<TeamTopic | null>(null);
-  const [deleteChannelSaving, setDeleteChannelSaving] = useState(false);
   const [conversationDeleteOpen, setConversationDeleteOpen] = useState(false);
   const [conversationDeleteSaving, setConversationDeleteSaving] = useState(false);
   const [leaveGroupOpen, setLeaveGroupOpen] = useState(false);
@@ -361,12 +292,18 @@ export function ChatPage() {
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
-  const selectedTopicId = topicIdFromUrl || "general";
   const selectedConversationId = conversationIdFromUrl;
   const isDmMode = Boolean(selectedConversationId);
 
-  const selectedTeamName = teams?.find((t) => t.id === selectedTeamId)?.name ?? "";
-  const threadId = isDmMode ? selectedConversationId : `${selectedTeamId}:${selectedTopicId}`;
+  const teamDetailQuery = useQuery({
+    queryKey: queryKeys.teamDetail(workspaceTeamId),
+    queryFn: () => fetchWebTeam(workspaceTeamId),
+    enabled: !!workspaceTeamId,
+    staleTime: 60_000,
+    refetchOnMount: false,
+  });
+
+  const threadId = selectedConversationId;
 
   const conversationsQuery = useQuery({
     queryKey: queryKeys.chatConversations,
@@ -376,79 +313,19 @@ export function ChatPage() {
     refetchOnMount: false,
   });
 
-  const workspaceRecencyQueries = useQueries({
-    queries: (teams ?? []).map((team) => ({
-      queryKey: ["chat-workspace-recency", team.id],
-      queryFn: () => fetchTeamMessages(team.id, "general"),
-      enabled: paneActive,
-      staleTime: MESSAGE_REFRESH_MS,
-      refetchInterval: paneActive ? MESSAGE_REFRESH_MS : false,
-      refetchOnMount: false,
-    })),
-  });
-
-  const workspaceRecencyByTeamId = useMemo(() => {
-    const recency = new Map<string, number>();
-    (teams ?? []).forEach((team, index) => {
-      const messages = normalizeMessageList<TeamChatMessage>(workspaceRecencyQueries[index]?.data);
-      const latest = messages.reduce((max, message) => {
-        const timestamp = new Date(message.createdAt).getTime();
-        return Number.isNaN(timestamp) ? max : Math.max(max, timestamp);
-      }, 0);
-      recency.set(team.id, latest);
-    });
-    return recency;
-  }, [teams, workspaceRecencyQueries]);
-
-  const orderedTeams = useMemo(
-    () =>
-      [...(teams ?? [])].sort((a, b) => {
-        const activityDiff = (workspaceRecencyByTeamId.get(b.id) ?? 0) - (workspaceRecencyByTeamId.get(a.id) ?? 0);
-        if (activityDiff !== 0) return activityDiff;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }),
-    [teams, workspaceRecencyByTeamId],
-  );
-
-  const topicsQuery = useQuery({
-    queryKey: queryKeys.chatTopics(selectedTeamId),
-    queryFn: () => fetchTeamTopics(selectedTeamId),
-    enabled: !!selectedTeamId,
-    staleTime: 60_000,
-    refetchOnMount: false,
-  });
-
-  const teamDetailQuery = useQuery({
-    queryKey: queryKeys.teamDetail(selectedTeamId),
-    queryFn: () => fetchWebTeam(selectedTeamId),
-    enabled: !!selectedTeamId,
-    staleTime: 60_000,
-    refetchOnMount: false,
-  });
-
   const threadQuery = useQuery({
-    queryKey: queryKeys.chatThread(isDmMode ? "dm" : "team", threadId),
-    queryFn: async () => {
-      if (isDmMode) {
-        return {
-          messages: await fetchDmMessages(selectedConversationId),
-          polls: [] as ApiPoll[],
-        };
-      }
-      const [messages, polls] = await Promise.all([
-        fetchTeamMessages(selectedTeamId, selectedTopicId),
-        fetchTeamPolls(selectedTeamId, selectedTopicId),
-      ]);
-      return { messages, polls };
-    },
-    enabled: isDmMode ? !!selectedConversationId : !!selectedTeamId,
+    queryKey: queryKeys.chatThread("dm", threadId),
+    queryFn: async () => ({
+      messages: await fetchDmMessages(selectedConversationId),
+      polls: [] as ApiPoll[],
+    }),
+    enabled: !!selectedConversationId,
     refetchInterval: paneActive ? MESSAGE_REFRESH_MS : false,
     staleTime: 15_000,
     refetchOnMount: false,
   });
 
   const conversations = conversationsQuery.data ?? [];
-  const topics = topicsQuery.data ?? [];
   const teamDetail = teamDetailQuery.data ?? null;
   const messages = useMemo(() => {
     const raw = threadQuery.data?.messages;
@@ -476,19 +353,23 @@ export function ChatPage() {
 
   const refreshChat = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.chatThread(isDmMode ? "dm" : "team", threadId),
+      queryKey: queryKeys.chatThread("dm", threadId),
     });
-  }, [queryClient, isDmMode, threadId]);
+  }, [queryClient, threadId]);
 
   useEffect(() => {
     if (!paneActive) return;
-    if (!teams?.length || !selectedTeamId) return;
-    if (isDmMode) return;
-    if (teamIdFromUrl === selectedTeamId && topicIdFromUrl === selectedTopicId) return;
-    setParams({ teamId: selectedTeamId, topicId: selectedTopicId }, { replace: true });
-  }, [paneActive, teams, selectedTeamId, teamIdFromUrl, topicIdFromUrl, selectedTopicId, isDmMode, setParams]);
-
-  const canCreateChannel = teamDetail?.myRole === "owner" || teamDetail?.myRole === "admin";
+    if (liveConversationId) return;
+    if (liveTopicId || liveTeamId) {
+      setParams({}, { replace: true });
+      return;
+    }
+    if (!conversations.length) return;
+    const mostRecent = [...conversations].sort((a, b) => conversationRecencyMs(b) - conversationRecencyMs(a))[0];
+    if (mostRecent) {
+      setParams({ conversationId: mostRecent.id }, { replace: true });
+    }
+  }, [paneActive, liveConversationId, liveTopicId, liveTeamId, conversations, setParams]);
 
   const canEditMessage = useCallback(
     (m: ChatMessageLike) => {
@@ -500,12 +381,8 @@ export function ChatPage() {
   );
 
   const canDeleteMessage = useCallback(
-    (m: ChatMessageLike) => {
-      if (me?.id && m.senderId === me.id) return true;
-      if (isDmMode) return false;
-      return teamDetail?.myRole === "owner" || teamDetail?.myRole === "admin";
-    },
-    [me?.id, isDmMode, teamDetail?.myRole],
+    (m: ChatMessageLike) => me?.id != null && m.senderId === me.id,
+    [me?.id],
   );
 
   const myReactionForMessage = useCallback(
@@ -523,12 +400,8 @@ export function ChatPage() {
     setMessageActionSaving(true);
     setActionErr(null);
     try {
-      if (isDmMode) {
-        if (!selectedConversationId) return;
-        await toggleDmMessageReaction(selectedConversationId, actionMessage.id, emoji);
-      } else if (selectedTeamId) {
-        await toggleTeamMessageReaction(selectedTeamId, actionMessage.id, emoji);
-      }
+      if (!selectedConversationId) return;
+      await toggleDmMessageReaction(selectedConversationId, actionMessage.id, emoji);
       setActionMessage(null);
       await refreshChat();
     } catch (e) {
@@ -545,34 +418,15 @@ export function ChatPage() {
   };
 
   const onConfirmEditMessage = async () => {
-    if (!editMessage || !selectedTeamId || isDmMode) return;
-    const content = editDraft.trim();
-    if (!content) return;
-    setMessageActionSaving(true);
-    setActionErr(null);
-    try {
-      await patchTeamMessage(selectedTeamId, editMessage.id, content);
-      setEditMessage(null);
-      setEditDraft("");
-      await refreshChat();
-    } catch (e) {
-      setActionErr(e instanceof Error ? e.message : "Could not edit message.");
-    } finally {
-      setMessageActionSaving(false);
-    }
+    return;
   };
 
   const onConfirmDeleteMessage = async () => {
-    if (!deleteMessageTarget) return;
+    if (!deleteMessageTarget || !selectedConversationId) return;
     setMessageActionSaving(true);
     setActionErr(null);
     try {
-      if (isDmMode) {
-        if (!selectedConversationId) return;
-        await deleteDmMessage(selectedConversationId, deleteMessageTarget.id);
-      } else if (selectedTeamId) {
-        await deleteTeamMessage(selectedTeamId, deleteMessageTarget.id);
-      }
+      await deleteDmMessage(selectedConversationId, deleteMessageTarget.id);
       setDeleteMessageTarget(null);
       await refreshChat();
     } catch (e) {
@@ -591,7 +445,7 @@ export function ChatPage() {
 
   useEffect(() => {
     discardPendingAttachment();
-  }, [selectedTeamId, selectedTopicId, selectedConversationId, discardPendingAttachment]);
+  }, [selectedConversationId, discardPendingAttachment]);
 
   const pendingAttachmentRef = useRef(pendingAttachment);
   pendingAttachmentRef.current = pendingAttachment;
@@ -603,11 +457,7 @@ export function ChatPage() {
     };
   }, []);
 
-  const threadKey = useMemo(
-    () =>
-      `${isDmMode ? "dm" : "ch"}:${isDmMode ? selectedConversationId ?? "" : `${selectedTeamId}:${selectedTopicId}`}`,
-    [isDmMode, selectedConversationId, selectedTeamId, selectedTopicId],
-  );
+  const threadKey = useMemo(() => `dm:${selectedConversationId ?? ""}`, [selectedConversationId]);
 
   const snapMessagesToBottom = useCallback(() => {
     const el = messagesContainerRef.current;
@@ -617,7 +467,6 @@ export function ChatPage() {
 
   useLayoutEffect(() => {
     stickToBottomRef.current = true;
-    setPollModalOpen(false);
   }, [threadKey]);
 
   const handleMessagesScroll = useCallback(() => {
@@ -647,23 +496,8 @@ export function ChatPage() {
     return () => observer.disconnect();
   }, [threadKey, snapMessagesToBottom]);
 
-  const onTeamChange = (id: string) => {
-    setParams({ teamId: id, topicId: "general" });
-    setSendErr(null);
-    setMessagesDrawerOpen(false);
-  };
-
-  const onTopicChange = (topicId: string) => {
-    if (!selectedTeamId) return;
-    setParams({ teamId: selectedTeamId, topicId });
-    setSendErr(null);
-    setMessagesDrawerOpen(false);
-  };
-
   const onConversationChange = (conversationId: string) => {
-    const next: Record<string, string> = { conversationId };
-    if (selectedTeamId) next.teamId = selectedTeamId;
-    setParams(next);
+    setParams({ conversationId });
     setSendErr(null);
     setMessagesDrawerOpen(false);
   };
@@ -678,26 +512,9 @@ export function ChatPage() {
   }, [messagesDrawerOpen]);
 
   const closeCreateModals = () => {
-    setCreateChannelOpen(false);
     setNewDmOpen(false);
     setCreateGroupOpen(false);
     setCreateErr(null);
-  };
-
-  const onCreateChannel = async (input: { name: string; description: string; color: string }) => {
-    if (!selectedTeamId) return;
-    setCreateSaving(true);
-    setCreateErr(null);
-    try {
-      const topic = await createTeamTopic(selectedTeamId, input);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.chatTopics(selectedTeamId) });
-      closeCreateModals();
-      onTopicChange(topic.id);
-    } catch (e) {
-      setCreateErr(e instanceof Error ? e.message : "Could not create channel.");
-    } finally {
-      setCreateSaving(false);
-    }
   };
 
   const onStartDm = async (recipientId: string) => {
@@ -715,7 +532,7 @@ export function ChatPage() {
     }
   };
 
-  const onCreateGroup = async (input: { name: string; participantIds: string[] }) => {
+  const onCreateGroup = async (input: { name: string; participantIds: string[]; teamId?: string }) => {
     setCreateSaving(true);
     setCreateErr(null);
     try {
@@ -739,18 +556,13 @@ export function ChatPage() {
     setSendErr(null);
 
     if (pending) {
-      if (isDmMode && !selectedConversationId) return;
-      if (!isDmMode && !selectedTeamId) return;
+      if (!selectedConversationId) return;
 
       setMediaUploading(true);
       try {
         const uploaded = await uploadChatMedia(pending.file);
         const mt = uploaded.contentType.startsWith("video/") ? "video" : "image";
-        if (isDmMode) {
-          await postDmMessage(selectedConversationId!, text, { mediaUrl: uploaded.url, mediaType: mt });
-        } else {
-          await postTeamMessage(selectedTeamId, text, selectedTopicId, { mediaUrl: uploaded.url, mediaType: mt });
-        }
+        await postDmMessage(selectedConversationId, text, { mediaUrl: uploaded.url, mediaType: mt });
         discardPendingAttachment();
         setDraft("");
         await refreshChat();
@@ -765,13 +577,8 @@ export function ChatPage() {
 
     setSending(true);
     try {
-      if (isDmMode) {
-        if (!selectedConversationId) return;
-        await postDmMessage(selectedConversationId, text);
-      } else {
-        if (!selectedTeamId) return;
-        await postTeamMessage(selectedTeamId, text, selectedTopicId);
-      }
+      if (!selectedConversationId) return;
+      await postDmMessage(selectedConversationId, text);
       setDraft("");
       await refreshChat();
       await refreshConversations();
@@ -797,9 +604,7 @@ export function ChatPage() {
   };
 
   const attachFile = useCallback((file: File) => {
-    if (sending || mediaUploading) return;
-    if (isDmMode && !selectedConversationId) return;
-    if (!isDmMode && !selectedTeamId) return;
+    if (sending || mediaUploading || !selectedConversationId) return;
     if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) return;
 
     setPendingAttachment((prev) => {
@@ -811,7 +616,7 @@ export function ChatPage() {
       };
     });
     setSendErr(null);
-  }, [sending, mediaUploading, isDmMode, selectedConversationId, selectedTeamId]);
+  }, [sending, mediaUploading, selectedConversationId]);
 
   useEffect(() => {
     if (!moreMenuOpen) return;
@@ -824,44 +629,24 @@ export function ChatPage() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [moreMenuOpen]);
 
-  const directConversations = useMemo(
-    () => conversations.filter((c) => !c.isGroup).sort((a, b) => conversationRecencyMs(b) - conversationRecencyMs(a)),
-    [conversations],
-  );
-  const groupConversations = useMemo(
-    () => conversations.filter((c) => c.isGroup).sort((a, b) => conversationRecencyMs(b) - conversationRecencyMs(a)),
+  const inboxConversations = useMemo(
+    () => [...conversations].sort((a, b) => conversationRecencyMs(b) - conversationRecencyMs(a)),
     [conversations],
   );
   const normalizedConversationFilter = conversationFilter.trim().toLowerCase();
-  const visibleTopics = useMemo(
+  const visibleInboxConversations = useMemo(
     () =>
-      topics.filter(
-        (topic) =>
-          !normalizedConversationFilter ||
-          topic.name.toLowerCase().includes(normalizedConversationFilter) ||
-          topic.description?.toLowerCase().includes(normalizedConversationFilter),
-      ),
-    [topics, normalizedConversationFilter],
-  );
-  const visibleDirectConversations = useMemo(
-    () =>
-      directConversations.filter((conversation) => {
+      inboxConversations.filter((conversation) => {
         if (!normalizedConversationFilter) return true;
+        if (conversation.isGroup) {
+          return `${conversation.name ?? ""} ${conversation.workspaceContext?.label ?? ""}`
+            .toLowerCase()
+            .includes(normalizedConversationFilter);
+        }
         const user = conversation.recipient ?? conversation.participants[0];
         return `${user?.name ?? ""} ${user?.email ?? ""}`.toLowerCase().includes(normalizedConversationFilter);
       }),
-    [directConversations, normalizedConversationFilter],
-  );
-  const visibleGroupConversations = useMemo(
-    () =>
-      groupConversations.filter((conversation) =>
-        !normalizedConversationFilter
-          ? true
-          : `${conversation.name ?? ""} ${conversation.workspaceContext?.label ?? ""}`
-              .toLowerCase()
-              .includes(normalizedConversationFilter),
-      ),
-    [groupConversations, normalizedConversationFilter],
+    [inboxConversations, normalizedConversationFilter],
   );
   const activeConversation = selectedConversationId ? conversations.find((c) => c.id === selectedConversationId) : null;
   const isLastGroupMember =
@@ -872,47 +657,8 @@ export function ChatPage() {
       : activeConversation.recipient?.name ?? activeConversation.recipient?.email ?? "Direct message"
     : null;
 
-  const channelLabel =
-    selectedTopicId === "general"
-      ? "Team chat"
-      : `# ${topics.find((t) => t.id === selectedTopicId)?.name ?? "channel"}`;
-
-  const activeTopic = selectedTopicId === "general" ? null : topics.find((t) => t.id === selectedTopicId);
-  const canDeleteCurrentChannel = canCreateChannel && !isDmMode && !!activeTopic;
-
-  const openDeleteChannel = (topic: TeamTopic) => {
-    setDeleteChannelTopic(topic);
-    setActionErr(null);
-  };
-
-  const closeDeleteChannel = () => {
-    if (deleteChannelSaving) return;
-    setDeleteChannelTopic(null);
-    setActionErr(null);
-  };
-
-  const onDeleteChannel = async () => {
-    if (!selectedTeamId || !deleteChannelTopic) return;
-    setDeleteChannelSaving(true);
-    setActionErr(null);
-    try {
-      await deleteTeamTopic(selectedTeamId, deleteChannelTopic.id);
-      setDeleteChannelTopic(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.chatTopics(selectedTeamId) });
-      onTopicChange("general");
-    } catch (e) {
-      setActionErr(e instanceof Error ? e.message : "Could not delete channel.");
-    } finally {
-      setDeleteChannelSaving(false);
-    }
-  };
-
   const exitConversation = () => {
-    if (selectedTeamId) {
-      setParams({ teamId: selectedTeamId, topicId: selectedTopicId || "general" });
-    } else {
-      setParams({});
-    }
+    setParams({});
     setSendErr(null);
   };
 
@@ -954,34 +700,20 @@ export function ChatPage() {
     }
   };
 
-  const channelHeaderTitle = isDmMode
-    ? conversationLabel ?? "Direct message"
-    : selectedTopicId === "general"
-      ? "Team chat"
-      : activeTopic?.name ?? "Team chat";
-  const channelHeaderHash = !isDmMode;
-  const channelHeaderKicker = isDmMode
-    ? activeConversation?.isGroup
-      ? "Group message"
-      : "Direct message"
-    : selectedTeamName || "Workspace";
-  const channelDescription = isDmMode
-    ? activeConversation?.isGroup
-      ? activeConversation.workspaceContext?.label
-        ? `${activeConversation.workspaceContext.label} · ${activeConversation.participants.length} members`
-        : `${activeConversation.participants.length} members`
-      : "Private conversation"
-    : selectedTopicId === "general"
-      ? selectedTeamName
-        ? `${selectedTeamName} · Shared channel for the whole team`
-        : "Shared channel for the whole team"
-      : activeTopic?.description?.trim() ||
-        (selectedTeamName
-          ? `${selectedTeamName} · Messages in ${activeTopic?.name ?? "this channel"}`
-          : `Messages in ${activeTopic?.name ?? "this channel"}.`);
-  const memberCount = isDmMode
-    ? activeConversation?.participants.length ?? 0
-    : teams?.find((t) => t.id === selectedTeamId)?._count?.members ?? 0;
+  const channelHeaderTitle = conversationLabel ?? "Messages";
+  const channelHeaderKicker = activeConversation?.isGroup
+    ? "Group message"
+    : activeConversation
+      ? "Direct message"
+      : "Messages";
+  const channelDescription = activeConversation?.isGroup
+    ? activeConversation.workspaceContext?.label
+      ? `${activeConversation.workspaceContext.label} · ${activeConversation.participants.length} members`
+      : `${activeConversation.participants.length} members`
+    : activeConversation
+      ? "Private conversation"
+      : null;
+  const memberCount = activeConversation?.participants.length ?? 0;
 
   const timelineBlocks = useMemo(() => {
     const blocks: Array<
@@ -1027,86 +759,9 @@ export function ChatPage() {
     return blocks;
   }, [messages, polls]);
 
-  const composerPlaceholder = isDmMode
+  const composerPlaceholder = selectedConversationId
     ? `Message ${conversationLabel ?? "…"}`
-    : selectedTopicId === "general"
-      ? "Message #team-chat"
-      : `Message #${(activeTopic?.name ?? "channel").replace(/\s+/g, "-").toLowerCase()}`;
-
-  const chatVideoRoomId = selectedTeamId && !isDmMode ? `chat-${selectedTeamId}-${selectedTopicId}` : "";
-
-  const openChatVideo = async () => {
-    if (!chatVideoRoomId) return;
-    setActionErr(null);
-    setVideoLoading(true);
-    try {
-      const room = await createVideoRoom(chatVideoRoomId, me?.name ?? me?.email ?? "Guest");
-      if (!room.token) throw new Error("Could not start video call.");
-      const call = `${room.url}?t=${encodeURIComponent(room.token)}&prejoin=false`;
-      setVideoTitle(`${selectedTeamName} · ${channelLabel}`);
-      setVideoUrl(call);
-    } catch (err) {
-      setActionErr(err instanceof Error ? err.message : "Could not start meeting.");
-    } finally {
-      setVideoLoading(false);
-    }
-  };
-
-  const submitPoll = async () => {
-    if (!selectedTeamId || isDmMode) return;
-    const q = pollQuestion.trim();
-    const opts = pollOptionDrafts.map((o) => o.trim()).filter(Boolean);
-    if (!q || opts.length < 2) {
-      setActionErr("Add a question and at least two options.");
-      return;
-    }
-    if (opts.length > 6) {
-      setActionErr("Maximum six options.");
-      return;
-    }
-    setPollSaving(true);
-    setActionErr(null);
-    try {
-      await createTeamPoll(selectedTeamId, {
-        question: q,
-        options: opts,
-        durationHours: pollDurationHours,
-        topicId: selectedTopicId === "general" ? null : selectedTopicId,
-      });
-      setPollModalOpen(false);
-      setPollQuestion("");
-      setPollOptionDrafts(["", ""]);
-      setPollDurationHours(24);
-      await refreshChat();
-    } catch (e) {
-      setActionErr(e instanceof Error ? e.message : "Could not create poll.");
-    } finally {
-      setPollSaving(false);
-    }
-  };
-
-  const onVotePoll = async (pollId: string, optionId: string) => {
-    if (!selectedTeamId || isDmMode) return;
-    setPollVoteId(pollId);
-    setActionErr(null);
-    try {
-      const updated = await voteTeamPoll(selectedTeamId, pollId, optionId);
-      queryClient.setQueryData(
-        queryKeys.chatThread("team", threadId),
-        (prev: { messages: Array<TeamChatMessage | DirectChatMessage>; polls: ApiPoll[] } | undefined) =>
-          prev
-            ? {
-                ...prev,
-                polls: prev.polls.map((p) => (p.id === pollId ? updated : p)),
-              }
-            : prev,
-      );
-    } catch (e) {
-      setActionErr(e instanceof Error ? e.message : "Could not record vote.");
-    } finally {
-      setPollVoteId(null);
-    }
-  };
+    : "Select a conversation";
 
   function pollTotalVotes(poll: ApiPoll): number {
     return poll.options.reduce((n, o) => n + o.votes.length, 0);
@@ -1118,6 +773,11 @@ export function ChatPage() {
     if (end.getTime() < Date.now()) return "Ended";
     return `Ends ${end.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
   }
+
+  const openCreateMenu = () => {
+    setCreateErr(null);
+    setNewDmOpen(true);
+  };
 
   return (
     <>
@@ -1146,19 +806,16 @@ export function ChatPage() {
               </span>
               <span className="chat-messages-tab-label">Messages</span>
             </button>
-            <aside className="chat-sidebar" id="chat-messages-drawer" aria-label="Channels">
+            <aside className="chat-sidebar" id="chat-messages-drawer" aria-label="Messages">
               <div className="chat-sidebar-card">
                 <div className="chat-sidebar-top">
                   <h2 className="chat-sidebar-title">Messages</h2>
                   <button
                     type="button"
                     className="chat-sidebar-compose-btn"
-                    aria-label="Compose a new message"
-                    title="New message"
-                    onClick={() => {
-                      setCreateErr(null);
-                      setNewDmOpen(true);
-                    }}
+                    aria-label="Message someone"
+                    title="Message someone"
+                    onClick={openCreateMenu}
                   >
                     <IconCompose />
                   </button>
@@ -1177,112 +834,62 @@ export function ChatPage() {
                   />
                 </label>
 
-                <div className="chat-sidebar-section chat-sidebar-workspaces">
-                  <div className="chat-sidebar-section-head">
-                    <span className="chat-channels-label">Workspaces</span>
-                  </div>
-                  <div className="chat-workspace-list">
-                    {orderedTeams.map((team, index) => {
-                      const selected = team.id === selectedTeamId;
-                      const workspaceMatches =
-                        !normalizedConversationFilter || team.name.toLowerCase().includes(normalizedConversationFilter);
-                      const showGeneral = workspaceMatches || selected;
-                      return (
-                        <section key={team.id} className={`chat-workspace-group${selected ? " is-selected" : ""}`}>
-                          <button
-                            type="button"
-                            className="chat-workspace-row"
-                            onClick={() => onTeamChange(team.id)}
-                          >
-                            <span className={`chat-workspace-mark chat-workspace-mark--${(index % 3) + 1}`} aria-hidden>
-                              {team.name.trim().slice(0, 1).toUpperCase()}
-                            </span>
-                            <span className="chat-workspace-name">{team.name}</span>
-                            <span className="chat-workspace-chevron" aria-hidden>{selected ? "⌄" : "›"}</span>
-                          </button>
-                          {showGeneral ? (
-                            <ul className="chat-channel-list chat-workspace-channels">
-                              <li
-                                className={`chat-channel-item ${selected && !isDmMode && selectedTopicId === "general" ? "chat-channel-item-active" : ""}`}
-                                onClick={() => {
-                                  if (selected) onTopicChange("general");
-                                  else onTeamChange(team.id);
-                                }}
-                                role="button"
-                                tabIndex={0}
-                              >
-                                <span className="chat-channel-item-label">
-                                  <span className="chat-channel-hash">#</span> Team chat
-                                </span>
-                                {selected && !isDmMode && selectedTopicId === "general" ? (
-                                  <span className="chat-channel-unread-dot" aria-hidden />
-                                ) : null}
-                              </li>
-                              {selected
-                                ? visibleTopics.map((topic) => (
-                                    <li
-                                      key={topic.id}
-                                      className={`chat-channel-item ${!isDmMode && selectedTopicId === topic.id ? "chat-channel-item-active" : ""}`}
-                                      onClick={() => onTopicChange(topic.id)}
-                                      role="button"
-                                      tabIndex={0}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter" || e.key === " ") {
-                                          e.preventDefault();
-                                          onTopicChange(topic.id);
-                                        }
-                                      }}
-                                    >
-                                      <span className="chat-channel-item-label">
-                                        <span className="chat-channel-hash">#</span> {topic.name}
-                                      </span>
-                                      {!isDmMode && selectedTopicId === topic.id && canCreateChannel ? (
-                                        <button
-                                          type="button"
-                                          className="chat-channel-settings-btn"
-                                          aria-label={`Delete ${topic.name}`}
-                                          title="Delete channel"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            openDeleteChannel(topic);
-                                          }}
-                                          data-testid={`chat-delete-channel-${topic.id}`}
-                                        >
-                                          <IconGear />
-                                        </button>
-                                      ) : null}
-                                    </li>
-                                  ))
-                                : null}
-                            </ul>
-                          ) : null}
-                        </section>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div className="chat-sidebar-section chat-sidebar-directs">
                   <div className="chat-sidebar-section-head">
-                    <span className="chat-channels-label">Direct messages</span>
+                    <span className="chat-channels-label">Conversations</span>
                     <button
                       type="button"
                       className="chat-sidebar-add-btn"
-                      aria-label="New direct message"
+                      aria-label="Create group"
                       onClick={() => {
                         setCreateErr(null);
-                        setNewDmOpen(true);
+                        setCreateGroupOpen(true);
                       }}
-                      data-testid="chat-add-dm"
+                      data-testid="chat-add-group"
                     >
                       <IconPlus />
                     </button>
                   </div>
                   <ul className="chat-channel-list">
-                    {visibleDirectConversations.length === 0 ? (
-                      <li className="chat-sidebar-empty">No direct messages yet</li>
+                    {visibleInboxConversations.length === 0 ? (
+                      <li className="chat-sidebar-empty">No conversations yet</li>
                     ) : null}
-                    {visibleDirectConversations.map((conv) => {
+                    {visibleInboxConversations.map((conv, index) => {
+                      if (conv.isGroup) {
+                        return (
+                          <li
+                            key={conv.id}
+                            className={`chat-channel-item chat-group-item ${selectedConversationId === conv.id ? "chat-channel-item-active" : ""}`}
+                            onClick={() => onConversationChange(conv.id)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onConversationChange(conv.id);
+                              }
+                            }}
+                          >
+                            <span className={`chat-group-icon chat-group-icon--${(index % 3) + 1}`} aria-hidden>
+                              <IconGroup />
+                            </span>
+                            <span className="chat-group-item-copy">
+                              <span className="chat-group-item-name">{conv.name ?? "Group chat"}</span>
+                              {conv.workspaceContext?.label ? (
+                                <span className="chat-group-item-workspace">{conv.workspaceContext.label}</span>
+                              ) : null}
+                              <span className="chat-group-item-meta">
+                                {conv.lastMessage?.content || `${conv.participants.length} members`}
+                              </span>
+                            </span>
+                            {conv.lastMessage?.createdAt ? (
+                              <time className="chat-dm-item-time" dateTime={conv.lastMessage.createdAt}>
+                                {formatMessageTime(conv.lastMessage.createdAt)}
+                              </time>
+                            ) : null}
+                          </li>
+                        );
+                      }
                       const user = conv.recipient ?? conv.participants[0];
                       const label = user?.name ?? user?.email ?? "Direct message";
                       return (
@@ -1317,66 +924,17 @@ export function ChatPage() {
                     })}
                   </ul>
                 </div>
-
-                <div className="chat-sidebar-section chat-sidebar-groups">
-                  <div className="chat-sidebar-section-head">
-                    <span className="chat-channels-label">Groups</span>
-                    <button
-                      type="button"
-                      className="chat-sidebar-add-btn"
-                      aria-label="New group message"
-                      onClick={() => {
-                        setCreateErr(null);
-                        setCreateGroupOpen(true);
-                      }}
-                      data-testid="chat-add-group"
-                    >
-                      <IconPlus />
-                    </button>
-                  </div>
-                  <ul className="chat-channel-list">
-                    {visibleGroupConversations.length === 0 ? (
-                      <li className="chat-sidebar-empty">No group messages yet</li>
-                    ) : null}
-                    {visibleGroupConversations.map((conv, index) => (
-                      <li
-                        key={conv.id}
-                        className={`chat-channel-item chat-group-item ${selectedConversationId === conv.id ? "chat-channel-item-active" : ""}`}
-                        onClick={() => onConversationChange(conv.id)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onConversationChange(conv.id);
-                          }
-                        }}
-                      >
-                        <span className={`chat-group-icon chat-group-icon--${(index % 3) + 1}`} aria-hidden>
-                          <IconGroup />
-                        </span>
-                        <span className="chat-group-item-copy">
-                          <span className="chat-group-item-name">{conv.name ?? "Group chat"}</span>
-                          {conv.workspaceContext?.label ? (
-                            <span className="chat-group-item-workspace">{conv.workspaceContext.label}</span>
-                          ) : null}
-                          <span className="chat-group-item-meta">{conv.participants.length} members</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               </div>
             </aside>
 
             <div className="chat-main-column">
               <div className="chat-main-card">
+                {selectedConversationId ? (
                 <div className="chat-channel-header">
                   <div className="chat-channel-header-main">
                     <p className="chat-channel-header-kicker">{channelHeaderKicker}</p>
                     <div className="chat-channel-header-title-row">
                       <h1 className="chat-channel-header-title">
-                        {channelHeaderHash ? <span className="chat-channel-hash">#</span> : null}
                         {channelHeaderTitle}
                       </h1>
                       <button type="button" className="chat-channel-favorite" aria-label="Favorite conversation" title="Favorite">
@@ -1386,20 +944,6 @@ export function ChatPage() {
                     {channelDescription ? <p className="chat-channel-header-desc">{channelDescription}</p> : null}
                   </div>
                   <div className="chat-channel-header-actions">
-                    {!isDmMode && canCreateChannel ? (
-                      <button
-                        type="button"
-                        className="chat-header-new-channel"
-                        onClick={() => {
-                          setCreateErr(null);
-                          setCreateChannelOpen(true);
-                        }}
-                        data-testid="chat-add-channel"
-                      >
-                        <IconPlus />
-                        New channel
-                      </button>
-                    ) : null}
                     {memberCount > 0 ? (
                       <button type="button" className="chat-header-icon-btn" aria-label={`${memberCount} members`} title={`${memberCount} members`}>
                         <IconUsers />
@@ -1412,7 +956,7 @@ export function ChatPage() {
                     <button type="button" className="chat-header-icon-btn" aria-label="Search messages" title="Search messages">
                       <IconSearch />
                     </button>
-                    {isDmMode && activeConversation ? (
+                    {activeConversation ? (
                       <button
                         type="button"
                         className="chat-header-icon-btn chat-header-icon-btn--danger"
@@ -1439,37 +983,7 @@ export function ChatPage() {
                       </button>
                       {moreMenuOpen ? (
                         <div className="chat-header-more-menu" role="menu">
-                          {!isDmMode ? (
-                            <>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="chat-header-more-item"
-                                disabled={videoLoading || !selectedTeamId}
-                                onClick={() => {
-                                  setMoreMenuOpen(false);
-                                  void openChatVideo();
-                                }}
-                                data-testid="chat-start-meeting"
-                              >
-                                {videoLoading ? "Starting meeting…" : "Start virtual meeting"}
-                              </button>
-                              {canDeleteCurrentChannel && activeTopic ? (
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="chat-header-more-item chat-header-more-item--danger"
-                                  onClick={() => {
-                                    setMoreMenuOpen(false);
-                                    openDeleteChannel(activeTopic);
-                                  }}
-                                  data-testid="chat-delete-channel"
-                                >
-                                  Delete channel
-                                </button>
-                              ) : null}
-                            </>
-                          ) : activeConversation ? (
+                          {activeConversation ? (
                             <>
                               <button
                                 type="button"
@@ -1508,6 +1022,7 @@ export function ChatPage() {
                     </div>
                   </div>
                 </div>
+                ) : null}
 
                 {actionErr ? (
                   <p className="enterprise-banner-warn chat-action-banner" role="status">
@@ -1522,11 +1037,47 @@ export function ChatPage() {
                     data-testid="chat-message-list"
                     onScroll={handleMessagesScroll}
                   >
-                    {messages.length === 0 && polls.length === 0 ? (
+                    {!selectedConversationId ? (
                       <div className="chat-messages-empty" data-testid="chat-messages-empty">
                         <div className="chat-messages-empty-card">
                           <span className="chat-messages-empty-icon" aria-hidden>
-                            #
+                            ✉
+                          </span>
+                          <p className="chat-messages-empty-title">Start a conversation</p>
+                          <p className="chat-messages-empty-copy">
+                            Message a teammate or create a group when your team needs one.
+                          </p>
+                          <div className="enterprise-modal-actions" style={{ justifyContent: "center", marginTop: 16 }}>
+                            <button
+                              type="button"
+                              className="auth-btn-primary"
+                              onClick={() => {
+                                setCreateErr(null);
+                                setNewDmOpen(true);
+                              }}
+                              data-testid="chat-add-dm"
+                            >
+                              Message someone
+                            </button>
+                            <button
+                              type="button"
+                              className="auth-btn-secondary"
+                              onClick={() => {
+                                setCreateErr(null);
+                                setCreateGroupOpen(true);
+                              }}
+                              data-testid="chat-empty-create-group"
+                            >
+                              Create group
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : messages.length === 0 && polls.length === 0 ? (
+                      <div className="chat-messages-empty" data-testid="chat-messages-empty">
+                        <div className="chat-messages-empty-card">
+                          <span className="chat-messages-empty-icon" aria-hidden>
+                            ✉
                           </span>
                           <p className="chat-messages-empty-title">
                             {loadingMeetings ? "Loading conversation…" : "Start the conversation"}
@@ -1534,7 +1085,7 @@ export function ChatPage() {
                           <p className="chat-messages-empty-copy">
                             {loadingMeetings
                               ? "Pulling in the latest messages."
-                              : `No messages yet. Say hello${selectedTeamName ? ` in ${selectedTeamName}` : ""}.`}
+                              : "No messages yet. Say hello."}
                           </p>
                         </div>
                       </div>
@@ -1583,8 +1134,8 @@ export function ChatPage() {
                                           <button
                                             type="button"
                                             className={`chat-poll-option ${isMine ? "chat-poll-option-mine" : ""} ${ended ? "chat-poll-option-ended" : ""}`}
-                                            disabled={ended || pollVoteId === poll.id}
-                                            onClick={() => void onVotePoll(poll.id, option.id)}
+                                            disabled={ended}
+                                            onClick={() => undefined}
                                           >
                                             <span className="chat-poll-option-bar" style={{ width: `${percentage}%` }} aria-hidden />
                                             <span className="chat-poll-option-label">{option.text}</span>
@@ -1659,114 +1210,8 @@ export function ChatPage() {
                     )}
                     <div ref={messagesEndRef} />
                   </div>
+                  {selectedConversationId ? (
                   <div className="chat-composer chat-composer-v2">
-                    {pollModalOpen ? (
-                      <div className="chat-poll-popover" role="dialog" aria-modal="false" aria-label="Create poll">
-                        <div className="chat-poll-popover-head">
-                          <div>
-                            <strong>Create a poll</strong>
-                            <span>Post to {channelLabel}</span>
-                          </div>
-                          <button
-                            type="button"
-                            className="chat-poll-popover-close"
-                            onClick={() => {
-                              setPollModalOpen(false);
-                              setActionErr(null);
-                            }}
-                            aria-label="Close poll composer"
-                          >
-                            ×
-                          </button>
-                        </div>
-                        <div className="chat-poll-popover-body">
-                          <label className="chat-poll-field">
-                            <span>Question</span>
-                            <input
-                              value={pollQuestion}
-                              onChange={(event) => setPollQuestion(event.target.value)}
-                              placeholder="What do you want to ask?"
-                              maxLength={500}
-                              autoFocus
-                            />
-                          </label>
-                          <div className="chat-poll-field">
-                            <span>Options</span>
-                            <div className="chat-poll-popover-options">
-                              {pollOptionDrafts.map((option, index) => (
-                                <input
-                                  key={index}
-                                  value={option}
-                                  onChange={(event) =>
-                                    setPollOptionDrafts((rows) =>
-                                      rows.map((row, rowIndex) => (rowIndex === index ? event.target.value : row)),
-                                    )
-                                  }
-                                  placeholder={`Option ${index + 1}`}
-                                  maxLength={200}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div className="chat-poll-popover-controls">
-                            <div>
-                              {pollOptionDrafts.length < 6 ? (
-                                <button
-                                  type="button"
-                                  className="chat-poll-text-btn"
-                                  onClick={() => setPollOptionDrafts((rows) => [...rows, ""])}
-                                >
-                                  + Add option
-                                </button>
-                              ) : null}
-                              {pollOptionDrafts.length > 2 ? (
-                                <button
-                                  type="button"
-                                  className="chat-poll-text-btn"
-                                  onClick={() => setPollOptionDrafts((rows) => rows.slice(0, -1))}
-                                >
-                                  Remove
-                                </button>
-                              ) : null}
-                            </div>
-                            <label className="chat-poll-duration">
-                              <span>Duration</span>
-                              <select
-                                value={pollDurationHours}
-                                onChange={(event) => setPollDurationHours(Number(event.target.value))}
-                              >
-                                {POLL_DURATION_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          </div>
-                          {actionErr ? <p className="chat-poll-popover-error">{actionErr}</p> : null}
-                        </div>
-                        <div className="chat-poll-popover-footer">
-                          <button
-                            type="button"
-                            className="chat-poll-cancel-btn"
-                            onClick={() => {
-                              setPollModalOpen(false);
-                              setActionErr(null);
-                            }}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            className="chat-poll-post-btn"
-                            disabled={pollSaving}
-                            onClick={() => void submitPoll()}
-                          >
-                            {pollSaving ? "Posting…" : "Post poll"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -1816,7 +1261,7 @@ export function ChatPage() {
                         onPaste={onPaste}
                         placeholder={composerPlaceholder}
                         rows={1}
-                        disabled={(!selectedTeamId && !isDmMode) || sending || mediaUploading}
+                        disabled={sending || mediaUploading}
                         data-testid="chat-input"
                       />
                       <div className="chat-composer-toolbar">
@@ -1836,21 +1281,6 @@ export function ChatPage() {
                           <button type="button" className="chat-composer-tool chat-composer-tool--gif" aria-label="GIF picker" title="GIF picker">
                             GIF
                           </button>
-                          {!isDmMode ? (
-                            <button
-                              type="button"
-                              className={`chat-composer-tool${pollModalOpen ? " is-active" : ""}`}
-                              aria-label="Create poll"
-                              title="Create poll"
-                              onClick={() => {
-                                setActionErr(null);
-                                setPollModalOpen((open) => !open);
-                              }}
-                              data-testid="chat-create-poll"
-                            >
-                              <IconPoll />
-                            </button>
-                          ) : null}
                           <button
                             type="button"
                             className="chat-composer-tool"
@@ -1870,8 +1300,7 @@ export function ChatPage() {
                             disabled={
                               sending ||
                               mediaUploading ||
-                              (!draft.trim() && !pendingAttachment) ||
-                              (!selectedTeamId && !isDmMode)
+                              (!draft.trim() && !pendingAttachment)
                             }
                             data-testid="chat-send"
                           >
@@ -1881,6 +1310,7 @@ export function ChatPage() {
                       </div>
                     </div>
                   </div>
+                  ) : null}
                 </div>
               </div>
               {sendErr ? (
@@ -1900,13 +1330,6 @@ export function ChatPage() {
             />
       </div>
 
-      <CreateChannelModal
-        open={createChannelOpen}
-        saving={createSaving}
-        error={createChannelOpen ? createErr : null}
-        onClose={closeCreateModals}
-        onSubmit={(input) => void onCreateChannel(input)}
-      />
       <NewDmModal
         open={newDmOpen}
         saving={createSaving}
@@ -1921,6 +1344,8 @@ export function ChatPage() {
         saving={createSaving}
         error={createGroupOpen ? createErr : null}
         myUserId={me?.id ?? ""}
+        teams={(teams ?? []).map((team) => ({ id: team.id, name: team.name }))}
+        defaultTeamId={workspaceTeamId}
         onClose={closeCreateModals}
         onSubmit={(input) => void onCreateGroup(input)}
       />
@@ -1968,45 +1393,6 @@ export function ChatPage() {
         }}
         onConfirm={() => void onConfirmDeleteMessage()}
       />
-
-      {deleteChannelTopic ? (
-        <div className="enterprise-modal-backdrop" role="presentation" onClick={closeDeleteChannel}>
-          <div
-            className="enterprise-modal-panel chat-delete-channel-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="chat-delete-channel-title"
-            onClick={(e) => e.stopPropagation()}
-            data-testid="chat-delete-channel-modal"
-          >
-            <h3 id="chat-delete-channel-title" className="enterprise-modal-title">
-              Delete channel?
-            </h3>
-            <p className="enterprise-muted enterprise-modal-sub">
-              Delete <strong>#{deleteChannelTopic.name}</strong>? All messages will be permanently removed.
-            </p>
-            {actionErr ? (
-              <p className="auth-error" role="alert">
-                {actionErr}
-              </p>
-            ) : null}
-            <div className="enterprise-modal-actions">
-              <button type="button" className="auth-btn-secondary" onClick={closeDeleteChannel} disabled={deleteChannelSaving}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="enterprise-team-btn-destructive"
-                disabled={deleteChannelSaving}
-                onClick={() => void onDeleteChannel()}
-                data-testid="confirm-delete-channel"
-              >
-                {deleteChannelSaving ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {leaveGroupOpen && activeConversation?.isGroup ? (
         <div className="enterprise-modal-backdrop" role="presentation" onClick={() => setLeaveGroupOpen(false)}>
@@ -2096,23 +1482,6 @@ export function ChatPage() {
                 {conversationDeleteSaving ? "Deleting…" : "Delete"}
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {videoUrl ? (
-        <div className="enterprise-task-modal-backdrop" role="presentation">
-          <div className="enterprise-video-modal" role="dialog" aria-modal="true">
-            <button type="button" className="enterprise-task-modal-close" onClick={() => setVideoUrl(null)} aria-label="Close video call">
-              ×
-            </button>
-            <h3 className="enterprise-card-title">{videoTitle || "Virtual meeting"}</h3>
-            <iframe
-              src={videoUrl}
-              className="enterprise-video-iframe"
-              allow="camera; microphone; fullscreen; display-capture"
-              title={videoTitle || "Virtual meeting"}
-            />
           </div>
         </div>
       ) : null}

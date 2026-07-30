@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Flame, Trophy } from "lucide-react-native";
 import type { ActivityFeedItem } from "./types";
-import { getActivityTintTokens, getActivityTypeLabel } from "./activity-ui";
+import { getActivityTintTokens } from "./activity-ui";
 import { ActivityCardShell } from "./ActivityCardShell";
 import { ActivityCardBody } from "./ActivityCardBody";
 
@@ -20,8 +20,8 @@ export function MilestoneActivityCard({ item, footer, onLongPress, testID }: Pro
   const Icon = isPersonalBest ? Flame : Trophy;
 
   const description = isPersonalBest
-    ? `Hit a personal best of ${count} on-time tasks`
-    : `Completed ${count} tasks on time`;
+    ? `${actorName} hit a personal best of ${count} on-time tasks`
+    : `${actorName} completed ${count} tasks on time`;
 
   return (
     <ActivityCardShell
@@ -32,7 +32,7 @@ export function MilestoneActivityCard({ item, footer, onLongPress, testID }: Pro
     >
       <ActivityCardBody
         actor={item.actor ?? { name: actorName }}
-        label={getActivityTypeLabel(item.type)}
+        label="Updates"
         LabelIcon={Icon}
         tint={tint}
         timestamp={item.timestamp}

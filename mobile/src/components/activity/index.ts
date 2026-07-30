@@ -21,3 +21,5 @@ export { CelebrationActivityCard } from "./CelebrationActivityCard";
 export { CelebrationTypePickerCards } from "./CelebrationTypePickerCards";
 export { CelebrationDeleteModal } from "./CelebrationDeleteModal";
 export { ActivityFeedCard } from "./ActivityFeedCard";
+export { GroupedActivityRow } from "./GroupedActivityRow";
+export { RecognitionActivityCard } from "./RecognitionActivityCard";

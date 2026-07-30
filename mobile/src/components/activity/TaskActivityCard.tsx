@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CheckCircle, ClipboardList } from "lucide-react-native";
 import type { ActivityFeedItem } from "./types";
-import { getActivityTintTokens, getActivityTypeLabel } from "./activity-ui";
+import { getActivityTintTokens } from "./activity-ui";
 import { ActivityCardShell } from "./ActivityCardShell";
 import { ActivityCardBody } from "./ActivityCardBody";
 
@@ -22,9 +22,9 @@ export function TaskActivityCard({ item, footer, onLongPress, testID }: Props) {
 
   const description = isAssigned
     ? count > 1
-      ? `Assigned ${count} tasks`
-      : `Assigned '${taskTitle}'`
-    : `Completed '${taskTitle}'`;
+      ? `${actorName} was assigned ${count} tasks`
+      : `${actorName} was assigned “${taskTitle}”`
+    : `${actorName} completed “${taskTitle}”`;
 
   const metadata = isAssigned
     ? `${count} task${count === 1 ? "" : "s"}`
@@ -39,7 +39,7 @@ export function TaskActivityCard({ item, footer, onLongPress, testID }: Props) {
     >
       <ActivityCardBody
         actor={item.actor ?? { name: actorName }}
-        label={getActivityTypeLabel(item.type)}
+        label="Tasks"
         LabelIcon={Icon}
         tint={tint}
         timestamp={item.timestamp}

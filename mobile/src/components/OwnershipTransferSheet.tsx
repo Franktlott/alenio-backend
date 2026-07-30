@@ -16,6 +16,7 @@ import {
   initiateOwnershipTransfer,
   type OwnershipTransferDisposition,
 } from "@/lib/ownership-transfer-api";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type MemberLite = {
   userId: string;
@@ -290,6 +291,27 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
 
       {step === "review" && member ? (
         <View style={styles.reviewStack}>
+          <View style={styles.recipientRow}>
+            <UserAvatar
+              user={member.user}
+              size={36}
+              radius={18}
+              backgroundColor="#EEF2FF"
+              textColor="#4338CA"
+              fontSize={13}
+            />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.recipientName} numberOfLines={1}>
+                {displayName}
+              </Text>
+              {member.user.email ? (
+                <Text style={styles.recipientEmail} numberOfLines={1}>
+                  {member.user.email}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
           <Text className="text-slate-500 text-[11px] font-bold uppercase" style={styles.sectionLabel}>
             Your role after they accept
           </Text>
@@ -386,6 +408,28 @@ const styles = StyleSheet.create({
   reviewStack: {
     width: "100%",
     gap: 12,
+  },
+  recipientRow: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  recipientName: {
+    color: "#0F172A",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  recipientEmail: {
+    marginTop: 2,
+    color: "#64748B",
+    fontSize: 11,
   },
   sectionLabel: {
     fontSize: 11,

@@ -34,6 +34,7 @@ import {
 } from "@/lib/plan-one-on-one";
 import { formatEventTimeRange } from "@/lib/format-event-time";
 import { durationMinutesFromRange } from "@/lib/video-meeting-duration";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type CalendarEvent = OneOnOneCalendarEventFields & {
   id: string;
@@ -161,6 +162,7 @@ export default function PlanOneOnOneScreen() {
       .map((member) => ({
         userId: member.userId,
         label: memberDisplayName(member.user.name, member.user.email),
+        user: member.user,
         role: member.role,
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -333,7 +335,18 @@ export default function PlanOneOnOneScreen() {
             }}
             testID="plan-one-on-one-member-picker"
           >
-            <UserRound size={18} color="#7C3AED" />
+            {selectedMember ? (
+              <UserAvatar
+                user={selectedMember.user}
+                size={24}
+                radius={12}
+                backgroundColor="#EDE9FE"
+                textColor="#7C3AED"
+                fontSize={9}
+              />
+            ) : (
+              <UserRound size={18} color="#7C3AED" />
+            )}
             <Text style={{ flex: 1, fontSize: 15, color: selectedMember ? "#0F172A" : "#94A3B8", fontWeight: "600" }}>
               {selectedMember?.label ?? "Choose team member"}
             </Text>
@@ -588,7 +601,11 @@ function MemberPickerModal({
   onSelect,
 }: {
   visible: boolean;
-  members: { userId: string; label: string }[];
+  members: {
+    userId: string;
+    label: string;
+    user: { name?: string | null; email?: string | null; image?: string | null };
+  }[];
   selectedUserId: string;
   onClose: () => void;
   onSelect: (userId: string) => void;
@@ -637,11 +654,22 @@ function MemberPickerModal({
                       style={{
                         paddingHorizontal: 16,
                         paddingVertical: 14,
+                        flexDirection: "row",
+                        alignItems: "center",
                         borderBottomWidth: 1,
                         borderBottomColor: "#F8FAFC",
                         backgroundColor: active ? "#F5F3FF" : "white",
                       }}
                     >
+                      <UserAvatar
+                        user={member.user}
+                        size={34}
+                        radius={17}
+                        backgroundColor="#EDE9FE"
+                        textColor="#7C3AED"
+                        fontSize={12}
+                        style={{ marginRight: 10 }}
+                      />
                       <Text style={{ fontSize: 15, fontWeight: active ? "700" : "500", color: "#0F172A" }}>
                         {member.label}
                       </Text>

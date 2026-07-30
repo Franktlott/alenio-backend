@@ -1,14 +1,14 @@
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import type { Task } from "@/lib/types";
 import { TaskRow } from "./TaskRow";
 import { TasksEmptyState } from "./TasksEmptyState";
-import { WS } from "./workspace-ui";
+import { colors, radii, space, surfaces, typography } from "@/theme";
 
 function SkeletonRow() {
   return (
-    <View style={{ paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-      <View style={{ height: 8, width: "62%", backgroundColor: "#E2E8F0", borderRadius: 4, marginBottom: 4 }} />
-      <View style={{ height: 7, width: "40%", backgroundColor: "#F1F5F9", borderRadius: 4 }} />
+    <View style={{ paddingHorizontal: space.md, paddingVertical: space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider }}>
+      <View style={{ height: 8, width: "62%", backgroundColor: colors.borderStrong, borderRadius: 4, marginBottom: 4 }} />
+      <View style={{ height: 7, width: "40%", backgroundColor: colors.divider, borderRadius: 4 }} />
     </View>
   );
 }
@@ -91,13 +91,8 @@ export function TaskListCard({
   return (
     <View
       style={{
+        ...surfaces.groupedCard,
         width: "100%",
-        alignSelf: "stretch",
-        backgroundColor: WS.surface,
-        borderRadius: WS.cardRadius,
-        overflow: "hidden",
-        borderWidth: 1,
-        borderColor: WS.cardBorder,
         ...(loading || loadError ? { minHeight: 72 } : {}),
       }}
     >
@@ -108,11 +103,19 @@ export function TaskListCard({
           <SkeletonRow />
         </>
       ) : loadError ? (
-        <View style={{ alignItems: "center", padding: 24 }}>
-          <Text style={{ fontSize: WS.title + 2, fontWeight: WS.titleWeight, color: WS.ink, marginBottom: 6 }}>Couldn't load tasks</Text>
-          <Text style={{ fontSize: WS.title, color: WS.muted, textAlign: "center", marginBottom: 12 }}>{loadError}</Text>
+        <View style={{ alignItems: "center", padding: space.xl }}>
+          <Text style={{ ...typography.rowTitle, marginBottom: 6 }}>Couldn't load tasks</Text>
+          <Text style={{ ...typography.supporting, textAlign: "center", marginBottom: 12 }}>{loadError}</Text>
           {onRetry ? (
-            <Pressable onPress={onRetry} style={{ backgroundColor: WS.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}>
+            <Pressable
+              onPress={onRetry}
+              style={{
+                backgroundColor: colors.brand,
+                borderRadius: radii.md,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+              }}
+            >
               <Text style={{ color: "white", fontWeight: "600" }}>Try again</Text>
             </Pressable>
           ) : null}
@@ -122,17 +125,15 @@ export function TaskListCard({
           <View key={section.id}>
             <View
               style={{
-                paddingHorizontal: 12,
-                paddingTop: sectionIndex === 0 ? 10 : 12,
-                paddingBottom: 4,
-                backgroundColor: sectionIndex === 0 ? WS.surface : "#F8FAFC",
-                borderTopWidth: sectionIndex === 0 ? 0 : 1,
-                borderTopColor: "#F1F5F9",
+                paddingHorizontal: space.md,
+                paddingTop: sectionIndex === 0 ? space.sm + 2 : space.md,
+                paddingBottom: space.xs,
+                backgroundColor: sectionIndex === 0 ? colors.surface : colors.pageBg,
+                borderTopWidth: sectionIndex === 0 ? 0 : StyleSheet.hairlineWidth,
+                borderTopColor: colors.divider,
               }}
             >
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 0.4, textTransform: "uppercase" }}>
-                {section.title}
-              </Text>
+              <Text style={typography.sectionLabel}>{section.title}</Text>
             </View>
             {renderTaskRows(
               section.tasks,
@@ -154,8 +155,8 @@ export function TaskListCard({
 export function TaskListFooterSpinner({ visible }: { visible: boolean }) {
   if (!visible) return null;
   return (
-    <View style={{ paddingVertical: 12, alignItems: "center" }}>
-      <ActivityIndicator color="#4361EE" size="small" />
+    <View style={{ paddingVertical: space.md, alignItems: "center" }}>
+      <ActivityIndicator color={colors.brand} size="small" />
     </View>
   );
 }

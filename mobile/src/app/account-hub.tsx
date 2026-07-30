@@ -777,7 +777,7 @@ function ComparePlansModal({
               <View
                 style={{
                   flex: 1,
-                  backgroundColor: "#F8FAFC",
+                  backgroundColor: "#FFFFFF",
                   borderRadius: 12,
                   borderWidth: 2,
                   borderColor: selectedTier === "free" ? FREE_ACCENT : "#E2E8F0",
@@ -793,7 +793,7 @@ function ComparePlansModal({
               <View
                 style={{
                   flex: 1,
-                  backgroundColor: "#F8FAFC",
+                  backgroundColor: "#FFFFFF",
                   borderRadius: 12,
                   borderWidth: 2,
                   borderColor: selectedTier === "team" ? TEAM_ACCENT : "#E2E8F0",
@@ -810,7 +810,7 @@ function ComparePlansModal({
             <View
               style={{
                 marginTop: 10,
-                backgroundColor: "#F8FAFC",
+                backgroundColor: "#FFFFFF",
                 borderRadius: 12,
                 borderWidth: 1,
                 borderColor: "#E2E8F0",

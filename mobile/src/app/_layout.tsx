@@ -242,8 +242,8 @@ function RootLayoutNav() {
         // DM notification — go to the conversation
         router.push({ pathname: '/dm-chat', params: { conversationId: data.conversationId } });
       } else if (data?.teamId && data?.teamName !== undefined) {
-        // Message notification — go to team chat
-        router.push({ pathname: '/team-chat', params: { teamId: data.teamId, teamName: data.teamName, ...(data.topicId ? { topicId: data.topicId } : {}) } });
+        // Legacy team/space message — soft-redirect to Chat inbox (Main Chat / Spaces hidden in V1)
+        router.push("/(app)/chat");
       } else if (data?.teamId) {
         // Join request or team update — go to team tab
         router.push('/(app)/team');
@@ -259,7 +259,7 @@ function RootLayoutNav() {
   }, [hasBackendSession, session?.user?.id]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F8F7FF' }}>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <AppPageBackground />
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
@@ -295,6 +295,34 @@ function RootLayoutNav() {
             <Stack.Screen name="task-detail" />
             <Stack.Screen name="member-profile" />
             <Stack.Screen name="workspace" />
+            <Stack.Screen
+              name="workspace-settings"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
+              }}
+            />
+            <Stack.Screen
+              name="team-priority"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
+              }}
+            />
+            <Stack.Screen
+              name="team-focus"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
+              }}
+            />
+            <Stack.Screen
+              name="team-directory"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
+              }}
+            />
             <Stack.Screen name="team-chat" />
             <Stack.Screen name="dm-chat" />
             <Stack.Screen
@@ -307,9 +335,7 @@ function RootLayoutNav() {
             <Stack.Screen
               name="create-group"
               options={{
-                presentation: 'formSheet',
-                sheetAllowedDetents: [0.9],
-                sheetGrabberVisible: true,
+                presentation: "fullScreenModal",
                 headerShown: false,
               }}
             />
@@ -328,8 +354,10 @@ function RootLayoutNav() {
             <Stack.Screen
               name="switch-workspace"
               options={{
-                presentation: "fullScreenModal",
+                presentation: "transparentModal",
+                animation: "fade",
                 headerShown: false,
+                contentStyle: { backgroundColor: "transparent" },
               }}
             />
             <Stack.Screen

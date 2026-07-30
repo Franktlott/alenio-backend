@@ -37,6 +37,8 @@ export function ActivityCardBody({
   children,
 }: Props) {
   const displayName = memberName ?? actor.name;
+  const headline = description ?? displayName;
+  const metaLine = [label, metadata].filter(Boolean).join(" · ");
 
   return (
     <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 7 }}>
@@ -62,7 +64,7 @@ export function ActivityCardBody({
         textColor={ACTIVITY_COLORS.slate500}
       />
 
-      <View style={{ flex: 1, minWidth: 0, gap: 0 }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
         <View
           style={{
             flexDirection: "row",
@@ -74,16 +76,14 @@ export function ActivityCardBody({
           <Text
             style={{
               flex: 1,
-              fontSize: 9,
-              fontWeight: "700",
-              color: tint.labelText,
-              letterSpacing: 0.4,
-              textTransform: "uppercase",
-              lineHeight: 11,
+              fontSize: 13,
+              fontWeight: "600",
+              color: ACTIVITY_COLORS.slate900,
+              lineHeight: 17,
             }}
-            numberOfLines={1}
+            numberOfLines={2}
           >
-            {label}
+            {headline}
           </Text>
           <Text
             style={{
@@ -98,25 +98,9 @@ export function ActivityCardBody({
           </Text>
         </View>
 
-        <Text
-          style={{ fontSize: 13, fontWeight: "700", color: ACTIVITY_COLORS.slate900, lineHeight: 15 }}
-          numberOfLines={1}
-        >
-          {displayName}
-        </Text>
-
-        {description ? (
-          <Text
-            style={{ fontSize: 12, fontWeight: "500", color: ACTIVITY_COLORS.slate700, lineHeight: 14 }}
-            numberOfLines={2}
-          >
-            {description}
-          </Text>
-        ) : null}
-
-        {metadata ? (
-          <Text style={{ fontSize: 11, color: ACTIVITY_COLORS.slate500, lineHeight: 13 }} numberOfLines={1}>
-            {metadata}
+        {metaLine ? (
+          <Text style={{ marginTop: 2, fontSize: 10, color: ACTIVITY_COLORS.slate500, lineHeight: 13 }} numberOfLines={1}>
+            {metaLine}
           </Text>
         ) : null}
 

@@ -27,7 +27,7 @@ export function NoWorkspaceRedirect() {
 
   if (!hasHydrated || isLoading || (teams && teams.length === 0)) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#4361EE" />
       </View>
     );
@@ -35,14 +35,14 @@ export function NoWorkspaceRedirect() {
 
   if (!activeTeamId) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" }}>
         <ActivityIndicator size="large" color="#4361EE" />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" }}>
       <ActivityIndicator size="large" color="#4361EE" />
     </View>
   );

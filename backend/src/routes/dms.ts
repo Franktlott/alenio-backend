@@ -11,6 +11,7 @@ import {
   listGroupMemberCandidates,
   resolveGroupConversationContext,
 } from "../lib/group-conversation-workspace";
+import { buildDmPairKey } from "../lib/dm-pair-key";
 import {
   canDeleteGroup,
   canManageGroupAdmins,
@@ -21,6 +22,7 @@ import {
 } from "../lib/group-conversation-roles";
 import { deleteReplacedStorageObject, deleteOwnedStorageUrls, deleteStorageObjectByUrlIfOwned } from "../lib/firebase-storage";
 import type { ConversationParticipantRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -69,7 +71,7 @@ dmsRouter.get("/", async (c) => {
             orderBy: { createdAt: "desc" },
             take: 1,
             include: {
-              sender: { select: { id: true, name: true } },
+              sender: { select: { id: true, name: true, image: true } },
             },
           },
         },
@@ -87,13 +89,17 @@ dmsRouter.get("/", async (c) => {
         const workspaceContext = await resolveGroupConversationContext(
           user.id,
           conv.participants.map((cp) => cp.userId),
+          conv.teamId,
         );
 
         return {
           id: conv.id,
+          type: "GROUP" as const,
           isGroup: true,
           name: conv.name,
           image: conv.image ?? null,
+          teamId: conv.teamId ?? null,
+          workspaceId: conv.teamId ?? null,
           participants: formatGroupParticipants(conv.participants),
           myRole: myGroupRole(conv.participants, user.id),
           recipient: null,
@@ -109,8 +115,11 @@ dmsRouter.get("/", async (c) => {
       const other = conv.participants.find((cp) => cp.userId !== user.id);
       return {
         id: conv.id,
+        type: "DIRECT" as const,
         isGroup: false,
         name: null,
+        teamId: null,
+        workspaceId: null,
         participants: participantUsers,
         recipient: other?.user ?? null,
         workspaceContext: null,
@@ -137,7 +146,56 @@ dmsRouter.post("/find-or-create", async (c) => {
     return c.json({ error: { message: "Cannot DM yourself", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  // Check if conversation already exists between these two users (non-group only)
+  const pairKey = buildDmPairKey(user.id, recipientId);
+
+  const includeShape = {
+    participants: {
+      include: {
+        user: { select: participantUserSelect },
+      },
+    },
+    messages: {
+      orderBy: { createdAt: "desc" as const },
+      take: 1,
+      include: { sender: { select: { id: true, name: true, image: true } } },
+    },
+  };
+
+  const formatDm = (existing: {
+    id: string;
+    createdAt: Date;
+    updatedAt: Date;
+    participants: Array<{ userId: string; user: { id: string; name: string | null; email: string | null; image: string | null } }>;
+    messages: Array<unknown>;
+  }, status: 200 | 201 = 200) => {
+    const other = existing.participants.find((p) => p.userId !== user.id);
+    return c.json(
+      {
+        data: {
+          id: existing.id,
+          type: "DIRECT" as const,
+          isGroup: false,
+          name: null,
+          participants: existing.participants.map((cp) => cp.user),
+          recipient: other?.user ?? null,
+          lastMessage: existing.messages[0] ?? null,
+          createdAt: existing.createdAt,
+          updatedAt: existing.updatedAt,
+        },
+      },
+      status,
+    );
+  };
+
+  const byKey = await prisma.conversation.findUnique({
+    where: { dmPairKey: pairKey },
+    include: includeShape,
+  });
+  if (byKey && !byKey.isGroup) {
+    return formatDm(byKey);
+  }
+
+  // Legacy rows without dmPairKey
   const existing = await prisma.conversation.findFirst({
     where: {
       isGroup: false,
@@ -147,73 +205,71 @@ dmsRouter.post("/find-or-create", async (c) => {
         { participants: { some: { userId: recipientId } } },
       ],
     },
-    include: {
-      participants: {
-        include: {
-          user: { select: participantUserSelect },
-        },
-      },
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        include: { sender: { select: { id: true, name: true } } },
-      },
-    },
+    include: includeShape,
   });
 
   if (existing) {
-    const other = existing.participants.find((p) => p.userId !== user.id);
-    return c.json({
-      data: {
-        id: existing.id,
-        isGroup: false,
-        name: null,
-        participants: existing.participants.map(cp => cp.user),
-        recipient: other?.user ?? null,
-        lastMessage: existing.messages[0] ?? null,
-        createdAt: existing.createdAt,
-        updatedAt: existing.updatedAt,
-      },
-    });
+    if (!existing.dmPairKey) {
+      try {
+        await prisma.conversation.update({
+          where: { id: existing.id },
+          data: { dmPairKey: pairKey },
+        });
+      } catch (err) {
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) {
+          throw err;
+        }
+        const winner = await prisma.conversation.findUnique({
+          where: { dmPairKey: pairKey },
+          include: includeShape,
+        });
+        if (winner) return formatDm(winner);
+      }
+    }
+    return formatDm(existing);
   }
 
-  // Create new conversation
-  const conversation = await prisma.conversation.create({
-    data: {
-      isGroup: false,
-      participants: {
-        create: [{ userId: user.id }, { userId: recipientId }],
-      },
-    },
-    include: {
-      participants: {
-        include: {
-          user: { select: participantUserSelect },
-        },
-      },
-    },
-  });
+  try {
+    let created = false;
+    const conversation = await prisma.$transaction(async (tx) => {
+      const raced = await tx.conversation.findUnique({
+        where: { dmPairKey: pairKey },
+        include: includeShape,
+      });
+      if (raced && !raced.isGroup) return raced;
 
-  const other = conversation.participants.find((p) => p.userId !== user.id);
-  return c.json({
-    data: {
-      id: conversation.id,
-      isGroup: false,
-      name: null,
-      participants: conversation.participants.map(cp => cp.user),
-      recipient: other?.user ?? null,
-      lastMessage: null,
-      createdAt: conversation.createdAt,
-      updatedAt: conversation.updatedAt,
-    },
-  }, 201);
+      created = true;
+      return tx.conversation.create({
+        data: {
+          isGroup: false,
+          dmPairKey: pairKey,
+          participants: {
+            create: [{ userId: user.id }, { userId: recipientId }],
+          },
+        },
+        include: includeShape,
+      });
+    });
+
+    return formatDm(conversation, created ? 201 : 200);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const winner = await prisma.conversation.findUnique({
+        where: { dmPairKey: pairKey },
+        include: includeShape,
+      });
+      if (winner) return formatDm(winner);
+    }
+    throw err;
+  }
 });
 
 // GET /api/dms/group-member-candidates — teammates across all of the user's workspaces
 dmsRouter.get("/group-member-candidates", async (c) => {
   const user = c.get("user")!;
   const q = c.req.query("q")?.trim() ?? "";
-  const candidates = await listGroupMemberCandidates(user.id, q);
+  const teamId = c.req.query("teamId")?.trim() || null;
+  const candidates = await listGroupMemberCandidates(user.id, q, teamId);
   return c.json({ data: candidates });
 });
 
@@ -221,7 +277,10 @@ dmsRouter.get("/group-member-candidates", async (c) => {
 dmsRouter.post("/create-group", async (c) => {
   const user = c.get("user")!;
   const body = await c.req.json();
-  const { name, participantIds } = body;
+  const { name, participantIds, teamId: rawTeamId, image: rawImage } = body;
+  const teamId = typeof rawTeamId === "string" && rawTeamId.trim() ? rawTeamId.trim() : null;
+  const image =
+    typeof rawImage === "string" && rawImage.trim() ? rawImage.trim() : null;
 
   if (!name?.trim()) {
     return c.json({ error: { message: "Group name is required", code: "VALIDATION_ERROR" } }, 400);
@@ -231,7 +290,7 @@ dmsRouter.post("/create-group", async (c) => {
   }
 
   try {
-    await assertParticipantsShareWorkspaceWithCreator(user.id, participantIds);
+    await assertParticipantsShareWorkspaceWithCreator(user.id, participantIds, teamId);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid group participants.";
     return c.json({ error: { message, code: "VALIDATION_ERROR" } }, 400);
@@ -244,6 +303,8 @@ dmsRouter.post("/create-group", async (c) => {
     data: {
       name: name.trim(),
       isGroup: true,
+      teamId,
+      image,
       participants: {
         create: allIds.map((userId) => ({
           userId,
@@ -263,14 +324,18 @@ dmsRouter.post("/create-group", async (c) => {
   const workspaceContext = await resolveGroupConversationContext(
     user.id,
     conversation.participants.map((participant) => participant.userId),
+    conversation.teamId,
   );
 
   return c.json({
     data: {
       id: conversation.id,
+      type: "GROUP" as const,
       isGroup: true,
       name: conversation.name,
       image: conversation.image ?? null,
+      teamId: conversation.teamId ?? null,
+      workspaceId: conversation.teamId ?? null,
       participants: formatGroupParticipants(conversation.participants),
       myRole: "owner" as const,
       recipient: null,
@@ -335,14 +400,18 @@ dmsRouter.patch("/:conversationId", async (c) => {
   const workspaceContext = await resolveGroupConversationContext(
     user.id,
     updated.participants.map((participant) => participant.userId),
+    updated.teamId,
   );
 
   return c.json({
     data: {
       id: updated.id,
+      type: "GROUP" as const,
       isGroup: true,
       name: updated.name,
       image: updated.image ?? null,
+      teamId: updated.teamId ?? null,
+      workspaceId: updated.teamId ?? null,
       participants: formatGroupParticipants(updated.participants),
       myRole: myGroupRole(updated.participants, user.id),
       recipient: null,
@@ -377,7 +446,7 @@ dmsRouter.get("/:conversationId/messages/pin", async (c) => {
           sender: { select: { id: true, name: true, image: true } },
         },
       },
-      pinnedBy: { select: { id: true, name: true } },
+      pinnedBy: { select: { id: true, name: true, image: true } },
     },
     take: MAX_CHAT_PINS,
   });
@@ -460,7 +529,7 @@ dmsRouter.put("/:conversationId/messages/pin", async (c) => {
           sender: { select: { id: true, name: true, image: true } },
         },
       },
-      pinnedBy: { select: { id: true, name: true } },
+      pinnedBy: { select: { id: true, name: true, image: true } },
     },
     take: MAX_CHAT_PINS,
   });
@@ -521,7 +590,7 @@ dmsRouter.delete("/:conversationId/messages/pin", async (c) => {
           sender: { select: { id: true, name: true, image: true } },
         },
       },
-      pinnedBy: { select: { id: true, name: true } },
+      pinnedBy: { select: { id: true, name: true, image: true } },
     },
     take: MAX_CHAT_PINS,
   });
@@ -569,14 +638,14 @@ dmsRouter.get("/:conversationId/messages", async (c) => {
 
   const messageInclude = {
     sender: { select: { id: true, name: true, email: true, image: true } },
-    reactions: { include: { user: { select: { id: true, name: true } } } },
+    reactions: { include: { user: { select: { id: true, name: true, image: true } } } },
     replyTo: {
       select: {
         id: true,
         content: true,
         mediaUrl: true,
         mediaType: true,
-        sender: { select: { id: true, name: true } },
+        sender: { select: { id: true, name: true, image: true } },
       },
     },
   } as const;
@@ -636,14 +705,14 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
     },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
-      reactions: { include: { user: { select: { id: true, name: true } } } },
+      reactions: { include: { user: { select: { id: true, name: true, image: true } } } },
       replyTo: {
         select: {
           id: true,
           content: true,
           mediaUrl: true,
           mediaType: true,
-          sender: { select: { id: true, name: true } },
+          sender: { select: { id: true, name: true, image: true } },
         },
       },
     },
@@ -753,14 +822,14 @@ dmsRouter.post("/:conversationId/messages/:messageId/reactions", async (c) => {
     where: { id: messageId },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
-      reactions: { include: { user: { select: { id: true, name: true } } } },
+      reactions: { include: { user: { select: { id: true, name: true, image: true } } } },
       replyTo: {
         select: {
           id: true,
           content: true,
           mediaUrl: true,
           mediaType: true,
-          sender: { select: { id: true, name: true } },
+          sender: { select: { id: true, name: true, image: true } },
         },
       },
     },
@@ -813,7 +882,7 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
             sender: { select: { id: true, name: true, image: true } },
           },
         },
-        pinnedBy: { select: { id: true, name: true } },
+        pinnedBy: { select: { id: true, name: true, image: true } },
       },
       take: MAX_CHAT_PINS,
     });

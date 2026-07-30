@@ -297,9 +297,9 @@ export default function DMChatScreen() {
     }
     const other = currentConversation ? dmOtherParticipant(currentConversation, currentUserId) : null;
     return {
-      name: recipientName?.trim() || other?.name?.trim() || other?.email?.trim() || "Direct Message",
+      name: other?.name?.trim() || other?.email?.trim() || recipientName?.trim() || "Direct Message",
       email: other?.email ?? null,
-      image: recipientImage?.trim() || other?.image || null,
+      image: other?.image ?? (recipientImage?.trim() || null),
     };
   }, [currentConversation, currentUserId, isGroup, recipientImage, recipientName]);
   const groupImageUri = isGroup ? resolveUserImageUrl(headerUser.image) : null;

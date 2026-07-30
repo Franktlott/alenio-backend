@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   Text,
   TextInput,
@@ -19,6 +18,7 @@ import {
   updateTaskNote,
 } from "@/lib/task-notes-api";
 import type { TaskNote } from "@/lib/types";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type Props = {
   teamId: string;
@@ -179,19 +179,15 @@ export function TaskNotesSection({
                 testID={`task-note-${note.id}`}
               >
                 <View className="mb-2 flex-row items-center">
-                  <View className="mr-2 h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-indigo-600">
-                    {note.createdBy.image ? (
-                      <Image
-                        source={{ uri: note.createdBy.image }}
-                        style={{ width: 28, height: 28 }}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <Text className="text-[11px] font-bold text-white">
-                        {name[0]?.toUpperCase() ?? "?"}
-                      </Text>
-                    )}
-                  </View>
+                  <UserAvatar
+                    user={note.createdBy}
+                    size={28}
+                    radius={14}
+                    backgroundColor="#4F46E5"
+                    textColor="#FFFFFF"
+                    fontSize={11}
+                    style={{ marginRight: 8 }}
+                  />
                   <View className="min-w-0 flex-1">
                     <Text className="text-xs font-semibold text-slate-800" numberOfLines={1}>
                       {name}

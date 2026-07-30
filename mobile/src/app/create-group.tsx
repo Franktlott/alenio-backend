@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,36 +8,91 @@ import {
   FlatList,
   ActivityIndicator,
   Image,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, X, Check, Users } from "lucide-react-native";
-import { router } from "expo-router";
+import { Camera, Search, X, Check, Users } from "lucide-react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import { toast } from "burnt";
+import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
+import { uploadFile } from "@/lib/upload";
 import { useSession } from "@/lib/auth/use-session";
-import type { Conversation, GroupMemberCandidate } from "@/lib/types";
+import { useTeamStore } from "@/lib/state/team-store";
+import type { Conversation, GroupMemberCandidate, Team } from "@/lib/types";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export default function CreateGroupScreen() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
+  const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const params = useLocalSearchParams<{ teamId?: string }>();
+  const paramTeamId = typeof params.teamId === "string" ? params.teamId : null;
 
   const [groupName, setGroupName] = useState("");
+  const [groupPhotoUri, setGroupPhotoUri] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUsers, setSelectedUsers] = useState<GroupMemberCandidate[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(paramTeamId ?? activeTeamId ?? null);
+
+  useEffect(() => {
+    if (paramTeamId) setSelectedTeamId(paramTeamId);
+  }, [paramTeamId]);
+
+  const { data: teams = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    enabled: !!session?.user,
+  });
+
+  useEffect(() => {
+    if (selectedTeamId) return;
+    if (activeTeamId) {
+      setSelectedTeamId(activeTeamId);
+      return;
+    }
+    if (teams[0]?.id) setSelectedTeamId(teams[0].id);
+  }, [activeTeamId, selectedTeamId, teams]);
+
+  const candidatesQuery = selectedTeamId
+    ? `/api/dms/group-member-candidates?teamId=${encodeURIComponent(selectedTeamId)}${
+        searchQuery.trim().length >= 2 ? `&q=${encodeURIComponent(searchQuery.trim())}` : ""
+      }`
+    : `/api/dms/group-member-candidates${
+        searchQuery.trim().length >= 2 ? `?q=${encodeURIComponent(searchQuery.trim())}` : ""
+      }`;
 
   const { data: candidates = [], isFetching: candidatesLoading } = useQuery({
-    queryKey: ["group-member-candidates", searchQuery],
-    queryFn: () =>
-      api.get<GroupMemberCandidate[]>(
-        `/api/dms/group-member-candidates${searchQuery.trim().length >= 2 ? `?q=${encodeURIComponent(searchQuery.trim())}` : ""}`,
-      ),
+    queryKey: ["group-member-candidates", selectedTeamId, searchQuery],
+    queryFn: () => api.get<GroupMemberCandidate[]>(candidatesQuery),
     enabled: !!session?.user,
   });
 
   const createGroupMutation = useMutation({
-    mutationFn: (payload: { name: string; participantIds: string[] }) =>
-      api.post<Conversation>("/api/dms/create-group", payload),
+    mutationFn: async (payload: {
+      name: string;
+      participantIds: string[];
+      teamId?: string | null;
+      imageUri?: string | null;
+    }) => {
+      let image: string | null = null;
+      if (payload.imageUri) {
+        const filename = payload.imageUri.split("/").pop() || "group-photo.jpg";
+        const uploaded = await uploadFile(
+          payload.imageUri,
+          filename,
+          "image/jpeg",
+        );
+        image = uploaded.url;
+      }
+      return api.post<Conversation>("/api/dms/create-group", {
+        name: payload.name,
+        participantIds: payload.participantIds,
+        teamId: payload.teamId,
+        image,
+      });
+    },
     onSuccess: (conv) => {
       queryClient.invalidateQueries({ queryKey: ["dms"] });
       router.replace({
@@ -69,15 +124,35 @@ export default function CreateGroupScreen() {
     return candidates.filter((user) => user.id !== currentUserId);
   }, [candidates, session?.user?.id]);
 
+  // Drop selections when workspace context changes (eligibility is workspace-scoped)
+  useEffect(() => {
+    setSelectedUsers([]);
+  }, [selectedTeamId]);
+
   const canCreate = groupName.trim().length > 0 && selectedUsers.length >= 1;
+
+  const pickGroupPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setGroupPhotoUri(result.assets[0].uri);
+  };
 
   const handleCreate = () => {
     if (!canCreate) return;
     createGroupMutation.mutate({
       name: groupName.trim(),
       participantIds: selectedUsers.map((u) => u.id),
+      teamId: selectedTeamId,
+      imageUri: groupPhotoUri,
     });
   };
+
+  const selectedTeamName = teams.find((t) => t.id === selectedTeamId)?.name;
 
   return (
     <SafeAreaView
@@ -109,6 +184,58 @@ export default function CreateGroupScreen() {
       </View>
 
       <View className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+        <Pressable
+          onPress={() => void pickGroupPhoto()}
+          style={{ alignSelf: "center", alignItems: "center", marginBottom: 14 }}
+          accessibilityRole="button"
+          accessibilityLabel={groupPhotoUri ? "Change group photo" : "Add group photo"}
+          testID="group-photo-picker"
+        >
+          <View
+            style={{
+              width: 84,
+              height: 84,
+              borderRadius: 42,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#EEF2FF",
+              borderWidth: 1,
+              borderColor: "#DDE4FF",
+              overflow: "visible",
+            }}
+          >
+            {groupPhotoUri ? (
+              <Image
+                source={{ uri: groupPhotoUri }}
+                style={{ width: 84, height: 84, borderRadius: 42 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Users size={30} color="#4361EE" strokeWidth={2} />
+            )}
+            <View
+              style={{
+                position: "absolute",
+                right: -2,
+                bottom: -2,
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#4361EE",
+                borderWidth: 3,
+                borderColor: "#FFFFFF",
+              }}
+            >
+              <Camera size={13} color="#FFFFFF" strokeWidth={2.4} />
+            </View>
+          </View>
+          <Text style={{ marginTop: 7, fontSize: 12, fontWeight: "600", color: "#4361EE" }}>
+            {groupPhotoUri ? "Change group photo" : "Add group photo"}
+          </Text>
+        </Pressable>
+
         <View
           className="flex-row items-center bg-slate-100 dark:bg-slate-800 rounded-2xl px-4 py-3"
           style={{ gap: 10 }}
@@ -124,6 +251,42 @@ export default function CreateGroupScreen() {
             autoFocus
           />
         </View>
+
+        {teams.length > 0 ? (
+          <View className="mt-3">
+            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Workspace
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {teams.map((team) => {
+                const active = selectedTeamId === team.id;
+                return (
+                  <Pressable
+                    key={team.id}
+                    testID={`create-group-workspace-${team.id}`}
+                    onPress={() => setSelectedTeamId(team.id)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 999,
+                      backgroundColor: active ? "#4361EE" : "#FFFFFF",
+                      borderWidth: 1,
+                      borderColor: active ? "#4361EE" : "#E2E8F0",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: active ? "#FFFFFF" : "#475569" }}>
+                      {team.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Text className="mt-2 text-xs text-slate-400">
+              Only people in {selectedTeamName ?? "this workspace"} can be added. Members are never auto-added.
+            </Text>
+          </View>
+        ) : null}
+
         {selectedUsers.length > 0 ? (
           <Text
             testID="selected-people-summary"
@@ -146,7 +309,11 @@ export default function CreateGroupScreen() {
           <Search size={16} color="#94A3B8" />
           <TextInput
             testID="user-search-input"
-            placeholder="Search people across your workspaces..."
+            placeholder={
+              selectedTeamName
+                ? `Search people in ${selectedTeamName}...`
+                : "Search people across your workspaces..."
+            }
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -169,7 +336,7 @@ export default function CreateGroupScreen() {
         ListHeaderComponent={
           !searchQuery.trim() ? (
             <Text className="px-4 pb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              People across your workspaces
+              {selectedTeamName ? `People in ${selectedTeamName}` : "People across your workspaces"}
             </Text>
           ) : null
         }
@@ -188,19 +355,15 @@ export default function CreateGroupScreen() {
             onPress={() => toggleUser(item)}
             className="flex-row items-center px-4 py-3"
           >
-            <View className="w-10 h-10 rounded-full bg-indigo-500 items-center justify-center mr-3 overflow-hidden">
-              {item.image ? (
-                <Image
-                  source={{ uri: item.image }}
-                  style={{ width: 40, height: 40 }}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Text className="text-white font-bold text-sm">
-                  {item.name?.[0]?.toUpperCase() ?? "?"}
-                </Text>
-              )}
-            </View>
+            <UserAvatar
+              user={item}
+              size={40}
+              radius={20}
+              backgroundColor="#6366F1"
+              textColor="#FFFFFF"
+              fontSize={14}
+              style={{ marginRight: 12 }}
+            />
             <View className="flex-1">
               <Text className="font-semibold text-slate-900 dark:text-white">
                 {item.name ?? item.email ?? "Member"}

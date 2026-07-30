@@ -69,7 +69,7 @@ export default function AdminUsersTab() {
   };
 
   return (
-    <View className="flex-1 bg-[#F8FAFC]">
+    <View className="flex-1 bg-white">
       <AdminHeader title="Users" subtitle="Search accounts · open a user to grant admin" />
 
       <View className="px-4 pt-4">

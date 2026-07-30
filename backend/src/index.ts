@@ -69,6 +69,7 @@ import { ensureWorkspaceModulesSchema } from "./lib/ensure-workspace-modules-sch
 import { ensureSubscriptionCancelSchema } from "./lib/ensure-subscription-cancel-schema";
 import { ensureOwnershipTransferSchema } from "./lib/ensure-ownership-transfer-schema";
 import { ensureConversationTeamSchema } from "./lib/ensure-conversation-team-schema";
+import { ensureDmPairKeySchema } from "./lib/ensure-dm-pair-key-schema";
 import { ensureGroupParticipantRolesSchema } from "./lib/ensure-group-participant-roles-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
 import { ensureTopicImageSchema } from "./lib/ensure-topic-image-schema";
@@ -77,6 +78,8 @@ import { ensurePinnedMessageSchema } from "./lib/ensure-pinned-message-schema";
 import { ensureConversationImageSchema } from "./lib/ensure-conversation-image-schema";
 import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
 import { ensureTaskNotesSchema } from "./lib/ensure-task-notes-schema";
+import { ensureTeamHealthSnapshotSchema } from "./lib/ensure-team-health-snapshot-schema";
+import { ensureSenecaTeamBriefSchema } from "./lib/ensure-seneca-team-brief-schema";
 import { ensureWalksSchema } from "./lib/ensure-walks-schema";
 import { ensureBetterAuthSchema } from "./lib/ensure-better-auth-schema";
 import { ensureOrganizationSchema } from "./lib/ensure-organization-schema";
@@ -87,6 +90,7 @@ import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
 import { senecaTeamRouter } from "./routes/seneca-team";
+import { senecaFocusRouter } from "./routes/seneca-focus";
 import { senecaStudioRouter } from "./routes/seneca-studio";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { enterpriseInvitesPublicRouter } from "./routes/enterprise-invites";
@@ -94,6 +98,8 @@ import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
 import { publicGoLinkRouter } from "./routes/public-go-link";
 import { publicGoWalksRouter } from "./routes/public-go-walks";
 import { walksRouter } from "./routes/walks";
+import { teamHealthHistoryRouter } from "./routes/team-health-history";
+import { captureMissingDailyTeamHealthSnapshots } from "./lib/team-health-snapshots";
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
 import { redeemPendingOrganizationSignupInvitesForUser } from "./lib/enterprise-signup-invite";
@@ -108,11 +114,13 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ensureBetterAuthSchema(prisma),
+  ensureTeamHealthSnapshotSchema(prisma),
+  ensureSenecaTeamBriefSchema(prisma),
   ensureOrganizationSchema(prisma),
   ensureOrgGoSchema(prisma),
   ensureSenecaStudioSchema(prisma),
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureOwnershipTransferSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureConversationImageSchema(prisma), ensureTaskArchiveSchema(prisma), ensureTaskNotesSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureOwnershipTransferSchema(prisma), ensureConversationTeamSchema(prisma), ensureDmPairKeySchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureConversationImageSchema(prisma), ensureTaskArchiveSchema(prisma), ensureTaskNotesSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -132,6 +140,7 @@ const startupSchemaReady = Promise.all([
         ensureSubscriptionCancelSchema(prisma),
         ensureOwnershipTransferSchema(prisma),
         ensureConversationTeamSchema(prisma),
+        ensureDmPairKeySchema(prisma),
         ensureGroupParticipantRolesSchema(prisma),
         ensureTopicImageSchema(prisma),
         ensureNotificationPreferencesSchema(prisma),
@@ -889,12 +898,16 @@ async function handleFileUpload(c: {
         where: { id: user.id },
         select: { image: true },
       });
-      await deleteStorageObjectByUrlIfOwned(row?.image ?? undefined);
       const uploaded = await uploadFileToFirebaseStorage({
         userId: user.id,
         file,
         slot: "profile",
       });
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { image: uploaded.url },
+      });
+      await deleteReplacedStorageObject(row?.image, uploaded.url);
       return c.json({ data: uploaded });
     }
 
@@ -1389,8 +1402,10 @@ app.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
 app.route("/api/teams/:teamId/members", developmentGoalsRouter);
 app.route("/api/teams/:teamId/members", senecaRouter);
 app.route("/api/teams/:teamId/seneca", senecaTeamRouter);
+app.route("/api/teams/:teamId/seneca/focus", senecaFocusRouter);
 app.route("/api/teams/:teamId/seneca-studio", senecaStudioRouter as any);
 app.route("/api/teams/:teamId/tasks", tasksRouter);
+app.route("/api/teams/:teamId/health-history", teamHealthHistoryRouter);
 app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
@@ -1502,6 +1517,25 @@ async function runCleanup() {
 // Run once on startup, then hourly (orphan uploads still only once per day).
 runCleanup();
 setInterval(runCleanup, 60 * 60 * 1000);
+
+let healthSnapshotJobRunning = false;
+async function runTeamHealthSnapshots() {
+  if (healthSnapshotJobRunning) return;
+  healthSnapshotJobRunning = true;
+  try {
+    const captured = await captureMissingDailyTeamHealthSnapshots();
+    if (captured > 0) {
+      console.log(`[team-health] captured ${captured} daily snapshot(s)`);
+    }
+  } catch (err) {
+    console.error("[team-health] daily snapshot job failed:", err);
+  } finally {
+    healthSnapshotJobRunning = false;
+  }
+}
+
+void startupSchemaReady.then(runTeamHealthSnapshots);
+setInterval(() => void runTeamHealthSnapshots(), 60 * 60 * 1000);
 
 // Re-schedule any pending meeting reminders after server restart
 initMeetingReminders();

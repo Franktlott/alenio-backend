@@ -4,7 +4,24 @@ import { getBackendUrl } from "../backend-url";
 
 const baseUrl = getBackendUrl();
 
-type ApiErrorBody = { error?: { message?: string } };
+export type ApiErrorBody = {
+  error?: {
+    message?: string;
+    code?: string;
+    refreshAvailableAt?: string;
+  };
+};
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: ApiErrorBody | null,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -66,7 +83,11 @@ const request = async <T>(
       // Next request can rehydrate via Neon session refresh if still valid.
       clearAccessToken();
     }
-    throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);
+    throw new ApiError(
+      err?.error?.message ?? `Request failed: ${response.status}`,
+      response.status,
+      err,
+    );
   }
   const parsed = await readJsonSafe<T>(response);
   return (parsed ?? ({} as T));
@@ -110,7 +131,11 @@ export const api = {
         // Soft-fail like request(): avoid immediate forced sign-out.
         clearAccessToken();
       }
-      throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);
+      throw new ApiError(
+        err?.error?.message ?? `Request failed: ${response.status}`,
+        response.status,
+        err,
+      );
     }
     if (response.status === 204 || response.status === 205) return undefined as T;
     const parsed = await readJsonSafe<{ data: T }>(response);

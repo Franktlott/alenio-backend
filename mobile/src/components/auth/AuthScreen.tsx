@@ -32,7 +32,7 @@ export function AuthScreen({
   tagline = "Your frontline\noperations platform.",
 }: AuthScreenProps) {
   return (
-    <View className="flex-1 bg-[#F7F7FF]" testID={testID}>
+    <View className="flex-1 bg-white" testID={testID}>
       <StatusBar style="light" />
       <LinearGradient
         colors={["#1769F5", "#7138EF"]}
@@ -64,7 +64,7 @@ export function AuthScreen({
           height: 100,
           borderTopLeftRadius: 70,
           borderTopRightRadius: 70,
-          backgroundColor: "#F7F7FF",
+          backgroundColor: "#FFFFFF",
         }}
       />
 

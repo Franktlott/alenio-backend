@@ -14,7 +14,7 @@ export default function AdminActivityTab() {
   const alerts = stats?.recentAlerts ?? [];
 
   return (
-    <View className="flex-1 bg-[#F8FAFC]">
+    <View className="flex-1 bg-white">
       <AdminHeader title="Activity" subtitle="Usage trends and platform alerts" />
 
       <ScrollView

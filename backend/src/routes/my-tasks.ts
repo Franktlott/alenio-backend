@@ -23,7 +23,7 @@ myTasksRouter.get("/", async (c) => {
         include: {
           assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
           recurrenceRule: true,
-          creator: { select: { id: true, name: true, email: true } },
+          creator: { select: { id: true, name: true, email: true, image: true } },
           team: { select: { id: true, name: true } },
         },
       },

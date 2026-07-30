@@ -469,7 +469,11 @@ calendarRouter.patch(
             ? { allDay: false }
             : {}),
         ...(body.color !== undefined ? { color: body.color } : {}),
-        ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : nextIsOneOnOne ? { isHidden: true } : {}),
+        ...(nextIsOneOnOne
+          ? { isHidden: true }
+          : body.isHidden !== undefined
+            ? { isHidden: body.isHidden }
+            : {}),
         ...(updatePolicy.resetApproval ? { approvalStatus: updatePolicy.resetApproval } : {}),
         ...(body.isVideoMeeting !== undefined || updatePolicy.forbidVideo
           ? { isVideoMeeting: nextIsVideoMeeting }

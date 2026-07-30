@@ -44,6 +44,7 @@ import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { TaskNotesSection } from "@/components/tasks/TaskNotesSection";
+import { UserAvatar } from "@/components/UserAvatar";
 
 function sameCalendarDay(a: Date | null, b: Date | null): boolean {
   if (!a && !b) return true;
@@ -1033,13 +1034,14 @@ export default function TaskDetailScreen() {
                                 overflow: "hidden",
                               }}
                             >
-                              {c.user.image ? (
-                                <Image source={{ uri: c.user.image }} style={{ width: 22, height: 22, borderRadius: 11 }} />
-                              ) : (
-                                <Text style={{ fontSize: 9, fontWeight: "700", color: "white" }}>
-                                  {c.user.name?.charAt(0).toUpperCase() ?? "?"}
-                                </Text>
-                              )}
+                              <UserAvatar
+                                user={c.user}
+                                size={19}
+                                radius={9.5}
+                                backgroundColor="#4361EE"
+                                textColor="#FFFFFF"
+                                fontSize={9}
+                              />
                             </View>
                           ))}
                           {completions.length > 3 ? (
@@ -1154,13 +1156,15 @@ export default function TaskDetailScreen() {
             <View style={{ gap: 8 }}>
               {task.assignments.map((a) => (
                 <View key={a.id} className="flex-row items-center">
-                  <View className="w-8 h-8 rounded-full bg-indigo-600 items-center justify-center mr-2 overflow-hidden">
-                    {a.user.image ? (
-                      <Image source={{ uri: a.user.image }} style={{ width: 32, height: 32 }} resizeMode="cover" />
-                    ) : (
-                      <Text className="text-white text-xs font-bold">{a.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
-                    )}
-                  </View>
+                  <UserAvatar
+                    user={a.user}
+                    size={32}
+                    radius={16}
+                    backgroundColor="#4F46E5"
+                    textColor="#FFFFFF"
+                    fontSize={12}
+                    style={{ marginRight: 8 }}
+                  />
                   <View className="flex-1">
                     <Text className="text-sm font-medium text-slate-900 dark:text-white">
                       {a.user.name}{a.userId === currentUserId ? " (you)" : ""}
@@ -1296,13 +1300,15 @@ export default function TaskDetailScreen() {
                   disabled={isPending}
                   className="flex-row items-center py-3 border-b border-slate-100 dark:border-slate-700"
                 >
-                  <View className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center mr-3 overflow-hidden">
-                    {m.user.image ? (
-                      <Image source={{ uri: m.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-                    ) : (
-                      <Text className="text-white text-sm font-bold">{m.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
-                    )}
-                  </View>
+                  <UserAvatar
+                    user={m.user}
+                    size={36}
+                    radius={18}
+                    backgroundColor="#4F46E5"
+                    textColor="#FFFFFF"
+                    fontSize={14}
+                    style={{ marginRight: 12 }}
+                  />
                   <View className="flex-1">
                     <Text className="font-semibold text-slate-900 dark:text-white">
                       {m.user.name}{m.userId === currentUserId ? " (you)" : ""}

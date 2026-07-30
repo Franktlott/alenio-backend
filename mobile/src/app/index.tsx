@@ -16,7 +16,7 @@ export default function Index() {
   }, [authReady?.me?.id, bootstrapped]);
 
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" }}>
       <ActivityIndicator size="large" color="#4361EE" />
     </View>
   );

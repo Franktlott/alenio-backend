@@ -29,13 +29,13 @@ function SheetOption({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 20,
-        paddingVertical: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
         backgroundColor: selected ? "#F5F7FF" : "transparent",
         opacity: disabled ? 0.45 : 1,
       }}
     >
-      <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: selected ? "#4361EE" : "#0F172A" }}>{label}</Text>
+      <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: selected ? "#4361EE" : "#0F172A" }}>{label}</Text>
       {selected ? <Check size={16} color="#4361EE" /> : null}
     </TouchableOpacity>
   );

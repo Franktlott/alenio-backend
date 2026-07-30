@@ -12,6 +12,7 @@ type Props = {
   style?: ViewStyle;
   imageStyle?: ImageStyle;
   textStyle?: TextStyle;
+  testID?: string;
 };
 
 export function UserAvatar({
@@ -24,6 +25,7 @@ export function UserAvatar({
   style,
   imageStyle,
   textStyle,
+  testID,
 }: Props) {
   const uri = resolveUserImageUrl(user.image);
   const [failedUri, setFailedUri] = useState<string | null>(null);
@@ -37,6 +39,7 @@ export function UserAvatar({
 
   return (
     <View
+      testID={testID}
       style={[
         {
           width: size,
@@ -53,6 +56,7 @@ export function UserAvatar({
     >
       {showImage ? (
         <Image
+          testID={testID ? `${testID}-image` : undefined}
           source={{ uri }}
           style={[{ width: size, height: size }, imageStyle]}
           resizeMode="cover"

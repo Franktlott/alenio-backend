@@ -20,7 +20,7 @@ export default function AdminWorkspacesTab() {
     : [];
 
   return (
-    <View className="flex-1 bg-[#F8FAFC]">
+    <View className="flex-1 bg-white">
       <AdminHeader title="Workspaces" subtitle="Find and review workplaces" />
 
       <View className="px-4 pt-4">

@@ -30,6 +30,7 @@ import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { resolveMyTeamRole } from "@/lib/member-identity";
 import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
   { label: "Low", value: "low", color: "#94A3B8" },
@@ -937,6 +938,15 @@ export default function CreateTaskScreen() {
                       }}
                       testID={`assignee-${member.userId}`}
                     >
+                      <UserAvatar
+                        user={member.user}
+                        size={32}
+                        radius={16}
+                        backgroundColor="#EEF2FF"
+                        textColor="#4361EE"
+                        fontSize={11}
+                        style={{ marginRight: 10 }}
+                      />
                       <Text style={{ fontSize: 15, color: "#334155", fontWeight: isSelected ? "700" : "500", flex: 1 }} numberOfLines={1}>
                         {memberDisplayName(member)}
                       </Text>

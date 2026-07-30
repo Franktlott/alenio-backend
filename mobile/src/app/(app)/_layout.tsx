@@ -1,10 +1,9 @@
 import { Tabs, router } from "expo-router";
-import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
+import { CheckSquare, Users, UserRound, MessageCircle, Activity } from "lucide-react-native";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   TAB_BAR_ACTIVE_COLOR,
-  TAB_BAR_DIVIDER_COLOR,
   TAB_BAR_HEIGHT,
   TAB_BAR_ICON_SIZE,
   TAB_BAR_INACTIVE_COLOR,
@@ -18,7 +17,8 @@ import { useUnreadStore, buildDmLastReadMap } from "@/lib/state/unread-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { isPersistedPaidPlan, toPersistedPlan } from "@/lib/plan-access-copy";
 import { useTaskStore } from "@/lib/state/task-store";
-import { useEffect, useMemo } from "react";
+import { useContext, useEffect, useMemo } from "react";
+import { BottomTabBarHeightCallbackContext } from "expo-router/js-tabs";
 import type { CalendarEvent, Conversation, Team, Task } from "@/lib/types";
 import MeetingBanner from "@/components/MeetingBanner";
 import { SenecaFloatingLauncher } from "@/components/seneca/SenecaFloatingLauncher";
@@ -35,12 +35,18 @@ const ALL_TABS = [
   { name: "chat", label: "Chat", Icon: MessageCircle, paidOnly: false },
   { name: "execute", label: "Workspace", Icon: CheckSquare, paidOnly: true },
   { name: "team", label: "Team", Icon: Users, paidOnly: false },
-  { name: "profile", label: "Profile", Icon: User, paidOnly: false },
+  { name: "profile", label: "Profile", Icon: UserRound, paidOnly: false },
 ] as const;
 
 function FixedTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const onTabBarHeightChange = useContext(BottomTabBarHeightCallbackContext);
   const queryClient = useQueryClient();
+
+  // Fixed bar overlays content — screens pad with tabBarClearance().
+  useEffect(() => {
+    onTabBarHeightChange?.(0);
+  }, [onTabBarHeightChange]);
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
@@ -56,14 +62,6 @@ function FixedTabBar({ state, navigation }: any) {
     refetchInterval: 5000,
   });
 
-  const { data: topics = [] } = useQuery({
-    queryKey: ["topics", activeTeamId],
-    queryFn: () => api.get<any[]>(`/api/teams/${activeTeamId}/topics`),
-    enabled: !!activeTeamId && !!session?.user,
-    refetchInterval: 15000,
-    staleTime: 10000,
-  });
-
   const dmUnreadLastReadIds = useMemo(
     () => buildDmLastReadMap(conversations, lastReadIds),
     [conversations, lastReadIds]
@@ -77,22 +75,6 @@ function FixedTabBar({ state, navigation }: any) {
   });
   const unreadCount = Object.values(dmUnreadCounts).reduce((a, b) => a + b, 0);
 
-  const teamChannelLastReadIds = useMemo(
-    (): Record<string, string> => ({
-      [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "",
-      ...Object.fromEntries(topics.map((t: any) => [`topic:${t.id}`, lastReadIds[`topic:${t.id}`] ?? ""])),
-    }),
-    [activeTeamId, topics, lastReadIds]
-  );
-  const { data: teamUnreadCountsMap = {} } = useQuery({
-    queryKey: ["team-unread-counts", activeTeamId, teamChannelLastReadIds],
-    queryFn: () => api.post<Record<string, number>>(`/api/teams/${activeTeamId}/messages/unread-counts`, { lastReadIds: teamChannelLastReadIds }),
-    enabled: !!activeTeamId && !!session?.user,
-    refetchInterval: 5000,
-    staleTime: 0,
-  });
-  const teamUnreadCount = Object.values(teamUnreadCountsMap).reduce((a: number, b: number) => a + b, 0);
-
   // Keep unread badges in sync the moment a message arrives (even when not in that chat).
   useEffect(() => {
     const userId = session?.user?.id;
@@ -101,9 +83,7 @@ function FixedTabBar({ state, navigation }: any) {
     realtimeClient.subscribe([channel]);
     const offInbox = realtimeClient.onInboxUpdated(() => {
       void queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
-      void queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
       void queryClient.invalidateQueries({ queryKey: ["dms"] });
-      void queryClient.invalidateQueries({ queryKey: ["messages", activeTeamId, "general", "preview"] });
     });
     return () => {
       offInbox();
@@ -230,72 +210,86 @@ function FixedTabBar({ state, navigation }: any) {
 
   const activeRouteName = state.routes[state.index]?.name;
 
-  return (
-    <View style={tabBarStyles.container} pointerEvents="box-none">
-      <View style={tabBarStyles.row}>
-        {visibleRoutes.map((route: any) => {
-          const isFocused = activeRouteName === route.name;
-          const tab = ALL_TABS.find((t) => t.name === route.name);
-          if (!tab) return null;
-          const { Icon, label, name } = tab;
-          const isChat = name === "chat";
-          const isTasks = name === "execute";
-          const isTeamTab = name === "team";
-          const acknowledgedCount = acknowledgedCounts[activeTeamId ?? ""] ?? 0;
-          const acknowledgedEventCount = acknowledgedEventCounts[activeTeamId ?? ""] ?? 0;
-          const newTaskCount = Math.max(0, taskCount - acknowledgedCount);
-          const newEventCount = Math.max(0, eventCount - acknowledgedEventCount);
-          const workspaceBadge = newTaskCount + newEventCount;
-          const badge =
-            isChat && unreadCount + teamUnreadCount > 0
-              ? unreadCount + teamUnreadCount
-              : isTasks && workspaceBadge > 0
-                ? workspaceBadge
-                : isTeamTab && pendingJoinRequestCount > 0
-                  ? pendingJoinRequestCount
-                  : null;
+  const tabs = visibleRoutes.map((route: any) => {
+    const isFocused = activeRouteName === route.name;
+    const tab = ALL_TABS.find((t) => t.name === route.name);
+    if (!tab) return null;
+    const { Icon, label, name } = tab;
+    const isChat = name === "chat";
+    const isTasks = name === "execute";
+    const isTeamTab = name === "team";
+    const acknowledgedCount = acknowledgedCounts[activeTeamId ?? ""] ?? 0;
+    const acknowledgedEventCount = acknowledgedEventCounts[activeTeamId ?? ""] ?? 0;
+    const newTaskCount = Math.max(0, taskCount - acknowledgedCount);
+    const newEventCount = Math.max(0, eventCount - acknowledgedEventCount);
+    const workspaceBadge = newTaskCount + newEventCount;
+    const badge =
+      isChat && unreadCount > 0
+        ? unreadCount
+        : isTasks && workspaceBadge > 0
+          ? workspaceBadge
+          : isTeamTab && pendingJoinRequestCount > 0
+            ? pendingJoinRequestCount
+            : null;
 
-          return (
-            <Pressable
-              key={route.key}
-              onPress={() => {
-                const event = navigation.emit({
-                  type: "tabPress",
-                  target: route.key,
-                  canPreventDefault: true,
-                });
-                if (isFocused || event.defaultPrevented) return;
-                prefetchRouteData(route.name);
-                navigation.navigate(route.name);
-              }}
-              style={tabBarStyles.tab}
-              testID={`tab-${name}`}
-            >
-              <View style={tabBarStyles.iconWrap}>
-                <Icon
-                  size={TAB_BAR_ICON_SIZE}
-                  color={isFocused ? TAB_BAR_ACTIVE_COLOR : TAB_BAR_INACTIVE_COLOR}
-                  strokeWidth={isFocused ? 2.5 : 1.8}
-                />
-                {badge ? (
-                  <View style={tabBarStyles.badge}>
-                    <Text style={tabBarStyles.badgeText}>{badge}</Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text
-                style={[
-                  tabBarStyles.label,
-                  { color: isFocused ? TAB_BAR_ACTIVE_COLOR : TAB_BAR_INACTIVE_COLOR, fontWeight: isFocused ? "600" : "500" },
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <View style={{ height: insets.bottom, backgroundColor: "#FFFFFF" }} />
+    return (
+      <Pressable
+        key={route.key}
+        onPress={() => {
+          const event = navigation.emit({
+            type: "tabPress",
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (isFocused || event.defaultPrevented) return;
+          prefetchRouteData(route.name);
+          navigation.navigate(route.name);
+        }}
+        style={tabBarStyles.tab}
+        testID={`tab-${name}`}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isFocused }}
+        accessibilityLabel={label}
+      >
+        <View style={tabBarStyles.iconWrap}>
+          <Icon
+            size={TAB_BAR_ICON_SIZE}
+            color={isFocused ? TAB_BAR_ACTIVE_COLOR : TAB_BAR_INACTIVE_COLOR}
+            strokeWidth={isFocused ? 2.5 : 1.8}
+          />
+          {badge ? (
+            <View style={tabBarStyles.badge}>
+              <Text style={tabBarStyles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
+            </View>
+          ) : null}
+        </View>
+        <Text
+          style={[
+            tabBarStyles.label,
+            {
+              color: isFocused ? TAB_BAR_ACTIVE_COLOR : TAB_BAR_INACTIVE_COLOR,
+              fontWeight: isFocused ? "700" : "500",
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </Pressable>
+    );
+  });
+
+  return (
+    <View
+      style={[
+        tabBarStyles.container,
+        { bottom: Math.max(insets.bottom, 8) },
+      ]}
+      pointerEvents="box-none"
+      testID="fixed-tab-bar"
+    >
+      <View style={tabBarStyles.depthShadow} pointerEvents="none" />
+      <View style={tabBarStyles.row}>{tabs}</View>
     </View>
   );
 }
@@ -303,20 +297,40 @@ function FixedTabBar({ state, navigation }: any) {
 const tabBarStyles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    left: 12,
+    right: 12,
+    zIndex: 10100,
+    elevation: 10100,
+    backgroundColor: "transparent",
+  },
+  depthShadow: {
+    position: "absolute",
+    left: 2,
+    right: 2,
+    top: 2,
     bottom: 0,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: TAB_BAR_DIVIDER_COLOR,
-    zIndex: 100,
-    elevation: 100,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.98)",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   row: {
     height: TAB_BAR_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 5,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(20, 30, 60, 0.06)",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 9,
   },
   tab: {
     flex: 1,
@@ -325,7 +339,7 @@ const tabBarStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 2,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
   iconWrap: {
     alignItems: "center",
@@ -337,7 +351,7 @@ const tabBarStyles = StyleSheet.create({
   badge: {
     position: "absolute",
     top: -4,
-    right: -8,
+    right: -10,
     backgroundColor: "#EF4444",
     borderRadius: 8,
     minWidth: 16,
@@ -421,13 +435,29 @@ export default function AppLayout() {
       <Tabs
         initialRouteName="chat"
         tabBar={(props) => <FixedTabBar {...props} />}
-        screenOptions={{ headerShown: false, animation: "none", sceneStyle: { backgroundColor: "transparent" } }}
+        screenOptions={{
+          headerShown: false,
+          animation: "none",
+          sceneStyle: { backgroundColor: "transparent", flex: 1 },
+          // Full-bleed scenes under the fixed overlay tab bar
+          tabBarStyle: {
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 0,
+            borderTopWidth: 0,
+            backgroundColor: "transparent",
+            elevation: 0,
+          },
+          safeAreaInsets: { bottom: 0 },
+        }}
       >
         <Tabs.Screen name="activity" options={{}} />
         <Tabs.Screen name="chat" options={{}} />
         <Tabs.Screen name="execute" options={{ title: "Workspace" }} />
         <Tabs.Screen name="team" options={{ title: "Team" }} />
-        <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+        <Tabs.Screen name="profile" options={{ title: "Settings" }} />
       </Tabs>
       <MeetingBanner />
       <SenecaFloatingLauncher />

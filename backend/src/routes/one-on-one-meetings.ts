@@ -601,7 +601,7 @@ oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
         oneOnOneTemplateId: event.oneOnOneTemplateId,
         createdById: event.createdById,
         createdBy: event.createdBy
-          ? { id: event.createdBy.id, name: event.createdBy.name }
+          ? { id: event.createdBy.id, name: event.createdBy.name, image: event.createdBy.image }
           : null,
       })),
     });

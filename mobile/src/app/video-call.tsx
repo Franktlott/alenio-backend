@@ -8,9 +8,10 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import WebView from "react-native-webview";
 import { useLocalSearchParams, router, useNavigation } from "expo-router";
 import { ChevronLeft, Video, PhoneOff, Share2, Monitor, Mail, X, Check } from "lucide-react-native";
-import { useSession } from "@/lib/auth/use-session";
+import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { api } from "@/lib/api/api";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const alenioLogo = require("@/assets/alenio-logo-white.png");
 
@@ -19,6 +20,7 @@ type Phase = "prejoin" | "connecting" | "incall" | "error";
 export default function VideoCallScreen() {
   const { roomId, roomName } = useLocalSearchParams<{ roomId: string; roomName: string }>();
   const { data: session } = useSession();
+  const { data: authReady } = useMobileAuthReady();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
@@ -31,8 +33,9 @@ export default function VideoCallScreen() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [roomReady, setRoomReady] = useState(false);
-  const userName = session?.user?.name ?? "Guest";
-  const userImage = session?.user?.image;
+  const userName = authReady?.me?.name ?? session?.user?.name ?? "Guest";
+  const userImage = authReady?.me?.image ?? session?.user?.image ?? null;
+  const userEmail = authReady?.me?.email ?? session?.user?.email ?? null;
 
   // Email invite state
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -188,7 +191,6 @@ export default function VideoCallScreen() {
 
   // ── PRE-JOIN ──
   if (phase === "prejoin") {
-    const initials = userName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
     return (
       <View style={[s.screen, { alignItems: "stretch" }]}>
         <StatusBar barStyle="light-content" />
@@ -204,13 +206,15 @@ export default function VideoCallScreen() {
 
           {/* Video preview area */}
           <View style={s.previewArea}>
-            {userImage ? (
-              <Image source={{ uri: userImage }} style={s.avatarLg} />
-            ) : (
-              <View style={s.avatarInitials}>
-                <Text style={s.avatarInitialsText}>{initials}</Text>
-              </View>
-            )}
+            <UserAvatar
+              user={{ name: userName, email: userEmail, image: userImage }}
+              size={112}
+              radius={56}
+              backgroundColor="#4361EE"
+              textColor="#FFFFFF"
+              fontSize={32}
+              style={s.avatarLg}
+            />
             <Text style={s.previewName}>{userName}</Text>
           </View>
 

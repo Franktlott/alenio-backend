@@ -415,7 +415,7 @@ tasksRouter.get("/", async (c) => {
       },
       subtasks: subtasksInclude,
       recurrenceRule: true,
-      creator: { select: { id: true, name: true, email: true } },
+      creator: { select: { id: true, name: true, email: true, image: true } },
       oneOnOneMeeting: {
         select: {
           id: true,
@@ -425,7 +425,7 @@ tasksRouter.get("/", async (c) => {
           status: true,
           publishedAt: true,
           createdAt: true,
-          createdBy: { select: { id: true, name: true, email: true } },
+          createdBy: { select: { id: true, name: true, email: true, image: true } },
         },
       },
     },
@@ -466,7 +466,7 @@ tasksRouter.post("/", async (c) => {
     assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
     subtasks: subtasksInclude,
     recurrenceRule: true,
-    creator: { select: { id: true, name: true, email: true } },
+    creator: { select: { id: true, name: true, email: true, image: true } },
   } as const;
 
   const dueDateObj = dueDate
@@ -1156,7 +1156,7 @@ tasksRouter.get("/:taskId", async (c) => {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
       subtasks: subtasksInclude,
       recurrenceRule: true,
-      creator: { select: { id: true, name: true, email: true } },
+      creator: { select: { id: true, name: true, email: true, image: true } },
     },
   });
 
@@ -1303,7 +1303,7 @@ tasksRouter.patch("/:taskId", async (c) => {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
       subtasks: subtasksInclude,
       recurrenceRule: true,
-      creator: { select: { id: true, name: true, email: true } },
+      creator: { select: { id: true, name: true, email: true, image: true } },
     },
   });
 
@@ -1451,7 +1451,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
       subtasks: subtasksInclude,
       recurrenceRule: true,
-      creator: { select: { id: true, name: true, email: true } },
+      creator: { select: { id: true, name: true, email: true, image: true } },
     },
   });
 

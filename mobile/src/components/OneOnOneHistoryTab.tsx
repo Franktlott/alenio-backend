@@ -43,6 +43,7 @@ import {
   type PlannedOneOnOneEvent,
 } from "@/lib/plan-one-on-one";
 import { formatEventTimeRange, eventShowsScheduledTime } from "@/lib/format-event-time";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   createOneOnOneMeeting,
   deleteOneOnOneMeeting,
@@ -389,7 +390,6 @@ export function OneOnOneHistoryTab({
   const lastStartCheckInTokenRef = useRef(0);
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
   const [linkedPlannedEventId, setLinkedPlannedEventId] = useState<string | null>(null);
-  const memberInitial = memberName.trim()[0]?.toUpperCase() || "?";
 
   useEffect(() => {
     onFlowActiveChange?.(view !== "list");
@@ -636,7 +636,7 @@ export function OneOnOneHistoryTab({
             </Text>
             <View
               style={{
-                backgroundColor: "#F8FAFC",
+                backgroundColor: "#FFFFFF",
                 borderRadius: 4,
                 paddingHorizontal: 6,
                 paddingVertical: 2,
@@ -1026,7 +1026,7 @@ export function OneOnOneHistoryTab({
           color: "#0F172A",
           minHeight: isLong ? 72 : undefined,
           textAlignVertical: isLong ? "top" : "center",
-          backgroundColor: "#F8FAFC",
+          backgroundColor: "#FFFFFF",
         }}
       />
     );
@@ -1075,7 +1075,7 @@ export function OneOnOneHistoryTab({
                     gap: 10,
                     padding: 12,
                     borderRadius: 12,
-                    backgroundColor: "#F8FAFC",
+                    backgroundColor: "#FFFFFF",
                     borderWidth: 1,
                     borderColor: "#E2E8F0",
                   }}
@@ -1166,7 +1166,7 @@ export function OneOnOneHistoryTab({
     );
 
     return (
-      <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
         <View
           style={{
             flexDirection: "row",
@@ -1289,7 +1289,7 @@ export function OneOnOneHistoryTab({
                     style={{
                       marginBottom: 8,
                       padding: 10,
-                      backgroundColor: "#F8FAFC",
+                      backgroundColor: "#FFFFFF",
                       borderRadius: 10,
                       gap: 6,
                     }}
@@ -1412,7 +1412,7 @@ export function OneOnOneHistoryTab({
   };
 
   const renderPickView = () => (
-    <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 4, backgroundColor: "#F8FAFC" }}>
+    <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 4, backgroundColor: "#FFFFFF" }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <Pressable
           onPress={() => setView("list")}
@@ -1841,7 +1841,7 @@ export function OneOnOneHistoryTab({
       <View
         style={{
           flex: 1,
-          backgroundColor: "#F8FAFC",
+          backgroundColor: "#FFFFFF",
           paddingTop: Platform.OS === "ios" ? 18 : insets.top + 8,
         }}
       >
@@ -1852,26 +1852,17 @@ export function OneOnOneHistoryTab({
             paddingHorizontal: 14,
             paddingBottom: 8,
             gap: 10,
-            backgroundColor: "#F8FAFC",
+            backgroundColor: "#FFFFFF",
           }}
         >
-          <View
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 17,
-              backgroundColor: "#EEF2FF",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-            }}
-          >
-            {memberImage ? (
-              <Image source={{ uri: memberImage }} style={{ width: 34, height: 34 }} />
-            ) : (
-              <Text style={{ fontSize: 14, fontWeight: "800", color: "#4F46E5" }}>{memberInitial}</Text>
-            )}
-          </View>
+          <UserAvatar
+            user={{ name: memberName, image: memberImage }}
+            size={34}
+            radius={17}
+            backgroundColor="#EEF2FF"
+            textColor="#4F46E5"
+            fontSize={14}
+          />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text
               style={{
@@ -2123,7 +2114,7 @@ export function OneOnOneHistoryTab({
                         width: 28,
                         height: 28,
                         borderRadius: 8,
-                        backgroundColor: "#F8FAFC",
+                        backgroundColor: "#FFFFFF",
                         alignItems: "center",
                         justifyContent: "center",
                       }}
@@ -2273,7 +2264,7 @@ export function OneOnOneHistoryTab({
                           style={{
                             marginBottom: 8,
                             padding: 10,
-                            backgroundColor: "#F8FAFC",
+                            backgroundColor: "#FFFFFF",
                             borderRadius: 8,
                             flexDirection: "row",
                             alignItems: "center",

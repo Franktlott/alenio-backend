@@ -1,31 +1,28 @@
 import React from "react";
-import { View, Text, Pressable, ActivityIndicator, ScrollView } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, ScrollView, type StyleProp, type ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useUnreadStore } from "@/lib/state/unread-store";
+import { tabBarClearance } from "@/lib/tab-bar";
 import type { Team } from "@/lib/types";
 import type { SpaceTopic } from "@/components/SpacesSection";
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
+import { surfaces, typography } from "@/theme";
 
 type Props = {
   activeTeamId: string | null;
   onSelectTeam: (teamId: string) => void;
-  cardStyle?: object;
+  /** Match Messages panel row chrome from chat.tsx */
+  cardStyle?: StyleProp<ViewStyle>;
 };
 
-const rowStyle = {
-  marginHorizontal: 14,
-  marginBottom: 6,
-  backgroundColor: "#FFFFFF",
-  borderRadius: 10,
-  paddingVertical: 9,
-  paddingHorizontal: 12,
-  borderWidth: 1,
-  borderColor: "#E9EDF2",
-} as const;
+const AVATAR = 28;
+
+const defaultRowStyle = surfaces.listCard;
 
 function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -33,23 +30,26 @@ function UnreadBadge({ count }: { count: number }) {
     <View
       style={{
         backgroundColor: "#EF4444",
-        borderRadius: 9,
-        minWidth: 18,
-        height: 18,
+        borderRadius: 8,
+        minWidth: 16,
+        height: 16,
         alignItems: "center",
         justifyContent: "center",
-        paddingHorizontal: 5,
+        paddingHorizontal: 4,
+        marginLeft: 6,
         flexShrink: 0,
       }}
     >
-      <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>{count > 99 ? "99+" : count}</Text>
+      <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>{count > 99 ? "99+" : count}</Text>
     </View>
   );
 }
 
-export function WorkspacesSection({ activeTeamId, onSelectTeam }: Props) {
+export function WorkspacesSection({ activeTeamId, onSelectTeam, cardStyle }: Props) {
+  const insets = useSafeAreaInsets();
   const { data: session } = useSession();
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
+  const rowStyle = cardStyle ?? defaultRowStyle;
 
   const { data: teams = [], isLoading } = useQuery<Team[]>({
     queryKey: ["teams"],
@@ -106,20 +106,9 @@ export function WorkspacesSection({ activeTeamId, onSelectTeam }: Props) {
   };
 
   const header = (
-    <View style={{ marginHorizontal: 14, marginTop: 16, marginBottom: 8, flexShrink: 0 }}>
-      <Text
-        style={{
-          fontSize: 11,
-          fontWeight: "700",
-          color: "#64748B",
-          letterSpacing: 0.8,
-          textTransform: "uppercase",
-          marginBottom: 2,
-        }}
-      >
-        Workspaces
-      </Text>
-      <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 16 }} numberOfLines={1}>
+    <View style={{ marginHorizontal: 12, marginTop: 8, marginBottom: 4, flexShrink: 0 }}>
+      <Text style={[typography.sectionLabel, { marginBottom: 1 }]}>Workspaces</Text>
+      <Text style={typography.sectionSubtitle} numberOfLines={1}>
         {teams.length === 0
           ? "Team chats and channels"
           : `${teams.length} workspace${teams.length === 1 ? "" : "s"}`}
@@ -138,18 +127,22 @@ export function WorkspacesSection({ activeTeamId, onSelectTeam }: Props) {
         onPress={() => openWorkspace(team)}
         style={rowStyle}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <WorkspaceTeamAvatar team={team} size={32} active={team.id === activeTeamId} radius={9} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <WorkspaceTeamAvatar team={team} size={AVATAR} active={team.id === activeTeamId} radius={8} />
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 13.5, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>
-              {team.name}
-            </Text>
-            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }} numberOfLines={1}>
-              {channelCount} channel{channelCount === 1 ? "" : "s"}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", flex: 1 }} numberOfLines={1}>
+                {team.name}
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 11, color: "#6B7280", flex: 1 }} numberOfLines={1}>
+                {channelCount} channel{channelCount === 1 ? "" : "s"}
+              </Text>
+              <UnreadBadge count={totalUnread} />
+            </View>
           </View>
-          <UnreadBadge count={totalUnread} />
-          <ChevronRight size={16} color="#CBD5E1" />
+          <ChevronRight size={14} color="#CBD5E1" style={{ flexShrink: 0 }} />
         </View>
       </Pressable>
     );
@@ -166,7 +159,7 @@ export function WorkspacesSection({ activeTeamId, onSelectTeam }: Props) {
         <ScrollView
           style={{ flex: 1, minHeight: 0 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 8 }}
+          contentContainerStyle={{ paddingBottom: tabBarClearance(insets.bottom, 8) }}
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled"
         >

@@ -327,16 +327,16 @@ export function CelebrationActivityCard({ item, footer, onLongPress, testID }: P
 
 const styles = StyleSheet.create({
   cardOuter: {
-    marginHorizontal: 16,
-    marginVertical: 6,
+    marginHorizontal: 12,
+    marginVertical: 4,
     shadowColor: "#4C1D95",
-    shadowOpacity: 0.24,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 5,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   cardClip: {
-    borderRadius: 16,
+    borderRadius: 12,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
@@ -491,17 +491,17 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   nameText: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "700",
     color: "#FFFFFF",
     letterSpacing: -0.2,
   },
   tagText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
   },
   byText: {
-    fontSize: 10,
+    fontSize: 9,
     color: "rgba(255,255,255,0.55)",
     fontWeight: "500",
     marginTop: 1,

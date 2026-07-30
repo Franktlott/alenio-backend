@@ -92,7 +92,17 @@ export function EditWorkspaceModal({ team, onClose, onSaved }: Props) {
               {imageUrl ? (
                 <img src={imageUrl} alt="" className="enterprise-edit-ws-photo-img" />
               ) : (
-                <span className="enterprise-edit-ws-photo-initials">{nameEdit?.[0]?.toUpperCase() ?? "W"}</span>
+                <span className="enterprise-edit-ws-photo-placeholder">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M16 11a4 4 0 1 0-3.2-6.4A4 4 0 0 0 16 11ZM8 12a3.5 3.5 0 1 0-2.8-5.6A3.5 3.5 0 0 0 8 12ZM3.5 19.2c.4-2.4 2.6-4.2 5.3-4.2.8 0 1.5.1 2.2.4M12.2 15c.8-.3 1.7-.5 2.6-.5 2.9 0 5.3 1.9 5.7 4.5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
               )}
             </div>
             <button type="button" className="enterprise-team-pill-btn" disabled={busy} onClick={onPickPhoto}>

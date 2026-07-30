@@ -1,6 +1,6 @@
 export type ActivityDateGroup = "today" | "yesterday" | "this_week" | "earlier";
 
-export type ActivityFilter = "all" | "tasks" | "calendar" | "team" | "celebrations";
+export type ActivityFilter = "all" | "tasks" | "calendar" | "team" | "updates";
 
 export type ActivityFeedType =
   | "task_completed"
@@ -40,6 +40,8 @@ export type ActivityMetadata = {
   celebrationType?: string;
   message?: string | null;
   assignees?: { id: string; name: string; image: string | null }[];
+  completedOnTime?: boolean;
+  dueDate?: string | null;
 };
 
 export type ActivityApiEvent = {
@@ -68,9 +70,20 @@ export type ActivityFeedItem = {
 };
 
 export type ActivityDateSection = {
-  group: ActivityDateGroup;
+  group: string;
   label: string;
   items: ActivityFeedItem[];
+};
+
+export type ActivityFeedGroup = {
+  id: string;
+  type: "group";
+  activityType: "task_completed" | "task_assigned" | "calendar_event_added";
+  items: ActivityFeedItem[];
+  title: string;
+  subtitle: string;
+  actionLabel: "View activity" | "View tasks" | "View events";
+  timestamp: string;
 };
 
 export type ActivitySummary = {
@@ -82,21 +95,10 @@ export type ActivitySummary = {
 export const ACTIVITY_FILTER_OPTIONS: { key: ActivityFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "tasks", label: "Tasks" },
-  { key: "team", label: "Team" },
   { key: "calendar", label: "Calendar" },
-  { key: "celebrations", label: "Recognition" },
+  { key: "team", label: "Team" },
+  { key: "updates", label: "Updates" },
 ];
-
-/** Display order folds this_week into earlier */
-type ActivityDisplayDateGroup = "today" | "yesterday" | "earlier";
-
-const DATE_GROUP_ORDER: ActivityDisplayDateGroup[] = ["today", "yesterday", "earlier"];
-const DATE_GROUP_BUCKET: Record<ActivityDateGroup, ActivityDisplayDateGroup> = {
-  today: "today",
-  yesterday: "yesterday",
-  this_week: "earlier",
-  earlier: "earlier",
-};
 
 function startOfDay(d: Date): Date {
   const next = new Date(d);
@@ -143,6 +145,22 @@ export function dateGroupLabel(group: ActivityDateGroup): string {
   }
 }
 
+function calendarDateKey(iso: string): string {
+  const date = new Date(iso);
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+export function activityDateLabel(iso: string): string {
+  const group = getDateGroup(iso);
+  if (group === "today") return "Today";
+  if (group === "yesterday") return "Yesterday";
+  return new Date(iso).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function matchesActivityFilter(type: ActivityFeedType, filter: ActivityFilter): boolean {
   if (filter === "all") return true;
   if (filter === "tasks") {
@@ -150,10 +168,36 @@ export function matchesActivityFilter(type: ActivityFeedType, filter: ActivityFi
   }
   if (filter === "calendar") return type === "calendar_event_added";
   if (filter === "team") return type === "member_joined" || type === "member_removed";
-  if (filter === "celebrations") {
+  if (filter === "updates") {
     return type === "celebration" || type === "task_milestone" || type === "personal_best";
   }
   return true;
+}
+
+export function isImportantActivity(item: ActivityFeedItem): boolean {
+  return (
+    item.type === "celebration" ||
+    item.type === "task_milestone" ||
+    item.type === "personal_best" ||
+    item.metadata.completedOnTime === false
+  );
+}
+
+export function matchesActivitySearch(item: ActivityFeedItem, query: string): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  return [
+    item.actor?.name,
+    item.title,
+    item.description,
+    item.teamName,
+    item.metadata.taskTitle,
+    item.metadata.eventTitle,
+    ...(item.metadata.taskTitles ?? []),
+    ...(item.metadata.eventTitles ?? []),
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(normalized));
 }
 
 export function buildActivitySummary(items: ActivityFeedItem[]): ActivitySummary {
@@ -173,20 +217,99 @@ export function buildActivitySummary(items: ActivityFeedItem[]): ActivitySummary
 }
 
 export function groupActivitiesByDate(items: ActivityFeedItem[]): ActivityDateSection[] {
-  const buckets = new Map<ActivityDisplayDateGroup, ActivityFeedItem[]>();
+  const buckets = new Map<string, ActivityFeedItem[]>();
 
   for (const item of items) {
-    const bucket = DATE_GROUP_BUCKET[item.dateGroup];
+    const bucket = calendarDateKey(item.timestamp);
     const existing = buckets.get(bucket) ?? [];
     existing.push(item);
     buckets.set(bucket, existing);
   }
 
-  return DATE_GROUP_ORDER.filter((group) => (buckets.get(group)?.length ?? 0) > 0).map((group) => ({
+  return [...buckets.entries()].map(([group, sectionItems]) => ({
     group,
-    label: dateGroupLabel(group),
-    items: buckets.get(group) ?? [],
+    label: activityDateLabel(sectionItems[0]!.timestamp),
+    items: sectionItems,
   }));
+}
+
+export function groupRepetitiveActivities(
+  items: ActivityFeedItem[],
+): Array<ActivityFeedItem | ActivityFeedGroup> {
+  const output: Array<ActivityFeedItem | ActivityFeedGroup> = [];
+  const clusterable = new Set<ActivityFeedType>([
+    "task_completed",
+    "task_assigned",
+    "calendar_event_added",
+  ]);
+
+  for (let index = 0; index < items.length; ) {
+    const first = items[index]!;
+    if (!clusterable.has(first.type)) {
+      output.push(first);
+      index += 1;
+      continue;
+    }
+
+    const cluster = [first];
+    let cursor = index + 1;
+    while (cursor < items.length) {
+      const next = items[cursor]!;
+      const sameIdentity =
+        next.type === first.type &&
+        next.teamId === first.teamId &&
+        next.actor?.id === first.actor?.id;
+      const withinHour =
+        Math.abs(new Date(first.timestamp).getTime() - new Date(next.timestamp).getTime()) <=
+        60 * 60 * 1000;
+      if (!sameIdentity || !withinHour) break;
+      cluster.push(next);
+      cursor += 1;
+    }
+
+    if (cluster.length < 2) {
+      output.push(first);
+      index += 1;
+      continue;
+    }
+
+    const actorName = first.actor?.name ?? "Someone";
+    const count = cluster.reduce(
+      (sum, item) =>
+        sum +
+        (item.type === "calendar_event_added"
+          ? item.metadata.eventCount ?? 1
+          : item.metadata.taskCount ?? 1),
+      0,
+    );
+    const noun = first.type === "calendar_event_added" ? "events" : "tasks";
+    const verb =
+      first.type === "task_completed"
+        ? "completed"
+        : first.type === "task_assigned"
+          ? "was assigned"
+          : "added";
+    const firstTitle =
+      first.metadata.taskTitle ??
+      first.metadata.taskTitles?.[0] ??
+      first.metadata.eventTitle ??
+      first.metadata.eventTitles?.[0] ??
+      first.title;
+
+    output.push({
+      id: `group-${cluster.map((item) => item.id).join("-")}`,
+      type: "group",
+      activityType: first.type,
+      items: cluster,
+      title: `${actorName} ${verb} ${count} ${noun}`,
+      subtitle: `Including “${firstTitle}” and ${Math.max(0, count - 1)} others`,
+      actionLabel: first.type === "calendar_event_added" ? "View events" : first.type === "task_assigned" ? "View tasks" : "View activity",
+      timestamp: first.timestamp,
+    });
+    index = cursor;
+  }
+
+  return output;
 }
 
 function actorName(item: ActivityApiEvent): string {

@@ -1,4 +1,6 @@
-import { View, Text, Image, Pressable } from "react-native";
+import { Image, View } from "react-native";
+import { EmptySection } from "@/components/ui/EmptySection";
+import { colors, radii } from "@/theme";
 
 type Props = {
   title: string;
@@ -8,7 +10,7 @@ type Props = {
   onAction?: () => void;
 };
 
-/** Centered illustration empty state — matches Growth / Check-in / Member tasks. */
+/** Compact empty — Apple Enterprise EmptySection (no large illustration). */
 export function TasksEmptyState({
   title,
   accentTitle,
@@ -16,80 +18,40 @@ export function TasksEmptyState({
   actionLabel,
   onAction,
 }: Props) {
+  const combinedTitle = accentTitle ? `${title} ${accentTitle}`.replace(/\s+/g, " ").trim() : title;
+
   return (
     <View
       style={{
-        flexGrow: 1,
+        flex: 1,
+        minHeight: 0,
+        width: "100%",
+        alignSelf: "stretch",
         justifyContent: "center",
-        paddingHorizontal: 16,
-        paddingTop: 0,
-        paddingBottom: 8,
-        marginTop: -18,
-        alignItems: "center",
-        minHeight: 280,
+        backgroundColor: colors.surface,
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.borderCard,
       }}
-      testID="empty-state"
     >
       <Image
-        source={require("@/assets/tasks-empty-caught-up.png")}
-        style={{ width: 152, height: 152, marginBottom: 12 }}
+        source={require("@/assets/alenio-empty-tasks.png")}
+        style={{
+          width: 132,
+          height: 132,
+          marginBottom: -8,
+          alignSelf: "center",
+        }}
         resizeMode="contain"
         accessibilityIgnoresInvertColors
       />
-      <Text
-        style={{
-          fontSize: 18,
-          fontWeight: "800",
-          color: "#0F172A",
-          textAlign: "center",
-          letterSpacing: -0.3,
-          lineHeight: 25,
-          marginBottom: 8,
-          maxWidth: 300,
-        }}
-      >
-        {accentTitle ? (
-          <>
-            {title}
-            {"\n"}
-            <Text style={{ color: "#7C3AED" }}>{accentTitle}</Text>
-          </>
-        ) : (
-          title
-        )}
-      </Text>
-      {subtitle ? (
-        <Text
-          style={{
-            fontSize: 13.5,
-            color: "#64748B",
-            textAlign: "center",
-            lineHeight: 20,
-            maxWidth: 300,
-            marginBottom: actionLabel && onAction ? 18 : 0,
-          }}
-        >
-          {subtitle}
-        </Text>
-      ) : null}
-      {actionLabel && onAction ? (
-        <Pressable
-          onPress={onAction}
-          style={{
-            backgroundColor: "#4361EE",
-            borderRadius: 12,
-            paddingHorizontal: 18,
-            paddingVertical: 12,
-            maxWidth: 280,
-            width: "100%",
-            alignItems: "center",
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={actionLabel}
-        >
-          <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>{actionLabel}</Text>
-        </Pressable>
-      ) : null}
+      <EmptySection
+        title={combinedTitle}
+        body={subtitle}
+        actionLabel={actionLabel}
+        onAction={onAction}
+        testID="empty-state"
+      />
     </View>
   );
 }

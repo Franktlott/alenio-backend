@@ -24,7 +24,7 @@ export default function AdminDashboardTab() {
   ];
 
   return (
-    <View className="flex-1 bg-[#F8FAFC]">
+    <View className="flex-1 bg-white">
       <AdminHeader title="Dashboard" subtitle="Overview of your platform activity" />
 
       <ScrollView

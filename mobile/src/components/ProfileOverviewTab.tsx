@@ -267,6 +267,8 @@ export function ProfileOverviewTab({
   const goalsSummary = standards.goalsRequired
     ? `${standards.minimumActiveGoals} required`
     : "Optional";
+  const showCheckInCards = standards.checkInRequired;
+  const showGoalsCards = standards.goalsRequired;
   if (loading && activeGoals.length === 0 && meetings.length === 0 && !err) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -285,29 +287,35 @@ export function ProfileOverviewTab({
         <Text style={{ fontSize: 11, color: "#DC2626", paddingHorizontal: 2 }}>{err}</Text>
       ) : null}
 
-      <SectionCard title="Performance snapshot">
-        <View style={{ flexDirection: "row", gap: 7 }}>
-          <SnapshotTile
-            icon={<Target size={9} color="#7C3AED" strokeWidth={2.4} />}
-            iconBg="#F3E8FF"
-            label="Goals"
-            value={`${activeGoals.length} Active`}
-          />
-          <SnapshotTile
-            icon={<Clock size={9} color="#EA580C" strokeWidth={2.4} />}
-            iconBg="#FFEDD5"
-            label="Check-in status"
-            value={
-              lastOneOnOneDate
-                ? daysSinceOneOnOne === 0
-                  ? "Today"
-                  : `${daysSinceOneOnOne ?? 0} days since`
-                : "Never"
-            }
-            sub={lastOneOnOneDate ? `Last ${formatDateOnly(lastOneOnOneDate)}` : "No check-in yet"}
-          />
-        </View>
-      </SectionCard>
+      {showCheckInCards || showGoalsCards ? (
+        <SectionCard title="Performance snapshot">
+          <View style={{ flexDirection: "row", gap: 7 }}>
+            {showGoalsCards ? (
+              <SnapshotTile
+                icon={<Target size={9} color="#7C3AED" strokeWidth={2.4} />}
+                iconBg="#F3E8FF"
+                label="Goals"
+                value={`${activeGoals.length} Active`}
+              />
+            ) : null}
+            {showCheckInCards ? (
+              <SnapshotTile
+                icon={<Clock size={9} color="#EA580C" strokeWidth={2.4} />}
+                iconBg="#FFEDD5"
+                label="Check-in status"
+                value={
+                  lastOneOnOneDate
+                    ? daysSinceOneOnOne === 0
+                      ? "Today"
+                      : `${daysSinceOneOnOne ?? 0} days since`
+                    : "Never"
+                }
+                sub={lastOneOnOneDate ? `Last ${formatDateOnly(lastOneOnOneDate)}` : "No check-in yet"}
+              />
+            ) : null}
+          </View>
+        </SectionCard>
+      ) : null}
 
       <SectionCard title="Task overview">
         <View style={{ flexDirection: "row", gap: 7 }}>
@@ -335,6 +343,7 @@ export function ProfileOverviewTab({
         </View>
       </SectionCard>
 
+      {showCheckInCards || showGoalsCards ? (
       <SectionCard
         title="Development standards"
         trailing={<StandardsStatusKey iconSize={13} />}
@@ -342,7 +351,11 @@ export function ProfileOverviewTab({
       >
         <View style={{ flexDirection: "row", gap: 8, alignItems: "stretch" }}>
           <View style={{ flex: 1.15, minWidth: 0, paddingTop: 1 }}>
-            {recentCheckIns.length === 0 ? (
+            {!showCheckInCards ? (
+              <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 16 }}>
+                Check-ins are not required for this workspace.
+              </Text>
+            ) : recentCheckIns.length === 0 ? (
               <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 16 }}>
                 No check-ins yet
               </Text>
@@ -412,38 +425,46 @@ export function ProfileOverviewTab({
               gap: 5,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
-              <Calendar size={12} color="#94A3B8" strokeWidth={2} style={{ marginTop: 1 }} />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "500" }}>Frequency</Text>
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A", marginTop: 0 }} numberOfLines={1}>
-                  {formatCheckInFrequencySummary(standards)}
-                </Text>
+            {showCheckInCards ? (
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+                <Calendar size={12} color="#94A3B8" strokeWidth={2} style={{ marginTop: 1 }} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "500" }}>Frequency</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A", marginTop: 0 }} numberOfLines={1}>
+                    {formatCheckInFrequencySummary(standards)}
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
-              <Flag size={12} color="#94A3B8" strokeWidth={2} style={{ marginTop: 1 }} />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "500" }}>Goals</Text>
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A", marginTop: 0 }} numberOfLines={1}>
-                  {goalsSummary}
-                </Text>
+            ) : null}
+            {showGoalsCards ? (
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+                <Flag size={12} color="#94A3B8" strokeWidth={2} style={{ marginTop: 1 }} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "500" }}>Goals</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A", marginTop: 0 }} numberOfLines={1}>
+                    {goalsSummary}
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
-              <Clock size={12} color="#94A3B8" strokeWidth={2} style={{ marginTop: 1 }} />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "500" }}>Next due</Text>
-                <Text style={{ fontSize: 12, fontWeight: "800", color: "#0F172A", marginTop: 0 }} numberOfLines={1}>
-                  {nextDue}
-                </Text>
+            ) : null}
+            {showCheckInCards ? (
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+                <Clock size={12} color="#94A3B8" strokeWidth={2} style={{ marginTop: 1 }} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "500" }}>Next due</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "800", color: "#0F172A", marginTop: 0 }} numberOfLines={1}>
+                    {nextDue}
+                  </Text>
+                </View>
               </View>
-            </View>
+            ) : null}
           </View>
         </View>
 
       </SectionCard>
+      ) : null}
 
+      {showGoalsCards ? (
       <SectionCard title="Development goals" style={{ flex: 1, minHeight: 120 }} bodyFill>
         {activeGoals.length === 0 ? (
           <View
@@ -524,6 +545,7 @@ export function ProfileOverviewTab({
           </View>
         )}
       </SectionCard>
+      ) : null}
     </ScrollView>
   );
 }

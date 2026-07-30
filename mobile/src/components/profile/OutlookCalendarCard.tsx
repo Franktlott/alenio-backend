@@ -219,14 +219,14 @@ export function OutlookCalendarCard() {
       <ProfileCard>
         <ProfileMenuRow
           icon={Calendar}
-          title="Outlook calendar"
+          title="Outlook Calendar"
           subtitle={subtitle}
           onPress={busy ? undefined : onPress}
           testID="outlook-calendar-row"
         />
         {connection?.connected ? (
           <>
-            <ProfileDivider inset />
+            <ProfileDivider />
             <ProfileMenuRow
               title="Calendar to sync"
               subtitle={calendarLabel}
@@ -237,7 +237,7 @@ export function OutlookCalendarCard() {
         ) : null}
         {syncError ? (
           <>
-            <ProfileDivider inset />
+            <ProfileDivider />
             <OutlookInlineNotice message={syncError} />
           </>
         ) : null}

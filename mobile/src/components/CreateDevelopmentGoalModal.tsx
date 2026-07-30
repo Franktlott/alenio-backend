@@ -6,13 +6,13 @@ import {
   Pressable,
   Modal,
   ScrollView,
-  Image,
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { UserAvatar } from "@/components/UserAvatar";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   X,
@@ -99,7 +99,6 @@ export function CreateDevelopmentGoalModal({
 }: Props) {
   const insets = useSafeAreaInsets();
   const firstName = memberName.trim().split(/\s+/)[0] || memberName || "this teammate";
-  const initial = memberName.trim()?.[0]?.toUpperCase() || "?";
 
   const [skillQuery, setSkillQuery] = useState("");
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>("leadership");
@@ -172,7 +171,7 @@ export function CreateDevelopmentGoalModal({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: "#F8FAFC" }}
+        style={{ flex: 1, backgroundColor: "#FFFFFF" }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View
@@ -191,23 +190,14 @@ export function CreateDevelopmentGoalModal({
               gap: 10,
             }}
           >
-            <View
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 17,
-                backgroundColor: "#EEF2FF",
-                alignItems: "center",
-                justifyContent: "center",
-                overflow: "hidden",
-              }}
-            >
-              {memberImage ? (
-                <Image source={{ uri: memberImage }} style={{ width: 34, height: 34 }} />
-              ) : (
-                <Text style={{ fontSize: 14, fontWeight: "800", color: "#4F46E5" }}>{initial}</Text>
-              )}
-            </View>
+            <UserAvatar
+              user={{ name: memberName, image: memberImage }}
+              size={34}
+              radius={17}
+              backgroundColor="#EEF2FF"
+              textColor="#4F46E5"
+              fontSize={14}
+            />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 style={{
@@ -287,7 +277,7 @@ export function CreateDevelopmentGoalModal({
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 6,
-                  backgroundColor: "#F8FAFC",
+                  backgroundColor: "#FFFFFF",
                   borderWidth: 1,
                   borderColor: "#E2E8F0",
                   borderRadius: 9,
@@ -354,7 +344,7 @@ export function CreateDevelopmentGoalModal({
                   style={{
                     borderWidth: 1,
                     borderColor: "#C7D2FE",
-                    backgroundColor: "#F8FAFC",
+                    backgroundColor: "#FFFFFF",
                     borderRadius: 9,
                     paddingHorizontal: 10,
                     paddingVertical: 8,
@@ -417,7 +407,7 @@ export function CreateDevelopmentGoalModal({
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 5,
-                      backgroundColor: "#F8FAFC",
+                      backgroundColor: "#FFFFFF",
                       borderWidth: 1,
                       borderColor: "#E2E8F0",
                       borderRadius: 9,
@@ -493,7 +483,7 @@ export function CreateDevelopmentGoalModal({
                     gap: 6,
                     borderWidth: 1,
                     borderColor: "#E2E8F0",
-                    backgroundColor: "#F8FAFC",
+                    backgroundColor: "#FFFFFF",
                     borderRadius: 9,
                     paddingHorizontal: 8,
                     paddingVertical: 8,
@@ -602,7 +592,7 @@ export function CreateDevelopmentGoalModal({
                   minHeight: 72,
                   borderWidth: 1,
                   borderColor: "#E2E8F0",
-                  backgroundColor: "#F8FAFC",
+                  backgroundColor: "#FFFFFF",
                   borderRadius: 9,
                   paddingHorizontal: 10,
                   paddingTop: 8,

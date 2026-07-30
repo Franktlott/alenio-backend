@@ -55,7 +55,7 @@ type PinSummaryMessage = {
 function toPinnedSummary(
   message: PinSummaryMessage,
   pinnedAt: Date,
-  pinnedBy: { id: string; name: string | null },
+  pinnedBy: { id: string; name: string | null; image: string | null },
 ) {
   return {
     messageId: message.id,
@@ -68,7 +68,7 @@ function toPinnedSummary(
       image: message.sender.image,
     },
     pinnedAt: pinnedAt.toISOString(),
-    pinnedBy: { id: pinnedBy.id, name: pinnedBy.name },
+    pinnedBy: { id: pinnedBy.id, name: pinnedBy.name, image: pinnedBy.image },
   };
 }
 
@@ -87,7 +87,7 @@ async function listTeamPins(teamId: string, topicId: string | null) {
     orderBy: [{ sortOrder: "asc" }, { pinnedAt: "asc" }],
     include: {
       message: { select: pinMessageSelect },
-      pinnedBy: { select: { id: true, name: true } },
+      pinnedBy: { select: { id: true, name: true, image: true } },
     },
     take: MAX_CHAT_PINS,
   });
@@ -269,14 +269,14 @@ messagesRouter.get("/", async (c) => {
 
   const messageInclude = {
     sender: { select: { id: true, name: true, email: true, image: true } },
-    reactions: { include: { user: { select: { id: true, name: true } } } },
+    reactions: { include: { user: { select: { id: true, name: true, image: true } } } },
     replyTo: {
       select: {
         id: true,
         content: true,
         mediaUrl: true,
         mediaType: true,
-        sender: { select: { id: true, name: true } },
+        sender: { select: { id: true, name: true, image: true } },
       },
     },
   } as const;
@@ -337,14 +337,14 @@ messagesRouter.post("/", async (c) => {
     },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
-      reactions: { include: { user: { select: { id: true, name: true } } } },
+      reactions: { include: { user: { select: { id: true, name: true, image: true } } } },
       replyTo: {
         select: {
           id: true,
           content: true,
           mediaUrl: true,
           mediaType: true,
-          sender: { select: { id: true, name: true } },
+          sender: { select: { id: true, name: true, image: true } },
         },
       },
     },
@@ -451,14 +451,14 @@ messagesRouter.post("/:messageId/reactions", async (c) => {
     where: { id: messageId, teamId },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
-      reactions: { include: { user: { select: { id: true, name: true } } } },
+      reactions: { include: { user: { select: { id: true, name: true, image: true } } } },
       replyTo: {
         select: {
           id: true,
           content: true,
           mediaUrl: true,
           mediaType: true,
-          sender: { select: { id: true, name: true } },
+          sender: { select: { id: true, name: true, image: true } },
         },
       },
     },
@@ -494,14 +494,14 @@ messagesRouter.patch("/:messageId", async (c) => {
     data: { content, editedAt: new Date() },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
-      reactions: { include: { user: { select: { id: true, name: true } } } },
+      reactions: { include: { user: { select: { id: true, name: true, image: true } } } },
       replyTo: {
         select: {
           id: true,
           content: true,
           mediaUrl: true,
           mediaType: true,
-          sender: { select: { id: true, name: true } },
+          sender: { select: { id: true, name: true, image: true } },
         },
       },
     },
@@ -553,7 +553,7 @@ messagesRouter.delete("/:messageId", async (c) => {
             sender: { select: { id: true, name: true, image: true } },
           },
         },
-        pinnedBy: { select: { id: true, name: true } },
+        pinnedBy: { select: { id: true, name: true, image: true } },
       },
       take: 5,
     });

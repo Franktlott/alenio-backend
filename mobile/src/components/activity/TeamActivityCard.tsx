@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { UserMinus, UserPlus } from "lucide-react-native";
 import type { ActivityFeedItem } from "./types";
-import { getActivityTintTokens, getActivityTypeLabel } from "./activity-ui";
+import { getActivityTintTokens } from "./activity-ui";
 import { ActivityCardShell } from "./ActivityCardShell";
 import { ActivityCardBody } from "./ActivityCardBody";
 
@@ -18,7 +18,7 @@ export function TeamActivityCard({ item, footer, onLongPress, testID }: Props) {
   const LabelIcon = isJoined ? UserPlus : UserMinus;
   const actorName = item.actor?.name ?? item.metadata.userName ?? "Someone";
 
-  const description = isJoined ? "Joined the team" : "Left the team";
+  const description = isJoined ? `${actorName} joined the team` : `${actorName} left the team`;
 
   return (
     <ActivityCardShell
@@ -29,7 +29,7 @@ export function TeamActivityCard({ item, footer, onLongPress, testID }: Props) {
     >
       <ActivityCardBody
         actor={item.actor ?? { name: actorName }}
-        label={getActivityTypeLabel(item.type)}
+        label="Team"
         LabelIcon={LabelIcon}
         tint={tint}
         timestamp={item.timestamp}

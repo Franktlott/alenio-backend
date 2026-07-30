@@ -69,17 +69,35 @@ export async function findSharedWorkspacesForParticipants(
 export async function resolveGroupConversationContext(
   userId: string,
   participantUserIds: string[],
+  teamId?: string | null,
 ): Promise<GroupWorkspaceContext> {
+  if (teamId) {
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { id: true, name: true },
+    });
+    if (team) {
+      return buildGroupWorkspaceContext([{ id: team.id, name: team.name }]);
+    }
+  }
   const workspaces = await findSharedWorkspacesForParticipants(userId, participantUserIds);
   return buildGroupWorkspaceContext(workspaces);
 }
 
-export async function listGroupMemberCandidates(userId: string, query = ""): Promise<GroupMemberCandidate[]> {
+export async function listGroupMemberCandidates(
+  userId: string,
+  query = "",
+  teamId?: string | null,
+): Promise<GroupMemberCandidate[]> {
   const memberships = await prisma.teamMember.findMany({
     where: { userId },
     select: { teamId: true },
   });
-  const teamIds = memberships.map((row) => row.teamId);
+  let teamIds = memberships.map((row) => row.teamId);
+  if (teamId) {
+    if (!teamIds.includes(teamId)) return [];
+    teamIds = [teamId];
+  }
   if (teamIds.length === 0) return [];
 
   const trimmedQuery = query.trim();
@@ -149,9 +167,21 @@ export async function listGroupMemberCandidates(userId: string, query = ""): Pro
 export async function assertParticipantsShareWorkspaceWithCreator(
   creatorId: string,
   participantIds: string[],
+  teamId?: string | null,
 ): Promise<void> {
   const uniqueParticipantIds = Array.from(new Set(participantIds.filter((id) => id && id !== creatorId)));
-  if (uniqueParticipantIds.length === 0) return;
+  if (uniqueParticipantIds.length === 0) {
+    if (teamId) {
+      const creatorInTeam = await prisma.teamMember.findFirst({
+        where: { userId: creatorId, teamId },
+        select: { id: true },
+      });
+      if (!creatorInTeam) {
+        throw new Error("You must belong to that workspace to create a group in it.");
+      }
+    }
+    return;
+  }
 
   const creatorTeamIds = (
     await prisma.teamMember.findMany({
@@ -164,16 +194,26 @@ export async function assertParticipantsShareWorkspaceWithCreator(
     throw new Error("You must belong to a workspace before creating a group.");
   }
 
+  if (teamId && !creatorTeamIds.includes(teamId)) {
+    throw new Error("You must belong to that workspace to create a group in it.");
+  }
+
+  const allowedTeamIds = teamId ? [teamId] : creatorTeamIds;
+
   for (const participantId of uniqueParticipantIds) {
     const sharedMembership = await prisma.teamMember.findFirst({
       where: {
         userId: participantId,
-        teamId: { in: creatorTeamIds },
+        teamId: { in: allowedTeamIds },
       },
       select: { id: true },
     });
     if (!sharedMembership) {
-      throw new Error("You can only add people who share a workspace with you.");
+      throw new Error(
+        teamId
+          ? "You can only add people who belong to that workspace."
+          : "You can only add people who share a workspace with you.",
+      );
     }
   }
 }

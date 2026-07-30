@@ -1,12 +1,12 @@
 import React from "react";
-import { Pressable, Text, useWindowDimensions, View } from "react-native";
-import { AlertCircle, CheckCircle2, ChevronRight, Clock3, ListChecks, Lock, Target } from "lucide-react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ChevronRight, ListChecks, Target } from "lucide-react-native";
 import type { TeamMember } from "@/lib/types";
 import type { MemberStandardsCompliance } from "@/lib/workplace-standards";
 import { UserAvatar } from "@/components/UserAvatar";
+import { PROFILE_UI } from "@/components/profile/ProfileEnterpriseUI";
 
-const STANDARD_PHONE_MIN_WIDTH = 375;
-const AVATAR_SIZE = 34;
+const DIRECTORY_AVATAR = 48;
 
 export type MetricHealthTone = "good" | "attention" | "critical" | "progress" | "neutral";
 
@@ -61,61 +61,13 @@ export function tasksHealthTone(
   return "neutral";
 }
 
-function checkInDisplay(
+function checkInRingColor(
   status: MemberStandardsCompliance["checkInStatus"] | undefined,
-  value: string,
-): { title: string; detail: string } {
-  if (status === "not_required") return { title: "Optional", detail: "No schedule" };
-  if (status === "overdue" && (value === "—" || value.toLowerCase() === "none")) {
-    return { title: "Not started", detail: "No check-in" };
-  }
-  if (status === "overdue") return { title: "Overdue", detail: value };
-  if (status === "due_soon") return { title: "Due soon", detail: value };
-  if (status === "on_track") return { title: "Checked in", detail: value };
-  return { title: "Check-in", detail: value === "—" ? "No data" : value };
-}
-
-function goalsDisplay(value: string): { title: string; detail: string } {
-  const progress = value.match(/^\s*(\d+)\s*\/\s*(\d+)\s*$/);
-  if (!progress) {
-    return {
-      title: "Goals",
-      detail: value === "—" || value.toLowerCase() === "none" ? "No data" : value,
-    };
-  }
-  const active = Number(progress[1]);
-  return {
-    title: `Goals ${active} / ${progress[2]}`,
-    detail: `${active} active`,
-  };
-}
-
-function tasksDisplay(
-  completedTasks: number,
-  activeTasks: number,
-  overdueTasks: number,
-): { title: string; detail: string } {
-  const completed = Math.max(0, completedTasks);
-  const active = Math.max(0, activeTasks);
-  const overdue = Math.max(0, overdueTasks);
-
-  const title = `Tasks ${completed}`;
-  if (active === 0) return { title, detail: "Clear" };
-  if (overdue > 0) return { title, detail: `${active} open · ${overdue} late` };
-  return { title, detail: `${active} open` };
-}
-
-export function getTeamMemberRowLayout(screenWidth: number) {
-  const compact = screenWidth < STANDARD_PHONE_MIN_WIDTH;
-  return {
-    compact,
-    avatarSize: AVATAR_SIZE,
-    rowPaddingHorizontal: compact ? 8 : 9,
-    rowPaddingVertical: 5,
-    nameFontSize: 13,
-    avatarGap: 8,
-    metricsWidth: compact ? 168 : 180,
-  };
+): string {
+  if (status === "on_track") return "#10B981";
+  if (status === "due_soon") return "#F59E0B";
+  if (status === "overdue") return "#EF4444";
+  return "#CBD5E1";
 }
 
 function memberRoleLabel(role: TeamMember["role"]): string {
@@ -124,211 +76,102 @@ function memberRoleLabel(role: TeamMember["role"]): string {
   return "Member";
 }
 
-function MemberAvatar({ image, name, size }: { image?: string | null; name?: string | null; size: number }) {
-  return (
-    <UserAvatar
-      user={{ name, image }}
-      size={size}
-      radius={size / 2}
-      backgroundColor="#4361EE"
-      textColor="#FFFFFF"
-      fontSize={Math.max(11, Math.round(size * 0.4))}
-      style={{ borderWidth: 1, borderColor: "#E0E7FF" }}
-    />
-  );
-}
-
-function IdentityBlock({
-  name,
-  isCurrentUser,
-  nameFontSize,
-}: {
-  name: string;
-  isCurrentUser?: boolean;
-  nameFontSize: number;
-}) {
-  const displayName = isCurrentUser ? `${name} (you)` : name;
-
-  return (
-    <View style={{ minWidth: 0, flexShrink: 1 }}>
-      <Text
-        style={{ fontSize: nameFontSize, fontWeight: "700", color: "#172033", lineHeight: 16 }}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.82}
-      >
-        {displayName}
-      </Text>
-    </View>
-  );
-}
-
 function RoleBadge({ role }: { role: TeamMember["role"] }) {
   const isLeader = role === "owner" || role === "team_leader";
   return (
     <View
-      style={{
-        height: 17,
-        paddingHorizontal: 6,
-        borderRadius: 9,
-        backgroundColor: isLeader ? "#EEF2FF" : "#F1F5F9",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-      }}
+      style={[
+        styles.roleBadge,
+        { backgroundColor: isLeader ? "#EEF2FF" : "#F1F5F9" },
+      ]}
     >
-      <Text style={{ fontSize: 9, fontWeight: "700", color: isLeader ? "#4F46E5" : "#64748B" }}>
+      <Text style={[styles.roleBadgeText, { color: isLeader ? "#4338CA" : "#64748B" }]}>
         {memberRoleLabel(role)}
       </Text>
     </View>
   );
 }
 
-function MetricBlock({
-  title,
-  detail,
+function CompactChip({
+  label,
   tone,
   icon,
 }: {
-  title: string;
-  detail: string;
-  tone: MetricHealthTone;
+  label: string;
+  tone: "green" | "orange" | "red" | "muted";
   icon: React.ReactNode;
 }) {
+  const palette =
+    tone === "green"
+      ? { bg: "#ECFDF5", text: "#059669" }
+      : tone === "orange"
+        ? { bg: "#FFF7ED", text: "#EA580C" }
+        : tone === "red"
+          ? { bg: "#FEF2F2", text: "#DC2626" }
+          : { bg: "#F8FAFC", text: "#94A3B8" };
+
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "flex-start",
-        gap: 4,
-        flex: 1,
-        minWidth: 0,
-      }}
-    >
-      <View style={{ paddingTop: 1 }}>{icon}</View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text
-          style={{ fontSize: 9.5, fontWeight: "700", color: METRIC_VALUE_COLORS[tone], lineHeight: 11 }}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.9}
-        >
-          {title}
-        </Text>
-        <Text
-          style={{ fontSize: 8.25, fontWeight: "500", color: "#7A8699", lineHeight: 10 }}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.9}
-        >
-          {detail}
-        </Text>
-      </View>
+    <View style={[styles.chip, { backgroundColor: palette.bg }]}>
+      {icon}
+      <Text style={[styles.chipText, { color: palette.text }]} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }
 
-function MetricsRow({
-  checkInValue,
-  goalsValue,
-  completedTasks,
-  activeTasks,
-  overdueTasks,
-  checkInTone,
-  goalsTone,
-  tasksTone,
-  checkInStatus,
-  width,
-}: {
-  checkInValue: string;
-  goalsValue: string;
-  completedTasks: number;
-  activeTasks: number;
-  overdueTasks: number;
-  checkInTone: MetricHealthTone;
-  goalsTone: MetricHealthTone;
-  tasksTone: MetricHealthTone;
-  checkInStatus?: MemberStandardsCompliance["checkInStatus"];
-  width: number;
-}) {
-  const checkIn = checkInDisplay(checkInStatus, checkInValue);
-  const goals = goalsDisplay(goalsValue);
-  const tasks = tasksDisplay(completedTasks, activeTasks, overdueTasks);
-  const checkInIcon =
-    checkInStatus === "on_track" ? (
-      <CheckCircle2 size={10} color={METRIC_VALUE_COLORS[checkInTone]} />
-    ) : checkInStatus === "due_soon" ? (
-      <Clock3 size={10} color={METRIC_VALUE_COLORS[checkInTone]} />
-    ) : (
-      <AlertCircle size={10} color={METRIC_VALUE_COLORS[checkInTone]} />
-    );
-
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "flex-start",
-        gap: 4,
-        minWidth: 0,
-        width,
-        flexShrink: 0,
-      }}
-    >
-      <MetricBlock
-        title={checkIn.title}
-        detail={checkIn.detail}
-        tone={checkInTone}
-        icon={checkInIcon}
-      />
-      <View style={{ width: 1, height: 20, backgroundColor: "#E8ECF3" }} />
-      <MetricBlock
-        title={goals.title}
-        detail={goals.detail}
-        tone={goalsTone}
-        icon={<Target size={10} color={METRIC_VALUE_COLORS[goalsTone]} />}
-      />
-      <View style={{ width: 1, height: 20, backgroundColor: "#E8ECF3" }} />
-      <MetricBlock
-        title={tasks.title}
-        detail={tasks.detail}
-        tone={tasksTone}
-        icon={<ListChecks size={10} color={METRIC_VALUE_COLORS[tasksTone]} />}
-      />
-    </View>
-  );
+function goalsChipLabel(value: string): string {
+  const progress = value.match(/^\s*(\d+)\s*\/\s*(\d+)\s*$/);
+  if (progress) return `${progress[1]}/${progress[2]} goals`;
+  if (!value || value === "—" || value.toLowerCase() === "none") return "No goals";
+  return value;
 }
 
-function PrivateMetricsRow() {
-  return (
-    <View style={{ alignSelf: "center" }}>
-      <View
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 9,
-          backgroundColor: "#F1F5F9",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Lock size={10} color="#94A3B8" />
-      </View>
-    </View>
-  );
+function tasksChipLabel(activeTasks: number, overdueTasks: number): string {
+  if (overdueTasks > 0) return `${overdueTasks} overdue`;
+  if (activeTasks > 0) return `${activeTasks} open`;
+  return "Tasks clear";
+}
+
+function checkInChipLabel(
+  status: MemberStandardsCompliance["checkInStatus"] | undefined,
+  value: string,
+): { label: string; tone: "green" | "orange" | "red" | "muted" } | null {
+  if (status === "not_required") return null;
+  if (status === "on_track") return { label: value === "—" ? "Checked in" : value, tone: "green" };
+  if (status === "due_soon") return { label: "Due soon", tone: "orange" };
+  if (status === "overdue") {
+    if (!value || value === "—" || value.toLowerCase() === "none") {
+      return { label: "No check-in", tone: "red" };
+    }
+    return { label: `Overdue · ${value}`, tone: "red" };
+  }
+  return null;
+}
+
+/** @deprecated Prefer fixed directory layout; kept for callers. */
+export function getTeamMemberRowLayout(_screenWidth: number) {
+  return {
+    compact: false,
+    avatarSize: DIRECTORY_AVATAR,
+    rowPaddingHorizontal: 12,
+    rowPaddingVertical: 12,
+    avatarGap: 12,
+  };
 }
 
 export function teamMemberRowStyle(
   rowPaddingHorizontal: number,
   rowPaddingVertical: number,
   showDivider: boolean,
+  withMetrics = true,
 ) {
   return {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
     paddingHorizontal: rowPaddingHorizontal,
     paddingVertical: rowPaddingVertical,
-    borderBottomWidth: showDivider ? 1 : 0,
-    borderBottomColor: "#EDF0F5",
+    minHeight: withMetrics ? 72 : 64,
+    borderBottomWidth: showDivider ? StyleSheet.hairlineWidth : 0,
+    borderBottomColor: PROFILE_UI.divider.backgroundColor,
     backgroundColor: "#FFFFFF",
   };
 }
@@ -346,6 +189,10 @@ export type TeamMemberRowProps = {
   checkInStatus?: MemberStandardsCompliance["checkInStatus"];
   goalsStatus?: MemberStandardsCompliance["goalsStatus"];
   showMetrics?: boolean;
+  /** When false, hide the Check-in metric (workplace standard off). */
+  showCheckInMetric?: boolean;
+  /** When false, hide the Goals metric (workplace standard off). */
+  showGoalsMetric?: boolean;
   hasProfilePermission?: boolean;
   showDivider?: boolean;
   onPress?: () => void;
@@ -359,147 +206,222 @@ export function TeamMemberRow({
   isCurrentUser,
   checkInValue = "—",
   goalsValue = "—",
-  completedTasks = 0,
+  completedTasks: _completedTasks = 0,
   activeTasks = 0,
   overdueTasks = 0,
   checkInStatus,
   goalsStatus,
   showMetrics = true,
+  showCheckInMetric = true,
+  showGoalsMetric = true,
   hasProfilePermission = true,
   showDivider = true,
   onPress,
   testID,
 }: TeamMemberRowProps) {
-  const { width: screenWidth } = useWindowDimensions();
-  const layout = getTeamMemberRowLayout(screenWidth);
-  const rowStyle = teamMemberRowStyle(
-    layout.rowPaddingHorizontal,
-    layout.rowPaddingVertical,
-    showDivider,
-  );
-  const checkInTone = checkInHealthTone(checkInStatus, checkInValue);
-  const goalsTone = goalsHealthTone(goalsStatus, goalsValue);
-  const tasksTone = tasksHealthTone(completedTasks, activeTasks, overdueTasks);
+  const displayName = isCurrentUser ? `${name} (you)` : name;
+  const ring = checkInRingColor(checkInStatus);
+  const goalsTone =
+    goalsStatus === "missing_goals" ? "orange" : goalsStatus === "on_track" ? "green" : "muted";
+  const tasksTone = overdueTasks > 0 ? "orange" : activeTasks > 0 ? "muted" : "green";
+  const checkInChip = showCheckInMetric ? checkInChipLabel(checkInStatus, checkInValue) : null;
 
-  const content = (
-    <>
-      <MemberAvatar image={image} name={name} size={layout.avatarSize} />
-      <View style={{ width: layout.avatarGap, flexShrink: 0 }} />
-      <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center" }}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <IdentityBlock
-            name={name}
-            isCurrentUser={isCurrentUser}
-            nameFontSize={layout.nameFontSize}
-          />
-          <View style={{ alignSelf: "flex-start", marginTop: 2 }}>
-            <RoleBadge role={role} />
-          </View>
-        </View>
-        {showMetrics ? (
-          <View style={{ marginLeft: 6, transform: [{ translateY: -1 }] }}>
-            {hasProfilePermission ? (
-              <MetricsRow
-                checkInValue={checkInValue}
-                goalsValue={goalsValue}
-                completedTasks={completedTasks}
-                activeTasks={activeTasks}
-                overdueTasks={overdueTasks}
-                checkInTone={checkInTone}
-                goalsTone={goalsTone}
-                tasksTone={tasksTone}
-                checkInStatus={checkInStatus}
-                width={layout.metricsWidth}
-              />
-            ) : (
-              <PrivateMetricsRow />
-            )}
-          </View>
-        ) : null}
-        {onPress ? <ChevronRight size={14} color="#94A3B8" style={{ marginLeft: 4 }} /> : null}
+  const row = (
+    <View
+      style={[
+        styles.row,
+        {
+          borderBottomWidth: showDivider ? StyleSheet.hairlineWidth : 0,
+          borderBottomColor: PROFILE_UI.divider.backgroundColor,
+        },
+      ]}
+    >
+      <View style={[styles.avatarRing, { borderColor: ring }]}>
+        <UserAvatar
+          user={{ name, image }}
+          size={DIRECTORY_AVATAR - 6}
+          radius={(DIRECTORY_AVATAR - 6) / 2}
+          backgroundColor="#4361EE"
+          textColor="#FFFFFF"
+          fontSize={15}
+        />
       </View>
-    </>
+
+      <View style={styles.main}>
+        <View style={styles.topLine}>
+          <Text style={styles.name} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <RoleBadge role={role} />
+        </View>
+
+        {showMetrics ? (
+          hasProfilePermission ? (
+            <View style={styles.chips}>
+              {showGoalsMetric ? (
+                <CompactChip
+                  label={goalsChipLabel(goalsValue)}
+                  tone={goalsTone}
+                  icon={<Target size={10} color={METRIC_VALUE_COLORS[goalsTone === "green" ? "good" : goalsTone === "orange" ? "attention" : "neutral"]} />}
+                />
+              ) : null}
+              <CompactChip
+                label={tasksChipLabel(activeTasks, overdueTasks)}
+                tone={tasksTone}
+                icon={
+                  <ListChecks
+                    size={10}
+                    color={
+                      METRIC_VALUE_COLORS[
+                        tasksTone === "green" ? "good" : tasksTone === "orange" ? "attention" : "neutral"
+                      ]
+                    }
+                  />
+                }
+              />
+              {checkInChip ? (
+                <CompactChip
+                  label={checkInChip.label}
+                  tone={checkInChip.tone}
+                  icon={null}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <Text style={styles.privateHint}>Private</Text>
+          )
+        ) : null}
+      </View>
+
+      {onPress ? <ChevronRight size={16} color="#CBD5E1" strokeWidth={2.25} /> : null}
+    </View>
   );
 
   if (onPress) {
     return (
-      <Pressable onPress={onPress} testID={testID} style={rowStyle}>
-        {content}
+      <Pressable
+        onPress={onPress}
+        testID={testID}
+        style={({ pressed }) => [styles.pressable, pressed ? styles.pressablePressed : null]}
+      >
+        {row}
       </Pressable>
     );
   }
 
-  return (
-    <View testID={testID} style={rowStyle}>
-      {content}
-    </View>
-  );
+  return <View testID={testID}>{row}</View>;
 }
 
-export function TeamMemberRowSkeleton({ paid = true, showDivider = true }: { paid?: boolean; showDivider?: boolean }) {
-  const { width: screenWidth } = useWindowDimensions();
-  const layout = getTeamMemberRowLayout(screenWidth);
-  const rowStyle = teamMemberRowStyle(
-    layout.rowPaddingHorizontal,
-    layout.rowPaddingVertical,
-    showDivider,
-  );
-
-  if (!paid) {
-    return (
-      <View style={rowStyle}>
-        <View
-          style={{
-            width: layout.avatarSize,
-            height: layout.avatarSize,
-            borderRadius: layout.avatarSize / 2,
-            backgroundColor: "#E2E8F0",
-            flexShrink: 0,
-          }}
-        />
-        <View style={{ width: layout.avatarGap }} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={{ height: 10, width: "68%", backgroundColor: "#E2E8F0", borderRadius: 3 }} />
-        </View>
-      </View>
-    );
-  }
-
+export function TeamMemberRowSkeleton({
+  paid = true,
+  showDivider = true,
+}: {
+  paid?: boolean;
+  showDivider?: boolean;
+}) {
   return (
-    <View style={rowStyle}>
-      <View
-        style={{
-          width: layout.avatarSize,
-          height: layout.avatarSize,
-          borderRadius: layout.avatarSize / 2,
-          backgroundColor: "#E2E8F0",
-          flexShrink: 0,
-        }}
-      />
-      <View style={{ width: layout.avatarGap }} />
-      <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center" }}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={{ height: 10, width: "72%", backgroundColor: "#E2E8F0", borderRadius: 3, marginBottom: 4 }} />
-          <View style={{ height: 14, width: 48, backgroundColor: "#F1F5F9", borderRadius: 7 }} />
-        </View>
-        <View style={{ width: layout.metricsWidth, flexDirection: "row", gap: 4 }}>
-          <View style={{ flex: 1, gap: 3 }}>
-            <View style={{ height: 7, width: "78%", backgroundColor: "#E2E8F0", borderRadius: 2 }} />
-            <View style={{ height: 6, width: "64%", backgroundColor: "#F1F5F9", borderRadius: 2 }} />
+    <View
+      style={[
+        styles.row,
+        {
+          borderBottomWidth: showDivider ? StyleSheet.hairlineWidth : 0,
+          borderBottomColor: PROFILE_UI.divider.backgroundColor,
+        },
+      ]}
+    >
+      <View style={[styles.avatarRing, { borderColor: "#E2E8F0", backgroundColor: "#E2E8F0" }]} />
+      <View style={styles.main}>
+        <View style={{ height: 12, width: "55%", backgroundColor: "#E2E8F0", borderRadius: 4 }} />
+        {paid ? (
+          <View style={{ flexDirection: "row", gap: 6, marginTop: 8 }}>
+            <View style={{ height: 20, width: 72, backgroundColor: "#F1F5F9", borderRadius: 8 }} />
+            <View style={{ height: 20, width: 64, backgroundColor: "#F1F5F9", borderRadius: 8 }} />
           </View>
-          <View style={{ flex: 1, gap: 3 }}>
-            <View style={{ height: 7, width: "72%", backgroundColor: "#E2E8F0", borderRadius: 2 }} />
-            <View style={{ height: 6, width: "82%", backgroundColor: "#F1F5F9", borderRadius: 2 }} />
-          </View>
-          <View style={{ flex: 1, gap: 3 }}>
-            <View style={{ height: 7, width: "70%", backgroundColor: "#E2E8F0", borderRadius: 2 }} />
-            <View style={{ height: 6, width: "76%", backgroundColor: "#F1F5F9", borderRadius: 2 }} />
-          </View>
-        </View>
+        ) : null}
       </View>
     </View>
   );
 }
 
-/** Gap between member row cards in the list. */
-export const TEAM_MEMBER_ROW_GAP = 5;
+/** @deprecated Kept for callers; members now live in one grouped list. */
+export const TEAM_MEMBER_ROW_GAP = 0;
+
+const styles = StyleSheet.create({
+  pressable: {
+    backgroundColor: "#FFFFFF",
+  },
+  pressablePressed: {
+    backgroundColor: "rgba(15, 23, 42, 0.03)",
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 72,
+    backgroundColor: "#FFFFFF",
+  },
+  avatarRing: {
+    width: DIRECTORY_AVATAR,
+    height: DIRECTORY_AVATAR,
+    borderRadius: DIRECTORY_AVATAR / 2,
+    borderWidth: 2.5,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  main: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  topLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minWidth: 0,
+  },
+  name: {
+    flexShrink: 1,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: -0.2,
+  },
+  roleBadge: {
+    height: 18,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    maxWidth: "100%",
+  },
+  chipText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  privateHint: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
+});

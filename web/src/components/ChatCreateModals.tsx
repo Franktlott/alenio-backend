@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  createTeamTopic,
-  findOrCreateDm,
   fetchGroupMemberCandidates,
   searchUsers,
   type GroupMemberCandidate,
@@ -11,7 +9,7 @@ import {
 
 const TOPIC_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
 
-type UserPickRow = UserSearchRow;
+type UserPickRow = UserSearchRow | GroupMemberCandidate;
 
 function userLabel(user: UserPickRow): string {
   return user.name ?? user.email ?? "Member";
@@ -53,7 +51,7 @@ function UserPickList({
               )}
               <span className="chat-create-user-copy">
                 <span className="chat-create-user-name">{userLabel(user)}</span>
-                {"workspaceLabel" in user && user.workspaceLabel ? (
+                {"workspaceLabel" in user && typeof user.workspaceLabel === "string" && user.workspaceLabel ? (
                   <span className="chat-create-user-workspace">{user.workspaceLabel}</span>
                 ) : null}
                 {user.email && user.email !== user.name ? (
@@ -242,9 +240,9 @@ export function NewDmModal({ open, saving, error, teamMembers, myUserId, onClose
         </button>
         <header className="enterprise-task-modal-head">
           <h3 id="chat-new-dm-title" className="enterprise-task-modal-title">
-            New direct message
+            Message someone
           </h3>
-          <p className="enterprise-muted">Pick someone to message.</p>
+          <p className="enterprise-muted">Send a private message to a teammate.</p>
         </header>
         <div className="chat-create-modal-body">
           {error ? <p className="enterprise-form-error" role="alert">{error}</p> : null}
@@ -269,8 +267,10 @@ type CreateGroupModalProps = {
   saving: boolean;
   error: string | null;
   myUserId: string;
+  teams?: Array<{ id: string; name: string }>;
+  defaultTeamId?: string;
   onClose: () => void;
-  onSubmit: (input: { name: string; participantIds: string[] }) => void;
+  onSubmit: (input: { name: string; participantIds: string[]; teamId?: string }) => void;
 };
 
 export function CreateGroupModal({
@@ -278,11 +278,14 @@ export function CreateGroupModal({
   saving,
   error,
   myUserId,
+  teams = [],
+  defaultTeamId,
   onClose,
   onSubmit,
 }: CreateGroupModalProps) {
   const [groupName, setGroupName] = useState("");
   const [query, setQuery] = useState("");
+  const [teamId, setTeamId] = useState<string>("");
   const [candidates, setCandidates] = useState<GroupMemberCandidate[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [selected, setSelected] = useState<GroupMemberCandidate[]>([]);
@@ -291,16 +294,17 @@ export function CreateGroupModal({
     if (!open) {
       setGroupName("");
       setQuery("");
+      setTeamId(defaultTeamId ?? "");
       setCandidates([]);
       setSelected([]);
     }
-  }, [open]);
+  }, [open, defaultTeamId]);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoadingCandidates(true);
-    void fetchGroupMemberCandidates(query)
+    void fetchGroupMemberCandidates(query, teamId || undefined)
       .then((rows) => {
         if (!cancelled) setCandidates(rows.filter((u) => u.id !== myUserId));
       })
@@ -313,13 +317,14 @@ export function CreateGroupModal({
     return () => {
       cancelled = true;
     };
-  }, [open, query, myUserId]);
+  }, [open, query, myUserId, teamId]);
 
   const selectedIds = useMemo(() => new Set(selected.map((u) => u.id)), [selected]);
 
-  const toggleUser = (user: GroupMemberCandidate) => {
+  const toggleUser = (user: UserPickRow) => {
+    const candidate = user as GroupMemberCandidate;
     setSelected((prev) =>
-      prev.some((u) => u.id === user.id) ? prev.filter((u) => u.id !== user.id) : [...prev, user],
+      prev.some((u) => u.id === candidate.id) ? prev.filter((u) => u.id !== candidate.id) : [...prev, candidate],
     );
   };
 
@@ -339,12 +344,33 @@ export function CreateGroupModal({
         </button>
         <header className="enterprise-task-modal-head">
           <h3 id="chat-create-group-title" className="enterprise-task-modal-title">
-            New group message
+            Create group
           </h3>
-          <p className="enterprise-muted">Add a name and pick people from any of your workspaces.</p>
+          <p className="enterprise-muted">Start a group when your team needs one.</p>
         </header>
         <div className="chat-create-modal-body">
           {error ? <p className="enterprise-form-error" role="alert">{error}</p> : null}
+          {teams.length > 1 ? (
+            <>
+              <label className="auth-label" htmlFor="chat-group-workspace">
+                Workspace <span className="enterprise-muted">(optional)</span>
+              </label>
+              <select
+                id="chat-group-workspace"
+                className="auth-input"
+                value={teamId}
+                onChange={(e) => setTeamId(e.target.value)}
+                data-testid="chat-create-group-workspace"
+              >
+                <option value="">All workspaces</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
           <label className="auth-label" htmlFor="chat-group-name">
             Group name
           </label>
@@ -387,6 +413,7 @@ export function CreateGroupModal({
               onSubmit({
                 name: groupName.trim(),
                 participantIds: selected.map((u) => u.id),
+                ...(teamId ? { teamId } : {}),
               })
             }
             data-testid="chat-create-group-submit"

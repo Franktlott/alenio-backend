@@ -3,6 +3,20 @@ import { planOneOnOneHref } from "./plan-one-on-one";
 import type { SenecaActionId } from "./seneca-assistant";
 import type { SenecaAskActionId } from "./seneca-api";
 import type { SenecaQuickAction } from "./seneca-briefing";
+import {
+  isSenecaFocusActionId,
+} from "./seneca-focus";
+import { senecaFocusDestination } from "./seneca-focus-presentation";
+
+export function senecaFocusActionNavigate(
+  actionId: string,
+  teamId: string,
+  affectedMemberIds: string[] = [],
+): boolean {
+  if (!isSenecaFocusActionId(actionId)) return false;
+  router.push(senecaFocusDestination(actionId, teamId, affectedMemberIds));
+  return true;
+}
 
 export function senecaActionNavigate(
   actionId: SenecaActionId | SenecaAskActionId,

@@ -23,24 +23,25 @@ export function ActivityCardShell({
   const tint = getActivityTintTokens(type);
 
   return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
-      disabled={!onPress && !onLongPress}
-      testID={testID}
-      style={({ pressed }) => ({
-        marginHorizontal: ACTIVITY_LAYOUT.cardMarginHorizontal,
-        marginVertical: ACTIVITY_LAYOUT.cardMarginVertical,
-        backgroundColor: tint.background,
-        borderBottomWidth: 1,
-        borderBottomColor: ACTIVITY_COLORS.slate100,
-        opacity: pressed && onPress ? 0.94 : 1,
-      })}
-    >
-      <View style={{ paddingHorizontal: 14, paddingVertical: ACTIVITY_LAYOUT.cardPadding, gap: ACTIVITY_LAYOUT.cardGap }}>
-        {children}
-        {footer ? <View>{footer}</View> : null}
-      </View>
-    </Pressable>
+    <View style={{ marginHorizontal: 14 }}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onLongPress}
+        disabled={!onPress && !onLongPress}
+        testID={testID}
+        style={({ pressed }) => ({
+          width: "100%",
+          backgroundColor: tint.background,
+          borderBottomWidth: 0.75,
+          borderBottomColor: ACTIVITY_COLORS.slate100,
+          opacity: pressed && onPress ? 0.94 : 1,
+        })}
+      >
+        <View style={{ width: "100%", paddingVertical: 8, gap: ACTIVITY_LAYOUT.cardGap }}>
+          {children}
+          {footer ? <View>{footer}</View> : null}
+        </View>
+      </Pressable>
+    </View>
   );
 }

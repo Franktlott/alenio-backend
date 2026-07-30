@@ -31,7 +31,7 @@ export default function AdminSettingsTab() {
   };
 
   return (
-    <View className="flex-1 bg-[#F8FAFC]">
+    <View className="flex-1 bg-white">
       <AdminHeader title="Settings" subtitle="Admin account options" />
 
       <View className="px-4 pt-5" style={{ paddingBottom: tabBarClearance(insets.bottom) }}>

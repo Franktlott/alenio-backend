@@ -331,7 +331,7 @@ export default function OwnershipTransferReturnScreen() {
   if (sessionLoading) {
     return (
       <View
-        style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8F7FF" }}
+        style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" }}
         testID="ownership-transfer-loading"
       >
         <StatusBar style="dark" />
@@ -375,7 +375,7 @@ export default function OwnershipTransferReturnScreen() {
     <View
       style={{
         flex: 1,
-        backgroundColor: "#F8F7FF",
+        backgroundColor: "#FFFFFF",
         paddingHorizontal: 24,
         justifyContent: "center",
       }}

@@ -1,467 +1,471 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, Modal, ScrollView } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Building2, Check, ChevronDown, LogOut, Pencil, X } from "lucide-react-native";
+import React, { useMemo } from "react";
+import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
+import { Building2, CheckCircle2, ChevronRight, CreditCard, Info, Plus, Users } from "lucide-react-native";
 import type { Team } from "@/lib/types";
-import {
-  formatTeamRole,
-  WorkspaceTeamAvatar,
-} from "@/components/WorkspaceTeamUI";
-import {
-  PROFILE_UI,
-  ProfileCard,
-} from "@/components/profile/ProfileEnterpriseUI";
-
-export type PendingJoinRequest = {
-  id: string;
-  status: string;
-  team: { id: string; name: string; image: string | null };
-};
+import { WorkspaceTeamAvatar, formatTeamRole } from "@/components/WorkspaceTeamUI";
+import { ProfileCard } from "@/components/profile/ProfileEnterpriseUI";
 
 type TeamWithRole = Team & { role?: string };
 
-type ProfileWorkspaceListProps = {
+type PendingJoinRequest = {
+  id: string;
+  status: string;
+  team: {
+    id: string;
+    name: string;
+    image?: string | null;
+  };
+};
+
+type Props = {
   teams: TeamWithRole[];
-  activeTeamId: string | null;
-  teamsLoading: boolean;
-  pendingCountMap: Record<string, number>;
+  activeTeamId: string | null | undefined;
+  teamsLoading?: boolean;
+  pendingCountMap?: Record<string, number>;
   pendingJoinRequests?: PendingJoinRequest[];
   cancelingRequestId?: string | null;
   onCancelPendingRequest?: (requestId: string) => void;
-  onSelectTeam: (teamId: string) => void;
-  onManageActive?: () => void;
-  onLeaveActive?: () => void;
-  onAddWorkspace: () => void;
+  /** Open the dedicated workspace page for the active workspace */
+  onOpenWorkspacePage?: () => void;
+  onOpenPeople?: () => void;
+  onOpenSubscriptions?: () => void;
+  onOpenWorkspaceDetails?: () => void;
+  onAddWorkspace?: () => void;
 };
 
-const MAX_VISIBLE_ROWS = 4;
-const ROW_HEIGHT = 44;
+function WorkspaceRow({
+  team,
+  pendingCount,
+  onPress,
+}: {
+  team: TeamWithRole;
+  pendingCount: number;
+  onPress: () => void;
+}) {
+  const roleLabel = formatTeamRole(team.role);
+  const subtitle = [roleLabel || null, pendingCount > 0 ? `${pendingCount} pending` : null]
+    .filter(Boolean)
+    .join(" · ");
+  const memberCount = team._count?.members ?? team.members?.length ?? 0;
 
-function WorkspaceRowIcon({ team, active }: { team: Pick<Team, "name" | "image">; active: boolean }) {
   return (
-    <View style={{ marginRight: 12 }}>
-      <WorkspaceTeamAvatar team={team} size={36} active={active} radius={8} />
-    </View>
+    <Pressable
+        onPress={onPress}
+        testID={`workspace-row-${team.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Manage ${team.name}, active workspace`}
+        style={({ pressed }) => ({
+          width: "100%",
+          position: "relative",
+          opacity: pressed ? 0.68 : 1,
+        })}
+      >
+        <View
+          style={{
+            width: "100%",
+            minHeight: 54,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            paddingLeft: 14,
+            paddingRight: 54,
+            paddingTop: 7,
+            paddingBottom: 4,
+          }}
+        >
+        <WorkspaceTeamAvatar team={{ name: team.name, image: team.image }} size={38} radius={10} />
+        <View
+          style={{
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
+            minWidth: 140,
+            overflow: "hidden",
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+            <Text
+              style={{
+                flexShrink: 1,
+                fontSize: 15,
+                fontFamily: "Inter_600SemiBold",
+                color: "#0F172A",
+                letterSpacing: -0.2,
+              }}
+              numberOfLines={1}
+            >
+              {team.name}
+            </Text>
+            <View
+              style={{
+                borderRadius: 999,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                backgroundColor: "#EEF2FF",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 8,
+                  lineHeight: 11,
+                  fontFamily: "Inter_600SemiBold",
+                  color: "#4361EE",
+                  letterSpacing: 0.5,
+                }}
+              >
+                ACTIVE
+              </Text>
+            </View>
+          </View>
+          <Text
+            style={{
+              marginTop: 2,
+              fontSize: 10,
+              fontFamily: "Inter_500Medium",
+              color: "#64748B",
+            }}
+            numberOfLines={1}
+          >
+            {subtitle || "Workspace member"}
+          </Text>
+        </View>
+        </View>
+        <View
+          style={{
+            position: "absolute",
+            right: 14,
+            top: 14,
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#F8F7FF",
+            borderWidth: 1,
+            borderColor: "#F0EEFF",
+          }}
+        >
+          <ChevronRight size={14} color="#6D4AFF" strokeWidth={2.3} />
+        </View>
+        <View
+          style={{
+            minHeight: 24,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 14,
+            paddingBottom: 4,
+            gap: 10,
+          }}
+        >
+          <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Users size={12} color="#6D4AFF" strokeWidth={2.1} />
+            <Text style={{ fontSize: 9, color: "#667085" }} numberOfLines={1}>
+              {memberCount} {memberCount === 1 ? "member" : "members"}
+            </Text>
+          </View>
+          <View style={{ width: 1, height: 18, backgroundColor: "#E8ECF3" }} />
+          <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <CheckCircle2 size={12} color="#10B981" strokeWidth={2.1} />
+            <Text style={{ fontSize: 9, color: "#667085" }} numberOfLines={1}>
+              Active
+            </Text>
+          </View>
+          <View style={{ width: 1, height: 18, backgroundColor: "#E8ECF3" }} />
+          <View style={{ flex: 1.2, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Building2 size={12} color="#4361EE" strokeWidth={2.1} />
+            <Text style={{ fontSize: 9, color: "#667085" }} numberOfLines={1}>
+              Current workspace
+            </Text>
+          </View>
+        </View>
+    </Pressable>
   );
 }
 
-function WorkspaceRowContent({
-  team,
-  isActive,
-  title,
-  subtitle,
-  pendingCount,
-  trailing,
+function WorkspaceAction({
+  label,
+  Icon,
+  onPress,
+  testID,
+  showDivider,
 }: {
-  team: TeamWithRole;
-  isActive: boolean;
-  title: string;
-  subtitle: string;
-  pendingCount?: number;
-  trailing?: React.ReactNode;
+  label: string;
+  Icon: typeof Users;
+  onPress?: () => void;
+  testID: string;
+  showDivider?: boolean;
 }) {
   return (
     <View
       style={{
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        minHeight: ROW_HEIGHT,
+        flex: 1,
+        minWidth: 0,
+        borderLeftWidth: showDivider ? 1 : 0,
+        borderLeftColor: "#EEF1F6",
       }}
     >
-      <WorkspaceRowIcon team={team} active={isActive} />
-      <View style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
-        <Text style={PROFILE_UI.rowTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={PROFILE_UI.rowSubtitle} numberOfLines={1}>
-          {subtitle}
-        </Text>
-      </View>
-      {(pendingCount ?? 0) > 0 ? (
+      <Pressable
+        onPress={onPress}
+        disabled={!onPress}
+        testID={testID}
+        accessibilityRole={onPress ? "button" : undefined}
+        accessibilityLabel={label}
+        style={({ pressed }) => ({
+          width: "100%",
+          opacity: !onPress ? 0.45 : pressed ? 0.62 : 1,
+        })}
+      >
         <View
           style={{
-            minWidth: 20,
-            height: 20,
-            borderRadius: 10,
-            backgroundColor: "#DC2626",
+            width: "100%",
+            minHeight: 50,
             alignItems: "center",
             justifyContent: "center",
-            paddingHorizontal: 6,
-            marginRight: trailing ? 8 : 0,
+            paddingHorizontal: 5,
+            paddingVertical: 5,
           }}
         >
-          <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "700" }}>{pendingCount}</Text>
+          <View
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 13,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#F1F0FF",
+            }}
+          >
+            <Icon size={13} color="#6D4AFF" strokeWidth={2.05} />
+          </View>
+          <Text
+            style={{
+              width: "100%",
+              marginTop: 2,
+              fontSize: 9,
+              lineHeight: 11,
+              fontFamily: "Inter_600SemiBold",
+              color: "#20283A",
+              textAlign: "center",
+            }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+          >
+            {label}
+          </Text>
         </View>
-      ) : null}
-      {trailing ?? null}
+      </Pressable>
     </View>
-  );
-}
-
-function workspaceSubtitle(team: TeamWithRole, isActive: boolean) {
-  const role = formatTeamRole(team.role);
-  const code = team.inviteCode?.trim();
-  const parts = [role];
-  if (isActive) parts.push("Current");
-  if (code) parts.push(`Code ${code}`);
-  return parts.join(" · ");
-}
-
-function ActiveWorkspaceRow({
-  team,
-  pendingCount,
-  canSwitch,
-  onOpenPicker,
-  onManageActive,
-  onLeaveActive,
-}: {
-  team: TeamWithRole;
-  pendingCount: number;
-  canSwitch: boolean;
-  onOpenPicker: () => void;
-  onManageActive?: () => void;
-  onLeaveActive?: () => void;
-}) {
-  const trailing = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-      {onManageActive ? (
-        <Pressable
-          onPress={onManageActive}
-          hitSlop={8}
-          testID="edit-active-workspace"
-          style={({ pressed }) => ({
-            opacity: pressed ? 0.6 : 1,
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            backgroundColor: "#EEF2FF",
-            alignItems: "center",
-            justifyContent: "center",
-          })}
-          accessibilityRole="button"
-          accessibilityLabel="Edit workspace name and photo"
-        >
-          <Pencil size={15} color="#4338CA" strokeWidth={2.25} />
-        </Pressable>
-      ) : null}
-      {onLeaveActive ? (
-        <Pressable
-          onPress={onLeaveActive}
-          hitSlop={8}
-          testID="leave-active-workspace"
-          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, marginLeft: 2 })}
-          accessibilityRole="button"
-          accessibilityLabel="Leave workspace"
-        >
-          <LogOut size={18} color="#64748B" />
-        </Pressable>
-      ) : canSwitch ? (
-        <ChevronDown size={18} color="#64748B" style={{ marginLeft: 2 }} />
-      ) : (
-        <Check size={20} color="#4338CA" strokeWidth={2.5} style={{ marginLeft: 2 }} />
-      )}
-    </View>
-  );
-
-  return (
-    <Pressable
-      onPress={canSwitch ? onOpenPicker : undefined}
-      onLongPress={onManageActive ?? undefined}
-      delayLongPress={400}
-      testID="workspace-dropdown-trigger"
-      style={({ pressed }) => (canSwitch && pressed ? { backgroundColor: "#F8FAFC" } : undefined)}
-    >
-      <WorkspaceRowContent
-        team={team}
-        isActive
-        title={team.name}
-        subtitle={workspaceSubtitle(team, true)}
-        pendingCount={pendingCount}
-        trailing={trailing}
-      />
-    </Pressable>
   );
 }
 
 export function ProfileWorkspaceList({
   teams,
   activeTeamId,
-  teamsLoading,
-  pendingCountMap,
+  teamsLoading = false,
+  pendingCountMap = {},
   pendingJoinRequests = [],
   cancelingRequestId = null,
   onCancelPendingRequest,
-  onSelectTeam,
-  onManageActive,
-  onLeaveActive,
+  onOpenWorkspacePage,
+  onOpenPeople,
+  onOpenSubscriptions,
+  onOpenWorkspaceDetails,
   onAddWorkspace,
-}: ProfileWorkspaceListProps) {
-  const insets = useSafeAreaInsets();
-  const [pickerOpen, setPickerOpen] = useState(false);
+}: Props) {
+  const activeTeam = useMemo(
+    () => teams.find((team) => team.id === activeTeamId) ?? teams[0] ?? null,
+    [activeTeamId, teams]
+  );
 
-  const activeTeam = teams.find((t) => t.id === activeTeamId) ?? teams[0] ?? null;
-  const sortedTeams = [...teams].sort((a, b) => {
-    if (a.id === activeTeamId) return -1;
-    if (b.id === activeTeamId) return 1;
-    return a.name.localeCompare(b.name);
-  });
-  const canSwitch = teams.length > 1;
-  const listMaxHeight = Math.min(sortedTeams.length, MAX_VISIBLE_ROWS) * ROW_HEIGHT;
-  const needsScroll = sortedTeams.length > MAX_VISIBLE_ROWS;
-  const pendingSent = pendingJoinRequests.filter((r) => r.status === "pending");
+  if (teamsLoading && teams.length === 0) {
+    return (
+      <ProfileCard>
+        <View style={{ paddingVertical: 28, alignItems: "center" }}>
+          <ActivityIndicator color="#4361EE" />
+        </View>
+      </ProfileCard>
+    );
+  }
 
-  const pendingSentRows =
-    pendingSent.length > 0 ? (
-      <View testID="pending-join-requests-sent">
-        <Text
-          style={[
-            PROFILE_UI.sectionLabel,
-            {
-              letterSpacing: 0.8,
-              paddingHorizontal: 14,
-              paddingTop: 8,
-              paddingBottom: 2,
-            },
-          ]}
+  if (!activeTeam && teams.length === 0) {
+    return (
+      <ProfileCard>
+        <Pressable
+          onPress={onAddWorkspace}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            paddingVertical: 18,
+            opacity: pressed ? 0.7 : 1,
+          })}
+          accessibilityRole="button"
+          accessibilityLabel="Create or join a workspace"
         >
-          Pending · {pendingSent.length}
-        </Text>
-        {pendingSent.map((request, index) => {
-          const isCanceling = cancelingRequestId === request.id;
-          return (
-            <View key={request.id}>
-              {index > 0 ? <View style={[PROFILE_UI.divider, { marginLeft: 46 }]} /> : null}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  minHeight: 40,
-                }}
-              >
-                <View style={{ marginRight: 10 }}>
-                  <WorkspaceTeamAvatar team={request.team} size={28} radius={6} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>
-                    {request.team.name}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }} numberOfLines={1}>
-                    Waiting for approval
-                  </Text>
-                </View>
-                {onCancelPendingRequest ? (
-                  <Pressable
-                    onPress={() => onCancelPendingRequest(request.id)}
-                    disabled={isCanceling}
-                    hitSlop={8}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 6,
-                      backgroundColor: pressed ? "#F8FAFC" : "transparent",
-                      borderWidth: 1,
-                      borderColor: "#E2E8F0",
-                      opacity: isCanceling ? 0.55 : 1,
-                    })}
-                    testID={`cancel-pending-join-${request.id}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Withdraw join request for ${request.team.name}`}
-                  >
-                    {isCanceling ? (
-                      <ActivityIndicator size="small" color="#64748B" />
-                    ) : (
-                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B" }}>Withdraw</Text>
-                    )}
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    ) : null;
-
-  if (teamsLoading) {
-    return (
-      <ProfileCard>
-        <View style={{ paddingVertical: 32, alignItems: "center" }}>
-          <ActivityIndicator color="#4338CA" />
-        </View>
-      </ProfileCard>
-    );
-  }
-
-  if (teams.length === 0) {
-    return (
-      <ProfileCard>
-        <View style={{ padding: 24, alignItems: "center" }}>
-          <View style={[PROFILE_UI.iconBox, { width: 48, height: 48, borderRadius: 12, marginBottom: 12 }]}>
-            <Building2 size={22} color="#64748B" />
-          </View>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", marginBottom: 4 }}>No workspaces</Text>
-          <Text style={{ fontSize: 12, color: "#64748B", textAlign: "center", lineHeight: 17, marginBottom: 16 }}>
-            Create a workspace for your team or join with an invite code.
+          <Plus size={16} color="#4361EE" strokeWidth={2.5} />
+          <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#4361EE" }}>
+            Create or join a workspace
           </Text>
-          <Pressable
-            onPress={onAddWorkspace}
-            testID="create-join-team-button"
-            style={{
-              paddingHorizontal: 18,
-              paddingVertical: 10,
-              borderRadius: 8,
-              backgroundColor: "#4338CA",
-            }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}>Get started</Text>
-          </Pressable>
-        </View>
-        {pendingSentRows ? (
-          <>
-            <View style={PROFILE_UI.divider} />
-            {pendingSentRows}
-          </>
-        ) : null}
+        </Pressable>
       </ProfileCard>
     );
   }
-
-  if (!activeTeam) return null;
-
-  const pendingCount = pendingCountMap[activeTeam.id] ?? 0;
 
   return (
     <>
-      <ProfileCard>
-        <ActiveWorkspaceRow
-          team={activeTeam}
-          pendingCount={pendingCount}
-          canSwitch={canSwitch}
-          onOpenPicker={() => setPickerOpen(true)}
-          onManageActive={onManageActive}
-          onLeaveActive={onLeaveActive}
+      <ProfileCard
+        style={{
+          borderRadius: 14,
+          borderColor: "#E6E9F1",
+          shadowColor: "#4338CA",
+          shadowOpacity: 0.045,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 1,
+        }}
+      >
+        <Image
+          source={require("@/assets/alenio-icon.png")}
+          resizeMode="contain"
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            width: 150,
+            height: 150,
+            right: -28,
+            top: -22,
+            opacity: 0.035,
+            tintColor: "#6D4AFF",
+            transform: [{ rotate: "-8deg" }],
+          }}
         />
-        {pendingSentRows ? (
-          <>
-            <View style={PROFILE_UI.divider} />
-            {pendingSentRows}
-          </>
-        ) : null}
+        <WorkspaceRow
+          team={activeTeam}
+          pendingCount={pendingCountMap[activeTeam.id] ?? 0}
+          onPress={onOpenWorkspacePage ?? onOpenWorkspaceDetails ?? (() => undefined)}
+        />
+        <View style={{ height: 1, backgroundColor: "#F1F5F9", marginHorizontal: 14 }} />
+        <View
+          style={{
+            width: "100%",
+            flexDirection: "row",
+            alignItems: "stretch",
+            paddingHorizontal: 4,
+            paddingVertical: 2,
+          }}
+        >
+          <WorkspaceAction
+            label="People"
+            Icon={Users}
+            onPress={onOpenPeople}
+            testID="workspace-home-people"
+          />
+          <WorkspaceAction
+            label="Subscriptions"
+            Icon={CreditCard}
+            onPress={onOpenSubscriptions}
+            testID="workspace-home-subscriptions"
+            showDivider
+          />
+          <WorkspaceAction
+            label="Workspace details"
+            Icon={Info}
+            onPress={onOpenWorkspaceDetails}
+            testID="workspace-home-details"
+            showDivider
+          />
+        </View>
       </ProfileCard>
 
-      <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
-          onPress={() => setPickerOpen(false)}
-        >
-          <Pressable onPress={(e) => e.stopPropagation?.()}>
-            <View
-              style={{
-                backgroundColor: "white",
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                paddingTop: 12,
-                paddingBottom: Math.max(insets.bottom, 16),
-              }}
-            >
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center" }} />
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingHorizontal: 20,
-                  paddingTop: 16,
-                  paddingBottom: 14,
-                }}
-              >
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Switch workspace</Text>
-                  <Text style={{ fontSize: 13, color: "#64748B", marginTop: 4 }}>
-                    {teams.length} {teams.length === 1 ? "workspace" : "workspaces"}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => setPickerOpen(false)}
-                  hitSlop={8}
+      {pendingJoinRequests.length > 0 ? (
+        <View style={{ marginTop: 10 }}>
+          <Text
+            style={{
+              marginBottom: 8,
+              marginLeft: 4,
+              fontSize: 11,
+              fontFamily: "Inter_600SemiBold",
+              color: "#94A3B8",
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+            }}
+          >
+            Pending requests
+          </Text>
+          <ProfileCard>
+            {pendingJoinRequests.map((request, index) => (
+              <View key={request.id}>
+                {index > 0 ? (
+                  <View style={{ height: 1, backgroundColor: "#F1F5F9", marginHorizontal: 14 }} />
+                ) : null}
+                <View
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: "#F1F5F9",
+                    flexDirection: "row",
                     alignItems: "center",
-                    justifyContent: "center",
+                    gap: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
                   }}
                 >
-                  <X size={18} color="#64748B" />
-                </Pressable>
-              </View>
-
-              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-                <View style={PROFILE_UI.card}>
-                  <ScrollView
-                    style={{ maxHeight: listMaxHeight }}
-                    bounces={needsScroll}
-                    showsVerticalScrollIndicator={needsScroll}
-                    keyboardShouldPersistTaps="handled"
-                    nestedScrollEnabled
-                  >
-                    {sortedTeams.map((team, index) => {
-                      const isActive = team.id === activeTeamId;
-                      const pending = pendingCountMap[team.id] ?? 0;
-                      return (
-                        <View key={team.id}>
-                          {index > 0 ? (
-                            <View style={{ height: 1, backgroundColor: "#F1F5F9", marginLeft: 46 }} />
-                          ) : null}
-                          <Pressable
-                            onPress={() => {
-                              setPickerOpen(false);
-                              if (!isActive) onSelectTeam(team.id);
-                            }}
-                            disabled={isActive}
-                            testID={`team-row-${team.id}`}
-                            style={({ pressed }) => ({
-                              backgroundColor: isActive ? "#F8FAFC" : pressed ? "#F8FAFC" : "transparent",
-                            })}
-                          >
-                            <WorkspaceRowContent
-                                team={team}
-                                isActive={isActive}
-                                title={team.name}
-                                subtitle={workspaceSubtitle(team, isActive)}
-                                pendingCount={pending}
-                                trailing={
-                                  isActive ? (
-                                    <Check size={20} color="#4338CA" strokeWidth={2.5} />
-                                  ) : undefined
-                                }
-                              />
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
+                  <WorkspaceTeamAvatar
+                    team={{ name: request.team.name, image: request.team.image }}
+                    size={36}
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontFamily: "Inter_600SemiBold",
+                        color: "#0F172A",
+                        letterSpacing: -0.2,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {request.team.name}
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 2,
+                        fontSize: 12,
+                        fontFamily: "Inter_500Medium",
+                        color: "#64748B",
+                      }}
+                    >
+                      Request pending
+                    </Text>
+                  </View>
+                  {onCancelPendingRequest ? (
+                    <Pressable
+                      onPress={() => onCancelPendingRequest(request.id)}
+                      disabled={cancelingRequestId === request.id}
+                      hitSlop={8}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                    >
+                      {cancelingRequestId === request.id ? (
+                        <ActivityIndicator size="small" color="#EF4444" />
+                      ) : (
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontFamily: "Inter_600SemiBold",
+                            color: "#EF4444",
+                          }}
+                        >
+                          Cancel
+                        </Text>
+                      )}
+                    </Pressable>
+                  ) : (
+                    <ChevronRight size={16} color="#CBD5E1" />
+                  )}
                 </View>
-                <Pressable
-                  onPress={() => {
-                    setPickerOpen(false);
-                    onAddWorkspace();
-                  }}
-                  style={{ paddingHorizontal: 20, paddingTop: 14, alignItems: "center" }}
-                  testID="create-join-team-button"
-                >
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#4338CA" }}>Add workspace</Text>
-                </Pressable>
               </View>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+            ))}
+          </ProfileCard>
+        </View>
+      ) : null}
     </>
   );
 }

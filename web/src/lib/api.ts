@@ -277,8 +277,11 @@ export type GroupMemberCandidate = {
 
 export type DmConversation = {
   id: string;
+  type?: "DIRECT" | "GROUP";
   isGroup: boolean;
   name: string | null;
+  teamId?: string | null;
+  workspaceId?: string | null;
   participants: Array<{ id: string; name: string | null; email: string | null; image: string | null }>;
   recipient: { id: string; name: string | null; email: string | null; image: string | null } | null;
   workspaceContext?: GroupWorkspaceContext | null;
@@ -1056,15 +1059,19 @@ export function findOrCreateDm(recipientId: string) {
   return apiPostJson<{ data: DmConversation }>("/api/dms/find-or-create", { recipientId }).then((r) => r.data);
 }
 
-export function createGroupDm(input: { name: string; participantIds: string[] }) {
+export function createGroupDm(input: { name: string; participantIds: string[]; teamId?: string }) {
   return apiPostJson<{ data: DmConversation }>("/api/dms/create-group", {
     name: input.name.trim(),
     participantIds: input.participantIds,
+    ...(input.teamId ? { teamId: input.teamId } : {}),
   }).then((r) => r.data);
 }
 
-export function fetchGroupMemberCandidates(query = "") {
-  const suffix = query.trim().length >= 2 ? `?q=${encodeURIComponent(query.trim())}` : "";
+export function fetchGroupMemberCandidates(query = "", teamId?: string) {
+  const params = new URLSearchParams();
+  if (query.trim().length >= 2) params.set("q", query.trim());
+  if (teamId?.trim()) params.set("teamId", teamId.trim());
+  const suffix = params.toString() ? `?${params.toString()}` : "";
   return apiGetJson<{ data: GroupMemberCandidate[] }>(`/api/dms/group-member-candidates${suffix}`).then((r) => r.data);
 }
 

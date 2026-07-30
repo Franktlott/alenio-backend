@@ -218,7 +218,7 @@ export default function SignIn() {
   }
 
   return (
-    <View className="flex-1 bg-[#F7F7FF]" testID="sign-in-screen">
+    <View className="flex-1 bg-white" testID="sign-in-screen">
       <StatusBar style="light" />
       <LinearGradient
         colors={["#1769F5", "#7138EF"]}
@@ -250,7 +250,7 @@ export default function SignIn() {
           height: 100,
           borderTopLeftRadius: 70,
           borderTopRightRadius: 70,
-          backgroundColor: "#F7F7FF",
+          backgroundColor: "#FFFFFF",
         }}
       />
 

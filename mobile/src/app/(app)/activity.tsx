@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  Image,
 } from "react-native";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -19,31 +18,36 @@ import {
   Check,
   ChevronDown,
   Building2,
-  Plus,
+  SlidersHorizontal,
 } from "lucide-react-native";
-import { useState, useEffect, useRef, useMemo } from "react";
-import { useSession } from "@/lib/auth/use-session";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { tabBarClearance, SENECA_FAB_SIZE, SENECA_FAB_RIGHT_INSET } from "@/lib/tab-bar";
-import { AppTabHeader } from "@/components/AppTabHeader";
+import { tabBarClearance, SENECA_FAB_SIZE, SENECA_FAB_VISIBLE_SIZE } from "@/lib/tab-bar";
+import { CurvedTabLayout } from "@/components/CurvedTabLayout";
+import { UserAvatar } from "@/components/UserAvatar";
+import { useActivityCelebrateFabListener } from "@/components/seneca/SenecaFloatingLauncher";
 import type { Team } from "@/lib/types";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { hasWorkspaceTaskAccess, PAYWALL_TITLE } from "@/lib/plan-access-copy";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { toast } from "burnt";
 import {
-  ActivityIntroHeader,
   ActivityFeedCard,
+  GroupedActivityRow,
   CelebrationTypePickerCards,
   CelebrationDeleteModal,
   CELEBRATION_TYPE_KEYS,
   mapApiActivityToFeedItem,
   matchesActivityFilter,
+  groupRepetitiveActivities,
   groupActivitiesByDate,
+  ACTIVITY_FILTER_OPTIONS,
   type ActivityApiEvent,
   type ActivityDateSection,
   type ActivityFeedItem,
+  type ActivityFeedGroup,
   type ActivityFilter,
   type CelebrationTypeKey,
 } from "@/components/activity";
@@ -77,6 +81,7 @@ function filterCelebrateMembers(members: CelebrateTeamMember[], query: string): 
 type FeedRow =
   | { kind: "section"; section: ActivityDateSection }
   | { kind: "item"; item: ActivityFeedItem; sectionGroup: string; isFirstInFeed: boolean }
+  | { kind: "group"; group: ActivityFeedGroup; sectionGroup: string }
   | { kind: "empty-filter" };
 
 function FeedItemCard({
@@ -155,7 +160,7 @@ function FeedItemCard({
             onToggleReaction={toggleReaction}
             showPicker={showPicker}
             onClosePicker={onClosePicker}
-            tone={item.type === "celebration" ? "onDark" : "default"}
+            tone="default"
             canDelete={canDelete}
             onDelete={canDelete ? handleDelete : undefined}
           />
@@ -183,10 +188,16 @@ function FeedItemCard({
 
 export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
+  const routeParams = useLocalSearchParams<{
+    openCelebrate?: string;
+    teamId?: string;
+    targetUserId?: string;
+  }>();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
+  const { data: authReady } = useMobileAuthReady();
   const queryClient = useQueryClient();
-  const currentUserId = session?.user?.id;
+  const currentUserId = authReady?.me?.id ?? session?.user?.id;
   const persistedPlan = useSubscriptionStore((s) => s.plan);
 
   const { data: teams = [] } = useQuery({
@@ -209,6 +220,7 @@ export default function ActivityScreen() {
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [workspaceFilter, setWorkspaceFilter] = useState<string>("all");
   const [showWorkspaceFilterSheet, setShowWorkspaceFilterSheet] = useState(false);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(() => new Set());
 
   const [showCelebrateModal, setShowCelebrateModal] = useState(false);
   const [celebrateStep, setCelebrateStep] = useState<1 | 2>(1);
@@ -275,7 +287,7 @@ export default function ActivityScreen() {
     },
     enabled: teams.length > 0,
     refetchInterval: 15000,
-    refetchOnMount: false,
+    refetchOnMount: "always",
   });
 
   const celebrateTeamIdResolved =
@@ -301,8 +313,20 @@ export default function ActivityScreen() {
     () =>
       workspaceFilteredActivities
         .map(mapApiActivityToFeedItem)
+        .map((item) =>
+          item.actor?.id === authReady?.me?.id
+            ? {
+                ...item,
+                actor: {
+                  ...item.actor,
+                  name: authReady.me.name,
+                  image: authReady.me.image,
+                },
+              }
+            : item,
+        )
         .filter((item) => matchesActivityFilter(item.type, activityFilter)),
-    [workspaceFilteredActivities, activityFilter],
+    [workspaceFilteredActivities, activityFilter, authReady?.me],
   );
 
   const sections = useMemo(() => groupActivitiesByDate(feedItems), [feedItems]);
@@ -310,9 +334,10 @@ export default function ActivityScreen() {
     workspaceFilter === "all"
       ? "All workspaces"
       : teams.find((t) => t.id === workspaceFilter)?.name ?? "Workspace";
+  const hasActiveFilters = activityFilter !== "all" || workspaceFilter !== "all";
   const showWorkspaceLabels = workspaceFilter === "all" && teams.length > 1;
 
-  const openCelebrate = () => {
+  const openCelebrate = useCallback((preferredTeamId?: string) => {
     if (!hasCelebrateAccess) {
       toast({
         title: PAYWALL_TITLE,
@@ -322,12 +347,44 @@ export default function ActivityScreen() {
       router.push("/account-hub");
       return;
     }
-    setCelebrateTeamId(workspaceFilter !== "all" ? workspaceFilter : activeTeamId ?? teams[0]?.id ?? "");
+    const validPreferredTeamId =
+      preferredTeamId && teams.some((team) => team.id === preferredTeamId)
+        ? preferredTeamId
+        : "";
+    setCelebrateTeamId(
+      validPreferredTeamId ||
+        (workspaceFilter !== "all" ? workspaceFilter : activeTeamId ?? teams[0]?.id ?? ""),
+    );
     setShowCelebrateModal(true);
     setCelebrateStep(1);
     setCelebrateMemberSearch("");
     setShowCelebrateWorkspaceMenu(false);
-  };
+  }, [hasCelebrateAccess, workspaceFilter, activeTeamId, teams]);
+
+  useActivityCelebrateFabListener(openCelebrate);
+
+  useEffect(() => {
+    if (routeParams.openCelebrate !== "1" || teams.length === 0) return;
+    openCelebrate(
+      typeof routeParams.teamId === "string" ? routeParams.teamId : undefined,
+    );
+    router.setParams({ openCelebrate: undefined, teamId: undefined });
+  }, [routeParams.openCelebrate, routeParams.teamId, teams.length, openCelebrate]);
+
+  useEffect(() => {
+    if (!showCelebrateModal || !routeParams.targetUserId || teamMembers.length === 0) {
+      return;
+    }
+    const member = teamMembers.find((row) => row.userId === routeParams.targetUserId);
+    if (!member) return;
+    setCelebrateTarget({
+      id: member.userId,
+      name: member.user.name,
+      image: member.user.image,
+    });
+    setCelebrateStep(2);
+    router.setParams({ targetUserId: undefined });
+  }, [routeParams.targetUserId, showCelebrateModal, teamMembers]);
 
   const listRows = useMemo<FeedRow[]>(() => {
     const rows: FeedRow[] = [];
@@ -338,7 +395,22 @@ export default function ActivityScreen() {
     let firstItemId: string | null = null;
     for (const section of sections) {
       rows.push({ kind: "section", section });
-      for (const item of section.items) {
+      for (const entry of groupRepetitiveActivities(section.items)) {
+        if (entry.type === "group") {
+          rows.push({ kind: "group", group: entry, sectionGroup: section.group });
+          if (!expandedGroupIds.has(entry.id)) continue;
+          for (const groupedItem of entry.items) {
+            if (!firstItemId) firstItemId = groupedItem.id;
+            rows.push({
+              kind: "item",
+              item: groupedItem,
+              sectionGroup: section.group,
+              isFirstInFeed: groupedItem.id === firstItemId,
+            });
+          }
+          continue;
+        }
+        const item = entry;
         if (!firstItemId) firstItemId = item.id;
         rows.push({
           kind: "item",
@@ -349,7 +421,7 @@ export default function ActivityScreen() {
       }
     }
     return rows;
-  }, [feedItems.length, sections]);
+  }, [feedItems.length, sections, expandedGroupIds]);
 
   const sortedCelebrateMembers = useMemo(
     () => sortCelebrateMembers(teamMembers as CelebrateTeamMember[]),
@@ -389,52 +461,119 @@ export default function ActivityScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={[]} testID="activity-screen">
-      <AppTabHeader
-        topInset={insets.top}
-        testID="activity-header"
-        rightAction={
-          teams.length > 1 ? (
-            <TouchableOpacity
-              onPress={() => setShowWorkspaceFilterSheet(true)}
-              testID="activity-intro-header-workspace-filter"
-              accessibilityLabel={workspaceFilterLabel}
+    <CurvedTabLayout
+      topInset={insets.top}
+      title="Activity"
+      subtitle="What's happening across your team"
+      testID="activity-screen"
+      headerTestID="activity-header"
+      rightAction={
+        <TouchableOpacity
+          onPress={() => setShowWorkspaceFilterSheet(true)}
+          testID="activity-header-filter"
+          accessibilityLabel={`Filter activity. Current workspace: ${workspaceFilterLabel}`}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(255,255,255,0.16)",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.24)",
+          }}
+        >
+          <SlidersHorizontal size={17} color="#FFFFFF" strokeWidth={2.2} />
+          {hasActiveFilters ? (
+            <View
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                maxWidth: 160,
-                backgroundColor: "rgba(255,255,255,0.2)",
-                borderRadius: 16,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
+                position: "absolute",
+                right: 2,
+                top: 2,
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: "#FBBF24",
+                borderWidth: 1,
+                borderColor: "#6D4AFF",
               }}
-            >
-              <Building2 size={13} color="white" strokeWidth={2.25} />
-              <Text style={{ flexShrink: 1, color: "white", fontSize: 12, fontWeight: "700" }} numberOfLines={1}>
-                {workspaceFilterLabel}
-              </Text>
-              <ChevronDown size={14} color="white" />
-            </TouchableOpacity>
-          ) : null
-        }
-      />
-
+            />
+          ) : null}
+        </TouchableOpacity>
+      }
+      overlays={
+        <>
       <AlenioBottomSheet
         visible={showWorkspaceFilterSheet}
-        title="Workspace"
-        subtitle="Filter activity by workspace"
+        title="Filter activity"
+        subtitle="Choose the updates and workspace you want to see"
         onClose={() => setShowWorkspaceFilterSheet(false)}
         compact
         footer={
-          <TouchableOpacity
-            onPress={() => setShowWorkspaceFilterSheet(false)}
-            style={[alenioSheetStyles.cancelButton, { paddingVertical: 4 }]}
-          >
-            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setActivityFilter("all");
+                setWorkspaceFilter("all");
+              }}
+              style={[alenioSheetStyles.cancelButton, { flex: 1, paddingVertical: 6 }]}
+            >
+              <Text style={alenioSheetStyles.cancelButtonText}>Clear</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowWorkspaceFilterSheet(false)}
+              style={{
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                backgroundColor: "#4361EE",
+                paddingVertical: 6,
+              }}
+            >
+              <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>Done</Text>
+            </TouchableOpacity>
+          </View>
         }
       >
+        <Text
+          style={{
+            marginBottom: 6,
+            fontSize: 10,
+            fontWeight: "800",
+            letterSpacing: 0.6,
+            color: "#64748B",
+            textTransform: "uppercase",
+          }}
+        >
+          Activity type
+        </Text>
+        {ACTIVITY_FILTER_OPTIONS.map((option) => (
+          <AlenioSheetOption
+            key={option.key}
+            compact
+            icon={<Check size={14} color="white" strokeWidth={2.5} />}
+            iconColor={activityFilter === option.key ? "#4361EE" : "#94A3B8"}
+            title={option.label}
+            onPress={() => setActivityFilter(option.key)}
+          />
+        ))}
+
+        {teams.length > 1 ? (
+          <Text
+            style={{
+              marginTop: 10,
+              marginBottom: 6,
+              fontSize: 10,
+              fontWeight: "800",
+              letterSpacing: 0.6,
+              color: "#64748B",
+              textTransform: "uppercase",
+            }}
+          >
+            Workspace
+          </Text>
+        ) : null}
         <AlenioSheetOption
           compact
           icon={<Check size={14} color="white" strokeWidth={2.5} />}
@@ -443,10 +582,9 @@ export default function ActivityScreen() {
           subtitle="Combined timeline"
           onPress={() => {
             setWorkspaceFilter("all");
-            setShowWorkspaceFilterSheet(false);
           }}
         />
-        {teams.map((team) => (
+        {teams.length > 1 ? teams.map((team) => (
           <AlenioSheetOption
             key={team.id}
             compact
@@ -455,10 +593,9 @@ export default function ActivityScreen() {
             title={team.name}
             onPress={() => {
               setWorkspaceFilter(team.id);
-              setShowWorkspaceFilterSheet(false);
             }}
           />
-        ))}
+        )) : null}
       </AlenioBottomSheet>
 
       <AlenioBottomSheet
@@ -685,13 +822,14 @@ export default function ActivityScreen() {
                   testID={`celebrate-member-${m.userId}`}
                   iconColor="#4361EE"
                   icon={
-                    m.user.image ? (
-                      <Image source={{ uri: m.user.image }} style={{ width: 32, height: 32 }} />
-                    ) : (
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>
-                        {m.user.name[0]?.toUpperCase()}
-                      </Text>
-                    )
+                    <UserAvatar
+                      user={m.user}
+                      size={32}
+                      radius={16}
+                      backgroundColor="#4361EE"
+                      textColor="#FFFFFF"
+                      fontSize={13}
+                    />
                   }
                   title={m.user.name}
                   onPress={() => {
@@ -737,14 +875,16 @@ export default function ActivityScreen() {
           </>
         )}
       </AlenioBottomSheet>
-
+        </>
+      }
+    >
       {isLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }} testID="loading-indicator">
           <ActivityIndicator color="#4361EE" />
         </View>
       ) : isError ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }} testID="error-state">
-          <Text style={{ fontSize: 16, fontWeight: "700", color: "#64748B", textAlign: "center" }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: "#64748B", textAlign: "center" }}>
             Couldn&apos;t load activity
           </Text>
           <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 8, textAlign: "center" }}>
@@ -764,14 +904,47 @@ export default function ActivityScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={{ flex: 1 }}>
-          <ActivityIntroHeader
-            filter={activityFilter}
-            onSelectFilter={setActivityFilter}
-            onPressFilterIcon={
-              teams.length > 1 ? () => setShowWorkspaceFilterSheet(true) : undefined
-            }
-          />
+        <View style={{ flex: 1, paddingTop: 28 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 14,
+              paddingVertical: 4,
+              marginBottom: 4,
+            }}
+          >
+            {ACTIVITY_FILTER_OPTIONS.map((option) => {
+              const selected = activityFilter === option.key;
+              return (
+                <TouchableOpacity
+                  key={option.key}
+                  onPress={() => setActivityFilter(option.key)}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    minHeight: 24,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 2,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                    backgroundColor: selected ? "#4361EE" : "#F1F5F9",
+                  }}
+                >
+                  <Text
+                    style={{ fontSize: 9, lineHeight: 12, fontWeight: "600", color: selected ? "#FFFFFF" : "#64748B" }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.85}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
           {workspaceFilteredActivities.length === 0 ? (
             <View
@@ -779,10 +952,10 @@ export default function ActivityScreen() {
               testID="empty-state"
             >
               <Activity size={48} color="#CBD5E1" />
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#94A3B8", marginTop: 16, textAlign: "center" }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#94A3B8", marginTop: 12, textAlign: "center" }}>
                 No activity yet
               </Text>
-              <Text style={{ fontSize: 14, color: "#CBD5E1", marginTop: 6, textAlign: "center", lineHeight: 20 }}>
+              <Text style={{ fontSize: 12, color: "#CBD5E1", marginTop: 4, textAlign: "center", lineHeight: 16 }}>
                 Team events like completed tasks and new members will appear here.
               </Text>
             </View>
@@ -792,13 +965,14 @@ export default function ActivityScreen() {
               keyExtractor={(row, index) => {
                 if (row.kind === "empty-filter") return "empty-filter";
                 if (row.kind === "section") return `section-${row.section.group}`;
+                if (row.kind === "group") return row.group.id;
                 return `item-${row.item.id}-${index}`;
               }}
               renderItem={({ item: row, index }) => {
                 if (row.kind === "empty-filter") {
                   return (
                     <View style={{ alignItems: "center", paddingHorizontal: 32, paddingVertical: 40 }}>
-                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#64748B", textAlign: "center" }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#64748B", textAlign: "center" }}>
                         No matching activity
                       </Text>
                       <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 6, textAlign: "center", lineHeight: 18 }}>
@@ -813,8 +987,8 @@ export default function ActivityScreen() {
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
-                        marginTop: index === 0 ? 4 : 8,
-                        marginBottom: 1,
+                        marginTop: index === 0 ? 4 : 16,
+                        marginBottom: 4,
                         paddingHorizontal: 14,
                         gap: 8,
                       }}
@@ -834,6 +1008,23 @@ export default function ActivityScreen() {
                     </View>
                   );
                 }
+                if (row.kind === "group") {
+                  const expanded = expandedGroupIds.has(row.group.id);
+                  return (
+                    <GroupedActivityRow
+                      group={row.group}
+                      expanded={expanded}
+                      onToggle={() =>
+                        setExpandedGroupIds((current) => {
+                          const next = new Set(current);
+                          if (next.has(row.group.id)) next.delete(row.group.id);
+                          else next.add(row.group.id);
+                          return next;
+                        })
+                      }
+                    />
+                  );
+                }
                 return (
                   <FeedItemCard
                     item={row.item}
@@ -846,7 +1037,7 @@ export default function ActivityScreen() {
                     showPicker={openPickerId === row.item.id}
                     onOpenPicker={() => setOpenPickerId(row.item.id)}
                     onClosePicker={() => setOpenPickerId(null)}
-                    showHint={row.isFirstInFeed && showReactionHint}
+                    showHint={row.isFirstInFeed && showReactionHint ? true : false}
                     showWorkspaceLabel={showWorkspaceLabels}
                   />
                 );
@@ -855,43 +1046,14 @@ export default function ActivityScreen() {
               refreshing={isLoading}
               contentContainerStyle={{
                 paddingTop: 0,
-                paddingBottom: tabBarClearance(insets.bottom) + SENECA_FAB_SIZE * 2 + 24,
+                paddingBottom: tabBarClearance(insets.bottom) + SENECA_FAB_SIZE + SENECA_FAB_VISIBLE_SIZE + 24,
               }}
               showsVerticalScrollIndicator={false}
               testID="activity-list"
             />
           )}
-
-          {hasCelebrateAccess ? (
-            <TouchableOpacity
-              testID="celebrate-button"
-              onPress={openCelebrate}
-              accessibilityLabel="Celebrate"
-              activeOpacity={0.9}
-              style={{
-                position: "absolute",
-                right: SENECA_FAB_RIGHT_INSET,
-                // Sit above the global Seneca FAB so the two don't overlap
-                bottom: tabBarClearance(insets.bottom, 12) + SENECA_FAB_SIZE + 10,
-                width: SENECA_FAB_SIZE,
-                height: SENECA_FAB_SIZE,
-                borderRadius: SENECA_FAB_SIZE / 2,
-                backgroundColor: "#4361EE",
-                alignItems: "center",
-                justifyContent: "center",
-                shadowColor: "#1E293B",
-                shadowOpacity: 0.2,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: 4 },
-                elevation: 6,
-                zIndex: 20,
-              }}
-            >
-              <Plus size={28} color="white" strokeWidth={2.5} />
-            </TouchableOpacity>
-          ) : null}
         </View>
       )}
-    </SafeAreaView>
+    </CurvedTabLayout>
   );
 }

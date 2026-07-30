@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
-  Image,
   Pressable,
   ScrollView,
   ActivityIndicator,
@@ -47,6 +46,7 @@ import {
 import { DevelopmentToolsLockedCard } from "@/components/DevelopmentToolsLockedCard";
 import { resolveUserImageUrl } from "@/lib/user-avatar";
 import { OwnershipTransferSheet } from "@/components/OwnershipTransferSheet";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
 const FORMER_MEMBER_TABS = ["Check-In"] as const;
@@ -461,25 +461,14 @@ export default function MemberProfileScreen() {
           >
             <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
               <View style={{ position: "relative" }}>
-                <View
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 24,
-                    backgroundColor: "#EEF2FF",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                  }}
-                >
-                  {profileMember.user.image ? (
-                    <Image source={{ uri: profileMember.user.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
-                  ) : (
-                    <Text style={{ fontSize: 18, fontWeight: "800", color: "#6366F1" }}>
-                      {profileMember.user.name?.[0]?.toUpperCase() ?? "?"}
-                    </Text>
-                  )}
-                </View>
+                <UserAvatar
+                  user={profileMember.user}
+                  size={48}
+                  radius={24}
+                  backgroundColor="#EEF2FF"
+                  textColor="#6366F1"
+                  fontSize={18}
+                />
                 {!isFormerMember ? (
                   <View
                     style={{

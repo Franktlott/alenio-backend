@@ -165,9 +165,12 @@ export type ConversationParticipant = {
 
 export interface Conversation {
   id: string;
+  type?: "DIRECT" | "GROUP";
   isGroup: boolean;
   name?: string | null;
   image?: string | null;
+  teamId?: string | null;
+  workspaceId?: string | null;
   participants?: ConversationParticipant[];
   myRole?: GroupParticipantRole | null;
   workspaceContext?: GroupWorkspaceContext | null;

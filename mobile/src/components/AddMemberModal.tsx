@@ -15,6 +15,7 @@ import {
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { previewTeamInvite, type TeamInvitePreview } from "@/lib/team-invites-api";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type Props = {
   visible: boolean;
@@ -31,13 +32,18 @@ function MemberPreviewCard({ preview, displayName }: { preview: TeamInvitePrevie
   return (
     <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
       <AlenioSheetIcon color={preview.found ? "#4361EE" : "#7C3AED"} compact>
-        {preview.user?.image ? (
-          <Image source={{ uri: preview.user.image }} style={{ width: 30, height: 30 }} resizeMode="cover" />
-        ) : (
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>
-            {displayName[0]?.toUpperCase() ?? "?"}
-          </Text>
-        )}
+        <UserAvatar
+          user={{
+            name: preview.user?.name ?? displayName,
+            email: preview.user?.email ?? preview.email,
+            image: preview.user?.image ?? null,
+          }}
+          size={30}
+          radius={15}
+          backgroundColor={preview.found ? "#4361EE" : "#7C3AED"}
+          textColor="#FFFFFF"
+          fontSize={13}
+        />
       </AlenioSheetIcon>
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>

@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Mail, RotateCw, X } from "lucide-react-native";
 import type { TeamInvite } from "@/lib/team-invites-api";
+import { colors, radii } from "@/theme";
 
 type Props = {
   visible: boolean;
@@ -212,22 +213,24 @@ export function PendingInvitesChip({
   return (
     <Pressable
       onPress={onPress}
-      style={{
+      style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
         gap: 5,
         backgroundColor: "#FFF7ED",
-        borderWidth: 1,
-        borderColor: "#FED7AA",
         paddingHorizontal: 10,
-        paddingVertical: 8,
-        borderRadius: 10,
-      }}
+        paddingVertical: 5,
+        borderRadius: radii.sm,
+        minHeight: 28,
+        opacity: pressed ? 0.72 : 1,
+      })}
       testID="pending-invites-chip"
       accessibilityLabel={`${count} pending invite${count !== 1 ? "s" : ""}, tap to manage`}
     >
-      <Mail size={14} color="#C2410C" />
-      <Text style={{ fontSize: 12, fontWeight: "700", color: "#C2410C" }}>{count} pending</Text>
+      <Mail size={12} color={colors.warning} />
+      <Text style={{ fontSize: 11, fontWeight: "600", color: colors.warning }}>
+        {count} pending
+      </Text>
     </Pressable>
   );
 }

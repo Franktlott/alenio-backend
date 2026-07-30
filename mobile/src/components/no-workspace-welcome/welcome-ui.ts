@@ -1,5 +1,5 @@
 export const WELCOME_UI = {
-  pageBg: "#F8FAFC",
+  pageBg: "#FFFFFF",
   heading: "#172033",
   body: "#64748B",
   bodyMuted: "#667085",

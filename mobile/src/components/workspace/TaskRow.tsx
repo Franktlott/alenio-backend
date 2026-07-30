@@ -1,8 +1,9 @@
-import { View, Text, Pressable, StyleSheet, Image } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Flag } from "lucide-react-native";
 import type { Task } from "@/lib/types";
 import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { WS } from "./workspace-ui";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const PRIORITY_CONFIG = {
   urgent: { label: "High", flagColor: "#DC2626", text: "#DC2626" },
@@ -10,12 +11,6 @@ const PRIORITY_CONFIG = {
   medium: { label: "Medium", flagColor: "#F59E0B", text: "#B45309" },
   low: { label: "Low", flagColor: "#16A34A", text: "#15803D" },
 };
-
-function initials(name?: string | null): string {
-  if (!name?.trim()) return "?";
-  const parts = name.trim().split(/\s+/);
-  return (parts[0]?.[0] ?? "").toUpperCase() + (parts[1]?.[0] ?? "").toUpperCase();
-}
 
 function avatarColor(name?: string | null): string {
   const palette = ["#7C3AED", "#4361EE", "#0EA5E9", "#10B981", "#F59E0B"];
@@ -168,23 +163,20 @@ export function TaskRow({ task, onToggle, onPress, onLongPress, showSeparator = 
                         borderRadius: 11,
                         borderWidth: 1.5,
                         borderColor: "#FFFFFF",
-                        backgroundColor: jointAssignee.image ? "#E2E8F0" : avatarColor(jointAssignee.name),
+                        backgroundColor: avatarColor(jointAssignee.name),
                         alignItems: "center",
                         justifyContent: "center",
                         overflow: "hidden",
                       }}
                     >
-                      {jointAssignee.image ? (
-                        <Image
-                          source={{ uri: jointAssignee.image }}
-                          style={{ width: 22, height: 22 }}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Text style={{ color: "white", fontSize: 7, fontWeight: "800" }}>
-                          {initials(jointAssignee.name)}
-                        </Text>
-                      )}
+                      <UserAvatar
+                        user={jointAssignee}
+                        size={19}
+                        radius={9.5}
+                        backgroundColor={avatarColor(jointAssignee.name)}
+                        textColor="#FFFFFF"
+                        fontSize={7}
+                      />
                     </View>
                   ))}
                   {assignees.length > 2 ? (
@@ -230,17 +222,20 @@ export function TaskRow({ task, onToggle, onPress, onLongPress, showSeparator = 
                 width: 20,
                 height: 20,
                 borderRadius: 10,
-                backgroundColor: assignee.image ? "#E2E8F0" : avatarColor(assignee.name),
+                backgroundColor: avatarColor(assignee.name),
                 alignItems: "center",
                 justifyContent: "center",
                 overflow: "hidden",
               }}
             >
-              {assignee.image ? (
-                <Image source={{ uri: assignee.image }} style={{ width: 20, height: 20 }} resizeMode="cover" />
-              ) : (
-                <Text style={{ color: "white", fontSize: 7, fontWeight: "700" }}>{initials(assignee.name)}</Text>
-              )}
+              <UserAvatar
+                user={assignee}
+                size={20}
+                radius={10}
+                backgroundColor={avatarColor(assignee.name)}
+                textColor="#FFFFFF"
+                fontSize={7}
+              />
             </View>
           ) : null}
           <View style={{ alignItems: "flex-end", minWidth: 40 }}>

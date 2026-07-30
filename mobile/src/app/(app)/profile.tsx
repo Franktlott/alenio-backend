@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  Image,
   Platform,
   TextInput,
   ScrollView,
@@ -16,10 +15,8 @@ import {
 } from "react-native";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { Camera, ImageIcon, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe, AlertTriangle, ShieldAlert, ChevronRight, Lock, Shield, FileText } from "lucide-react-native";
-import { notificationPreferencesSummary } from "@/components/NotificationPreferencesPanel";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Bell, Building2, Camera, CircleHelp, Clock3, FileText, ImageIcon, Info, LogOut, MessageSquareText, Palette, X, Check, AlertTriangle, ShieldAlert, ChevronLeft, ChevronRight, Lock, Settings, Shield, ShieldCheck } from "lucide-react-native";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
 import { authClient, agentDebugLog, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
 import {
@@ -39,27 +36,31 @@ import { getBackendUrl } from "@/lib/backend-url";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { uploadFile } from "@/lib/upload";
 import { pickImage, takePhoto } from "@/lib/file-picker";
-import * as ImagePicker from "expo-image-picker";
 import { useTeamStore } from "@/lib/state/team-store";
-import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
-import { applyTeamRemovedFromAccount } from "@/lib/workspace-switch";
 import { toast } from "burnt";
-import { ACCOUNT_HUB_TITLE, hasTeamPlan } from "@/lib/plan-access-copy";
+import { ACCOUNT_HUB_TITLE } from "@/lib/plan-access-copy";
 import { tabBarClearance } from "@/lib/tab-bar";
 import type { Team } from "@/lib/types";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import {
+  AlenioBottomSheet,
+  AlenioSheetOption,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
 import {
   ProfileCard,
   ProfileContent,
   ProfileDivider,
   ProfileMenuRow,
   ProfileSection,
-  ProfileToolbarButton,
 } from "@/components/profile/ProfileEnterpriseUI";
+import { formatTeamRole } from "@/components/WorkspaceTeamUI";
+import { radii, space } from "@/theme";
 import { ProfileWorkspaceList } from "@/components/profile/ProfileWorkspaceList";
 import { OutlookCalendarCard } from "@/components/profile/OutlookCalendarCard";
-import { AppTabHeader } from "@/components/AppTabHeader";
+import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { formatOutlookUserError } from "@/lib/outlook-calendar-errors";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type JoinRequestItem = {
   id: string;
@@ -96,7 +97,6 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
-  const { switchWorkspace } = useSwitchWorkspace();
   const user = session?.user;
 
   useEffect(() => {
@@ -111,13 +111,9 @@ export default function ProfileScreen() {
     }
   }, [outlook, message, queryClient]);
 
-  const nameColor = "#0F172A";
-  const emailColor = "#64748B";
-
   // Profile state
   const [localImage, setLocalImage] = useState<string | null>(null);
-  /** URI whose load genuinely failed (not cancelled). RN may fire onError when a prior load is aborted on uri change. */
-  const [avatarFailedUri, setAvatarFailedUri] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
 
@@ -134,14 +130,6 @@ export default function ProfileScreen() {
     setDeletePasswordVisible(false);
   };
 
-  // Team edit state
-  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
-  const [editTeamName, setEditTeamName] = useState("");
-  const [editTeamImage, setEditTeamImage] = useState<string | null>(null);
-  const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleteTeamPassword, setDeleteTeamPassword] = useState("");
-  const [leavingTeam, setLeavingTeam] = useState<Team | null>(null);
   const [timezoneModalOpen, setTimezoneModalOpen] = useState(false);
   const [timezoneSaving, setTimezoneSaving] = useState(false);
 
@@ -204,22 +192,11 @@ export default function ProfileScreen() {
 
   const isOwnerOfAnyTeam = teams.some((t) => (t as Team & { role?: string }).role === "owner");
   const activeTeam = teams.find((t) => t.id === activeTeamId) as (Team & { role?: string }) | undefined;
-  const canManageActiveTeam =
-    !!activeTeam && ["owner", "team_leader"].includes(activeTeam.role ?? "");
-  const canLeaveActiveTeam =
-    !!activeTeam && !canManageActiveTeam;
 
   const { data: ownerTeamSubscription } = useQuery({
     queryKey: ["subscription", activeTeamId],
     queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
     enabled: !!activeTeamId && isOwnerOfAnyTeam,
-  });
-
-  // Join requests for the team being edited (owner only)
-  const { data: joinRequests = [], refetch: refetchRequests } = useQuery({
-    queryKey: ["join-requests", editingTeam?.id],
-    queryFn: () => api.get<JoinRequestItem[]>(`/api/teams/${editingTeam!.id}/join-requests`),
-    enabled: !!editingTeam && ["owner", "team_leader"].includes((editingTeam as Team & { role?: string }).role ?? ""),
   });
 
   // Join requests the current user has sent (waiting for approval)
@@ -246,24 +223,6 @@ export default function ProfileScreen() {
     ownedTeamIds.map((id, i) => [id, joinRequestCounts[i]?.data?.length ?? 0])
   );
 
-  // Approve / reject mutations
-  const approveMutation = useMutation({
-    mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
-      api.post(`/api/teams/${teamId}/join-requests/${requestId}/approve`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["join-requests", editingTeam?.id] });
-      queryClient.invalidateQueries({ queryKey: ["teams"] });
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
-      api.post(`/api/teams/${teamId}/join-requests/${requestId}/reject`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["join-requests", editingTeam?.id] });
-    },
-  });
-
   const cancelMyJoinRequestMutation = useMutation({
     mutationFn: (requestId: string) => api.delete(`/api/join-requests/${requestId}`),
     onSuccess: () => {
@@ -281,13 +240,32 @@ export default function ProfileScreen() {
       if (!file) throw new Error("cancelled");
       setLocalImage(file.uri);
       const uploaded = await uploadFile(file.uri, file.filename, file.mimeType, { purpose: "profile" });
-      await api.patch("/api/profile", { image: uploaded.url });
       return uploaded.url;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-      await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
-      setLocalImage(null);
+    onSuccess: async (uploadedUrl) => {
+      setLocalImage(uploadedUrl);
+      queryClient.setQueryData<
+        { id: string; name: string; email: string; image: string | null; isAdmin?: boolean; timezone?: string | null }
+      >(ME_QUERY_KEY, (current) => (current ? { ...current, image: uploadedUrl } : current));
+      await refreshMeInAuthCaches(queryClient);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: ["teams"] }),
+        queryClient.invalidateQueries({ queryKey: ["team"] }),
+        queryClient.invalidateQueries({ queryKey: ["dms"] }),
+        queryClient.invalidateQueries({ queryKey: ["dm-messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-search"] }),
+        queryClient.invalidateQueries({ queryKey: ["group-member-candidates"] }),
+        queryClient.invalidateQueries({ queryKey: ["activity"] }),
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+        queryClient.invalidateQueries({ queryKey: ["task"] }),
+        queryClient.invalidateQueries({ queryKey: ["task-notes"] }),
+        queryClient.invalidateQueries({ queryKey: ["calendar-events"] }),
+        queryClient.invalidateQueries({ queryKey: ["join-requests"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+      ]);
+      toast({ title: "Profile photo updated", preset: "done" });
     },
     onError: (err: Error) => {
       setLocalImage(null);
@@ -296,41 +274,6 @@ export default function ProfileScreen() {
         Alert.alert("Could not update photo", err.message || "Something went wrong. Try again.");
       }
     },
-  });
-
-  // ── Team mutations ─────────────────────────────────────────────
-  const updateTeamMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { name?: string; image?: string | null } }) =>
-      api.patch<Team>(`/api/teams/${id}`, data),
-    onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: ["teams"] });
-      queryClient.invalidateQueries({ queryKey: ["team", updated.id] });
-      closeEditModal();
-      toast({ title: "Team updated", preset: "done" });
-    },
-    onError: () => toast({ title: "Failed to update team", preset: "error" }),
-  });
-
-  const deleteTeamMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { confirmPhrase?: string; password?: string } }) =>
-      api.delete(`/api/teams/${id}`, body),
-    onSuccess: async (_data, { id }) => {
-      closeEditModal();
-      await applyTeamRemovedFromAccount(id, activeTeamId, setActiveTeamId, queryClient);
-      toast({ title: "Workspace deleted", preset: "done" });
-    },
-    onError: () => toast({ title: "Failed to delete team", preset: "error" }),
-  });
-
-  const leaveTeamMutation = useMutation({
-    mutationFn: (teamId: string) => api.delete(`/api/teams/${teamId}/leave`),
-    onSuccess: async (_data, teamId) => {
-      setLeavingTeam(null);
-      await queryClient.invalidateQueries({ queryKey: ["former-members", teamId] });
-      await applyTeamRemovedFromAccount(teamId, activeTeamId, setActiveTeamId, queryClient);
-      toast({ title: "Left team", preset: "done" });
-    },
-    onError: () => toast({ title: "Failed to leave team", preset: "error" }),
   });
 
   const deleteAccountMutation = useMutation({
@@ -372,59 +315,6 @@ export default function ProfileScreen() {
     setTimeout(() => uploadMutation.mutate(source), 280);
   };
 
-  const openEditModal = (team: Team) => {
-    setEditingTeam(team);
-    setEditTeamName(team.name);
-    setEditTeamImage(team.image ?? null);
-    setConfirmingDelete(false);
-    setDeleteTeamPassword("");
-  };
-
-  const closeEditModal = () => {
-    setEditingTeam(null);
-    setEditTeamName("");
-    setEditTeamImage(null);
-    setConfirmingDelete(false);
-    setDeleteTeamPassword("");
-  };
-
-  const pickTeamPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets[0]) return;
-    const teamBeingEdited = editingTeam;
-    if (!teamBeingEdited) return;
-    setUploadingTeamImage(true);
-    try {
-      const uploaded = await uploadFile(result.assets[0].uri, "team-photo.jpg", "image/jpeg", {
-        purpose: "team",
-        teamId: teamBeingEdited.id,
-      });
-      setEditTeamImage(uploaded.url);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Upload failed";
-      toast({ title: "Failed to upload photo", message, preset: "error" });
-    } finally {
-      setUploadingTeamImage(false);
-    }
-  };
-
-  const handleSaveTeam = () => {
-    if (!editingTeam || !editTeamName.trim()) return;
-    updateTeamMutation.mutate({ id: editingTeam.id, data: { name: editTeamName.trim(), image: editTeamImage } });
-  };
-
-  const deleteTeamConfirmationReady = deleteTeamPassword.trim().length > 0;
-
-  const handleDeleteTeam = () => {
-    if (!editingTeam || !deleteTeamConfirmationReady) return;
-    deleteTeamMutation.mutate({ id: editingTeam.id, body: { password: deleteTeamPassword } });
-  };
-
   const handleSignOut = async () => {
     setShowSignOutConfirm(false);
     markSessionSignedOut();
@@ -445,12 +335,14 @@ export default function ProfileScreen() {
   const displayName = meProfile?.name ?? user?.name;
   const displayEmail = meProfile?.email ?? user?.email;
   const avatarUri = localImage ?? meProfile?.image ?? user?.image ?? null;
-  const avatarInitial = displayName?.trim()?.[0]?.toUpperCase() ?? "?";
-  const showAvatarImage = !!avatarUri && avatarFailedUri !== avatarUri;
-
-  useEffect(() => {
-    setAvatarFailedUri(null);
-  }, [avatarUri]);
+  const isPlatformAdmin = meProfile?.isAdmin === true || authReady?.me?.isAdmin === true;
+  const heroRoleLabel = isPlatformAdmin
+    ? "Admin"
+    : activeTeam?.role
+      ? formatTeamRole(activeTeam.role)
+      : "Member";
+  const workspaceCountLabel = `${teams.length} Workspace${teams.length === 1 ? "" : "s"}`;
+  const timezoneValue = formatTimeZoneLabel(resolveTimeZone(meProfile?.timezone));
 
   const [pushDebugResult, setPushDebugResult] = useState<string | null>(null);
   const [pushDebugLoading, setPushDebugLoading] = useState(false);
@@ -603,683 +495,75 @@ export default function ProfileScreen() {
     await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
     await queryClient.invalidateQueries({ queryKey: ["teams"] });
     await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
-    await queryClient.invalidateQueries({ queryKey: ["join-requests", editingTeam?.id] });
+    await queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
     setRefreshing(false);
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={[]} testID="profile-screen">
-      <AppTabHeader
-        topInset={insets.top}
-        testID="profile-header"
-      />
-
-      <View style={{ flex: 1, minHeight: 0 }}>
-        {/* Profile hero — fixed */}
-        <View style={{ flexShrink: 0 }}>
-          <View style={{ height: 96, overflow: "hidden" }}>
-            <Image
-              source={require("@/assets/profile-header.png")}
-              style={{ width: "100%", height: 96 }}
-              resizeMode="cover"
-            />
-            <LinearGradient
-              colors={["transparent", "rgba(241,245,249,0.95)"]}
-              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 48 }}
-            />
-          </View>
-
-          <View style={{ alignItems: "center", paddingBottom: 12, paddingHorizontal: 16 }}>
-            <TouchableOpacity
-              onPress={handlePhotoPress}
-              disabled={uploadMutation.isPending}
-              style={{ marginTop: -48, marginBottom: 8 }}
-              testID="avatar-upload-button"
-            >
-              <View
-                className="w-24 h-24 rounded-full overflow-hidden bg-indigo-100"
-                style={{ borderWidth: 3, borderColor: "#F8FAFC", position: "relative" }}
-              >
-                <View
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  pointerEvents="none"
-                >
-                  <Text className="text-indigo-600 text-3xl font-bold">{avatarInitial}</Text>
-                </View>
-                {showAvatarImage ? (
-                  <Image
-                    key={avatarUri}
-                    source={{ uri: avatarUri }}
-                    style={{ position: "absolute", top: 0, left: 0, width: 96, height: 96 }}
-                    resizeMode="cover"
-                    onError={() => setAvatarFailedUri(avatarUri)}
-                    testID="profile-avatar-image"
-                  />
-                ) : null}
-                {uploadMutation.isPending ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: "rgba(255,255,255,0.55)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
-                  </View>
-                ) : null}
-              </View>
-              <View className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
-                <Camera size={13} color="white" />
-              </View>
-            </TouchableOpacity>
-
-            <Text style={{ fontSize: 16, fontWeight: "700", color: nameColor, marginBottom: 1 }}>{displayName}</Text>
-            <Text style={{ fontSize: 12, color: emailColor }}>{displayEmail}</Text>
-          </View>
-        </View>
-
-        {/* Settings sections — only this area scrolls */}
-        <ScrollView
-          style={{ flex: 1, minHeight: 0 }}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: tabBarClearance(insets.bottom) }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
-          keyboardShouldPersistTaps="handled"
-        >
-          <ProfileContent>
-          {/* Workspaces */}
-          <ProfileSection
-            title="Workspaces"
-            subtitle={
-              teamsLoading
-                ? undefined
-                : teams.length > 1
-                  ? canManageActiveTeam
-                    ? "Tap to switch · pencil to edit name & photo."
-                    : "Tap your workspace to switch."
-                  : canManageActiveTeam
-                    ? "Tap the pencil to edit name & photo."
-                    : undefined
-            }
-            action={
-              !teamsLoading && teams.length > 0 ? (
-                <ProfileToolbarButton
-                  label="Add"
-                  onPress={() =>
-                    router.push({
-                      pathname: "/onboarding",
-                      params: { intent: "add" },
-                    })
-                  }
-                  testID="create-join-team-button"
-                />
-              ) : undefined
-            }
+    <CurvedTabLayout
+      topInset={insets.top}
+      title={showSettings ? "Settings" : "Profile"}
+      subtitle={showSettings ? "Account and preferences" : "Your account and workspaces"}
+      leftAction={
+        showSettings ? (
+          <Pressable
+            onPress={() => setShowSettings(false)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Back to profile"
+            testID="settings-back-to-profile"
+            style={({ pressed }) => ({
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: pressed ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.16)",
+            })}
           >
-            <ProfileWorkspaceList
-              teams={teams as (Team & { role?: string })[]}
-              activeTeamId={activeTeamId}
-              teamsLoading={teamsLoading}
-              pendingCountMap={pendingCountMap}
-              pendingJoinRequests={myPendingJoinRequests}
-              cancelingRequestId={cancelMyJoinRequestMutation.isPending ? cancelMyJoinRequestMutation.variables ?? null : null}
-              onCancelPendingRequest={(requestId) => cancelMyJoinRequestMutation.mutate(requestId)}
-              onSelectTeam={(teamId) => void switchWorkspace(teamId)}
-              onManageActive={
-                canManageActiveTeam && activeTeam ? () => openEditModal(activeTeam) : undefined
-              }
-              onLeaveActive={
-                canLeaveActiveTeam && activeTeam ? () => setLeavingTeam(activeTeam) : undefined
-              }
-              onAddWorkspace={() =>
-                router.push({
-                  pathname: "/onboarding",
-                  params: { intent: "add" },
-                })
-              }
-            />
-          </ProfileSection>
-
-          {/* Account */}
-          <ProfileSection title="Account">
-            <ProfileCard>
-              {(meProfile?.isAdmin === true || authReady?.me?.isAdmin === true) ? (
-                <>
-                  <ProfileMenuRow
-                    icon={Shield}
-                    title="Alenio Admin"
-                    subtitle="Platform stats, users, and workspaces"
-                    onPress={() => {
-                      void (async () => {
-                        await refreshMeInAuthCaches(queryClient);
-                        router.push("/(admin)/(tabs)");
-                      })();
-                    }}
-                    testID="alenio-admin-row"
-                  />
-                  <ProfileDivider inset />
-                </>
-              ) : null}
-              <ProfileMenuRow
-                icon={Crown}
-                title={ACCOUNT_HUB_TITLE}
-                subtitle={
-                  isOwnerOfAnyTeam
-                    ? hasTeamPlan(ownerTeamSubscription)
-                      ? "Team access active · Manage workplaces"
-                      : "Manage workplace subscriptions"
-                    : "View workplace plans"
-                }
-                onPress={() => router.push("/account-hub")}
-                testID="account-hub-row"
-              />
-            </ProfileCard>
-          </ProfileSection>
-
-          <ProfileSection title="Calendar sync">
-            <OutlookCalendarCard />
-          </ProfileSection>
-
-          {/* Settings */}
-          <ProfileSection title="Settings">
-            <ProfileCard>
-              <ProfileMenuRow
-                icon={Bell}
-                title="Notification settings"
-                subtitle={notificationPreferencesSummary(notifPrefs)}
-                onPress={() => router.push("/notifications")}
-                testID="notifications-menu-row"
-              />
-              <ProfileDivider inset />
-              <ProfileMenuRow
-                icon={Globe}
-                title="Time zone"
-                subtitle={formatTimeZoneLabel(resolveTimeZone(meProfile?.timezone))}
-                onPress={() => setTimezoneModalOpen(true)}
-                testID="timezone-menu-row"
-              />
-            </ProfileCard>
-          </ProfileSection>
-
-        {/* Push Notifications Debug — hidden, preserved for future use */}
-        {false ? (<View className="mx-4 mt-5">
-          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 ml-1">Push Notifications Debug</Text>
-          <ProfileCard>
-            <Pressable
-              onPress={handleRetryPushRegistration}
-              disabled={retryingPush}
-              className="px-4 py-3.5 border-b border-slate-100/60"
-              testID="retry-push-registration-button"
-            >
-              {retryingPush ? (
-                <ActivityIndicator size="small" color="#4361EE" />
-              ) : (
-                <Text className="text-sm font-semibold text-indigo-600">Retry push registration</Text>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={handleCheckNotifStatus}
-              className="px-4 py-3.5 border-b border-slate-100/60"
-              testID="check-notif-status-button"
-            >
-              <Text className="text-sm font-semibold text-indigo-600">Check notification status</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleCheckBackendPushStatus}
-              className="px-4 py-3.5 border-b border-slate-100/60"
-              testID="check-backend-push-status-button"
-            >
-              <Text className="text-sm font-semibold text-indigo-600">Check backend token status</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleDirectTestPush}
-              disabled={pushDebugLoading}
-              className="px-4 py-3.5 border-b border-slate-100/60"
-              testID="send-direct-test-push-button"
-            >
-              {pushDebugLoading ? (
-                <ActivityIndicator size="small" color="#4361EE" />
-              ) : (
-                <Text className="text-sm font-semibold text-indigo-600">Test push</Text>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={handleClearBackendPushToken}
-              disabled={pushDebugLoading}
-              className="px-4 py-3.5 border-b border-slate-100/60"
-              testID="clear-backend-push-token-button"
-            >
-              <Text className="text-sm font-semibold text-indigo-600">Clear backend push token</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleClearLocalDebugLog}
-              className="px-4 py-3.5"
-              testID="clear-local-push-debug-log-button"
-            >
-              <Text className="text-sm font-semibold text-indigo-600">Clear local debug log</Text>
-            </Pressable>
-            {pushDebugResult ? (
-              <View className="px-4 pb-3.5 pt-1 border-t border-slate-100/60">
-                <Text className="text-xs text-slate-500" selectable testID="push-debug-result">{pushDebugResult}</Text>
-              </View>
-            ) : null}
-          </ProfileCard>
-        </View>) : null}
-
-          {/* Support */}
-          <ProfileSection title="Support">
-            <ProfileCard>
-              <ProfileMenuRow
-                icon={MessageSquare}
-                title="Send feedback"
-                subtitle="Report issues or suggest improvements"
-                onPress={() => router.push("/feedback")}
-                testID="feedback-card"
-              />
-            </ProfileCard>
-          </ProfileSection>
-
-          {/* Legal */}
-          <ProfileSection title="Legal & privacy">
-            <ProfileCard>
-              <ProfileMenuRow
-                icon={Lock}
-                title="Privacy Policy"
-                onPress={() => router.push("/privacy-policy")}
-                testID="privacy-policy-link"
-              />
-              <ProfileDivider inset />
-              <ProfileMenuRow
-                icon={FileText}
-                title="Terms of Service"
-                onPress={() => router.push("/terms-of-service")}
-                testID="terms-of-service-link"
-              />
-              <ProfileDivider inset />
-              <ProfileMenuRow
-                icon={Trash2}
-                title="Account deletion"
-                subtitle="Permanently remove your account and data"
-                onPress={() => setDeleteStep(1)}
-                testID="account-deletion-link"
-                destructive
-              />
-            </ProfileCard>
-            <Text style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", marginTop: 10 }}>
-              v{Constants.expoConfig?.version ?? "—"}
-            </Text>
-          </ProfileSection>
-
-          {/* Sign out */}
-          <ProfileSection title="Session">
-            <ProfileCard>
-              <ProfileMenuRow
-                icon={LogOut}
-                title="Sign out"
-                subtitle="Sign in again to access your account"
-                onPress={() => setShowSignOutConfirm(true)}
-                testID="sign-out-button"
-                destructive
-                showChevron={false}
-              />
-            </ProfileCard>
-          </ProfileSection>
-        </ProfileContent>
-
-        {/* App Info / Environment */}
-        {false ? (<View className="mx-4 mt-2 mb-8 items-center">
-          <View className="flex-row items-center mb-1" style={{ gap: 6 }}>
-            <View
-              style={{
-                backgroundColor: __DEV__ ? "rgba(234, 179, 8, 0.12)" : "rgba(34, 197, 94, 0.12)",
-                borderRadius: 20,
-                paddingHorizontal: 10,
-                paddingVertical: 3,
-                borderWidth: 1,
-                borderColor: __DEV__ ? "rgba(234, 179, 8, 0.4)" : "rgba(34, 197, 94, 0.4)",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "600",
-                  color: __DEV__ ? "#B45309" : "#15803D",
-                  letterSpacing: 0.5,
-                  textTransform: "uppercase",
-                }}
-              >
-                {__DEV__ ? "Development" : "Production"}
-              </Text>
-            </View>
-          </View>
-          <Text className="text-xs text-slate-400" numberOfLines={1} style={{ maxWidth: "90%" }}>
-            {getBackendUrl()}
-          </Text>
-        </View>) : null}
-      </ScrollView>
-      </View>
-
-      {/* Team edit / delete modal */}
-      <Modal visible={!!editingTeam} transparent animationType="slide" onRequestClose={closeEditModal}>
-        <Pressable className="flex-1 bg-black/40 justify-end" onPress={closeEditModal}>
-          <SafeKeyboardAvoidingView>
-            <Pressable onPress={(e) => e.stopPropagation()}>
-              <View className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-10">
-
-                {!confirmingDelete ? (
-                  <>
-                    <View className="flex-row items-center justify-between mb-6">
-                      <Text className="text-lg font-bold text-slate-900 dark:text-white">Edit Team</Text>
-                      <TouchableOpacity onPress={closeEditModal} testID="close-edit-modal">
-                        <X size={20} color="#94A3B8" />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Pending join requests section */}
-                    {joinRequests.length > 0 ? (
-                      <View className="mb-6">
-                        <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                          Pending Requests ({joinRequests.length})
-                        </Text>
-                        {joinRequests.map((req) => (
-                          <View key={req.id} className="flex-row items-center bg-slate-50 dark:bg-slate-700 rounded-xl px-3 py-2.5 mb-2">
-                            <View className="w-9 h-9 rounded-full bg-indigo-100 items-center justify-center mr-3 overflow-hidden">
-                              {req.user.image ? (
-                                <Image source={{ uri: req.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-                              ) : (
-                                <Text className="text-indigo-600 font-bold text-sm">{req.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
-                              )}
-                            </View>
-                            <View className="flex-1">
-                              <Text className="text-sm font-semibold text-slate-900 dark:text-white">{req.user.name}</Text>
-                              <Text className="text-xs text-slate-400">{req.user.email}</Text>
-                            </View>
-                            <TouchableOpacity
-                              onPress={() => rejectMutation.mutate({ teamId: editingTeam!.id, requestId: req.id })}
-                              className="w-7 h-7 rounded-full bg-red-100 items-center justify-center mr-1.5"
-                              disabled={rejectMutation.isPending || approveMutation.isPending}
-                              testID={`reject-request-${req.id}`}
-                            >
-                              <X size={13} color="#EF4444" />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => approveMutation.mutate({ teamId: editingTeam!.id, requestId: req.id })}
-                              className="w-7 h-7 rounded-full bg-green-100 items-center justify-center"
-                              disabled={approveMutation.isPending || rejectMutation.isPending}
-                              testID={`approve-request-${req.id}`}
-                            >
-                              <Check size={13} color="#22C55E" />
-                            </TouchableOpacity>
-                          </View>
-                        ))}
-                      </View>
-                    ) : null}
-
-                    {/* Team photo */}
-                    <View className="items-center mb-6">
-                      <TouchableOpacity onPress={pickTeamPhoto} disabled={uploadingTeamImage} testID="pick-team-photo">
-                        <View className="w-24 h-24 rounded-full bg-indigo-100 items-center justify-center overflow-hidden">
-                          {uploadingTeamImage ? (
-                            <ActivityIndicator color="#4361EE" />
-                          ) : editTeamImage ? (
-                            <Image source={{ uri: editTeamImage }} style={{ width: 96, height: 96 }} resizeMode="cover" />
-                          ) : (
-                            <Text className="text-indigo-600 font-bold text-3xl">{editTeamName?.[0]?.toUpperCase() ?? "T"}</Text>
-                          )}
-                        </View>
-                        <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-indigo-600 items-center justify-center"
-                          style={{ shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } }}>
-                          <Camera size={14} color="white" />
-                        </View>
-                      </TouchableOpacity>
-                      <Text className="text-xs text-slate-400 mt-2">Tap to change photo</Text>
-                    </View>
-
-                    {/* Team name */}
-                    <View className="mb-6">
-                      <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Team Name</Text>
-                      <TextInput
-                        className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base"
-                        value={editTeamName}
-                        onChangeText={setEditTeamName}
-                        placeholder="Enter team name"
-                        placeholderTextColor="#94A3B8"
-                        testID="team-name-input"
-                        returnKeyType="done"
-                      />
-                    </View>
-
-                    <TouchableOpacity
-                      onPress={handleSaveTeam}
-                      disabled={updateTeamMutation.isPending || !editTeamName.trim()}
-                      className="rounded-2xl py-4 items-center mb-3"
-                      style={{ backgroundColor: editTeamName.trim() ? "#4361EE" : "#CBD5E1" }}
-                      testID="save-team-button"
-                    >
-                      {updateTeamMutation.isPending ? (
-                        <ActivityIndicator color="white" />
-                      ) : (
-                        <Text className="text-white font-bold text-base">Save Changes</Text>
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => setConfirmingDelete(true)}
-                      className="rounded-2xl py-4 items-center border border-red-200"
-                      testID="delete-team-button"
-                    >
-                      <View className="flex-row items-center" style={{ gap: 6 }}>
-                        <Trash2 size={16} color="#EF4444" />
-                        <Text className="text-red-500 font-semibold text-base">Delete Team</Text>
-                      </View>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <View className="flex-row items-center justify-between mb-4">
-                      <Text className="text-lg font-bold text-slate-900 dark:text-white">Delete Team?</Text>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setConfirmingDelete(false);
-                          setDeleteTeamPassword("");
-                        }}
-                        testID="back-from-delete"
-                      >
-                        <X size={20} color="#94A3B8" />
-                      </TouchableOpacity>
-                    </View>
-                    <Text className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                      This will permanently delete{" "}
-                      <Text className="font-semibold text-slate-700 dark:text-slate-200">{editingTeam?.name}</Text>
-                      {" "}and all its tasks and messages. Members will keep their accounts.
-                    </Text>
-                    <Text className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-                      Enter your account password to confirm.
-                    </Text>
-                    <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                      Your account password
-                    </Text>
-                    <TextInput
-                      className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base mb-4 border border-slate-200 dark:border-slate-600"
-                      value={deleteTeamPassword}
-                      onChangeText={setDeleteTeamPassword}
-                      placeholder="Password"
-                      placeholderTextColor="#94A3B8"
-                      secureTextEntry
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      testID="delete-confirm-password-input"
-                    />
-                    <TouchableOpacity
-                      onPress={handleDeleteTeam}
-                      disabled={deleteTeamMutation.isPending || !deleteTeamConfirmationReady}
-                      className="rounded-2xl py-4 items-center mb-3"
-                      style={{ backgroundColor: deleteTeamConfirmationReady ? "#EF4444" : "#CBD5E1" }}
-                      testID="confirm-delete-team"
-                    >
-                      {deleteTeamMutation.isPending ? (
-                        <ActivityIndicator color="white" />
-                      ) : (
-                        <Text className="text-white font-bold text-base">Delete Forever</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setConfirmingDelete(false);
-                        setDeleteTeamPassword("");
-                      }}
-                      className="rounded-2xl py-4 items-center bg-slate-100 dark:bg-slate-700"
-                      testID="cancel-delete-team"
-                    >
-                      <Text className="text-slate-700 dark:text-slate-200 font-semibold text-base">Cancel</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            </Pressable>
-          </SafeKeyboardAvoidingView>
-        </Pressable>
-      </Modal>
-
-      {/* Leave team confirmation modal */}
-      <Modal
-        visible={showPhotoPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPhotoPicker(false)}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.45)", justifyContent: "flex-end" }}
-          onPress={() => setShowPhotoPicker(false)}
-          accessibilityLabel="Dismiss"
-        >
-          <Pressable onPress={(e) => e.stopPropagation?.()}>
-            <View
-              style={{
-                backgroundColor: "#FFFFFF",
-                marginHorizontal: 12,
-                marginBottom: Math.max(insets.bottom, 12) + 8,
-                borderRadius: 20,
-                overflow: "hidden",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                shadowColor: "#0F172A",
-                shadowOpacity: 0.12,
-                shadowRadius: 16,
-                shadowOffset: { width: 0, height: 8 },
-                elevation: 8,
-              }}
-            >
-              <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 6 }}>
-                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0" }} />
-              </View>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: "#64748B",
-                  letterSpacing: 0.4,
-                  textTransform: "uppercase",
-                  paddingHorizontal: 20,
-                  paddingBottom: 8,
-                }}
-              >
-                Profile photo
-              </Text>
-              <Pressable
-                testID="profile-photo-library"
-                onPress={() => pickProfilePhoto("library")}
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 20,
-                  paddingVertical: 14,
-                  gap: 14,
-                  backgroundColor: pressed ? "#F8FAFC" : "#FFFFFF",
-                  borderTopWidth: 1,
-                  borderTopColor: "#F1F5F9",
-                })}
-              >
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 12,
-                    backgroundColor: "#EEF2FF",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <ImageIcon size={20} color="#4361EE" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#0F172A" }}>Choose from library</Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Pick an existing photo</Text>
-                </View>
-              </Pressable>
-              <Pressable
-                testID="profile-photo-camera"
-                onPress={() => pickProfilePhoto("camera")}
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 20,
-                  paddingVertical: 14,
-                  gap: 14,
-                  backgroundColor: pressed ? "#F8FAFC" : "#FFFFFF",
-                  borderTopWidth: 1,
-                  borderTopColor: "#F1F5F9",
-                })}
-              >
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 12,
-                    backgroundColor: "#EEF2FF",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Camera size={20} color="#4361EE" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#0F172A" }}>Take photo</Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Use your camera</Text>
-                </View>
-              </Pressable>
-              <Pressable
-                testID="profile-photo-cancel"
-                onPress={() => setShowPhotoPicker(false)}
-                style={({ pressed }) => ({
-                  marginHorizontal: 16,
-                  marginTop: 10,
-                  marginBottom: 14,
-                  borderRadius: 12,
-                  paddingVertical: 13,
-                  alignItems: "center",
-                  backgroundColor: pressed ? "#E2E8F0" : "#F1F5F9",
-                })}
-              >
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#64748B" }}>Cancel</Text>
-              </Pressable>
-            </View>
+            <ChevronLeft size={20} color="#FFFFFF" strokeWidth={2.4} />
           </Pressable>
-        </Pressable>
-      </Modal>
+        ) : undefined
+      }
+      showNotifications={!showSettings}
+      testID="profile-screen"
+      headerTestID="profile-header"
+      overlays={
+        <>
+      {/* Profile photo sheet */}
+      <AlenioBottomSheet
+        visible={showPhotoPicker}
+        title="Profile Photo"
+        subtitle="Update your profile picture"
+        onClose={() => setShowPhotoPicker(false)}
+        compact
+        scrollEnabled={false}
+        testID="profile-photo-sheet"
+        footer={
+          <Pressable
+            testID="profile-photo-cancel"
+            onPress={() => setShowPhotoPicker(false)}
+            style={alenioSheetStyles.cancelButton}
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </Pressable>
+        }
+      >
+        <AlenioSheetOption
+          icon={<ImageIcon size={16} color="white" />}
+          title="Choose from Library"
+          subtitle="Pick an existing photo"
+          onPress={() => pickProfilePhoto("library")}
+          testID="profile-photo-library"
+        />
+        <AlenioSheetOption
+          icon={<Camera size={16} color="white" />}
+          title="Take Photo"
+          subtitle="Use your camera"
+          onPress={() => pickProfilePhoto("camera")}
+          testID="profile-photo-camera"
+        />
+      </AlenioBottomSheet>
 
       <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={() => setShowSignOutConfirm(false)}>
         <Pressable className="flex-1 bg-black/40 items-center justify-center px-6" onPress={() => setShowSignOutConfirm(false)}>
@@ -1303,42 +587,6 @@ export default function ProfileScreen() {
                   testID="confirm-sign-out-button"
                 >
                   <Text className="font-semibold text-white">Sign out</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal visible={!!leavingTeam} transparent animationType="fade" onRequestClose={() => setLeavingTeam(null)}>
-        <Pressable className="flex-1 bg-black/40 items-center justify-center px-6" onPress={() => setLeavingTeam(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full">
-              <Text className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">Leave Team?</Text>
-              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
-                You'll lose access to{" "}
-                <Text className="font-semibold text-slate-700 dark:text-slate-200">{leavingTeam?.name}</Text>
-                {" "}and all its tasks. The Team Leader can invite you back.
-              </Text>
-              <View className="flex-row" style={{ gap: 10 }}>
-                <TouchableOpacity
-                  onPress={() => setLeavingTeam(null)}
-                  className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
-                  testID="cancel-leave-team"
-                >
-                  <Text className="font-semibold text-slate-600 dark:text-slate-300">Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => leavingTeam && leaveTeamMutation.mutate(leavingTeam.id)}
-                  disabled={leaveTeamMutation.isPending}
-                  className="flex-1 py-3 rounded-xl bg-red-500 items-center"
-                  testID="confirm-leave-team"
-                >
-                  {leaveTeamMutation.isPending ? (
-                    <ActivityIndicator color="white" size="small" />
-                  ) : (
-                    <Text className="font-semibold text-white">Leave</Text>
-                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -1609,6 +857,481 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+        </>
+      }
+    >
+      <View style={{ flex: 1, minHeight: 0 }}>
+        {!showSettings ? (
+        <>
+        {/* Centered profile identity hero */}
+        <View style={{ flexShrink: 0, marginHorizontal: space.pagePad, marginTop: 12, marginBottom: 6 }}>
+          <View
+            style={{
+              paddingTop: 2,
+              paddingBottom: 10,
+              alignItems: "center",
+            }}
+          >
+            <TouchableOpacity
+              onPress={handlePhotoPress}
+              disabled={uploadMutation.isPending}
+              testID="avatar-upload-button"
+              style={{ position: "relative" }}
+            >
+              <View style={{ width: 76, height: 76 }}>
+                <UserAvatar
+                  user={{ name: displayName, email: displayEmail, image: avatarUri }}
+                  size={76}
+                  radius={38}
+                  backgroundColor="#EEF2FF"
+                  textColor="#4361EE"
+                  fontSize={25}
+                  style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
+                  testID="profile-avatar"
+                />
+                {uploadMutation.isPending ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                    backgroundColor: "rgba(255,255,255,0.55)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
+                  </View>
+                ) : null}
+              </View>
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  right: 0,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  backgroundColor: "#FFFFFF",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1.5,
+                  borderColor: "#D7DDF8",
+                }}
+              >
+                <Camera size={10} color="#4361EE" />
+              </View>
+            </TouchableOpacity>
+
+            <Pressable
+              onPress={handlePhotoPress}
+              style={{ alignItems: "center", marginTop: 8, maxWidth: "88%" }}
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile photo"
+            >
+              <Text
+                style={{ fontSize: 19, lineHeight: 23, fontWeight: "700", color: "#172033", letterSpacing: -0.3 }}
+                numberOfLines={1}
+              >
+                {displayName}
+              </Text>
+              <Text style={{ fontSize: 11, color: "#7A869A", marginTop: 2 }} numberOfLines={1}>
+                {displayEmail}
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 7, flexWrap: "wrap" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Building2 size={11} color="#7A869A" strokeWidth={2.25} />
+                  <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>
+                    {workspaceCountLabel}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 10, color: "#B8C1CE" }}>•</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Shield size={11} color="#7A869A" strokeWidth={2.25} />
+                  <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>
+                    {heroRoleLabel}
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+
+          </View>
+        </View>
+        </>
+        ) : null}
+
+        {/* Profile and settings content */}
+        <ScrollView
+          style={{ flex: 1, minHeight: 0 }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingTop: showSettings ? 24 : 0,
+            paddingBottom: tabBarClearance(insets.bottom),
+          }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
+          keyboardShouldPersistTaps="handled"
+        >
+          <ProfileContent>
+          {!showSettings ? (
+          <>
+          {/* Current workspace */}
+          <ProfileSection title="Current workspace">
+            <ProfileWorkspaceList
+              teams={teams as (Team & { role?: string })[]}
+              activeTeamId={activeTeamId}
+              teamsLoading={teamsLoading}
+              pendingCountMap={pendingCountMap}
+              pendingJoinRequests={myPendingJoinRequests}
+              cancelingRequestId={cancelMyJoinRequestMutation.isPending ? cancelMyJoinRequestMutation.variables ?? null : null}
+              onCancelPendingRequest={(requestId) => cancelMyJoinRequestMutation.mutate(requestId)}
+              onOpenWorkspacePage={
+                activeTeam
+                  ? () =>
+                      router.push({
+                        pathname: "/workspace-settings",
+                        params: { teamId: activeTeam.id },
+                      })
+                  : undefined
+              }
+              onOpenPeople={
+                activeTeam
+                  ? () =>
+                      router.push({
+                        pathname: "/team-directory",
+                        params: { teamId: activeTeam.id },
+                      })
+                  : undefined
+              }
+              onOpenSubscriptions={
+                activeTeam
+                  ? () =>
+                      router.push({
+                        pathname: "/account-hub",
+                        params: { teamId: activeTeam.id },
+                      })
+                  : undefined
+              }
+              onOpenWorkspaceDetails={
+                activeTeam
+                  ? () =>
+                      router.push({
+                        pathname: "/workspace-settings",
+                        params: { teamId: activeTeam.id },
+                      })
+                  : undefined
+              }
+              onAddWorkspace={() =>
+                router.push({
+                  pathname: "/onboarding",
+                  params: { intent: "add" },
+                })
+              }
+            />
+          </ProfileSection>
+
+          {/* Account */}
+          <ProfileSection title="Account">
+            <ProfileCard>
+              {isPlatformAdmin ? (
+                <>
+                  <ProfileMenuRow
+                    icon={Shield}
+                    title="Alenio Admin"
+                    onPress={() => {
+                      void (async () => {
+                        await refreshMeInAuthCaches(queryClient);
+                        router.push("/(admin)/(tabs)");
+                      })();
+                    }}
+                    testID="alenio-admin-row"
+                  />
+                  <ProfileDivider inset />
+                </>
+              ) : null}
+              <ProfileMenuRow
+                icon={Lock}
+                title={ACCOUNT_HUB_TITLE}
+                onPress={() => router.push("/account-hub")}
+                testID="account-hub-row"
+              />
+            </ProfileCard>
+          </ProfileSection>
+
+          <ProfileSection title="Integrations">
+            <OutlookCalendarCard />
+          </ProfileSection>
+
+          <ProfileSection title="Account controls">
+            <ProfileCard>
+              <ProfileMenuRow
+                icon={Settings}
+                title="Settings"
+                subtitle="Notifications, appearance, security, and support"
+                onPress={() => setShowSettings(true)}
+                testID="open-settings-row"
+              />
+            </ProfileCard>
+          </ProfileSection>
+          </>
+          ) : null}
+
+          {showSettings ? (
+          <>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              borderRadius: radii.md,
+              paddingHorizontal: 14,
+              paddingVertical: 13,
+              backgroundColor: "#F2F5FF",
+              borderWidth: 1,
+              borderColor: "#DDE5FF",
+            }}
+          >
+            <View
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 11,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#FFFFFF",
+              }}
+            >
+              <ShieldCheck size={19} color="#4361EE" strokeWidth={2.1} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: "700", color: "#182033" }}>
+                Account controls
+              </Text>
+              <Text style={{ marginTop: 2, fontSize: 11, lineHeight: 15, color: "#69758C" }}>
+                Manage your personal Alenio experience and account security.
+              </Text>
+            </View>
+          </View>
+
+          <ProfileSection
+            title="Preferences"
+            subtitle="Choose how Alenio communicates and displays information."
+          >
+            <ProfileCard>
+              <ProfileMenuRow
+                icon={Bell}
+                title="Notifications"
+                subtitle="Messages, assignments, meetings, and admin alerts"
+                onPress={() => router.push("/notifications")}
+                testID="notifications-menu-row"
+              />
+              <ProfileDivider inset />
+              <ProfileMenuRow
+                icon={Clock3}
+                title="Time Zone"
+                subtitle="Used for due dates, schedules, and recurring work"
+                value={timezoneValue}
+                onPress={() => setTimezoneModalOpen(true)}
+                testID="timezone-menu-row"
+              />
+              <ProfileDivider inset />
+              <ProfileMenuRow
+                icon={Palette}
+                title="Appearance"
+                subtitle="Match Alenio to your device display"
+                value="System"
+                onPress={() =>
+                  Alert.alert("Appearance", "Alenio currently follows your device appearance settings.")
+                }
+                testID="appearance-menu-row"
+              />
+            </ProfileCard>
+          </ProfileSection>
+
+          <ProfileSection
+            title="Security & access"
+            subtitle="Protect your account and manage sensitive actions."
+          >
+            <ProfileCard>
+              <ProfileMenuRow
+                icon={ShieldCheck}
+                title="Security"
+                subtitle="Review account protection and deletion options"
+                onPress={() => setDeleteStep(1)}
+                testID="security-menu-row"
+              />
+            </ProfileCard>
+          </ProfileSection>
+
+        {/* Push Notifications Debug — hidden, preserved for future use */}
+        {false ? (<View className="mx-4 mt-5">
+          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 ml-1">Push Notifications Debug</Text>
+          <ProfileCard>
+            <Pressable
+              onPress={handleRetryPushRegistration}
+              disabled={retryingPush}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="retry-push-registration-button"
+            >
+              {retryingPush ? (
+                <ActivityIndicator size="small" color="#4361EE" />
+              ) : (
+                <Text className="text-sm font-semibold text-indigo-600">Retry push registration</Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={handleCheckNotifStatus}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="check-notif-status-button"
+            >
+              <Text className="text-sm font-semibold text-indigo-600">Check notification status</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleCheckBackendPushStatus}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="check-backend-push-status-button"
+            >
+              <Text className="text-sm font-semibold text-indigo-600">Check backend token status</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleDirectTestPush}
+              disabled={pushDebugLoading}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="send-direct-test-push-button"
+            >
+              {pushDebugLoading ? (
+                <ActivityIndicator size="small" color="#4361EE" />
+              ) : (
+                <Text className="text-sm font-semibold text-indigo-600">Test push</Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={handleClearBackendPushToken}
+              disabled={pushDebugLoading}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="clear-backend-push-token-button"
+            >
+              <Text className="text-sm font-semibold text-indigo-600">Clear backend push token</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleClearLocalDebugLog}
+              className="px-4 py-3.5"
+              testID="clear-local-push-debug-log-button"
+            >
+              <Text className="text-sm font-semibold text-indigo-600">Clear local debug log</Text>
+            </Pressable>
+            {pushDebugResult ? (
+              <View className="px-4 pb-3.5 pt-1 border-t border-slate-100/60">
+                <Text className="text-xs text-slate-500" selectable testID="push-debug-result">{pushDebugResult}</Text>
+              </View>
+            ) : null}
+          </ProfileCard>
+        </View>) : null}
+
+          <ProfileSection
+            title="Help & resources"
+            subtitle="Get assistance and learn more about Alenio."
+          >
+            <ProfileCard>
+              <ProfileMenuRow
+                icon={MessageSquareText}
+                title="Send Feedback"
+                subtitle="Share an idea or report a problem"
+                onPress={() => router.push("/feedback")}
+                testID="feedback-card"
+              />
+              <ProfileDivider inset />
+              <ProfileMenuRow
+                icon={CircleHelp}
+                title="Help Center"
+                subtitle="Guides, answers, and product support"
+                onPress={() => void Linking.openURL("https://alenio.com")}
+                testID="help-center-row"
+              />
+              <ProfileDivider inset />
+              <ProfileMenuRow
+                icon={Info}
+                title="About Alenio"
+                subtitle="Product and release information"
+                value={`v${Constants.expoConfig?.version ?? "—"}`}
+                onPress={() =>
+                  Alert.alert(
+                    "About Alenio",
+                    `Version ${Constants.expoConfig?.version ?? "—"}\n\nWorkplace chat, tasks, and team rituals — built for the floor.`,
+                  )
+                }
+                testID="about-alenio-row"
+              />
+            </ProfileCard>
+          </ProfileSection>
+
+          <ProfileSection title="Legal">
+            <ProfileCard>
+              <ProfileMenuRow
+                icon={FileText}
+                title="Privacy Policy"
+                onPress={() => router.push("/privacy-policy")}
+                testID="privacy-policy-link"
+              />
+              <ProfileDivider inset />
+              <ProfileMenuRow
+                icon={FileText}
+                title="Terms of Service"
+                onPress={() => router.push("/terms-of-service")}
+                testID="terms-of-service-link"
+              />
+            </ProfileCard>
+          </ProfileSection>
+
+          <ProfileSection title="Account">
+            <ProfileCard>
+              <ProfileMenuRow
+                icon={LogOut}
+                title="Sign Out"
+                onPress={() => setShowSignOutConfirm(true)}
+                testID="sign-out-button"
+                destructive
+                subtitle="Sign out of Alenio on this device"
+              />
+            </ProfileCard>
+          </ProfileSection>
+          </>
+          ) : null}
+        </ProfileContent>
+
+        {/* App Info / Environment */}
+        {false ? (<View className="mx-4 mt-2 mb-8 items-center">
+          <View className="flex-row items-center mb-1" style={{ gap: 6 }}>
+            <View
+              style={{
+                backgroundColor: __DEV__ ? "rgba(234, 179, 8, 0.12)" : "rgba(34, 197, 94, 0.12)",
+                borderRadius: 20,
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                borderWidth: 1,
+                borderColor: __DEV__ ? "rgba(234, 179, 8, 0.4)" : "rgba(34, 197, 94, 0.4)",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "600",
+                  color: __DEV__ ? "#B45309" : "#15803D",
+                  letterSpacing: 0.5,
+                  textTransform: "uppercase",
+                }}
+              >
+                {__DEV__ ? "Development" : "Production"}
+              </Text>
+            </View>
+          </View>
+          <Text className="text-xs text-slate-400" numberOfLines={1} style={{ maxWidth: "90%" }}>
+            {getBackendUrl()}
+          </Text>
+        </View>) : null}
+      </ScrollView>
+      </View>
+    </CurvedTabLayout>
   );
 }

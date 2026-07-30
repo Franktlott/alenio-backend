@@ -41,7 +41,8 @@ import { formatTaskDueDateLabel } from "@/lib/timezone";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { workspaceTaskClearance } from "@/lib/tab-bar";
 import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
-import { WorkspaceHeader } from "@/components/workspace/WorkspaceHeader";
+import { CurvedTabLayout } from "@/components/CurvedTabLayout";
+import { HeaderAddButton } from "@/components/HeaderAddButton";
 import { WorkspaceViewToggle, type WorkspaceViewMode } from "@/components/workspace/WorkspaceViewToggle";
 import { CalendarCard } from "@/components/workspace/CalendarCard";
 import { EventsSection } from "@/components/workspace/EventsSection";
@@ -49,6 +50,7 @@ import { TaskStatusTabs } from "@/components/workspace/TaskStatusTabs";
 import { TaskFilterBar } from "@/components/workspace/TaskFilterBar";
 import { TaskListCard } from "@/components/workspace/TaskListCard";
 import { MemberTasksEmptyState } from "@/components/workspace/MemberTasksEmptyState";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
@@ -942,8 +944,10 @@ export default function TasksScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]} testID="workspace-paywall-screen">
         <ProFeatureLockedView
-          title="Pro plan required"
-          body="Workspace tasks and calendar are included with the Pro plan. View what is included in Workplace Access."
+          title="Unlock Tasks & Calendar"
+          body="Upgrade this workspace to unlock tasks, scheduling, and your shared team calendar."
+          variant="workspace"
+          ctaLabel="Upgrade"
           testID="workspace-paywall"
         />
       </SafeAreaView>
@@ -974,254 +978,31 @@ export default function TasksScreen() {
     );
   }
 
+  const activeWorkspaceName =
+    teamData?.name ??
+    teams?.find((workspace) => workspace.id === activeTeamId)?.name ??
+    "Workspace";
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={[]} testID="tasks-screen">
-      <WorkspaceHeader
-        topInset={insets.top}
-        showAdd={!!activeTeamId}
-        addLabel="Add"
-        onAddPress={() => setShowAddModal(true)}
-        addTestID="workspace-header-add-button"
-      />
-
-      <WorkspaceViewToggle
-        mode={workspaceMode}
-        onChange={setWorkspaceMode}
-        calendarBadge={calendarBadge}
-        tasksBadge={tasksBadge}
-      />
-
-      <View style={{ flex: 1 }}>
-        {workspaceMode === "calendar" ? (
-          <View style={{ flex: 1, minHeight: 0 }}>
-            <View style={{ flexShrink: 0 }}>
-              <CalendarCard
-                tasks={calendarTasks}
-                events={calendarEventsWithOutlook}
-                holidays={holidays}
-                selectedDay={selectedDay}
-                onSelectDay={handleSelectDay}
-                viewYear={calendarYear}
-                viewMonth={calendarMonth}
-                onViewMonthChange={handleViewMonthChange}
-              />
-            </View>
-
-            <EventsSection
-              dayEvents={dayEvents}
-              dayHolidays={dayHolidays}
-              dayTasks={dayTasks}
-              selectedDayIso={targetIso}
-              variant="dayList"
-              fillRemaining
-              canManageEvent={canManageEvent}
-              onEventLongPress={openEventActions}
-              onTaskPress={(task) =>
-                router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })
-              }
-              onTaskLongPress={(task) => {
-                if (!canManageTaskMenu(task)) return;
-                setActionMenuTask(task);
-              }}
-              onAddEvent={() => setShowAddModal(true)}
-              listPaddingBottom={workspaceTaskClearance(insets.bottom)}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
-              }
-            />
-          </View>
-        ) : showMemberTasksEmpty ? (
-          <ScrollView
-            style={{
-              flex: 1,
-              backgroundColor: WS.surface,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-            }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
-            contentContainerStyle={{
-              flexGrow: 1,
-              paddingBottom: workspaceTaskClearance(insets.bottom),
-            }}
-          >
-            <MemberTasksEmptyState />
-          </ScrollView>
-        ) : (
-          <>
-            <View
-              style={{
-                flexShrink: 0,
-                paddingHorizontal: WS.pageGutter,
-                paddingTop: 4,
-                paddingBottom: WS.sectionGap,
-                backgroundColor: WS.pageBg,
-              }}
-            >
-              <TaskStatusTabs
-                statusTab={filters.statusTab}
-                activeCount={activeCount}
-                completedCount={completedCount}
-                onChange={handleStatusTabChange}
-              />
-
-              {filters.statusTab === "archived" ? (
-                <View
-                  style={{
-                    marginTop: 8,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    backgroundColor: WS.surface,
-                    borderWidth: 1,
-                    borderColor: WS.cardBorder,
-                    borderRadius: 12,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                  }}
-                >
-                  <Search size={16} color="#94A3B8" />
-                  <TextInput
-                    value={archiveSearch}
-                    onChangeText={setArchiveSearch}
-                    placeholder="Search archived tasks..."
-                    placeholderTextColor="#94A3B8"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="search"
-                    style={{ flex: 1, fontSize: 14, color: "#0F172A", padding: 0 }}
-                    testID="archive-search-input"
-                  />
-                  {archiveSearch.length > 0 ? (
-                    <Pressable onPress={() => setArchiveSearch("")} hitSlop={8} testID="archive-search-clear">
-                      <X size={16} color="#94A3B8" />
-                    </Pressable>
-                  ) : null}
-                  {archivedFetching ? <ActivityIndicator size="small" color="#4361EE" /> : null}
-                </View>
-              ) : (
-                <View style={{ marginTop: 6 }}>
-                  <TaskFilterBar
-                    filters={filters}
-                    selectedDay={selectedDay}
-                    onOpenPicker={setFilterPicker}
-                    directReportsDisabled={!isOwnerOrLeader}
-                    unassignedDisabled={!isOwnerOrLeader}
-                    entireTeamDisabled={!isOwnerOrLeader}
-                  />
-                </View>
-              )}
-            </View>
-
-            <View style={{ flex: 1, minHeight: 140, paddingHorizontal: WS.pageGutter }}>
-              <ScrollView
-                style={{ flex: 1 }}
-                showsVerticalScrollIndicator={false}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
-                contentContainerStyle={{
-                  paddingTop:
-                    visibleTasks.length === 0 && !showTasksLoading
-                      ? workspaceTaskClearance(insets.bottom) * 0.35
-                      : 4,
-                  paddingBottom: workspaceTaskClearance(insets.bottom),
-                  flexGrow: 1,
-                  justifyContent: visibleTasks.length === 0 && !showTasksLoading ? "center" : undefined,
-                }}
-              >
-                <TaskListCard
-                  sections={visibleWeekGroups.map((group) => ({
-                    id: group.key,
-                    title: group.label,
-                    tasks: group.tasks,
-                  }))}
-                  loading={showTasksLoading}
-                  loadError={tasksLoadError}
-                  onRetry={() => void refetchActiveTasks()}
-                  onToggle={handleToggleTask}
-                  onPress={(task) => router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })}
-                  onLongPress={(task) => {
-                    if (!canManageTaskMenu(task)) return;
-                    setActionMenuTask(task);
-                  }}
-                  emptyTitle={
-                    filters.statusTab === "archived"
-                      ? archiveSearchReady
-                        ? "No matches"
-                        : "Search archive"
-                      : filters.statusTab === "completed"
-                        ? "Nothing completed"
-                        : filters.dueDate === "calendar_day"
-                          ? "No active tasks"
-                          : "You're all"
-                  }
-                  emptyAccentTitle={
-                    filters.statusTab === "archived"
-                      ? archiveSearchReady
-                        ? "found."
-                        : "by name."
-                      : filters.statusTab === "completed"
-                        ? filters.dueDate === "calendar_day"
-                          ? "for this day."
-                          : "yet."
-                        : filters.dueDate === "calendar_day"
-                          ? "for this day."
-                          : "caught up."
-                  }
-                  emptySubtitle={
-                    filters.statusTab === "archived"
-                      ? archiveSearchReady
-                        ? `Nothing matched “${archiveSearchDebounced}”. Try another title.`
-                        : "Completed tasks move here after 30 days. Type at least 2 letters to find them."
-                      : filters.dueDate === "calendar_day" && selectedDay
-                        ? "Try viewing upcoming tasks or adjust your filters."
-                        : filters.statusTab === "completed"
-                          ? "Completed work from the last 30 days shows here."
-                          : "No active tasks for the current filters."
-                  }
-                  emptyActionLabel={filters.dueDate === "calendar_day" ? "View upcoming tasks" : undefined}
-                  onEmptyAction={
-                    filters.dueDate === "calendar_day"
-                      ? () => setFilters((f) => ({ ...f, dueDate: "all" }))
-                      : undefined
-                  }
-                  footer={
-                    <>
-                      {remainingWeekCount > 0 ? (
-                        <Pressable
-                          onPress={() => setVisibleWeeks((v) => v + 1)}
-                          style={{ margin: 12, paddingVertical: 12, borderRadius: 10, alignItems: "center", backgroundColor: "#F1F5F9" }}
-                          testID="show-more-button"
-                        >
-                          <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>
-                            {remainingWeekCount === 1
-                              ? "Show 1 more week"
-                              : `Show more weeks (${remainingWeekCount} left)`}
-                          </Text>
-                        </Pressable>
-                      ) : null}
-                      {nextCursor !== null ? (
-                        <Pressable
-                          onPress={handleLoadMore}
-                          style={{ margin: 12, marginTop: 0, paddingVertical: 12, borderRadius: 10, alignItems: "center", backgroundColor: "#EEF2FF", flexDirection: "row", justifyContent: "center", gap: 8 }}
-                          testID="load-more-button"
-                          disabled={loadingMore}
-                        >
-                          {loadingMore ? <ActivityIndicator size="small" color="#4361EE" testID="load-more-indicator" /> : null}
-                          <Text style={{ fontSize: 13, fontWeight: "600", color: "#4361EE" }}>
-                            {loadingMore ? "Loading..." : "Load more tasks"}
-                          </Text>
-                        </Pressable>
-                      ) : null}
-                    </>
-                  }
-                />
-              </ScrollView>
-            </View>
-          </>
-        )}
-      </View>
-
-      <WorkspaceFilterPicker
+    <CurvedTabLayout
+      topInset={insets.top}
+      title={activeWorkspaceName}
+      subtitle={`Manage ${activeWorkspaceName} tasks and calendar`}
+      workspaceTitleSelector
+      testID="tasks-screen"
+      headerTestID="workspace-header"
+      rightAction={
+        activeTeamId ? (
+          <HeaderAddButton
+            onPress={() => setShowAddModal(true)}
+            accessibilityLabel="Add"
+            testID="workspace-header-add-button"
+          />
+        ) : null
+      }
+      overlays={
+        <>
+<WorkspaceFilterPicker
         picker={filterPicker}
         filters={filters}
         members={teamMembers}
@@ -1522,13 +1303,14 @@ export default function TasksScreen() {
             <AlenioSheetOption
               key={member.userId}
               icon={
-                member.user?.image ? (
-                  <Image source={{ uri: member.user.image }} style={{ width: 44, height: 44, borderRadius: 22 }} />
-                ) : (
-                  <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>
-                    {member.user?.name?.[0]?.toUpperCase() ?? "?"}
-                  </Text>
-                )
+                <UserAvatar
+                  user={member.user}
+                  size={44}
+                  radius={22}
+                  backgroundColor="#4361EE"
+                  textColor="#FFFFFF"
+                  fontSize={16}
+                />
               }
               title={member.user?.name ?? "Team member"}
               subtitle={member.role.replace("_", " ")}
@@ -2315,6 +2097,245 @@ export default function TasksScreen() {
         </Pressable>
       </Modal>
 
-    </SafeAreaView>
+        </>
+      }
+    >
+      <View style={{ flex: 1, minHeight: 0 }}>
+        <WorkspaceViewToggle
+        mode={workspaceMode}
+        onChange={setWorkspaceMode}
+        calendarBadge={calendarBadge}
+        tasksBadge={tasksBadge}
+      />
+
+      <View style={{ flex: 1 }}>
+        {workspaceMode === "calendar" ? (
+          <View style={{ flex: 1, minHeight: 0 }}>
+            <View style={{ flexShrink: 0 }}>
+              <CalendarCard
+                tasks={calendarTasks}
+                events={calendarEventsWithOutlook}
+                holidays={holidays}
+                selectedDay={selectedDay}
+                onSelectDay={handleSelectDay}
+                viewYear={calendarYear}
+                viewMonth={calendarMonth}
+                onViewMonthChange={handleViewMonthChange}
+              />
+            </View>
+
+            <EventsSection
+              dayEvents={dayEvents}
+              dayHolidays={dayHolidays}
+              dayTasks={dayTasks}
+              selectedDayIso={targetIso}
+              variant="dayList"
+              fillRemaining
+              canManageEvent={canManageEvent}
+              onEventLongPress={openEventActions}
+              onTaskPress={(task) =>
+                router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })
+              }
+              onTaskLongPress={(task) => {
+                if (!canManageTaskMenu(task)) return;
+                setActionMenuTask(task);
+              }}
+              onAddEvent={() => setShowAddModal(true)}
+              listPaddingBottom={workspaceTaskClearance(insets.bottom)}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
+              }
+            />
+          </View>
+        ) : showMemberTasksEmpty ? (
+          <ScrollView
+            style={{
+              flex: 1,
+              backgroundColor: WS.surface,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+            }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
+            contentContainerStyle={{
+              flexGrow: 1,
+            }}
+          >
+            <MemberTasksEmptyState />
+          </ScrollView>
+        ) : (
+          <>
+            <View
+              style={{
+                flexShrink: 0,
+                paddingHorizontal: WS.pageGutter,
+                paddingTop: 4,
+                paddingBottom: WS.sectionGap,
+                backgroundColor: WS.pageBg,
+              }}
+            >
+              <TaskStatusTabs
+                statusTab={filters.statusTab}
+                activeCount={activeCount}
+                completedCount={completedCount}
+                onChange={handleStatusTabChange}
+              />
+
+              {filters.statusTab === "archived" ? (
+                <View
+                  style={{
+                    marginTop: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    backgroundColor: WS.surface,
+                    borderWidth: 1,
+                    borderColor: WS.cardBorder,
+                    borderRadius: 12,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <Search size={16} color="#94A3B8" />
+                  <TextInput
+                    value={archiveSearch}
+                    onChangeText={setArchiveSearch}
+                    placeholder="Search archived tasks..."
+                    placeholderTextColor="#94A3B8"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    style={{ flex: 1, fontSize: 14, color: "#0F172A", padding: 0 }}
+                    testID="archive-search-input"
+                  />
+                  {archiveSearch.length > 0 ? (
+                    <Pressable onPress={() => setArchiveSearch("")} hitSlop={8} testID="archive-search-clear">
+                      <X size={16} color="#94A3B8" />
+                    </Pressable>
+                  ) : null}
+                  {archivedFetching ? <ActivityIndicator size="small" color="#4361EE" /> : null}
+                </View>
+              ) : (
+                <View style={{ marginTop: 6 }}>
+                  <TaskFilterBar
+                    filters={filters}
+                    selectedDay={selectedDay}
+                    onOpenPicker={setFilterPicker}
+                    directReportsDisabled={!isOwnerOrLeader}
+                    unassignedDisabled={!isOwnerOrLeader}
+                    entireTeamDisabled={!isOwnerOrLeader}
+                  />
+                </View>
+              )}
+            </View>
+
+            <View style={{ flex: 1, minHeight: 140, paddingHorizontal: WS.pageGutter }}>
+              <ScrollView
+                style={{ flex: 1 }}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
+                contentContainerStyle={{
+                  paddingTop: 4,
+                  paddingBottom:
+                    visibleTasks.length === 0 && !showTasksLoading
+                      ? 4
+                      : workspaceTaskClearance(insets.bottom),
+                  flexGrow: 1,
+                }}
+              >
+                <TaskListCard
+                  sections={visibleWeekGroups.map((group) => ({
+                    id: group.key,
+                    title: group.label,
+                    tasks: group.tasks,
+                  }))}
+                  loading={showTasksLoading}
+                  loadError={tasksLoadError}
+                  onRetry={() => void refetchActiveTasks()}
+                  onToggle={handleToggleTask}
+                  onPress={(task) => router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })}
+                  onLongPress={(task) => {
+                    if (!canManageTaskMenu(task)) return;
+                    setActionMenuTask(task);
+                  }}
+                  emptyTitle={
+                    filters.statusTab === "archived"
+                      ? archiveSearchReady
+                        ? "No matches"
+                        : "Search archive"
+                      : filters.statusTab === "completed"
+                        ? "Nothing completed"
+                        : filters.dueDate === "calendar_day"
+                          ? "No active tasks"
+                          : "You're all"
+                  }
+                  emptyAccentTitle={
+                    filters.statusTab === "archived"
+                      ? archiveSearchReady
+                        ? "found."
+                        : "by name."
+                      : filters.statusTab === "completed"
+                        ? filters.dueDate === "calendar_day"
+                          ? "for this day."
+                          : "yet."
+                        : filters.dueDate === "calendar_day"
+                          ? "for this day."
+                          : "caught up."
+                  }
+                  emptySubtitle={
+                    filters.statusTab === "archived"
+                      ? archiveSearchReady
+                        ? `Nothing matched “${archiveSearchDebounced}”. Try another title.`
+                        : "Completed tasks move here after 30 days. Type at least 2 letters to find them."
+                      : filters.dueDate === "calendar_day" && selectedDay
+                        ? "Try viewing upcoming tasks or adjust your filters."
+                        : filters.statusTab === "completed"
+                          ? "Completed work from the last 30 days shows here."
+                          : "No active tasks for the current filters."
+                  }
+                  emptyActionLabel={filters.dueDate === "calendar_day" ? "View upcoming tasks" : undefined}
+                  onEmptyAction={
+                    filters.dueDate === "calendar_day"
+                      ? () => setFilters((f) => ({ ...f, dueDate: "all" }))
+                      : undefined
+                  }
+                  footer={
+                    <>
+                      {remainingWeekCount > 0 ? (
+                        <Pressable
+                          onPress={() => setVisibleWeeks((v) => v + 1)}
+                          style={{ margin: 12, paddingVertical: 12, borderRadius: 10, alignItems: "center", backgroundColor: "#F1F5F9" }}
+                          testID="show-more-button"
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>
+                            {remainingWeekCount === 1
+                              ? "Show 1 more week"
+                              : `Show more weeks (${remainingWeekCount} left)`}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                      {nextCursor !== null ? (
+                        <Pressable
+                          onPress={handleLoadMore}
+                          style={{ margin: 12, marginTop: 0, paddingVertical: 12, borderRadius: 10, alignItems: "center", backgroundColor: "#EEF2FF", flexDirection: "row", justifyContent: "center", gap: 8 }}
+                          testID="load-more-button"
+                          disabled={loadingMore}
+                        >
+                          {loadingMore ? <ActivityIndicator size="small" color="#4361EE" testID="load-more-indicator" /> : null}
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: "#4361EE" }}>
+                            {loadingMore ? "Loading..." : "Load more tasks"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </>
+                  }
+                />
+              </ScrollView>
+            </View>
+          </>
+        )}
+      </View>
+      </View>
+    </CurvedTabLayout>
   );
 }
