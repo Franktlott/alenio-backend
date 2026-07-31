@@ -39,12 +39,11 @@ function FilterButton({
         alignItems: "center",
         gap: 4,
         paddingHorizontal: 7,
-        paddingVertical: 6,
         borderRadius: 8,
         backgroundColor: WS.surface,
         borderWidth: 1,
         borderColor: "#E2E8F0",
-        minHeight: 34,
+        height: WS.controlRowHeight,
       }}
     >
       {icon}

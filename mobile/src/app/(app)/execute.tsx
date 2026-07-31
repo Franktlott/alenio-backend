@@ -33,13 +33,13 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useTaskStore } from "@/lib/state/task-store";
 import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
-import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
+import { NoWorkspaceTabState } from "@/components/people/NoWorkspaceTabState";
 import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { earlierIncompleteSeriesTasks } from "@/lib/recurring-task";
 import { formatTaskDueDateLabel } from "@/lib/timezone";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
-import { workspaceTaskClearance } from "@/lib/tab-bar";
+import { tabBarClearance, workspaceTaskClearance } from "@/lib/tab-bar";
 import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { HeaderAddButton } from "@/components/HeaderAddButton";
@@ -926,9 +926,20 @@ export default function TasksScreen() {
 
   if (!activeTeamId) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]}>
-        <NoWorkspaceRedirect />
-      </SafeAreaView>
+      <CurvedTabLayout
+        topInset={insets.top}
+        title="Workspace"
+        subtitle="Tasks and schedules live here"
+        testID="execute-screen"
+        headerTestID="execute-header"
+      >
+        <NoWorkspaceTabState
+          icon={CheckSquare}
+          title="Tasks and schedules need a workspace"
+          description="Join your team's workspace or create one to plan work, assign tasks and share a calendar."
+          testID="execute-no-workspace"
+        />
+      </CurvedTabLayout>
     );
   }
 
@@ -2142,6 +2153,7 @@ export default function TasksScreen() {
               }}
               onAddEvent={() => setShowAddModal(true)}
               listPaddingBottom={workspaceTaskClearance(insets.bottom)}
+              emptyStateBottomInset={tabBarClearance(insets.bottom, 8)}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
               }
@@ -2159,6 +2171,7 @@ export default function TasksScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
             contentContainerStyle={{
               flexGrow: 1,
+              paddingBottom: tabBarClearance(insets.bottom, 8),
             }}
           >
             <MemberTasksEmptyState />
@@ -2193,7 +2206,7 @@ export default function TasksScreen() {
                     borderColor: WS.cardBorder,
                     borderRadius: 12,
                     paddingHorizontal: 12,
-                    paddingVertical: 10,
+                    height: WS.controlRowHeight,
                   }}
                 >
                   <Search size={16} color="#94A3B8" />
@@ -2238,7 +2251,7 @@ export default function TasksScreen() {
                   paddingTop: 4,
                   paddingBottom:
                     visibleTasks.length === 0 && !showTasksLoading
-                      ? 4
+                      ? tabBarClearance(insets.bottom, 8)
                       : workspaceTaskClearance(insets.bottom),
                   flexGrow: 1,
                 }}

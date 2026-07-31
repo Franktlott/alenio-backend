@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { prisma } from "../prisma";
 import { env } from "../env";
 import { logActivity } from "./activity";
+import { recordAccountActivity } from "./account-activity";
 import { sendPushToUsers } from "./push";
 import { webPublicBaseUrl } from "./web-public-url";
 
@@ -674,6 +675,21 @@ export async function inviteOrAddMemberByEmail(input: {
     token: invite.token,
     expiresAt: invite.expiresAt,
   });
+
+  // An invitation reaches an account that may have no workspace at all, so it is
+  // recorded against the person rather than the inviting workspace.
+  const invitee = await prisma.user.findFirst({
+    where: { email: { equals: normalized, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (invitee) {
+    await recordAccountActivity({
+      userId: invitee.id,
+      type: "workspace_invitation_received",
+      content: `${emailContext.inviterName ?? "Someone"} invited you to join ${emailContext.teamName}`,
+      metadata: { teamId: input.teamId, teamName: emailContext.teamName },
+    });
+  }
 
   return {
     kind: "invited",

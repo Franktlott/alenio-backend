@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import { findUnmessageableUserIds } from "./messaging-permission";
 
 export type GroupConversationWorkspace = {
   id: string;
@@ -15,6 +16,7 @@ export type GroupMemberCandidate = {
   id: string;
   name: string | null;
   email: string | null;
+  username: string | null;
   image: string | null;
   workspaces: GroupConversationWorkspace[];
   workspaceLabel: string;
@@ -37,38 +39,9 @@ export function buildGroupWorkspaceContext(workspaces: GroupConversationWorkspac
   return { label: "Cross-workspace", workspaces, isCrossWorkspace: true };
 }
 
-export async function findSharedWorkspacesForParticipants(
-  userId: string,
-  participantUserIds: string[],
-): Promise<GroupConversationWorkspace[]> {
-  const memberIds = Array.from(new Set([userId, ...participantUserIds]));
-  if (memberIds.length === 0) return [];
-
-  const userTeams = await prisma.teamMember.findMany({
-    where: { userId },
-    select: { team: { select: { id: true, name: true } }, teamId: true },
-  });
-  if (userTeams.length === 0) return [];
-
-  const shared: GroupConversationWorkspace[] = [];
-  for (const membership of userTeams) {
-    const overlapCount = await prisma.teamMember.count({
-      where: {
-        teamId: membership.teamId,
-        userId: { in: memberIds },
-      },
-    });
-    if (overlapCount === memberIds.length) {
-      shared.push({ id: membership.team.id, name: membership.team.name });
-    }
-  }
-
-  return shared.sort((a, b) => a.name.localeCompare(b.name));
-}
-
 export async function resolveGroupConversationContext(
   userId: string,
-  participantUserIds: string[],
+  _participantUserIds: string[],
   teamId?: string | null,
 ): Promise<GroupWorkspaceContext> {
   if (teamId) {
@@ -80,8 +53,9 @@ export async function resolveGroupConversationContext(
       return buildGroupWorkspaceContext([{ id: team.id, name: team.name }]);
     }
   }
-  const workspaces = await findSharedWorkspacesForParticipants(userId, participantUserIds);
-  return buildGroupWorkspaceContext(workspaces);
+  // A group with no teamId is personal, not workspace-owned. Inferring a label from
+  // shared memberships would stamp an employer's name onto a private conversation.
+  return buildGroupWorkspaceContext([]);
 }
 
 export async function listGroupMemberCandidates(
@@ -98,9 +72,14 @@ export async function listGroupMemberCandidates(
     if (!teamIds.includes(teamId)) return [];
     teamIds = [teamId];
   }
-  if (teamIds.length === 0) return [];
 
   const trimmedQuery = query.trim();
+
+  // Someone with no workspace still has people: connections and anyone they already chat with.
+  if (teamIds.length === 0) {
+    return listPersonalGroupCandidates(userId, trimmedQuery);
+  }
+
   const rows = await prisma.teamMember.findMany({
     where: {
       teamId: { in: teamIds },
@@ -110,6 +89,7 @@ export async function listGroupMemberCandidates(
             user: {
               OR: [
                 { name: { contains: trimmedQuery, mode: "insensitive" } },
+                { username: { contains: trimmedQuery.toLowerCase() } },
                 { email: { contains: trimmedQuery, mode: "insensitive" } },
               ],
             },
@@ -117,7 +97,7 @@ export async function listGroupMemberCandidates(
         : {}),
     },
     include: {
-      user: { select: { id: true, name: true, email: true, image: true } },
+      user: { select: { id: true, name: true, email: true, username: true, image: true } },
       team: { select: { id: true, name: true } },
     },
     orderBy: [{ team: { name: "asc" } }, { user: { name: "asc" } }],
@@ -129,6 +109,7 @@ export async function listGroupMemberCandidates(
       id: string;
       name: string | null;
       email: string | null;
+      username: string | null;
       image: string | null;
       workspaces: Map<string, GroupConversationWorkspace>;
     }
@@ -144,6 +125,7 @@ export async function listGroupMemberCandidates(
       id: row.user.id,
       name: row.user.name,
       email: row.user.email,
+      username: row.user.username,
       image: row.user.image,
       workspaces: new Map([[row.team.id, { id: row.team.id, name: row.team.name }]]),
     });
@@ -156,12 +138,101 @@ export async function listGroupMemberCandidates(
         id: entry.id,
         name: entry.name,
         email: entry.email,
+        username: entry.username,
         image: entry.image,
         workspaces,
         workspaceLabel: formatWorkspaceListLabel(workspaces),
       };
     })
     .sort((a, b) => (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? ""));
+}
+
+/**
+ * People a workspace-less user can put in a personal group: accepted connections
+ * plus anyone they already share a conversation with. No workspace labels, because
+ * a personal group is not owned by any employer.
+ */
+async function listPersonalGroupCandidates(
+  userId: string,
+  trimmedQuery: string,
+): Promise<GroupMemberCandidate[]> {
+  const [connections, chatPartners, blocks] = await Promise.all([
+    prisma.connection.findMany({
+      where: {
+        status: "accepted",
+        OR: [{ requesterId: userId }, { recipientId: userId }],
+      },
+      select: { requesterId: true, recipientId: true },
+    }),
+    prisma.conversationParticipant.findMany({
+      where: {
+        userId: { not: userId },
+        conversation: { participants: { some: { userId } } },
+      },
+      select: { userId: true },
+      distinct: ["userId"],
+      take: 200,
+    }),
+    prisma.userBlock.findMany({
+      where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+      select: { blockerId: true, blockedId: true },
+    }),
+  ]);
+
+  const blockedIds = new Set(
+    blocks.flatMap((row) => [row.blockerId, row.blockedId]).filter((id) => id !== userId),
+  );
+
+  const candidateIds = new Set<string>();
+  for (const row of connections) {
+    const otherId = row.requesterId === userId ? row.recipientId : row.requesterId;
+    if (!blockedIds.has(otherId)) candidateIds.add(otherId);
+  }
+  for (const row of chatPartners) {
+    if (!blockedIds.has(row.userId)) candidateIds.add(row.userId);
+  }
+  if (candidateIds.size === 0) return [];
+
+  const users = await prisma.user.findMany({
+    where: {
+      id: { in: Array.from(candidateIds) },
+      ...(trimmedQuery.length >= 2
+        ? {
+            OR: [
+              { name: { contains: trimmedQuery, mode: "insensitive" } },
+              { username: { contains: trimmedQuery.toLowerCase() } },
+            ],
+          }
+        : {}),
+    },
+    select: { id: true, name: true, username: true, image: true },
+    orderBy: { name: "asc" },
+  });
+
+  // No email: outside a shared workspace there is no basis for exposing an address.
+  return users.map((user) => ({
+    id: user.id,
+    name: user.name,
+    email: null,
+    username: user.username,
+    image: user.image,
+    workspaces: [],
+    workspaceLabel: "",
+  }));
+}
+
+/**
+ * Validation for a personal group (`teamId` null). Workspace membership is irrelevant
+ * here; what matters is that the creator is allowed to message everyone they add.
+ */
+export async function assertPersonalGroupParticipantsAllowed(
+  creatorId: string,
+  participantIds: string[],
+): Promise<void> {
+  const blockedIds = await findUnmessageableUserIds(creatorId, participantIds);
+  if (blockedIds.length > 0) {
+    throw new Error("You can only add people you are able to message.");
+  }
 }
 
 export async function assertParticipantsShareWorkspaceWithCreator(

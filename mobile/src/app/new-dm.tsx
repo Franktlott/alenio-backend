@@ -15,7 +15,7 @@ import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
-import type { User, Team } from "@/lib/types";
+import type { PersonSearchResult, User, Team } from "@/lib/types";
 import { resolveUserImageUrl } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -55,7 +55,8 @@ export default function NewDMScreen() {
     refetch: refetchSearch,
   } = useQuery({
     queryKey: ["user-search", searchQuery],
-    queryFn: () => api.get<User[]>(`/api/users/search?q=${encodeURIComponent(searchQuery)}`),
+    queryFn: () =>
+      api.get<PersonSearchResult[]>(`/api/users/search?q=${encodeURIComponent(searchQuery)}`),
     enabled: searchQuery.trim().length >= 2,
   });
 
@@ -99,24 +100,45 @@ export default function NewDMScreen() {
     [currentUserId, meImage],
   );
 
-  const teamMembers: User[] = useMemo(
+  /** One row shape for both the roster fallback and global search results. */
+  type PersonRow = { id: string; name: string | null; image: string | null; subtitle: string | null };
+
+  const teamMembers: PersonRow[] = useMemo(
     () =>
       (team?.members ?? [])
         .filter((m) => m.userId !== currentUserId && m.user?.id !== currentUserId)
-        .map((m) =>
-          withLiveImage({
+        .map((m) => {
+          const withImage = withLiveImage({
             id: m.user.id,
             name: m.user.name,
             email: m.user.email,
             image: m.user.image ?? null,
-          }),
-        ),
-    [team?.members, currentUserId, withLiveImage],
+          });
+          return {
+            id: withImage.id,
+            name: withImage.name,
+            image: withImage.image ?? null,
+            subtitle: team?.name ?? null,
+          };
+        }),
+    [team?.members, team?.name, currentUserId, withLiveImage],
   );
 
-  const displayUsers = searchQuery.trim().length >= 2
-    ? searchResults.filter((u) => u.id !== currentUserId).map(withLiveImage)
-    : teamMembers;
+  const searchRows: PersonRow[] = useMemo(
+    () =>
+      searchResults
+        .filter((u) => u.id !== currentUserId)
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+          image: u.id === currentUserId && meImage ? meImage : u.image,
+          // Handle first, workspace as the fallback hint. Never an email address.
+          subtitle: u.username ? `@${u.username}` : u.sharedWorkspaceName,
+        })),
+    [searchResults, currentUserId, meImage],
+  );
+
+  const displayUsers = searchQuery.trim().length >= 2 ? searchRows : teamMembers;
 
   return (
     <SafeAreaView testID="new-dm-screen" className="flex-1 bg-white dark:bg-slate-900" edges={["top", "bottom"]}>
@@ -135,7 +157,7 @@ export default function NewDMScreen() {
           <Search size={16} color="#94A3B8" />
           <TextInput
             testID="dm-user-search-input"
-            placeholder="Search by name or email..."
+            placeholder="Search by name or @username..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -218,7 +240,7 @@ export default function NewDMScreen() {
           extraData={meImage}
           removeClippedSubviews={false}
           ListHeaderComponent={
-            !searchQuery.trim() ? (
+            !searchQuery.trim() && teamMembers.length > 0 ? (
               <Text className="px-4 pt-3 pb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                 Team Members
               </Text>
@@ -226,9 +248,11 @@ export default function NewDMScreen() {
           }
           ListEmptyComponent={
             searchQuery.trim().length >= 2 && !isSearching ? (
-              <Text className="text-center text-slate-400 text-sm py-8">No users found</Text>
+              <Text className="text-center text-slate-400 text-sm py-8">No people found</Text>
             ) : !searchQuery.trim() && !teamLoading ? (
-              <Text className="text-center text-slate-400 text-sm py-8">No teammates to message</Text>
+              <Text className="text-center text-slate-400 text-sm py-8">
+                Search by name or @username to message anyone on Alenio.
+              </Text>
             ) : null
           }
           renderItem={({ item }) => (
@@ -250,7 +274,11 @@ export default function NewDMScreen() {
               />
               <View className="flex-1">
                 <Text className="font-semibold text-slate-900 dark:text-white">{item.name}</Text>
-                <Text className="text-xs text-slate-500">{item.email}</Text>
+                {item.subtitle ? (
+                  <Text className="text-xs text-slate-500" numberOfLines={1}>
+                    {item.subtitle}
+                  </Text>
+                ) : null}
               </View>
               {dmMutation.isPending ? <ActivityIndicator size="small" color="#4361EE" /> : null}
             </TouchableOpacity>

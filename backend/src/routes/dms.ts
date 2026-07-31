@@ -8,9 +8,16 @@ import { MAX_CHAT_PINS } from "../lib/ensure-pinned-message-schema";
 import { env } from "../env";
 import {
   assertParticipantsShareWorkspaceWithCreator,
+  assertPersonalGroupParticipantsAllowed,
   listGroupMemberCandidates,
   resolveGroupConversationContext,
 } from "../lib/group-conversation-workspace";
+import {
+  canMessage,
+  isBlockedEitherWay,
+  messagePermissionErrorMessage,
+} from "../lib/messaging-permission";
+import { recordAccountActivity } from "../lib/account-activity";
 import { buildDmPairKey } from "../lib/dm-pair-key";
 import {
   canDeleteGroup,
@@ -41,7 +48,7 @@ async function getGroupParticipant(
   return prisma.conversationParticipant.findUnique({
     where: { conversationId_userId: { conversationId, userId } },
     include: {
-      conversation: { select: { id: true, isGroup: true, image: true } },
+      conversation: { select: { id: true, isGroup: true, image: true, teamId: true } },
     },
   });
 }
@@ -187,6 +194,16 @@ dmsRouter.post("/find-or-create", async (c) => {
     );
   };
 
+  // A block closes an existing thread too; a mere privacy setting does not, so
+  // people who already talk keep their conversation when preferences change later.
+  const permission = await canMessage(user.id, recipientId);
+  if (permission.reason === "blocked") {
+    return c.json(
+      { error: { message: messagePermissionErrorMessage("blocked"), code: "MESSAGING_BLOCKED" } },
+      403,
+    );
+  }
+
   const byKey = await prisma.conversation.findUnique({
     where: { dmPairKey: pairKey },
     include: includeShape,
@@ -227,6 +244,18 @@ dmsRouter.post("/find-or-create", async (c) => {
       }
     }
     return formatDm(existing);
+  }
+
+  if (!permission.allowed) {
+    return c.json(
+      {
+        error: {
+          message: messagePermissionErrorMessage(permission.reason),
+          code: "MESSAGING_NOT_ALLOWED",
+        },
+      },
+      403,
+    );
   }
 
   try {
@@ -290,7 +319,13 @@ dmsRouter.post("/create-group", async (c) => {
   }
 
   try {
-    await assertParticipantsShareWorkspaceWithCreator(user.id, participantIds, teamId);
+    // Workspace groups keep the organization's membership rules; personal groups
+    // (no teamId) are governed by messaging permission instead.
+    if (teamId) {
+      await assertParticipantsShareWorkspaceWithCreator(user.id, participantIds, teamId);
+    } else {
+      await assertPersonalGroupParticipantsAllowed(user.id, participantIds);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid group participants.";
     return c.json({ error: { message, code: "VALIDATION_ERROR" } }, 400);
@@ -680,9 +715,25 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
 
   const participant = await prisma.conversationParticipant.findUnique({
     where: { conversationId_userId: { conversationId, userId: user.id } },
+    include: { conversation: { select: { isGroup: true } } },
   });
   if (!participant) {
     return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  // Defence in depth for 1:1 threads: a block placed after the conversation
+  // existed must stop new messages, not just new conversations.
+  if (!participant.conversation.isGroup) {
+    const other = await prisma.conversationParticipant.findFirst({
+      where: { conversationId, userId: { not: user.id } },
+      select: { userId: true },
+    });
+    if (other && (await isBlockedEitherWay(user.id, other.userId))) {
+      return c.json(
+        { error: { message: messagePermissionErrorMessage("blocked"), code: "MESSAGING_BLOCKED" } },
+        403,
+      );
+    }
   }
 
   const body = await c.req.json();
@@ -779,6 +830,18 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
             content?.trim() || "mentioned you in a message",
             { conversationId },
             "notifMessages",
+          );
+          // Account-level so a mention in a personal DM still reaches Activity
+          // for someone who belongs to no workspace.
+          await Promise.all(
+            validMentionIds.map((mentionedId) =>
+              recordAccountActivity({
+                userId: mentionedId,
+                type: "mention_in_conversation",
+                content: `${senderName} mentioned you in ${conversation.name ?? "a conversation"}`,
+                metadata: { conversationId },
+              }),
+            ),
           );
         }
       }
@@ -936,7 +999,12 @@ dmsRouter.post("/:conversationId/members", async (c) => {
   }
 
   try {
-    await assertParticipantsShareWorkspaceWithCreator(user.id, toAdd);
+    // Mirror create-group: the conversation's own scope decides which rule applies.
+    if (actor.conversation.teamId) {
+      await assertParticipantsShareWorkspaceWithCreator(user.id, toAdd, actor.conversation.teamId);
+    } else {
+      await assertPersonalGroupParticipantsAllowed(user.id, toAdd);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid group participants.";
     return c.json({ error: { message, code: "VALIDATION_ERROR" } }, 400);

@@ -12,6 +12,10 @@ export const WS = {
   meta: 10,
   control: 11,
   controlWeight: "700" as const,
+  /** One geometry for every control on the screen: 32pt buttons inside a 38pt row. */
+  controlHeight: 32,
+  controlTrackPad: 3,
+  controlRowHeight: 38,
   ink: colors.textPrimary,
   muted: colors.textSecondary,
   faint: colors.textMuted,

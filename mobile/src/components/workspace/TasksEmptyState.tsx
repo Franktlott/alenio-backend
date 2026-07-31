@@ -37,9 +37,9 @@ export function TasksEmptyState({
       <Image
         source={require("@/assets/alenio-empty-tasks.png")}
         style={{
-          width: 132,
-          height: 132,
-          marginBottom: -8,
+          width: 168,
+          height: 168,
+          marginBottom: -12,
           alignSelf: "center",
         }}
         resizeMode="contain"

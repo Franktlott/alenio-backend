@@ -51,12 +51,11 @@ export async function resolveAuthenticatedDestination(
     return `/onboarding?mode=join&code=${encodeURIComponent(joinCode)}&focus=code`;
   }
 
+  // Chat is home whether or not you have a workspace — the account is the anchor.
   const teams = await fetchUserTeams(queryClient);
-  if (teams.length === 0) return NO_WORKSPACE_WELCOME_PATH;
-
   const storedTeamId = useTeamStore.getState().activeTeamId;
   const nextTeamId = resolveActiveTeamId(teams, storedTeamId);
-  if (nextTeamId && nextTeamId !== storedTeamId) {
+  if (nextTeamId !== storedTeamId) {
     useTeamStore.getState().setActiveTeamId(nextTeamId);
   }
 

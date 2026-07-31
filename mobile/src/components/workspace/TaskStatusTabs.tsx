@@ -9,7 +9,7 @@ type Props = {
   onChange: (tab: TaskStatusTab) => void;
 };
 
-const TAB_HEIGHT = 32;
+const TAB_HEIGHT = WS.controlHeight;
 const TAB_FONT = WS.control - 1;
 const TAB_LINE = TAB_FONT + 2;
 
@@ -32,8 +32,8 @@ export function TaskStatusTabs({
         alignItems: "center",
         backgroundColor: WS.chipBg,
         borderRadius: 10,
-        padding: 3,
-        height: TAB_HEIGHT + 6,
+        padding: WS.controlTrackPad,
+        height: WS.controlRowHeight,
       }}
     >
       {tabs.map((tab) => {

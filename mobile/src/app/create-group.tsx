@@ -46,14 +46,16 @@ export default function CreateGroupScreen() {
     enabled: !!session?.user,
   });
 
+  // `null` means a personal group, so the default is chosen once rather than
+  // continuously re-forced — otherwise picking Personal would snap back to a workspace.
+  const [scopeInitialized, setScopeInitialized] = useState(!!paramTeamId || !!activeTeamId);
   useEffect(() => {
-    if (selectedTeamId) return;
-    if (activeTeamId) {
-      setSelectedTeamId(activeTeamId);
-      return;
-    }
-    if (teams[0]?.id) setSelectedTeamId(teams[0].id);
-  }, [activeTeamId, selectedTeamId, teams]);
+    if (scopeInitialized) return;
+    if (teams.length > 0 && teams[0]?.id) setSelectedTeamId(teams[0].id);
+    setScopeInitialized(true);
+  }, [scopeInitialized, teams]);
+
+  const isPersonalGroup = selectedTeamId === null;
 
   const candidatesQuery = selectedTeamId
     ? `/api/dms/group-member-candidates?teamId=${encodeURIComponent(selectedTeamId)}${
@@ -64,7 +66,7 @@ export default function CreateGroupScreen() {
       }`;
 
   const { data: candidates = [], isFetching: candidatesLoading } = useQuery({
-    queryKey: ["group-member-candidates", selectedTeamId, searchQuery],
+    queryKey: ["group-member-candidates", selectedTeamId, searchQuery, candidatesQuery],
     queryFn: () => api.get<GroupMemberCandidate[]>(candidatesQuery),
     enabled: !!session?.user,
   });
@@ -255,9 +257,27 @@ export default function CreateGroupScreen() {
         {teams.length > 0 ? (
           <View className="mt-3">
             <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Workspace
+              Group type
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              <Pressable
+                testID="create-group-workspace-personal"
+                onPress={() => setSelectedTeamId(null)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 999,
+                  backgroundColor: isPersonalGroup ? "#4361EE" : "#FFFFFF",
+                  borderWidth: 1,
+                  borderColor: isPersonalGroup ? "#4361EE" : "#E2E8F0",
+                }}
+              >
+                <Text
+                  style={{ fontSize: 12, fontWeight: "600", color: isPersonalGroup ? "#FFFFFF" : "#475569" }}
+                >
+                  Personal
+                </Text>
+              </Pressable>
               {teams.map((team) => {
                 const active = selectedTeamId === team.id;
                 return (
@@ -282,7 +302,9 @@ export default function CreateGroupScreen() {
               })}
             </ScrollView>
             <Text className="mt-2 text-xs text-slate-400">
-              Only people in {selectedTeamName ?? "this workspace"} can be added. Members are never auto-added.
+              {isPersonalGroup
+                ? "A personal group belongs to you, not a workspace. Add your connections and people you already chat with."
+                : `Only people in ${selectedTeamName ?? "this workspace"} can be added. Members are never auto-added.`}
             </Text>
           </View>
         ) : null}
@@ -294,7 +316,7 @@ export default function CreateGroupScreen() {
             numberOfLines={2}
           >
             {selectedUsers.length} {selectedUsers.length === 1 ? "person" : "people"}:{" "}
-            {selectedUsers.map((u) => u.name ?? u.email ?? "Member").join(", ")}
+            {selectedUsers.map((u) => u.name ?? (u.username ? `@${u.username}` : "Member")).join(", ")}
           </Text>
         ) : (
           <Text className="mt-2 text-sm text-slate-400">Select people from the list below</Text>
@@ -312,7 +334,7 @@ export default function CreateGroupScreen() {
             placeholder={
               selectedTeamName
                 ? `Search people in ${selectedTeamName}...`
-                : "Search people across your workspaces..."
+                : "Search your people..."
             }
             placeholderTextColor="#94A3B8"
             value={searchQuery}
@@ -336,14 +358,18 @@ export default function CreateGroupScreen() {
         ListHeaderComponent={
           !searchQuery.trim() ? (
             <Text className="px-4 pb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              {selectedTeamName ? `People in ${selectedTeamName}` : "People across your workspaces"}
+              {selectedTeamName ? `People in ${selectedTeamName}` : "Your people"}
             </Text>
           ) : null
         }
         ListEmptyComponent={
           !candidatesLoading ? (
             <Text className="text-center text-slate-400 text-sm py-8">
-              {searchQuery.trim().length >= 2 ? "No people found" : "No teammates available yet"}
+              {searchQuery.trim().length >= 2
+                ? "No people found"
+                : isPersonalGroup
+                  ? "Connect with people or start a chat, and they will appear here."
+                  : "No teammates available yet"}
             </Text>
           ) : null
         }
@@ -366,14 +392,16 @@ export default function CreateGroupScreen() {
             />
             <View className="flex-1">
               <Text className="font-semibold text-slate-900 dark:text-white">
-                {item.name ?? item.email ?? "Member"}
+                {item.name ?? (item.username ? `@${item.username}` : "Member")}
               </Text>
-              <Text className="text-xs text-indigo-600 dark:text-indigo-300" numberOfLines={1}>
-                {item.workspaceLabel}
-              </Text>
-              {item.email && item.name ? (
+              {item.workspaceLabel ? (
+                <Text className="text-xs text-indigo-600 dark:text-indigo-300" numberOfLines={1}>
+                  {item.workspaceLabel}
+                </Text>
+              ) : null}
+              {item.username ? (
                 <Text className="text-xs text-slate-500" numberOfLines={1}>
-                  {item.email}
+                  @{item.username}
                 </Text>
               ) : null}
             </View>

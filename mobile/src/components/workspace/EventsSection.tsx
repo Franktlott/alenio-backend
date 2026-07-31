@@ -40,6 +40,8 @@ type Props = {
   variant?: "carousel" | "dayList";
   fillRemaining?: boolean;
   listPaddingBottom?: number;
+  /** Keeps the empty-state card above the tab bar so its art centers in the visible area. */
+  emptyStateBottomInset?: number;
   refreshControl?: ReactElement<RefreshControlProps>;
   canManageEvent?: (event: CalendarEvent) => boolean;
   onEventLongPress?: (event: CalendarEvent) => void;
@@ -278,6 +280,7 @@ export function EventsSection({
   variant = "carousel",
   fillRemaining = false,
   listPaddingBottom = 4,
+  emptyStateBottomInset = 0,
   refreshControl,
   canManageEvent,
   onEventLongPress,
@@ -351,6 +354,7 @@ export function EventsSection({
               flex: 1,
               minHeight: 0,
               alignSelf: "stretch",
+              marginBottom: emptyStateBottomInset,
             }}
             testID="calendar-day-empty-wrap"
           >

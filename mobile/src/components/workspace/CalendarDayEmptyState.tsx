@@ -31,9 +31,9 @@ export function CalendarDayEmptyState({ dayLabel, onAdd }: Props) {
       <Image
         source={require("@/assets/alenio-empty-calendar.png")}
         style={{
-          width: 132,
-          height: 132,
-          marginBottom: 2,
+          width: 168,
+          height: 168,
+          marginBottom: 0,
         }}
         resizeMode="contain"
         accessibilityIgnoresInvertColors

@@ -24,7 +24,6 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Image as ExpoImage } from "expo-image";
 import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { resolveUserImageUrl } from "@/lib/user-avatar";
-import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { tabBarClearance, SENECA_FAB_SIZE, SENECA_FAB_VISIBLE_SIZE } from "@/lib/tab-bar";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
@@ -461,19 +460,19 @@ export default function ActivityScreen() {
     },
   });
 
-  if (!activeTeamId) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]}>
-        <NoWorkspaceRedirect />
-      </SafeAreaView>
-    );
-  }
-
   return (
     <CurvedTabLayout
       topInset={insets.top}
       title="Activity"
-      subtitle="What's happening across your team"
+      subtitle={
+        teams.length === 0
+          ? "Your Alenio activity"
+          : workspaceFilter === "all"
+            ? teams.length > 1
+              ? "What's happening across all your workspaces"
+              : "What's happening across your team"
+            : `What's happening in ${workspaceFilterLabel}`
+      }
       testID="activity-screen"
       headerTestID="activity-header"
       rightAction={
@@ -914,47 +913,6 @@ export default function ActivityScreen() {
         </View>
       ) : (
         <View style={{ flex: 1, paddingTop: 28 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              paddingHorizontal: 14,
-              paddingVertical: 4,
-              marginBottom: 4,
-            }}
-          >
-            {ACTIVITY_FILTER_OPTIONS.map((option) => {
-              const selected = activityFilter === option.key;
-              return (
-                <TouchableOpacity
-                  key={option.key}
-                  onPress={() => setActivityFilter(option.key)}
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    minHeight: 24,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingHorizontal: 2,
-                    paddingVertical: 4,
-                    borderRadius: 12,
-                    backgroundColor: selected ? "#4361EE" : "#F1F5F9",
-                  }}
-                >
-                  <Text
-                    style={{ fontSize: 9, lineHeight: 12, fontWeight: "600", color: selected ? "#FFFFFF" : "#64748B" }}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.85}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
           {workspaceFilteredActivities.length === 0 ? (
             <View
               style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }}
@@ -965,7 +923,9 @@ export default function ActivityScreen() {
                 No activity yet
               </Text>
               <Text style={{ fontSize: 12, color: "#CBD5E1", marginTop: 4, textAlign: "center", lineHeight: 16 }}>
-                Team events like completed tasks and new members will appear here.
+                {workspaceFilter === "all" && teams.length > 1
+                  ? "Events from all your workspaces — completed tasks, new members, and celebrations — will appear here."
+                  : "Team events like completed tasks and new members will appear here."}
               </Text>
             </View>
           ) : (

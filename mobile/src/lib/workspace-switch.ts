@@ -1,5 +1,4 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import type { Team, Task, CalendarEvent } from "@/lib/types";
 import { hasTeamPlan, toPersistedPlan } from "@/lib/plan-access-copy";
@@ -35,9 +34,10 @@ export async function applyTeamRemovedFromAccount(
     if (freshTeams.length > 0) {
       await performWorkspaceSwitch(freshTeams[0].id, removedTeamId, setActiveTeamId, queryClient);
     } else {
+      // Leaving the last workspace keeps you in the app: identity, DMs and
+      // connections are account-level and survive the departure.
       setActiveTeamId(null);
       useSubscriptionStore.getState().setPlan("free");
-      router.replace("/no-workspace-welcome");
     }
   }
 

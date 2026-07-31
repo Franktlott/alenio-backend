@@ -36,6 +36,7 @@ import {
 } from "@/lib/workplace-standards";
 import { ManagerCoachingHome } from "@/components/people/ManagerCoachingHome";
 import { MemberSelfHome } from "@/components/people/MemberSelfHome";
+import { FreePlanTeamHome } from "@/components/people/FreePlanTeamHome";
 import { ProfileCard } from "@/components/profile/ProfileEnterpriseUI";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
@@ -50,7 +51,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { reconcileActiveTeamAfterRemoval } from "@/lib/workspace-switch";
 import type { Team, TeamMember, Task } from "@/lib/types";
 import type { TeamHealthHistoryPoint } from "@/lib/team-health-history";
-import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
+import { ZeroWorkspaceTeamHome } from "@/components/people/ZeroWorkspaceTeamHome";
 import { AddMemberModal } from "@/components/AddMemberModal";
 import { PendingInvitesSheet } from "@/components/PendingInvitesSheet";
 import { PendingJoinRequestsSheet } from "@/components/PendingJoinRequestsSheet";
@@ -1009,9 +1010,15 @@ export default function TeamScreen() {
       );
     }
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]}>
-        <NoWorkspaceRedirect />
-      </SafeAreaView>
+      <CurvedTabLayout
+        topInset={insets.top}
+        title="Team"
+        subtitle="Your people on Alenio"
+        testID="team-screen"
+        headerTestID="team-header"
+      >
+        <ZeroWorkspaceTeamHome currentUserId={myId ?? ""} />
+      </CurvedTabLayout>
     );
   }
 
@@ -1059,7 +1066,13 @@ export default function TeamScreen() {
     <CurvedTabLayout
       topInset={insets.top}
       title={team?.name ?? "Team"}
-      subtitle={`People and coaching for ${team?.name ?? "your team"}`}
+      subtitle={
+        !isPaid
+          ? "People in this workspace"
+          : isOwnerOrLeader
+            ? "Team health, check-ins, and coaching"
+            : "Your check-ins, goals, and teammates"
+      }
       workspaceTitleSelector
       testID="team-screen"
       headerTestID="team-header"
@@ -1253,7 +1266,20 @@ export default function TeamScreen() {
           />
         ) : null}
 
-        {isOwnerOrLeader ? (
+        {!isPaid ? (
+          <FreePlanTeamHome
+            team={team}
+            members={sortedMembers}
+            myId={myId}
+            isOwner={isOwner}
+            isOwnerOrLeader={isOwnerOrLeader}
+            canViewMemberProfile={canViewMemberProfile}
+            contentBottomPad={TAB_BAR_CLEARANCE + 12}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            onInvite={handleInvitePress}
+          />
+        ) : isOwnerOrLeader ? (
           <ManagerCoachingHome
             key="manager-coaching-home-focus-card-v3"
             team={team}

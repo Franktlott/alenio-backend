@@ -369,6 +369,8 @@ function RootLayoutNav() {
               }}
             />
             <Stack.Screen name="notifications" />
+            <Stack.Screen name="username" />
+            <Stack.Screen name="person" />
           </Stack.Protected>
           <Stack.Protected guard={!hasBackendSession}>
             <Stack.Screen name="welcome" />

@@ -43,14 +43,18 @@ userActivityRouter.get("/", async (c) => {
     select: { teamId: true },
   });
   const teamIds = memberships.map((m) => m.teamId);
-  if (teamIds.length === 0) {
-    return c.json({ data: [] });
-  }
-
   const feedStart = new Date(Date.now() - ACTIVITY_FEED_DAYS * 24 * 60 * 60 * 1000);
 
+  // Workspace activity from every workspace you belong to, plus your own
+  // account-level activity, which has no teamId and outlives any employer.
   const activities = await prisma.teamActivity.findMany({
-    where: { teamId: { in: teamIds }, createdAt: { gte: feedStart } },
+    where: {
+      createdAt: { gte: feedStart },
+      OR: [
+        ...(teamIds.length > 0 ? [{ teamId: { in: teamIds } }] : []),
+        { teamId: null, userId: user.id },
+      ],
+    },
     include: {
       team: { select: { id: true, name: true } },
       user: { select: { id: true, name: true, image: true } },

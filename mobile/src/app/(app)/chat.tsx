@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageCircle, Users, Plus, Pin, Search } from "lucide-react-native";
+import { MessageCircle, Users, Plus, Pin, Search, X } from "lucide-react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -23,7 +23,6 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore, buildDmLastReadMap, getDmUnreadCount } from "@/lib/state/unread-store";
 import type { Conversation, Team } from "@/lib/types";
-import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import { dmOtherParticipant, resolveUserImageUrl } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
@@ -35,17 +34,10 @@ import {
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { typography } from "@/theme";
+import { tabBarClearance } from "@/lib/tab-bar";
 
 const PINNED_DMS_KEY = "pinned_dms";
 const MAX_DM_PINS = 5;
-type ConversationFilter = "all" | "unread" | "groups" | "direct";
-
-const CONVERSATION_FILTERS: { key: ConversationFilter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "unread", label: "Unread" },
-  { key: "groups", label: "Groups" },
-  { key: "direct", label: "Direct" },
-];
 
 const AVATAR = 34;
 const PINNED_CIRCLE = 44;
@@ -122,9 +114,9 @@ function ChatEmptyState({
       <Image
         source={require("@/assets/alenio-empty-chat-bubbles.png")}
         style={{
-          width: 132,
-          height: 132,
-          marginBottom: 2,
+          width: 168,
+          height: 168,
+          marginBottom: 0,
           alignSelf: "center",
         }}
         resizeMode="contain"
@@ -215,8 +207,7 @@ export default function ChatScreen() {
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [pinsReady, setPinsReady] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [conversationFilter, setConversationFilter] =
-    useState<ConversationFilter>("all");
+  const [unreadOnly, setUnreadOnly] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -296,20 +287,22 @@ export default function ChatScreen() {
     staleTime: 0,
   });
 
+  const unreadConversationCount = conversations.reduce(
+    (total, conv) => total + (getDmUnreadCount(dmUnreadCounts, conv.id) > 0 ? 1 : 0),
+    0,
+  );
+
+  // Reading the last unread thread would otherwise strand the user on an empty filtered list.
+  useEffect(() => {
+    if (unreadOnly && unreadConversationCount === 0) setUnreadOnly(false);
+  }, [unreadOnly, unreadConversationCount]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["dms"] });
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
     setRefreshing(false);
   };
-
-  if (!activeTeamId) {
-    return (
-      <SafeAreaView className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]}>
-        <NoWorkspaceRedirect />
-      </SafeAreaView>
-    );
-  }
 
   const members = teamDetail?.members ?? [];
   const avatarUser = (
@@ -341,14 +334,8 @@ export default function ChatScreen() {
     return name.includes(q) || workspace.includes(q);
   };
 
-  const matchesConversationFilter = (conv: Conversation) => {
-    if (conversationFilter === "unread") {
-      return getDmUnreadCount(dmUnreadCounts, conv.id) > 0;
-    }
-    if (conversationFilter === "groups") return conv.isGroup;
-    if (conversationFilter === "direct") return !conv.isGroup;
-    return true;
-  };
+  const matchesConversationFilter = (conv: Conversation) =>
+    !unreadOnly || getDmUnreadCount(dmUnreadCounts, conv.id) > 0;
 
   const activityTime = (conv: Conversation) =>
     new Date(conv.lastMessage?.createdAt ?? conv.updatedAt).getTime();
@@ -684,7 +671,7 @@ export default function ChatScreen() {
   };
 
   const hasActiveSearch = searchQuery.trim().length > 0;
-  const hasActiveInboxFilter = hasActiveSearch || conversationFilter !== "all";
+  const hasActiveInboxFilter = hasActiveSearch || unreadOnly;
 
   return (
     <CurvedTabLayout
@@ -694,13 +681,11 @@ export default function ChatScreen() {
       testID="chat-screen"
       headerTestID="chat-header"
       rightAction={
-        activeTeamId ? (
-          <HeaderAddButton
-            onPress={() => setShowAddModal(true)}
-            accessibilityLabel="Add conversation"
-            testID="chat-header-add-button"
-          />
-        ) : null
+        <HeaderAddButton
+          onPress={() => setShowAddModal(true)}
+          accessibilityLabel="Add conversation"
+          testID="chat-header-add-button"
+        />
       }
       overlays={
         <AlenioBottomSheet
@@ -718,7 +703,7 @@ export default function ChatScreen() {
         <AlenioSheetOption
           icon={<MessageCircle size={16} color="white" />}
           title="Message someone"
-          subtitle="Send a private message to a teammate"
+          subtitle="Send a private message to anyone on Alenio"
           onPress={() => {
             setShowAddModal(false);
             router.push("/new-dm");
@@ -730,7 +715,7 @@ export default function ChatScreen() {
           iconColor="#7C3AED"
           tint="purple"
           title="Create group"
-          subtitle="Start a group when your team needs one"
+          subtitle="Start a group chat with the people you choose"
           onPress={() => {
             setShowAddModal(false);
             router.push("/create-group");
@@ -741,8 +726,8 @@ export default function ChatScreen() {
       }
     >
       <View style={styles.chatColumns}>
-          <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 }}>
-            <View style={styles.searchBar}>
+          <View style={styles.searchRow}>
+            <View style={[styles.searchBar, { flex: 1 }]}>
               <Search size={13} color="#94A3B8" />
               <TextInput
                 value={searchQuery}
@@ -755,31 +740,6 @@ export default function ChatScreen() {
                 autoCapitalize="none"
               />
             </View>
-          </View>
-
-          <View style={styles.filterRow}>
-            {CONVERSATION_FILTERS.map((option) => {
-              const selected = conversationFilter === option.key;
-              return (
-                <Pressable
-                  key={option.key}
-                  onPress={() => setConversationFilter(option.key)}
-                  style={[styles.filterChip, selected ? styles.filterChipSelected : null]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  testID={`chat-filter-${option.key}`}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      selected ? styles.filterChipTextSelected : null,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
           </View>
 
           {pinnedConversations.length > 0 ? (
@@ -814,12 +774,54 @@ export default function ChatScreen() {
                         ? "Direct messages & groups"
                         : `${listConversations.length} conversation${listConversations.length === 1 ? "" : "s"}`
               }
+              right={
+                unreadConversationCount > 0 || unreadOnly ? (
+                  <Pressable
+                    onPress={() => setUnreadOnly((current) => !current)}
+                    style={({ pressed }) => [
+                      styles.unreadChip,
+                      unreadOnly ? styles.unreadChipActive : null,
+                      pressed ? { opacity: 0.75 } : null,
+                    ]}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: unreadOnly }}
+                    accessibilityLabel={
+                      unreadOnly
+                        ? "Showing unread only. Tap to show all conversations."
+                        : `Show only unread conversations. ${unreadConversationCount} unread.`
+                    }
+                    testID="chat-unread-filter"
+                  >
+                    {unreadOnly ? (
+                      <X size={11} color="#4361EE" strokeWidth={2.75} />
+                    ) : (
+                      <View style={styles.unreadChipDot} />
+                    )}
+                    <Text
+                      style={[
+                        styles.unreadChipLabel,
+                        unreadOnly ? styles.unreadChipLabelActive : null,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {unreadOnly ? "Unread only" : `${unreadConversationCount} unread`}
+                    </Text>
+                  </Pressable>
+                ) : null
+              }
             />
             <ScrollView
               style={{ flex: 1, minHeight: 0 }}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
-                paddingBottom: 24,
+                paddingTop: 12,
+                // An empty state fills the sheet, so it needs to stop above the tab bar to
+                // stay optically centered rather than centering on the screen edge.
+                paddingBottom:
+                  conversations.length === 0 || listConversations.length === 0
+                    ? tabBarClearance(insets.bottom, 8)
+                    : 24,
                 flexGrow: conversations.length === 0 || listConversations.length === 0 ? 1 : undefined,
               }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
@@ -878,7 +880,7 @@ export default function ChatScreen() {
                   onPrimary={() => {
                     if (hasActiveInboxFilter) {
                       setSearchQuery("");
-                      setConversationFilter("all");
+                      setUnreadOnly(false);
                       return;
                     }
                     setShowAddModal(true);
@@ -931,33 +933,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  filterRow: {
+  searchRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
-  filterChip: {
-    flex: 1,
-    minHeight: 24,
+  unreadChip: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 5,
+    height: 24,
+    paddingHorizontal: 9,
     borderRadius: 12,
     backgroundColor: "#F1F5F9",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    flexShrink: 0,
   },
-  filterChipSelected: {
+  unreadChipActive: {
+    backgroundColor: "#E0E7FF",
+  },
+  unreadChipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: "#4361EE",
   },
-  filterChipText: {
-    color: "#64748B",
+  unreadChipLabel: {
     fontSize: 10,
     lineHeight: 12,
-    fontWeight: "600",
+    fontWeight: "700",
+    color: "#475569",
+    letterSpacing: -0.1,
+    includeFontPadding: false,
   },
-  filterChipTextSelected: {
-    color: "#FFFFFF",
+  unreadChipLabelActive: {
+    color: "#4361EE",
   },
 });

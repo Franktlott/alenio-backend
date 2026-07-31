@@ -37,7 +37,8 @@ export function WorkspaceViewToggle({
         flexDirection: "row",
         backgroundColor: colors.surfaceSecondary,
         borderRadius: radii.card,
-        padding: 2,
+        padding: WS.controlTrackPad,
+        height: WS.controlRowHeight,
       }}
       testID="workspace-view-toggle"
     >
@@ -55,7 +56,7 @@ export function WorkspaceViewToggle({
               justifyContent: "center",
               gap: 4,
               borderRadius: radii.sm,
-              paddingVertical: 5,
+              height: WS.controlHeight,
               backgroundColor: selected ? colors.brand : "transparent",
             }}
             testID={`workspace-view-${key}`}

@@ -144,10 +144,51 @@ export type GroupWorkspaceContext = {
   isCrossWorkspace: boolean;
 };
 
+export type ConnectionStatus =
+  | "none"
+  | "pending_outgoing"
+  | "pending_incoming"
+  | "connected"
+  | "declined"
+  | "blocked";
+
+/** Shape of GET /api/users/search. Deliberately carries no email address. */
+export type PersonSearchResult = {
+  id: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+  sharedWorkspaceName: string | null;
+  connectionStatus: ConnectionStatus;
+};
+
+export type ConnectionPerson = {
+  id: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+};
+
+export type ConnectionEntry = {
+  id: string;
+  person: ConnectionPerson;
+  status: ConnectionStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConnectionsResponse = {
+  accepted: ConnectionEntry[];
+  incoming: ConnectionEntry[];
+  outgoing: ConnectionEntry[];
+};
+
 export type GroupMemberCandidate = {
   id: string;
   name: string | null;
+  /** Null outside a shared workspace — see listPersonalGroupCandidates on the backend. */
   email: string | null;
+  username: string | null;
   image: string | null;
   workspaces: Array<{ id: string; name: string }>;
   workspaceLabel: string;

@@ -161,11 +161,12 @@ function FixedTabBar({ state, navigation }: any) {
     return n;
   }, [joinRequestQueries, goLoginRequestQueries]);
 
+  // All five tabs stay visible at zero workspaces; each screen renders its own
+  // onboarding state rather than disappearing from the bar.
   const visibleRoutes = state.routes.filter((r: any) => {
     const tab = ALL_TABS.find((t) => t.name === r.name);
     if (!tab) return false;
-    if (tab.paidOnly && (!isPaid || !activeTeamId)) return false;
-    if (!activeTeamId && (r.name === "activity" || r.name === "execute")) return false;
+    if (tab.paidOnly && activeTeamId && !isPaid) return false;
     return true;
   });
 
@@ -392,12 +393,11 @@ export default function AppLayout() {
     staleTime: 1000 * 60 * 2,
   });
 
+  // Zero workspaces is a supported state, not an error: the account itself is the
+  // home. Only clear a stale active workspace so tabs do not render another team's data.
   useEffect(() => {
     if (!session?.user || !teamsFetched) return;
-    if (!teams || teams.length === 0) {
-      if (activeTeamId) setActiveTeamId(null);
-      router.replace(NO_WORKSPACE_WELCOME_PATH);
-    }
+    if ((!teams || teams.length === 0) && activeTeamId) setActiveTeamId(null);
   }, [activeTeamId, session?.user, setActiveTeamId, teams, teamsFetched]);
 
   useEffect(() => {
@@ -421,7 +421,7 @@ export default function AppLayout() {
   // Free: Activity + Chat + Team + Profile. Pro+: also Workspace.
   const isPaid = isPersistedPaidPlan(plan);
 
-  if (!teamsFetched || !teams || teams.length === 0) {
+  if (!teamsFetched) {
     return (
       <View style={[styles.shell, { alignItems: "center", justifyContent: "center", backgroundColor: "transparent" }]}>
         <ActivityIndicator size="large" color="#4361EE" />

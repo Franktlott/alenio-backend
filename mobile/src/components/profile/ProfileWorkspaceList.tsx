@@ -336,7 +336,7 @@ export function ProfileWorkspaceList({
             height: 150,
             right: -28,
             top: -22,
-            opacity: 0.035,
+            opacity: 0.075,
             tintColor: "#6D4AFF",
             transform: [{ rotate: "-8deg" }],
           }}

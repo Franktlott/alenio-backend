@@ -59,7 +59,8 @@ export function AppTabHeader({
     staleTime: 1000 * 60 * 2,
   });
   const activeTeam = teams.find((team) => team.id === activeTeamId) ?? teams[0];
-  const workspaceLabel = activeTeam?.name ?? "Workspace";
+  // With no workspace the header names the account, not an absent workspace.
+  const workspaceLabel = activeTeam?.name ?? (teams.length === 0 ? "Alenio" : "Workspace");
   const canSwitch = teams.length > 1;
   const pageTitleMode = Boolean(title?.trim());
 
