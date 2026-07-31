@@ -10,7 +10,7 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, Search, X, Check, Users } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -27,6 +27,7 @@ export default function CreateGroupScreen() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ teamId?: string }>();
   const paramTeamId = typeof params.teamId === "string" ? params.teamId : null;
 
@@ -61,8 +62,8 @@ export default function CreateGroupScreen() {
     ? `/api/dms/group-member-candidates?teamId=${encodeURIComponent(selectedTeamId)}${
         searchQuery.trim().length >= 2 ? `&q=${encodeURIComponent(searchQuery.trim())}` : ""
       }`
-    : `/api/dms/group-member-candidates${
-        searchQuery.trim().length >= 2 ? `?q=${encodeURIComponent(searchQuery.trim())}` : ""
+    : `/api/dms/group-member-candidates?scope=personal${
+        searchQuery.trim().length >= 2 ? `&q=${encodeURIComponent(searchQuery.trim())}` : ""
       }`;
 
   const { data: candidates = [], isFetching: candidatesLoading } = useQuery({
@@ -157,12 +158,11 @@ export default function CreateGroupScreen() {
   const selectedTeamName = teams.find((t) => t.id === selectedTeamId)?.name;
 
   return (
-    <SafeAreaView
-      testID="create-group-screen"
-      className="flex-1 bg-white dark:bg-slate-900"
-      edges={["top", "bottom"]}
-    >
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+    <View testID="create-group-screen" className="flex-1 bg-white dark:bg-slate-900">
+      <View
+        className="flex-row items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800"
+        style={{ paddingTop: insets.top + 12 }}
+      >
         <TouchableOpacity onPress={() => router.back()}>
           <X size={22} color="#64748B" />
         </TouchableOpacity>
@@ -355,6 +355,7 @@ export default function CreateGroupScreen() {
         testID="user-list"
         data={displayUsers}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         ListHeaderComponent={
           !searchQuery.trim() ? (
             <Text className="px-4 pb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
@@ -394,7 +395,7 @@ export default function CreateGroupScreen() {
               <Text className="font-semibold text-slate-900 dark:text-white">
                 {item.name ?? (item.username ? `@${item.username}` : "Member")}
               </Text>
-              {item.workspaceLabel ? (
+              {!isPersonalGroup && item.workspaceLabel ? (
                 <Text className="text-xs text-indigo-600 dark:text-indigo-300" numberOfLines={1}>
                   {item.workspaceLabel}
                 </Text>
@@ -418,6 +419,6 @@ export default function CreateGroupScreen() {
           );
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }

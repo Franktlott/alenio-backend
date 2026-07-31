@@ -62,7 +62,16 @@ export async function listGroupMemberCandidates(
   userId: string,
   query = "",
   teamId?: string | null,
+  options?: { personal?: boolean },
 ): Promise<GroupMemberCandidate[]> {
+  const trimmedQuery = query.trim();
+
+  // A personal group draws on personal relationships, never on an employer roster,
+  // even when the creator does happen to belong to workspaces.
+  if (options?.personal && !teamId) {
+    return listPersonalGroupCandidates(userId, trimmedQuery);
+  }
+
   const memberships = await prisma.teamMember.findMany({
     where: { userId },
     select: { teamId: true },
@@ -72,8 +81,6 @@ export async function listGroupMemberCandidates(
     if (!teamIds.includes(teamId)) return [];
     teamIds = [teamId];
   }
-
-  const trimmedQuery = query.trim();
 
   // Someone with no workspace still has people: connections and anyone they already chat with.
   if (teamIds.length === 0) {

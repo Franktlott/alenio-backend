@@ -298,7 +298,8 @@ dmsRouter.get("/group-member-candidates", async (c) => {
   const user = c.get("user")!;
   const q = c.req.query("q")?.trim() ?? "";
   const teamId = c.req.query("teamId")?.trim() || null;
-  const candidates = await listGroupMemberCandidates(user.id, q, teamId);
+  const personal = c.req.query("scope")?.trim() === "personal";
+  const candidates = await listGroupMemberCandidates(user.id, q, teamId, { personal });
   return c.json({ data: candidates });
 });
 
