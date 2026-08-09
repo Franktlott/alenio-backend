@@ -35,10 +35,12 @@ export function WorkspaceViewToggle({
         marginTop: space.sm,
         marginBottom: space.xs,
         flexDirection: "row",
-        backgroundColor: colors.surfaceSecondary,
+        backgroundColor: "rgba(255,255,255,0.98)",
         borderRadius: radii.card,
         padding: WS.controlTrackPad,
         height: WS.controlRowHeight,
+        borderWidth: 1,
+        borderColor: "rgba(20, 30, 60, 0.06)",
       }}
       testID="workspace-view-toggle"
     >
@@ -78,7 +80,7 @@ export function WorkspaceViewToggle({
                     justifyContent: "center",
                     paddingHorizontal: 3,
                     borderWidth: 1.5,
-                    borderColor: selected ? colors.brand : colors.surfaceSecondary,
+                    borderColor: selected ? colors.brand : "#FFFFFF",
                   }}
                   testID={`workspace-view-${key}-badge`}
                 >

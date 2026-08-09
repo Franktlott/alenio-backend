@@ -24,6 +24,9 @@ import {
   Calendar,
   Target,
   Star,
+  Check,
+  Clock,
+  UserPlus,
 } from "lucide-react-native";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
@@ -33,7 +36,12 @@ import { isLeaderRole, memberMatchesUserId } from "@/lib/member-identity";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { isPersistedPaidPlan } from "@/lib/plan-access-copy";
-import type { Team, TeamMember, TeamRole } from "@/lib/types";
+import type {
+  ConnectionPairStatus,
+  Team,
+  TeamMember,
+  TeamRole,
+} from "@/lib/types";
 import { ProfileOverviewTab } from "@/components/ProfileOverviewTab";
 import { DevelopmentPlanTab } from "@/components/DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "@/components/OneOnOneHistoryTab";
@@ -47,6 +55,7 @@ import { DevelopmentToolsLockedCard } from "@/components/DevelopmentToolsLockedC
 import { resolveUserImageUrl } from "@/lib/user-avatar";
 import { OwnershipTransferSheet } from "@/components/OwnershipTransferSheet";
 import { UserAvatar } from "@/components/UserAvatar";
+import { HEADER_GRADIENT } from "@/lib/header-gradient";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
 const FORMER_MEMBER_TABS = ["Check-In"] as const;
@@ -227,6 +236,14 @@ export default function MemberProfileScreen() {
       : null);
   const isFormerMember = !member && !!formerMember;
   const isSelf = !!myId && memberUserId === myId;
+  const { data: connectionRelationship } = useQuery({
+    queryKey: ["connection-status", memberUserId],
+    queryFn: () =>
+      api.get<ConnectionPairStatus>(
+        `/api/connections/status?userId=${encodeURIComponent(memberUserId)}`,
+      ),
+    enabled: !!memberUserId && !isSelf,
+  });
 
   const ownerMember = team?.members?.find((m) => m.role === "owner");
   const managerName = ownerMember?.user.name ?? ownerMember?.user.email ?? null;
@@ -273,6 +290,29 @@ export default function MemberProfileScreen() {
       });
     },
     onError: (err: Error) => toast({ title: err.message || "Could not open message", preset: "error" }),
+  });
+
+  const connectionMutation = useMutation({
+    mutationFn: (action: "request" | "accept" | "remove") => {
+      if (action === "remove") {
+        return api.delete("/api/connections", { userId: memberUserId });
+      }
+      return api.post(`/api/connections/${action}`, { userId: memberUserId });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["connection-status", memberUserId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["connections"] });
+      void queryClient.invalidateQueries({ queryKey: ["connection-suggestions"] });
+      void queryClient.invalidateQueries({ queryKey: ["user-search"] });
+      toast({ title: "Connection updated", preset: "done" });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: error.message || "Could not update connection",
+        preset: "error",
+      }),
   });
 
   const goToCheckIn = (autoStart = false) => {
@@ -389,7 +429,7 @@ export default function MemberProfileScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG }} edges={["bottom"]}>
       <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
+        colors={HEADER_GRADIENT}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
@@ -445,6 +485,9 @@ export default function MemberProfileScreen() {
 
       <View style={{ flex: 1, marginTop: -26 }}>
         <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+          <Text style={{ marginBottom: 6, marginLeft: 3, fontSize: 9.5, fontWeight: "800", letterSpacing: 0.5, color: "#64748B" }}>
+            WORKSPACE RELATIONSHIP
+          </Text>
           <View
             style={{
               backgroundColor: "white",
@@ -536,6 +579,99 @@ export default function MemberProfileScreen() {
             </View>
           </View>
         </View>
+
+        {!isSelf ? (
+          <View style={{ paddingHorizontal: 12, paddingBottom: 8 }} testID="member-profile-connection-card">
+            <Text style={{ marginBottom: 6, marginLeft: 3, fontSize: 9.5, fontWeight: "800", letterSpacing: 0.5, color: "#64748B" }}>
+              CONNECTIONS
+            </Text>
+            <View
+              style={{
+                minHeight: 60,
+                paddingHorizontal: 13,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: PAGE_BORDER,
+                backgroundColor: "#FFFFFF",
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 12.5, fontWeight: "700", color: "#0F172A" }}>
+                  {connectionRelationship?.isBlockedByMe
+                    ? "Blocked"
+                    : connectionRelationship?.status === "connected"
+                    ? "Connected"
+                    : connectionRelationship?.status === "pending_outgoing"
+                      ? "Request pending"
+                      : connectionRelationship?.status === "pending_incoming"
+                        ? "Wants to connect"
+                        : "Not connected"}
+                </Text>
+                <Text style={{ marginTop: 2, fontSize: 10.5, color: "#7C8798" }}>
+                  Connecting does not change workspace access.
+                </Text>
+              </View>
+              {connectionRelationship?.isBlockedByMe ? (
+                <View style={{ minHeight: 32, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 9, backgroundColor: "#F1F5F9" }}>
+                  <Shield size={12} color="#64748B" />
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#64748B" }}>Blocked</Text>
+                </View>
+              ) : connectionRelationship?.status === "connected" ? (
+                <Pressable
+                  onPress={() =>
+                    Alert.alert(
+                      "Remove connection?",
+                      `${displayName} will remain a member of this workspace.`,
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Remove",
+                          style: "destructive",
+                          onPress: () => connectionMutation.mutate("remove"),
+                        },
+                      ],
+                    )
+                  }
+                  disabled={connectionMutation.isPending}
+                  style={{ minHeight: 32, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 9, borderWidth: 1, borderColor: "#D8E0EC" }}
+                  testID="member-profile-remove-connection"
+                >
+                  <Check size={12} color="#168A55" />
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#475569" }}>Connected</Text>
+                </Pressable>
+              ) : connectionRelationship?.status === "pending_incoming" ? (
+                <Pressable
+                  onPress={() => connectionMutation.mutate("accept")}
+                  disabled={connectionMutation.isPending}
+                  style={{ minHeight: 32, paddingHorizontal: 11, flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 9, backgroundColor: "#4361EE" }}
+                  testID="member-profile-accept-connection"
+                >
+                  <Check size={12} color="#FFFFFF" />
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#FFFFFF" }}>Accept</Text>
+                </Pressable>
+              ) : connectionRelationship?.status === "pending_outgoing" ? (
+                <View style={{ minHeight: 32, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 9, backgroundColor: "#F1F5F9" }}>
+                  <Clock size={12} color="#64748B" />
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#64748B" }}>Pending</Text>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => connectionMutation.mutate("request")}
+                  disabled={connectionMutation.isPending || !connectionRelationship}
+                  style={{ minHeight: 32, paddingHorizontal: 11, flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 9, backgroundColor: "#4361EE" }}
+                  testID="member-profile-connect"
+                >
+                  <UserPlus size={12} color="#FFFFFF" />
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#FFFFFF" }}>Connect</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        ) : null}
 
         <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
           {visibleTabs.length > 1 ? (

@@ -11,6 +11,7 @@ export function TeamPage() {
     selectedTeamId,
     refreshMeAndTeams,
     setWorkspaceMainLoading,
+    workspaceAccess,
   } = useEnterpriseShell();
   const [workspaceOverlayLoading, setWorkspaceOverlayLoading] = useState(false);
 
@@ -28,7 +29,10 @@ export function TeamPage() {
       ? selectedTeamId
       : (teams[0]?.id ?? "");
   const activeTeam = teams.find((t) => t.id === resolvedTeamId) ?? null;
-  const teamFeaturesUnlocked = activeTeam?.hasTeamFeatures !== false;
+  const teamFeaturesUnlocked =
+    workspaceAccess?.teamId === resolvedTeamId
+      ? workspaceAccess.hasTeamFeatures
+      : activeTeam?.hasTeamFeatures !== false;
 
   if (activeTeam && !teamFeaturesUnlocked) {
     return (
@@ -46,6 +50,7 @@ export function TeamPage() {
         me={me}
         onTeamsRefresh={refreshMeAndTeams}
         onWorkspaceSwitchLoading={setWorkspaceOverlayLoading}
+        readOnly={workspaceAccess?.canWrite === false}
       />
     </div>
   );

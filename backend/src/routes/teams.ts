@@ -123,15 +123,23 @@ teamsRouter.get("/", async (c) => {
 teamsRouter.post("/", async (c) => {
   const user = c.get("user")!;
   const body = await c.req.json();
-  const { name } = body;
+  const { name, industry, startTrial } = body;
   if (!name?.trim()) {
     return c.json({ error: { message: "Team name is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+  if (startTrial !== true) {
+    return c.json(
+      { error: { message: "startTrial must be true to create a self-serve workspace", code: "TRIAL_REQUIRED" } },
+      400,
+    );
   }
 
   const result = await createWorkspaceForAuthUser({
     authUser: user,
     preferredUserId: user.id,
     name,
+    industry: typeof industry === "string" ? industry : null,
+    startTrial: true,
   });
   if (!result.ok) {
     return c.json({ error: { message: result.message, code: result.code } }, result.status);
@@ -162,6 +170,8 @@ teamsRouter.post("/join", async (c) => {
   if (!team) {
     return c.json({ error: { message: "Invalid invite code", code: "NOT_FOUND" } }, 404);
   }
+  const selectedTeam = team as unknown as { id: string; name?: unknown };
+  const teamName = typeof selectedTeam.name === "string" ? selectedTeam.name : "this workspace";
 
   const existing = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId: team.id } },
@@ -233,9 +243,9 @@ teamsRouter.post("/join", async (c) => {
     select: { userId: true },
   });
   const ownerIds = owners.map((o) => o.userId);
-  await sendPushToUsers(ownerIds, "Join Request", `${user.name} wants to join ${team.name}`, { teamId: team.id, type: "join_request" }, undefined, team.id);
+  await sendPushToUsers(ownerIds, "Join Request", `${user.name} wants to join ${teamName}`, { teamId: team.id, type: "join_request" }, undefined, team.id);
 
-  return c.json({ data: { status: "pending", teamName: team.name, requestId: joinRequest.id } });
+  return c.json({ data: { status: "pending", teamName, requestId: joinRequest.id } });
 });
 
 // GET /api/teams/:teamId - get team details

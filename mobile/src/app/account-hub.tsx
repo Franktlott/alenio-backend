@@ -59,6 +59,7 @@ import { useTeamStore } from "@/lib/state/team-store";
 import {
   ACCOUNT_HUB_TITLE,
 } from "@/lib/plan-access-copy";
+import { HEADER_GRADIENT } from "@/lib/header-gradient";
 
 function canEditWorkspace(role: string | undefined | null) {
   return ["owner", "team_leader"].includes((role ?? "").trim().toLowerCase());
@@ -99,9 +100,9 @@ const PRO_FEATURES = [
 
 const OPERATIONS_FEATURES = [
   "Everything in Pro",
-  "Alenio Go (checklists & walks)",
-  "Temperature checks",
-  "Shift briefings & cascades",
+  "Alenio Go: checklists & operational walks (coming soon)",
+  "Temperature checks (coming soon)",
+  "Operations tools (coming soon)",
 ] as const;
 
 type TeamListItem = {
@@ -221,7 +222,7 @@ function selectedWorkspaceStatusLabel(
   tone: WorkspaceSubscriptionTone,
 ): string {
   if (tier === "pending" || tone === "pending") return "Loading…";
-  if (tier !== "team") return "Free plan";
+  if (tier !== "team") return "Legacy access";
   if (tone === "canceling") return "Canceling";
   if (tone === "issue") return "Payment issue";
   if (tone === "canceled") return "Ended";
@@ -415,14 +416,33 @@ function SelectedWorkspacePanel({
 }) {
   const subscription = workspace.subscription;
   const subscriptionTone = workspaceSubscriptionTone(subscription);
+  const isTrialing = subscription?.status?.trim().toLowerCase() === "trialing";
+  const trialDays =
+    subscription?.remainingDays ??
+    (subscription?.trialEndsAt
+      ? Math.max(
+          0,
+          Math.ceil((new Date(subscription.trialEndsAt).getTime() - Date.now()) / 86_400_000),
+        )
+      : null);
   const renewalValue =
-    selectedTier === "team" && subscription?.currentPeriodEnd
+    isTrialing
+      ? trialDays == null
+        ? "—"
+        : `${trialDays} day${trialDays === 1 ? "" : "s"}`
+      : selectedTier === "team" && subscription?.currentPeriodEnd
       ? formatShortDate(subscription.currentPeriodEnd)
       : selectedTier === "pending"
         ? "…"
         : "—";
-  const renewalLabel = subscriptionTone === "canceling" ? "Ends on" : "Renewal date";
-  const statusLabel = selectedWorkspaceStatusLabel(selectedTier, subscriptionTone);
+  const renewalLabel = isTrialing
+    ? "Trial remaining"
+    : subscriptionTone === "canceling"
+      ? "Ends on"
+      : "Renewal date";
+  const statusLabel = isTrialing
+    ? "Trial active"
+    : selectedWorkspaceStatusLabel(selectedTier, subscriptionTone);
   const canEdit = !!onEditWorkspace && canEditWorkspace(workspace.role);
 
   return (
@@ -1002,7 +1022,7 @@ export default function AccountHubScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]} testID="account-hub-screen">
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View
           style={{
             paddingHorizontal: 16,
@@ -1032,6 +1052,10 @@ export default function AccountHubScreen() {
           paddingTop: 10,
           paddingBottom: Math.max(insets.bottom, 8),
           backgroundColor: "transparent",
+          justifyContent:
+            !isLoading && !isError && workspaces.length === 0
+              ? "center"
+              : "flex-start",
         }}
       >
         {isLoading ? (
@@ -1072,9 +1096,7 @@ export default function AccountHubScreen() {
         {!isLoading && !isError && workspaces.length === 0 ? (
           <View
             style={{
-              alignItems: "center",
-              paddingVertical: 20,
-              paddingHorizontal: 12,
+              padding: 14,
               backgroundColor: "white",
               borderRadius: 16,
               borderWidth: 1,
@@ -1082,16 +1104,135 @@ export default function AccountHubScreen() {
             }}
             testID="account-hub-empty"
           >
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 6 }}>No workplaces yet</Text>
-            <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, marginBottom: 14 }}>
-              Create or join a workplace from your profile to manage billing here.
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 11 }}>
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#F3F1FF",
+                }}
+              >
+                <Image
+                  source={require("@/assets/alenio-icon.png")}
+                  style={{ width: 30, height: 30, borderRadius: 8 }}
+                  resizeMode="contain"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Plans for every team</Text>
+                <Text style={{ fontSize: 12, color: "#64748B", lineHeight: 17, marginTop: 2 }}>
+                  Start with a card-free 14-day Operations trial.
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ marginTop: 14 }}>
+              <View
+                style={{
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "#DDE3F5",
+                  padding: 12,
+                  backgroundColor: "#FFFFFF",
+                }}
+              >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#EEF2FF",
+                  }}
+                >
+                  <Users size={17} color={TEAM_ACCENT} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#172033" }}>Pro</Text>
+                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>Lead, coach, and execute as one team</Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: "#172033" }}>$39.99</Text>
+                  <Text style={{ fontSize: 9, color: "#64748B", marginTop: 1 }}>workspace / month</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, lineHeight: 17, color: "#475569", marginTop: 9 }}>
+                Tasks and priorities · Team calendar · Coaching and Seneca · Insights and development
+              </Text>
+              </View>
+
+              <View
+                style={{
+                  marginTop: 10,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: "#7C3AED",
+                  padding: 12,
+                  backgroundColor: "#F8F7FF",
+                }}
+              >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#7C3AED",
+                  }}
+                >
+                  <Shield size={17} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "800", color: "#172033" }}>Operations</Text>
+                    <View style={{ borderRadius: 999, backgroundColor: "#EDE9FE", paddingHorizontal: 7, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 8, fontWeight: "800", color: "#6D28D9", letterSpacing: 0.4 }}>
+                        COMING SOON
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>Everything in Pro, built for frontline teams</Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: "#172033" }}>$69.99</Text>
+                  <Text style={{ fontSize: 9, color: "#64748B", marginTop: 1 }}>workspace / month</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, lineHeight: 17, color: "#475569", marginTop: 9 }}>
+                Coming soon: Alenio Go with checklists and operational walks · Temperature checks and operations tools
+              </Text>
+              </View>
+            </View>
+
             <TouchableOpacity
-              onPress={() => router.push({ pathname: "/onboarding", params: { intent: "add" } })}
-              style={{ backgroundColor: "#4361EE", borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10 }}
+              onPress={() => router.push({ pathname: "/onboarding", params: { intent: "add", mode: "create" } })}
+              style={{
+                marginTop: 14,
+                minHeight: 44,
+                backgroundColor: "#4361EE",
+                borderRadius: 11,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 18,
+              }}
+              testID="account-hub-start-trial"
             >
-              <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>Add workspace</Text>
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>Start 14-day trial</Text>
             </TouchableOpacity>
+            <Pressable
+              onPress={() => router.push({ pathname: "/onboarding", params: { intent: "add", mode: "join" } })}
+              style={{ alignItems: "center", paddingTop: 11, paddingBottom: 2 }}
+              testID="account-hub-join-workspace"
+            >
+              <Text style={{ color: TEAM_ACCENT, fontWeight: "600", fontSize: 12 }}>Have an invite? Join a workspace</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -1151,7 +1292,9 @@ export default function AccountHubScreen() {
                   selectedTier={selectedTier}
                   billingCycleLabel={billingCycleLabel}
                   onOpenWeb={openSelectedWorkspaceBilling}
-                  onComparePlans={() => setComparePlansOpen(true)}
+                  onComparePlans={() =>
+                    router.push({ pathname: "/choose-plan", params: { teamId: selected.id } })
+                  }
                   onEditWorkspace={
                     canEditWorkspace(selected.role) ? () => setEditingWorkspace(selected) : undefined
                   }

@@ -17,9 +17,8 @@ describe("normalizeUsername", () => {
 });
 
 describe("validateUsername", () => {
-  test("accepts letters, numbers, periods and underscores", () => {
+  test("accepts letters, numbers and underscores", () => {
     expect(validateUsername("franklott")).toEqual({ ok: true, username: "franklott" });
-    expect(validateUsername("frank.lott")).toEqual({ ok: true, username: "frank.lott" });
     expect(validateUsername("frank_lott9")).toEqual({ ok: true, username: "frank_lott9" });
   });
 
@@ -39,15 +38,12 @@ describe("validateUsername", () => {
     expect(validateUsername("frank lott")).toMatchObject({ ok: false, reason: "invalid_characters" });
     expect(validateUsername("frank-lott")).toMatchObject({ ok: false, reason: "invalid_characters" });
     expect(validateUsername("frank@lott")).toMatchObject({ ok: false, reason: "invalid_characters" });
+    expect(validateUsername("frank.lott")).toMatchObject({ ok: false, reason: "invalid_characters" });
   });
 
   test("rejects leading or trailing separators", () => {
-    expect(validateUsername(".franklott")).toMatchObject({ ok: false, reason: "invalid_characters" });
+    expect(validateUsername("_franklott")).toMatchObject({ ok: false, reason: "invalid_characters" });
     expect(validateUsername("franklott_")).toMatchObject({ ok: false, reason: "invalid_characters" });
-  });
-
-  test("rejects consecutive periods", () => {
-    expect(validateUsername("frank..lott")).toMatchObject({ ok: false, reason: "consecutive_periods" });
   });
 
   test("rejects reserved handles regardless of casing", () => {
@@ -66,7 +62,7 @@ describe("buildUsernameCandidate", () => {
   });
 
   test("falls back to the email local part when the name is unusable", () => {
-    expect(buildUsernameCandidate("", "karyna.mulero@alenio.com")).toBe("karyna.mulero");
+    expect(buildUsernameCandidate("", "karyna.mulero@alenio.com")).toBe("karynamulero");
     expect(buildUsernameCandidate("!!", "antonio@alenio.com")).toBe("antonio");
   });
 

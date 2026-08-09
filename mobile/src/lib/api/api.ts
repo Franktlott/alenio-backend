@@ -1,6 +1,7 @@
 import { fetch } from "expo/fetch";
 import { clearAccessToken, getAuthHeaders, refreshSessionTokens } from "../auth/auth-client";
 import { getBackendUrl } from "../backend-url";
+import { notifyWorkspaceReadOnly } from "../workspace-read-only-events";
 
 const baseUrl = getBackendUrl();
 
@@ -78,6 +79,10 @@ const request = async <T>(
 
   if (!response.ok) {
     const err = await readJsonSafe<ApiErrorBody>(response);
+    if (response.status === 403 && err?.error?.code === "WORKSPACE_READ_ONLY") {
+      const teamId = (err as ApiErrorBody & { error?: { teamId?: string } })?.error?.teamId;
+      notifyWorkspaceReadOnly(teamId);
+    }
     if (response.status === 401 && !skipSignOut) {
       // Soft-fail: clear cached token, but do not force global sign-out on one 401.
       // Next request can rehydrate via Neon session refresh if still valid.
@@ -127,6 +132,10 @@ export const api = {
 
     if (!response.ok) {
       const err = await readJsonSafe<ApiErrorBody>(response);
+      if (response.status === 403 && err?.error?.code === "WORKSPACE_READ_ONLY") {
+        const teamId = (err as ApiErrorBody & { error?: { teamId?: string } })?.error?.teamId;
+        notifyWorkspaceReadOnly(teamId);
+      }
       if (response.status === 401) {
         // Soft-fail like request(): avoid immediate forced sign-out.
         clearAccessToken();

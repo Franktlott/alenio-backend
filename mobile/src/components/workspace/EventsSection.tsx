@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, type RefreshControlProps } from "react-native";
 import { router } from "expo-router";
 import { Clock, MapPin, Video } from "lucide-react-native";
@@ -43,6 +43,7 @@ type Props = {
   /** Keeps the empty-state card above the tab bar so its art centers in the visible area. */
   emptyStateBottomInset?: number;
   refreshControl?: ReactElement<RefreshControlProps>;
+  footer?: ReactNode;
   canManageEvent?: (event: CalendarEvent) => boolean;
   onEventLongPress?: (event: CalendarEvent) => void;
   onEventPress?: (event: CalendarEvent) => void;
@@ -282,6 +283,7 @@ export function EventsSection({
   listPaddingBottom = 4,
   emptyStateBottomInset = 0,
   refreshControl,
+  footer,
   canManageEvent,
   onEventLongPress,
   onEventPress,
@@ -400,6 +402,7 @@ export function EventsSection({
             })}
           </ScrollView>
         )}
+        {footer}
       </View>
     );
   }

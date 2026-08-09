@@ -7,6 +7,7 @@ import {
   getTeamSubscription,
 } from "./subscription";
 import { createTeamCheckoutSession, createTeamPortalSession } from "../lib/team-billing-sessions";
+import { resolveWorkspaceAccess } from "../lib/workspace-access";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -18,9 +19,18 @@ mobileBillingRouter.use("*", authGuard);
 
 function subscriptionSummary(sub: Awaited<ReturnType<typeof getTeamSubscription>>) {
   const billingProvider = billingProviderFromSubscription(sub);
+  const access = resolveWorkspaceAccess(sub.teamId, sub);
   return {
     plan: sub.plan,
-    status: sub.status,
+    status: access.status,
+    trialStartedAt: sub.trialStartedAt,
+    trialEndsAt: sub.trialEndsAt,
+    remainingDays: access.remainingDays,
+    canWrite: access.canWrite,
+    accessMode: access.accessMode,
+    bannerSeverity: access.bannerSeverity,
+    hasTeamFeatures: access.hasTeamFeatures,
+    hasGoFeatures: access.hasGoFeatures,
     currentPeriodEnd: sub.currentPeriodEnd,
     cancelAtPeriodEnd: sub.cancelAtPeriodEnd === true,
     billingProvider,

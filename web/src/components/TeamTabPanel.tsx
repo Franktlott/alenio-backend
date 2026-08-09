@@ -519,9 +519,18 @@ type Props = {
   onTeamsRefresh: () => Promise<void>;
   /** True while fetching a new workspace after the sidebar selection changed. */
   onWorkspaceSwitchLoading?: (busy: boolean) => void;
+  /** Expired workspaces remain viewable, but management actions are unavailable. */
+  readOnly?: boolean;
 };
 
-export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWorkspaceSwitchLoading }: Props) {
+export function TeamTabPanel({
+  teams,
+  selectedTeamId,
+  me,
+  onTeamsRefresh,
+  onWorkspaceSwitchLoading,
+  readOnly = false,
+}: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const paneActive = useEnterprisePaneActive();
@@ -873,9 +882,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   };
 
   const myRole = teamDetail?.myRole ?? "";
-  const manageJoin = canManageJoinRequests(myRole);
-  const manageMembers = canRemoveMembers(myRole);
-  const canManageOneOneTemplates = myRole === "owner";
+  const manageJoin = !readOnly && canManageJoinRequests(myRole);
+  const manageMembers = !readOnly && canRemoveMembers(myRole);
+  const canManageOneOneTemplates = !readOnly && myRole === "owner";
   const showOwnerManageRow = canManageOneOneTemplates;
   const isRegularMember = myRole === "member";
 

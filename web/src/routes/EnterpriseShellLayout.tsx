@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   AuthLoadingScreen,
   ENTERPRISE_WORKSPACE_LOADING_STEPS,
@@ -8,7 +8,15 @@ import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
 import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
-import { fetchWebMe, fetchWebTeams, patchApiProfile, type WebMeUser, type WebTeamRow } from "../lib/api";
+import {
+  fetchWebMe,
+  fetchWebTeams,
+  fetchWebTeamSubscription,
+  patchApiProfile,
+  type WebMeUser,
+  type WebTeamRow,
+  type WebTeamSubscription,
+} from "../lib/api";
 import { getBrowserTimeZone } from "../lib/timezone";
 import { hasMobileWebPreferred } from "../lib/app-links";
 import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
@@ -61,6 +69,8 @@ export function EnterpriseShellLayout() {
   const [me, setMe] = useState<WebMeUser | null | undefined>(undefined);
   const [teams, setTeams] = useState<WebTeamRow[] | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState(() => getPersistedEnterpriseTeamId());
+  const [workspaceAccess, setWorkspaceAccess] = useState<WebTeamSubscription | null>(null);
+  const [workspaceAccessLoading, setWorkspaceAccessLoading] = useState(false);
   const [shellLoadErr, setShellLoadErr] = useState<string | null>(null);
   const [workspaceMainLoading, setWorkspaceMainLoading] = useState(false);
   const [shellMainSuffix, setShellMainSuffix] = useState("");
@@ -144,6 +154,48 @@ export function EnterpriseShellLayout() {
     setTeams(t ?? []);
     setShellLoadErr(null);
   }, [syncTimeZoneIfNeeded]);
+
+  const refreshWorkspaceAccess = useCallback(async () => {
+    if (!selectedTeamId) {
+      setWorkspaceAccess(null);
+      return;
+    }
+    const access = await fetchWebTeamSubscription(selectedTeamId);
+    setWorkspaceAccess(access);
+  }, [selectedTeamId]);
+
+  useEffect(() => {
+    if (!selectedTeamId || teams === null || !teams.some((team) => team.id === selectedTeamId)) {
+      setWorkspaceAccess(null);
+      setWorkspaceAccessLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setWorkspaceAccess(null);
+    setWorkspaceAccessLoading(true);
+    void fetchWebTeamSubscription(selectedTeamId)
+      .then((access) => {
+        if (!cancelled) setWorkspaceAccess(access);
+      })
+      .catch(() => {
+        if (!cancelled) setWorkspaceAccess(null);
+      })
+      .finally(() => {
+        if (!cancelled) setWorkspaceAccessLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTeamId, teams]);
+
+  useEffect(() => {
+    const onReadOnly = (event: Event) => {
+      const teamId = (event as CustomEvent<{ teamId?: string }>).detail?.teamId;
+      if (!teamId || teamId === selectedTeamId) void refreshWorkspaceAccess();
+    };
+    window.addEventListener("alenio:workspace-read-only", onReadOnly);
+    return () => window.removeEventListener("alenio:workspace-read-only", onReadOnly);
+  }, [selectedTeamId, refreshWorkspaceAccess]);
 
   /** Soft-refresh team list after a workspace change — never block the UI overlay on this. */
   const lastTeamRefreshForSelectedIdRef = useRef<string | null>(null);
@@ -288,7 +340,9 @@ export function EnterpriseShellLayout() {
   const showActivityExecuteNav =
     teams === null ||
     !effectiveTeamId ||
-    teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures !== false;
+    (workspaceAccess?.teamId === effectiveTeamId
+      ? workspaceAccess.hasTeamFeatures
+      : teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures !== false);
   /**
    * Alenio Go: enterprise org members always; otherwise Operations workspaces only
    * (never during self-serve no-workspace setup).
@@ -297,7 +351,9 @@ export function EnterpriseShellLayout() {
     enterpriseMember ||
     (teams !== null &&
       !!effectiveTeamId &&
-      teams.find((t) => t.id === effectiveTeamId)?.hasGoFeatures === true);
+      (workspaceAccess?.teamId === effectiveTeamId
+        ? workspaceAccess.hasGoFeatures
+        : teams.find((t) => t.id === effectiveTeamId)?.hasGoFeatures === true));
   const showPlanNav = workspaceOwner && !hasNoTeams;
 
   /** Phone browsers should use the native app unless the user chose web explicitly. */
@@ -422,6 +478,9 @@ export function EnterpriseShellLayout() {
       setTeams,
       selectedTeamId,
       setSelectedTeamId,
+      workspaceAccess,
+      workspaceAccessLoading,
+      refreshWorkspaceAccess,
       setWorkspaceMainLoading: setWorkspaceMainLoadingCb,
       beginEnterpriseWorkspaceBoot,
       refreshMeAndTeams,
@@ -432,6 +491,9 @@ export function EnterpriseShellLayout() {
       me,
       teams,
       selectedTeamId,
+      workspaceAccess,
+      workspaceAccessLoading,
+      refreshWorkspaceAccess,
       setWorkspaceMainLoadingCb,
       beginEnterpriseWorkspaceBoot,
       refreshMeAndTeams,
@@ -456,6 +518,19 @@ export function EnterpriseShellLayout() {
   const shellSelectedTeamId = isKnownEnterpriseWorkspace(me, teams, selectedTeamId)
     ? selectedTeamId
     : effectiveTeamId;
+  const trialDays = workspaceAccess?.remainingDays;
+  const isTrialing = workspaceAccess?.status === "trialing";
+  const isReadOnly = workspaceAccess?.accessMode === "read_only";
+  const bannerTone =
+    isReadOnly
+      ? "critical"
+      : (trialDays ?? 99) <= 1
+        ? "urgent"
+        : (trialDays ?? 99) <= 3
+          ? "warning"
+          : (trialDays ?? 99) <= 7
+            ? "attention"
+            : "info";
 
   return (
     <EnterpriseShellContext.Provider value={contextValue}>
@@ -512,7 +587,23 @@ export function EnterpriseShellLayout() {
             <NoTeamsEmptyState onRefreshWorkspaces={refreshMeAndTeams} />
           </div>
         ) : (
-          <Outlet />
+          <>
+            {(isTrialing || isReadOnly) && workspaceAccess?.teamId === shellSelectedTeamId ? (
+              <div
+                className={`workspace-access-banner workspace-access-banner--${bannerTone}`}
+                role={isReadOnly ? "alert" : "status"}
+                data-testid="workspace-access-banner"
+              >
+                <span>
+                  {isReadOnly
+                    ? "This workspace is read-only. Choose a plan to restore changes; all existing content remains available."
+                    : `${trialDays === 1 ? "1 day" : `${trialDays ?? 0} days`} left in your Operations trial.`}
+                </span>
+                {workspaceOwner ? <Link to="/billing">Choose a Plan</Link> : isReadOnly ? <span>Ask the workspace owner to choose a plan.</span> : null}
+              </div>
+            ) : null}
+            <Outlet />
+          </>
         )}
         {teams !== null &&
         (teams.find((t) => t.id === effectiveTeamId)?.role === "owner" ||

@@ -16,6 +16,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { fetchTeamInviteByToken, type TeamInviteLinkPreview } from "@/lib/team-invites-api";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 import { finishMobilePostAuth } from "@/lib/auth/finish-post-auth";
+import { HEADER_GRADIENT } from "@/lib/header-gradient";
 
 export default function TeamInviteScreen() {
   const params = useLocalSearchParams<{ token?: string | string[] }>();
@@ -113,7 +114,7 @@ export default function TeamInviteScreen() {
   return (
     <View className="flex-1 bg-white dark:bg-slate-900">
       <StatusBar style="light" />
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <SafeAreaView edges={["top"]}>
           <View className="items-center py-10 px-6">
             <Image source={require("@/assets/alenio-logo-white.png")} style={{ width: 200, height: 72 }} resizeMode="contain" />

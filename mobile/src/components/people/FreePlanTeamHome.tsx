@@ -49,7 +49,7 @@ type Props = {
   onInvite: () => void;
 };
 
-/** Team tab for workspaces without Pro: coaching upsell, roster, and a way in to help. */
+/** Compatibility view for legacy workspaces without paid team features. */
 export function FreePlanTeamHome({
   team,
   members,
@@ -108,7 +108,7 @@ export function FreePlanTeamHome({
     >
       <View style={styles.upsellCard}>
         <View style={styles.planBadge}>
-          <Text style={styles.planBadgeText}>FREE PLAN</Text>
+          <Text style={styles.planBadgeText}>LEGACY WORKSPACE</Text>
         </View>
 
         <View style={styles.upsellBody}>
@@ -119,12 +119,12 @@ export function FreePlanTeamHome({
             accessibilityIgnoresInvertColors
           />
           <View style={styles.upsellCopy}>
-            <Text style={styles.upsellTitle}>Unlock team coaching</Text>
+            <Text style={styles.upsellTitle}>Add team coaching</Text>
             <Text style={styles.upsellText}>
-              The Free plan includes the team directory so you can connect with your people.
+              Your current workspace includes the team directory so you can connect with your people.
               {isOwner
-                ? " Upgrade to Pro to coach, set goals, track progress, and get team insights."
-                : " Pro adds coaching, goals, progress tracking, and team insights."}
+                ? " Choose a plan to coach, set goals, track progress, and get team insights."
+                : " Paid plans add coaching, goals, progress tracking, and team insights."}
             </Text>
           </View>
         </View>

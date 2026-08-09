@@ -14,6 +14,7 @@ import { env } from "../env";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
 import { createTeamCheckoutSession, createTeamPortalSession } from "../lib/team-billing-sessions";
 import { billingReturnBaseUrl } from "../lib/stripe-billing";
+import { getWorkspaceAccess } from "../lib/workspace-access";
 
 async function getWebSession(c: { req: { raw: Request } }) {
   return getSessionFromHeaders(c.req.raw.headers);
@@ -53,8 +54,21 @@ export function mountWebStripeBilling(webRouter: Hono): void {
     if (!membership) return c.json({ error: "Not found" }, 404);
     await reconcileStripeForSubscriptionRead(teamId);
     const subscription = await getTeamSubscription(teamId);
+    const access = await getWorkspaceAccess(teamId);
     const billingProvider = billingProviderFromSubscription(subscription);
-    return c.json({ data: { ...subscription, billingProvider } });
+    return c.json({
+      data: {
+        ...subscription,
+        status: access.status,
+        billingProvider,
+        remainingDays: access.remainingDays,
+        canWrite: access.canWrite,
+        accessMode: access.accessMode,
+        bannerSeverity: access.bannerSeverity,
+        hasTeamFeatures: access.hasTeamFeatures,
+        hasGoFeatures: access.hasGoFeatures,
+      },
+    });
   });
 
   /** Lets the web app show setup guidance when checkout returns NOT_CONFIGURED (common in local dev). */

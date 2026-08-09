@@ -12,33 +12,35 @@ import {
   CheckSquare,
   ChevronRight,
   Settings2,
+  Sparkles,
   Target,
+  TrendingDown,
+  TrendingUp,
+  UserPlus,
   Users,
 } from "lucide-react-native";
 import { router } from "expo-router";
 import type { Team, TeamMember } from "@/lib/types";
 import type { TeamHealthHistoryPoint } from "@/lib/team-health-history";
-import type {
-  MemberStandardsCompliance,
-  MemberStatsPayload,
-  MemberStatsRow,
-} from "@/lib/workplace-standards";
+import type { MemberStatsPayload } from "@/lib/workplace-standards";
 import {
   buildNeedsAttention,
   timeOfDayGreeting,
   type CoachingPriorityFilter,
+  type NeedsAttentionItem,
 } from "@/lib/coaching-priorities";
 import { UserAvatar } from "@/components/UserAvatar";
 import { PendingInvitesChip } from "@/components/PendingInvitesSheet";
 import { ProfileCard } from "@/components/profile/ProfileEnterpriseUI";
 import { CoachingPrioritySheet } from "@/components/people/CoachingPrioritySheet";
-import { NeedsAttentionKey } from "@/components/people/NeedsAttentionKey";
+import { TeamHealthRing } from "@/components/people/TeamHealthRing";
 import { colors } from "@/theme";
 import { TeamSnapshotCard } from "@/components/seneca/TeamSnapshotCard";
 import type { SenecaFocusResponse } from "@/lib/seneca-focus";
 import { teamHealthBandForScore } from "@/lib/team-health-score";
 
 const PAGE_PAD = 16;
+const DIRECTORY_AVATARS = 6;
 
 type Props = {
   team: Team | undefined;
@@ -54,7 +56,9 @@ type Props = {
   teamHealthPct: number | null;
   checkInPct: number | null;
   goalsPct: number | null;
-  tasksPct: number | null;
+  /** Share of managed members recognized recently; shown as the Engagement band. */
+  recognitionPct: number | null;
+  unrecognizedCount: number;
   healthHistory: TeamHealthHistoryPoint[];
   pendingApprovalCount: number;
   pendingInviteCount: number;
@@ -72,51 +76,6 @@ type Props = {
   onOpenWorkspaceSettings: () => void;
   onOpenSenecaFocus: () => void;
 };
-
-function PriorityCard({
-  label,
-  status,
-  score,
-  tone,
-  Icon,
-  onPress,
-  testID,
-  showDivider,
-}: {
-  label: string;
-  status: string;
-  score: number;
-  tone: "blue" | "purple" | "green";
-  Icon: typeof Target;
-  onPress: () => void;
-  testID: string;
-  showDivider: boolean;
-}) {
-  const palette =
-    tone === "blue"
-      ? { icon: "#4361EE", status: "#4361EE" }
-      : tone === "purple"
-        ? { icon: "#7C3AED", status: "#7C3AED" }
-        : { icon: "#10B981", status: "#059669" };
-
-  return (
-    <View style={[styles.prioritySlot, showDivider ? styles.priorityDivider : null]}>
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.priorityMetric,
-          pressed ? { opacity: 0.72 } : null,
-        ]}
-        testID={testID}
-      >
-        <Icon size={15} color={palette.icon} strokeWidth={2.25} />
-        <Text style={styles.priorityCount}>{score}%</Text>
-        <Text style={styles.priorityLabel}>{label}</Text>
-        <Text style={[styles.priorityStatus, { color: palette.status }]}>{status}</Text>
-      </Pressable>
-    </View>
-  );
-}
 
 function SectionHeader({
   title,
@@ -149,55 +108,61 @@ function SectionHeader({
 const METRIC_GOOD = "#059669";
 const METRIC_PARTIAL = "#D97706";
 const METRIC_BAD = "#DC2626";
-const METRIC_NEUTRAL = "#1E293B";
 
-function checkInMetricLabel(
-  status: MemberStandardsCompliance["checkInStatus"] | undefined,
-): string {
-  if (status === "due_soon") return "Due soon";
-  if (status === "overdue") return "Due";
-  return "Active";
-}
-
-function checkInMetricColor(
-  status: MemberStandardsCompliance["checkInStatus"] | undefined,
-): string {
-  if (status === "due_soon") return METRIC_PARTIAL;
-  if (status === "overdue") return METRIC_BAD;
-  return METRIC_GOOD;
-}
-
-function completionMetricColor(pct: number | null): string {
-  if (pct == null) return METRIC_NEUTRAL;
+function pctColor(pct: number | null): string {
+  if (pct == null) return "#94A3B8";
   if (pct >= 80) return METRIC_GOOD;
   if (pct >= 50) return METRIC_PARTIAL;
   return METRIC_BAD;
 }
 
-function goalsPctValue(goalsDisplay: string | undefined): number | null {
-  const progress = (goalsDisplay ?? "").match(/^\s*(\d+)\s*\/\s*(\d+)\s*$/);
-  if (!progress) return null;
-  const current = Number(progress[1]);
-  const required = Number(progress[2]);
-  if (!Number.isFinite(current) || !Number.isFinite(required) || required <= 0) return null;
-  return Math.min(100, Math.round((current / required) * 100));
+/** Recognition share reads better as a band than as a raw percentage. */
+function engagementBand(pct: number | null): { label: string; color: string } {
+  if (pct == null) return { label: "—", color: "#94A3B8" };
+  if (pct >= 60) return { label: "High", color: METRIC_GOOD };
+  if (pct >= 30) return { label: "Medium", color: METRIC_PARTIAL };
+  return { label: "Low", color: METRIC_BAD };
 }
 
-function goalsPctLabel(goalsDisplay: string | undefined): string {
-  const pct = goalsPctValue(goalsDisplay);
-  return pct == null ? "—" : `${pct}%`;
+type AttentionGroupKey = "checkIn" | "tasks" | "goals";
+
+/** Mirrors the precedence inside buildNeedsAttention so the row lands in one bucket. */
+function attentionGroupFor(
+  item: NeedsAttentionItem,
+  checkInRequired: boolean,
+  goalsRequired: boolean,
+): AttentionGroupKey | null {
+  const compliance = item.stats?.standardsCompliance;
+  if (checkInRequired && compliance?.checkInStatus === "overdue") return "checkIn";
+  if ((item.stats?.overdueTasks ?? 0) > 0) return "tasks";
+  if (checkInRequired && compliance?.checkInStatus === "due_soon") return "checkIn";
+  if (goalsRequired && compliance?.goalsStatus === "missing_goals") return "goals";
+  return null;
 }
 
-function tasksPctValue(stats: MemberStatsRow | undefined): number {
-  const active = stats?.activeTasks ?? 0;
-  const overdue = stats?.overdueTasks ?? 0;
-  if (active <= 0) return 100;
-  const onTime = Math.max(0, active - Math.min(active, overdue));
-  return Math.round((onTime / active) * 100);
+const ATTENTION_GROUP_META: Record<
+  AttentionGroupKey,
+  { filter: CoachingPriorityFilter; Icon: typeof Target; color: string; tint: string }
+> = {
+  checkIn: { filter: "checkInDue", Icon: CalendarClock, color: "#DC2626", tint: "#FEF2F2" },
+  tasks: { filter: "overdueTasks", Icon: CheckSquare, color: "#D97706", tint: "#FFFBEB" },
+  goals: { filter: "goalsMissing", Icon: Target, color: "#7C3AED", tint: "#F5F3FF" },
+};
+
+function attentionSummary(key: AttentionGroupKey, items: NeedsAttentionItem[]): string {
+  if (key === "checkIn") {
+    return items.length === 1 ? "1 check-in overdue" : `${items.length} check-ins overdue`;
+  }
+  if (key === "tasks") {
+    const tasks = items.reduce((total, item) => total + (item.stats?.overdueTasks ?? 0), 0);
+    return tasks === 1 ? "1 task overdue" : `${tasks} tasks overdue`;
+  }
+  return items.length === 1 ? "1 member needs goals" : `${items.length} members need goals`;
 }
 
-function tasksPctLabel(stats: MemberStatsRow | undefined): string {
-  return `${tasksPctValue(stats)}%`;
+function memberFirstName(member: TeamMember): string {
+  const name = member.user.name?.trim() ?? "";
+  return name.split(/\s+/)[0] || "Member";
 }
 
 export function ManagerCoachingHome({
@@ -213,7 +178,9 @@ export function ManagerCoachingHome({
   teamHealthPct,
   checkInPct,
   goalsPct,
-  tasksPct,
+  recognitionPct,
+  unrecognizedCount,
+  healthHistory,
   pendingApprovalCount,
   pendingInviteCount,
   senecaFocus,
@@ -223,7 +190,7 @@ export function ManagerCoachingHome({
   contentBottomPad,
   refreshing,
   onRefresh,
-  onInvite: _onInvite,
+  onInvite,
   onOpenInsights,
   onOpenJoinRequests,
   onOpenPendingInvites,
@@ -251,7 +218,67 @@ export function ManagerCoachingHome({
       }),
     [checkInRequired, goalsRequired, members, memberStats],
   );
-  const needsAttentionPreview = needsAttentionAll.slice(0, 3);
+
+  const attentionGroups = useMemo(() => {
+    const buckets = new Map<AttentionGroupKey, NeedsAttentionItem[]>();
+    for (const item of needsAttentionAll) {
+      const key = attentionGroupFor(item, checkInRequired, goalsRequired);
+      if (!key) continue;
+      const bucket = buckets.get(key);
+      if (bucket) bucket.push(item);
+      else buckets.set(key, [item]);
+    }
+    return (["checkIn", "tasks", "goals"] as AttentionGroupKey[])
+      .map((key) => ({ key, items: buckets.get(key) ?? [] }))
+      .filter((group) => group.items.length > 0);
+  }, [needsAttentionAll, checkInRequired, goalsRequired]);
+
+  /** Oldest → newest delta over whatever window the history query returned. */
+  const healthTrend = useMemo(() => {
+    if (healthHistory.length < 2 || teamHealthPct == null) return null;
+    const sorted = [...healthHistory].sort((a, b) => a.date.localeCompare(b.date));
+    const oldest = sorted[0];
+    const newest = sorted[sorted.length - 1];
+    const days = Math.max(
+      1,
+      Math.round(
+        (new Date(newest.date).getTime() - new Date(oldest.date).getTime()) / 86_400_000,
+      ),
+    );
+    return { delta: newest.teamHealthPct - oldest.teamHealthPct, days };
+  }, [healthHistory, teamHealthPct]);
+
+  const healthMetrics = useMemo(() => {
+    const engagement = engagementBand(recognitionPct);
+    return [
+      ...(checkInRequired
+        ? [
+            {
+              key: "checkIns",
+              label: "Check-ins",
+              value: checkInPct == null ? "—" : `${checkInPct}%`,
+              color: pctColor(checkInPct),
+            },
+          ]
+        : []),
+      ...(goalsRequired
+        ? [
+            {
+              key: "goals",
+              label: "Goals",
+              value: goalsPct == null ? "—" : `${goalsPct}%`,
+              color: pctColor(goalsPct),
+            },
+          ]
+        : []),
+      {
+        key: "engagement",
+        label: "Engagement",
+        value: engagement.label,
+        color: engagement.color,
+      },
+    ];
+  }, [checkInPct, checkInRequired, goalsPct, goalsRequired, recognitionPct]);
 
   const openPriority = (filter: CoachingPriorityFilter) => {
     setPriorityFilter(filter);
@@ -265,62 +292,6 @@ export function ManagerCoachingHome({
     });
   };
 
-  const openProfile = (userId: string) => {
-    router.push({
-      pathname: "/member-profile",
-      params: { teamId, memberUserId: userId },
-    });
-  };
-
-  const priorityCards = useMemo(
-    () => [
-      ...(checkInRequired
-        ? [
-            {
-              key: "checkIn",
-              label: "Check-ins",
-              status: "On track",
-              score: checkInPct ?? 100,
-              tone: "blue" as const,
-              Icon: CalendarClock,
-              onPress: () => openPriority("checkInDue"),
-              testID: "priority-check-ins",
-            },
-          ]
-        : []),
-      ...(goalsRequired
-        ? [
-            {
-              key: "goals",
-              label: "Goals",
-              status: "Coverage",
-              score: goalsPct ?? 100,
-              tone: "purple" as const,
-              Icon: Target,
-              onPress: () => openPriority("goalsMissing"),
-              testID: "priority-goals",
-            },
-          ]
-        : []),
-      {
-        key: "overdue",
-        label: "Tasks",
-        status: "On time",
-        score: tasksPct ?? 100,
-        tone: "green" as const,
-        Icon: CheckSquare,
-        onPress: () => openPriority("overdueTasks"),
-        testID: "priority-overdue-tasks",
-      },
-    ],
-    [
-      checkInPct,
-      checkInRequired,
-      goalsPct,
-      goalsRequired,
-      tasksPct,
-    ],
-  );
   const refreshControl = (
     <RefreshControl
       refreshing={refreshing}
@@ -343,145 +314,157 @@ export function ManagerCoachingHome({
         refreshControl={refreshControl}
       >
         <View style={styles.fixedTop}>
-        <View style={styles.summaryHeader}>
-          <Text style={styles.greeting} numberOfLines={1}>
-            {greeting}, {firstName}! 👋
-          </Text>
-          <View style={styles.summaryMetaRow}>
-            <Pressable
-              onPress={onOpenInsights}
-              style={({ pressed }) => [
-                styles.healthStatusRow,
-                pressed ? { opacity: 0.75 } : null,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`Team health ${teamHealthPct ?? "not available"}, ${healthLabel}`}
-              testID="coaching-team-health-status"
-            >
-              <Text style={styles.healthStatusLabel} numberOfLines={1}>
-                <Text style={[styles.healthStatusDot, { color: healthColor }]}>●{" "}</Text>
-                Team health{" "}
-                <Text style={styles.healthStatusValue}>
-                  {teamHealthPct == null ? "—" : `${teamHealthPct}%`}
-                </Text>
-                {" · "}
-                <Text style={[styles.healthStatusBand, { color: healthColor }]}>
-                  {healthLabel}
-                </Text>
+          <View style={styles.summaryHeader}>
+            <View style={styles.summaryMetaRow}>
+              <Text style={styles.greeting} numberOfLines={1}>
+                {greeting}, {firstName}! 👋
               </Text>
-            </Pressable>
-            {isOwner ? (
+              {isOwner ? (
+                <Pressable
+                  onPress={onOpenWorkspaceSettings}
+                  style={({ pressed }) => (pressed ? { opacity: 0.8 } : undefined)}
+                  hitSlop={8}
+                  testID="coaching-team-settings"
+                >
+                  <View style={styles.settingsPill}>
+                    <Settings2 size={11} color={colors.brand} strokeWidth={2.4} />
+                    <Text style={styles.settingsPillText}>Team settings</Text>
+                  </View>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+
+          {pendingApprovalCount > 0 || pendingInviteCount > 0 ? (
+            <View style={styles.chipsRow}>
+              {pendingApprovalCount > 0 ? (
+                <Pressable
+                  onPress={onOpenJoinRequests}
+                  style={styles.chip}
+                  testID="pending-join-requests-chip"
+                >
+                  <Users size={11} color="#4338CA" />
+                  <Text style={styles.chipText}>
+                    {pendingApprovalCount === 1 ? "1 request" : `${pendingApprovalCount} requests`}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <PendingInvitesChip count={pendingInviteCount} onPress={onOpenPendingInvites} />
+            </View>
+          ) : null}
+
+          <View style={styles.section}>
+            <SectionHeader
+              title="Team health"
+              actionLabel="See details"
+              onAction={onOpenInsights}
+              actionTestID="coaching-team-health-details"
+            />
+            <ProfileCard style={styles.healthCard}>
               <Pressable
-                onPress={onOpenWorkspaceSettings}
-                style={({ pressed }) => (pressed ? { opacity: 0.8 } : undefined)}
-                hitSlop={8}
-                testID="coaching-team-settings"
+                onPress={onOpenInsights}
+                style={({ pressed }) => [styles.healthCardRow, pressed ? { opacity: 0.85 } : null]}
+                accessibilityRole="button"
+                accessibilityLabel={`Team health ${teamHealthPct ?? "not available"}, ${healthLabel}`}
+                testID="coaching-team-health-status"
               >
-                <View style={styles.settingsPill}>
-                  <Settings2 size={11} color={colors.brand} strokeWidth={2.4} />
-                  <Text style={styles.settingsPillText}>Team settings</Text>
+                <View style={styles.healthCardLeft}>
+                  <TeamHealthRing value={teamHealthPct} color={healthColor} />
+                  <Text style={[styles.healthBandLabel, { color: healthColor }]} numberOfLines={1}>
+                    {healthLabel}
+                  </Text>
+                  {healthTrend ? (
+                    <View style={styles.healthTrendRow}>
+                      {healthTrend.delta >= 0 ? (
+                        <TrendingUp size={11} color={METRIC_GOOD} strokeWidth={2.4} />
+                      ) : (
+                        <TrendingDown size={11} color={METRIC_BAD} strokeWidth={2.4} />
+                      )}
+                      <Text
+                        style={[
+                          styles.healthTrendText,
+                          { color: healthTrend.delta >= 0 ? METRIC_GOOD : METRIC_BAD },
+                        ]}
+                      >
+                        {healthTrend.delta >= 0 ? "+" : ""}
+                        {healthTrend.delta}%
+                      </Text>
+                      <Text style={styles.healthTrendCaption} numberOfLines={1}>
+                        vs {healthTrend.days} days ago
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.healthMetrics}>
+                  {healthMetrics.map((metric, index) => (
+                    <View
+                      key={metric.key}
+                      style={[styles.healthMetricRow, index > 0 ? styles.healthMetricDivider : null]}
+                      testID={`team-health-metric-${metric.key}`}
+                    >
+                      <Text style={styles.healthMetricLabel} numberOfLines={1}>
+                        {metric.label}
+                      </Text>
+                      <Text style={[styles.healthMetricValue, { color: metric.color }]}>
+                        {metric.value}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               </Pressable>
-            ) : null}
-          </View>
-        </View>
-
-        {(pendingApprovalCount > 0 || pendingInviteCount > 0) ? (
-          <View style={styles.chipsRow}>
-            {pendingApprovalCount > 0 ? (
-              <Pressable onPress={onOpenJoinRequests} style={styles.chip} testID="pending-join-requests-chip">
-                <Users size={11} color="#4338CA" />
-                <Text style={styles.chipText}>
-                  {pendingApprovalCount === 1 ? "1 request" : `${pendingApprovalCount} requests`}
-                </Text>
-              </Pressable>
-            ) : null}
-            <PendingInvitesChip count={pendingInviteCount} onPress={onOpenPendingInvites} />
-          </View>
-        ) : null}
-
-        {isPaid ? (
-          <View style={styles.focusSection}>
-            <ProfileCard
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 22,
-                minHeight: 140,
-              }}
-            >
-              <TeamSnapshotCard
-                focus={senecaFocus}
-                isLoading={senecaFocusLoading}
-                isError={senecaFocusError}
-                isFetching={senecaFocusFetching}
-                affectedMembers={members
-                  .filter((member) =>
-                    senecaFocus?.brief.affectedMemberIds.includes(member.userId),
-                  )
-                  .map((member) => member.user)}
-                onOpenFocus={onOpenSenecaFocus}
-              />
             </ProfileCard>
           </View>
-        ) : null}
 
-        <View style={[styles.section, styles.coachingSection]}>
-          <SectionHeader
-            title="Coaching priorities"
-            actionLabel="View all"
-            onAction={openDirectory}
-            actionTestID="priorities-view-all"
-          />
-          <View style={styles.priorityRow}>
-            {priorityCards.map((card, index) => (
-              <PriorityCard
-                key={card.key}
-                label={card.label}
-                status={card.status}
-                score={card.score}
-                tone={card.tone}
-                Icon={card.Icon}
-                onPress={card.onPress}
-                testID={card.testID}
-                showDivider={index > 0}
-              />
-            ))}
-          </View>
-        </View>
-        </View>
-
-      {isPaid ? (
-        <View style={[styles.section, styles.attentionSection]}>
-          <SectionHeader
-            title="Needs your attention"
-            titleAccessory={
-              <NeedsAttentionKey
-                checkInRequired={checkInRequired}
-                goalsRequired={goalsRequired}
-              />
-            }
-            actionLabel={
-              needsAttentionAll.length > 0
-                ? `View all (${needsAttentionAll.length})`
-                : undefined
-            }
-            onAction={
-              needsAttentionAll.length > 0
-                ? () =>
-                    openPriority(
-                      checkInRequired
-                        ? "checkInDue"
-                        : goalsRequired
-                          ? "goalsMissing"
-                          : "overdueTasks",
+          {isPaid ? (
+            <View style={styles.focusSection}>
+              <ProfileCard
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 22,
+                  minHeight: 140,
+                }}
+              >
+                <TeamSnapshotCard
+                  focus={senecaFocus}
+                  isLoading={senecaFocusLoading}
+                  isError={senecaFocusError}
+                  isFetching={senecaFocusFetching}
+                  affectedMembers={members
+                    .filter((member) =>
+                      senecaFocus?.brief.affectedMemberIds.includes(member.userId),
                     )
-                : undefined
-            }
-            actionTestID="needs-attention-view-all"
-          />
-          {needsAttentionAll.length === 0 ? (
-            <View testID="needs-attention-scroll">
-              <View style={styles.attentionCard}>
+                    .map((member) => member.user)}
+                  onOpenFocus={onOpenSenecaFocus}
+                />
+              </ProfileCard>
+            </View>
+          ) : null}
+        </View>
+
+        {isPaid ? (
+          <View style={[styles.section, styles.attentionSection]}>
+            <SectionHeader
+              title="Needs your attention"
+              actionLabel={
+                needsAttentionAll.length > 0 ? `View all (${needsAttentionAll.length})` : undefined
+              }
+              onAction={
+                needsAttentionAll.length > 0
+                  ? () =>
+                      openPriority(
+                        checkInRequired
+                          ? "checkInDue"
+                          : goalsRequired
+                            ? "goalsMissing"
+                            : "overdueTasks",
+                      )
+                  : undefined
+              }
+              actionTestID="needs-attention-view-all"
+            />
+            <View style={styles.attentionCard} testID="needs-attention-scroll">
+              {attentionGroups.length === 0 ? (
                 <View style={styles.emptyAttention}>
                   <Text style={styles.emptyAttentionText}>Everyone is on track today.</Text>
                   <Pressable
@@ -492,145 +475,119 @@ export function ManagerCoachingHome({
                     <Text style={styles.emptyAttentionLink}>Recognize someone on Activity</Text>
                   </Pressable>
                 </View>
-              </View>
-            </View>
-          ) : (
-            <View testID="needs-attention-scroll">
-              <View style={styles.attentionCard}>
-                <View style={styles.attentionMetricsHeader}>
-                  <View style={styles.attentionHeaderAvatarSpacer} />
-                  <View style={styles.attentionHeaderNameSpacer} />
-                  <View style={styles.attentionMetrics}>
-                    {checkInRequired ? (
-                      <View style={[styles.metricColumn, styles.checkInMetricColumn]}>
-                        <Text style={styles.metricHeaderLabel}>Check-in</Text>
-                      </View>
-                    ) : null}
-                    {goalsRequired ? (
-                      <View style={styles.metricColumn}>
-                        <Text style={styles.metricHeaderLabel}>Goals</Text>
-                      </View>
-                    ) : null}
-                    <View style={styles.metricColumn}>
-                      <Text style={styles.metricHeaderLabel}>Tasks</Text>
-                    </View>
-                  </View>
-                  <View style={styles.attentionHeaderChevronSpacer} />
-                </View>
-                {needsAttentionPreview.map((item, index) => {
-                  const checkInStatus = item.stats?.standardsCompliance?.checkInStatus;
-                  const goalsDisplay = item.stats?.standardsCompliance?.goalsDisplay;
-                  const showCheckIn = checkInRequired && checkInStatus !== "not_required";
+              ) : (
+                attentionGroups.map((group, index) => {
+                  const meta = ATTENTION_GROUP_META[group.key];
+                  const names = group.items.map((item) => memberFirstName(item.member));
                   return (
-                    <View key={item.member.userId}>
-                      {index > 0 ? <View style={styles.attentionRowDivider} /> : null}
-                      <Pressable
-                        onPress={() => openProfile(item.member.userId)}
-                        style={({ pressed }) => [
-                          styles.attentionRowPressable,
-                          pressed ? styles.attentionRowPressed : null,
-                        ]}
-                        testID={`needs-attention-${item.member.userId}`}
-                      >
-                      <View style={styles.attentionRow}>
-                        <View style={styles.avatarWrap}>
-                          <UserAvatar
-                            user={item.member.user}
-                            size={26}
-                            radius={13}
-                            backgroundColor="#F1F5F9"
-                            textColor="#334155"
-                            fontSize={10}
-                          />
-                        </View>
-                        <View style={styles.attentionCopy}>
-                          <Text style={styles.attentionName} numberOfLines={1}>
-                            {item.member.user.name?.trim() || "Member"}
-                            {item.member.userId === myId ? " (you)" : ""}
-                          </Text>
-                        </View>
-                        <View style={styles.attentionMetrics}>
-                          {checkInRequired ? (
-                            <View style={[styles.metricColumn, styles.checkInMetricColumn]}>
-                              <Text
-                                style={[
-                                  styles.metricValue,
-                                  { color: checkInMetricColor(checkInStatus) },
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {showCheckIn ? checkInMetricLabel(checkInStatus) : "—"}
-                              </Text>
-                            </View>
-                          ) : null}
-                          {goalsRequired ? (
-                            <View style={styles.metricColumn}>
-                              <Text
-                                style={[
-                                  styles.metricValue,
-                                  {
-                                    color: completionMetricColor(
-                                      goalsPctValue(goalsDisplay),
-                                    ),
-                                  },
-                                ]}
-                              >
-                                {goalsPctLabel(goalsDisplay)}
-                              </Text>
-                            </View>
-                          ) : null}
-                          <View style={styles.metricColumn}>
-                            <Text
-                              style={[
-                                styles.metricValue,
-                                {
-                                  color: completionMetricColor(tasksPctValue(item.stats)),
-                                },
-                              ]}
-                            >
-                              {tasksPctLabel(item.stats)}
-                            </Text>
-                          </View>
-                        </View>
-                        <ChevronRight size={14} color="#94A3B8" strokeWidth={2.25} />
+                    <Pressable
+                      key={group.key}
+                      onPress={() => openPriority(meta.filter)}
+                      style={({ pressed }) => [
+                        styles.attentionRow,
+                        index > 0 ? styles.attentionRowDivider : null,
+                        pressed ? styles.attentionRowPressed : null,
+                      ]}
+                      testID={`needs-attention-${group.key}`}
+                    >
+                      <View style={[styles.attentionIcon, { backgroundColor: meta.tint }]}>
+                        <meta.Icon size={15} color={meta.color} strokeWidth={2.3} />
                       </View>
-                      </Pressable>
-                    </View>
+                      <View style={styles.attentionCopy}>
+                        <Text style={styles.attentionSummary} numberOfLines={1}>
+                          {attentionSummary(group.key, group.items)}
+                        </Text>
+                        <Text style={styles.attentionNames} numberOfLines={1}>
+                          {names.join(", ")}
+                        </Text>
+                      </View>
+                      <ChevronRight size={16} color="#C0C7D1" strokeWidth={2.25} />
+                    </Pressable>
                   );
-                })}
-              </View>
+                })
+              )}
             </View>
-          )}
-        </View>
-      ) : (
-        <View style={styles.attentionSectionSpacer} />
-      )}
+          </View>
+        ) : null}
 
-        <View style={styles.browseFooter}>
-          <Text style={styles.browseHeader}>People</Text>
-          <ProfileCard>
-            <Pressable
-              onPress={openDirectory}
-              style={({ pressed }) =>
-                pressed ? styles.directoryCtaPressed : undefined
-              }
-              testID="browse-team-directory"
-            >
-              <View style={styles.directoryCta}>
-                <View style={styles.directoryIcon}>
-                  <Users size={15} color={colors.brand} strokeWidth={2.25} />
+        {isPaid && unrecognizedCount > 0 ? (
+          <View style={[styles.section, styles.coachingInsightsSection]}>
+            <SectionHeader title="Coaching insights" />
+            <ProfileCard>
+              <Pressable
+                onPress={openDirectory}
+                style={({ pressed }) => [
+                  styles.insightRow,
+                  pressed ? styles.attentionRowPressed : null,
+                ]}
+                testID="coaching-insight-recognition"
+              >
+                <View style={[styles.attentionIcon, { backgroundColor: "#FFFBEB" }]}>
+                  <Sparkles size={15} color="#D97706" strokeWidth={2.3} />
                 </View>
-                <View style={styles.directoryCopy}>
-                  <Text style={styles.directoryTitle} numberOfLines={1}>
-                    Team directory
+                <View style={styles.attentionCopy}>
+                  <Text style={styles.attentionSummary} numberOfLines={1}>
+                    {unrecognizedCount === 1
+                      ? "1 team member could use recognition"
+                      : `${unrecognizedCount} team members could use recognition`}
                   </Text>
-                  <Text style={styles.directorySub} numberOfLines={1}>
-                    {memberCount} member{memberCount === 1 ? "" : "s"}
+                  <Text style={styles.attentionNames} numberOfLines={1}>
+                    No celebration in the last 14 days
                   </Text>
                 </View>
                 <ChevronRight size={16} color="#C0C7D1" strokeWidth={2.25} />
-              </View>
-            </Pressable>
+              </Pressable>
+            </ProfileCard>
+          </View>
+        ) : null}
+
+        <View style={styles.browseFooter}>
+          <SectionHeader
+            title="Team directory"
+            actionLabel="See all"
+            onAction={openDirectory}
+            actionTestID="browse-team-directory"
+          />
+          <ProfileCard style={styles.directoryCard}>
+            <Text style={styles.directorySub}>
+              {memberCount} member{memberCount === 1 ? "" : "s"}
+            </Text>
+            <View style={styles.directoryRow}>
+              <Pressable
+                onPress={openDirectory}
+                style={styles.directoryAvatars}
+                testID="directory-avatar-row"
+              >
+                {members.slice(0, DIRECTORY_AVATARS).map((member) => (
+                  <View key={member.userId} style={styles.directoryAvatarWrap}>
+                    <UserAvatar
+                      user={member.user}
+                      size={38}
+                      radius={19}
+                      backgroundColor="#EEF2FF"
+                      textColor={colors.brand}
+                      fontSize={14}
+                    />
+                  </View>
+                ))}
+                {memberCount > DIRECTORY_AVATARS ? (
+                  <View style={[styles.directoryAvatarWrap, styles.directoryOverflow]}>
+                    <Text style={styles.directoryOverflowText}>
+                      +{memberCount - DIRECTORY_AVATARS}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+              <Pressable
+                onPress={onInvite}
+                style={({ pressed }) => [styles.inviteCircle, pressed ? { opacity: 0.8 } : null]}
+                accessibilityRole="button"
+                accessibilityLabel="Invite people"
+                testID="directory-invite-button"
+              >
+                <UserPlus size={17} color={colors.brand} strokeWidth={2.3} />
+              </Pressable>
+            </View>
           </ProfileCard>
         </View>
       </ScrollView>
@@ -668,14 +625,12 @@ const styles = StyleSheet.create({
     paddingTop: 32,
     flexShrink: 0,
   },
-  attentionSectionSpacer: {
-    height: 0,
-  },
   summaryHeader: {
-    marginBottom: 12,
+    marginBottom: 16,
     paddingHorizontal: 4,
   },
   greeting: {
+    flexShrink: 1,
     fontSize: 17,
     lineHeight: 22,
     fontWeight: "400",
@@ -683,35 +638,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   summaryMetaRow: {
-    marginTop: 5,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-  },
-  healthStatusRow: {
-    flexDirection: "row",
-    flexWrap: "nowrap",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    flexShrink: 1,
-  },
-  healthStatusDot: {
-    fontSize: 9,
-    fontWeight: "500",
-  },
-  healthStatusLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "500",
-    color: "#64748B",
-  },
-  healthStatusValue: {
-    fontWeight: "700",
-    color: "#475569",
-  },
-  healthStatusBand: {
-    fontWeight: "700",
   },
   settingsPill: {
     flexDirection: "row",
@@ -747,173 +677,84 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#4338CA",
   },
-  topCardRow: {
-    height: 172,
-    flexDirection: "row",
-    alignItems: "stretch",
-    justifyContent: "space-between",
-    gap: 8,
-  },
   healthCard: {
-    width: "48.7%",
-    height: "100%",
-    position: "relative",
-    alignItems: "stretch",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E9E3FF",
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
-  focusCardSlot: {
-    width: "48.7%",
-    height: "100%",
-  },
-  topCardHeader: {
+  healthCardRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 18,
+    gap: 14,
   },
-  healthRingPosition: {
-    position: "absolute",
-    top: 36,
-    width: 100,
-    height: 100,
-  },
-  healthTrendCopy: {
-    width: 50,
+  healthCardLeft: {
+    width: 112,
     flexShrink: 0,
-    alignItems: "flex-end",
-    gap: 2,
-  },
-  healthTrendDelta: {
-    fontSize: 9,
-    lineHeight: 11,
-    fontWeight: "800",
-    color: "#10B981",
-    textAlign: "right",
-  },
-  healthTrendCaption: {
-    fontSize: 7,
-    lineHeight: 8,
-    fontWeight: "600",
-    color: "#94A3B8",
-    textAlign: "right",
-  },
-  healthTrendSummary: {
-    marginTop: 2,
-    fontSize: 7,
-    lineHeight: 9,
-    fontWeight: "700",
-    color: "#475569",
-    textAlign: "right",
-  },
-  healthRingValue: {
-    fontSize: 26,
-    lineHeight: 28,
-    fontWeight: "800",
-    color: "#0F172A",
-    letterSpacing: -0.5,
-  },
-  healthRingStatus: {
-    width: 82,
-    fontSize: 7,
-    lineHeight: 9,
-    fontWeight: "800",
-    textAlign: "center",
-    textTransform: "uppercase",
-  },
-  topCardAction: {
-    height: 24,
-    borderRadius: 7,
-    backgroundColor: "#F6F2FF",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-  },
-  topCardActionText: {
-    fontSize: 8,
-    fontWeight: "800",
-    color: "#7C3AED",
-  },
-  healthTop: {
-    flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  healthTrend: {
-    width: 154,
-    alignItems: "flex-end",
-    flexShrink: 0,
-  },
-  healthTrendNote: {
-    marginTop: 2,
-    width: "100%",
-    fontSize: 7,
-    fontWeight: "600",
-    color: "#94A3B8",
-    textAlign: "right",
-  },
-  healthTitle: {
+  healthBandLabel: {
     fontSize: 11,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  healthValue: {
-    marginTop: 0,
-    fontSize: 26,
+    lineHeight: 14,
     fontWeight: "800",
-    color: "#0F172A",
-    letterSpacing: -1,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
-  healthBreakdown: {
-    marginTop: 8,
-    paddingTop: 7,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#F1F5F9",
+  healthTrendRow: {
     flexDirection: "row",
-    alignItems: "stretch",
-  },
-  healthDivider: {
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: "#E2E8F0",
-    marginVertical: 2,
-  },
-  healthCell: {
-    flex: 1,
     alignItems: "center",
-    gap: 1,
-    paddingHorizontal: 2,
+    gap: 3,
   },
-  healthCellValue: {
+  healthTrendText: {
     fontSize: 11,
+    lineHeight: 14,
     fontWeight: "800",
-    color: "#0F172A",
   },
-  healthCellLabel: {
-    fontSize: 8,
+  healthTrendCaption: {
+    flexShrink: 1,
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: "600",
     color: "#94A3B8",
+  },
+  healthMetrics: {
+    flex: 1,
+    minWidth: 0,
+  },
+  healthMetricRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    paddingVertical: 9,
+  },
+  healthMetricDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#EEF2F7",
+  },
+  healthMetricLabel: {
+    flexShrink: 1,
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  healthMetricValue: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "800",
   },
   section: {
     gap: 0,
   },
   focusSection: {
     width: "100%",
-  },
-  coachingSection: {
-    marginTop: 23,
+    marginTop: 20,
   },
   attentionSection: {
-    marginTop: 48,
+    marginTop: 26,
+  },
+  coachingInsightsSection: {
+    marginTop: 26,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -943,79 +784,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.brand,
   },
-  priorityRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    minHeight: 82,
-  },
-  prioritySlot: {
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: 0,
-    justifyContent: "center",
-  },
-  priorityDivider: {
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: "#E2E8F0",
-  },
-  priorityMetric: {
-    minHeight: 82,
-    width: "100%",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  priorityCount: {
-    marginTop: 5,
-    fontSize: 16,
-    lineHeight: 19,
-    fontWeight: "700",
-    color: "#172033",
-    letterSpacing: -0.35,
-    textAlign: "center",
-  },
-  priorityLabel: {
-    marginTop: 1,
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "600",
-    color: "#475569",
-    textAlign: "center",
-  },
-  priorityStatus: {
-    marginTop: 1,
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: "700",
-    textAlign: "center",
-  },
   attentionCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#E7EBF1",
     overflow: "hidden",
-  },
-  attentionMetricsHeader: {
-    minHeight: 22,
-    paddingHorizontal: 7,
-    paddingTop: 3,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  attentionHeaderAvatarSpacer: {
-    width: 26,
-    flexShrink: 0,
-  },
-  attentionHeaderNameSpacer: {
-    flex: 1,
-    minWidth: 0,
-  },
-  attentionHeaderChevronSpacer: {
-    width: 14,
-    flexShrink: 0,
   },
   emptyAttention: {
     paddingHorizontal: 12,
@@ -1032,125 +806,111 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.brand,
   },
-  avatarWrap: {
-    position: "relative",
-    width: 26,
-    height: 26,
-    flexShrink: 0,
-  },
-  attentionRowPressable: {
+  attentionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     backgroundColor: "#FFFFFF",
   },
   attentionRowDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "#E7EBF1",
-    marginHorizontal: 9,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E7EBF1",
   },
   attentionRowPressed: {
     backgroundColor: "#F8FAFC",
   },
-  attentionRow: {
-    flexDirection: "row",
+  attentionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
-    gap: 6,
-    height: 44,
-    maxHeight: 44,
-    paddingHorizontal: 7,
-    width: "100%",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   attentionCopy: {
     flex: 1,
     minWidth: 0,
     justifyContent: "center",
   },
-  attentionName: {
-    flexShrink: 1,
-    fontSize: 12,
+  attentionSummary: {
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: "700",
     color: "#0F172A",
-    lineHeight: 15,
   },
-  attentionMetrics: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flexShrink: 0,
-    gap: 5,
-  },
-  metricColumn: {
-    alignItems: "center",
-    minWidth: 36,
-  },
-  checkInMetricColumn: {
-    minWidth: 48,
-  },
-  metricHeaderLabel: {
-    fontSize: 9,
-    lineHeight: 11,
-    fontWeight: "700",
-    color: "#94A3B8",
-    textAlign: "center",
-  },
-  metricValue: {
+  attentionNames: {
+    marginTop: 1,
     fontSize: 11,
     lineHeight: 14,
-    fontWeight: "800",
-    color: "#1E293B",
+    fontWeight: "500",
+    color: "#7A869A",
+  },
+  insightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
   browseFooter: {
     flexShrink: 0,
-    gap: 8,
     marginTop: "auto",
-    paddingTop: 23,
-    paddingBottom: 0,
+    paddingTop: 26,
     width: "100%",
   },
-  browseHeader: {
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: "800",
-    color: "#64748B",
-    letterSpacing: 0.55,
-    textTransform: "uppercase",
-  },
-  directoryCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    minHeight: 54,
-    paddingLeft: 12,
-    paddingRight: 46,
-    paddingVertical: 8,
-  },
-  directoryCtaPressed: {
-    backgroundColor: "rgba(15, 23, 42, 0.03)",
-  },
-  directoryIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#EEF2FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-    flexShrink: 0,
-  },
-  directoryCopy: {
-    flex: 1,
-    minWidth: 0,
-    marginRight: 8,
-    justifyContent: "center",
-  },
-  directoryTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.2,
+  directoryCard: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
   directorySub: {
-    marginTop: 1,
     fontSize: 11,
-    fontWeight: "500",
+    fontWeight: "600",
     color: "#64748B",
+  },
+  directoryRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  directoryAvatars: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+  },
+  directoryAvatarWrap: {
+    marginRight: -8,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  directoryOverflow: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  directoryOverflowText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  inviteCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "#C7D2FE",
+    backgroundColor: "#F8FAFF",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
 });

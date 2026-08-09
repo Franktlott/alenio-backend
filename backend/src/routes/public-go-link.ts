@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { prisma } from "../prisma";
-import { ensureTeamGoHubToken, teamHasGoPlan } from "../lib/go-hub";
+import { ensureTeamGoHubToken, findTeamByGoHubToken, teamHasGoPlan } from "../lib/go-hub";
 import {
   findTeamByInviteCode,
   notifyGoLoginApprovers,
@@ -17,8 +17,30 @@ import {
   listKioskModulesForDevice,
   verifyModuleTestCode,
 } from "../lib/workspace-modules";
+import { assertWorkspaceCanWrite, workspaceReadOnlyError } from "../lib/workspace-access";
 
 const publicGoLinkRouter = new Hono();
+
+publicGoLinkRouter.use("*", async (c, next) => {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)) return next();
+  try {
+    const body = await c.req.raw.clone().json() as { hubToken?: unknown; inviteCode?: unknown };
+    const hubToken = typeof body.hubToken === "string" ? body.hubToken.trim() : "";
+    const inviteCode = typeof body.inviteCode === "string" ? body.inviteCode.trim() : "";
+    const team = hubToken
+      ? await findTeamByGoHubToken(hubToken)
+      : inviteCode
+        ? await findTeamByWorkspaceCode(inviteCode)
+        : null;
+    if (team) {
+      const guard = await assertWorkspaceCanWrite(team.id);
+      if (!guard.ok) return c.json(workspaceReadOnlyError(guard.access), 403);
+    }
+  } catch {
+    // Route validation owns malformed-body responses.
+  }
+  return next();
+});
 
 const linkBodySchema = z.object({
   inviteCode: z.string().min(1).max(32),
@@ -26,8 +48,8 @@ const linkBodySchema = z.object({
   deviceLabel: z.string().max(120).optional(),
 });
 
-async function findTeamByWorkspaceCode(code: string) {
-  return findTeamByInviteCode(code, { id: true, name: true });
+async function findTeamByWorkspaceCode(code: string): Promise<{ id: string; name: string } | null> {
+  return findTeamByInviteCode(code, { id: true, name: true }) as Promise<{ id: string; name: string } | null>;
 }
 
 publicGoLinkRouter.post("/link", zValidator("json", linkBodySchema), async (c) => {
@@ -188,9 +210,6 @@ publicGoLinkRouter.get("/alerts", async (c) => {
       if (result.code === "DEVICE_UNLINKED") {
         return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       }
-      if (result.code === "FORBIDDEN") {
-        return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
-      }
       return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
     }
 
@@ -213,7 +232,7 @@ publicGoLinkRouter.post("/alerts/:alertId/ack", async (c) => {
 
     const result = await ackWorkplaceAlertForDevice(alertId, hubToken, deviceId);
     if (!result.ok) {
-      if (result.code === "FORBIDDEN" || result.code === "DEVICE_UNLINKED") {
+      if (result.code === "DEVICE_UNLINKED") {
         return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       }
       return c.json({ error: { message: "Alert not found", code: "NOT_FOUND" } }, 404);

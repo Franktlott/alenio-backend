@@ -15,7 +15,6 @@ import { oneOnOneMeetingsRouter } from "./one-on-one-meetings";
 import { developmentGoalsRouter } from "./development-goals";
 import { reconcileStripeForSubscriptionRead } from "../lib/stripe-billing";
 import {
-  getTeamSubscription,
   teamSubscriptionRowHasGoFeatures,
   teamSubscriptionRowHasTeamFeatures,
 } from "./subscription";
@@ -133,8 +132,6 @@ webRouter.get("/api/teams", async (c) => {
   const teamIds = memberships.map((m) => m.team.id);
   /** Same best-effort Stripe sync as Plan / subscription read — list used to use stale DB only. */
   await Promise.all(teamIds.map((id) => reconcileStripeForSubscriptionRead(id)));
-  /** Ensure every team has a subscription row so `findMany` is complete (new teams / legacy DB). */
-  await Promise.all(teamIds.map((id) => getTeamSubscription(id)));
   const subscriptions = await prisma.teamSubscription.findMany({
     where: { teamId: { in: teamIds } },
     select: { teamId: true, plan: true, status: true },
@@ -158,13 +155,21 @@ webRouter.post("/api/teams", async (c) => {
   const session = await getWebSession(c);
   if (!session) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({}));
-  const { name } = body;
+  const { name, industry, startTrial } = body;
   if (!name || !name.trim()) return c.json({ error: { message: "Name is required" } }, 400);
+  if (startTrial !== true) {
+    return c.json(
+      { error: { message: "startTrial must be true to create a self-serve workspace", code: "TRIAL_REQUIRED" } },
+      400,
+    );
+  }
 
   const result = await createWorkspaceForAuthUser({
     authUser: session.user,
     preferredUserId: webPrismaUserIdFromContext(c),
     name,
+    industry: typeof industry === "string" ? industry : null,
+    startTrial: true,
   });
   if (!result.ok) {
     return c.json({ error: { message: result.message, code: result.code } }, result.status);
@@ -178,7 +183,7 @@ webRouter.post("/api/teams", async (c) => {
     ownerName,
   }).catch((err) => console.warn("[web-app] admin workspace push failed", err));
 
-  return c.json({ data: { ...team, role: "owner", hasTeamFeatures: false } });
+  return c.json({ data: { ...team, role: "owner", hasTeamFeatures: true, hasGoFeatures: true } });
 });
 
 // Stripe billing + team subscription (register early so paths like /api/teams/:id/subscription
@@ -387,7 +392,7 @@ webRouter.patch("/api/teams/:id/members/:userId/role", async (c) => {
   const callerId = webPrismaUserIdFromContext(c);
   if (!callerId) return c.json({ error: "Unauthorized" }, 401);
   const { id: teamId, userId: targetUserId } = c.req.param();
-  const body = await c.req.json<{ role?: string }>().catch(() => ({}));
+  const body: { role?: string } = await c.req.json<{ role?: string }>().catch(() => ({}));
   const role = body.role ?? "";
 
   if (!["member", "team_leader"].includes(role)) {

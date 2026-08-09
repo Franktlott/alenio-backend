@@ -183,6 +183,66 @@ export type ConnectionsResponse = {
   outgoing: ConnectionEntry[];
 };
 
+export type ConnectionSuggestionReasonKey =
+  | "current_workspace"
+  | "mutual_connections"
+  | "same_organization"
+  | "shared_workspace"
+  | "recently_joined_workspace";
+
+export type ConnectionSuggestionWorkspace = {
+  id: string;
+  name: string;
+  role: string;
+  joinedAt: string;
+};
+
+export type ConnectionSuggestion = {
+  person: ConnectionPerson;
+  connectionStatus: "none" | "declined";
+  sharedCurrentWorkspace: boolean;
+  currentWorkspace?: ConnectionSuggestionWorkspace;
+  sharedWorkspaces: ConnectionSuggestionWorkspace[];
+  mutualConnections: number;
+  reasons: { key: ConnectionSuggestionReasonKey; label: string }[];
+};
+
+export type ConnectionPairStatus = {
+  status: ConnectionStatus;
+  isBlockedByMe: boolean;
+  canMessage: boolean;
+};
+
+export type PublicProfileWorkspace = {
+  id: string;
+  name: string;
+  image: string | null;
+  role: string;
+  joinedAt: string;
+};
+
+export type PublicPersonProfile = {
+  id: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+  emailVerified: boolean;
+  memberSince: string;
+  profileWebsite: string | null;
+  profileLocation: string | null;
+  profileBio: string | null;
+  stats: {
+    connections: number;
+    workspaces: number;
+    mutualConnections: number;
+  };
+  sharedWorkspaces: PublicProfileWorkspace[];
+  connectionStatus: ConnectionStatus;
+  isBlockedByMe: boolean;
+  canMessage: boolean;
+  isSelf: boolean;
+};
+
 export type GroupMemberCandidate = {
   id: string;
   name: string | null;

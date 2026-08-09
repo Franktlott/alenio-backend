@@ -39,17 +39,19 @@ import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { earlierIncompleteSeriesTasks } from "@/lib/recurring-task";
 import { formatTaskDueDateLabel } from "@/lib/timezone";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
-import { tabBarClearance, workspaceTaskClearance } from "@/lib/tab-bar";
+import { tabBarClearance } from "@/lib/tab-bar";
 import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { HeaderAddButton } from "@/components/HeaderAddButton";
+import { useWorkspaceAccess } from "@/lib/workspace-access";
 import { WorkspaceViewToggle, type WorkspaceViewMode } from "@/components/workspace/WorkspaceViewToggle";
 import { CalendarCard } from "@/components/workspace/CalendarCard";
 import { EventsSection } from "@/components/workspace/EventsSection";
-import { TaskStatusTabs } from "@/components/workspace/TaskStatusTabs";
-import { TaskFilterBar } from "@/components/workspace/TaskFilterBar";
+import { WorkspaceMembersCarousel } from "@/components/workspace/WorkspaceMembersCarousel";
+import { TaskShowingRow } from "@/components/workspace/TaskShowingRow";
 import { TaskListCard } from "@/components/workspace/TaskListCard";
 import { MemberTasksEmptyState } from "@/components/workspace/MemberTasksEmptyState";
+import { WorkspaceSnapshotCarousel } from "@/components/workspace/snapshot/WorkspaceSnapshotCarousel";
 import { UserAvatar } from "@/components/UserAvatar";
 import {
   AlenioBottomSheet,
@@ -60,7 +62,6 @@ import {
 import {
   DEFAULT_WORKSPACE_FILTERS,
   type FilterPicker,
-  type TaskStatusTab,
   type WorkspaceFiltersState,
 } from "@/components/workspace/workspace-types";
 import { WorkspaceFilterPicker } from "@/components/workspace/WorkspaceFilterPicker";
@@ -77,6 +78,24 @@ import {
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 import { eventCalendarDayRange } from "@/lib/calendar-grid";
+import {
+  countCompletedToday,
+  countDueToday,
+  countOverdue,
+  personalHealthPercent,
+  workspaceHealthPercent,
+} from "@/lib/workspace-summary-metrics";
+import {
+  mergeWorkplaceStandards,
+  type MemberStatsPayload,
+} from "@/lib/workplace-standards";
+import { buildNeedsAttention } from "@/lib/coaching-priorities";
+import { computeTeamCompliancePercentages } from "@/lib/member-stats-display";
+import {
+  buildSnapshotPages,
+  countRecognitionThisWeek,
+} from "@/lib/workspace-snapshot-pages";
+import type { ActivityApiEvent } from "@/components/activity/types";
 import {
   fetchExternalCalendarEvents,
   type ExternalCalendarEventItem,
@@ -139,8 +158,6 @@ export default function TasksScreen() {
   const [meetingDurationMinutes, setMeetingDurationMinutes] = useState(60);
   const [formError, setFormError] = useState<string | null>(null);
   const [visibleWeeks, setVisibleWeeks] = useState<number>(1);
-  const [archiveSearch, setArchiveSearch] = useState("");
-  const [archiveSearchDebounced, setArchiveSearchDebounced] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const { data: session } = useSession();
@@ -153,13 +170,6 @@ export default function TasksScreen() {
   const acknowledgedEventCounts = useTaskStore((s) => s.acknowledgedEventCounts);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const workspacePollInterval = isScreenFocused ? 15_000 : false;
-
-  useEffect(() => {
-    const handle = setTimeout(() => setArchiveSearchDebounced(archiveSearch.trim()), 300);
-    return () => clearTimeout(handle);
-  }, [archiveSearch]);
-
-  const archiveSearchReady = archiveSearchDebounced.length >= 2;
 
   useFocusEffect(
     useCallback(() => {
@@ -221,7 +231,6 @@ export default function TasksScreen() {
             activeTeamId,
             assignedToQueryKey(filters.assignedTo),
             "archived",
-            archiveSearchDebounced,
           ] as const)
         : filters.statusTab === "completed"
           ? (["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), calendarYear, calendarMonth, "completed"] as const)
@@ -234,7 +243,6 @@ export default function TasksScreen() {
           calendarMonth,
           assignedTo: filters.assignedTo,
           cursor: nextCursor,
-          search: filters.statusTab === "archived" ? archiveSearchDebounced : undefined,
         }),
       );
       queryClient.setQueryData<{ tasks: Task[]; nextCursor: string | null }>(queryKey, (prev) => ({
@@ -257,6 +265,10 @@ export default function TasksScreen() {
   const isRegularMember = currentRole === "member";
   const isOwnerOrLeader = currentRole === "owner" || currentRole === "team_leader";
   const isCalendarManager = isOwnerOrLeader || currentRole === "admin";
+  const summaryAssignedTo = isCalendarManager ? "entire_team" : "me";
+  const summaryToday = new Date();
+  const summaryYear = summaryToday.getFullYear();
+  const summaryMonth = summaryToday.getMonth();
   const canManageTaskMenu = useCallback(
     (task: Task) => {
       // Check-in follow-ups are completed via the form, not the edit menu.
@@ -297,6 +309,7 @@ export default function TasksScreen() {
   });
   const plan = useSubscriptionStore((s) => s.plan);
   const hasTaskAccess = hasWorkspaceTaskAccess(subscription, plan);
+  const { access } = useWorkspaceAccess(activeTeamId);
 
   const {
     data: activeTasksData,
@@ -336,13 +349,57 @@ export default function TasksScreen() {
     refetchIntervalInBackground: false,
   });
 
-  const { data: archivedTasksData, isPending: archivedPending, isFetching: archivedFetching } = useQuery({
+  const {
+    data: summaryActiveTasksData,
+    isPending: summaryActivePending,
+  } = useQuery({
+    queryKey: ["tasks", activeTeamId, assignedToQueryKey(summaryAssignedTo), "active"],
+    queryFn: async () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        buildWorkspaceTasksPath(activeTeamId!, {
+          statusTab: "active",
+          calendarYear: summaryYear,
+          calendarMonth: summaryMonth,
+          assignedTo: summaryAssignedTo,
+        }),
+      ),
+    enabled: !!activeTeamId && hasTaskAccess,
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
+  });
+
+  const {
+    data: summaryCompletedTasksData,
+    isPending: summaryCompletedPending,
+  } = useQuery({
+    queryKey: [
+      "tasks",
+      activeTeamId,
+      assignedToQueryKey(summaryAssignedTo),
+      summaryYear,
+      summaryMonth,
+      "completed",
+    ],
+    queryFn: async () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        buildWorkspaceTasksPath(activeTeamId!, {
+          statusTab: "completed",
+          calendarYear: summaryYear,
+          calendarMonth: summaryMonth,
+          assignedTo: summaryAssignedTo,
+        }),
+      ),
+    enabled: !!activeTeamId && hasTaskAccess,
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
+  });
+
+  const { data: archivedTasksData, isPending: archivedPending } = useQuery({
     queryKey: [
       "tasks",
       activeTeamId,
       assignedToQueryKey(filters.assignedTo),
       "archived",
-      archiveSearchDebounced,
     ],
     queryFn: async () =>
       api.get<{ tasks: Task[]; nextCursor: string | null }>(
@@ -351,10 +408,9 @@ export default function TasksScreen() {
           calendarYear,
           calendarMonth,
           assignedTo: filters.assignedTo,
-          search: archiveSearchDebounced,
         }),
       ),
-    enabled: !!activeTeamId && hasTaskAccess && filters.statusTab === "archived" && archiveSearchReady,
+    enabled: !!activeTeamId && hasTaskAccess && filters.statusTab === "archived",
     refetchInterval: false,
     refetchIntervalInBackground: false,
   });
@@ -364,11 +420,35 @@ export default function TasksScreen() {
       ? (archivedTasksData?.tasks ?? [])
       : filters.statusTab === "completed"
         ? (completedTasksData?.tasks ?? [])
-        : (activeTasksData?.tasks ?? []);
+        : filters.statusTab === "all"
+          ? [
+              ...new Map(
+                [
+                  ...(activeTasksData?.tasks ?? []),
+                  ...(completedTasksData?.tasks ?? []),
+                ].map((task) => [task.id, task]),
+              ).values(),
+            ]
+          : (activeTasksData?.tasks ?? []);
   const { data: teamData } = useQuery({
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
     enabled: !!activeTeamId,
+  });
+  const {
+    data: memberStatsPayload,
+    isPending: memberStatsPending,
+  } = useQuery({
+    queryKey: ["member-stats", activeTeamId],
+    queryFn: () =>
+      api.get<MemberStatsPayload>(`/api/teams/${activeTeamId}/tasks/member-stats`),
+    enabled: !!activeTeamId && hasTaskAccess,
+  });
+  const { data: teamActivity = [] } = useQuery({
+    queryKey: ["team-activity", activeTeamId],
+    queryFn: () => api.get<ActivityApiEvent[]>(`/api/teams/${activeTeamId}/activity`),
+    enabled: !!activeTeamId && hasTaskAccess && isCalendarManager,
+    staleTime: 60_000,
   });
   const nonOwnerMembers: TeamMember[] = (teamData?.members ?? []).filter(
     (m) => m.role !== "owner"
@@ -782,29 +862,156 @@ export default function TasksScreen() {
   const currentUserId = session?.user?.id ?? null;
 
   const teamMembers: TeamMember[] = teamData?.members ?? [];
+  const summaryMember = teamMembers.find(
+    (member) =>
+      (!!currentUserId && (member.userId === currentUserId || member.user.id === currentUserId)) ||
+      (!!session?.user?.email &&
+        member.user.email.trim().toLowerCase() === session.user.email.trim().toLowerCase()),
+  );
+  const summaryMemberUserId = summaryMember?.userId ?? currentUserId;
+  const summaryStandards = React.useMemo(
+    () => mergeWorkplaceStandards(memberStatsPayload?.workplaceStandards),
+    [memberStatsPayload?.workplaceStandards],
+  );
+  const summaryCompletedToday = summaryCompletedPending && !summaryCompletedTasksData
+    ? null
+    : countCompletedToday(summaryCompletedTasksData?.tasks ?? [], summaryToday);
+  const summaryDueToday = summaryActivePending && !summaryActiveTasksData
+    ? null
+    : countDueToday(summaryActiveTasksData?.tasks ?? [], summaryToday);
+  const summaryOverdue = summaryActivePending && !summaryActiveTasksData
+    ? null
+    : countOverdue(summaryActiveTasksData?.tasks ?? [], summaryToday);
+  const summaryHealth = isCalendarManager
+    ? workspaceHealthPercent({
+        members: teamMembers,
+        memberStats: memberStatsPayload?.stats,
+        standards: summaryStandards,
+      })
+    : personalHealthPercent({
+        stats: summaryMemberUserId
+          ? memberStatsPayload?.stats[summaryMemberUserId]
+          : undefined,
+        standards: summaryStandards,
+      });
+  const summaryMetricsLoading =
+    (summaryActivePending && !summaryActiveTasksData) ||
+    (summaryCompletedPending && !summaryCompletedTasksData) ||
+    (memberStatsPending && !memberStatsPayload);
+
+  const summaryNeedsAttention = React.useMemo(() => {
+    if (!isCalendarManager) return null;
+    if (!memberStatsPayload) return null;
+    return buildNeedsAttention({
+      members: teamMembers,
+      memberStats: memberStatsPayload.stats,
+      standards: summaryStandards,
+      limit: 100,
+    }).length;
+  }, [isCalendarManager, memberStatsPayload, teamMembers, summaryStandards]);
+
+  // Stable across renders so the snapshot memos only recompute when the day rolls over.
+  const summaryTodayIso = toLocalIso(summaryToday);
+  const summaryDayStart = React.useMemo(
+    () => startOfDay(new Date(`${summaryTodayIso}T12:00:00`)),
+    [summaryTodayIso],
+  );
+
+  const summaryCheckInsToday = React.useMemo(() => {
+    const today = summaryDayStart.getTime();
+    return calendarEvents.filter((event) => {
+      if (!event.isOneOnOne) return false;
+      const { start, end } = eventCalendarDayRange(event);
+      return startOfDay(start).getTime() <= today && startOfDay(end).getTime() >= today;
+    }).length;
+  }, [calendarEvents, summaryDayStart]);
+
+  const summaryRecognitionThisWeek = React.useMemo(
+    () => (isCalendarManager ? countRecognitionThisWeek(teamActivity, summaryDayStart) : null),
+    [isCalendarManager, teamActivity, summaryDayStart],
+  );
+
+  const summaryGoalsOnTrackPct = React.useMemo(() => {
+    if (!isCalendarManager || !memberStatsPayload) return null;
+    return computeTeamCompliancePercentages({
+      memberUserIds: teamMembers.filter((m) => m.role !== "owner").map((m) => m.userId),
+      memberStats: memberStatsPayload.stats,
+      workplaceStandards: summaryStandards,
+    }).developmentPlanCompliancePct;
+  }, [isCalendarManager, memberStatsPayload, teamMembers, summaryStandards]);
+
+  const openSummaryTasks = useCallback(
+    (statusTab: "active" | "completed", dueDate: "today" | "overdue") => {
+      setWorkspaceMode("tasks");
+      setSelectedDay(null);
+      setVisibleWeeks(1);
+      setFilters((current) => ({
+        ...current,
+        statusTab,
+        assignedTo: summaryAssignedTo,
+        dueDate,
+        sort: statusTab === "completed" ? "newest" : "due",
+      }));
+    },
+    [summaryAssignedTo],
+  );
 
   const handleSelectDay = useCallback((iso: string | null) => {
     setSelectedDay(iso);
   }, []);
 
-  const handleStatusTabChange = useCallback((tab: TaskStatusTab) => {
-    setFilters((f) => ({
-      ...f,
-      statusTab: tab,
-      sort: tab === "completed" || tab === "archived" ? "completed" : f.sort === "completed" ? "due" : f.sort,
-    }));
-    setVisibleWeeks(1);
-    if (tab !== "archived") {
-      setArchiveSearch("");
-      setArchiveSearchDebounced("");
-    }
-  }, []);
+  const openTodayInCalendar = useCallback(() => {
+    setWorkspaceMode("calendar");
+    setSelectedDay(summaryTodayIso);
+  }, [summaryTodayIso]);
+
+  const snapshotPages = React.useMemo(
+    () =>
+      buildSnapshotPages({
+        isManager: isCalendarManager,
+        dueToday: summaryDueToday,
+        overdue: summaryOverdue,
+        completedToday: summaryCompletedToday,
+        checkInsToday: summaryCheckInsToday,
+        needsAttention: summaryNeedsAttention,
+        health: summaryHealth,
+        recognitionThisWeek: summaryRecognitionThisWeek,
+        goalsOnTrackPct: summaryGoalsOnTrackPct,
+        onPressDueToday: () => openSummaryTasks("active", "today"),
+        onPressOverdue: () => openSummaryTasks("active", "overdue"),
+        onPressCompletedToday: () => openSummaryTasks("completed", "today"),
+        onPressCheckIns: openTodayInCalendar,
+        onPressNeedsAttention: () =>
+          router.push({ pathname: "/(app)/team", params: { openInsights: "1" } }),
+        onPressHealth: isCalendarManager
+          ? () => router.push({ pathname: "/(app)/team", params: { openInsights: "1" } })
+          : undefined,
+        onPressRecognition: () => router.push("/(app)/activity"),
+        onPressGoals: () =>
+          router.push({ pathname: "/(app)/team", params: { openInsights: "1" } }),
+      }),
+    [
+      isCalendarManager,
+      summaryDueToday,
+      summaryOverdue,
+      summaryCompletedToday,
+      summaryCheckInsToday,
+      summaryNeedsAttention,
+      summaryHealth,
+      summaryRecognitionThisWeek,
+      summaryGoalsOnTrackPct,
+      openSummaryTasks,
+      openTodayInCalendar,
+    ],
+  );
 
   const showTasksLoading =
     filters.statusTab === "archived"
-      ? archiveSearchReady && archivedPending
+      ? archivedPending
       : filters.statusTab === "completed"
         ? completedPending && rawTasks.length === 0
+        : filters.statusTab === "all"
+          ? (activePending || completedPending) && rawTasks.length === 0
         : activePending && rawTasks.length === 0;
 
   useEffect(() => {
@@ -814,6 +1021,8 @@ export default function TasksScreen() {
         ? archivedTasksData
         : filters.statusTab === "completed"
           ? completedTasksData
+          : filters.statusTab === "all"
+            ? undefined
           : activeTasksData;
     setNextCursor(source?.nextCursor ?? null);
   }, [
@@ -929,14 +1138,11 @@ export default function TasksScreen() {
       <CurvedTabLayout
         topInset={insets.top}
         title="Workspace"
-        subtitle="Tasks and schedules live here"
         testID="execute-screen"
         headerTestID="execute-header"
       >
         <NoWorkspaceTabState
-          icon={CheckSquare}
-          title="Tasks and schedules need a workspace"
-          description="Join your team's workspace or create one to plan work, assign tasks and share a calendar."
+          bottomInset={tabBarClearance(insets.bottom, 20)}
           testID="execute-no-workspace"
         />
       </CurvedTabLayout>
@@ -998,12 +1204,11 @@ export default function TasksScreen() {
     <CurvedTabLayout
       topInset={insets.top}
       title={activeWorkspaceName}
-      subtitle={`Manage ${activeWorkspaceName} tasks and calendar`}
       workspaceTitleSelector
       testID="tasks-screen"
       headerTestID="workspace-header"
       rightAction={
-        activeTeamId ? (
+        activeTeamId && access.canWrite ? (
           <HeaderAddButton
             onPress={() => setShowAddModal(true)}
             accessibilityLabel="Add"
@@ -1018,10 +1223,11 @@ export default function TasksScreen() {
         filters={filters}
         members={teamMembers}
         isLeader={isOwnerOrLeader}
+        activeCount={activeCount}
+        completedCount={completedCount}
         onClose={() => setFilterPicker(null)}
         onApply={(next) => {
-          setFilters((f) => ({ ...f, ...next }));
-          setFilterPicker(null);
+          setFilters(next);
           setVisibleWeeks(1);
         }}
       />
@@ -2111,13 +2317,15 @@ export default function TasksScreen() {
         </>
       }
     >
-      <View style={{ flex: 1, minHeight: 0 }}>
+      <View style={{ flex: 1, minHeight: 0, backgroundColor: "#FFFFFF" }}>
         <WorkspaceViewToggle
         mode={workspaceMode}
         onChange={setWorkspaceMode}
         calendarBadge={calendarBadge}
         tasksBadge={tasksBadge}
       />
+
+      <WorkspaceSnapshotCarousel pages={snapshotPages} loading={summaryMetricsLoading} />
 
       <View style={{ flex: 1 }}>
         {workspaceMode === "calendar" ? (
@@ -2152,94 +2360,58 @@ export default function TasksScreen() {
                 setActionMenuTask(task);
               }}
               onAddEvent={() => setShowAddModal(true)}
-              listPaddingBottom={workspaceTaskClearance(insets.bottom)}
-              emptyStateBottomInset={tabBarClearance(insets.bottom, 8)}
+              listPaddingBottom={8}
+              emptyStateBottomInset={0}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
               }
             />
           </View>
         ) : showMemberTasksEmpty ? (
-          <ScrollView
-            style={{
-              flex: 1,
-              backgroundColor: WS.surface,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-            }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
-            contentContainerStyle={{
-              flexGrow: 1,
-              paddingBottom: tabBarClearance(insets.bottom, 8),
-            }}
-          >
-            <MemberTasksEmptyState />
-          </ScrollView>
+          <View style={{ flex: 1, minHeight: 0 }}>
+            <ScrollView
+              style={{
+                flex: 1,
+                backgroundColor: WS.surface,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+              }}
+              showsVerticalScrollIndicator={false}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
+              contentContainerStyle={{
+                flexGrow: 1,
+                paddingBottom: 8,
+              }}
+            >
+              <MemberTasksEmptyState />
+            </ScrollView>
+          </View>
         ) : (
           <>
             <View
               style={{
                 flexShrink: 0,
                 paddingHorizontal: WS.pageGutter,
-                paddingTop: 4,
+                paddingTop: 12,
                 paddingBottom: WS.sectionGap,
                 backgroundColor: WS.pageBg,
               }}
             >
-              <TaskStatusTabs
-                statusTab={filters.statusTab}
-                activeCount={activeCount}
-                completedCount={completedCount}
-                onChange={handleStatusTabChange}
+              <TaskShowingRow
+                filters={filters}
+                selectedDay={selectedDay}
+                onOpenFilterView={() => setFilterPicker("filterView")}
+                canCreateTask={!isRegularMember && access.canWrite}
+                onCreateTask={() =>
+                  router.push({
+                    pathname: "/create-task",
+                    params: {
+                      teamId: activeTeamId!,
+                      initialDueDate: selectedDay ?? toLocalIso(new Date()),
+                    },
+                  })
+                }
               />
-
-              {filters.statusTab === "archived" ? (
-                <View
-                  style={{
-                    marginTop: 8,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    backgroundColor: WS.surface,
-                    borderWidth: 1,
-                    borderColor: WS.cardBorder,
-                    borderRadius: 12,
-                    paddingHorizontal: 12,
-                    height: WS.controlRowHeight,
-                  }}
-                >
-                  <Search size={16} color="#94A3B8" />
-                  <TextInput
-                    value={archiveSearch}
-                    onChangeText={setArchiveSearch}
-                    placeholder="Search archived tasks..."
-                    placeholderTextColor="#94A3B8"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="search"
-                    style={{ flex: 1, fontSize: 14, color: "#0F172A", padding: 0 }}
-                    testID="archive-search-input"
-                  />
-                  {archiveSearch.length > 0 ? (
-                    <Pressable onPress={() => setArchiveSearch("")} hitSlop={8} testID="archive-search-clear">
-                      <X size={16} color="#94A3B8" />
-                    </Pressable>
-                  ) : null}
-                  {archivedFetching ? <ActivityIndicator size="small" color="#4361EE" /> : null}
-                </View>
-              ) : (
-                <View style={{ marginTop: 6 }}>
-                  <TaskFilterBar
-                    filters={filters}
-                    selectedDay={selectedDay}
-                    onOpenPicker={setFilterPicker}
-                    directReportsDisabled={!isOwnerOrLeader}
-                    unassignedDisabled={!isOwnerOrLeader}
-                    entireTeamDisabled={!isOwnerOrLeader}
-                  />
-                </View>
-              )}
             </View>
 
             <View style={{ flex: 1, minHeight: 140, paddingHorizontal: WS.pageGutter }}>
@@ -2249,10 +2421,7 @@ export default function TasksScreen() {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
                 contentContainerStyle={{
                   paddingTop: 4,
-                  paddingBottom:
-                    visibleTasks.length === 0 && !showTasksLoading
-                      ? tabBarClearance(insets.bottom, 8)
-                      : workspaceTaskClearance(insets.bottom),
+                  paddingBottom: 8,
                   flexGrow: 1,
                 }}
               >
@@ -2273,9 +2442,7 @@ export default function TasksScreen() {
                   }}
                   emptyTitle={
                     filters.statusTab === "archived"
-                      ? archiveSearchReady
-                        ? "No matches"
-                        : "Search archive"
+                      ? "No archived tasks"
                       : filters.statusTab === "completed"
                         ? "Nothing completed"
                         : filters.dueDate === "calendar_day"
@@ -2284,9 +2451,7 @@ export default function TasksScreen() {
                   }
                   emptyAccentTitle={
                     filters.statusTab === "archived"
-                      ? archiveSearchReady
-                        ? "found."
-                        : "by name."
+                      ? "yet."
                       : filters.statusTab === "completed"
                         ? filters.dueDate === "calendar_day"
                           ? "for this day."
@@ -2297,9 +2462,7 @@ export default function TasksScreen() {
                   }
                   emptySubtitle={
                     filters.statusTab === "archived"
-                      ? archiveSearchReady
-                        ? `Nothing matched “${archiveSearchDebounced}”. Try another title.`
-                        : "Completed tasks move here after 30 days. Type at least 2 letters to find them."
+                      ? "Completed tasks move here after 30 days."
                       : filters.dueDate === "calendar_day" && selectedDay
                         ? "Try viewing upcoming tasks or adjust your filters."
                         : filters.statusTab === "completed"
@@ -2347,6 +2510,11 @@ export default function TasksScreen() {
             </View>
           </>
         )}
+        <WorkspaceMembersCarousel
+          teamId={activeTeamId!}
+          members={teamMembers}
+          bottomInset={tabBarClearance(insets.bottom, 8)}
+        />
       </View>
       </View>
     </CurvedTabLayout>

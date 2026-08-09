@@ -3,6 +3,8 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { createTeamCheckoutSession, createTeamPortalSession } from "../lib/team-billing-sessions";
+import type { TeamSubscription } from "@prisma/client";
+import { getWorkspaceAccess, resolveWorkspaceAccess } from "../lib/workspace-access";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -15,7 +17,6 @@ subscriptionRouter.use("*", authGuard);
 const WEB_BILLING_MESSAGE =
   "Subscribe and manage your team plan at https://alenio.com/billing (Stripe on the web).";
 
-// Helper: fetch or create a free subscription for a team
 export function billingProviderFromSubscription(sub: {
   stripeSubscriptionId: string | null;
   plan: string;
@@ -32,12 +33,25 @@ export function billingProviderFromSubscription(sub: {
   return "none";
 }
 
-export async function getTeamSubscription(teamId: string) {
-  const sub = await prisma.teamSubscription.upsert({
-    where: { teamId },
-    create: { teamId, plan: "free", status: "active" },
-    update: {},
-  });
+/** Read a subscription without creating a free row. Missing rows are legacy grandfathered workspaces. */
+export async function getTeamSubscription(teamId: string): Promise<TeamSubscription> {
+  const sub = await prisma.teamSubscription.findUnique({ where: { teamId } });
+  if (!sub) {
+    return {
+      id: `legacy:${teamId}`,
+      teamId,
+      plan: "free",
+      status: "active",
+      trialStartedAt: null,
+      trialEndsAt: null,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+    };
+  }
   if (sub.plan === "pro") {
     return prisma.teamSubscription.update({
       where: { teamId },
@@ -47,22 +61,30 @@ export async function getTeamSubscription(teamId: string) {
   return sub;
 }
 
-const PAID_ACTIVE_STATUSES = ["active", "trialing", "past_due", "incomplete", "paused"] as const;
-
 /** Pro + Operations unlock tasks, activity, workspace (Operations also unlocks Go). */
-export function teamSubscriptionRowHasTeamFeatures(sub: { plan: string; status: string } | null | undefined): boolean {
-  const plan = (sub?.plan ?? "free").trim().toLowerCase();
-  const status = (sub?.status ?? "active").trim().toLowerCase();
-  if (!["team", "pro", "operations"].includes(plan)) return false;
-  return (PAID_ACTIVE_STATUSES as readonly string[]).includes(status);
+export function teamSubscriptionRowHasTeamFeatures(
+  sub: ({ teamId?: string; plan: string; status: string; trialStartedAt?: Date | null; trialEndsAt?: Date | null }) | null | undefined,
+): boolean {
+  return resolveWorkspaceAccess(sub?.teamId ?? "unknown", sub ? {
+    teamId: sub.teamId ?? "unknown",
+    plan: sub.plan,
+    status: sub.status,
+    trialStartedAt: sub.trialStartedAt ?? null,
+    trialEndsAt: sub.trialEndsAt ?? null,
+  } : null).hasTeamFeatures;
 }
 
 /** Alenio Go — Operations plan only. */
-export function teamSubscriptionRowHasGoFeatures(sub: { plan: string; status: string } | null | undefined): boolean {
-  const plan = (sub?.plan ?? "free").trim().toLowerCase();
-  const status = (sub?.status ?? "active").trim().toLowerCase();
-  if (plan !== "operations") return false;
-  return (PAID_ACTIVE_STATUSES as readonly string[]).includes(status);
+export function teamSubscriptionRowHasGoFeatures(
+  sub: ({ teamId?: string; plan: string; status: string; trialStartedAt?: Date | null; trialEndsAt?: Date | null }) | null | undefined,
+): boolean {
+  return resolveWorkspaceAccess(sub?.teamId ?? "unknown", sub ? {
+    teamId: sub.teamId ?? "unknown",
+    plan: sub.plan,
+    status: sub.status,
+    trialStartedAt: sub.trialStartedAt ?? null,
+    trialEndsAt: sub.trialEndsAt ?? null,
+  } : null).hasGoFeatures;
 }
 
 // GET /api/teams/:teamId/subscription
@@ -90,10 +112,17 @@ subscriptionRouter.get("/", async (c) => {
   const stripeDetails = await syncSubscriptionDetailsFromStripe(teamId);
   subscription = await getTeamSubscription(teamId);
   const billingProvider = billingProviderFromSubscription(subscription);
+  const access = await getWorkspaceAccess(teamId);
   return c.json({
     data: {
       plan: subscription.plan,
-      status: subscription.status,
+      status: access.status,
+      trialStartedAt: subscription.trialStartedAt,
+      trialEndsAt: subscription.trialEndsAt,
+      remainingDays: access.remainingDays,
+      canWrite: access.canWrite,
+      accessMode: access.accessMode,
+      bannerSeverity: access.bannerSeverity,
       currentPeriodEnd: subscription.currentPeriodEnd,
       cancelAtPeriodEnd: stripeDetails.cancelAtPeriodEnd,
       billingInterval: stripeDetails.billingInterval,
@@ -102,8 +131,8 @@ subscriptionRouter.get("/", async (c) => {
       stripeSubscriptionId: subscription.stripeSubscriptionId,
       hasStripeCustomer: !!subscription.stripeCustomerId?.trim(),
       hasStripeSubscription: !!subscription.stripeSubscriptionId?.trim(),
-      hasTeamFeatures: teamSubscriptionRowHasTeamFeatures(subscription),
-      hasGoFeatures: teamSubscriptionRowHasGoFeatures(subscription),
+      hasTeamFeatures: access.hasTeamFeatures,
+      hasGoFeatures: access.hasGoFeatures,
     },
   });
 });
@@ -140,6 +169,8 @@ subscriptionRouter.get("/health", async (c) => {
       teamSubscription: {
         plan: current.plan,
         status: current.status,
+        trialStartedAt: current.trialStartedAt,
+        trialEndsAt: current.trialEndsAt,
         currentPeriodEnd: current.currentPeriodEnd,
         stripeSubscriptionId: current.stripeSubscriptionId,
         stripeCustomerId: current.stripeCustomerId,

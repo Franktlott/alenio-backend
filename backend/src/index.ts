@@ -73,12 +73,15 @@ import { ensureGoFrontendSettingsSchema } from "./lib/ensure-go-frontend-setting
 import { ensureGoLeaderPinSchema } from "./lib/ensure-go-leader-pin-schema";
 import { ensureWorkspaceModulesSchema } from "./lib/ensure-workspace-modules-schema";
 import { ensureSubscriptionCancelSchema } from "./lib/ensure-subscription-cancel-schema";
+import { ensureWorkspaceTrialSchema } from "./lib/ensure-workspace-trial-schema";
 import { ensureOwnershipTransferSchema } from "./lib/ensure-ownership-transfer-schema";
 import { ensureConversationTeamSchema } from "./lib/ensure-conversation-team-schema";
 import { ensureDmPairKeySchema } from "./lib/ensure-dm-pair-key-schema";
 import { ensureUsernameSchema } from "./lib/ensure-username-schema";
 import { ensureConnectionsSchema } from "./lib/ensure-connections-schema";
 import { ensureAccountActivitySchema } from "./lib/ensure-account-activity-schema";
+import { ensurePublicProfileSchema } from "./lib/ensure-public-profile-schema";
+import { validatePublicProfileUpdate } from "./lib/public-profile";
 import {
   isUniqueConstraintError,
   usernameCooldownRemainingDays,
@@ -117,6 +120,12 @@ import { captureMissingDailyTeamHealthSnapshots } from "./lib/team-health-snapsh
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
 import { redeemPendingOrganizationSignupInvitesForUser } from "./lib/enterprise-signup-invite";
+import { workspaceReadOnlyMiddleware } from "./middleware/workspace-read-only";
+import {
+  assertWorkspaceCanWrite,
+  expireEndedWorkspaceTrials,
+  workspaceReadOnlyError,
+} from "./lib/workspace-access";
 
 const isProduction = env.NODE_ENV === "production";
 
@@ -132,6 +141,7 @@ const startupSchemaReady = Promise.all([
   ensureUsernameSchema(prisma),
   // Backs messaging permission checks on chat paths shared by both environments.
   ensureConnectionsSchema(prisma),
+  ensurePublicProfileSchema(prisma),
   // Relaxes TeamActivity.teamId so account-level activity can be written.
   ensureAccountActivitySchema(prisma),
   ensureTeamHealthSnapshotSchema(prisma),
@@ -139,6 +149,7 @@ const startupSchemaReady = Promise.all([
   ensureOrganizationSchema(prisma),
   ensureOrgGoSchema(prisma),
   ensureSenecaStudioSchema(prisma),
+  ensureWorkspaceTrialSchema(prisma),
   ...(isProduction
     ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureOwnershipTransferSchema(prisma), ensureConversationTeamSchema(prisma), ensureDmPairKeySchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureConversationImageSchema(prisma), ensureTaskArchiveSchema(prisma), ensureTaskNotesSchema(prisma)]
     : [
@@ -471,6 +482,8 @@ app.use("*", async (c, next) => {
   }
   await next();
 });
+
+app.use("*", workspaceReadOnlyMiddleware);
 
 /** Browsers opening the API port directly see a hint (API has no HTML app at `/`). */
 app.get("/", (c) => {
@@ -860,6 +873,10 @@ async function handleFileUpload(c: {
         400,
       );
     }
+    if ((purpose === "team" || purpose === "go_alert_sound") && teamIdRaw) {
+      const guard = await assertWorkspaceCanWrite(teamIdRaw);
+      if (!guard.ok) return c.json(workspaceReadOnlyError(guard.access), 403);
+    }
 
     if (purpose === "go_alert_sound" && teamIdRaw) {
       const membership = await prisma.teamMember.findUnique({
@@ -989,13 +1006,39 @@ app.post("/api/upload/smoke", async (c) => {
   }
 });
 
-// Update profile (name and/or image)
+// Update account and public profile identity.
 app.patch("/api/profile", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
 
   const body = await c.req.json();
-  const { name, image, timezone, username } = body;
+  const {
+    name,
+    image,
+    timezone,
+    username,
+    profileWebsite,
+    profileLocation,
+    profileBio,
+  } = body;
+
+  const publicProfileUpdate = validatePublicProfileUpdate({
+    profileWebsite,
+    profileLocation,
+    profileBio,
+  });
+  if (!publicProfileUpdate.ok) {
+    return c.json(
+      { error: { message: publicProfileUpdate.message, code: "INVALID_PROFILE" } },
+      400,
+    );
+  }
+  if (name !== undefined && (typeof name !== "string" || !name.trim() || name.trim().length > 80)) {
+    return c.json(
+      { error: { message: "Enter a display name of 80 characters or fewer.", code: "INVALID_PROFILE" } },
+      400,
+    );
+  }
 
   let nextUsername: string | undefined;
   if (username !== undefined) {
@@ -1044,6 +1087,9 @@ app.patch("/api/profile", async (c) => {
     timezone: true,
     username: true,
     usernameAutoGenerated: true,
+    profileWebsite: true,
+    profileLocation: true,
+    profileBio: true,
   } as const;
 
   try {
@@ -1052,6 +1098,7 @@ app.patch("/api/profile", async (c) => {
       data: {
         ...(name !== undefined ? { name: name.trim() } : {}),
         ...(image !== undefined ? { image } : {}),
+        ...publicProfileUpdate.data,
         ...(timezone !== undefined
           ? { timezone: typeof timezone === "string" && isValidTimeZone(timezone) ? timezone : null }
           : {}),
@@ -1148,6 +1195,12 @@ app.get("/api/me", async (c) => {
       timezone: true,
       username: true,
       usernameAutoGenerated: true,
+      usernameUpdatedAt: true,
+      profileWebsite: true,
+      profileLocation: true,
+      profileBio: true,
+      emailVerified: true,
+      createdAt: true,
     },
   });
   return c.json({ data: fullUser });
@@ -1665,6 +1718,15 @@ async function runCleanup() {
   completedTasksCutoff.setMonth(completedTasksCutoff.getMonth() - 7);
 
   try {
+    const expiredTrials = await expireEndedWorkspaceTrials();
+    if (expiredTrials > 0) {
+      console.log(`[cleanup] Expired ${expiredTrials} workspace trial(s)`);
+    }
+  } catch (err) {
+    console.error("[cleanup] Workspace trial expiry failed:", err);
+  }
+
+  try {
     // Delete calendar events whose start date is older than 45 days.
     const deletedEvents = await prisma.calendarEvent.deleteMany({
       where: { startDate: { lt: eventsCutoff } },
@@ -1730,7 +1792,7 @@ async function runCleanup() {
 }
 
 // Run once on startup, then hourly (orphan uploads still only once per day).
-runCleanup();
+void startupSchemaReady.then(runCleanup);
 setInterval(runCleanup, 60 * 60 * 1000);
 
 let healthSnapshotJobRunning = false;

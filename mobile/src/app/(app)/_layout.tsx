@@ -1,7 +1,9 @@
-import { Tabs, router } from "expo-router";
-import { CheckSquare, Users, UserRound, MessageCircle, Activity } from "lucide-react-native";
+import { Tabs } from "expo-router";
+import { CheckSquare, Users, UserRound, MessageCircle, Activity, Sparkles } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
 import {
   TAB_BAR_ACTIVE_COLOR,
   TAB_BAR_HEIGHT,
@@ -14,34 +16,37 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore, buildDmLastReadMap } from "@/lib/state/unread-store";
-import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { isPersistedPaidPlan, toPersistedPlan } from "@/lib/plan-access-copy";
 import { useTaskStore } from "@/lib/state/task-store";
-import { useContext, useEffect, useMemo } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { BottomTabBarHeightCallbackContext } from "expo-router/js-tabs";
 import type { CalendarEvent, Conversation, Team, Task } from "@/lib/types";
 import MeetingBanner from "@/components/MeetingBanner";
-import { SenecaFloatingLauncher } from "@/components/seneca/SenecaFloatingLauncher";
+import { ContextualActionLauncher } from "@/components/seneca/SenecaFloatingLauncher";
+import { SenecaAssistantSheet } from "@/components/seneca/SenecaAssistantSheet";
 import { AppReleaseGate } from "@/components/AppReleaseGate";
-import { NO_WORKSPACE_WELCOME_PATH, resolveActiveTeamId } from "@/lib/no-workspace-routing";
+import { resolveActiveTeamId } from "@/lib/no-workspace-routing";
 import { realtimeClient, userRealtimeChannel } from "@/lib/realtime-client";
+import { useWorkspaceAccess } from "@/lib/workspace-access";
+import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { hasTeamPlan, isPersistedPaidPlan } from "@/lib/plan-access-copy";
 
 export const unstable_settings = {
   initialRouteName: "chat",
 };
 
 const ALL_TABS = [
-  { name: "activity", label: "Activity", Icon: Activity, paidOnly: false },
-  { name: "chat", label: "Chat", Icon: MessageCircle, paidOnly: false },
-  { name: "execute", label: "Workspace", Icon: CheckSquare, paidOnly: true },
-  { name: "team", label: "Team", Icon: Users, paidOnly: false },
-  { name: "profile", label: "Profile", Icon: UserRound, paidOnly: false },
+  { name: "activity", label: "Activity", Icon: Activity },
+  { name: "chat", label: "Chat", Icon: MessageCircle },
+  { name: "execute", label: "Workspace", Icon: CheckSquare },
+  { name: "team", label: "People", Icon: Users },
+  { name: "profile", label: "Profile", Icon: UserRound },
 ] as const;
 
 function FixedTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const onTabBarHeightChange = useContext(BottomTabBarHeightCallbackContext);
   const queryClient = useQueryClient();
+  const [senecaOpen, setSenecaOpen] = useState(false);
 
   // Fixed bar overlays content — screens pad with tabBarClearance().
   useEffect(() => {
@@ -49,9 +54,8 @@ function FixedTabBar({ state, navigation }: any) {
   }, [onTabBarHeightChange]);
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const persistedPlan = useSubscriptionStore((s) => s.plan);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
-  const plan = useSubscriptionStore((s) => s.plan);
-  const isPaid = isPersistedPaidPlan(plan);
   const acknowledgedCounts = useTaskStore((s) => s.acknowledgedCounts);
   const acknowledgedEventCounts = useTaskStore((s) => s.acknowledgedEventCounts);
 
@@ -115,6 +119,26 @@ function FixedTabBar({ state, navigation }: any) {
     staleTime: 1000 * 60 * 2,
   });
 
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription", activeTeamId],
+    queryFn: () =>
+      api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
+        `/api/teams/${activeTeamId}/subscription`,
+      ),
+    enabled: !!activeTeamId && !!session?.user,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const activeRole = teamsList.find((team) => team.id === activeTeamId)?.role;
+  const hasSenecaPlan = subscription
+    ? hasTeamPlan(subscription)
+    : isPersistedPaidPlan(persistedPlan);
+  const canOpenSeneca =
+    !!session?.user &&
+    !!activeTeamId &&
+    (activeRole === "owner" || activeRole === "team_leader") &&
+    hasSenecaPlan;
+
   const manageableTeamIds = useMemo(
     () => teamsList.filter((t) => t.role === "owner" || t.role === "team_leader").map((t) => t.id),
     [teamsList],
@@ -161,13 +185,11 @@ function FixedTabBar({ state, navigation }: any) {
     return n;
   }, [joinRequestQueries, goLoginRequestQueries]);
 
-  // All five tabs stay visible at zero workspaces; each screen renders its own
-  // onboarding state rather than disappearing from the bar.
+  // Account-first navigation: all five destinations remain visible for every
+  // authenticated user. Each screen adapts to workspace membership and role.
   const visibleRoutes = state.routes.filter((r: any) => {
     const tab = ALL_TABS.find((t) => t.name === r.name);
-    if (!tab) return false;
-    if (tab.paidOnly && activeTeamId && !isPaid) return false;
-    return true;
+    return !!tab;
   });
 
   const prefetchRouteData = (routeName: string) => {
@@ -180,7 +202,7 @@ function FixedTabBar({ state, navigation }: any) {
       return;
     }
     if (!activeTeamId) return;
-    if (routeName === "execute" && isPaid) {
+    if (routeName === "execute") {
       void queryClient.prefetchQuery({
         queryKey: ["tasks", activeTeamId, "mine", "active"],
         queryFn: () =>
@@ -273,6 +295,8 @@ function FixedTabBar({ state, navigation }: any) {
             },
           ]}
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
         >
           {label}
         </Text>
@@ -281,17 +305,56 @@ function FixedTabBar({ state, navigation }: any) {
   });
 
   return (
-    <View
-      style={[
-        tabBarStyles.container,
-        { bottom: Math.max(insets.bottom, 8) },
-      ]}
-      pointerEvents="box-none"
-      testID="fixed-tab-bar"
-    >
-      <View style={tabBarStyles.depthShadow} pointerEvents="none" />
-      <View style={tabBarStyles.row}>{tabs}</View>
-    </View>
+    <>
+      <View
+        style={[
+          tabBarStyles.container,
+          { bottom: Math.max(insets.bottom, 8) },
+        ]}
+        pointerEvents="box-none"
+        testID="fixed-tab-bar"
+      >
+        <View style={tabBarStyles.depthShadow} pointerEvents="none" />
+        <View style={tabBarStyles.row}>
+          {tabs}
+          <Pressable
+            onPress={() => {
+              if (!canOpenSeneca) return;
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setSenecaOpen(true);
+            }}
+            style={({ pressed }) => [
+              tabBarStyles.senecaTab,
+              !canOpenSeneca ? tabBarStyles.senecaTabDisabled : null,
+              pressed && canOpenSeneca ? tabBarStyles.senecaTabPressed : null,
+            ]}
+            testID="tab-seneca"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canOpenSeneca, expanded: senecaOpen }}
+            accessibilityLabel="Open Seneca leadership assistant"
+          >
+            <LinearGradient
+              colors={["#5368F5", "#8447EF"]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={tabBarStyles.senecaPill}
+            >
+              <Sparkles size={12} color="#FFFFFF" strokeWidth={2.3} />
+              <Text style={tabBarStyles.senecaLabel} numberOfLines={1}>
+                Seneca
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </View>
+      {canOpenSeneca && activeTeamId ? (
+        <SenecaAssistantSheet
+          open={senecaOpen}
+          onClose={() => setSenecaOpen(false)}
+          teamId={activeTeamId}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -342,6 +405,40 @@ const tabBarStyles = StyleSheet.create({
     gap: 2,
     paddingHorizontal: 2,
   },
+  senecaTab: {
+    width: 70,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: 2,
+  },
+  senecaTabDisabled: {
+    opacity: 0.55,
+  },
+  senecaTabPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
+  senecaPill: {
+    width: 66,
+    height: 34,
+    borderRadius: 17,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    shadowColor: "#5B47D6",
+    shadowOpacity: 0.24,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  senecaLabel: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
   iconWrap: {
     alignItems: "center",
     justifyContent: "center",
@@ -371,20 +468,9 @@ const tabBarStyles = StyleSheet.create({
 export default function AppLayout() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
-  const setPlan = useSubscriptionStore((s) => s.setPlan);
-  const plan = useSubscriptionStore((s) => s.plan);
   const { data: session } = useSession();
 
-  // Keep plan in sync with server
-  const { data: subscription } = useQuery({
-    queryKey: ["subscription", activeTeamId],
-    queryFn: () =>
-      api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
-        `/api/teams/${activeTeamId}/subscription`,
-      ),
-    enabled: !!activeTeamId,
-    staleTime: 1000 * 60 * 5,
-  });
+  useWorkspaceAccess(activeTeamId);
 
   const { data: teams, isFetched: teamsFetched } = useQuery({
     queryKey: ["teams"],
@@ -401,25 +487,12 @@ export default function AppLayout() {
   }, [activeTeamId, session?.user, setActiveTeamId, teams, teamsFetched]);
 
   useEffect(() => {
-    if (!activeTeamId) {
-      setPlan("free");
-      return;
-    }
-    if (subscription) {
-      setPlan(toPersistedPlan(subscription));
-    }
-  }, [subscription, activeTeamId, setPlan]);
-
-  useEffect(() => {
     if (!teams || teams.length === 0) return;
     const nextTeamId = resolveActiveTeamId(teams, activeTeamId);
     if (nextTeamId && nextTeamId !== activeTeamId) {
       setActiveTeamId(nextTeamId);
     }
   }, [teams, activeTeamId, setActiveTeamId]);
-
-  // Free: Activity + Chat + Team + Profile. Pro+: also Workspace.
-  const isPaid = isPersistedPaidPlan(plan);
 
   if (!teamsFetched) {
     return (
@@ -450,7 +523,6 @@ export default function AppLayout() {
             backgroundColor: "transparent",
             elevation: 0,
           },
-          safeAreaInsets: { bottom: 0 },
         }}
       >
         <Tabs.Screen name="activity" options={{}} />
@@ -460,7 +532,7 @@ export default function AppLayout() {
         <Tabs.Screen name="profile" options={{ title: "Settings" }} />
       </Tabs>
       <MeetingBanner />
-      <SenecaFloatingLauncher />
+      <ContextualActionLauncher />
       <AppReleaseGate enabled={!!session?.user} />
     </View>
   );

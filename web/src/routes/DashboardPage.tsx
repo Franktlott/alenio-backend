@@ -132,7 +132,8 @@ export function DashboardPage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const overdueFocus = searchParams.get("overdue") === "1";
-  const { me, teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
+  const { me, teams, selectedTeamId, setSelectedTeamId, workspaceAccess } = useEnterpriseShell();
+  const canWriteWorkspace = workspaceAccess?.canWrite !== false;
   const [calendarView, setCalendarView] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
   const [taskScope, setTaskScope] = useState<TaskScope>("mine");
@@ -306,11 +307,19 @@ export function DashboardPage() {
   };
 
   const openCreateTask = (dueDate?: string) => {
+    if (!canWriteWorkspace) {
+      setTaskActionError("This workspace is read-only. Choose a plan to create tasks.");
+      return;
+    }
     setCreateInitialDueDate(dueDate);
     setCreateOpen(true);
   };
 
   const requestCompleteTask = (task: ApiTask) => {
+    if (!canWriteWorkspace) {
+      setTaskActionError("This workspace is read-only. Choose a plan to update tasks.");
+      return;
+    }
     if (task.status === "done") return;
     setCompletePromptTask(task);
   };
@@ -833,6 +842,8 @@ export function DashboardPage() {
                   <button
                     type="button"
                     className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
+                    disabled={!canWriteWorkspace}
+                    title={!canWriteWorkspace ? "Choose a plan to add calendar items" : undefined}
                     onClick={() => {
                       if (!selectedTeamId) return;
                       if (isOwnerOrLeader) setEventAddChoiceOpen(true);
@@ -985,7 +996,9 @@ export function DashboardPage() {
                       ))}
                       {selectedEvents.map((event) => {
                         const canManageEvent =
-                          (isOwnerOrLeader || (!!me?.id && event.createdById === me.id)) && !!selectedTeamId;
+                          canWriteWorkspace &&
+                          (isOwnerOrLeader || (!!me?.id && event.createdById === me.id)) &&
+                          !!selectedTeamId;
                         const badgesContent = (
                           <>
                             {!event.isHidden ? <span className="enterprise-cal-badge-public">Public</span> : null}
@@ -1209,6 +1222,8 @@ export function DashboardPage() {
               <button
                 type="button"
                 className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
+                disabled={!canWriteWorkspace}
+                title={!canWriteWorkspace ? "Choose a plan to add tasks" : undefined}
                 onClick={() => openCreateTask(selectedDate ? selectedDate.toISOString().slice(0, 10) : undefined)}
               >
                 + Add task

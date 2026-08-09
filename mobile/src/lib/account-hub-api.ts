@@ -20,6 +20,15 @@ export type WorkspaceBillingRow = {
 export type WorkspaceSubscriptionSnapshot = {
   plan: string;
   status: string;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  remainingDays?: number | null;
+  canWrite?: boolean;
+  accessMode?: "full" | "read_only";
+  bannerSeverity?: "none" | "info" | "warning" | "critical";
+  hasTeamFeatures?: boolean;
+  hasGoFeatures?: boolean;
+  features?: Record<string, boolean> | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd?: boolean;
   billingInterval?: BillingInterval | null;
@@ -43,6 +52,15 @@ type TeamListRow = {
 export type SubscriptionApiRow = {
   plan: string;
   status: string;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  remainingDays?: number | null;
+  canWrite?: boolean;
+  accessMode?: "full" | "read_only";
+  bannerSeverity?: "none" | "info" | "warning" | "critical";
+  hasTeamFeatures?: boolean;
+  hasGoFeatures?: boolean;
+  features?: Record<string, boolean> | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd?: boolean;
   billingInterval?: BillingInterval | null;
@@ -76,6 +94,15 @@ export function rowFromTeamAndSubscription(team: TeamListRow, sub: SubscriptionA
     subscription: {
       plan: sub.plan,
       status: sub.status,
+      trialStartedAt: sub.trialStartedAt,
+      trialEndsAt: sub.trialEndsAt,
+      remainingDays: sub.remainingDays,
+      canWrite: sub.canWrite,
+      accessMode: sub.accessMode,
+      bannerSeverity: sub.bannerSeverity,
+      hasTeamFeatures: sub.hasTeamFeatures,
+      hasGoFeatures: sub.hasGoFeatures,
+      features: sub.features,
       currentPeriodEnd: sub.currentPeriodEnd,
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd === true,
       billingInterval: sub.billingInterval ?? null,
@@ -141,16 +168,16 @@ export function workspaceSubscriptionLine(
   return planStatusLabel(sub.plan, sub.status);
 }
 
-/** Full plan name for badges (Free / Pro / Operations). */
-export function planBadgeLabel(plan: string | null | undefined): "Free" | "Pro" | "Operations" {
+/** Full plan name for badges. Older free workspaces are shown neutrally as Legacy. */
+export function planBadgeLabel(plan: string | null | undefined): "Legacy" | "Pro" | "Operations" {
   const p = (plan ?? "free").trim().toLowerCase();
   if (p === "operations") return "Operations";
   if (p === "team" || p === "pro") return "Pro";
-  return "Free";
+  return "Legacy";
 }
 
 export function isPaidPlanBadge(label: ReturnType<typeof planBadgeLabel>): boolean {
-  return label !== "Free";
+  return label !== "Legacy";
 }
 
 export function billingCycleLabelFromSubscription(
@@ -198,6 +225,7 @@ function isBillingApiUnavailable(message: string): boolean {
 async function postBillingSession(
   teamId: string,
   kind: "checkout" | "portal",
+  plan: "pro" | "operations" = "pro",
 ): Promise<{ url: string; openedWebFallback?: boolean }> {
   const teamPaths =
     kind === "checkout"
@@ -209,7 +237,7 @@ async function postBillingSession(
   let lastError: Error | null = null;
   for (const path of [...teamPaths, ...legacyPaths]) {
     try {
-      const body = path.startsWith("/api/billing/") ? { teamId } : {};
+      const body = path.startsWith("/api/billing/") ? { teamId, plan } : { plan };
       return await api.post<{ url: string }>(path, body);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
@@ -225,8 +253,8 @@ async function postBillingSession(
   throw lastError ?? new Error("Billing is unavailable right now.");
 }
 
-export function postBillingCheckout(teamId: string) {
-  return postBillingSession(teamId, "checkout");
+export function postBillingCheckout(teamId: string, plan: "pro" | "operations" = "pro") {
+  return postBillingSession(teamId, "checkout", plan);
 }
 
 export function postBillingPortal(teamId: string) {
@@ -283,5 +311,5 @@ export function planStatusLabel(plan: string, status: string): string {
     if (status === "canceled") return "Pro — canceled";
     return "Pro plan active";
   }
-  return "Free plan";
+  return "Legacy access";
 }

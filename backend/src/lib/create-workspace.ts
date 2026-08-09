@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { syncAppUserFromAuth } from "./ensure-app-user";
 import type { AppUser } from "../auth";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "./team-name";
+import { trialEndsAtFrom } from "./workspace-access";
 
 function prismaCode(err: unknown): string | undefined {
   if (!err || typeof err !== "object") return undefined;
@@ -22,6 +23,7 @@ export type CreateWorkspaceResult =
       team: {
         id: string;
         name: string;
+        industry: string | null;
         image: string | null;
         createdAt: Date;
         _count: { members: number; tasks: number };
@@ -44,6 +46,9 @@ export async function createWorkspaceForAuthUser(opts: {
   /** Preferred Prisma user id from middleware sync (may differ from auth id when matched by email). */
   preferredUserId?: string | null;
   name: string;
+  industry?: string | null;
+  /** Self-serve callers must explicitly opt in to the Operations trial. */
+  startTrial?: boolean;
 }): Promise<CreateWorkspaceResult> {
   const nameNorm = normalizeTeamName(opts.name);
   if (!nameNorm) {
@@ -101,21 +106,40 @@ export async function createWorkspaceForAuthUser(opts: {
   }
 
   try {
-    const team = await prisma.team.create({
-      data: {
-        name: nameNorm,
-        inviteCode,
-        members: {
-          create: { userId: owner.id, role: "owner" },
+    const team = await prisma.$transaction(async (tx) => {
+      const created = await tx.team.create({
+        data: {
+          name: nameNorm,
+          industry: opts.industry?.trim().slice(0, 120) || null,
+          inviteCode,
         },
-      },
-      select: {
+      });
+      await tx.teamMember.create({
+        data: { userId: owner.id, teamId: created.id, role: "owner" },
+      });
+      if (opts.startTrial === true) {
+        const trialStartedAt = new Date();
+        await tx.teamSubscription.create({
+          data: {
+            teamId: created.id,
+            plan: "operations",
+            status: "trialing",
+            trialStartedAt,
+            trialEndsAt: trialEndsAtFrom(trialStartedAt),
+          },
+        });
+      }
+      return tx.team.findUniqueOrThrow({
+        where: { id: created.id },
+        select: {
         id: true,
         name: true,
+        industry: true,
         image: true,
         createdAt: true,
         _count: { select: { members: true, tasks: true } },
-      },
+        },
+      });
     });
 
     return { ok: true, team, ownerName: owner.name };

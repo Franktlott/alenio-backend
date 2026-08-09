@@ -12,7 +12,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import {
-  Activity,
   Search,
   X,
   Check,
@@ -25,7 +24,7 @@ import { Image as ExpoImage } from "expo-image";
 import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { resolveUserImageUrl } from "@/lib/user-avatar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { tabBarClearance, SENECA_FAB_SIZE, SENECA_FAB_VISIBLE_SIZE } from "@/lib/tab-bar";
+import { tabBarClearance, SENECA_FAB_VISIBLE_SIZE } from "@/lib/tab-bar";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useActivityCelebrateFabListener } from "@/components/seneca/SenecaFloatingLauncher";
@@ -464,15 +463,6 @@ export default function ActivityScreen() {
     <CurvedTabLayout
       topInset={insets.top}
       title="Activity"
-      subtitle={
-        teams.length === 0
-          ? "Your Alenio activity"
-          : workspaceFilter === "all"
-            ? teams.length > 1
-              ? "What's happening across all your workspaces"
-              : "What's happening across your team"
-            : `What's happening in ${workspaceFilterLabel}`
-      }
       testID="activity-screen"
       headerTestID="activity-header"
       rightAction={
@@ -915,17 +905,51 @@ export default function ActivityScreen() {
         <View style={{ flex: 1, paddingTop: 28 }}>
           {workspaceFilteredActivities.length === 0 ? (
             <View
-              style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }}
+              style={{
+                flex: 1,
+                minHeight: 0,
+                width: "100%",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                marginBottom: 4,
+              }}
               testID="empty-state"
             >
-              <Activity size={48} color="#CBD5E1" />
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#94A3B8", marginTop: 12, textAlign: "center" }}>
+              <ExpoImage
+                source={require("@/assets/alenio-empty-activity.png")}
+                style={{ width: 168, height: 168, alignSelf: "center" }}
+                contentFit="contain"
+                accessibilityLabel="Alenio activity pulse"
+                accessibilityIgnoresInvertColors
+              />
+              <Text
+                style={{
+                  width: "100%",
+                  marginBottom: 4,
+                  fontSize: 14,
+                  fontWeight: "700",
+                  color: "#0F172A",
+                  letterSpacing: -0.2,
+                  textAlign: "center",
+                }}
+              >
                 No activity yet
               </Text>
-              <Text style={{ fontSize: 12, color: "#CBD5E1", marginTop: 4, textAlign: "center", lineHeight: 16 }}>
+              <Text
+                style={{
+                  width: "100%",
+                  maxWidth: 260,
+                  fontSize: 12,
+                  lineHeight: 16,
+                  color: "#64748B",
+                  textAlign: "center",
+                }}
+              >
                 {workspaceFilter === "all" && teams.length > 1
                   ? "Events from all your workspaces — completed tasks, new members, and celebrations — will appear here."
-                  : "Team events like completed tasks and new members will appear here."}
+                  : "Updates from your connections and workspaces will appear here."}
               </Text>
             </View>
           ) : (
@@ -1019,7 +1043,7 @@ export default function ActivityScreen() {
               refreshing={isLoading}
               contentContainerStyle={{
                 paddingTop: 0,
-                paddingBottom: tabBarClearance(insets.bottom) + SENECA_FAB_SIZE + SENECA_FAB_VISIBLE_SIZE + 24,
+                paddingBottom: tabBarClearance(insets.bottom) + SENECA_FAB_VISIBLE_SIZE + 24,
               }}
               showsVerticalScrollIndicator={false}
               testID="activity-list"

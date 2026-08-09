@@ -13,8 +13,6 @@ import {
 } from "../lib/api";
 import { loadWebCheckoutConfig, peekWebCheckoutConfig, type WebCheckoutConfig } from "../lib/checkout-config-cache";
 import { LEGAL_CONTACT_EMAIL } from "../lib/legal-constants";
-import { OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED } from "../lib/plan-catalog";
-
 const FREE_FEATURES = ["Activity feed", "Team chat", "Team members"] as const;
 const PRO_CARD_FEATURES = [
   "Tasks & action items",
@@ -301,15 +299,21 @@ export function BillingPage() {
 
   const proCheckoutReady = checkoutCfg?.plans?.pro !== false && !!checkoutCfg?.configured;
   const operationsCheckoutReady = !!checkoutCfg?.plans?.operations;
+  const isCardFreeTrial = sub?.status === "trialing" && !sub.stripeSubscriptionId;
   const canCheckoutPro =
-    isOwner && !!sub && !mobileManaged && currentPlanTier === "free" && proCheckoutReady;
-  const canCheckoutOperations =
-    OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED &&
     isOwner &&
     !!sub &&
     !mobileManaged &&
-    currentPlanTier !== "operations" &&
-    (currentPlanTier === "free" || stripeActive);
+    (currentPlanTier === "free" || isCardFreeTrial) &&
+    proCheckoutReady;
+  const canCheckoutOperations =
+    isOwner &&
+    !!sub &&
+    !mobileManaged &&
+    (currentPlanTier !== "operations" || isCardFreeTrial) &&
+    (currentPlanTier === "free" || stripeActive || isCardFreeTrial) &&
+    operationsCheckoutReady;
+  const isGrandfatheredFree = sub?.id.startsWith("legacy:") === true;
   const showCheckoutNotConfigured =
     !checkoutCfgLoading &&
     !!checkoutCfg &&
@@ -413,8 +417,8 @@ export function BillingPage() {
                     </strong>
                   </div>
                   <div>
-                    <span className="billing-sub-k">Renews</span>
-                    <strong>{formatRenewalDate(sub.currentPeriodEnd)}</strong>
+                    <span className="billing-sub-k">{sub.status === "trialing" ? "Trial ends" : "Renews"}</span>
+                    <strong>{formatRenewalDate(sub.status === "trialing" ? sub.trialEndsAt : sub.currentPeriodEnd)}</strong>
                   </div>
                 </div>
                 {isOwner && !mobileManaged ? (
@@ -435,32 +439,28 @@ export function BillingPage() {
           </aside>
         </header>
 
-        <div className="billing-plans">
-          <article
-            className={`billing-card${currentPlanTier === "free" ? " billing-card--current" : ""}`}
-            aria-labelledby="billing-free-heading"
-          >
-            <div className="billing-card-head">
-              <h2 id="billing-free-heading" className="billing-card-name">
-                Free
-              </h2>
-              <p className="billing-card-tag">Chat, activity, and team</p>
-            </div>
-            <p className="billing-card-price">
-              $0 <span>forever</span>
-            </p>
-            <ul className="billing-card-features">
-              {FREE_FEATURES.map((f) => (
-                <li key={f}>
-                  <CheckIcon />
-                  <span>{f}</span>
-                </li>
-              ))}
-            </ul>
-            <button type="button" className="billing-cta billing-cta--outline" disabled>
-              {currentPlanTier === "free" ? "Current plan" : "Included in Pro"}
-            </button>
-          </article>
+        <div className={`billing-plans${isGrandfatheredFree ? "" : " billing-plans--paid-only"}`}>
+          {isGrandfatheredFree ? (
+            <article className="billing-card billing-card--legacy" aria-labelledby="billing-free-heading">
+              <div className="billing-card-head">
+                <h2 id="billing-free-heading" className="billing-card-name">
+                  Legacy workspace
+                </h2>
+                <p className="billing-card-tag">Your existing access remains unchanged</p>
+              </div>
+              <ul className="billing-card-features">
+                {FREE_FEATURES.map((f) => (
+                  <li key={f}>
+                    <CheckIcon />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className="billing-cta billing-cta--outline" disabled>
+                Current access
+              </button>
+            </article>
+          ) : null}
 
           <article
             className={`billing-card billing-card--pro${currentPlanTier === "pro" ? " billing-card--current" : ""}`}
@@ -489,7 +489,7 @@ export function BillingPage() {
               <button type="button" className="billing-cta billing-cta--current" disabled>
                 Current plan
               </button>
-            ) : currentPlanTier === "operations" ? (
+            ) : currentPlanTier === "operations" && !isCardFreeTrial ? (
               <button type="button" className="billing-cta billing-cta--outline" disabled>
                 Included in Operations
               </button>
@@ -518,15 +518,8 @@ export function BillingPage() {
           </article>
 
           <article
-            className={`billing-card${currentPlanTier === "operations" ? " billing-card--current" : ""}${
-              currentPlanTier !== "operations" && !OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED
-                ? " billing-card--coming-soon"
-                : ""
-            }`}
+            className={`billing-card${currentPlanTier === "operations" ? " billing-card--current" : ""}`}
             aria-labelledby="billing-ops-heading"
-            aria-disabled={
-              currentPlanTier !== "operations" && !OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? true : undefined
-            }
           >
             <div className="billing-card-head">
               <div className="billing-card-name-row">
@@ -535,9 +528,6 @@ export function BillingPage() {
                 </h2>
                 <AlenioGoLogo variant="nav" className="billing-go-logo" />
                 <span className="billing-badge billing-badge--ops">Go</span>
-                {currentPlanTier !== "operations" && !OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? (
-                  <span className="billing-badge billing-badge--coming-soon">Coming soon</span>
-                ) : null}
               </div>
               <p className="billing-card-tag">Advanced tools for high performing teams</p>
             </div>
@@ -553,13 +543,9 @@ export function BillingPage() {
                 </li>
               ))}
             </ul>
-            {currentPlanTier === "operations" ? (
+            {currentPlanTier === "operations" && !isCardFreeTrial ? (
               <button type="button" className="billing-cta billing-cta--current" disabled>
                 Current plan
-              </button>
-            ) : !OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED ? (
-              <button type="button" className="billing-cta billing-cta--coming-soon" disabled>
-                Coming soon
               </button>
             ) : (
               <button

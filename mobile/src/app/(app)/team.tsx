@@ -13,16 +13,11 @@ import {
   RefreshControl,
   Dimensions,
   Linking,
-  StyleSheet,
+  TextInput,
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Clock,
-  X,
-  Camera,
-  Trash2,
-} from "lucide-react-native";
+import { Clock, X, Camera, Trash2, Search } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
@@ -34,9 +29,9 @@ import {
   type MemberStatsPayload,
   type MemberStandardsCompliance,
 } from "@/lib/workplace-standards";
-import { ManagerCoachingHome } from "@/components/people/ManagerCoachingHome";
-import { MemberSelfHome } from "@/components/people/MemberSelfHome";
-import { FreePlanTeamHome } from "@/components/people/FreePlanTeamHome";
+import { PeopleDirectoryHome } from "@/components/people/PeopleDirectoryHome";
+import { AddConnectionSheet } from "@/components/people/AddConnectionSheet";
+import { AddPersonSheet } from "@/components/people/AddPersonSheet";
 import { ProfileCard } from "@/components/profile/ProfileEnterpriseUI";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
@@ -74,8 +69,10 @@ import {
   inviteMemberByEmail,
   resendTeamInvite,
 } from "@/lib/team-invites-api";
+import { teamInviteErrorMessage } from "@/lib/team-invite-errors";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { isPersistedPaidPlan } from "@/lib/plan-access-copy";
+import { useWorkspaceAccess } from "@/lib/workspace-access";
 import { tabBarClearance } from "@/lib/tab-bar";
 import Svg, { Path, Circle, Line, Text as SvgText, Polyline } from "react-native-svg";
 import {
@@ -282,18 +279,20 @@ function PerformanceChart({ data, dark }: { data: Array<{ label: string; complet
 // ------------------------------------------------------------------
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
+  const [peopleQuery, setPeopleQuery] = useState("");
   // Match Chat: sit flush above the fixed tab bar (no extra gap).
   // Coaching home pins Browse above the tab bar; Seneca floats over the right edge.
   const TAB_BAR_CLEARANCE = tabBarClearance(insets.bottom, 0);
   const COACHING_BOTTOM_PAD = TAB_BAR_CLEARANCE + 6;
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const { access } = useWorkspaceAccess(activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const hasHydrated = useTeamStore((s) => s._hasHydrated);
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const plan = useSubscriptionStore((s) => s.plan);
   const isPaid = isPersistedPaidPlan(plan);
-  const routeParams = useLocalSearchParams<{ openInvite?: string }>();
+  const routeParams = useLocalSearchParams<{ openInvite?: string; openInsights?: string }>();
 
   // Prefer /api/me — same backend identity as team membership. Auth session can lag or disagree.
   const { data: meProfile } = useQuery({
@@ -596,12 +595,20 @@ export default function TeamScreen() {
   }, [activeTeamId, queryClient]);
 
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [addConnectionOpen, setAddConnectionOpen] = useState(false);
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [pendingInvitesOpen, setPendingInvitesOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
   const [joinRequestActionId, setJoinRequestActionId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (routeParams.openInsights !== "1" || !isPaid || !isOwnerOrLeader) return;
+    setInsightsOpen(true);
+    router.setParams({ openInsights: undefined });
+  }, [isOwnerOrLeader, isPaid, routeParams.openInsights]);
 
   const inviteMemberMutation = useMutation({
     mutationFn: (email: string) => inviteMemberByEmail(activeTeamId!, email),
@@ -619,12 +626,7 @@ export default function TeamScreen() {
       }
     },
     onError: (err: Error) => {
-      const msg = err.message;
-      setAddMemberError(
-        msg.includes("404")
-          ? "Could not reach the invite service. Restart your backend dev server so it picks up the latest code."
-          : msg,
-      );
+      setAddMemberError(teamInviteErrorMessage(err));
     },
   });
 
@@ -729,6 +731,8 @@ export default function TeamScreen() {
     await queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
     await queryClient.invalidateQueries({ queryKey: ["team-go-login-requests"] });
+    await queryClient.invalidateQueries({ queryKey: ["connections"] });
+    await queryClient.invalidateQueries({ queryKey: ["connection-suggestions"] });
     if (canViewSenecaFocus && activeTeamId) {
       await queryClient.invalidateQueries({
         queryKey: senecaFocusQueryKey(activeTeamId),
@@ -750,6 +754,7 @@ export default function TeamScreen() {
   };
 
   const handleInvitePress = () => {
+    if (!access.canWrite) return;
     if (isOwnerOrLeader) {
       setAddMemberError(null);
       setAddMemberOpen(true);
@@ -757,6 +762,33 @@ export default function TeamScreen() {
     }
     handleShareCode();
   };
+
+  const canInviteWorkspaceMembers = Boolean(
+    activeTeamId && isOwnerOrLeader && access.canWrite,
+  );
+  const addPersonHeaderAction = (
+    <HeaderAddButton
+      onPress={() => setAddPersonOpen(true)}
+      accessibilityLabel="Add person"
+      testID="add-person-button"
+    />
+  );
+  const addPersonOverlays = (
+    <>
+      <AddPersonSheet
+        visible={addPersonOpen}
+        canInviteWorkspaceMembers={canInviteWorkspaceMembers}
+        workspaceName={team?.name}
+        onClose={() => setAddPersonOpen(false)}
+        onConnect={() => setAddConnectionOpen(true)}
+        onInvite={handleInvitePress}
+      />
+      <AddConnectionSheet
+        visible={addConnectionOpen}
+        onClose={() => setAddConnectionOpen(false)}
+      />
+    </>
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -938,10 +970,11 @@ export default function TeamScreen() {
       return (
         <CurvedTabLayout
           topInset={insets.top}
-          title="Team"
-          subtitle="People, coaching, and insights"
+          title="People"
           testID="team-screen"
           headerTestID="team-header"
+          rightAction={addPersonHeaderAction}
+          overlays={addPersonOverlays}
         >
           <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24 }}>
             <Text style={{ fontSize: 12, fontWeight: "600", color: "#8B95A5", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 8, paddingHorizontal: 4 }}>
@@ -1012,12 +1045,13 @@ export default function TeamScreen() {
     return (
       <CurvedTabLayout
         topInset={insets.top}
-        title="Team"
-        subtitle="Your people on Alenio"
+        title="People"
         testID="team-screen"
         headerTestID="team-header"
+        rightAction={addPersonHeaderAction}
+        overlays={addPersonOverlays}
       >
-        <ZeroWorkspaceTeamHome currentUserId={myId ?? ""} />
+        <ZeroWorkspaceTeamHome onAddConnection={() => setAddConnectionOpen(true)} />
       </CurvedTabLayout>
     );
   }
@@ -1029,10 +1063,11 @@ export default function TeamScreen() {
     return (
       <CurvedTabLayout
         topInset={insets.top}
-        title="Team"
-        subtitle="People, coaching, and insights"
+        title="People"
         testID="team-error-screen"
         headerTestID="team-header"
+        rightAction={addPersonHeaderAction}
+        overlays={addPersonOverlays}
       >
         <View
           style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }}
@@ -1065,31 +1100,56 @@ export default function TeamScreen() {
   return (
     <CurvedTabLayout
       topInset={insets.top}
-      title={team?.name ?? "Team"}
-      subtitle={
-        !isPaid
-          ? "People in this workspace"
-          : isOwnerOrLeader
-            ? "Team health, check-ins, and coaching"
-            : "Your check-ins, goals, and teammates"
-      }
-      workspaceTitleSelector
+      title="People"
       testID="team-screen"
       headerTestID="team-header"
-      rightAction={
-        isOwnerOrLeader ? (
-          <HeaderAddButton
-            onPress={() => {
-              setAddMemberError(null);
-              setAddMemberOpen(true);
+      searchSlot={
+        <View
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingHorizontal: 12,
+            borderRadius: 14,
+            backgroundColor: "#F1F5F9",
+          }}
+          testID="team-search-bar"
+        >
+          <Search size={15} color="#94A3B8" />
+          <TextInput
+            value={peopleQuery}
+            onChangeText={setPeopleQuery}
+            placeholder="Search people or @username"
+            placeholderTextColor="#94A3B8"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel="Search people"
+            style={{
+              flex: 1,
+              height: "100%",
+              paddingVertical: 0,
+              fontSize: 13,
+              color: "#0F172A",
             }}
-            accessibilityLabel="Add member"
-            testID="add-member-button"
           />
-        ) : null
+          {peopleQuery.length > 0 ? (
+            <Pressable
+              onPress={() => setPeopleQuery("")}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear people search"
+            >
+              <X size={15} color="#94A3B8" />
+            </Pressable>
+          ) : null}
+        </View>
       }
+      rightAction={addPersonHeaderAction}
       overlays={
         <>
+      {addPersonOverlays}
       {/* ── Team photo action sheet ─────────────────────────────────── */}
       <Modal visible={photoMenuOpen} transparent animationType="slide" onRequestClose={() => setPhotoMenuOpen(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }} onPress={() => setPhotoMenuOpen(false)}>
@@ -1266,81 +1326,25 @@ export default function TeamScreen() {
           />
         ) : null}
 
-        {!isPaid ? (
-          <FreePlanTeamHome
+        {team ? (
+          <PeopleDirectoryHome
             team={team}
             members={sortedMembers}
             myId={myId}
-            isOwner={isOwner}
-            isOwnerOrLeader={isOwnerOrLeader}
+            isLeader={isOwnerOrLeader}
+            memberStats={memberStats}
             canViewMemberProfile={canViewMemberProfile}
             contentBottomPad={TAB_BAR_CLEARANCE + 12}
             refreshing={refreshing}
             onRefresh={onRefresh}
             onInvite={handleInvitePress}
-          />
-        ) : isOwnerOrLeader ? (
-          <ManagerCoachingHome
-            key="manager-coaching-home-focus-card-v3"
-            team={team}
-            members={sortedMembers}
-            myId={myId}
-            managerName={meProfile?.name || session?.user?.name || "there"}
-            managerImage={meProfile?.image || session?.user?.image}
-            isPaid={isPaid}
-            isOwner={isOwner}
-            memberStats={memberStats}
-            checkInRequired={workplaceStandards.checkInRequired}
-            goalsRequired={workplaceStandards.goalsRequired}
-            teamHealthPct={teamHealthPct}
-            checkInPct={healthBreakdown.checkInPct}
-            goalsPct={healthBreakdown.goalsPct}
-            tasksPct={healthBreakdown.tasksPct}
-            healthHistory={teamHealthHistory}
-            pendingApprovalCount={pendingApprovalCount}
-            pendingInviteCount={pendingInvites.length}
-            senecaFocus={senecaFocus}
-            senecaFocusLoading={senecaFocusLoading}
-            senecaFocusError={senecaFocusError}
-            senecaFocusFetching={senecaFocusFetching}
-            contentBottomPad={COACHING_BOTTOM_PAD}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            onInvite={handleInvitePress}
-            onOpenInsights={() => setInsightsOpen(true)}
-            onOpenJoinRequests={() => setJoinRequestsOpen(true)}
-            onOpenPendingInvites={() => setPendingInvitesOpen(true)}
-            onOpenSenecaFocus={() =>
-              router.push({
-                pathname: "/team-focus",
-                params: { teamId: activeTeamId ?? "" },
-              })
-            }
-            onOpenWorkspaceSettings={() =>
-              router.push({
-                pathname: "/workspace-settings",
-                params: { teamId: activeTeamId ?? "" },
-              })
-            }
+            onAddConnection={() => setAddConnectionOpen(true)}
+            searchQuery={peopleQuery}
           />
         ) : (
-          <MemberSelfHome
-            team={team}
-            myId={myId}
-            myName={meProfile?.name || session?.user?.name || "You"}
-            myImage={meProfile?.image || session?.user?.image}
-            myRole={myRole}
-            isPaid={isPaid}
-            checkInRequired={workplaceStandards.checkInRequired}
-            goalsRequired={workplaceStandards.goalsRequired}
-            daysSinceLastOneOnOne={myMemberStats?.daysSinceLastOneOnOne}
-            compliance={myCompliance}
-            contentBottomPad={TAB_BAR_CLEARANCE + 12}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            onCopyCode={() => void handleCopyCode()}
-            onShareCode={handleShareCode}
-          />
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            <ActivityIndicator color="#4361EE" />
+          </View>
         )}
       </View>
     </CurvedTabLayout>

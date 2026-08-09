@@ -15,6 +15,7 @@ import {
   inviteExpiresAt,
   generateInviteToken,
 } from "../lib/team-invites";
+import { assertWorkspaceCanWrite, workspaceReadOnlyError } from "../lib/workspace-access";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -184,6 +185,11 @@ const teamInvitesPublicRouter = new Hono<{ Variables: Variables }>();
 teamInvitesPublicRouter.post("/redeem", authGuard, zValidator("json", z.object({ token: z.string().min(1) })), async (c) => {
   const user = c.get("user")!;
   const { token } = c.req.valid("json");
+  const invite = await prisma.teamInvite.findUnique({ where: { token }, select: { teamId: true } });
+  if (invite) {
+    const guard = await assertWorkspaceCanWrite(invite.teamId);
+    if (!guard.ok) return c.json(workspaceReadOnlyError(guard.access), 403);
+  }
 
   const result = await redeemInviteByToken(token, user.id, user.email ?? "");
   if (!result) {

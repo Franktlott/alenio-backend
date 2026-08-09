@@ -20,6 +20,7 @@ import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
+import { formatConversationTime } from "@/lib/format-conversation-time";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore, buildDmLastReadMap, getDmUnreadCount } from "@/lib/state/unread-store";
 import type { Conversation, Team } from "@/lib/types";
@@ -112,7 +113,7 @@ function ChatEmptyState({
       }}
     >
       <Image
-        source={require("@/assets/alenio-empty-chat-bubbles.png")}
+        source={require("@/assets/alenio-empty-chat-v2.png")}
         style={{
           width: 168,
           height: 168,
@@ -185,16 +186,6 @@ function ChatEmptyState({
       ) : null}
     </View>
   );
-}
-
-function formatTime(dateStr: string) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return d.toLocaleDateString("en-US", { weekday: "short" });
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export default function ChatScreen() {
@@ -548,7 +539,11 @@ export default function ChatScreen() {
     const displayName = conversationDisplayName(conv);
     const groupWorkspace = isGroup ? groupWorkspaceLabel(conv.workspaceContext) : null;
     const lastMsg = conv.lastMessage;
-    const timeStr = lastMsg ? formatTime(lastMsg.createdAt) : (conv.updatedAt ? formatTime(conv.updatedAt) : "");
+    const timeStr = lastMsg
+      ? formatConversationTime(lastMsg.createdAt)
+      : conv.updatedAt
+        ? formatConversationTime(conv.updatedAt)
+        : "";
 
     return (
       <Pressable
@@ -677,9 +672,23 @@ export default function ChatScreen() {
     <CurvedTabLayout
       topInset={insets.top}
       title="Chat"
-      subtitle="All conversations in one place"
       testID="chat-screen"
       headerTestID="chat-header"
+      searchSlot={
+        <View style={styles.searchBar}>
+          <Search size={15} color="#94A3B8" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search conversations"
+            placeholderTextColor="#94A3B8"
+            style={styles.searchInput}
+            testID="chat-search-input"
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+        </View>
+      }
       rightAction={
         <HeaderAddButton
           onPress={() => setShowAddModal(true)}
@@ -726,22 +735,6 @@ export default function ChatScreen() {
       }
     >
       <View style={styles.chatColumns}>
-          <View style={styles.searchRow}>
-            <View style={[styles.searchBar, { flex: 1 }]}>
-              <Search size={13} color="#94A3B8" />
-              <TextInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search conversations"
-                placeholderTextColor="#94A3B8"
-                style={{ flex: 1, fontSize: 12, color: "#0F172A", padding: 0 }}
-                testID="chat-search-input"
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-            </View>
-          </View>
-
           {pinnedConversations.length > 0 ? (
             <View style={{ flexShrink: 0, paddingTop: 2, paddingBottom: 2 }} testID="pinned-conversations-section">
               <SectionHeader title="Pinned" subtitle="Hold a circle to unpin" />
@@ -925,21 +918,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    backgroundColor: "#F1F5F9",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  searchRow: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: "#0F172A",
+    padding: 0,
   },
   unreadChip: {
     flexDirection: "row",

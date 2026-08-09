@@ -13,9 +13,36 @@ import {
   isFirebaseStorageConfigured,
   uploadFileToFirebaseStorage,
 } from "../lib/firebase-storage";
+import { assertWorkspaceCanWrite, workspaceReadOnlyError } from "../lib/workspace-access";
 
 const publicGoWalksRouter = new Hono();
 const MAX_WALK_PHOTO_BYTES = 12 * 1024 * 1024;
+
+publicGoWalksRouter.use("*", async (c, next) => {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)) return next();
+  let hubToken = c.req.query("hubToken")?.trim() ?? "";
+  try {
+    const clone = c.req.raw.clone();
+    const contentType = clone.headers.get("content-type") ?? "";
+    if (contentType.includes("multipart/form-data")) {
+      const form = await clone.formData();
+      hubToken = String(form.get("hubToken") ?? "").trim();
+    } else {
+      const body = await clone.json() as { hubToken?: unknown };
+      hubToken = typeof body.hubToken === "string" ? body.hubToken.trim() : hubToken;
+    }
+  } catch {
+    // Route validation returns the appropriate malformed-body response.
+  }
+  if (hubToken) {
+    const team = await findTeamByGoHubToken(hubToken);
+    if (team) {
+      const guard = await assertWorkspaceCanWrite(team.id);
+      if (!guard.ok) return c.json(workspaceReadOnlyError(guard.access), 403);
+    }
+  }
+  return next();
+});
 
 async function resolveHubTeam(hubToken: string | undefined, deviceId: string | undefined) {
   const token = hubToken?.trim();

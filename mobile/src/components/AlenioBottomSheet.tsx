@@ -23,6 +23,7 @@ type Props = {
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  headerRight?: React.ReactNode;
   asScreen?: boolean;
   testID?: string;
   sheetStyle?: StyleProp<ViewStyle>;
@@ -43,6 +44,7 @@ function SheetContent({
   onClose,
   children,
   footer,
+  headerRight,
   testID,
   sheetStyle,
   compact = false,
@@ -89,6 +91,7 @@ function SheetContent({
                 </Text>
               ) : null}
             </View>
+            {headerRight}
             {showCloseButton ? (
               <Pressable
                 onPress={onClose}

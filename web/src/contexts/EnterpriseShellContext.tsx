@@ -1,5 +1,5 @@
 import { createContext, useContext, type Dispatch, type SetStateAction } from "react";
-import type { WebMeUser, WebTeamRow } from "../lib/api";
+import type { WebMeUser, WebTeamRow, WebTeamSubscription } from "../lib/api";
 
 export type EnterpriseShellContextValue = {
   me: WebMeUser | null | undefined;
@@ -8,6 +8,9 @@ export type EnterpriseShellContextValue = {
   setTeams: Dispatch<SetStateAction<WebTeamRow[] | null>>;
   selectedTeamId: string;
   setSelectedTeamId: Dispatch<SetStateAction<string>>;
+  workspaceAccess: WebTeamSubscription | null;
+  workspaceAccessLoading: boolean;
+  refreshWorkspaceAccess: () => Promise<void>;
   setWorkspaceMainLoading: (v: boolean) => void;
   /**
    * Full-screen SSO-style boot while an enterprise workspace opens and sidebar tabs

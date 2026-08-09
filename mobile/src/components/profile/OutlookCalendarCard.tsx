@@ -192,7 +192,18 @@ export function OutlookCalendarCard() {
   if (loading) {
     return (
       <ProfileCard>
-        <Text style={{ padding: 16, color: "#64748B", fontSize: 14 }}>Loading calendar settings…</Text>
+        <Text
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            color: "#64748B",
+            fontSize: 13,
+            lineHeight: 18,
+            textAlign: "left",
+          }}
+        >
+          Loading calendar settings…
+        </Text>
       </ProfileCard>
     );
   }
@@ -200,7 +211,16 @@ export function OutlookCalendarCard() {
   if (!configured) {
     return (
       <ProfileCard>
-        <Text style={{ padding: 16, color: "#64748B", fontSize: 14 }}>
+        <Text
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            color: "#64748B",
+            fontSize: 13,
+            lineHeight: 18,
+            textAlign: "left",
+          }}
+        >
           Outlook calendar sync is not enabled on this server yet.
         </Text>
       </ProfileCard>

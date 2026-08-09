@@ -62,6 +62,7 @@ import {
   ProfileMenuRow,
   PROFILE_UI,
 } from "@/components/profile/ProfileEnterpriseUI";
+import { HEADER_GRADIENT } from "@/lib/header-gradient";
 
 function DmChatEmptyState({
   user,
@@ -657,7 +658,7 @@ export default function DMChatScreen() {
   return (
     <SafeAreaView testID="dm-chat-screen" className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]}>
       <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
+        colors={HEADER_GRADIENT}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={{ zIndex: 2, elevation: 4 }}

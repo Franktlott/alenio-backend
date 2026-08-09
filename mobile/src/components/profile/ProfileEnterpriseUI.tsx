@@ -22,9 +22,21 @@ export const PROFILE_UI = {
   dividerInset: space.cardPadH + space.avatar + 10,
 };
 
-export function ProfileContent({ children }: { children: React.ReactNode }) {
+export function ProfileContent({
+  children,
+  compact = false,
+}: {
+  children: React.ReactNode;
+  compact?: boolean;
+}) {
   return (
-    <View style={{ paddingHorizontal: space.pagePad, paddingTop: space.sm, gap: PROFILE_UI.sectionGap }}>
+    <View
+      style={{
+        paddingHorizontal: space.pagePad,
+        paddingTop: compact ? 2 : space.sm,
+        gap: compact ? 10 : 18,
+      }}
+    >
       {children}
     </View>
   );
@@ -177,11 +189,13 @@ export function ProfileToolbarButton({
   onPress,
   testID,
   primary,
+  showChevron = true,
 }: {
   label: string;
   onPress: () => void;
   testID?: string;
   primary?: boolean;
+  showChevron?: boolean;
 }) {
   return (
     <Pressable
@@ -198,7 +212,7 @@ export function ProfileToolbarButton({
       })}
     >
       <Text style={{ fontSize: 12, fontWeight: "600", color: primary ? "#4338CA" : "#4361EE" }}>{label}</Text>
-      <ChevronRight size={12} color={primary ? "#4338CA" : "#4361EE"} />
+      {showChevron ? <ChevronRight size={12} color={primary ? "#4338CA" : "#4361EE"} /> : null}
     </Pressable>
   );
 }
@@ -220,27 +234,29 @@ export function ProfileAddRow({
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
-        gap: 8,
-        paddingVertical: 10,
-        paddingHorizontal: 4,
-        opacity: pressed ? 0.7 : 1,
+        alignSelf: "flex-start",
+        gap: 6,
+        marginTop: 8,
+        paddingVertical: 4,
+        paddingHorizontal: 2,
+        opacity: pressed ? 0.65 : 1,
       })}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
       <View
         style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
+          width: 18,
+          height: 18,
+          borderRadius: 9,
           backgroundColor: colors.brandSoft,
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Text style={{ color: colors.brand, fontSize: 16, fontWeight: "600", lineHeight: 18 }}>+</Text>
+        <Text style={{ color: colors.brand, fontSize: 14, fontWeight: "700", lineHeight: 16 }}>+</Text>
       </View>
-      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.brand }}>{label}</Text>
+      <Text style={{ fontSize: 12, fontWeight: "600", color: colors.brand }}>{label}</Text>
     </Pressable>
   );
 }

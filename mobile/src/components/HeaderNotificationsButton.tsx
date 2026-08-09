@@ -8,12 +8,13 @@ import {
   Linking,
 } from "react-native";
 import { useQueries, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, Crown, Smartphone, UserPlus, Mail, Settings, X } from "lucide-react-native";
+import { Bell, Check, Crown, Smartphone, Mail, Settings, X } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
-import type { Team } from "@/lib/types";
+import type { ConnectionsResponse, Team } from "@/lib/types";
 import { UserAvatar } from "@/components/UserAvatar";
+import { formatRelativeTime } from "@/components/activity/types";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
@@ -212,6 +213,15 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
     refetchInterval: 30_000,
   });
 
+  const { data: connections } = useQuery({
+    queryKey: ["connections"],
+    queryFn: () => api.get<ConnectionsResponse>("/api/connections"),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+  const incomingConnectionRequests = connections?.incoming ?? [];
+  const outgoingConnectionRequests = connections?.outgoing ?? [];
+
   const { data: ownershipTransfers = [] } = useQuery({
     queryKey: ["ownership-transfers-mine"],
     queryFn: () => fetchIncomingOwnershipTransfers(),
@@ -285,7 +295,9 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
     outgoingPending.length +
     pendingEvents.length +
     ownershipTransfers.length +
-    outgoingOwnershipTransfers.length;
+    outgoingOwnershipTransfers.length +
+    incomingConnectionRequests.length +
+    outgoingConnectionRequests.length;
 
   const approveJoin = useMutation({
     mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
@@ -327,6 +339,43 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
     onMutate: (requestId) => setBusyId(requestId),
     onSettled: () => setBusyId(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] }),
+  });
+
+  const cancelConnectionRequest = useMutation({
+    mutationFn: (userId: string) => api.delete("/api/connections", { userId }),
+    onMutate: (userId) => setBusyId(`connection-${userId}`),
+    onSettled: () => setBusyId(null),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      queryClient.invalidateQueries({ queryKey: ["user-search"] });
+      queryClient.invalidateQueries({ queryKey: ["person"] });
+    },
+    onError: (err: Error) => {
+      Alert.alert("Connection request", err.message || "Could not cancel this request.");
+    },
+  });
+
+  const respondToConnectionRequest = useMutation({
+    mutationFn: ({
+      userId,
+      action,
+    }: {
+      userId: string;
+      action: "accept" | "decline";
+    }) => api.post(`/api/connections/${action}`, { userId }),
+    onMutate: ({ userId }) => setBusyId(`incoming-connection-${userId}`),
+    onSettled: () => setBusyId(null),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      queryClient.invalidateQueries({ queryKey: ["user-search"] });
+      queryClient.invalidateQueries({ queryKey: ["person"] });
+    },
+    onError: (err: Error) => {
+      Alert.alert(
+        "Connection request",
+        err.message || "Could not update this request.",
+      );
+    },
   });
 
   const cancelInvite = useMutation({
@@ -439,25 +488,25 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
           opacity: pressed ? 0.75 : 1,
         })}
       >
-        <Bell size={18} color="white" strokeWidth={2.25} />
+        <Bell size={19} color="white" strokeWidth={2.25} />
         {badgeCount > 0 ? (
           <View
             style={{
               position: "absolute",
-              top: 0,
-              right: 0,
-              minWidth: 14,
-              height: 14,
-              borderRadius: 7,
-              paddingHorizontal: 3,
+              top: 1,
+              right: 1,
+              minWidth: badgeCount > 9 ? 14 : 11,
+              height: 11,
+              borderRadius: 6,
+              paddingHorizontal: badgeCount > 9 ? 2 : 0,
               backgroundColor: "#EF4444",
               alignItems: "center",
               justifyContent: "center",
-              borderWidth: 1.5,
+              borderWidth: 1,
               borderColor: "#5B21B6",
             }}
           >
-            <Text style={{ color: "white", fontSize: 9, fontWeight: "800" }}>
+            <Text style={{ color: "white", fontSize: 7, lineHeight: 8, fontWeight: "800" }}>
               {badgeCount > 9 ? "9+" : String(badgeCount)}
             </Text>
           </View>
@@ -503,10 +552,134 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
               You&apos;re all caught up
             </Text>
             <Text style={{ fontSize: 12, color: "#64748B", textAlign: "center", marginTop: 4, lineHeight: 17 }}>
-              Join requests, ownership transfers you send or receive, Alenio Go logins, invites, and calendar
-              approvals will show up here.
+              Connection and join requests, ownership transfers, Alenio Go logins, invites, and
+              calendar approvals will show up here.
             </Text>
           </AlenioSheetCard>
+        ) : null}
+
+        {incomingConnectionRequests.length > 0 ? (
+          <View style={{ gap: 6 }}>
+            <SectionLabel>Connection requests</SectionLabel>
+            {incomingConnectionRequests.map((entry) => {
+              const connectionBusyId = `incoming-connection-${entry.person.id}`;
+              return (
+                <AlenioSheetCard key={entry.id} compact>
+                  <View
+                    style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+                    testID={`header-incoming-connection-${entry.person.id}`}
+                  >
+                    <UserAvatar
+                      user={entry.person}
+                      size={34}
+                      radius={17}
+                      backgroundColor="#EEF2FF"
+                      textColor="#4361EE"
+                      fontSize={13}
+                    />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}
+                        numberOfLines={1}
+                      >
+                        {entry.person.name ?? "Alenio member"}
+                      </Text>
+                      <Text style={{ marginTop: 1, fontSize: 11, color: "#64748B" }}>
+                        Requested {formatRelativeTime(entry.createdAt)}
+                      </Text>
+                    </View>
+                    <ActionPair
+                      busy={busyId === connectionBusyId}
+                      onDecline={() =>
+                        respondToConnectionRequest.mutate({
+                          userId: entry.person.id,
+                          action: "decline",
+                        })
+                      }
+                      onApprove={() =>
+                        respondToConnectionRequest.mutate({
+                          userId: entry.person.id,
+                          action: "accept",
+                        })
+                      }
+                      testIdPrefix={`header-connection-${entry.person.id}`}
+                    />
+                  </View>
+                </AlenioSheetCard>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {outgoingConnectionRequests.length > 0 ? (
+          <View style={{ gap: 6 }}>
+            <SectionLabel>Sent connection requests</SectionLabel>
+            {outgoingConnectionRequests.map((entry) => {
+              const connectionBusyId = `connection-${entry.person.id}`;
+              return (
+                <AlenioSheetCard key={entry.id} compact>
+                  <Pressable
+                    onPress={() => {
+                      setOpen(false);
+                      router.push({
+                        pathname: "/person",
+                        params: { userId: entry.person.id },
+                      });
+                    }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+                    testID={`header-sent-connection-${entry.person.id}`}
+                  >
+                    <UserAvatar
+                      user={entry.person}
+                      size={34}
+                      radius={17}
+                      backgroundColor="#EEF2FF"
+                      textColor="#4361EE"
+                      fontSize={13}
+                    />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}
+                        numberOfLines={1}
+                      >
+                        {entry.person.name ?? "Alenio member"}
+                      </Text>
+                      <Text style={{ marginTop: 1, fontSize: 11, color: "#64748B" }}>
+                        Sent {formatRelativeTime(entry.createdAt)}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={(event) => {
+                        event.stopPropagation();
+                        cancelConnectionRequest.mutate(entry.person.id);
+                      }}
+                      disabled={busyId === connectionBusyId}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Cancel request to ${entry.person.name ?? "this person"}`}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        backgroundColor: "#F8FAFC",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: busyId === connectionBusyId ? 0.5 : 1,
+                      }}
+                      testID={`header-cancel-connection-${entry.person.id}`}
+                    >
+                      {busyId === connectionBusyId ? (
+                        <ActivityIndicator size="small" color="#64748B" />
+                      ) : (
+                        <X size={15} color="#64748B" />
+                      )}
+                    </Pressable>
+                  </Pressable>
+                </AlenioSheetCard>
+              );
+            })}
+          </View>
         ) : null}
 
         {ownershipTransfers.length > 0 ? (
@@ -548,7 +721,7 @@ export function HeaderNotificationsButton({ testID = "header-notifications-butto
                     />
                   </View>
                   {row.awaitingPaymentMethod ? (
-                    <Text style={{ fontSize: 10, color: "#6366F1", fontWeight: "650", marginTop: 8 }}>
+                    <Text style={{ fontSize: 10, color: "#6366F1", fontWeight: "600", marginTop: 8 }}>
                       Tap ✓ to add a different card (previous owner’s card won’t work)
                     </Text>
                   ) : null}

@@ -103,8 +103,6 @@ export async function applySubscriptionFromStripeSubscription(
   customerId: string | null,
   subscription: Stripe.Subscription,
 ): Promise<void> {
-  await getTeamSubscription(teamId);
-
   const previous = await prisma.teamSubscription.findUnique({
     where: { teamId },
     select: { plan: true, status: true, team: { select: { name: true } } },
@@ -113,31 +111,33 @@ export async function applySubscriptionFromStripeSubscription(
   const stripeStatus = subscription.status;
   const currentPeriodEnd = subscriptionCurrentPeriodEnd(subscription);
 
-  let plan = "free";
+  let plan = planFromStripeSubscription(subscription);
   let status = "canceled";
   let subId: string | null = subscription.id;
   let cancelAtPeriodEnd = false;
 
   if (stripeStatus === "active" || stripeStatus === "trialing") {
-    plan = planFromStripeSubscription(subscription);
-    status = "active";
+    status = stripeStatus;
     cancelAtPeriodEnd = isStripeSubscriptionCanceling(subscription);
   } else if (stripeStatus === "past_due") {
-    plan = planFromStripeSubscription(subscription);
     status = "past_due";
   } else if (stripeStatus === "incomplete" || stripeStatus === "paused") {
     // Checkout often lands here briefly before `active`; persist Stripe ids so the app + webhooks can converge.
-    plan = planFromStripeSubscription(subscription);
-    status = stripeStatus;
+    status = "past_due";
   } else if (
     stripeStatus === "canceled" ||
     stripeStatus === "unpaid" ||
     stripeStatus === "incomplete_expired"
   ) {
-    plan = "free";
     status = "canceled";
-    subId = null;
   }
+
+  const trialStartedAt = subscription.trial_start
+    ? new Date(subscription.trial_start * 1000)
+    : null;
+  const trialEndsAt = subscription.trial_end
+    ? new Date(subscription.trial_end * 1000)
+    : null;
 
   const baseData = {
     ...(customerId ? { stripeCustomerId: customerId } : {}),
@@ -145,18 +145,22 @@ export async function applySubscriptionFromStripeSubscription(
     plan,
     status,
     currentPeriodEnd,
+    trialStartedAt,
+    trialEndsAt,
   };
 
   try {
-    await prisma.teamSubscription.update({
+    await prisma.teamSubscription.upsert({
       where: { teamId },
-      data: { ...baseData, cancelAtPeriodEnd },
+      create: { teamId, ...baseData, cancelAtPeriodEnd },
+      update: { ...baseData, cancelAtPeriodEnd },
     });
   } catch (err) {
     console.warn("[stripe] cancelAtPeriodEnd column unavailable, persisting without it:", err);
-    await prisma.teamSubscription.update({
+    await prisma.teamSubscription.upsert({
       where: { teamId },
-      data: baseData,
+      create: { teamId, ...baseData },
+      update: baseData,
     });
   }
 

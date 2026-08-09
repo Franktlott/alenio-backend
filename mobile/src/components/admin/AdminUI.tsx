@@ -22,6 +22,7 @@ import {
   isPaidPlan,
   type AdminAlert,
 } from "@/lib/admin/admin-api";
+import { HEADER_GRADIENT } from "@/lib/header-gradient";
 
 export function AdminHeader({
   title,
@@ -35,7 +36,7 @@ export function AdminHeader({
   return (
     <>
       <StatusBar style="light" />
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <SafeAreaView edges={["top"]}>
           <View className="px-5 pt-2 pb-5">
             <View className="flex-row items-center justify-between">

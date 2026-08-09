@@ -24,6 +24,8 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { AppPageBackground } from '@/components/AppPageBackground';
+import { toast } from 'burnt';
+import { subscribeToWorkspaceReadOnly } from '@/lib/workspace-access';
 
 export const unstable_settings = {
   /** Run `index` first so session + `/api/me` gate to Chat or Sign-in stays consistent. */
@@ -258,6 +260,22 @@ function RootLayoutNav() {
     };
   }, [hasBackendSession, session?.user?.id]);
 
+  useEffect(
+    () =>
+      subscribeToWorkspaceReadOnly((teamId) => {
+        toast({
+          title: "Workspace is read-only",
+          message: "Choose a plan to make changes.",
+          preset: "error",
+        });
+        router.push({
+          pathname: "/choose-plan",
+          params: teamId ? { teamId } : undefined,
+        });
+      }),
+    [],
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <AppPageBackground />
@@ -297,6 +315,13 @@ function RootLayoutNav() {
             <Stack.Screen name="workspace" />
             <Stack.Screen
               name="workspace-settings"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
+              }}
+            />
+            <Stack.Screen
+              name="manage-workspaces"
               options={{
                 headerShown: false,
                 animation: "slide_from_right",
@@ -349,6 +374,8 @@ function RootLayoutNav() {
               }}
             />
             <Stack.Screen name="account-hub" />
+            <Stack.Screen name="choose-plan" />
+            <Stack.Screen name="workspace-welcome" />
             <Stack.Screen name="billing" />
             <Stack.Screen name="subscription" />
             <Stack.Screen

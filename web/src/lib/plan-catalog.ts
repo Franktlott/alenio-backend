@@ -1,4 +1,4 @@
-/** Shared Free / Pro / Operations plan copy for billing (app) and public pricing (website). */
+/** Shared plan copy. Free constants describe grandfathered workspaces only. */
 
 export const FREE_INCLUDED = ["Activity feed", "Team chat", "Team members"] as const;
 
@@ -33,7 +33,7 @@ export const OPERATIONS_FEATURES = [
   "Floor-ready ops workflows",
 ] as const;
 
-export const FREE_BEST_FOR = "Small teams evaluating Alenio.";
+export const FREE_BEST_FOR = "Existing grandfathered workspaces.";
 export const PRO_BEST_FOR =
   "Team communication, tasks, development, calendar, chat, and core workspace features.";
 export const OPERATIONS_BEST_FOR =
@@ -43,9 +43,6 @@ export const PRO_PRICE_AMOUNT = "$39.99";
 export const PRO_PRICE_PERIOD = "per workspace / month";
 export const OPERATIONS_PRICE_AMOUNT = "$69.99";
 export const OPERATIONS_PRICE_PERIOD = "per workspace / month";
-
-/** Flip to true when Operations self-serve checkout is ready for customers. */
-export const OPERATIONS_SELF_SERVE_CHECKOUT_ENABLED = false;
 
 /** @deprecated Prefer PRO_* — kept for any lingering imports during rename. */
 export const TEAM_FEATURES = PRO_FEATURES;

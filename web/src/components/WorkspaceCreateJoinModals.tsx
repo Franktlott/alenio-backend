@@ -27,6 +27,9 @@ export function WorkspaceCreateJoinModals({
 }: Props) {
   const [joinCode, setJoinCode] = useState("");
   const [createName, setCreateName] = useState("");
+  const [createIndustry, setCreateIndustry] = useState("");
+  const [createStep, setCreateStep] = useState<"details" | "confirm" | "welcome">("details");
+  const [createdTeam, setCreatedTeam] = useState<WebTeamRow | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [joinErr, setJoinErr] = useState<string | null>(null);
@@ -41,6 +44,9 @@ export function WorkspaceCreateJoinModals({
   const closeCreate = () => {
     onCloseCreate();
     setCreateName("");
+    setCreateIndustry("");
+    setCreateStep("details");
+    setCreatedTeam(null);
     setCreateErr(null);
   };
 
@@ -54,21 +60,25 @@ export function WorkspaceCreateJoinModals({
   useEffect(() => {
     if (!createOpen) {
       setCreateName("");
+      setCreateIndustry("");
+      setCreateStep("details");
+      setCreatedTeam(null);
       setCreateErr(null);
     }
   }, [createOpen]);
 
   const onCreateWorkspace = async () => {
     const trimmed = createName.trim();
-    if (!trimmed || createBusy) return;
+    const industry = createIndustry.trim();
+    if (!trimmed || !industry || createBusy) return;
     setCreateBusy(true);
     setCreateErr(null);
     try {
-      const team = await createWebTeam(trimmed);
-      closeCreate();
-      await onWorkspaceEntered?.(team);
+      const team = await createWebTeam({ name: trimmed, industry, startTrial: true });
+      setCreatedTeam(team);
+      setCreateStep("welcome");
       await onRefreshWorkspaces().catch(() => {
-        /* shell already has optimistic team from onWorkspaceEntered */
+        /* keep the successful creation confirmation available */
       });
     } catch (e) {
       setCreateErr(e instanceof Error ? e.message : "Could not create workspace.");
@@ -187,10 +197,18 @@ export function WorkspaceCreateJoinModals({
             </button>
             <header className="enterprise-task-modal-head">
               <h3 id="ws-create-title" className="enterprise-task-modal-title">
-                Create workspace
+                {createStep === "details"
+                  ? "Create workspace"
+                  : createStep === "confirm"
+                    ? "Start your Operations trial"
+                    : "Your workspace is ready"}
               </h3>
               <p className="enterprise-muted">
-                You will be the workspace owner. Subscriptions are billed per workspace on the Billing page.
+                {createStep === "details"
+                  ? "Tell us about your workspace. Nothing is created until you confirm the trial."
+                  : createStep === "confirm"
+                    ? "Try every Operations feature for 14 days. No card is required."
+                    : `Welcome to ${createdTeam?.name ?? createName.trim()}. Your 14-day Operations trial starts today.`}
               </p>
             </header>
             <div className="chat-create-modal-body">
@@ -199,44 +217,100 @@ export function WorkspaceCreateJoinModals({
                   {createErr}
                 </p>
               ) : null}
-              <label className="auth-label" htmlFor="ws-create-name">
-                Workspace name
-              </label>
-              <input
-                id="ws-create-name"
-                className="auth-input"
-                placeholder="e.g. Acme Retail"
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                autoComplete="organization"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && createName.trim() && !createBusy) {
-                    e.preventDefault();
-                    void onCreateWorkspace();
-                  }
-                }}
-                data-testid="create-workspace-name-input"
-              />
+              {createStep === "details" ? (
+                <>
+                  <label className="auth-label" htmlFor="ws-create-name">
+                    Workspace name
+                  </label>
+                  <input
+                    id="ws-create-name"
+                    className="auth-input"
+                    placeholder="e.g. Acme Retail"
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                    autoComplete="organization"
+                    autoFocus
+                    data-testid="create-workspace-name-input"
+                  />
+                  <label className="auth-label" htmlFor="ws-create-industry">
+                    Industry
+                  </label>
+                  <input
+                    id="ws-create-industry"
+                    className="auth-input"
+                    placeholder="e.g. Retail, hospitality, healthcare"
+                    value={createIndustry}
+                    onChange={(e) => setCreateIndustry(e.target.value)}
+                    data-testid="create-workspace-industry-input"
+                  />
+                  <p className="workspace-create-logo-note">
+                    You can add a workspace logo later from Settings.
+                  </p>
+                </>
+              ) : createStep === "confirm" ? (
+                <div className="workspace-trial-confirm">
+                  <strong>14 days of Operations, free</strong>
+                  <ul>
+                    <li>Team tasks, chat, calendars, and coaching</li>
+                    <li>Alenio Go checklists, walks, and temperature checks</li>
+                    <li>No card today; choose a paid plan before the trial ends to keep editing</li>
+                  </ul>
+                  <p>
+                    <strong>{createName.trim()}</strong> · {createIndustry.trim()}
+                  </p>
+                </div>
+              ) : (
+                <div className="workspace-trial-welcome" role="status">
+                  <span className="workspace-trial-welcome-mark" aria-hidden>✓</span>
+                  <p>All Operations features are unlocked. We’ll show a countdown in your workspace.</p>
+                </div>
+              )}
             </div>
             <footer className="enterprise-task-modal-footer">
-              <button
-                type="button"
-                className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
-                disabled={createBusy}
-                onClick={closeCreate}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
-                disabled={createBusy || !createName.trim()}
-                data-testid="create-workspace-submit"
-                onClick={() => void onCreateWorkspace()}
-              >
-                {createBusy ? "Creating…" : "Create workspace"}
-              </button>
+              {createStep !== "welcome" ? (
+                <button
+                  type="button"
+                  className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
+                  disabled={createBusy}
+                  onClick={() => createStep === "confirm" ? setCreateStep("details") : closeCreate()}
+                >
+                  {createStep === "confirm" ? "Back" : "Cancel"}
+                </button>
+              ) : null}
+              {createStep === "details" ? (
+                <button
+                  type="button"
+                  className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
+                  disabled={!createName.trim() || !createIndustry.trim()}
+                  data-testid="create-workspace-details-next"
+                  onClick={() => setCreateStep("confirm")}
+                >
+                  Continue
+                </button>
+              ) : createStep === "confirm" ? (
+                <button
+                  type="button"
+                  className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
+                  disabled={createBusy}
+                  data-testid="create-workspace-submit"
+                  onClick={() => void onCreateWorkspace()}
+                >
+                  {createBusy ? "Creating…" : "Start free trial"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
+                  data-testid="create-workspace-enter"
+                  onClick={() => {
+                    const team = createdTeam;
+                    closeCreate();
+                    if (team) void onWorkspaceEntered?.(team);
+                  }}
+                >
+                  Enter workspace
+                </button>
+              )}
             </footer>
           </div>
         </div>

@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { getAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
@@ -26,10 +27,16 @@ import {
   AuthScreen,
   AuthTextLink,
 } from "@/components/auth/AuthScreen";
+import { EmailVerifiedCelebration } from "@/components/auth/EmailVerifiedCelebration";
 
 /** Better Auth defaults to 6; some projects use longer OTPs. */
 const OTP_MIN_LEN = 6;
 const OTP_MAX_LEN = 10;
+const SUCCESS_ANIMATION_MS = 2400;
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 export default function VerifyOtp() {
   const params = useLocalSearchParams<{ email?: string | string[]; inviteToken?: string | string[] }>();
@@ -41,6 +48,7 @@ export default function VerifyOtp() {
   const [otp, setOtp] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendHint, setResendHint] = useState<string | null>(null);
   const invalidateSession = useInvalidateSession();
@@ -75,6 +83,9 @@ export default function VerifyOtp() {
           return;
         }
         setAccessTokenFromAuthData(result.data ?? null);
+        setEmailVerified(true);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await wait(SUCCESS_ANIMATION_MS);
       } catch (e) {
         setError(formatAuthFlowError(e));
         return;
@@ -171,6 +182,10 @@ export default function VerifyOtp() {
         />
       </AuthScreen>
     );
+  }
+
+  if (emailVerified) {
+    return <EmailVerifiedCelebration email={email.trim().toLowerCase()} />;
   }
 
   return (

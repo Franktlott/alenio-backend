@@ -67,7 +67,7 @@ type Props = {
   workspaceOverlayLoading?: boolean;
   /** When false, the Billing sidebar item is hidden (non-owners in a workspace). */
   showPlanNav: boolean;
-  /** When false, Activity and Workspace are hidden (workspace on Free plan). */
+  /** When false, Activity and Workspace are unavailable for this workspace's access tier. */
   showActivityExecuteNav: boolean;
   /** When false, Alenio Go is hidden (requires Operations plan). */
   showGoNav?: boolean;

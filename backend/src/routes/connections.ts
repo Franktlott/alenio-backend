@@ -12,6 +12,13 @@ import {
 } from "../lib/messaging-permission";
 import { isUniqueConstraintError } from "../lib/username";
 import { recordAccountActivity } from "../lib/account-activity";
+import { countMutualConnections } from "../lib/public-profile";
+import {
+  buildConnectionSuggestions,
+  CONNECTION_SUGGESTION_DEFAULT_LIMIT,
+  CONNECTION_SUGGESTION_MAX_LIMIT,
+  type ConnectionSuggestionCandidate,
+} from "../lib/connection-suggestions";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -54,6 +61,10 @@ export function describeConnectionStatus(
 }
 
 const targetSchema = z.object({ userId: z.string().min(1) });
+const suggestionsQuerySchema = z.object({
+  teamId: z.string().trim().min(1).optional(),
+  limit: z.coerce.number().int().positive().optional(),
+});
 
 // GET /api/connections — accepted connections plus both pending queues
 connectionsRouter.get("/", async (c) => {
@@ -88,6 +99,215 @@ connectionsRouter.get("/", async (c) => {
 
   return c.json({ data: { accepted, incoming, outgoing } });
 });
+
+// GET /api/connections/suggestions — evidence-backed people the viewer may know
+connectionsRouter.get(
+  "/suggestions",
+  zValidator("query", suggestionsQuerySchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const query = c.req.valid("query");
+    const limit = Math.min(
+      query.limit ?? CONNECTION_SUGGESTION_DEFAULT_LIMIT,
+      CONNECTION_SUGGESTION_MAX_LIMIT,
+    );
+
+    const [viewerMemberships, viewerOrganizationMemberships, viewerAcceptedRows] =
+      await Promise.all([
+        prisma.teamMember.findMany({
+          where: { userId: user.id },
+          select: {
+            teamId: true,
+            role: true,
+            joinedAt: true,
+            team: { select: { id: true, name: true } },
+          },
+        }),
+        prisma.organizationMembership.findMany({
+          where: { userId: user.id },
+          select: { organizationId: true },
+        }),
+        prisma.connection.findMany({
+          where: {
+            status: "accepted",
+            OR: [{ requesterId: user.id }, { recipientId: user.id }],
+          },
+          select: { requesterId: true, recipientId: true },
+        }),
+      ]);
+
+    if (
+      query.teamId &&
+      !viewerMemberships.some((membership) => membership.teamId === query.teamId)
+    ) {
+      return c.json(
+        {
+          error: {
+            message: "You must belong to the requested workspace.",
+            code: "WORKSPACE_ACCESS_DENIED",
+          },
+        },
+        403,
+      );
+    }
+
+    const sharedTeamIds = viewerMemberships.map((membership) => membership.teamId);
+    const sharedOrganizationIds = viewerOrganizationMemberships.map(
+      (membership) => membership.organizationId,
+    );
+    const viewerConnectionIds = viewerAcceptedRows.map((row) =>
+      row.requesterId === user.id ? row.recipientId : row.requesterId,
+    );
+    const viewerConnectionIdSet = new Set(viewerConnectionIds);
+
+    const mutualEvidenceRows =
+      viewerConnectionIds.length === 0
+        ? []
+        : await prisma.connection.findMany({
+            where: {
+              status: "accepted",
+              OR: [
+                { requesterId: { in: viewerConnectionIds } },
+                { recipientId: { in: viewerConnectionIds } },
+              ],
+            },
+            select: { requesterId: true, recipientId: true },
+          });
+
+    const mutualCandidateIds = new Set<string>();
+    for (const row of mutualEvidenceRows) {
+      if (viewerConnectionIdSet.has(row.requesterId)) mutualCandidateIds.add(row.recipientId);
+      if (viewerConnectionIdSet.has(row.recipientId)) mutualCandidateIds.add(row.requesterId);
+    }
+    mutualCandidateIds.delete(user.id);
+
+    const evidenceFilters = [
+      ...(sharedTeamIds.length > 0
+        ? [{ teamMembers: { some: { teamId: { in: sharedTeamIds } } } }]
+        : []),
+      ...(sharedOrganizationIds.length > 0
+        ? [
+            {
+              organizationMemberships: {
+                some: { organizationId: { in: sharedOrganizationIds } },
+              },
+            },
+          ]
+        : []),
+      ...(mutualCandidateIds.size > 0 ? [{ id: { in: [...mutualCandidateIds] } }] : []),
+    ];
+
+    if (evidenceFilters.length === 0) return c.json({ data: [] });
+
+    const people = await prisma.user.findMany({
+      where: {
+        id: { not: user.id },
+        OR: evidenceFilters,
+      },
+      select: {
+        ...personSelect,
+        teamMembers: {
+          where: { teamId: { in: sharedTeamIds } },
+          select: {
+            role: true,
+            joinedAt: true,
+            team: { select: { id: true, name: true } },
+          },
+        },
+        organizationMemberships: {
+          where: { organizationId: { in: sharedOrganizationIds } },
+          select: { organizationId: true },
+        },
+      },
+    });
+
+    if (people.length === 0) return c.json({ data: [] });
+
+    const candidateIds = people.map((person) => person.id);
+    const [connectionRows, blockRows] = await Promise.all([
+      prisma.connection.findMany({
+        where: {
+          OR: [
+            { requesterId: user.id, recipientId: { in: candidateIds } },
+            { recipientId: user.id, requesterId: { in: candidateIds } },
+          ],
+        },
+        select: {
+          requesterId: true,
+          recipientId: true,
+          status: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.userBlock.findMany({
+        where: {
+          OR: [
+            { blockerId: user.id, blockedId: { in: candidateIds } },
+            { blockedId: user.id, blockerId: { in: candidateIds } },
+          ],
+        },
+        select: { blockerId: true, blockedId: true },
+      }),
+    ]);
+
+    const connectionsByPerson = new Map(
+      connectionRows.map((row) => [
+        row.requesterId === user.id ? row.recipientId : row.requesterId,
+        row,
+      ]),
+    );
+    const blockedPersonIds = new Set(
+      blockRows.map((row) => (row.blockerId === user.id ? row.blockedId : row.blockerId)),
+    );
+    const candidateIdSet = new Set(candidateIds);
+    const mutualIdsByCandidate = new Map<string, Set<string>>();
+    const addMutual = (candidateId: string, mutualId: string) => {
+      const mutualIds = mutualIdsByCandidate.get(candidateId) ?? new Set<string>();
+      mutualIds.add(mutualId);
+      mutualIdsByCandidate.set(candidateId, mutualIds);
+    };
+    for (const row of mutualEvidenceRows) {
+      if (candidateIdSet.has(row.requesterId) && viewerConnectionIdSet.has(row.recipientId)) {
+        addMutual(row.requesterId, row.recipientId);
+      }
+      if (candidateIdSet.has(row.recipientId) && viewerConnectionIdSet.has(row.requesterId)) {
+        addMutual(row.recipientId, row.requesterId);
+      }
+    }
+
+    const candidates: ConnectionSuggestionCandidate[] = people.map((person) => {
+      const connection = connectionsByPerson.get(person.id);
+      return {
+        person: {
+          id: person.id,
+          name: person.name,
+          username: person.username,
+          image: person.image,
+        },
+        sharedWorkspaces: person.teamMembers.map((membership) => ({
+          id: membership.team.id,
+          name: membership.team.name,
+          role: membership.role,
+          joinedAt: membership.joinedAt,
+        })),
+        mutualConnections: mutualIdsByCandidate.get(person.id)?.size ?? 0,
+        sharesOrganization: person.organizationMemberships.length > 0,
+        connection: connection
+          ? { status: connection.status, updatedAt: connection.updatedAt }
+          : null,
+        blocked: blockedPersonIds.has(person.id),
+      };
+    });
+
+    return c.json({
+      data: buildConnectionSuggestions({
+        candidates,
+        currentTeamId: query.teamId,
+        limit,
+      }),
+    });
+  },
+);
 
 // GET /api/connections/status?userId= — single-pair status for a profile screen
 connectionsRouter.get("/status", async (c) => {
@@ -127,15 +347,25 @@ connectionsRouter.get("/person/:userId", async (c) => {
     where: { id: userId },
     select: {
       ...personSelect,
+      emailVerified: true,
+      createdAt: true,
+      profileWebsite: true,
+      profileLocation: true,
+      profileBio: true,
       teamMembers: {
         where: { team: { members: { some: { userId: user.id } } } },
-        select: { team: { select: { id: true, name: true } } },
+        select: {
+          role: true,
+          joinedAt: true,
+          team: { select: { id: true, name: true, image: true } },
+        },
       },
     },
   });
   if (!person) return c.json({ error: { message: "Person not found", code: "NOT_FOUND" } }, 404);
 
-  const [connection, blocked, permission] = await Promise.all([
+  const [connection, blocked, permission, personConnectionCount, viewerConnectionRows, personConnectionRows] =
+    await Promise.all([
     prisma.connection.findUnique({
       where: { pairKey: buildConnectionPairKey(user.id, userId) },
       select: { requesterId: true, recipientId: true, status: true },
@@ -145,6 +375,26 @@ connectionsRouter.get("/person/:userId", async (c) => {
       select: { id: true },
     }),
     canMessage(user.id, userId),
+    prisma.connection.count({
+      where: {
+        status: "accepted",
+        OR: [{ requesterId: userId }, { recipientId: userId }],
+      },
+    }),
+    prisma.connection.findMany({
+      where: {
+        status: "accepted",
+        OR: [{ requesterId: user.id }, { recipientId: user.id }],
+      },
+      select: { requesterId: true, recipientId: true },
+    }),
+    prisma.connection.findMany({
+      where: {
+        status: "accepted",
+        OR: [{ requesterId: userId }, { recipientId: userId }],
+      },
+      select: { requesterId: true, recipientId: true },
+    }),
   ]);
 
   return c.json({
@@ -153,8 +403,30 @@ connectionsRouter.get("/person/:userId", async (c) => {
       name: person.name,
       username: person.username,
       image: person.image,
+      emailVerified: person.emailVerified,
+      memberSince: person.createdAt,
+      profileWebsite: person.profileWebsite,
+      profileLocation: person.profileLocation,
+      profileBio: person.profileBio,
+      stats: {
+        connections: personConnectionCount,
+        workspaces: person.teamMembers.length,
+        mutualConnections:
+          person.id === user.id
+            ? 0
+            : countMutualConnections(
+                user.id,
+                person.id,
+                viewerConnectionRows,
+                personConnectionRows,
+              ),
+      },
       // Only workspaces the viewer also belongs to: never a directory of someone's employers.
-      sharedWorkspaces: person.teamMembers.map((row) => row.team),
+      sharedWorkspaces: person.teamMembers.map((row) => ({
+        ...row.team,
+        role: row.role,
+        joinedAt: row.joinedAt,
+      })),
       connectionStatus: describeConnectionStatus(user.id, connection),
       isBlockedByMe: blocked !== null,
       canMessage: permission.allowed,

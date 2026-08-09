@@ -45,6 +45,8 @@ import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { TaskNotesSection } from "@/components/tasks/TaskNotesSection";
 import { UserAvatar } from "@/components/UserAvatar";
+import { HEADER_GRADIENT } from "@/lib/header-gradient";
+import { useWorkspaceAccess } from "@/lib/workspace-access";
 
 function sameCalendarDay(a: Date | null, b: Date | null): boolean {
   if (!a && !b) return true;
@@ -96,6 +98,7 @@ export default function TaskDetailScreen() {
     enabled: !!teamId,
   });
   const hasTaskAccess = hasWorkspaceTaskAccess(subscription, persistedPlan);
+  const { access } = useWorkspaceAccess(teamId);
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
@@ -207,7 +210,7 @@ export default function TaskDetailScreen() {
   const isCreator = !!currentUserId && task?.creator?.id === currentUserId;
   const isOwnerOrLeader = team?.role === "owner" || team?.role === "team_leader" || team?.role === "admin";
   const isRegularMember = !isOwnerOrLeader;
-  const canEdit = (isCreator || isOwnerOrLeader) && !isCompleted;
+  const canEdit = access.canWrite && (isCreator || isOwnerOrLeader) && !isCompleted;
   const canComplete = !isCompleted && !isFeedbackTask && (isSelfAssigned || canEdit || isCreator);
   const isEditable = canEdit && isEditMode;
 
@@ -425,7 +428,7 @@ export default function TaskDetailScreen() {
   if (!hasTaskAccess && !subscriptionFetched) {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]} testID="loading-indicator">
-        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
           <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
             <TouchableOpacity onPress={() => router.back()} testID="back-button">
               <ArrowLeft size={22} color="white" />
@@ -442,7 +445,7 @@ export default function TaskDetailScreen() {
   if (!hasTaskAccess && subscriptionFetched) {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]} testID="task-detail-paywall-screen">
-        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
           <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
             <TouchableOpacity onPress={() => router.back()} testID="back-button">
               <ArrowLeft size={22} color="white" />
@@ -461,7 +464,7 @@ export default function TaskDetailScreen() {
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: "transparent" }} edges={["top"]} testID="loading-indicator">
-        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
           <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
             <TouchableOpacity onPress={() => router.back()} testID="back-button">
               <ArrowLeft size={22} color="white" />
@@ -486,7 +489,7 @@ export default function TaskDetailScreen() {
   return (
     <SafeAreaView className="flex-1" edges={["top"]} testID="task-detail-screen" style={{ backgroundColor: "transparent" }}>
       {/* Header */}
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <TouchableOpacity onPress={() => { setIsEditMode(false); router.back(); }} testID="back-button">
             <ArrowLeft size={22} color="white" />
@@ -961,7 +964,7 @@ export default function TaskDetailScreen() {
             <Text className="flex-1 text-sm text-emerald-700 dark:text-emerald-400">
               Task is completed. Recall it to make edits.
             </Text>
-            <TouchableOpacity
+            {access.canWrite ? <TouchableOpacity
               onPress={() => setShowRecallConfirm(true)}
               disabled={updateMutation.isPending}
               className="px-3 py-1 rounded-full bg-emerald-600"
@@ -971,7 +974,7 @@ export default function TaskDetailScreen() {
               ) : (
                 <Text className="text-xs font-semibold text-white">Recall</Text>
               )}
-            </TouchableOpacity>
+            </TouchableOpacity> : null}
           </View>
         ) : null}
 
@@ -1005,7 +1008,7 @@ export default function TaskDetailScreen() {
                     <TouchableOpacity
                       key={subtask.id}
                       onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !doneForMe })}
-                      disabled={isCompleted || toggleSubtaskMutation.isPending}
+                      disabled={!access.canWrite || isCompleted || toggleSubtaskMutation.isPending}
                       testID={`subtask-toggle-${subtask.id}`}
                       style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 4, gap: 10 }}
                       activeOpacity={0.6}
@@ -1248,7 +1251,7 @@ export default function TaskDetailScreen() {
         <View style={{ height: 32 }} />
       </ScrollView>
 
-      {!showFocusedFeedbackTask && canComplete ? (
+      {!showFocusedFeedbackTask && canComplete && access.canWrite ? (
         <View
           style={{
             paddingHorizontal: 16,

@@ -31,16 +31,9 @@ export const SENECA_FAB_SIZE = 48;
 export const SENECA_FAB_VISIBLE_SIZE = 40;
 export const SENECA_FAB_RIGHT_INSET = 16;
 
-/** Workspace lists: clear tab bar + Seneca + primary Add FAB. */
+/** Workspace lists: clear the tab bar and contextual Add FAB. */
 export function workspaceTaskClearance(bottomInset: number): number {
-  // Tab bar + Seneca + Workspace primary + gap so list content clears both FABs.
-  return (
-    tabBarClearance(bottomInset, 12) +
-    SENECA_FAB_SIZE +
-    10 +
-    SENECA_FAB_VISIBLE_SIZE +
-    8
-  );
+  return tabBarClearance(bottomInset, 12) + SENECA_FAB_VISIBLE_SIZE + 12;
 }
 
 export function workspaceTaskRightInset(): number {

@@ -46,6 +46,8 @@ export function dueDateLabel(value: DueDateFilter, selectedDayIso: string | null
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
   if (value === "today") return "Today";
+  if (value === "tomorrow") return "Tomorrow";
+  if (value === "this_week") return "This Week";
   if (value === "overdue") return "Overdue";
   return "All";
 }
@@ -58,7 +60,9 @@ export function priorityLabel(value: PriorityFilter): string {
 export function sortLabel(value: SortFilter): string {
   if (value === "due") return "Due Date";
   if (value === "priority") return "Priority";
-  return "Completed";
+  if (value === "newest") return "Newest";
+  if (value === "oldest") return "Oldest";
+  return "Alphabetical";
 }
 
 export function isDefaultAssignedTo(value: AssignedToFilter): boolean {
@@ -74,7 +78,53 @@ export function isDefaultPriority(value: PriorityFilter): boolean {
 }
 
 export function isDefaultSort(value: SortFilter, statusTab: TaskStatusTab): boolean {
-  return statusTab === "completed" ? value === "completed" : value === "due";
+  return statusTab === "completed" || statusTab === "archived"
+    ? value === "newest"
+    : value === "due";
+}
+
+export function taskStatusLabel(value: TaskStatusTab): string {
+  if (value === "completed") return "Completed Tasks";
+  if (value === "archived") return "Archived Tasks";
+  if (value === "all") return "All Tasks";
+  return "Active Tasks";
+}
+
+export function taskFilterSummary(
+  filters: WorkspaceFiltersState,
+  selectedDayIso: string | null,
+): string {
+  const base =
+    filters.statusTab === "completed"
+      ? "Completed"
+      : filters.statusTab === "archived"
+        ? "Archived"
+        : filters.statusTab === "all"
+          ? "All Tasks"
+          : "Active Tasks";
+  if (typeof filters.assignedTo === "object") {
+    return `Assigned to ${filters.assignedTo.memberName}`;
+  }
+  const due = dueDateLabel(filters.dueDate, selectedDayIso);
+  if (filters.dueDate !== "all") return `${base} • ${due}`;
+  if (filters.priority !== "all") {
+    return `${base} • ${priorityLabel(filters.priority)} Priority`;
+  }
+  return base;
+}
+
+/**
+ * Badge count for the Filters control. Assigned to and Sort are excluded
+ * because each already shows its current value in its own pill.
+ */
+export function countActiveTaskFilters(
+  filters: Pick<WorkspaceFiltersState, "dueDate" | "priority">,
+  selectedDayIso: string | null,
+): number {
+  let count = 0;
+  if (!isDefaultDueDate(filters.dueDate, selectedDayIso)) count += 1;
+  if (!isDefaultPriority(filters.priority)) count += 1;
+  return count;
 }
 
 export function buildWorkspaceTasksPath(
@@ -93,7 +143,9 @@ export function buildWorkspaceTasksPath(
   const params = new URLSearchParams({
     limit: opts.statusTab === "active" ? "500" : "200",
   });
-  if (opts.statusTab === "completed") {
+  if (opts.statusTab === "all") {
+    // No status scope: return the recent active/completed set allowed by the API.
+  } else if (opts.statusTab === "completed") {
     params.set("completedYear", String(opts.calendarYear));
     params.set("completedMonth", String(opts.calendarMonth));
     params.set("status", "done");
@@ -139,7 +191,9 @@ export function filterTasksClientSide(
   const { filters, currentUserId, members, selectedDay, calendarYear, calendarMonth, isLeader } = opts;
   let result = tasks;
 
-  if (filters.statusTab === "active") {
+  if (filters.statusTab === "all") {
+    result = result.filter((t) => !t.archivedAt);
+  } else if (filters.statusTab === "active") {
     result = result.filter((t) => t.status !== "done");
   } else if (filters.statusTab === "archived") {
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -177,20 +231,38 @@ export function filterTasksClientSide(
   }
 
   if (filters.priority !== "all") {
-    result = result.filter((t) => t.priority === filters.priority);
+    result = result.filter((t) =>
+      filters.priority === "high"
+        ? t.priority === "high" || t.priority === "urgent"
+        : t.priority === filters.priority,
+    );
   }
 
   const todayIso = toLocalIso(new Date());
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowIso = toLocalIso(tomorrow);
   const effectiveDay =
     filters.dueDate === "calendar_day"
       ? selectedDay ?? todayIso
       : filters.dueDate === "today"
         ? todayIso
+        : filters.dueDate === "tomorrow"
+          ? tomorrowIso
         : null;
 
   if (filters.dueDate === "overdue" && filters.statusTab === "active") {
     const todayStart = startOfDay(new Date());
     result = result.filter((t) => t.dueDate && startOfDay(new Date(t.dueDate)) < todayStart);
+  } else if (filters.dueDate === "this_week") {
+    const weekStart = startOfWeekSunday(new Date());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    result = result.filter((t) => {
+      if (!t.dueDate) return false;
+      const due = startOfDay(new Date(t.dueDate));
+      return due >= weekStart && due < weekEnd;
+    });
   } else if (effectiveDay) {
     result = result.filter((t) => {
       if (filters.statusTab === "completed" || filters.statusTab === "archived") {
@@ -211,10 +283,11 @@ function sortTasks(a: Task, b: Task, sort: SortFilter): number {
     const order = { urgent: 0, high: 1, medium: 2, low: 3 };
     return (order[a.priority as keyof typeof order] ?? 2) - (order[b.priority as keyof typeof order] ?? 2);
   }
-  if (sort === "completed") {
-    const aDate = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-    const bDate = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-    return bDate - aDate;
+  if (sort === "alphabetical") return a.title.localeCompare(b.title);
+  if (sort === "newest" || sort === "oldest") {
+    const aDate = new Date(a.createdAt ?? a.completedAt ?? 0).getTime();
+    const bDate = new Date(b.createdAt ?? b.completedAt ?? 0).getTime();
+    return sort === "newest" ? bDate - aDate : aDate - bDate;
   }
   if (!a.dueDate && !b.dueDate) return 0;
   if (!a.dueDate) return 1;

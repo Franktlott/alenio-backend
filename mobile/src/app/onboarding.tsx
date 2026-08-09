@@ -7,14 +7,16 @@ import {
   Modal,
   Pressable,
   Alert,
+  Image,
   StyleSheet,
   TouchableOpacity,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ScanLine, Building2, Users, X } from "lucide-react-native";
+import { ScanLine, Building2, Users, X, Camera, CheckCircle2, ShieldCheck, Clock3 } from "lucide-react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
@@ -27,8 +29,10 @@ import {
   AlenioSheetIcon,
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
+import { uploadFile } from "@/lib/upload";
 
 const INVITE_CODE_MAX_LENGTH = 12;
+const INDUSTRIES = ["Retail", "Hospitality", "Healthcare", "Food service", "Operations", "Other"] as const;
 type JoinResult =
   | { status: "pending"; teamName: string; requestId: string }
   | (Team & { status?: undefined });
@@ -82,6 +86,9 @@ export default function OnboardingScreen() {
       : "";
   const [mode, setMode] = useState<"create" | "join">(modeParam === "join" || !!initialCode ? "join" : "create");
   const [teamName, setTeamName] = useState("");
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
+  const [industry, setIndustry] = useState("");
+  const [logoUri, setLogoUri] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
   const [cooldownUntilMs, setCooldownUntilMs] = useState<number>(0);
@@ -118,15 +125,29 @@ export default function OnboardingScreen() {
   }, [isSessionLoading, session?.user]);
 
   const createMutation = useMutation({
-    mutationFn: () => api.post<Team>("/api/teams", { name: teamName }),
+    mutationFn: () =>
+      api.post<Team>("/api/teams", {
+        name: teamName.trim(),
+        industry: industry.trim() || undefined,
+        startTrial: true,
+      }),
     onSuccess: async (team) => {
-      setActiveTeamId(team.id);
-      queryClient.invalidateQueries({ queryKey: ["teams"] });
-      if (isAddFlow && router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace("/(app)/chat");
+      if (logoUri) {
+        try {
+          const uploaded = await uploadFile(logoUri, "workspace-logo.jpg", "image/jpeg", {
+            purpose: "team",
+            teamId: team.id,
+          });
+          await api.patch<Team>(`/api/teams/${team.id}`, { image: uploaded.url });
+        } catch {
+          // The workspace is still valid; its logo can be added later in settings.
+        }
       }
+      setActiveTeamId(team.id);
+      await queryClient.invalidateQueries({ queryKey: ["teams"] });
+      await queryClient.invalidateQueries({ queryKey: ["subscription", team.id] });
+      await queryClient.invalidateQueries({ queryKey: ["billing-workspaces"] });
+      router.replace({ pathname: "/workspace-welcome", params: { teamId: team.id, teamName: team.name } });
     },
     onError: (err: unknown) => {
       const rawMsg = err instanceof Error ? err.message : "";
@@ -254,7 +275,15 @@ export default function OnboardingScreen() {
     }
     if (mode === "create") {
       if (!teamName.trim()) {
-        setError("Please enter a team name");
+        setError("Please enter a workspace name");
+        return;
+      }
+      if (!industry.trim()) {
+        setError("Please choose an industry");
+        return;
+      }
+      if (createStep === 1) {
+        setCreateStep(2);
         return;
       }
       createMutation.mutate();
@@ -282,9 +311,19 @@ export default function OnboardingScreen() {
   const isModeLocked = modeParam === "join" || modeParam === "create";
 
   const sheetTitle =
-    isAddFlow ? "Add workplace" : mode === "create" ? "Create a workplace" : "Join a workspace";
+    mode === "create"
+      ? createStep === 1
+        ? "Create a workspace"
+        : "Start your trial"
+      : isAddFlow
+        ? "Add workplace"
+        : "Join a workspace";
   const sheetSubtitle =
-    mode === "create" ? "Set up a new team space" : "Connect with your organization";
+    mode === "create"
+      ? createStep === 1
+        ? "Tell us about your operation"
+        : "14 days of Operations, no card required"
+      : "Connect with your organization";
 
   const sheetFooter = (
     <>
@@ -303,17 +342,30 @@ export default function OnboardingScreen() {
           </Text>
         ) : (
           <Text style={alenioSheetStyles.primaryButtonText}>
-            {mode === "create" ? "Create workplace" : "Join workspace"}
+            {mode === "create"
+              ? createStep === 1
+                ? "Continue"
+                : "Start 14-Day Trial"
+              : "Join workspace"}
           </Text>
         )}
       </TouchableOpacity>
       <TouchableOpacity
-        onPress={handleClose}
+        onPress={() => {
+          if (mode === "create" && createStep === 2) {
+            setCreateStep(1);
+            setError(null);
+          } else {
+            handleClose();
+          }
+        }}
         style={alenioSheetStyles.cancelButton}
         testID="onboarding-cancel"
         activeOpacity={0.8}
       >
-        <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+        <Text style={alenioSheetStyles.cancelButtonText}>
+          {mode === "create" && createStep === 2 ? "Back" : "Cancel"}
+        </Text>
       </TouchableOpacity>
     </>
   );
@@ -325,25 +377,26 @@ export default function OnboardingScreen() {
           mode={mode}
           onChange={(next) => {
             setMode(next);
+            setCreateStep(1);
             setError(null);
           }}
         />
       ) : null}
 
-      {mode === "create" ? (
+      {mode === "create" && createStep === 1 ? (
         <AlenioSheetCard compact>
           <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
             <AlenioSheetIcon compact>
               <Building2 size={16} color="white" />
             </AlenioSheetIcon>
             <View style={{ flex: 1 }}>
-              <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]}>New workplace</Text>
+              <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]}>Your workspace</Text>
               <Text style={[alenioSheetStyles.optionSubtitle, alenioSheetStyles.optionSubtitleCompact]}>
-                Create a team space for your organization.
+                Set up the shared space your team will use each day.
               </Text>
             </View>
           </View>
-          <FieldLabel>Workplace name</FieldLabel>
+          <FieldLabel>Workspace name</FieldLabel>
           <TextInput
             style={alenioSheetStyles.fieldInput}
             placeholder="e.g. Retail Location #5427"
@@ -357,6 +410,89 @@ export default function OnboardingScreen() {
             onSubmitEditing={handleSubmit}
             testID="team-name-input"
           />
+          <FieldLabel>Workspace logo (optional)</FieldLabel>
+          <Pressable
+            onPress={async () => {
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ["images"],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets[0]) setLogoUri(result.assets[0].uri);
+            }}
+            style={styles.logoPicker}
+            testID="workspace-logo-picker"
+          >
+            {logoUri ? (
+              <Image source={{ uri: logoUri }} style={styles.logoPreview} />
+            ) : (
+              <View style={styles.logoPlaceholder}>
+                <Camera size={18} color={WELCOME_UI.primary} />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.logoTitle}>{logoUri ? "Logo selected" : "Add a logo"}</Text>
+              <Text style={styles.logoSubtitle}>You can change this later.</Text>
+            </View>
+          </Pressable>
+          <FieldLabel>Industry</FieldLabel>
+          <View style={styles.industryGrid}>
+            {INDUSTRIES.map((value) => {
+              const selected = industry === value;
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => {
+                    setIndustry(value);
+                    setError(null);
+                  }}
+                  style={[styles.industryChip, selected ? styles.industryChipSelected : null]}
+                  testID={`industry-${value.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  <Text style={[styles.industryText, selected ? styles.industryTextSelected : null]}>
+                    {value}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </AlenioSheetCard>
+      ) : mode === "create" ? (
+        <AlenioSheetCard tint="purple" compact>
+          <View style={styles.trialHero}>
+            <View style={styles.trialIcon}>
+              <ShieldCheck size={24} color="white" />
+            </View>
+            <Text style={styles.trialEyebrow}>ALENIO OPERATIONS</Text>
+            <Text style={styles.trialTitle}>14-day Operations trial</Text>
+            <Text style={styles.trialSubtitle}>No credit card. No commitment. Your trial starts when you tap below.</Text>
+          </View>
+          {[
+            { label: "Tasks, priorities, and team execution", comingSoon: false },
+            { label: "Coaching, insights, and Seneca", comingSoon: false },
+            { label: "Alenio Go: checklists and operational walks", comingSoon: true },
+            { label: "Temperature checks and operations tools", comingSoon: true },
+          ].map((feature) => (
+            <View key={feature.label} style={styles.featureRow}>
+              {feature.comingSoon ? (
+                <Clock3 size={17} color="#D97706" />
+              ) : (
+                <CheckCircle2 size={17} color="#16A34A" />
+              )}
+              <Text style={styles.featureText}>{feature.label}</Text>
+              {feature.comingSoon ? (
+                <View style={styles.comingSoonBadge}>
+                  <Text style={styles.comingSoonText}>COMING SOON</Text>
+                </View>
+              ) : null}
+            </View>
+          ))}
+          <View style={styles.trialNote}>
+            <Text style={styles.trialNoteText}>
+              After 14 days, existing content stays available in read-only mode until the workspace owner chooses a plan.
+            </Text>
+          </View>
         </AlenioSheetCard>
       ) : (
         <>
@@ -549,4 +685,61 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     fontWeight: "600",
   },
+  logoPicker: {
+    minHeight: 58,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    padding: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  logoPlaceholder: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoPreview: { width: 42, height: 42, borderRadius: 10 },
+  logoTitle: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  logoSubtitle: { fontSize: 11, color: "#64748B", marginTop: 2 },
+  industryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  industryChip: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    backgroundColor: "#FFFFFF",
+  },
+  industryChipSelected: { borderColor: WELCOME_UI.primary, backgroundColor: "#EEF2FF" },
+  industryText: { fontSize: 12, fontWeight: "600", color: "#475569" },
+  industryTextSelected: { color: WELCOME_UI.primary },
+  trialHero: { alignItems: "center", paddingBottom: 12 },
+  trialIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: WELCOME_UI.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  trialEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.2, color: "#6366F1" },
+  trialTitle: { fontSize: 20, fontWeight: "800", color: "#0F172A", marginTop: 4 },
+  trialSubtitle: { fontSize: 12, lineHeight: 17, color: "#64748B", textAlign: "center", marginTop: 5 },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 5 },
+  featureText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#334155" },
+  comingSoonBadge: {
+    borderRadius: 999,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  comingSoonText: { fontSize: 8, fontWeight: "800", letterSpacing: 0.5, color: "#B45309" },
+  trialNote: { marginTop: 10, borderRadius: 9, backgroundColor: "#F8FAFC", padding: 10 },
+  trialNoteText: { fontSize: 11, lineHeight: 16, color: "#64748B", textAlign: "center" },
 });

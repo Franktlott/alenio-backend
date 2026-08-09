@@ -10,6 +10,13 @@ export type TeamHealthHistoryPoint = {
 
 export type TeamHealthHistoryResponse = TeamHealthHistoryPoint[];
 
+export type {
+  ConnectionSuggestion,
+  ConnectionSuggestionReason,
+  ConnectionSuggestionReasonKey,
+  ConnectionSuggestionWorkspace,
+} from "./lib/connection-suggestions";
+
 export type SenecaFocusCategory =
   | "check_ins"
   | "goals"

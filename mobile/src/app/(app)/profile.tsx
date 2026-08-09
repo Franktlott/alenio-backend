@@ -13,11 +13,12 @@ import {
   Alert,
   Linking,
   Switch,
+  useWindowDimensions,
 } from "react-native";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AtSign, Ban, Bell, Building2, Camera, CircleHelp, Clock3, FileText, ImageIcon, Info, LogOut, Mail, MessageSquareText, Palette, Search, X, Check, AlertTriangle, ShieldAlert, ChevronLeft, ChevronRight, Lock, Settings, Shield, ShieldCheck } from "lucide-react-native";
+import { AtSign, Ban, Bell, Building2, Camera, CircleHelp, Clock3, FileText, ImageIcon, Info, LogOut, Mail, MessageSquareText, Palette, Pencil, Search, X, Check, AlertTriangle, ShieldAlert, ChevronLeft, ChevronRight, Lock, Settings, Shield, ShieldCheck, UserRound } from "lucide-react-native";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
 import { authClient, agentDebugLog, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
 import {
@@ -30,7 +31,7 @@ import {
 } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
-import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { readJsonSafe } from "@/lib/api/api";
 import { getBackendUrl } from "@/lib/backend-url";
@@ -54,6 +55,7 @@ import {
   ProfileDivider,
   ProfileMenuRow,
   ProfileSection,
+  ProfileToolbarButton,
 } from "@/components/profile/ProfileEnterpriseUI";
 import { formatTeamRole } from "@/components/WorkspaceTeamUI";
 import { radii, space } from "@/theme";
@@ -62,13 +64,7 @@ import { OutlookCalendarCard } from "@/components/profile/OutlookCalendarCard";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { formatOutlookUserError } from "@/lib/outlook-calendar-errors";
 import { UserAvatar } from "@/components/UserAvatar";
-
-type JoinRequestItem = {
-  id: string;
-  status: string;
-  createdAt: string;
-  user: { id: string; name: string; email: string; image: string | null };
-};
+import { useWorkspaceAccess } from "@/lib/workspace-access";
 
 type MyJoinRequest = {
   id: string;
@@ -135,13 +131,19 @@ const MESSAGE_PRIVACY_LABELS: Record<MessagePrivacy, string> = {
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { height: viewportHeight } = useWindowDimensions();
   const { outlook, message } = useLocalSearchParams<{ outlook?: string; message?: string }>();
   const { data: session } = useSession();
   const { data: authReady } = useMobileAuthReady();
   const queryClient = useQueryClient();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
+  const { access: activeWorkspaceAccess } = useWorkspaceAccess(activeTeamId);
   const user = session?.user;
+  const planAccessSubtitle =
+    activeWorkspaceAccess.status === "trialing"
+      ? `${activeWorkspaceAccess.remainingDays ?? 0} days left in trial · Plans from $39.99/mo`
+      : "Plans from $39.99 per workspace / month";
 
   useEffect(() => {
     if (outlook === "connected") {
@@ -184,6 +186,7 @@ export default function ProfileScreen() {
     queryFn: () => api.get<Team[]>("/api/teams"),
     enabled: !!user,
   });
+  const compactNoWorkspace = !teamsLoading && teams.length === 0 && viewportHeight < 900;
 
   /** Backend profile (includes `image` from DB); auth session often omits photo URL — same source as team member avatars. */
   const { data: meProfile } = useQuery({
@@ -277,14 +280,7 @@ export default function ProfileScreen() {
   const deleteWarnings = deletionReadiness?.issues.filter((issue) => !issue.blocking) ?? [];
   const canContinueDelete = deletionReadiness?.canDelete === true;
 
-  const isOwnerOfAnyTeam = teams.some((t) => (t as Team & { role?: string }).role === "owner");
   const activeTeam = teams.find((t) => t.id === activeTeamId) as (Team & { role?: string }) | undefined;
-
-  const { data: ownerTeamSubscription } = useQuery({
-    queryKey: ["subscription", activeTeamId],
-    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
-    enabled: !!activeTeamId && isOwnerOfAnyTeam,
-  });
 
   // Join requests the current user has sent (waiting for approval)
   const { data: myPendingJoinRequests = [] } = useQuery({
@@ -292,23 +288,6 @@ export default function ProfileScreen() {
     queryFn: () => api.get<MyJoinRequest[]>("/api/join-requests/mine"),
     refetchInterval: 15000,
   });
-
-  // Fetch join request counts for all owned teams (for badges)
-  const ownedTeamIds = teams
-    .filter((t) => ["owner", "team_leader"].includes((t as Team & { role?: string }).role ?? ""))
-    .map((t) => t.id);
-
-  const joinRequestCounts = useQueries({
-    queries: ownedTeamIds.map((id) => ({
-      queryKey: ["join-requests", id],
-      queryFn: () => api.get<JoinRequestItem[]>(`/api/teams/${id}/join-requests`),
-      enabled: ownedTeamIds.length > 0,
-    })),
-  });
-
-  const pendingCountMap = Object.fromEntries(
-    ownedTeamIds.map((id, i) => [id, joinRequestCounts[i]?.data?.length ?? 0])
-  );
 
   const cancelMyJoinRequestMutation = useMutation({
     mutationFn: (requestId: string) => api.delete(`/api/join-requests/${requestId}`),
@@ -582,17 +561,95 @@ export default function ProfileScreen() {
     await refreshMeInAuthCaches(queryClient);
     await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
     await queryClient.invalidateQueries({ queryKey: ["teams"] });
+    await queryClient.invalidateQueries({ queryKey: ["billing-workspaces"] });
     await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
     await queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
     setRefreshing(false);
   };
 
+  const profileAvatarSize = compactNoWorkspace ? 78 : 84;
+  const profileAvatarBridgeShift = 14;
+  const profileAvatarBridge = !showSettings ? (
+    <TouchableOpacity
+      onPress={handlePhotoPress}
+      disabled={uploadMutation.isPending}
+      testID="avatar-upload-button"
+      style={{
+        position: "relative",
+        width: profileAvatarSize + 8,
+        height: profileAvatarSize + 8,
+        borderRadius: (profileAvatarSize + 8) / 2,
+        padding: 4,
+        backgroundColor: "#FFFFFF",
+        shadowColor: "#312E81",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.16,
+        shadowRadius: 9,
+        elevation: 5,
+        transform: [{ translateY: profileAvatarBridgeShift }],
+      }}
+    >
+      <View
+        style={{
+          width: profileAvatarSize,
+          height: profileAvatarSize,
+          borderRadius: profileAvatarSize / 2,
+          overflow: "hidden",
+        }}
+      >
+        <UserAvatar
+          user={{ name: displayName, email: displayEmail, image: avatarUri }}
+          size={profileAvatarSize}
+          radius={profileAvatarSize / 2}
+          backgroundColor="#EEF2FF"
+          textColor="#4361EE"
+          fontSize={compactNoWorkspace ? 27 : 29}
+          style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
+          testID="profile-avatar"
+        />
+        {uploadMutation.isPending ? (
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(255,255,255,0.62)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
+          </View>
+        ) : null}
+      </View>
+      <View
+        style={{
+          position: "absolute",
+          bottom: 1,
+          right: 1,
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: "#FFFFFF",
+          alignItems: "center",
+          justifyContent: "center",
+          borderWidth: 1.5,
+          borderColor: "#D7DDF8",
+        }}
+      >
+        <Camera size={11} color="#4361EE" />
+      </View>
+    </TouchableOpacity>
+  ) : undefined;
+
   return (
     <CurvedTabLayout
       topInset={insets.top}
-      title={showSettings ? "Settings" : activeTeam?.name ?? "Profile"}
-      subtitle={showSettings ? "Account and preferences" : "Your account and workspaces"}
-      workspaceTitleSelector={!showSettings}
+      title={showSettings ? "Settings" : ""}
+      workspaceTitleSelector={false}
+      hideHeaderTitle={!showSettings}
       leftAction={
         showSettings ? (
           <Pressable
@@ -617,6 +674,8 @@ export default function ProfileScreen() {
       showNotifications={!showSettings}
       testID="profile-screen"
       headerTestID="profile-header"
+      headerBridge={profileAvatarBridge}
+      headerBridgeSize={profileAvatarSize + 8}
       overlays={
         <>
       {/* Profile photo sheet */}
@@ -1046,70 +1105,28 @@ export default function ProfileScreen() {
         {!showSettings ? (
         <>
         {/* Centered profile identity hero */}
-        <View style={{ flexShrink: 0, marginHorizontal: space.pagePad, marginTop: 12, marginBottom: 6 }}>
+        <View
+          style={{
+            flexShrink: 0,
+            marginHorizontal: space.pagePad,
+            marginTop: profileAvatarSize / 2 + profileAvatarBridgeShift + 12,
+            marginBottom: 0,
+          }}
+        >
           <View
             style={{
-              paddingTop: 2,
-              paddingBottom: 10,
+              paddingTop: 0,
+              paddingBottom: 8,
               alignItems: "center",
             }}
           >
-            <TouchableOpacity
-              onPress={handlePhotoPress}
-              disabled={uploadMutation.isPending}
-              testID="avatar-upload-button"
-              style={{ position: "relative" }}
-            >
-              <View style={{ width: 76, height: 76 }}>
-                <UserAvatar
-                  user={{ name: displayName, email: displayEmail, image: avatarUri }}
-                  size={76}
-                  radius={38}
-                  backgroundColor="#EEF2FF"
-                  textColor="#4361EE"
-                  fontSize={25}
-                  style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
-                  testID="profile-avatar"
-                />
-                {uploadMutation.isPending ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                    backgroundColor: "rgba(255,255,255,0.55)",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
-                  </View>
-                ) : null}
-              </View>
-              <View
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  right: 0,
-                  width: 20,
-                  height: 20,
-                  borderRadius: 10,
-                  backgroundColor: "#FFFFFF",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1.5,
-                  borderColor: "#D7DDF8",
-                }}
-              >
-                <Camera size={10} color="#4361EE" />
-              </View>
-            </TouchableOpacity>
-
             <Pressable
               onPress={handlePhotoPress}
-              style={{ alignItems: "center", marginTop: 8, maxWidth: "88%" }}
+              style={{
+                alignItems: "center",
+                marginTop: 0,
+                maxWidth: "88%",
+              }}
               accessibilityRole="button"
               accessibilityLabel="Edit profile photo"
             >
@@ -1136,7 +1153,16 @@ export default function ProfileScreen() {
               </Pressable>
             ) : null}
 
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 7, flexWrap: "wrap" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 7,
+                marginTop: compactNoWorkspace ? 4 : 6,
+                flexWrap: "wrap",
+              }}
+            >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Building2 size={11} color="#7A869A" strokeWidth={2.25} />
                 <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>
@@ -1163,64 +1189,81 @@ export default function ProfileScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingTop: showSettings ? 24 : 0,
-            paddingBottom: tabBarClearance(insets.bottom),
+            paddingBottom: tabBarClearance(insets.bottom, 12),
           }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
           keyboardShouldPersistTaps="handled"
         >
-          <ProfileContent>
+          <ProfileContent compact={compactNoWorkspace}>
           {!showSettings ? (
           <>
-          {/* Current workspace */}
-          <ProfileSection title="Current workspace">
+          {!teamsLoading && teams.length === 0 ? (
+            <ProfileSection title="Public profile">
+              <ProfileCard>
+                <ProfileMenuRow
+                  icon={UserRound}
+                  title="View public profile"
+                  subtitle="See how others find and connect with you"
+                  onPress={() => {
+                    const userId = meProfile?.id ?? user?.id;
+                    if (!userId) return;
+                    router.push({ pathname: "/person", params: { userId } });
+                  }}
+                  testID="view-public-profile-row"
+                />
+              </ProfileCard>
+            </ProfileSection>
+          ) : null}
+
+          {/* Workspaces */}
+          <ProfileSection
+            title="Workspaces"
+            action={
+              teams.length >= 2 ? (
+                <ProfileToolbarButton
+                  label={`Manage (${teams.length})`}
+                  onPress={() => router.push("/manage-workspaces")}
+                  testID="view-all-workspaces"
+                  showChevron={false}
+                />
+              ) : undefined
+            }
+          >
             <ProfileWorkspaceList
               teams={teams as (Team & { role?: string })[]}
               activeTeamId={activeTeamId}
               teamsLoading={teamsLoading}
-              pendingCountMap={pendingCountMap}
               pendingJoinRequests={myPendingJoinRequests}
               cancelingRequestId={cancelMyJoinRequestMutation.isPending ? cancelMyJoinRequestMutation.variables ?? null : null}
               onCancelPendingRequest={(requestId) => cancelMyJoinRequestMutation.mutate(requestId)}
-              onOpenWorkspacePage={
-                activeTeam
-                  ? () =>
-                      router.push({
-                        pathname: "/workspace-settings",
-                        params: { teamId: activeTeam.id },
-                      })
-                  : undefined
+              onOpenWorkspacePage={(teamId) =>
+                router.push({
+                  pathname: "/workspace-settings",
+                  params: { teamId },
+                })
               }
-              onOpenPeople={
-                activeTeam
-                  ? () =>
-                      router.push({
-                        pathname: "/team-directory",
-                        params: { teamId: activeTeam.id },
-                      })
-                  : undefined
+              onOpenPeople={(teamId) =>
+                router.push({
+                  pathname: "/team-directory",
+                  params: { teamId },
+                })
               }
-              onOpenSubscriptions={
-                activeTeam
-                  ? () =>
-                      router.push({
-                        pathname: "/account-hub",
-                        params: { teamId: activeTeam.id },
-                      })
-                  : undefined
+              onOpenWorkspaceDetails={(teamId) =>
+                router.push({
+                  pathname: "/workspace-settings",
+                  params: { teamId },
+                })
               }
-              onOpenWorkspaceDetails={
-                activeTeam
-                  ? () =>
-                      router.push({
-                        pathname: "/workspace-settings",
-                        params: { teamId: activeTeam.id },
-                      })
-                  : undefined
-              }
-              onAddWorkspace={() =>
+              onCreateWorkspace={() =>
                 router.push({
                   pathname: "/onboarding",
-                  params: { intent: "add" },
+                  params: { intent: "add", mode: "create" },
+                })
+              }
+              onJoinWorkspace={() =>
+                router.push({
+                  pathname: "/onboarding",
+                  params: { intent: "add", mode: "join" },
                 })
               }
             />
@@ -1248,18 +1291,29 @@ export default function ProfileScreen() {
               <ProfileMenuRow
                 icon={Lock}
                 title={ACCOUNT_HUB_TITLE}
+                subtitle={planAccessSubtitle}
                 onPress={() => router.push("/account-hub")}
                 testID="account-hub-row"
               />
             </ProfileCard>
           </ProfileSection>
 
-          <ProfileSection title="Integrations">
-            <OutlookCalendarCard />
-          </ProfileSection>
+          {!teamsLoading && teams.length > 0 ? (
+            <ProfileSection title="Integrations">
+              <OutlookCalendarCard />
+            </ProfileSection>
+          ) : null}
 
           <ProfileSection title="Account controls">
             <ProfileCard>
+              <ProfileMenuRow
+                icon={Pencil}
+                title="Public profile"
+                subtitle="Photo, name, website, location, and About"
+                onPress={() => router.push("/edit-profile")}
+                testID="edit-public-profile-menu-row"
+              />
+              <ProfileDivider inset />
               <ProfileMenuRow
                 icon={Settings}
                 title="Settings"

@@ -7,7 +7,9 @@ import { HeaderNotificationsButton } from "@/components/HeaderNotificationsButto
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { SwitchWorkspaceSheet } from "@/components/SwitchWorkspaceSheet";
 import { api } from "@/lib/api/api";
+import { HEADER_GRADIENT } from "@/lib/header-gradient";
 import { useTeamStore } from "@/lib/state/team-store";
+import { canOpenWorkspaceTitleMenu } from "@/lib/workspace-management";
 import type { Team } from "@/lib/types";
 
 type Props = {
@@ -23,12 +25,13 @@ type Props = {
   showNotifications?: boolean;
   /**
    * Optional page title mode (e.g. Chat). When set, replaces the workspace pill
-   * with a centered title + subtitle so tabs can trial a curved-sheet layout.
+   * with a centered title so tabs can trial a curved-sheet layout.
    */
   title?: string;
-  subtitle?: string;
   /** Let the centered title open the shared workspace selector. */
   workspaceTitleSelector?: boolean;
+  /** Leave the center slot empty while preserving the side actions. */
+  hideCenterContent?: boolean;
   /** Extra padding under the header row so a curved sheet can overlap the gradient. */
   overlapPad?: number;
 };
@@ -36,7 +39,7 @@ type Props = {
 const HEADER_PAD_TOP = 2;
 const HEADER_PAD_BOTTOM = 4;
 const TITLE_HEADER_PAD_TOP = 2;
-const TITLE_HEADER_PAD_BOTTOM = 5;
+const TITLE_HEADER_PAD_BOTTOM = 3;
 const ROW_MIN_HEIGHT = 30;
 const SIDE_SLOT_MIN = 36;
 
@@ -47,8 +50,8 @@ export function AppTabHeader({
   testID,
   showNotifications = true,
   title,
-  subtitle,
   workspaceTitleSelector = false,
+  hideCenterContent = false,
   overlapPad = 0,
 }: Props) {
   const [switchOpen, setSwitchOpen] = useState(false);
@@ -62,27 +65,33 @@ export function AppTabHeader({
   // With no workspace the header names the account, not an absent workspace.
   const workspaceLabel = activeTeam?.name ?? (teams.length === 0 ? "Alenio" : "Workspace");
   const canSwitch = teams.length > 1;
+  const canOpenTitleMenu = canOpenWorkspaceTitleMenu({
+    enabled: workspaceTitleSelector,
+    teamCount: teams.length,
+    activeRole: activeTeam?.role,
+  });
   const pageTitleMode = Boolean(title?.trim());
+  const titleLayoutMode = pageTitleMode || hideCenterContent;
 
   return (
     <>
       <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
+        colors={HEADER_GRADIENT}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={[
           styles.gradient,
           {
             paddingTop:
-              topInset + (pageTitleMode ? TITLE_HEADER_PAD_TOP : HEADER_PAD_TOP),
+              topInset + (titleLayoutMode ? TITLE_HEADER_PAD_TOP : HEADER_PAD_TOP),
             paddingBottom:
-              (pageTitleMode ? TITLE_HEADER_PAD_BOTTOM : HEADER_PAD_BOTTOM) +
+              (titleLayoutMode ? TITLE_HEADER_PAD_BOTTOM : HEADER_PAD_BOTTOM) +
               Math.max(0, overlapPad),
           },
         ]}
         testID={testID}
       >
-        <View style={[styles.row, pageTitleMode ? styles.rowTitleMode : null]}>
+        <View style={[styles.row, titleLayoutMode ? styles.rowTitleMode : null]}>
           <View style={[styles.sideSlot, styles.sideSlotStart]}>
             {leftAction ?? (
               <Image
@@ -93,18 +102,20 @@ export function AppTabHeader({
             )}
           </View>
 
-          {pageTitleMode ? (
+          {hideCenterContent ? (
+            <View style={styles.emptyTitleBlock} />
+          ) : pageTitleMode ? (
             <Pressable
               onPress={() => setSwitchOpen(true)}
-              disabled={!workspaceTitleSelector || !canSwitch}
+              disabled={!canOpenTitleMenu}
               style={({ pressed }) => [
                 styles.titleBlock,
                 pressed ? styles.titleBlockPressed : null,
               ]}
-              accessibilityRole={workspaceTitleSelector && canSwitch ? "button" : undefined}
+              accessibilityRole={canOpenTitleMenu ? "button" : undefined}
               accessibilityLabel={
-                workspaceTitleSelector && canSwitch
-                  ? `Switch workspace. Current: ${title}`
+                canOpenTitleMenu
+                  ? `Open workspace menu. Current: ${title}`
                   : undefined
               }
             >
@@ -112,7 +123,7 @@ export function AppTabHeader({
                 <Text style={styles.pageTitle} numberOfLines={1}>
                   {title}
                 </Text>
-                {workspaceTitleSelector && canSwitch ? (
+                {canOpenTitleMenu ? (
                   <ChevronDown
                     size={14}
                     color="rgba(255,255,255,0.92)"
@@ -120,11 +131,6 @@ export function AppTabHeader({
                   />
                 ) : null}
               </View>
-              {subtitle ? (
-                <Text style={styles.pageSubtitle} numberOfLines={1}>
-                  {subtitle}
-                </Text>
-              ) : null}
             </Pressable>
           ) : (
             <Pressable
@@ -187,7 +193,7 @@ const styles = StyleSheet.create({
   },
   rowTitleMode: {
     alignItems: "center",
-    minHeight: 44,
+    minHeight: 34,
   },
   sideSlot: {
     flex: 1,
@@ -213,6 +219,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     maxWidth: 220,
   },
+  emptyTitleBlock: {
+    width: 0,
+  },
   titleBlockPressed: {
     opacity: 0.78,
   },
@@ -225,18 +234,10 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     color: "#FFFFFF",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
     letterSpacing: -0.4,
-    lineHeight: 24,
-  },
-  pageSubtitle: {
-    marginTop: 1,
-    color: "rgba(255,255,255,0.82)",
-    fontSize: 10,
-    fontWeight: "500",
-    letterSpacing: -0.1,
-    lineHeight: 12,
+    lineHeight: 22,
   },
   workspaceSelector: {
     flexShrink: 1,

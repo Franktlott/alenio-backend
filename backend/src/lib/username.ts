@@ -7,10 +7,10 @@ export const USERNAME_MAX_LENGTH = 30;
 export const USERNAME_CHANGE_COOLDOWN_DAYS = 30;
 
 /**
- * Lowercase letters/digits at each end, with periods and underscores allowed inside.
+ * Lowercase letters/digits at each end, with underscores allowed inside.
  * Handles are stored lowercase, so uniqueness is case-insensitive by construction.
  */
-const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._]*[a-z0-9])?$/;
+const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9_]*[a-z0-9])?$/;
 
 /** System and impersonation-risk handles nobody may claim. */
 const RESERVED_USERNAMES = new Set([
@@ -23,7 +23,6 @@ export type UsernameRejection =
   | "too_short"
   | "too_long"
   | "invalid_characters"
-  | "consecutive_periods"
   | "reserved";
 
 export type UsernameValidation =
@@ -34,8 +33,7 @@ const REJECTION_MESSAGES: Record<UsernameRejection, string> = {
   too_short: `Usernames must be at least ${USERNAME_MIN_LENGTH} characters.`,
   too_long: `Usernames can be at most ${USERNAME_MAX_LENGTH} characters.`,
   invalid_characters:
-    "Usernames can use letters, numbers, periods and underscores, and must start and end with a letter or number.",
-  consecutive_periods: "Usernames cannot contain two periods in a row.",
+    "Usernames can use letters, numbers and underscores, and must start and end with a letter or number.",
   reserved: "That username is reserved.",
 };
 
@@ -55,7 +53,6 @@ export function validateUsername(raw: string): UsernameValidation {
   if (username.length < USERNAME_MIN_LENGTH) return reject("too_short");
   if (username.length > USERNAME_MAX_LENGTH) return reject("too_long");
   if (!USERNAME_PATTERN.test(username)) return reject("invalid_characters");
-  if (username.includes("..")) return reject("consecutive_periods");
   if (RESERVED_USERNAMES.has(username)) return reject("reserved");
 
   return { ok: true, username };
@@ -77,7 +74,7 @@ export function buildUsernameCandidate(name?: string | null, email?: string | nu
   if (fromEmail.length >= USERNAME_MIN_LENGTH) return truncateCandidate(fromEmail);
 
   const seed = fromName || fromEmail;
-  return truncateCandidate(seed ? seed.padEnd(USERNAME_MIN_LENGTH, "0") : "alenio.user");
+  return truncateCandidate(seed ? seed.padEnd(USERNAME_MIN_LENGTH, "0") : "aleniouser");
 }
 
 function slugify(value: string): string {
@@ -85,13 +82,12 @@ function slugify(value: string): string {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9._]/g, "")
-    .replace(/\.{2,}/g, ".")
-    .replace(/^[._]+|[._]+$/g, "");
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/^_+|_+$/g, "");
 }
 
 function truncateCandidate(value: string): string {
-  return value.slice(0, USERNAME_MAX_LENGTH).replace(/[._]+$/, "");
+  return value.slice(0, USERNAME_MAX_LENGTH).replace(/_+$/, "");
 }
 
 /**
@@ -102,7 +98,7 @@ export function withUsernameSuffix(candidate: string, attempt: number): string {
   if (attempt <= 1) return candidate;
   const suffix = String(attempt);
   const room = USERNAME_MAX_LENGTH - suffix.length;
-  return `${candidate.slice(0, room).replace(/[._]+$/, "")}${suffix}`;
+  return `${candidate.slice(0, room).replace(/_+$/, "")}${suffix}`;
 }
 
 export function usernameCooldownRemainingDays(

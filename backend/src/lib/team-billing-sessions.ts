@@ -14,11 +14,12 @@ import {
 } from "./stripe-billing";
 
 type BillingError = { message: string; code: string };
+type BillingStatus = 400 | 403 | 409 | 502 | 503;
 export type BillingCheckoutResult =
   | { url: string }
   | { upgraded: true }
-  | { error: BillingError; status: number };
-type BillingResult = { url: string } | { error: BillingError; status: number };
+  | { error: BillingError; status: BillingStatus };
+type BillingResult = { url: string } | { error: BillingError; status: BillingStatus };
 
 async function assertOwnerMembership(userId: string, teamId: string): Promise<BillingError | null> {
   const membership = await prisma.teamMember.findUnique({
@@ -85,15 +86,6 @@ export async function createTeamCheckoutSession(opts: {
   plan?: StripeCheckoutPlan;
 }): Promise<BillingCheckoutResult> {
   const checkoutPlan: StripeCheckoutPlan = opts.plan === "operations" ? "operations" : "pro";
-  if (checkoutPlan === "operations") {
-    return {
-      error: {
-        message: "Operations is coming soon. Self-serve checkout is not available yet.",
-        code: "COMING_SOON",
-      },
-      status: 503,
-    };
-  }
   if (!isStripeCheckoutPlanConfigured(checkoutPlan)) {
     return {
       error: {

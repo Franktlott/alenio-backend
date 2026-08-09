@@ -6,6 +6,7 @@ import { logActivity } from "./activity";
 import { recordAccountActivity } from "./account-activity";
 import { sendPushToUsers } from "./push";
 import { webPublicBaseUrl } from "./web-public-url";
+import { assertWorkspaceCanWrite } from "./workspace-access";
 
 const INVITE_TTL_DAYS = 7;
 
@@ -472,6 +473,7 @@ export async function redeemInviteForUser(
     return null;
   }
   if (normalizeInviteEmail(userEmail) !== invite.email) return null;
+  if (!(await assertWorkspaceCanWrite(invite.teamId)).ok) return null;
 
   await addUserToTeam(invite.teamId, userId);
   await prisma.teamInvite.update({

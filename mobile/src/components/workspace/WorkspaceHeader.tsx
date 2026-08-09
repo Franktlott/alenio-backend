@@ -18,7 +18,6 @@ export function WorkspaceHeader({ topInset }: Props) {
       topInset={topInset}
       testID="workspace-header"
       title="Workspace"
-      subtitle="Tasks and calendar in one place"
       overlapPad={WORKSPACE_HEADER_OVERLAP}
     />
   );

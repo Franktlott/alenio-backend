@@ -239,7 +239,7 @@ organizationsRouter.post(
     "json",
     z.object({
       name: z.string().trim().min(2).max(200),
-      plan: z.enum(["free", "team", "pro", "operations"]).optional(),
+      plan: z.enum(["team", "pro", "operations"]).optional(),
     }),
   ),
   async (c) => {

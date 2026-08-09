@@ -21,6 +21,7 @@ import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
 import { getBackendUrl } from "@/lib/backend-url";
 import { toast } from "burnt";
+import { HEADER_GRADIENT } from "@/lib/header-gradient";
 
 const BASE_URL = getBackendUrl();
 
@@ -215,7 +216,7 @@ export default function UserDetail() {
 
       {/* Header */}
       <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
+        colors={HEADER_GRADIENT}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >

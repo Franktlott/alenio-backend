@@ -176,7 +176,7 @@ export function OwnershipTransferModal({
                 </strong>
                 <span className="enterprise-muted" style={{ fontSize: 12, display: "block", marginTop: 4 }}>
                   Your card comes off the workspace after they finish setup. Reusing the same card won’t complete
-                  the transfer. Free workspaces skip this step.
+                  the transfer. Workspaces without Stripe billing skip this step.
                 </span>
               </div>
             </section>

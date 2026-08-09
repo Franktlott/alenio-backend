@@ -1,23 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  Pressable,
   ActivityIndicator,
-  StyleSheet,
   Modal,
+  Pressable,
   ScrollView,
+  StyleSheet,
+  Text,
+  View,
   useWindowDimensions,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check, ChevronRight, LayoutGrid, Plus } from "lucide-react-native";
+import {
+  Check,
+  ChevronRight,
+  Plus,
+  Settings,
+  X,
+} from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import type { Team } from "@/lib/types";
 import { useSession } from "@/lib/auth/use-session";
 import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
-import { WorkspaceTeamAvatar, formatTeamRole } from "@/components/WorkspaceTeamUI";
+import {
+  WorkspaceTeamAvatar,
+  formatTeamRole,
+} from "@/components/WorkspaceTeamUI";
 import { colors } from "@/theme";
 
 type Props = {
@@ -25,33 +34,33 @@ type Props = {
   onClose: () => void;
 };
 
-type TeamWithRole = Team & { role?: string };
+const MAX_VISIBLE_WORKSPACES = 5;
+const WORKSPACE_ROW_HEIGHT = 62;
 
-/** Quiet workspace picker — compact sheet, no branded chrome. Stays on the current tab. */
+function memberLabel(team: Team) {
+  const count = team._count?.members;
+  if (count == null) return formatTeamRole(team.role);
+  return `${formatTeamRole(team.role)}  ·  ${count} Member${count === 1 ? "" : "s"}`;
+}
+
+/** Workspace switcher and entry point to workspace management. */
 export function SwitchWorkspaceSheet({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const { data: session } = useSession();
   const { switchWorkspace, activeTeamId } = useSwitchWorkspace();
   const [switchingId, setSwitchingId] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
 
   const { data: teams = [], isLoading } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
-    enabled: !!session?.user && visible,
+    enabled: Boolean(session?.user && visible),
   });
 
-  const sortedTeams = useMemo(() => {
-    // Stable alpha order — don't jump the selected workspace to the top.
-    return [...(teams as TeamWithRole[])].sort((a, b) => a.name.localeCompare(b.name));
-  }, [teams]);
-  const visibleTeams = showAll ? sortedTeams : sortedTeams.slice(0, 4);
-  const menuWidth = Math.min(width - 32, 304);
-
-  useEffect(() => {
-    if (!visible) setShowAll(false);
-  }, [visible]);
+  const sortedTeams = useMemo(
+    () => [...teams].sort((a, b) => a.name.localeCompare(b.name)),
+    [teams],
+  );
 
   const onSelect = async (teamId: string) => {
     if (switchingId) return;
@@ -68,124 +77,159 @@ export function SwitchWorkspaceSheet({ visible, onClose }: Props) {
     }
   };
 
-  const onAddWorkspace = () => {
+  const openCreate = () => {
     onClose();
     router.push({
       pathname: "/onboarding",
-      params: { intent: "add" },
+      params: { intent: "add", mode: "create" },
     });
   };
 
+  const openManage = () => {
+    onClose();
+    router.push("/manage-workspaces");
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Dismiss" />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityLabel="Dismiss workspace menu"
+        />
+
         <View
           style={[
-            styles.menu,
-            {
-              top: insets.top + 50,
-              width: menuWidth,
-              left: (width - menuWidth) / 2,
-            },
+            styles.sheet,
+            { paddingBottom: Math.max(insets.bottom, 16) + 8 },
           ]}
+          testID="switch-workspace-sheet"
         >
-          <Text style={styles.title}>SWITCH WORKSPACE</Text>
+          <View style={styles.handle} />
+          <View style={styles.header}>
+            <Text style={styles.title}>Switch Workspace</Text>
+            <Pressable
+              onPress={onClose}
+              hitSlop={10}
+              style={styles.closeButton}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <X size={17} color="#64748B" strokeWidth={2.25} />
+            </Pressable>
+          </View>
 
-            {isLoading ? (
-              <View style={styles.loading}>
-                <ActivityIndicator color={colors.brand} />
-              </View>
-            ) : teams.length === 0 ? (
-              <View style={styles.empty}>
-                <Text style={styles.emptyTitle}>No workspaces yet</Text>
-                <Text style={styles.emptyBody}>Create or join one to get started.</Text>
-              </View>
-            ) : (
-              <View style={styles.listCard}>
-                <ScrollView
-                  bounces={showAll && sortedTeams.length > 6}
-                  showsVerticalScrollIndicator={showAll && sortedTeams.length > 6}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled
-                  style={styles.listScroll}
-                >
-                  {visibleTeams.map((team, index) => {
-                    const isActive = team.id === activeTeamId;
-                    const isBusy = switchingId === team.id;
-                    return (
-                      <View key={team.id}>
-                        {index > 0 ? <View style={styles.divider} /> : null}
-                        <Pressable
-                          onPress={() => void onSelect(team.id)}
-                          disabled={!!switchingId}
-                          testID={`switch-workspace-${team.id}`}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: isActive }}
-                          style={({ pressed }) => [
-                            styles.rowPressable,
-                            pressed ? styles.rowPressed : null,
-                          ]}
-                        >
-                          <View style={styles.row}>
-                            <WorkspaceTeamAvatar
-                              team={team}
-                              size={28}
-                              active={isActive}
-                              radius={8}
-                            />
-                            <View style={styles.rowText}>
-                              <Text style={styles.rowTitle} numberOfLines={1}>
-                                {team.name}
-                              </Text>
-                              <Text style={styles.rowMeta} numberOfLines={1}>
-                                {formatTeamRole(team.role)}
-                                {isActive ? " · Current" : ""}
-                              </Text>
-                            </View>
-                            {isBusy ? (
-                              <ActivityIndicator size="small" color={colors.brand} />
-                            ) : isActive ? (
-                              <View style={styles.checkWrap}>
-                                <Check size={16} color={colors.brand} strokeWidth={2.75} />
-                              </View>
-                            ) : (
-                              <View style={styles.checkSpacer} />
-                            )}
-                          </View>
-                        </Pressable>
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-
-            {!isLoading ? (
-              <>
-              <Pressable
-                onPress={onAddWorkspace}
-                style={({ pressed }) => [styles.addLink, pressed ? styles.addLinkPressed : null]}
-                testID="add-workspace-from-switcher"
-                accessibilityRole="button"
+          {isLoading ? (
+            <View style={styles.loading}>
+              <ActivityIndicator color={colors.brand} />
+            </View>
+          ) : teams.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>No workspaces yet</Text>
+              <Text style={styles.emptyBody}>
+                Create a workspace to get started.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.workspaceCard}>
+              <ScrollView
+                style={{
+                  maxHeight: Math.min(
+                    MAX_VISIBLE_WORKSPACES * WORKSPACE_ROW_HEIGHT,
+                    Math.round(height * 0.42),
+                  ),
+                }}
+                scrollEnabled={sortedTeams.length > MAX_VISIBLE_WORKSPACES}
+                showsVerticalScrollIndicator={
+                  sortedTeams.length > MAX_VISIBLE_WORKSPACES
+                }
+                bounces={sortedTeams.length > MAX_VISIBLE_WORKSPACES}
+                keyboardShouldPersistTaps="handled"
               >
-                <Plus size={14} color={colors.brand} strokeWidth={2.5} />
-                <Text style={styles.addLinkText}>Add workspace</Text>
+                {sortedTeams.map((team, index) => {
+                  const current = team.id === activeTeamId;
+                  const busy = switchingId === team.id;
+                  return (
+                    <View key={team.id}>
+                      {index > 0 ? <View style={styles.divider} /> : null}
+                      <Pressable
+                        onPress={() => void onSelect(team.id)}
+                        disabled={Boolean(switchingId)}
+                        style={styles.workspaceRow}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: current }}
+                        testID={`switch-workspace-${team.id}`}
+                      >
+                        <WorkspaceTeamAvatar
+                          team={team}
+                          size={38}
+                          radius={10}
+                          active={current}
+                        />
+                        <View style={styles.workspaceText}>
+                          <Text style={styles.workspaceName} numberOfLines={1}>
+                            {team.name}
+                          </Text>
+                          <Text style={styles.workspaceMeta} numberOfLines={1}>
+                            {memberLabel(team)}
+                            {current ? "  ·  Current" : ""}
+                          </Text>
+                        </View>
+                        {busy ? (
+                          <ActivityIndicator size="small" color={colors.brand} />
+                        ) : current ? (
+                          <Check
+                            size={20}
+                            color={colors.brand}
+                            strokeWidth={2.6}
+                          />
+                        ) : (
+                          <ChevronRight size={18} color="#94A3B8" />
+                        )}
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {!isLoading ? (
+            <View style={styles.actions}>
+              <Pressable
+                onPress={openCreate}
+                style={styles.actionRow}
+                accessibilityRole="button"
+                testID="create-workspace-from-switcher"
+              >
+                <View style={[styles.actionIcon, styles.createIcon]}>
+                  <Plus size={14} color={colors.brand} strokeWidth={2.5} />
+                </View>
+                <Text style={[styles.actionText, { color: colors.brand }]}>
+                  Create Workspace
+                </Text>
               </Pressable>
-              {sortedTeams.length > 4 && !showAll ? (
-                <Pressable
-                  onPress={() => setShowAll(true)}
-                  style={({ pressed }) => [styles.viewAllLink, pressed ? styles.addLinkPressed : null]}
-                  testID="view-all-workspaces"
-                  accessibilityRole="button"
-                >
-                  <LayoutGrid size={13} color="#64748B" strokeWidth={2.1} />
-                  <Text style={styles.viewAllText}>View all workspaces</Text>
-                  <ChevronRight size={13} color="#94A3B8" />
-                </Pressable>
-              ) : null}
-              </>
-            ) : null}
+
+              <Pressable
+                onPress={openManage}
+                style={styles.actionRow}
+                accessibilityRole="button"
+                testID="manage-workspaces-from-switcher"
+              >
+                <View style={styles.actionIcon}>
+                  <Settings size={14} color="#64748B" strokeWidth={2.15} />
+                </View>
+                <Text style={styles.actionText}>Manage Workspaces</Text>
+                <ChevronRight size={15} color="#94A3B8" />
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -195,137 +239,150 @@ export function SwitchWorkspaceSheet({ visible, onClose }: Props) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.10)",
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.28)",
   },
-  menu: {
-    position: "absolute",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+  sheet: {
+    width: "100%",
+    maxHeight: "84%",
+    paddingHorizontal: 14,
     paddingTop: 10,
-    paddingHorizontal: 10,
-    paddingBottom: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#E6EAF0",
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     shadowColor: "#0F172A",
-    shadowOpacity: 0.14,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 10,
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 18,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 12,
+    backgroundColor: "#E2E8F0",
+  },
+  header: {
+    minHeight: 38,
+    marginBottom: 8,
+    paddingLeft: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   title: {
-    fontSize: 9,
+    fontSize: 17,
+    lineHeight: 21,
     fontWeight: "700",
-    color: "#64748B",
-    letterSpacing: 0.7,
-    marginBottom: 7,
-    marginLeft: 2,
+    color: "#0F172A",
+    letterSpacing: -0.25,
+  },
+  closeButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+  pressed: {
+    opacity: 0.65,
   },
   loading: {
-    paddingVertical: 32,
+    minHeight: 100,
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    justifyContent: "center",
   },
   empty: {
     paddingVertical: 24,
-    paddingHorizontal: 12,
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
   },
   emptyTitle: {
     fontSize: 14,
-    fontWeight: "600",
-    color: colors.textPrimary,
-    marginBottom: 4,
+    fontWeight: "700",
+    color: "#0F172A",
   },
   emptyBody: {
+    marginTop: 4,
     fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: "center",
+    color: "#64748B",
   },
-  listCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+  workspaceCard: {
     overflow: "hidden",
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#E7ECF3",
+    backgroundColor: "#FFFFFF",
   },
-  listScroll: {
-    maxHeight: 270,
+  workspaceRow: {
+    minHeight: 62,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  rowPressed: {
+    backgroundColor: "#F8FAFC",
+  },
+  workspaceText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  workspaceName: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  workspaceMeta: {
+    marginTop: 3,
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: "500",
+    color: "#7C8798",
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "#F1F5F9",
-    marginLeft: 39,
+    marginLeft: 58,
+    backgroundColor: "#E8EDF3",
   },
-  rowPressable: {
+  actions: {
+    marginTop: 9,
+    gap: 6,
+  },
+  actionRow: {
+    minHeight: 40,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
   },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 7,
-    paddingHorizontal: 2,
-    gap: 9,
-  },
-  rowPressed: {
-    backgroundColor: "#F3F4F6",
-  },
-  rowText: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: "center",
-  },
-  rowTitle: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#111827",
-    letterSpacing: -0.2,
-  },
-  rowMeta: {
-    fontSize: 9,
-    color: "#9CA3AF",
-    marginTop: 2,
-  },
-  checkWrap: {
-    width: 18,
-    height: 18,
+  actionIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#F1F5F9",
   },
-  checkSpacer: {
-    width: 18,
-    height: 18,
+  createIcon: {
+    borderWidth: 1.25,
+    borderColor: colors.brand,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
   },
-  addLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 9,
-    paddingHorizontal: 3,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#EEF1F5",
-  },
-  addLinkPressed: {
-    opacity: 0.6,
-  },
-  addLinkText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: colors.brand,
-  },
-  viewAllLink: {
-    minHeight: 34,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 3,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#EEF1F5",
-  },
-  viewAllText: {
+  actionText: {
     flex: 1,
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#475569",
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: "700",
+    color: "#334155",
   },
 });

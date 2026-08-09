@@ -21523,6 +21523,56 @@ body:has(.temps-module) .seneca-drawer-backdrop {
   scrollbar-gutter: stable;
 }
 
+.workspace-access-banner {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.workspace-access-banner a {
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.workspace-access-banner--attention {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.workspace-access-banner--warning {
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.workspace-access-banner--urgent,
+.workspace-access-banner--critical {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+@media (max-width: 640px) {
+  .workspace-access-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+}
+
 .enterprise-workspace-loading-overlay {
   position: absolute;
   inset: 0;
@@ -25514,6 +25564,51 @@ button.enterprise-profile-legal-link {
 .workspace-form-modal .enterprise-task-modal-footer {
   padding-left: 1rem;
   padding-right: 1rem;
+}
+
+.workspace-create-logo-note {
+  margin: 0.15rem 0 0;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.workspace-trial-confirm,
+.workspace-trial-welcome {
+  padding: 1rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 14px;
+  background: #f5f7ff;
+  color: #312e81;
+}
+
+.workspace-trial-confirm ul {
+  margin: 0.65rem 0;
+  padding-left: 1.2rem;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.workspace-trial-confirm p,
+.workspace-trial-welcome p {
+  margin: 0;
+}
+
+.workspace-trial-welcome {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.workspace-trial-welcome-mark {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: #4f46e5;
+  color: #fff;
+  font-weight: 800;
 }
 
 .chat-create-modal-body {
@@ -37798,6 +37893,12 @@ button.enterprise-profile-legal-link {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.site-pricing-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 900px;
+  margin-inline: auto;
+}
+
 .site-pricing-card-enterprise {
   border-color: #cbd5e1;
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
@@ -38052,6 +38153,7 @@ button.enterprise-profile-legal-link {
 
 @media (max-width: 1024px) {
   .site-pricing-grid-3,
+  .site-pricing-grid-2,
   .site-marketing-pillar-grid {
     grid-template-columns: 1fr;
   }
@@ -43047,6 +43149,12 @@ button.enterprise-profile-legal-link {
   align-content: center;
   width: 100%;
   min-height: 0;
+}
+
+.billing-plans--paid-only {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 900px;
+  margin-inline: auto;
 }
 
 .billing-card {

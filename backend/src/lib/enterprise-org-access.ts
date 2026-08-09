@@ -206,7 +206,7 @@ export async function createOrganizationWorkspace(input: {
 
   const planRaw = (input.plan ?? "operations").trim().toLowerCase();
   const plan = planRaw === "pro" ? "team" : planRaw;
-  if (!["free", "team", "operations"].includes(plan)) {
+  if (!["team", "operations"].includes(plan)) {
     return { ok: false as const, code: "VALIDATION" as const };
   }
 

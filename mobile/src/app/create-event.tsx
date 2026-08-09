@@ -27,6 +27,7 @@ import {
   videoMeetingEndFromDuration,
 } from "@/lib/video-meeting-duration";
 import { resolveCalendarEventColor } from "@/lib/calendar-event-colors";
+import { HEADER_GRADIENT } from "@/lib/header-gradient";
 
 type CalendarEvent = {
   id: string;
@@ -180,7 +181,7 @@ export default function CreateEventScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]} testID="event-modal">
       {/* Gradient header */}
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Pressable
             onPress={() => router.back()}

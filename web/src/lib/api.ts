@@ -68,6 +68,11 @@ function parseZodErrorMessage(message: string): string | undefined {
   }
 }
 
+type ApiErrorBody = {
+  error?: string | { message?: string; issues?: ZodIssueLike[]; code?: string; teamId?: string; status?: string };
+  message?: string;
+};
+
 function parseApiErrorMessage(body: unknown): string | undefined {
   if (Array.isArray(body)) {
     const issues = body as ZodIssueLike[];
@@ -76,10 +81,7 @@ function parseApiErrorMessage(body: unknown): string | undefined {
   }
   if (!body || typeof body !== "object") return undefined;
 
-  const record = body as {
-    error?: string | { message?: string; issues?: ZodIssueLike[] };
-    message?: string;
-  };
+  const record = body as ApiErrorBody;
   const errField = record.error;
   if (errField && typeof errField === "object") {
     if (Array.isArray(errField.issues) && errField.issues.length > 0) {
@@ -92,6 +94,24 @@ function parseApiErrorMessage(body: unknown): string | undefined {
   if (typeof errField === "string") return errField;
   if (typeof record.message === "string") return record.message;
   return undefined;
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly teamId?: string;
+
+  constructor(message: string, status: number, details?: { code?: string; teamId?: string }) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = details?.code;
+    this.teamId = details?.teamId;
+  }
+}
+
+export function isWorkspaceReadOnlyError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.code === "WORKSPACE_READ_ONLY";
 }
 
 async function readJson<T>(res: Response): Promise<T | null> {
@@ -143,12 +163,23 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await readJson<unknown>(res);
     const msg = parseApiErrorMessage(body);
-    throw new Error(
+    const details =
+      body && typeof body === "object" && !Array.isArray(body)
+        ? (body as ApiErrorBody).error
+        : undefined;
+    const structured = details && typeof details === "object" ? details : undefined;
+    const error = new ApiError(
       msg ??
         (res.status === 404
           ? "Not found — this may not exist or you may not have access."
           : `Request failed (${res.status})`),
+      res.status,
+      { code: structured?.code, teamId: structured?.teamId },
     );
+    if (error.code === "WORKSPACE_READ_ONLY" && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("alenio:workspace-read-only", { detail: { teamId: error.teamId } }));
+    }
+    throw error;
   }
   const parsed = await readJson<T>(res);
   return (parsed ?? {}) as T;
@@ -218,6 +249,9 @@ export type WebTeamRow = {
   hasGoFeatures?: boolean;
 };
 
+export type WorkspaceAccessMode = "full" | "read_only";
+export type WorkspaceBannerSeverity = "none" | "info" | "warning" | "critical";
+
 export type WebTeamSubscription = {
   id: string;
   teamId: string;
@@ -229,6 +263,14 @@ export type WebTeamSubscription = {
   createdAt: string;
   updatedAt: string;
   billingProvider?: "stripe" | "mobile_store" | "none";
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  remainingDays: number | null;
+  canWrite: boolean;
+  accessMode: WorkspaceAccessMode;
+  bannerSeverity: WorkspaceBannerSeverity;
+  hasTeamFeatures: boolean;
+  hasGoFeatures: boolean;
 };
 
 export type ChatMessageReaction = {
@@ -1768,8 +1810,12 @@ export function postJoinTeamByCode(inviteCode: string) {
   }).then((r) => r.data);
 }
 
-export function createWebTeam(name: string) {
-  return apiPostJson<{ data: WebTeamRow }>("/web/api/teams", { name: name.trim() }).then((r) => r.data);
+export function createWebTeam(input: { name: string; industry: string; startTrial: true }) {
+  return apiPostJson<{ data: WebTeamRow }>("/web/api/teams", {
+    name: input.name.trim(),
+    industry: input.industry.trim(),
+    startTrial: true,
+  }).then((r) => r.data);
 }
 
 export function patchApiTeam(teamId: string, body: { name?: string; image?: string | null }) {

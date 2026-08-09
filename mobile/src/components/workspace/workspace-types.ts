@@ -1,6 +1,6 @@
 import type { TaskPriority } from "@/lib/types";
 
-export type TaskStatusTab = "active" | "completed" | "archived";
+export type TaskStatusTab = "active" | "completed" | "archived" | "all";
 
 export type AssignedToFilter =
   | "me"
@@ -9,11 +9,22 @@ export type AssignedToFilter =
   | "unassigned"
   | { memberId: string; memberName: string };
 
-export type DueDateFilter = "calendar_day" | "today" | "all" | "overdue";
+export type DueDateFilter =
+  | "calendar_day"
+  | "today"
+  | "tomorrow"
+  | "this_week"
+  | "all"
+  | "overdue";
 
 export type PriorityFilter = "all" | TaskPriority;
 
-export type SortFilter = "due" | "priority" | "completed";
+export type SortFilter =
+  | "due"
+  | "priority"
+  | "newest"
+  | "oldest"
+  | "alphabetical";
 
 export interface WorkspaceFiltersState {
   statusTab: TaskStatusTab;
@@ -31,4 +42,4 @@ export const DEFAULT_WORKSPACE_FILTERS: WorkspaceFiltersState = {
   sort: "due",
 };
 
-export type FilterPicker = "assignedTo" | "dueDate" | "priority" | "sort" | null;
+export type FilterPicker = "filterView" | null;

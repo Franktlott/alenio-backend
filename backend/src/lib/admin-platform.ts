@@ -3,8 +3,8 @@ import { deleteAppUserCompletely } from "./delete-app-user";
 import { isPrismaUniqueOnName, normalizeTeamName } from "./team-name";
 import { prisma } from "../prisma";
 
-const VALID_PLANS = new Set(["free", "team", "pro", "operations"]);
-const VALID_STATUSES = new Set(["active", "canceled", "past_due", "trialing"]);
+const VALID_PLANS = new Set(["team", "pro", "operations"]);
+const VALID_STATUSES = new Set(["active", "canceled", "past_due", "trialing", "expired"]);
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -144,7 +144,7 @@ export async function listPlatformTeams(limit = 200) {
             stripeCustomerId: team.subscription.stripeCustomerId,
             currentPeriodEnd: team.subscription.currentPeriodEnd?.toISOString() ?? null,
           }
-        : { plan: "free", status: "active", stripeCustomerId: null, currentPeriodEnd: null },
+        : { plan: "legacy", status: "active", stripeCustomerId: null, currentPeriodEnd: null },
     };
   });
 }
@@ -307,16 +307,14 @@ export async function createEnterpriseAccount(input: {
       name: team.name,
       ownerName: owner.name,
     }).catch((err) => console.warn("[admin-platform] workspace push failed", err));
-    if (plan !== "free") {
-      void notifyAdminsBillingChange({
-        teamId: team.id,
-        teamName: team.name,
-        plan,
-        status: "active",
-        previousPlan: "free",
-        previousStatus: "canceled",
-      }).catch((err) => console.warn("[admin-platform] billing push failed", err));
-    }
+    void notifyAdminsBillingChange({
+      teamId: team.id,
+      teamName: team.name,
+      plan,
+      status: "active",
+      previousPlan: "legacy",
+      previousStatus: "canceled",
+    }).catch((err) => console.warn("[admin-platform] billing push failed", err));
 
     return {
       ok: true as const,

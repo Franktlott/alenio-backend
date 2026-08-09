@@ -7,14 +7,21 @@ import {
   Image,
   TouchableOpacity,
 } from "react-native";
-import { UserPlus } from "lucide-react-native";
+import { AlertCircle, UserPlus } from "lucide-react-native";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
   AlenioSheetIcon,
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
-import { previewTeamInvite, type TeamInvitePreview } from "@/lib/team-invites-api";
+import {
+  previewTeamInvite,
+  type TeamInvitePreview,
+} from "@/lib/team-invites-api";
+import {
+  isValidInviteEmail,
+  teamInviteErrorMessage,
+} from "@/lib/team-invite-errors";
 import { UserAvatar } from "@/components/UserAvatar";
 
 type Props = {
@@ -120,6 +127,10 @@ export function AddMemberModal({
   const handleContinue = async () => {
     const trimmed = email.trim();
     if (!trimmed || !teamId) return;
+    if (!isValidInviteEmail(trimmed)) {
+      setPreviewError("Enter a valid email address, like name@company.com.");
+      return;
+    }
     setPreviewLoading(true);
     setPreviewError(null);
     onClearError?.();
@@ -128,7 +139,12 @@ export function AddMemberModal({
       setPreview(result);
       setStep("confirm");
     } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : "Could not look up this email.");
+      setPreviewError(
+        teamInviteErrorMessage(
+          err,
+          "We couldn't look up this email. Please try again.",
+        ),
+      );
     } finally {
       setPreviewLoading(false);
     }
@@ -208,8 +224,18 @@ export function AddMemberModal({
             </View>
 
             {(error || previewError) ? (
-              <View style={alenioSheetStyles.errorBox} testID="add-member-error">
-                <Text style={alenioSheetStyles.errorText}>{error ?? previewError}</Text>
+              <View
+                style={[
+                  alenioSheetStyles.errorBox,
+                  { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+                ]}
+                accessibilityRole="alert"
+                testID="add-member-error"
+              >
+                <AlertCircle size={15} color="#DC2626" style={{ marginTop: 1 }} />
+                <Text style={[alenioSheetStyles.errorText, { flex: 1 }]}>
+                  {error ?? previewError}
+                </Text>
               </View>
             ) : null}
 
