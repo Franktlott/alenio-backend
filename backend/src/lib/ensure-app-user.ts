@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import type { AppUser } from "../auth";
 import { shouldSyncAuthImage } from "./auth-image-sync";
 import { allocateUsername } from "./username";
+import { syncWorkspaceTrialIdentity } from "./workspace-trial-policy";
 
 export type SyncMatchedBy = "auth_user_id" | "email" | "created";
 
@@ -226,6 +227,12 @@ export async function syncAppUserFromAuth(authUser: AppUser): Promise<{
     void notifyAdminsNewUser(user).catch((err) =>
       console.warn("[ensure-app-user] admin push failed", err),
     );
+  }
+
+  try {
+    await syncWorkspaceTrialIdentity(user.id, user.email);
+  } catch (err) {
+    logSyncFailure(`failed to sync workspace trial identity for user id=${user.id}`, err);
   }
 
   return { user, matchedBy };

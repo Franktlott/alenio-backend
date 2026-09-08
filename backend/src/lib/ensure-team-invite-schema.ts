@@ -8,6 +8,7 @@ export async function ensureTeamInviteSchema(prisma: PrismaClient): Promise<void
         "id" TEXT NOT NULL,
         "teamId" TEXT NOT NULL,
         "email" TEXT NOT NULL,
+        "role" TEXT NOT NULL DEFAULT 'member',
         "invitedById" TEXT NOT NULL,
         "token" TEXT NOT NULL,
         "status" TEXT NOT NULL DEFAULT 'pending',
@@ -17,6 +18,11 @@ export async function ensureTeamInviteSchema(prisma: PrismaClient): Promise<void
         "acceptedAt" TIMESTAMP(3),
         CONSTRAINT "TeamInvite_pkey" PRIMARY KEY ("id")
       );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "TeamInvite"
+        ADD COLUMN IF NOT EXISTS "role" TEXT NOT NULL DEFAULT 'member';
     `);
 
     await prisma.$executeRawUnsafe(`

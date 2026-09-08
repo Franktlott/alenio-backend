@@ -1,6 +1,9 @@
 import type { PrismaClient } from "@prisma/client";
 import { SENECA_GLOBAL_CORE } from "./seneca-global-core";
-import { SENECA_DATA_GROUNDING_RULES } from "./seneca-grounding";
+import {
+  SENECA_DATA_GROUNDING_RULES,
+  SENECA_PERSONAL_GROUNDING_RULES,
+} from "./seneca-grounding";
 import {
   getPublishedOrDraftOperational,
   getPublishedOrDraftStudio,
@@ -20,6 +23,14 @@ export type AssembledSenecaPrompt = {
   studioVersion: number | null;
   operationalVersion: number | null;
 };
+
+export function groundingRulesForSenecaScope(
+  scope: "workspace" | "personal_only" = "workspace",
+): string {
+  return scope === "personal_only"
+    ? SENECA_PERSONAL_GROUNDING_RULES
+    : SENECA_DATA_GROUNDING_RULES;
+}
 
 function pushStudioLayers(
   layers: string[],
@@ -59,6 +70,7 @@ export async function assembleSenecaSystemPrompt(
     /** Optional Organization owner for future inheritance. */
     organizationOwner?: SenecaOwnerRef | null;
     templateKey?: SenecaPromptTemplateKey | null;
+    groundingScope?: "workspace" | "personal_only";
     userContext?: string | null;
     requestContext?: string | null;
   },
@@ -77,7 +89,7 @@ export async function assembleSenecaSystemPrompt(
   layers.push(
     "## Response formatting\n" + SENECA_GLOBAL_CORE.responseFormatting.map((r) => `- ${r}`).join("\n"),
   );
-  layers.push(SENECA_DATA_GROUNDING_RULES);
+  layers.push(groundingRulesForSenecaScope(opts.groundingScope));
 
   const platformStudio = await getPublishedOrDraftStudio(prisma, globalOwner());
   if (!isPlatformOnly || platformStudio.source !== "default") {

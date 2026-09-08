@@ -32,6 +32,7 @@ export type InboxUpdatedEvent = {
   teamId?: string;
   topicId?: string | null;
   conversationId?: string;
+  resource?: "calendar" | "check_ins" | "goals";
 };
 
 export type TeamPinUpdatedEvent = {
@@ -157,6 +158,7 @@ export function publishUserInboxUpdated(
     teamId?: string;
     topicId?: string | null;
     conversationId?: string;
+    resource?: "calendar" | "check_ins" | "goals";
   },
 ) {
   const unique = [...new Set(userIds.filter(Boolean))];
@@ -169,6 +171,7 @@ export function publishUserInboxUpdated(
         teamId: detail.teamId,
         topicId: detail.topicId,
         conversationId: detail.conversationId,
+        resource: detail.resource,
       },
       userRealtimeKey(userId),
     );

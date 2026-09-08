@@ -10,6 +10,7 @@ export type AppUser = {
   email: string | null;
   name: string | null;
   image?: string | null;
+  emailVerified?: boolean;
 };
 
 export type AppSession = {
@@ -73,12 +74,15 @@ export async function createEmailPasswordUser(email: string, password: string, n
   return server.createEmailPasswordUser(email, password, name);
 }
 
-export async function sendEmailVerificationOtp(email: string): Promise<void> {
+export async function sendEmailVerificationOtp(
+  email: string,
+  purpose: "email-verification" | "email-change" = "email-verification",
+): Promise<void> {
   const server = await loadAuthServer();
   if (!server) {
     throw new Error("Auth server is not available.");
   }
-  await server.sendEmailVerificationOtp(email);
+  await server.sendEmailVerificationOtp(email, purpose);
 }
 
 export async function verifyEmailVerificationOtp(email: string, otp: string): Promise<void> {

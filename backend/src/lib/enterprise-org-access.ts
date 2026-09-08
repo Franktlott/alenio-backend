@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import { teamSubscriptionRowHasGoFeatures } from "../routes/subscription";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "./team-name";
+import { resolveTimeZone } from "./timezone";
 
 const ORG_GO_ADMIN_ROLES = new Set(["org_owner", "org_admin"]);
 const DEFAULT_WORKSPACE_LIMIT = 5;
@@ -62,6 +63,7 @@ export type EnterpriseOrgForUser = {
     id: string;
     name: string;
     inviteCode: string | null;
+    timezone: string | null;
     hasGoFeatures: boolean;
   }>;
 };
@@ -88,6 +90,7 @@ export async function listEnterpriseOrganizationsForUser(userId: string): Promis
               id: true,
               name: true,
               inviteCode: true,
+              timezone: true,
               subscription: { select: { plan: true, status: true } },
             },
           },
@@ -117,6 +120,7 @@ export async function listEnterpriseOrganizationsForUser(userId: string): Promis
           id: t.id,
           name: t.name,
           inviteCode: t.inviteCode,
+          timezone: t.timezone,
           hasGoFeatures: teamSubscriptionRowHasGoFeatures(t.subscription),
         })),
       };
@@ -214,6 +218,10 @@ export async function createOrganizationWorkspace(input: {
   while (await prisma.team.findUnique({ where: { inviteCode } })) {
     inviteCode = generateInviteCode();
   }
+  const creator = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { name: true, timezone: true },
+  });
 
   try {
     const team = await prisma.$transaction(async (tx) => {
@@ -221,6 +229,7 @@ export async function createOrganizationWorkspace(input: {
         data: {
           name: teamName,
           inviteCode,
+          timezone: resolveTimeZone(creator?.timezone),
           organizationId: org.id,
           // Org admins are not workspace members — they manage via org role.
         },
@@ -237,15 +246,11 @@ export async function createOrganizationWorkspace(input: {
       return created;
     });
 
-    const owner = await prisma.user.findUnique({
-      where: { id: input.userId },
-      select: { name: true },
-    });
     const { notifyAdminsNewWorkspace } = await import("./admin-push");
     void notifyAdminsNewWorkspace({
       id: team.id,
       name: team.name,
-      ownerName: owner?.name ?? null,
+      ownerName: creator?.name ?? null,
     }).catch((err) => console.warn("[enterprise-org] workspace push failed", err));
 
     return {
@@ -254,6 +259,7 @@ export async function createOrganizationWorkspace(input: {
         id: team.id,
         name: team.name,
         inviteCode: team.inviteCode,
+        timezone: team.timezone,
         hasGoFeatures: teamSubscriptionRowHasGoFeatures({ plan, status: "active" }),
       },
       workspaceLimit: limit,
@@ -298,7 +304,7 @@ export async function renameOrganizationWorkspace(input: {
 
   const team = await prisma.team.findUnique({
     where: { id: input.teamId },
-    select: { id: true, name: true, inviteCode: true, organizationId: true },
+    select: { id: true, name: true, inviteCode: true, timezone: true, organizationId: true },
   });
   if (!team || team.organizationId !== input.organizationId) {
     return { ok: false as const, code: "TEAM_NOT_FOUND" as const };
@@ -317,7 +323,7 @@ export async function renameOrganizationWorkspace(input: {
     const updated = await prisma.team.update({
       where: { id: team.id },
       data: { name: teamName },
-      select: { id: true, name: true, inviteCode: true },
+      select: { id: true, name: true, inviteCode: true, timezone: true },
     });
     return { ok: true as const, team: updated };
   } catch (err) {

@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient, RecurrenceRule, RecurrenceSeries, Task } from "@prisma/client";
+import { LEGACY_TASK_CLASSIFICATION } from "./task-kind";
 import {
   addCalendarDaysInTimeZone,
   calendarDayFromInstant,
@@ -150,7 +151,18 @@ export function isRecurringTask(task: Pick<Task, "recurrenceSeriesId"> & { recur
 
 export async function createRecurrenceSeries(
   prisma: PrismaClient,
-  task: Pick<Task, "teamId" | "creatorId" | "title" | "description" | "priority" | "incognito" | "isJoint" | "attachmentUrl">,
+  task: Pick<
+    Task,
+    | "teamId"
+    | "creatorId"
+    | "title"
+    | "description"
+    | "priority"
+    | "incognito"
+    | "isJoint"
+    | "attachmentUrl"
+  > &
+    Partial<Pick<Task, "kind" | "momentumEligible">>,
   recurrence: RecurrenceInput,
 ): Promise<RecurrenceSeries> {
   const occurrenceCount = resolveRecurrenceOccurrenceCount(recurrence);
@@ -160,6 +172,9 @@ export async function createRecurrenceSeries(
       creatorId: task.creatorId,
       title: task.title,
       description: task.description,
+      kind: task.kind ?? LEGACY_TASK_CLASSIFICATION.kind,
+      momentumEligible:
+        task.momentumEligible ?? LEGACY_TASK_CLASSIFICATION.momentumEligible,
       priority: task.priority,
       incognito: task.incognito,
       isJoint: task.isJoint,
@@ -285,6 +300,8 @@ export async function spawnAllRecurrenceTasks(
           data: {
             title: series.title,
             description: series.description,
+            kind: series.kind,
+            momentumEligible: series.momentumEligible,
             priority: series.priority,
             status: "todo",
             dueDate,

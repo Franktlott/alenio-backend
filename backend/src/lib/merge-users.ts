@@ -82,6 +82,8 @@ export type MergeableProfile = {
   phoneNumber: string | null;
   phoneNumberVerified: boolean;
   personalBestStreak: number;
+  workspaceTrialStartedAt?: Date | null;
+  workspaceTrialConsumedAt?: Date | null;
 };
 
 /** Fills gaps on the surviving record from the one being merged away; never overwrites. */
@@ -104,6 +106,19 @@ export function mergeProfileFields(
   if (!target.emailVerified && source.emailVerified) updates.emailVerified = true;
   if (source.personalBestStreak > target.personalBestStreak) {
     updates.personalBestStreak = source.personalBestStreak;
+  }
+  const earliest = (a: Date | null | undefined, b: Date | null | undefined) => {
+    if (!a) return b;
+    if (!b) return a;
+    return a.getTime() <= b.getTime() ? a : b;
+  };
+  const trialStartedAt = earliest(target.workspaceTrialStartedAt, source.workspaceTrialStartedAt);
+  const trialConsumedAt = earliest(target.workspaceTrialConsumedAt, source.workspaceTrialConsumedAt);
+  if (trialStartedAt?.getTime() !== target.workspaceTrialStartedAt?.getTime()) {
+    updates.workspaceTrialStartedAt = trialStartedAt;
+  }
+  if (trialConsumedAt?.getTime() !== target.workspaceTrialConsumedAt?.getTime()) {
+    updates.workspaceTrialConsumedAt = trialConsumedAt;
   }
 
   return updates;
@@ -222,6 +237,8 @@ const ACCOUNT_SELECT = {
   phoneNumber: true,
   phoneNumberVerified: true,
   personalBestStreak: true,
+  workspaceTrialStartedAt: true,
+  workspaceTrialConsumedAt: true,
 } as const;
 
 type LoadedAccount = Prisma.UserGetPayload<{ select: typeof ACCOUNT_SELECT }>;

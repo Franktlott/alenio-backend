@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { deleteReplacedStorageObject, deleteStorageObjectByUrlIfOwned } from "../lib/firebase-storage";
+import { canManageWorkspaceSpaces } from "../lib/workspace-role-policy";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -13,7 +14,6 @@ const topicsRouter = new Hono<{ Variables: Variables }>();
 topicsRouter.use("*", authGuard);
 
 const SPACE_LIMIT = 50;
-const MANAGER_ROLES = ["owner", "team_leader", "admin"] as const;
 
 async function getMembership(userId: string, teamId: string) {
   return prisma.teamMember.findUnique({
@@ -22,7 +22,7 @@ async function getMembership(userId: string, teamId: string) {
 }
 
 function canManageTeam(role: string) {
-  return (MANAGER_ROLES as readonly string[]).includes(role);
+  return canManageWorkspaceSpaces(role);
 }
 
 async function userCanAccessTopic(userId: string, topicId: string, teamId: string) {

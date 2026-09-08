@@ -27,6 +27,23 @@ type OtpCopy = {
 };
 
 function copyForType(type: AuthOtpEmailType): OtpCopy {
+  if (type === "email-change") {
+    return {
+      subject: "Confirm your new Alenio email",
+      eyebrow: "Account security",
+      title: "Verify your new email",
+      intro:
+        "Enter this verification code in Alenio to confirm your new email address. Your sign-in email will not change until verification is complete.",
+      steps: [
+        "Return to the Change Email screen in Alenio",
+        "Enter the code above exactly as shown",
+        "Use your new email the next time you sign in",
+      ],
+      codeLabel: "Verification code",
+      footerNote:
+        "This code expires shortly. If you did not request this email change, ignore this message and your account will remain unchanged.",
+    };
+  }
   if (type === "forget-password") {
     return {
       subject: "Reset your Alenio password",

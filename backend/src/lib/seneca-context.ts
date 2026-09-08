@@ -87,7 +87,7 @@ export async function buildSenecaRawContext(
 
   const [assignments, devGoals, meetings, activities, template] = await Promise.all([
     prisma.taskAssignment.findMany({
-      where: { userId: memberUserId, task: { teamId, status: { not: "done" } } },
+      where: { userId: memberUserId, task: { teamId, kind: "workspace_task", status: { not: "done" } } },
       include: { task: { select: { title: true, status: true, dueDate: true } } },
       take: 20,
     }),
@@ -130,7 +130,7 @@ export async function buildSenecaRawContext(
   let completedThisMonth = 0;
 
   const allAssignments = await prisma.taskAssignment.findMany({
-    where: { userId: memberUserId, task: { teamId } },
+    where: { userId: memberUserId, task: { teamId, kind: "workspace_task" } },
     include: { task: { select: { status: true, dueDate: true, completedAt: true } } },
   });
   for (const a of allAssignments) {
@@ -159,6 +159,7 @@ export async function buildSenecaRawContext(
     const followUpTasks = await prisma.task.findMany({
       where: {
         teamId,
+        kind: "workspace_task",
         oneOnOneMeetingId: lastMeeting.id,
         status: { not: "done" },
       },
@@ -220,7 +221,7 @@ export async function buildSenecaRawContext(
 
   const completionPatterns =
     completedThisMonth > 0 || streakRow?.currentStreak
-      ? `${completedThisMonth} task${completedThisMonth !== 1 ? "s" : ""} completed this month. Current streak: ${streakRow?.currentStreak ?? 0} day${(streakRow?.currentStreak ?? 0) !== 1 ? "s" : ""}.`
+      ? `${completedThisMonth} task${completedThisMonth !== 1 ? "s" : ""} completed this month. Current task streak: ${streakRow?.currentStreak ?? 0} completion${(streakRow?.currentStreak ?? 0) !== 1 ? "s" : ""}.`
       : null;
 
   const templateFields = template

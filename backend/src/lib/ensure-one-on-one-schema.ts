@@ -6,6 +6,30 @@ import type { PrismaClient } from "@prisma/client";
  */
 export async function ensureOneOnOneSchema(prisma: PrismaClient): Promise<void> {
   try {
+    // App models live in public. The database search path may put neon_auth first,
+    // so runtime repairs must be schema-qualified to avoid altering auth mirrors.
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "public"."OneOnOneMeeting"
+        ADD COLUMN IF NOT EXISTS "sourceVideoRoomId" TEXT,
+        ADD COLUMN IF NOT EXISTS "calendarEventId" TEXT;
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "OneOnOneMeeting_sourceVideoRoomId_idx"
+        ON "public"."OneOnOneMeeting"("sourceVideoRoomId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "OneOnOneMeeting_calendarEventId_idx"
+        ON "public"."OneOnOneMeeting"("calendarEventId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "public"."Task"
+        ADD COLUMN IF NOT EXISTS "oneOnOneMeetingId" TEXT;
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "Task_oneOnOneMeetingId_idx"
+        ON "public"."Task"("oneOnOneMeetingId");
+    `);
+
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "OneOnOneTemplate" (
         "id" TEXT NOT NULL,
@@ -47,6 +71,8 @@ export async function ensureOneOnOneSchema(prisma: PrismaClient): Promise<void> 
         "id" TEXT NOT NULL,
         "teamId" TEXT NOT NULL,
         "memberUserId" TEXT NOT NULL,
+        "sourceVideoRoomId" TEXT,
+        "calendarEventId" TEXT,
         "templateId" TEXT,
         "templateTitle" TEXT NOT NULL,
         "templateFields" TEXT NOT NULL,
@@ -114,6 +140,39 @@ export async function ensureOneOnOneSchema(prisma: PrismaClient): Promise<void> 
       DO $$ BEGIN
         ALTER TABLE "OneOnOneMeeting" ADD COLUMN "publishedAt" TIMESTAMP(3);
       EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "OneOnOneMeeting" ADD COLUMN "sourceVideoRoomId" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "OneOnOneMeeting" ADD COLUMN "calendarEventId" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "OneOnOneMeeting_sourceVideoRoomId_idx"
+        ON "OneOnOneMeeting"("sourceVideoRoomId");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "OneOnOneMeeting_calendarEventId_idx"
+        ON "OneOnOneMeeting"("calendarEventId");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "OneOnOneMeeting"
+          ADD CONSTRAINT "OneOnOneMeeting_calendarEventId_fkey"
+          FOREIGN KEY ("calendarEventId") REFERENCES "CalendarEvent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);
 

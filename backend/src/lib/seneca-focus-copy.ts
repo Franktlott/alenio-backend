@@ -27,7 +27,7 @@ const actionRoute: Record<SenecaFocusCandidate["action"], SenecaFocusAction["rou
   view_goals: "/team-priority",
   view_overdue_tasks: "/team-priority",
   view_workload: "/(app)/execute",
-  create_recognition: "/(app)/activity",
+  create_recognition: "/(app)/chat",
   open_team: "/(app)/team",
 };
 

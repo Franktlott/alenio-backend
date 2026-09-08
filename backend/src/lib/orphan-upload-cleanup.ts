@@ -25,6 +25,26 @@ function addJsonUrlList(paths: Set<string>, value: unknown) {
   }
 }
 
+export function collectUploadObjectPathsFromValue(
+  value: unknown,
+  paths = new Set<string>(),
+): Set<string> {
+  if (typeof value === "string") {
+    addUrl(paths, value);
+    return paths;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) collectUploadObjectPathsFromValue(entry, paths);
+    return paths;
+  }
+  if (value && typeof value === "object") {
+    for (const entry of Object.values(value as Record<string, unknown>)) {
+      collectUploadObjectPathsFromValue(entry, paths);
+    }
+  }
+  return paths;
+}
+
 /**
  * Collect Storage object paths still referenced by live app data.
  * Generic chat/task uploads live under users/.../uploads/.
@@ -43,6 +63,7 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
     users,
     teams,
     walkResponses,
+    senecaMessages,
   ] = await Promise.all([
     prisma.message.findMany({
       where: { mediaUrl: { not: null } },
@@ -83,6 +104,10 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
       where: { photoUrls: { not: Prisma.DbNull } },
       select: { photoUrls: true, response: true },
     }),
+    prisma.senecaConversationMessage.findMany({
+      where: { conversation: { expiresAt: { gt: new Date() } } },
+      select: { metadata: true },
+    }),
   ]);
 
   for (const row of messages) addUrl(paths, row.mediaUrl);
@@ -106,6 +131,9 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
       const nested = (row.response as { photoUrls?: unknown }).photoUrls;
       addJsonUrlList(paths, nested);
     }
+  }
+  for (const row of senecaMessages) {
+    collectUploadObjectPathsFromValue(row.metadata, paths);
   }
 
   return paths;

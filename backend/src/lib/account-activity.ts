@@ -1,11 +1,13 @@
 import { prisma } from "../prisma";
 
 /**
- * Account-level activity types, kept deliberately few. Connection requests,
- * declines, removals, blocks and profile views are intentionally never logged.
+ * Account-level activity types, kept deliberately few. Declines, removals,
+ * blocks and profile views are intentionally never logged.
  */
 export const ACCOUNT_ACTIVITY_TYPES = [
   "connection_accepted",
+  "connection_request_sent",
+  "connection_request_received",
   "workspace_invitation_received",
   "mention_in_conversation",
 ] as const;

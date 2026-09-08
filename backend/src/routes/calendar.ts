@@ -19,6 +19,7 @@ import {
   cancelPendingCalendarEventReminders,
   storePendingCalendarEventReminders,
 } from "../lib/calendar-event-reminders";
+import { publishUserInboxUpdated } from "../lib/realtime-hub";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -28,6 +29,17 @@ type Variables = {
 const calendarRouter = new Hono<{ Variables: Variables }>();
 
 calendarRouter.use("*", authGuard);
+
+async function publishTeamCalendarUpdated(teamId: string): Promise<void> {
+  const members = await prisma.teamMember.findMany({
+    where: { teamId },
+    select: { userId: true },
+  });
+  publishUserInboxUpdated(
+    members.map((member) => member.userId),
+    { kind: "team", teamId, resource: "calendar" },
+  );
+}
 
 function parseMeetingSettings(raw: string | null | undefined): { reminderMinutes: number[]; assigneeIds: string[] } {
   if (!raw) return { reminderMinutes: [], assigneeIds: [] };
@@ -108,6 +120,35 @@ async function scheduleEventReminders(
   }
 
   storePendingCalendarEventReminders(eventId, handles);
+}
+
+async function notifyCalendarApprovalNeeded(input: {
+  teamId: string;
+  eventId: string;
+  eventTitle: string;
+  creatorId: string;
+  creatorName?: string | null;
+}) {
+  const managers = await prisma.teamMember.findMany({
+    where: { teamId: input.teamId, role: { in: ["owner", "team_leader"] } },
+    select: { userId: true },
+  });
+  const managerIds = managers
+    .map((member) => member.userId)
+    .filter((id) => id !== input.creatorId);
+  if (managerIds.length === 0) return;
+  await sendPushToUsers(
+    managerIds,
+    "Calendar approval needed",
+    `${input.creatorName ?? "A team member"} submitted "${input.eventTitle}" for the team calendar.`,
+    {
+      eventId: input.eventId,
+      teamId: input.teamId,
+      type: "calendar_event_pending",
+    },
+    "notifMeetings",
+    input.teamId,
+  );
 }
 
 // Re-schedule reminders for upcoming events on startup
@@ -327,31 +368,26 @@ calendarRouter.post(
       );
     }
 
-    await logActivity({
-      teamId,
-      userId: user.id,
-      type: "calendar_event_added",
-      metadata: { eventTitles: [event.title], eventCount: 1, isVideoMeeting: event.isVideoMeeting, startDate: event.startDate.toISOString(), allDay: event.allDay },
-    });
-
-    if (createPolicy.approvalStatus === "pending") {
-      const managers = await prisma.teamMember.findMany({
-        where: { teamId, role: { in: ["owner", "team_leader"] } },
-        select: { userId: true },
+    if (createPolicy.approvalStatus === "approved") {
+      await logActivity({
+        teamId,
+        userId: user.id,
+        type: "calendar_event_added",
+        metadata: { eventTitles: [event.title], eventCount: 1, isVideoMeeting: event.isVideoMeeting, startDate: event.startDate.toISOString(), allDay: event.allDay },
       });
-      const managerIds = managers.map((m) => m.userId).filter((id) => id !== user.id);
-      if (managerIds.length > 0) {
-        await sendPushToUsers(
-          managerIds,
-          "Calendar approval needed",
-          `${user.name ?? "A team member"} submitted "${event.title}" for the team calendar.`,
-          { eventId: event.id, teamId, type: "calendar_event_pending" },
-          "notifMeetings",
-          teamId,
-        );
-      }
     }
 
+    if (createPolicy.approvalStatus === "pending") {
+      await notifyCalendarApprovalNeeded({
+        teamId,
+        eventId: event.id,
+        eventTitle: event.title,
+        creatorId: user.id,
+        creatorName: user.name,
+      });
+    }
+
+    await publishTeamCalendarUpdated(teamId);
     return c.json({ data: { ...event, assigneeIds } }, 201);
   }
 );
@@ -491,6 +527,19 @@ calendarRouter.patch(
       },
     });
 
+    if (
+      updatePolicy.resetApproval === "pending" &&
+      existing.approvalStatus !== "pending"
+    ) {
+      await notifyCalendarApprovalNeeded({
+        teamId,
+        eventId: updated.id,
+        eventTitle: updated.title,
+        creatorId: user.id,
+        creatorName: user.name,
+      });
+    }
+
     // Re-schedule reminders if relevant fields changed
     const isVideo = body.isVideoMeeting !== undefined ? body.isVideoMeeting : existing.isVideoMeeting;
     const isOneOnOne = body.isOneOnOne !== undefined ? body.isOneOnOne : existing.isOneOnOne;
@@ -505,6 +554,7 @@ calendarRouter.patch(
       );
     }
 
+    await publishTeamCalendarUpdated(teamId);
     return c.json({ data: { ...updated, assigneeIds: mergedAssigneeIds } });
   }
 );
@@ -534,6 +584,7 @@ calendarRouter.delete("/:teamId/events/:eventId", async (c) => {
   cancelPendingCalendarEventReminders(eventId);
 
   await prisma.calendarEvent.delete({ where: { id: eventId } });
+  await publishTeamCalendarUpdated(teamId);
 
   return c.body(null, 204);
 });
@@ -567,6 +618,21 @@ async function applyCalendarApproval(
       createdBy: { select: { id: true, name: true, image: true } },
     },
   });
+
+  if (status === "approved") {
+    await logActivity({
+      teamId,
+      userId: existing.createdById,
+      type: "calendar_event_added",
+      metadata: {
+        eventTitles: [updated.title],
+        eventCount: 1,
+        isVideoMeeting: updated.isVideoMeeting,
+        startDate: updated.startDate.toISOString(),
+        allDay: updated.allDay,
+      },
+    });
+  }
 
   if (existing.createdById !== actorId) {
     await sendPushToUsers(

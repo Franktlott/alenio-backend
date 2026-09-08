@@ -1,6 +1,7 @@
 import { createEmailPasswordUser } from "../auth";
 import { deleteAppUserCompletely } from "./delete-app-user";
 import { isPrismaUniqueOnName, normalizeTeamName } from "./team-name";
+import { resolveTimeZone } from "./timezone";
 import { prisma } from "../prisma";
 
 const VALID_PLANS = new Set(["team", "pro", "operations"]);
@@ -89,6 +90,7 @@ export async function listPlatformTeams(limit = 200) {
       id: true,
       name: true,
       inviteCode: true,
+      timezone: true,
       createdAt: true,
       organizationId: true,
       organization: {
@@ -110,7 +112,12 @@ export async function listPlatformTeams(limit = 200) {
           user: { select: { id: true, name: true, email: true } },
         },
       },
-      _count: { select: { members: true, tasks: true } },
+      _count: {
+        select: {
+          members: true,
+          tasks: { where: { kind: "workspace_task" } },
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -124,6 +131,7 @@ export async function listPlatformTeams(limit = 200) {
       id: team.id,
       name: team.name,
       inviteCode: team.inviteCode,
+      timezone: team.timezone,
       createdAt: team.createdAt.toISOString(),
       memberCount: team._count.members,
       taskCount: team._count.tasks,
@@ -156,6 +164,7 @@ export async function getPlatformTeam(teamId: string) {
       id: true,
       name: true,
       inviteCode: true,
+      timezone: true,
       createdAt: true,
       subscription: true,
       members: {
@@ -166,7 +175,13 @@ export async function getPlatformTeam(teamId: string) {
         },
         orderBy: { joinedAt: "asc" },
       },
-      _count: { select: { members: true, tasks: true, messages: true } },
+      _count: {
+        select: {
+          members: true,
+          tasks: { where: { kind: "workspace_task" } },
+          messages: true,
+        },
+      },
     },
   });
   if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
@@ -177,6 +192,7 @@ export async function getPlatformTeam(teamId: string) {
       id: team.id,
       name: team.name,
       inviteCode: team.inviteCode,
+      timezone: team.timezone,
       createdAt: team.createdAt.toISOString(),
       memberCount: team._count.members,
       taskCount: team._count.tasks,
@@ -290,6 +306,7 @@ export async function createEnterpriseAccount(input: {
         data: {
           name: teamName,
           inviteCode,
+          timezone: resolveTimeZone(owner.timezone),
           ...(addOwnerAsTeamMember
             ? { members: { create: { userId: owner!.id, role: "owner" } } }
             : {}),
@@ -322,6 +339,7 @@ export async function createEnterpriseAccount(input: {
         id: team.id,
         name: team.name,
         inviteCode: team.inviteCode,
+        timezone: team.timezone,
       },
       owner: { id: owner.id, name: owner.name, email: owner.email },
       plan,

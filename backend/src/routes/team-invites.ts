@@ -6,9 +6,11 @@ import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
 import {
   canInviteMembers,
+  canInviteWorkspaceRole,
   inviteOrAddMemberByEmail,
   listPendingTeamInvites,
   loadTeamInviteEmailContext,
+  normalizeTeamInviteRole,
   redeemInviteByToken,
   sendTeamInviteEmail,
   serializeTeamInvite,
@@ -27,7 +29,8 @@ teamInvitesRouter.use("*", authGuard);
 
 const inviteEmailSchema = z.object({
   email: z.string().trim().email("Enter a valid email address"),
-});
+  role: z.enum(["member", "team_leader"]).default("member"),
+}).strict();
 
 // GET /api/teams/:teamId/invites
 teamInvitesRouter.get("/", async (c) => {
@@ -46,11 +49,17 @@ teamInvitesRouter.get("/", async (c) => {
 teamInvitesRouter.post("/", zValidator("json", inviteEmailSchema), async (c) => {
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
-  const { email } = c.req.valid("json");
+  const { email, role } = c.req.valid("json");
 
-  if (!(await canInviteMembers(teamId, user.id))) {
+  const inviter = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+    select: { role: true },
+  });
+  if (!canInviteWorkspaceRole(inviter?.role, role)) {
     return c.json({ error: { message: "You cannot invite members to this workspace", code: "FORBIDDEN" } }, 403);
   }
+  const writeGuard = await assertWorkspaceCanWrite(teamId);
+  if (!writeGuard.ok) return c.json(workspaceReadOnlyError(writeGuard.access), 403);
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -64,6 +73,7 @@ teamInvitesRouter.post("/", zValidator("json", inviteEmailSchema), async (c) => 
     const result = await inviteOrAddMemberByEmail({
       teamId,
       email,
+      role,
       invitedById: user.id,
       inviterName: user.name ?? user.email ?? "A team leader",
       teamName: team.name,
@@ -107,6 +117,8 @@ teamInvitesRouter.delete("/:inviteId", async (c) => {
   if (!(await canInviteMembers(teamId, user.id))) {
     return c.json({ error: { message: "You cannot manage invites for this workspace", code: "FORBIDDEN" } }, 403);
   }
+  const writeGuard = await assertWorkspaceCanWrite(teamId);
+  if (!writeGuard.ok) return c.json(workspaceReadOnlyError(writeGuard.access), 403);
 
   const invite = await prisma.teamInvite.findFirst({
     where: { id: inviteId, teamId, status: "pending" },
@@ -129,9 +141,15 @@ teamInvitesRouter.post("/:inviteId/resend", async (c) => {
   const teamId = c.req.param("teamId") as string;
   const inviteId = c.req.param("inviteId") as string;
 
-  if (!(await canInviteMembers(teamId, user.id))) {
+  const inviter = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+    select: { role: true },
+  });
+  if (!canInviteWorkspaceRole(inviter?.role, "member")) {
     return c.json({ error: { message: "You cannot manage invites for this workspace", code: "FORBIDDEN" } }, 403);
   }
+  const writeGuard = await assertWorkspaceCanWrite(teamId);
+  if (!writeGuard.ok) return c.json(workspaceReadOnlyError(writeGuard.access), 403);
 
   const invite = await prisma.teamInvite.findFirst({
     where: { id: inviteId, teamId, status: "pending" },
@@ -139,6 +157,12 @@ teamInvitesRouter.post("/:inviteId/resend", async (c) => {
   });
   if (!invite) {
     return c.json({ error: { message: "Invite not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canInviteWorkspaceRole(inviter?.role, normalizeTeamInviteRole(invite.role))) {
+    return c.json(
+      { error: { message: "Only owners can resend team leader invites", code: "FORBIDDEN" } },
+      403,
+    );
   }
 
   const token = generateInviteToken();
@@ -229,6 +253,7 @@ teamInvitesPublicRouter.get("/:token", async (c) => {
       teamImage: invite.team.image,
       inviterName: invite.invitedBy.name,
       email: invite.email,
+      role: normalizeTeamInviteRole(invite.role),
       expiresAt: invite.expiresAt.toISOString(),
     },
   });

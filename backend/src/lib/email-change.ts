@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { sendEmailVerificationOtp, verifyEmailVerificationOtp } from "../auth";
+import { syncWorkspaceTrialIdentity } from "./workspace-trial-policy";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -26,7 +27,7 @@ export async function assertEmailAvailableForUser(userId: string, newEmail: stri
 
 export async function requestEmailChange(userId: string, currentEmail: string | null, newEmail: string) {
   await assertEmailAvailableForUser(userId, newEmail, currentEmail);
-  await sendEmailVerificationOtp(newEmail);
+  await sendEmailVerificationOtp(newEmail, "email-change");
 }
 
 export async function confirmEmailChange(
@@ -37,6 +38,7 @@ export async function confirmEmailChange(
 ) {
   await assertEmailAvailableForUser(userId, newEmail, currentEmail);
   await verifyEmailVerificationOtp(newEmail, otp);
+  await syncWorkspaceTrialIdentity(userId, currentEmail);
   await updateAuthUserEmail(userId, newEmail);
 
   const updated = await prisma.user.update({
@@ -44,6 +46,7 @@ export async function confirmEmailChange(
     data: { email: newEmail, emailVerified: true },
     select: { id: true, name: true, email: true, image: true, timezone: true },
   });
+  await syncWorkspaceTrialIdentity(userId, newEmail);
 
   return updated;
 }

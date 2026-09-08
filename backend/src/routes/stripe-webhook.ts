@@ -7,6 +7,10 @@ import {
   stripeCustomerIdOfSubscription,
 } from "../lib/stripe-billing";
 import { completeOwnershipTransferFromSetupSession } from "../lib/ownership-transfer";
+import {
+  finalizePendingWorkspaceCheckout,
+  markPendingWorkspaceCheckoutAwaitingPayment,
+} from "../lib/pending-workspace-checkout";
 
 export async function handleStripeWebhook(c: Context): Promise<Response> {
   const secret = env.STRIPE_WEBHOOK_SECRET?.trim();
@@ -33,13 +37,36 @@ export async function handleStripeWebhook(c: Context): Promise<Response> {
 
   try {
     switch (event.type) {
-      case "checkout.session.completed": {
+      case "checkout.session.completed":
+      case "checkout.session.async_payment_succeeded": {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.mode === "setup") {
           await completeOwnershipTransferFromSetupSession(session);
           break;
         }
         if (session.mode !== "subscription") break;
+        const pendingCheckoutId = session.metadata?.pending_workspace_checkout_id?.trim();
+        if (pendingCheckoutId) {
+          const subRef = session.subscription;
+          const subId = typeof subRef === "string" ? subRef : subRef?.id;
+          if (!subId) {
+            throw new Error("Pending workspace checkout completed without a subscription");
+          }
+          const subscription = await stripe.subscriptions.retrieve(subId, {
+            expand: ["items.data"],
+          });
+          if (subscription.status !== "active") {
+            await markPendingWorkspaceCheckoutAwaitingPayment(
+              pendingCheckoutId,
+              session.id,
+              subscription.id,
+            );
+            break;
+          }
+          const finalized = await finalizePendingWorkspaceCheckout(session, subscription);
+          if (!finalized) throw new Error("Active pending workspace checkout could not be finalized");
+          break;
+        }
         const teamId =
           session.metadata?.team_id?.trim() ||
           (typeof session.client_reference_id === "string" ? session.client_reference_id.trim() : "") ||

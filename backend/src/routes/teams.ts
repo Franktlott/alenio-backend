@@ -34,8 +34,20 @@ import { createWorkspaceForAuthUser } from "../lib/create-workspace";
 import {
   canManageTeamRoster,
   cleanupWorkspaceMemberDeparture,
+  cleanupWorkspaceMembersDeparture,
   listFormerWorkspaceMembers,
 } from "../lib/workspace-member-departure";
+import {
+  canManageWorkspaceJoinRequests,
+  canManageWorkspaceSettings,
+  WORKSPACE_MANAGER_ROLES,
+} from "../lib/workspace-role-policy";
+import {
+  validateWorkspaceMemberRemoval,
+  validateWorkspaceRoleChange,
+} from "../lib/workspace-member-management";
+import { assertWorkspaceCanWrite, workspaceReadOnlyError } from "../lib/workspace-access";
+import { publishUserInboxUpdated } from "../lib/realtime-hub";
 import {
   acceptOwnershipTransfer,
   assertNoPendingRecipientRemoval,
@@ -62,15 +74,22 @@ import {
 } from "../lib/workspace-modules";
 import {
   canInviteMembers,
+  canInviteWorkspaceRole,
   generateInviteToken,
   inviteExpiresAt,
   inviteOrAddMemberByEmail,
   loadTeamInviteEmailContext,
+  normalizeTeamInviteRole,
   previewInviteByEmail,
   listPendingTeamInvites,
   sendTeamInviteEmail,
   serializeTeamInvite,
 } from "../lib/team-invites";
+import { normalizeWorkspaceLocation } from "../lib/workspace-location";
+import {
+  canChangeWorkspaceTimeZone,
+  validateWorkspaceTimeZone,
+} from "../lib/workspace-timezone";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -86,20 +105,11 @@ function generateInviteCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-async function teamHasOwner(teamId: string): Promise<boolean> {
-  const row = await prisma.teamMember.findFirst({ where: { teamId, role: "owner" } });
-  return row !== null;
-}
-
-/** Owner, team leader, or admin; or any member if the workspace has no owner (recovery after bad data / legacy leave). */
 async function canManageJoinRequests(teamId: string, userId: string): Promise<boolean> {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId, teamId } },
   });
-  if (!membership) return false;
-  if (["owner", "team_leader", "admin"].includes(membership.role)) return true;
-  if (!(await teamHasOwner(teamId))) return true;
-  return false;
+  return canManageWorkspaceJoinRequests(membership?.role);
 }
 
 // GET /api/teams - list teams for current user
@@ -110,7 +120,12 @@ teamsRouter.get("/", async (c) => {
     include: {
       team: {
         include: {
-          _count: { select: { members: true, tasks: true } },
+          _count: {
+            select: {
+              members: true,
+              tasks: { where: { kind: "workspace_task" } },
+            },
+          },
         },
       },
     },
@@ -123,7 +138,7 @@ teamsRouter.get("/", async (c) => {
 teamsRouter.post("/", async (c) => {
   const user = c.get("user")!;
   const body = await c.req.json();
-  const { name, industry, startTrial } = body;
+  const { name, industry, location, startTrial } = body;
   if (!name?.trim()) {
     return c.json({ error: { message: "Team name is required", code: "VALIDATION_ERROR" } }, 400);
   }
@@ -139,6 +154,7 @@ teamsRouter.post("/", async (c) => {
     preferredUserId: user.id,
     name,
     industry: typeof industry === "string" ? industry : null,
+    location: location ?? null,
     startTrial: true,
   });
   if (!result.ok) {
@@ -154,6 +170,51 @@ teamsRouter.post("/", async (c) => {
   }).catch((err) => console.warn("[teams] admin workspace push failed", err));
 
   return c.json({ data: { ...team, role: "owner" } }, 201);
+});
+
+// GET /api/teams/join-preview/:inviteCode - confirm a workspace before requesting access
+teamsRouter.get("/join-preview/:inviteCode", async (c) => {
+  const inviteCode = c.req.param("inviteCode")?.trim();
+  if (!inviteCode) {
+    return c.json(
+      {
+        error: {
+          message: "Invite code is required",
+          code: "VALIDATION_ERROR",
+        },
+      },
+      400,
+    );
+  }
+
+  const team = await findTeamByInviteCode<{
+    id: string;
+    name: string;
+    image: string | null;
+  }>(inviteCode, {
+    id: true,
+    name: true,
+    image: true,
+  });
+  if (!team) {
+    return c.json(
+      {
+        error: {
+          message: "No workspace was found for this QR code.",
+          code: "NOT_FOUND",
+        },
+      },
+      404,
+    );
+  }
+
+  return c.json({
+    data: {
+      id: team.id,
+      name: team.name,
+      image: team.image,
+    },
+  });
 });
 
 // POST /api/teams/join - join team by invite code (creates a pending join request)
@@ -193,7 +254,14 @@ teamsRouter.post("/join", async (c) => {
       await tx.joinRequest.deleteMany({ where: { teamId: team.id } });
       return tx.team.findUnique({
         where: { id: team.id },
-        include: { _count: { select: { members: true, tasks: true } } },
+        include: {
+          _count: {
+            select: {
+              members: true,
+              tasks: { where: { kind: "workspace_task" } },
+            },
+          },
+        },
       });
     }).catch((e: unknown) => {
       if (e instanceof Error && e.message === "CONCURRENT_JOIN") return null;
@@ -239,7 +307,7 @@ teamsRouter.post("/join", async (c) => {
 
   // Notify team owners
   const owners = await prisma.teamMember.findMany({
-    where: { teamId: team.id, role: { in: ["owner", "team_leader", "admin"] } },
+    where: { teamId: team.id, role: { in: [...WORKSPACE_MANAGER_ROLES] } },
     select: { userId: true },
   });
   const ownerIds = owners.map((o) => o.userId);
@@ -263,14 +331,42 @@ teamsRouter.get("/:teamId", async (c) => {
   const team = await prisma.team.findUnique({
     where: { id: teamId },
     include: {
-      members: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
-      _count: { select: { tasks: true } },
+      members: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+              username: true,
+              profileTitle: true,
+            },
+          },
+        },
+      },
+      _count: {
+        select: {
+          tasks: { where: { kind: "workspace_task" } },
+        },
+      },
     },
   });
 
   const workplaceStandards = parseWorkplaceStandards(team?.workplaceStandards);
   const goFrontendSettings = parseGoFrontendSettings(team?.goFrontendSettings);
-  return c.json({ data: { ...team, role: membership.role, workplaceStandards, goFrontendSettings } });
+  return c.json({
+    data: {
+      ...team,
+      members: team?.members.map((member) => ({
+        ...member,
+        user: { ...member.user, isWorkplaceConnected: true },
+      })),
+      role: membership.role,
+      workplaceStandards,
+      goFrontendSettings,
+    },
+  });
 });
 
 // GET /api/teams/:teamId/former-members - archived members with published check-in history
@@ -301,20 +397,37 @@ teamsRouter.patch("/:teamId", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || !["owner","team_leader"].includes(membership.role)) {
+  if (!canManageWorkspaceSettings(membership?.role)) {
     return c.json({ error: { message: "Only owners and team leaders can edit team info", code: "FORBIDDEN" } }, 403);
   }
 
   const nameTrim = typeof body.name === "string" ? body.name.trim() : "";
-  const hasWorkplaceStandards = body.workplaceStandards !== undefined;
-  const hasGoFrontendSettings = body.goFrontendSettings !== undefined;
-  if (hasWorkplaceStandards && membership.role !== "owner") {
+  const hasTimezone = body.timezone !== undefined;
+  if (hasTimezone && !canChangeWorkspaceTimeZone(membership?.role)) {
     return c.json(
-      { error: { message: "Only the workspace owner can edit workplace standards", code: "FORBIDDEN" } },
+      { error: { message: "Only the workspace owner can change its timezone", code: "FORBIDDEN" } },
       403,
     );
   }
-
+  const parsedTimezone = hasTimezone ? validateWorkspaceTimeZone(body.timezone) : null;
+  if (parsedTimezone && !parsedTimezone.ok) {
+    return c.json(
+      { error: { message: parsedTimezone.message, code: "VALIDATION_ERROR" } },
+      400,
+    );
+  }
+  const hasLocation = body.location !== undefined;
+  const normalizedLocation = hasLocation
+    ? normalizeWorkspaceLocation(body.location)
+    : null;
+  if (normalizedLocation && !normalizedLocation.ok) {
+    return c.json(
+      { error: { message: normalizedLocation.message, code: "VALIDATION_ERROR" } },
+      400,
+    );
+  }
+  const hasWorkplaceStandards = body.workplaceStandards !== undefined;
+  const hasGoFrontendSettings = body.goFrontendSettings !== undefined;
   let parsedStandards: ReturnType<typeof parseWorkplaceStandardsPatch> | null = null;
   if (hasWorkplaceStandards) {
     parsedStandards = parseWorkplaceStandardsPatch(body.workplaceStandards);
@@ -366,6 +479,8 @@ teamsRouter.patch("/:teamId", async (c) => {
       where: { id: teamId },
       data: {
         ...(nameTrim ? { name: nameTrim } : {}),
+        ...(parsedTimezone?.ok ? { timezone: parsedTimezone.value } : {}),
+        ...(normalizedLocation?.ok ? { location: normalizedLocation.value } : {}),
         ...(body.image !== undefined ? { image: body.image } : {}),
         ...(parsedStandards?.ok
           ? { workplaceStandards: serializeWorkplaceStandards(parsedStandards.value) }
@@ -545,6 +660,7 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
   }
 
   if (joinRequest.status === "approved") {
+    publishUserInboxUpdated([joinRequest.userId], { kind: "team", teamId });
     return c.json({ data: { success: true, alreadyApproved: true } });
   }
   if (joinRequest.status !== "pending") {
@@ -562,6 +678,7 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
       where: { id: requestId },
       data: { status: "approved" },
     });
+    publishUserInboxUpdated([joinRequest.userId], { kind: "team", teamId });
     return c.json({ data: { success: true, alreadyMember: true } });
   }
 
@@ -601,8 +718,11 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
       where: { id: requestId },
       data: { status: "approved" },
     });
+    publishUserInboxUpdated([joinRequest.userId], { kind: "team", teamId });
     return c.json({ data: { success: true, alreadyMember: true } });
   }
+
+  publishUserInboxUpdated([joinRequest.userId], { kind: "team", teamId });
 
   // Notify the requesting user
   await sendPushToUsers(
@@ -743,7 +863,20 @@ teamsRouter.post("/:teamId/go-login-requests/:requestId/reject", async (c) => {
 
 const inviteEmailSchema = z.object({
   email: z.string().trim().email("Enter a valid email address"),
-});
+  role: z.enum(["member", "team_leader"]).default("member"),
+}).strict();
+
+const bulkMemberActionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("set_role"),
+    userIds: z.array(z.string().trim().min(1)).min(1).max(100),
+    role: z.enum(["member", "team_leader"]),
+  }).strict(),
+  z.object({
+    action: z.literal("remove"),
+    userIds: z.array(z.string().trim().min(1)).min(1).max(100),
+  }).strict(),
+]);
 
 // GET /api/teams/:teamId/invites
 teamsRouter.get("/:teamId/invites", async (c) => {
@@ -758,15 +891,172 @@ teamsRouter.get("/:teamId/invites", async (c) => {
   return c.json({ data });
 });
 
+// GET /api/teams/:teamId/invite-candidates - find existing Alenio users
+teamsRouter.get("/:teamId/invite-candidates", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const q = c.req.query("q")?.trim() ?? "";
+
+  if (!(await canInviteMembers(teamId, user.id))) {
+    return c.json(
+      {
+        error: {
+          message: "You cannot invite members to this workspace",
+          code: "FORBIDDEN",
+        },
+      },
+      403,
+    );
+  }
+  if (q.length < 2) return c.json({ data: [] });
+
+  const blocked = await prisma.userBlock.findMany({
+    where: { OR: [{ blockerId: user.id }, { blockedId: user.id }] },
+    select: { blockerId: true, blockedId: true },
+  });
+  const blockedIds = blocked
+    .flatMap((row) => [row.blockerId, row.blockedId])
+    .filter((id) => id !== user.id);
+  const handleQuery = q.replace(/^@/, "").toLowerCase();
+
+  const candidates = await prisma.user.findMany({
+    where: {
+      id: {
+        not: user.id,
+        ...(blockedIds.length > 0 ? { notIn: blockedIds } : {}),
+      },
+      teamMembers: { none: { teamId } },
+      OR: [
+        { name: { contains: q, mode: "insensitive" } },
+        { username: { contains: handleQuery } },
+      ],
+    },
+    select: { id: true, name: true, username: true, image: true },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+    take: 8,
+  });
+
+  return c.json({ data: candidates });
+});
+
+// POST /api/teams/:teamId/invites/user - add an existing Alenio user
+teamsRouter.post(
+  "/:teamId/invites/user",
+  zValidator("json", z.object({ userId: z.string().min(1) })),
+  async (c) => {
+    const user = c.get("user")!;
+    const { teamId } = c.req.param();
+    const { userId } = c.req.valid("json");
+
+    const inviter = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId: user.id, teamId } },
+      select: { role: true },
+    });
+    if (!canInviteWorkspaceRole(inviter?.role, "member")) {
+      return c.json(
+        {
+          error: {
+            message: "You cannot invite members to this workspace",
+            code: "FORBIDDEN",
+          },
+        },
+        403,
+      );
+    }
+    const writeGuard = await assertWorkspaceCanWrite(teamId);
+    if (!writeGuard.ok) {
+      return c.json(workspaceReadOnlyError(writeGuard.access), 403);
+    }
+
+    const [team, candidate, block] = await Promise.all([
+      prisma.team.findUnique({
+        where: { id: teamId },
+        select: { id: true, name: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true },
+      }),
+      prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: user.id, blockedId: userId },
+            { blockerId: userId, blockedId: user.id },
+          ],
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (!team || !candidate || candidate.id === user.id || block) {
+      return c.json(
+        {
+          error: {
+            message: "That Alenio user could not be found",
+            code: "NOT_FOUND",
+          },
+        },
+        404,
+      );
+    }
+
+    try {
+      const result = await inviteOrAddMemberByEmail({
+        teamId,
+        email: candidate.email,
+        role: "member",
+        invitedById: user.id,
+        inviterName: user.name ?? user.email ?? "A team leader",
+        teamName: team.name,
+      });
+      if (result.kind === "added") {
+        return c.json({
+          data: {
+            added: true,
+            user: result.user,
+            role: result.role,
+          },
+        });
+      }
+      return c.json({
+        data: {
+          added: false,
+          invite: result.invite,
+          emailSent: result.emailSent,
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (message === "ALREADY_MEMBER") {
+        return c.json(
+          {
+            error: {
+              message: "This person is already in the workspace",
+              code: "CONFLICT",
+            },
+          },
+          409,
+        );
+      }
+      throw err;
+    }
+  },
+);
+
 // POST /api/teams/:teamId/invites
 teamsRouter.post("/:teamId/invites", zValidator("json", inviteEmailSchema), async (c) => {
   const user = c.get("user")!;
   const { teamId } = c.req.param();
-  const { email } = c.req.valid("json");
+  const { email, role } = c.req.valid("json");
 
-  if (!(await canInviteMembers(teamId, user.id))) {
+  const inviter = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+    select: { role: true },
+  });
+  if (!canInviteWorkspaceRole(inviter?.role, role)) {
     return c.json({ error: { message: "You cannot invite members to this workspace", code: "FORBIDDEN" } }, 403);
   }
+  const writeGuard = await assertWorkspaceCanWrite(teamId);
+  if (!writeGuard.ok) return c.json(workspaceReadOnlyError(writeGuard.access), 403);
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -780,6 +1070,7 @@ teamsRouter.post("/:teamId/invites", zValidator("json", inviteEmailSchema), asyn
     const result = await inviteOrAddMemberByEmail({
       teamId,
       email,
+      role,
       invitedById: user.id,
       inviterName: user.name ?? user.email ?? "A team leader",
       teamName: team.name,
@@ -818,7 +1109,7 @@ teamsRouter.post("/:teamId/invites", zValidator("json", inviteEmailSchema), asyn
 teamsRouter.post("/:teamId/invites/preview", zValidator("json", inviteEmailSchema), async (c) => {
   const user = c.get("user")!;
   const { teamId } = c.req.param();
-  const { email } = c.req.valid("json");
+  const { email, role } = c.req.valid("json");
 
   if (!(await canInviteMembers(teamId, user.id))) {
     return c.json({ error: { message: "You cannot invite members to this workspace", code: "FORBIDDEN" } }, 403);
@@ -826,7 +1117,7 @@ teamsRouter.post("/:teamId/invites/preview", zValidator("json", inviteEmailSchem
 
   try {
     const data = await previewInviteByEmail(teamId, email);
-    return c.json({ data });
+    return c.json({ data: { ...data, role } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg === "VALIDATION") {
@@ -844,6 +1135,8 @@ teamsRouter.delete("/:teamId/invites/:inviteId", async (c) => {
   if (!(await canInviteMembers(teamId, user.id))) {
     return c.json({ error: { message: "You cannot manage invites for this workspace", code: "FORBIDDEN" } }, 403);
   }
+  const writeGuard = await assertWorkspaceCanWrite(teamId);
+  if (!writeGuard.ok) return c.json(workspaceReadOnlyError(writeGuard.access), 403);
 
   const invite = await prisma.teamInvite.findFirst({
     where: { id: inviteId, teamId, status: "pending" },
@@ -865,9 +1158,15 @@ teamsRouter.post("/:teamId/invites/:inviteId/resend", async (c) => {
   const user = c.get("user")!;
   const { teamId, inviteId } = c.req.param();
 
-  if (!(await canInviteMembers(teamId, user.id))) {
+  const inviter = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+    select: { role: true },
+  });
+  if (!canInviteWorkspaceRole(inviter?.role, "member")) {
     return c.json({ error: { message: "You cannot manage invites for this workspace", code: "FORBIDDEN" } }, 403);
   }
+  const writeGuard = await assertWorkspaceCanWrite(teamId);
+  if (!writeGuard.ok) return c.json(workspaceReadOnlyError(writeGuard.access), 403);
 
   const invite = await prisma.teamInvite.findFirst({
     where: { id: inviteId, teamId, status: "pending" },
@@ -875,6 +1174,12 @@ teamsRouter.post("/:teamId/invites/:inviteId/resend", async (c) => {
   });
   if (!invite) {
     return c.json({ error: { message: "Invite not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canInviteWorkspaceRole(inviter?.role, normalizeTeamInviteRole(invite.role))) {
+    return c.json(
+      { error: { message: "Only owners can resend team leader invites", code: "FORBIDDEN" } },
+      403,
+    );
   }
 
   const token = generateInviteToken();
@@ -915,7 +1220,212 @@ teamsRouter.post("/:teamId/invites/:inviteId/resend", async (c) => {
   return c.json({ data: serializeTeamInvite(updated) });
 });
 
-// DELETE /api/teams/:teamId/members/:memberId - remove a member (owner only)
+// POST /api/teams/:teamId/members/bulk - atomically update or remove members
+teamsRouter.post("/:teamId/members/bulk", zValidator("json", bulkMemberActionSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const body = c.req.valid("json");
+  const userIds = [...new Set(body.userIds)];
+
+  const actor = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+    select: { role: true },
+  });
+  if (!actor || !canManageTeamRoster(actor.role)) {
+    return c.json(
+      { error: { message: "Only owners and team leaders can manage members", code: "FORBIDDEN" } },
+      403,
+    );
+  }
+  const writeGuard = await assertWorkspaceCanWrite(teamId);
+  if (!writeGuard.ok) return c.json(workspaceReadOnlyError(writeGuard.access), 403);
+
+  const targets = await prisma.teamMember.findMany({
+    where: { teamId, userId: { in: userIds } },
+    select: {
+      userId: true,
+      role: true,
+      user: { select: { name: true } },
+    },
+  });
+  if (targets.length !== userIds.length) {
+    return c.json(
+      { error: { message: "One or more members were not found", code: "NOT_FOUND" } },
+      404,
+    );
+  }
+
+  if (body.action === "set_role") {
+    for (const target of targets) {
+      const policyError = validateWorkspaceRoleChange({
+        actorUserId: user.id,
+        actorRole: actor.role,
+        targetUserId: target.userId,
+        targetRole: target.role,
+      });
+      if (policyError) {
+        return c.json(
+          { error: { message: policyError.message, code: policyError.code } },
+          policyError.status,
+        );
+      }
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const [currentActor, currentTargets] = await Promise.all([
+        tx.teamMember.findUnique({
+          where: { userId_teamId: { userId: user.id, teamId } },
+          select: { role: true },
+        }),
+        tx.teamMember.findMany({
+          where: { teamId, userId: { in: userIds } },
+          select: { userId: true, role: true },
+        }),
+      ]);
+      if (!currentActor || currentTargets.length !== userIds.length) {
+        throw new Error("BULK_MEMBER_CONFLICT");
+      }
+      for (const target of currentTargets) {
+        if (validateWorkspaceRoleChange({
+          actorUserId: user.id,
+          actorRole: currentActor.role,
+          targetUserId: target.userId,
+          targetRole: target.role,
+        })) {
+          throw new Error("BULK_MEMBER_CONFLICT");
+        }
+      }
+      const result = await tx.teamMember.updateMany({
+        where: {
+          teamId,
+          userId: { in: userIds },
+          role: { in: ["member", "team_leader"] },
+        },
+        data: { role: body.role },
+      });
+      if (result.count !== userIds.length) throw new Error("BULK_MEMBER_CONFLICT");
+      return result.count;
+    }).catch((error: unknown) => {
+      if (error instanceof Error && error.message === "BULK_MEMBER_CONFLICT") return null;
+      throw error;
+    });
+    if (updated === null) {
+      return c.json(
+        { error: { message: "Workspace members changed; retry the request", code: "CONFLICT" } },
+        409,
+      );
+    }
+    return c.json({ data: { updated, action: body.action } });
+  }
+
+  const pendingTransfers = await prisma.ownershipTransfer.findMany({
+    where: { teamId, status: "PENDING", toUserId: { in: userIds } },
+    select: { toUserId: true },
+  });
+  const pendingRecipientIds = new Set(pendingTransfers.map((transfer) => transfer.toUserId));
+  for (const target of targets) {
+    const policyError = validateWorkspaceMemberRemoval({
+      actorUserId: user.id,
+      actorRole: actor.role,
+      targetUserId: target.userId,
+      targetRole: target.role,
+      isPendingOwnershipRecipient: pendingRecipientIds.has(target.userId),
+    });
+    if (policyError) {
+      return c.json(
+        { error: { message: policyError.message, code: policyError.code } },
+        policyError.status,
+      );
+    }
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const [currentActor, currentTargets, currentPendingTransfers] = await Promise.all([
+      tx.teamMember.findUnique({
+        where: { userId_teamId: { userId: user.id, teamId } },
+        select: { role: true },
+      }),
+      tx.teamMember.findMany({
+        where: { teamId, userId: { in: userIds } },
+        select: { userId: true, role: true },
+      }),
+      tx.ownershipTransfer.findMany({
+        where: { teamId, status: "PENDING", toUserId: { in: userIds } },
+        select: { toUserId: true },
+      }),
+    ]);
+    if (!currentActor || currentTargets.length !== userIds.length) {
+      throw new Error("BULK_MEMBER_CONFLICT");
+    }
+    const currentPendingIds = new Set(
+      currentPendingTransfers.map((transfer) => transfer.toUserId),
+    );
+    for (const target of currentTargets) {
+      const policyError = validateWorkspaceMemberRemoval({
+        actorUserId: user.id,
+        actorRole: currentActor.role,
+        targetUserId: target.userId,
+        targetRole: target.role,
+        isPendingOwnershipRecipient: currentPendingIds.has(target.userId),
+      });
+      if (policyError?.code === "TRANSFER_PENDING_RECIPIENT") {
+        throw new Error("BULK_PENDING_RECIPIENT");
+      }
+      if (policyError) throw new Error("BULK_MEMBER_CONFLICT");
+    }
+
+    let removed = 0;
+    await cleanupWorkspaceMembersDeparture(
+      tx,
+      teamId,
+      currentTargets.map((target) => target.userId),
+    );
+    for (const target of currentTargets) {
+      const result = await tx.teamMember.deleteMany({
+        where: { teamId, userId: target.userId, role: target.role },
+      });
+      if (result.count !== 1) {
+        throw new Error("BULK_MEMBER_CONFLICT");
+      }
+      removed += result.count;
+    }
+    return removed;
+  }, { timeout: 30_000 }).catch((error: unknown) => {
+    if (error instanceof Error && error.message === "BULK_MEMBER_CONFLICT") return null;
+    if (error instanceof Error && error.message === "BULK_PENDING_RECIPIENT") return "pending" as const;
+    throw error;
+  });
+  if (updated === "pending") {
+    return c.json(
+      {
+        error: {
+          message: "Cancel the pending ownership transfer before removing this member.",
+          code: "TRANSFER_PENDING_RECIPIENT",
+        },
+      },
+      409,
+    );
+  }
+  if (updated === null) {
+    return c.json(
+      { error: { message: "Workspace members changed; retry the request", code: "CONFLICT" } },
+      409,
+    );
+  }
+
+  for (const target of targets) {
+    await logActivity({
+      teamId,
+      userId: target.userId,
+      type: "member_removed",
+      metadata: { userName: target.user.name ?? "" },
+    });
+  }
+
+  return c.json({ data: { updated, action: body.action } });
+});
+
+// DELETE /api/teams/:teamId/members/:memberId - remove a member
 teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
   const user = c.get("user")!;
   const { teamId, memberId } = c.req.param();
@@ -923,13 +1433,11 @@ teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || !["owner","team_leader"].includes(membership.role)) {
+  if (!membership || !canManageTeamRoster(membership.role)) {
     return c.json({ error: { message: "Only owners and team leaders can remove members", code: "FORBIDDEN" } }, 403);
   }
-
-  if (memberId === user.id) {
-    return c.json({ error: { message: "You cannot remove yourself", code: "BAD_REQUEST" } }, 400);
-  }
+  const writeGuard = await assertWorkspaceCanWrite(teamId);
+  if (!writeGuard.ok) return c.json(workspaceReadOnlyError(writeGuard.access), 403);
 
   const targetMembership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: memberId, teamId } },
@@ -938,8 +1446,17 @@ teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
   if (!targetMembership) {
     return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
   }
-  if (["owner", "team_leader"].includes(targetMembership.role)) {
-    return c.json({ error: { message: "Cannot remove an owner or team leader", code: "FORBIDDEN" } }, 403);
+  const policyError = validateWorkspaceMemberRemoval({
+    actorUserId: user.id,
+    actorRole: membership.role,
+    targetUserId: memberId,
+    targetRole: targetMembership.role,
+  });
+  if (policyError) {
+    return c.json(
+      { error: { message: policyError.message, code: policyError.code } },
+      policyError.status,
+    );
   }
 
   const pendingRecipientErr = await assertNoPendingRecipientRemoval(teamId, memberId);
@@ -984,14 +1501,25 @@ teamsRouter.patch("/:teamId/members/:userId/role", async (c) => {
   if (!caller || caller.role !== "owner") {
     return c.json({ error: { message: "Only owners can change roles" } }, 403);
   }
+  const writeGuard = await assertWorkspaceCanWrite(teamId);
+  if (!writeGuard.ok) return c.json(workspaceReadOnlyError(writeGuard.access), 403);
 
   // Target must exist and not be an owner
   const target = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId, teamId } },
   });
   if (!target) return c.json({ error: { message: "Member not found" } }, 404);
-  if (target.role === "owner") {
-    return c.json({ error: { message: "Cannot change owner role" } }, 403);
+  const policyError = validateWorkspaceRoleChange({
+    actorUserId: user.id,
+    actorRole: caller.role,
+    targetUserId: userId,
+    targetRole: target.role,
+  });
+  if (policyError) {
+    return c.json(
+      { error: { message: policyError.message, code: policyError.code } },
+      policyError.status,
+    );
   }
 
   const updated = await prisma.teamMember.update({

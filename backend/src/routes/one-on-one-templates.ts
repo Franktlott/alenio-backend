@@ -11,6 +11,11 @@ import {
 } from "../lib/check-in-template-library";
 import { appendLeaderCommentsFields } from "../lib/check-in-leader-comments";
 import { normalizeLeaderPrep, parseLeaderPrep, serializeLeaderPrep } from "../lib/leader-prep";
+import {
+  canManageCheckInTemplates,
+  getCheckInTemplateDeletionBlock,
+} from "../lib/one-on-one-template-policy";
+import { parseWorkplaceStandards } from "../lib/workplace-standards";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -102,10 +107,6 @@ const upsertSchema = z.object({
   leaderPrep: z.array(z.string().max(200)).max(8).optional(),
 });
 
-function requireOwner(membership: { role: string } | null) {
-  return membership?.role === "owner";
-}
-
 // GET /api/teams/:teamId/one-on-one-templates
 oneOnOneTemplatesRouter.get("/", async (c) => {
   const teamId = c.req.param("teamId") as string;
@@ -137,8 +138,8 @@ oneOnOneTemplatesRouter.post("/from-library/:libraryKey", async (c) => {
   const libraryKey = c.req.param("libraryKey") as string;
 
   const membership = await getMembership(c, teamId);
-  if (!requireOwner(membership)) {
-    return c.json({ error: { message: "Only the workspace owner can add check-in templates", code: "FORBIDDEN" } }, 403);
+  if (!canManageCheckInTemplates(membership?.role)) {
+    return c.json({ error: { message: "Only the workspace owner or a team leader can add check-in templates", code: "FORBIDDEN" } }, 403);
   }
 
   const def = getCheckInLibraryDefByKey(libraryKey);
@@ -181,8 +182,8 @@ oneOnOneTemplatesRouter.post("/", zValidator("json", upsertSchema), async (c) =>
   const teamId = c.req.param("teamId") as string;
 
   const membership = await getMembership(c, teamId);
-  if (!requireOwner(membership)) {
-    return c.json({ error: { message: "Only the workspace owner can create check-in templates", code: "FORBIDDEN" } }, 403);
+  if (!canManageCheckInTemplates(membership?.role)) {
+    return c.json({ error: { message: "Only the workspace owner or a team leader can create check-in templates", code: "FORBIDDEN" } }, 403);
   }
 
   const body = c.req.valid("json");
@@ -218,8 +219,8 @@ oneOnOneTemplatesRouter.patch(
     const templateId = c.req.param("templateId") as string;
 
     const membership = await getMembership(c, teamId);
-    if (!requireOwner(membership)) {
-      return c.json({ error: { message: "Only the workspace owner can edit check-in templates", code: "FORBIDDEN" } }, 403);
+    if (!canManageCheckInTemplates(membership?.role)) {
+      return c.json({ error: { message: "Only the workspace owner or a team leader can edit check-in templates", code: "FORBIDDEN" } }, 403);
     }
 
     const existing = await prisma.oneOnOneTemplate.findFirst({
@@ -255,19 +256,79 @@ oneOnOneTemplatesRouter.delete("/:templateId", async (c) => {
   const templateId = c.req.param("templateId") as string;
 
   const membership = await getMembership(c, teamId);
-  if (!requireOwner(membership)) {
-    return c.json({ error: { message: "Only the workspace owner can delete check-in templates", code: "FORBIDDEN" } }, 403);
+  if (!canManageCheckInTemplates(membership?.role)) {
+    return c.json({ error: { message: "Only the workspace owner or a team leader can delete check-in templates", code: "FORBIDDEN" } }, 403);
   }
 
-  const existing = await prisma.oneOnOneTemplate.findFirst({
-    where: { id: templateId, teamId },
-  });
-  if (!existing) {
-    return c.json({ error: { message: "Template not found", code: "NOT_FOUND" } }, 404);
-  }
+  try {
+    const now = new Date();
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.oneOnOneTemplate.findFirst({
+          where: { id: templateId, teamId },
+          select: {
+            id: true,
+            team: { select: { workplaceStandards: true } },
+          },
+        });
+        if (!existing) return { status: "not_found" as const };
 
-  await prisma.oneOnOneTemplate.delete({ where: { id: templateId } });
-  return c.json({ data: { deleted: true } });
+        const standards = parseWorkplaceStandards(existing.team.workplaceStandards);
+        const futureReference = await tx.calendarEvent.findFirst({
+          where: {
+            teamId,
+            isOneOnOne: true,
+            oneOnOneTemplateId: templateId,
+            startDate: { gt: now },
+            isHidden: false,
+            approvalStatus: { in: ["approved", "pending"] },
+          },
+          select: {
+            isOneOnOne: true,
+            oneOnOneTemplateId: true,
+            startDate: true,
+            isHidden: true,
+            approvalStatus: true,
+          },
+        });
+        const block = getCheckInTemplateDeletionBlock({
+          templateId,
+          requiredCheckInTemplateId: standards.requiredCheckInTemplateId,
+          calendarReferences: futureReference ? [futureReference] : [],
+          now,
+        });
+        if (block) return { status: "blocked" as const, block };
+
+        await tx.oneOnOneTemplate.delete({ where: { id: templateId } });
+        return { status: "deleted" as const };
+      },
+      { isolationLevel: "Serializable" },
+    );
+
+    if (result.status === "not_found") {
+      return c.json({ error: { message: "Template not found", code: "NOT_FOUND" } }, 404);
+    }
+    if (result.status === "blocked") {
+      if (result.block === "required_by_workspace_standards") {
+        return c.json({
+          error: {
+            message: "Choose a different required check-in template in Workspace Standards before deleting this template.",
+            code: "TEMPLATE_REQUIRED_BY_WORKSPACE_STANDARDS",
+          },
+        }, 409);
+      }
+      return c.json({
+        error: {
+          message: "Reschedule, hide, reject, or remove future check-ins using this template before deleting it.",
+          code: "TEMPLATE_HAS_FUTURE_CHECK_INS",
+        },
+      }, 409);
+    }
+
+    return c.json({ data: { deleted: true } });
+  } catch (err) {
+    return prismaRouteError(c, err, "[one-on-one-templates] DELETE failed");
+  }
 });
 
 export { oneOnOneTemplatesRouter };

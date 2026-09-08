@@ -14,6 +14,7 @@ import * as reportingService from "../lib/walks/reporting-service";
 import * as scheduleService from "../lib/walks/schedule-service";
 import * as walkRunService from "../lib/walks/walk-run-service";
 import * as walkService from "../lib/walks/walk-template-service";
+import { isValidTimeZone } from "../lib/timezone";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -1111,6 +1112,9 @@ walksRouter.get("/runs", async (c) => {
 
 const scheduleRecurrenceSchema = z.enum(["ONCE", "DAILY", "WEEKLY", "INTERVAL"]);
 const scheduleIntervalMinutesSchema = z.number().int().min(15).max(24 * 60).optional().nullable();
+const scheduleTimezoneSchema = z.string().max(80).refine(isValidTimeZone, {
+  message: "timezone must be a valid IANA timezone",
+});
 
 walksRouter.get("/schedules", async (c) => {
   const teamId = c.req.param("teamId")!;
@@ -1135,7 +1139,7 @@ walksRouter.post(
     z.object({
       templateId: z.string().min(1),
       name: z.string().max(120).optional().nullable(),
-      timezone: z.string().max(80).optional(),
+      timezone: scheduleTimezoneSchema.optional(),
       recurrence: scheduleRecurrenceSchema.optional(),
       daysOfWeek: z.array(z.number().int().min(0).max(6)).optional().nullable(),
       intervalMinutes: scheduleIntervalMinutesSchema,
@@ -1202,7 +1206,7 @@ walksRouter.patch(
     "json",
     z.object({
       name: z.string().max(120).optional().nullable(),
-      timezone: z.string().max(80).optional(),
+      timezone: scheduleTimezoneSchema.optional(),
       recurrence: scheduleRecurrenceSchema.optional(),
       daysOfWeek: z.array(z.number().int().min(0).max(6)).optional().nullable(),
       intervalMinutes: scheduleIntervalMinutesSchema,

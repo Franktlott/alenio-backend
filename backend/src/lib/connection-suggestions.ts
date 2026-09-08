@@ -1,7 +1,10 @@
+import { DECLINED_CONNECTION_COOLDOWN_DAYS } from "./connection-request-policy";
+
 export const CONNECTION_SUGGESTION_DEFAULT_LIMIT = 20;
 export const CONNECTION_SUGGESTION_MAX_LIMIT = 50;
-export const DECLINED_CONNECTION_COOLDOWN_DAYS = 30;
+export { DECLINED_CONNECTION_COOLDOWN_DAYS };
 export const RECENT_WORKSPACE_JOIN_DAYS = 90;
+export const CONNECTION_SUGGESTION_DISMISSAL_DAYS = 90;
 
 export type ConnectionSuggestionReasonKey =
   | "current_workspace"
@@ -22,25 +25,45 @@ export type ConnectionSuggestionWorkspace = {
   joinedAt: string;
 };
 
+export type ConnectionSuggestionMutual = {
+  id: string;
+  name: string;
+  image: string | null;
+};
+
+/** Faces shown on the suggestion card; the rest stay as a "and N others" count. */
+export const CONNECTION_SUGGESTION_MUTUAL_PREVIEW_LIMIT = 2;
+
 export type ConnectionSuggestion = {
   person: {
     id: string;
     name: string;
     username: string | null;
     image: string | null;
+    profileTitle?: string | null;
+    isWorkplaceConnected?: boolean;
   };
   connectionStatus: "none" | "declined";
   sharedCurrentWorkspace: boolean;
   currentWorkspace?: ConnectionSuggestionWorkspace;
   sharedWorkspaces: ConnectionSuggestionWorkspace[];
   mutualConnections: number;
+  mutualPreview?: ConnectionSuggestionMutual[];
   reasons: ConnectionSuggestionReason[];
+};
+
+export type ConnectionSuggestionDismissalResponse = {
+  userId: string;
+  dismissedAt: string;
+  dismissedUntil: string;
+  cooldownDays: number;
 };
 
 export type ConnectionSuggestionCandidate = {
   person: ConnectionSuggestion["person"];
   sharedWorkspaces: Array<Omit<ConnectionSuggestionWorkspace, "joinedAt"> & { joinedAt: Date }>;
   mutualConnections: number;
+  mutualPreview?: ConnectionSuggestionMutual[];
   sharesOrganization: boolean;
   connection?: {
     status: string;
@@ -64,17 +87,22 @@ export function buildConnectionSuggestions(input: {
   currentTeamId?: string;
   limit: number;
   now?: Date;
+  dismissedAtByPersonId?: ReadonlyMap<string, Date>;
 }): ConnectionSuggestion[] {
   const now = input.now ?? new Date();
   const declinedCutoff = now.getTime() - DECLINED_CONNECTION_COOLDOWN_DAYS * DAY_MS;
+  const dismissalCutoff =
+    now.getTime() - CONNECTION_SUGGESTION_DISMISSAL_DAYS * DAY_MS;
   const recentJoinCutoff = now.getTime() - RECENT_WORKSPACE_JOIN_DAYS * DAY_MS;
   const merged = mergeCandidates(input.candidates);
   const ranked: RankedSuggestion[] = [];
 
   for (const candidate of merged.values()) {
     const connection = candidate.connection;
+    const dismissedAt = input.dismissedAtByPersonId?.get(candidate.person.id);
     if (
       candidate.blocked ||
+      (dismissedAt && dismissedAt.getTime() > dismissalCutoff) ||
       connection?.status === "accepted" ||
       connection?.status === "pending" ||
       (connection?.status === "declined" && connection.updatedAt.getTime() > declinedCutoff)
@@ -136,6 +164,14 @@ export function buildConnectionSuggestions(input: {
       ...(current ? { currentWorkspace: serializeWorkspace(current) } : {}),
       sharedWorkspaces: workspaces.map(serializeWorkspace),
       mutualConnections: candidate.mutualConnections,
+      ...(candidate.mutualPreview && candidate.mutualPreview.length > 0
+        ? {
+            mutualPreview: candidate.mutualPreview.slice(
+              0,
+              CONNECTION_SUGGESTION_MUTUAL_PREVIEW_LIMIT,
+            ),
+          }
+        : {}),
       reasons,
       rank: [
         current ? 1 : 0,
@@ -179,6 +215,9 @@ function mergeCandidates(
       existing.mutualConnections,
       candidate.mutualConnections,
     );
+    if ((candidate.mutualPreview?.length ?? 0) > (existing.mutualPreview?.length ?? 0)) {
+      existing.mutualPreview = candidate.mutualPreview;
+    }
     existing.sharesOrganization ||= candidate.sharesOrganization;
     existing.blocked ||= candidate.blocked;
     existing.sharedWorkspaces = dedupeWorkspaces([

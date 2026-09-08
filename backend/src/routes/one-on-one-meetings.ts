@@ -30,6 +30,19 @@ import {
   isActiveTeamMember,
 } from "../lib/workspace-member-departure";
 import { removePlannedCheckInCalendarEvent } from "../lib/remove-planned-check-in-event";
+import { canManageCheckIns, WORKSPACE_MANAGER_ROLES } from "../lib/workspace-role-policy";
+import {
+  applyMomentumCompletion,
+  withSerializableMomentumTransaction,
+} from "../lib/momentum-service";
+import { logActivity } from "../lib/activity";
+import { workspaceTaskClassificationForRole } from "../lib/task-policy";
+import { publishUserInboxUpdated } from "../lib/realtime-hub";
+import {
+  contextIncludesCheckInSelection,
+  resolveVideoCheckInContext,
+  VideoRoomAccessError,
+} from "../lib/video-check-in-context";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -38,6 +51,17 @@ type Variables = {
 
 const oneOnOneMeetingsRouter = new Hono<{ Variables: Variables }>();
 oneOnOneMeetingsRouter.use("*", authGuard);
+
+async function publishTeamCheckInsUpdated(teamId: string): Promise<void> {
+  const members = await prisma.teamMember.findMany({
+    where: { teamId },
+    select: { userId: true },
+  });
+  publishUserInboxUpdated(
+    members.map((member) => member.userId),
+    { kind: "team", teamId, resource: "check_ins" },
+  );
+}
 
 type TemplateField = OneOnOneTemplateFieldLike & {
   order: number;
@@ -63,6 +87,8 @@ const createMeetingSchema = z.object({
   requestAssociateFeedback: z.boolean().optional(),
   status: z.enum(["draft", "published"]).optional(),
   plannedCalendarEventId: z.string().min(1).optional(),
+  sourceVideoRoomId: z.string().min(1).nullable().optional(),
+  calendarEventId: z.string().min(1).nullable().optional(),
 });
 
 const updateMeetingSchema = z.object({
@@ -71,6 +97,8 @@ const updateMeetingSchema = z.object({
   requestAssociateFeedback: z.boolean().optional(),
   status: z.enum(["draft", "published"]).optional(),
   plannedCalendarEventId: z.string().min(1).optional(),
+  sourceVideoRoomId: z.string().min(1).nullable().optional(),
+  calendarEventId: z.string().min(1).nullable().optional(),
 });
 
 const meetingInclude = {
@@ -82,6 +110,17 @@ const taskAssignmentInclude = {
     include: { user: { select: { id: true, name: true, email: true, image: true } } },
   },
 } as const;
+
+async function shouldRemovePlannedEventAfterPublish(
+  eventId: string,
+  teamId: string,
+): Promise<boolean> {
+  const event = await prisma.calendarEvent.findFirst({
+    where: { id: eventId, teamId },
+    select: { isVideoMeeting: true },
+  });
+  return event ? !event.isVideoMeeting : false;
+}
 
 async function getMembership(
   c: { get: (key: "user" | "session") => unknown },
@@ -119,7 +158,7 @@ function parseResponses(raw: string): Record<string, string | number> {
 }
 
 function canManageOneOnOne(membership: { role: string }): boolean {
-  return membership.role === "owner" || membership.role === "team_leader";
+  return canManageCheckIns(membership.role);
 }
 
 async function resolveCheckInMemberAccess(
@@ -162,6 +201,8 @@ function serializeMeeting(meeting: {
   id: string;
   teamId: string;
   memberUserId: string;
+  sourceVideoRoomId?: string | null;
+  calendarEventId?: string | null;
   templateId: string | null;
   templateTitle: string;
   templateFields: string;
@@ -176,6 +217,8 @@ function serializeMeeting(meeting: {
     id: meeting.id,
     teamId: meeting.teamId,
     memberUserId: meeting.memberUserId,
+    sourceVideoRoomId: meeting.sourceVideoRoomId ?? null,
+    calendarEventId: meeting.calendarEventId ?? null,
     templateId: meeting.templateId,
     templateTitle: meeting.templateTitle,
     templateFields: parseJsonArray(meeting.templateFields),
@@ -221,6 +264,8 @@ async function serializeMeetingWithTasks(meeting: {
   id: string;
   teamId: string;
   memberUserId: string;
+  sourceVideoRoomId?: string | null;
+  calendarEventId?: string | null;
   templateId: string | null;
   templateTitle: string;
   templateFields: string;
@@ -294,7 +339,7 @@ async function validateFollowUpAssignees(
 ) {
   const allowed = new Set([memberUserId, createdById]);
   const leaders = await prisma.teamMember.findMany({
-    where: { teamId, role: { in: ["owner", "team_leader"] } },
+    where: { teamId, role: { in: [...WORKSPACE_MANAGER_ROLES] } },
     select: { userId: true },
   });
   for (const leader of leaders) allowed.add(leader.userId);
@@ -321,17 +366,63 @@ async function feedbackRequestAlreadySent(meetingId: string, fieldId: string) {
   return tasks.some((task) => task.description?.includes(`"fieldId":"${fieldId}"`));
 }
 
-async function completeFeedbackTasks(meetingId: string, fieldId: string) {
+async function completeFeedbackTasks(meetingId: string, fieldId: string, actorUserId: string) {
   const tasks = await prisma.task.findMany({
     where: { oneOnOneMeetingId: meetingId, status: { not: "done" } },
     select: { id: true, description: true },
   });
   const toComplete = tasks.filter((task) => task.description?.includes(`"fieldId":"${fieldId}"`));
   if (toComplete.length === 0) return;
-  await prisma.task.updateMany({
-    where: { id: { in: toComplete.map((task) => task.id) } },
-    data: { status: "done", completedAt: new Date() },
-  });
+  for (const candidate of toComplete) {
+    const completedAt = new Date();
+    const result = await withSerializableMomentumTransaction(prisma, async (tx) => {
+      const current = await tx.task.findUnique({
+        where: { id: candidate.id },
+        select: { status: true },
+      });
+      if (!current || current.status === "done") return null;
+      const task = await tx.task.update({
+        where: { id: candidate.id },
+        data: { status: "done", completedAt },
+        select: {
+          id: true,
+          teamId: true,
+          title: true,
+          incognito: true,
+          dueDate: true,
+          assignments: {
+            select: { userId: true, user: { select: { name: true, image: true } } },
+          },
+        },
+      });
+      const momentum = await applyMomentumCompletion(tx, {
+        taskId: task.id,
+        actorUserId,
+        completedAt,
+      });
+      return { task, momentum };
+    });
+    if (!result) continue;
+    await logActivity({
+      teamId: result.task.teamId,
+      userId: actorUserId,
+      type: "task_completed",
+      metadata: {
+        taskId: result.task.id,
+        idempotencyKey: `task_completed:${result.task.teamId}:${result.task.id}:${completedAt.toISOString()}`,
+        momentumCreditIds: result.momentum.creditIds,
+        taskTitle: result.task.incognito ? null : result.task.title,
+        dueDate: result.task.dueDate?.toISOString() ?? null,
+        completedAt: completedAt.toISOString(),
+        completedOnTime: result.task.dueDate ? completedAt <= result.task.dueDate : null,
+        assignees: result.task.assignments.map((assignment) => ({
+          id: assignment.userId,
+          name: assignment.user.name,
+          image: assignment.user.image ?? null,
+        })),
+      },
+    });
+  }
 }
 
 function associateFeedbackAnswered(responses: Record<string, string | number>): boolean {
@@ -352,6 +443,7 @@ async function createMeetingAssociateFeedbackRequest(
   responses: Record<string, string | number>,
   creatorId: string,
   managerName: string,
+  creatorRole: string,
 ) {
   if (!requestAssociateFeedback) return;
   if (associateFeedbackAnswered(responses)) return;
@@ -366,10 +458,12 @@ async function createMeetingAssociateFeedbackRequest(
   };
 
   const description = encodeFeedbackTaskDescription(meta);
+  const classification = workspaceTaskClassificationForRole(creatorRole);
   const task = await prisma.task.create({
     data: {
       title: associateFeedbackTaskTitle(meeting.templateTitle),
       description,
+      ...classification,
       priority: "medium",
       status: "todo",
       dueDate: associateFeedbackDueDate(),
@@ -416,10 +510,12 @@ async function createFollowUpTasks(
   teamId: string,
   creatorId: string,
   tasks: z.infer<typeof followUpTaskSchema>[],
-  timeZone?: string | null,
+  timeZone: string | null | undefined,
+  creatorRole: string,
 ) {
   if (tasks.length === 0) return;
   const tz = resolveTimeZone(timeZone);
+  const classification = workspaceTaskClassificationForRole(creatorRole);
   const createdForPush: { id: string; title: string; assigneeUserId: string }[] = [];
 
   for (const task of tasks) {
@@ -430,6 +526,7 @@ async function createFollowUpTasks(
     const baseData = {
       title: task.title.trim(),
       description: task.description?.trim() || null,
+      ...classification,
       priority: "medium",
       status: "todo",
       dueDate,
@@ -486,7 +583,8 @@ async function syncFollowUpTasks(
   teamId: string,
   creatorId: string,
   tasks: z.infer<typeof followUpTaskSchema>[],
-  timeZone?: string | null,
+  timeZone: string | null | undefined,
+  creatorRole: string,
 ) {
   if (tasks.length === 0) return;
   const existing = await loadFollowUpTasks(meetingId);
@@ -504,11 +602,88 @@ async function syncFollowUpTasks(
     if (!title) return false;
     return !existingKeys.has(followUpTaskKey(title, task.assigneeUserId));
   });
-  await createFollowUpTasks(meetingId, teamId, creatorId, toCreate, timeZone);
+  await createFollowUpTasks(meetingId, teamId, creatorId, toCreate, timeZone, creatorRole);
 }
 
 function plannedOneOnOneTitle(memberName: string): string {
   return checkInEventTitle(memberName);
+}
+
+async function validateMeetingProvenance(
+  callerUserId: string,
+  teamId: string,
+  memberUserId: string,
+  provenance: {
+    sourceVideoRoomId?: string | null;
+    calendarEventId?: string | null;
+  },
+): Promise<
+  | { ok: true; calendarEventId: string | null | undefined }
+  | { ok: false; message: string }
+> {
+  try {
+    const sourceContext = provenance.sourceVideoRoomId
+      ? await resolveVideoCheckInContext(
+          prisma,
+          callerUserId,
+          provenance.sourceVideoRoomId,
+        )
+      : null;
+    if (
+      sourceContext &&
+      !contextIncludesCheckInSelection(sourceContext, teamId, memberUserId)
+    ) {
+      return {
+        ok: false,
+        message:
+          "The selected member and workspace are not eligible for this video room.",
+      };
+    }
+
+    const linkedCalendarEventId =
+      sourceContext?.calendarEventId ?? provenance.calendarEventId;
+    if (
+      provenance.calendarEventId &&
+      sourceContext?.calendarEventId &&
+      provenance.calendarEventId !== sourceContext.calendarEventId
+    ) {
+      return {
+        ok: false,
+        message: "The calendar event does not match this video room.",
+      };
+    }
+
+    if (
+      provenance.calendarEventId &&
+      provenance.calendarEventId !== sourceContext?.calendarEventId
+    ) {
+      const calendarContext = await resolveVideoCheckInContext(
+        prisma,
+        callerUserId,
+        provenance.calendarEventId,
+      );
+      if (
+        !contextIncludesCheckInSelection(
+          calendarContext,
+          teamId,
+          memberUserId,
+        )
+      ) {
+        return {
+          ok: false,
+          message:
+            "The selected member and workspace are not eligible for this calendar event.",
+        };
+      }
+    }
+
+    return { ok: true, calendarEventId: linkedCalendarEventId };
+  } catch (error) {
+    if (error instanceof VideoRoomAccessError) {
+      return { ok: false, message: error.message };
+    }
+    throw error;
+  }
 }
 
 // GET /api/teams/:teamId/members/:memberUserId/planned-one-on-ones
@@ -689,6 +864,23 @@ oneOnOneMeetingsRouter.post(
     if (followUpError) {
       return c.json({ error: { message: followUpError, code: "VALIDATION_ERROR" } }, 400);
     }
+    const provenance = await validateMeetingProvenance(
+      user.id,
+      teamId,
+      memberUserId,
+      body,
+    );
+    if (!provenance.ok) {
+      return c.json(
+        {
+          error: {
+            message: provenance.message,
+            code: "INVALID_VIDEO_CHECK_IN_CONTEXT",
+          },
+        },
+        403,
+      );
+    }
 
     try {
       const meeting = await prisma.$transaction(async (tx) => {
@@ -696,6 +888,8 @@ oneOnOneMeetingsRouter.post(
           data: {
             teamId,
             memberUserId,
+            sourceVideoRoomId: body.sourceVideoRoomId ?? null,
+            calendarEventId: provenance.calendarEventId ?? null,
             templateId: template.id,
             templateTitle: template.title,
             templateFields: templateFieldsJson,
@@ -717,6 +911,7 @@ oneOnOneMeetingsRouter.post(
             const baseData = {
               title: task.title.trim(),
               description: task.description?.trim() || null,
+              ...workspaceTaskClassificationForRole(membership.role),
               priority: "medium",
               status: "todo",
               dueDate,
@@ -742,7 +937,14 @@ oneOnOneMeetingsRouter.post(
         return created;
       });
 
-      if (!isDraft && body.plannedCalendarEventId) {
+      if (
+        !isDraft &&
+        body.plannedCalendarEventId &&
+        (await shouldRemovePlannedEventAfterPublish(
+          body.plannedCalendarEventId,
+          teamId,
+        ))
+      ) {
         await removePlannedCheckInCalendarEvent(prisma, {
           eventId: body.plannedCalendarEventId,
           teamId,
@@ -760,9 +962,11 @@ oneOnOneMeetingsRouter.post(
           body.responses,
           user.id,
           managerName,
+          membership.role,
         );
       }
 
+      await publishTeamCheckInsUpdated(teamId);
       return c.json({ data: await serializeMeetingWithTasks(meeting) }, 201);
     } catch (err) {
       return prismaRouteError(c, err, "[one-on-one-meetings] POST failed");
@@ -829,6 +1033,23 @@ oneOnOneMeetingsRouter.patch(
     if (followUpError) {
       return c.json({ error: { message: followUpError, code: "VALIDATION_ERROR" } }, 400);
     }
+    const provenance = await validateMeetingProvenance(
+      user.id,
+      teamId,
+      memberUserId,
+      body,
+    );
+    if (!provenance.ok) {
+      return c.json(
+        {
+          error: {
+            message: provenance.message,
+            code: "INVALID_VIDEO_CHECK_IN_CONTEXT",
+          },
+        },
+        403,
+      );
+    }
 
     const publishingNow = existing.status === "draft" && nextStatus === "published";
 
@@ -838,12 +1059,18 @@ oneOnOneMeetingsRouter.patch(
         data: {
           responses: JSON.stringify(body.responses),
           status: nextStatus,
+          ...(body.sourceVideoRoomId !== undefined
+            ? { sourceVideoRoomId: body.sourceVideoRoomId }
+            : {}),
+          ...(provenance.calendarEventId !== undefined
+            ? { calendarEventId: provenance.calendarEventId }
+            : {}),
           ...(publishingNow ? { publishedAt: new Date() } : {}),
         },
       });
 
       if (followUpTasks.length > 0) {
-        await syncFollowUpTasks(meetingId, teamId, user.id, followUpTasks, user.timezone);
+        await syncFollowUpTasks(meetingId, teamId, user.id, followUpTasks, user.timezone, membership.role);
       }
 
       const managerName = user.name?.trim() || user.email || "Your manager";
@@ -854,10 +1081,18 @@ oneOnOneMeetingsRouter.patch(
           body.responses,
           user.id,
           managerName,
+          membership.role,
         );
       }
 
-      if (publishingNow && body.plannedCalendarEventId) {
+      if (
+        publishingNow &&
+        body.plannedCalendarEventId &&
+        (await shouldRemovePlannedEventAfterPublish(
+          body.plannedCalendarEventId,
+          teamId,
+        ))
+      ) {
         await removePlannedCheckInCalendarEvent(prisma, {
           eventId: body.plannedCalendarEventId,
           teamId,
@@ -874,6 +1109,7 @@ oneOnOneMeetingsRouter.patch(
       if (!meeting) {
         return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
       }
+      await publishTeamCheckInsUpdated(teamId);
       return c.json({ data: await serializeMeetingWithTasks(meeting) });
     } catch (err) {
       return prismaRouteError(c, err, "[one-on-one-meetings] PATCH failed");
@@ -994,7 +1230,7 @@ oneOnOneMeetingsRouter.post(
       where: { id: meetingId },
       data: { responses: JSON.stringify(responses) },
     });
-    await completeFeedbackTasks(meetingId, body.fieldId);
+    await completeFeedbackTasks(meetingId, body.fieldId, user.id);
 
     const updated = await prisma.oneOnOneMeeting.findUnique({
       where: { id: meetingId },
@@ -1004,6 +1240,7 @@ oneOnOneMeetingsRouter.post(
       return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
     }
 
+    await publishTeamCheckInsUpdated(teamId);
     return c.json({ data: await serializeMeetingWithTasks(updated) });
   },
 );
@@ -1038,6 +1275,7 @@ oneOnOneMeetingsRouter.delete("/:memberUserId/one-on-ones/:meetingId", async (c)
 
   try {
     await prisma.oneOnOneMeeting.delete({ where: { id: meetingId } });
+    await publishTeamCheckInsUpdated(teamId);
     return c.json({ data: { deleted: true } });
   } catch (err) {
     return prismaRouteError(c, err, "[one-on-one-meetings] DELETE failed");

@@ -51,6 +51,10 @@ function resolveOpenAiKey(): string {
   return resolveOpenAiKeySource().key;
 }
 
+export function senecaOpenAiKey(): string {
+  return resolveOpenAiKey();
+}
+
 export function senecaDiagnostics() {
   const { key, sourceVar, raw } = resolveOpenAiKeySource();
   const openAiEnvKeys = OPENAI_ENV_CANDIDATES.filter((name) => Boolean(process.env[name]?.trim()));
@@ -79,10 +83,28 @@ export function senecaUnavailableMessage(): string {
   return "Seneca is not configured on this server. Add OPENAI_API_KEY to enable coaching assistance.";
 }
 
+export type SenecaOpenAiUserContent =
+  | string
+  | Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string; detail: "auto" } }
+    >;
+
+export function buildSenecaUserContent(
+  text: string,
+  imageDataUrl?: string,
+): SenecaOpenAiUserContent {
+  if (!imageDataUrl) return text;
+  return [
+    { type: "text", text },
+    { type: "image_url", image_url: { url: imageDataUrl, detail: "auto" } },
+  ];
+}
+
 export async function senecaJson<T>(
   instruction: string,
   context: string,
-  options?: { systemPrompt?: string },
+  options?: { systemPrompt?: string; imageDataUrl?: string },
 ): Promise<T> {
   if (!senecaAvailable()) {
     throw new Error(senecaUnavailableMessage());
@@ -102,7 +124,10 @@ export async function senecaJson<T>(
         { role: "system", content: options?.systemPrompt ?? COACHING_SYSTEM },
         {
           role: "user",
-          content: `${instruction}\n\n---\nContext:\n${context}`,
+          content: buildSenecaUserContent(
+            `${instruction}\n\n---\nContext:\n${context}`,
+            options?.imageDataUrl,
+          ),
         },
       ],
     }),
@@ -110,7 +135,19 @@ export async function senecaJson<T>(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Seneca request failed (${res.status})${body ? `: ${body.slice(0, 200)}` : ""}`);
+    console.error("Seneca provider request failed", {
+      status: res.status,
+      detail: body.slice(0, 500),
+    });
+    if (
+      res.status === 400 &&
+      /unsupported image|image.*format|invalid.*image/i.test(body)
+    ) {
+      throw new Error(
+        "I couldn’t read that image. Please choose a JPG, PNG, or WebP image and try again.",
+      );
+    }
+    throw new Error("I couldn’t complete that request right now. Please try again.");
   }
 
   const data = (await res.json()) as {
@@ -129,7 +166,7 @@ export async function senecaJson<T>(
 export async function senecaText(
   instruction: string,
   context: string,
-  options?: { systemPrompt?: string },
+  options?: { systemPrompt?: string; imageDataUrl?: string },
 ): Promise<string> {
   if (!senecaAvailable()) {
     throw new Error(senecaUnavailableMessage());
@@ -148,7 +185,10 @@ export async function senecaText(
         { role: "system", content: options?.systemPrompt ?? COACHING_SYSTEM },
         {
           role: "user",
-          content: `${instruction}\n\n---\nContext:\n${context}`,
+          content: buildSenecaUserContent(
+            `${instruction}\n\n---\nContext:\n${context}`,
+            options?.imageDataUrl,
+          ),
         },
       ],
     }),
@@ -156,7 +196,19 @@ export async function senecaText(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Seneca request failed (${res.status})${body ? `: ${body.slice(0, 200)}` : ""}`);
+    console.error("Seneca provider request failed", {
+      status: res.status,
+      detail: body.slice(0, 500),
+    });
+    if (
+      res.status === 400 &&
+      /unsupported image|image.*format|invalid.*image/i.test(body)
+    ) {
+      throw new Error(
+        "I couldn’t read that image. Please choose a JPG, PNG, or WebP image and try again.",
+      );
+    }
+    throw new Error("I couldn’t complete that request right now. Please try again.");
   }
 
   const data = (await res.json()) as {

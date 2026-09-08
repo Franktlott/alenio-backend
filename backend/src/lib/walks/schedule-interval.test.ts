@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { intervalStartMinutesForDay } from "./schedule-service";
+import {
+  intervalStartMinutesForDay,
+  zonedLocalToUtc,
+} from "./schedule-service";
 
 describe("intervalStartMinutesForDay", () => {
   test("generates every 4 hours between 6am and 10pm", () => {
@@ -40,5 +43,43 @@ describe("intervalStartMinutesForDay", () => {
     });
     expect(starts[0]).toBe(0);
     expect(starts.length).toBeGreaterThan(1);
+  });
+});
+
+describe("zonedLocalToUtc", () => {
+  test("moves skipped spring-forward wall time forward", () => {
+    expect(
+      zonedLocalToUtc(
+        2026,
+        3,
+        8,
+        2 * 60 + 30,
+        "America/New_York",
+      ).toISOString(),
+    ).toBe("2026-03-08T07:30:00.000Z");
+  });
+
+  test("uses the earlier repeated fall-back wall time", () => {
+    expect(
+      zonedLocalToUtc(
+        2026,
+        11,
+        1,
+        1 * 60 + 30,
+        "America/New_York",
+      ).toISOString(),
+    ).toBe("2026-11-01T05:30:00.000Z");
+  });
+
+  test("normalizes overnight minutes using the next local day", () => {
+    expect(
+      zonedLocalToUtc(
+        2026,
+        3,
+        7,
+        24 * 60 + 3 * 60 + 30,
+        "America/New_York",
+      ).toISOString(),
+    ).toBe("2026-03-08T07:30:00.000Z");
   });
 });

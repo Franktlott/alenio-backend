@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 export const USERNAME_MIN_LENGTH = 3;
-export const USERNAME_MAX_LENGTH = 30;
+export const USERNAME_MAX_LENGTH = 15;
 
 /** Days a user must wait between handle changes. */
 export const USERNAME_CHANGE_COOLDOWN_DAYS = 30;

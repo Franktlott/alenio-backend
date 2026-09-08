@@ -1,22 +1,42 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import type { GetStartedCompletionResponse } from "./types";
 import { env } from "./env";
 import { senecaAvailable, senecaDiagnostics } from "./lib/seneca-openai";
-import { getSessionFromHeaders, type AppSession, type AppUser, verifyEmailPassword } from "./auth";
-import { confirmEmailChange, normalizeEmailInput, requestEmailChange } from "./lib/email-change";
+import {
+  maxUploadBytesForContentType,
+  uploadTooLargeMessage,
+} from "./lib/upload-limits";
+import {
+  getSessionFromHeaders,
+  type AppSession,
+  type AppUser,
+  verifyEmailPassword,
+} from "./auth";
+import {
+  confirmEmailChange,
+  normalizeEmailInput,
+  requestEmailChange,
+} from "./lib/email-change";
 import { prisma } from "./prisma";
 import { sampleRouter } from "./routes/sample";
 import { teamsRouter } from "./routes/teams";
+import { workspaceCheckoutsRouter } from "./routes/workspace-checkouts";
 import { goLeaderPinRouter } from "./routes/go-leader-pin";
 import { tasksRouter } from "./routes/tasks";
 import { myTasksRouter } from "./routes/my-tasks";
 import { messagesRouter } from "./routes/messages";
 import { dmsRouter } from "./routes/dms";
-import { connectionsRouter, describeConnectionStatus } from "./routes/connections";
+import {
+  connectionsRouter,
+  describeConnectionStatus,
+} from "./routes/connections";
+import { presenceRouter } from "./routes/presence";
 import {
   DEFAULT_MESSAGE_PRIVACY,
   buildConnectionPairKey,
+  evaluateUserSearchMessagePermission,
   isMessagePrivacy,
 } from "./lib/messaging-permission";
 import { templatesRouter } from "./routes/templates";
@@ -50,7 +70,10 @@ import { getDatabasePublicSummary } from "./lib/database-public-summary";
 import { isBetterAuthMounted } from "./lib/better-auth-status";
 import { syncAppUserFromAuth } from "./lib/ensure-app-user";
 import { deleteAppUserCompletely } from "./lib/delete-app-user";
-import { assertAccountDeletionAllowed, getAccountDeletionReadiness } from "./lib/account-deletion-readiness";
+import {
+  assertAccountDeletionAllowed,
+  getAccountDeletionReadiness,
+} from "./lib/account-deletion-readiness";
 import {
   deleteReplacedStorageObject,
   deleteStorageObjectByUrlIfOwned,
@@ -64,6 +87,7 @@ import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schem
 import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
 import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-schema";
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
+import { ensureTeamTimezoneSchema } from "./lib/ensure-team-timezone-schema";
 import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
 import { ensureCalendarOneOnOneSchema } from "./lib/ensure-calendar-one-on-one-schema";
 import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards-schema";
@@ -74,11 +98,16 @@ import { ensureGoLeaderPinSchema } from "./lib/ensure-go-leader-pin-schema";
 import { ensureWorkspaceModulesSchema } from "./lib/ensure-workspace-modules-schema";
 import { ensureSubscriptionCancelSchema } from "./lib/ensure-subscription-cancel-schema";
 import { ensureWorkspaceTrialSchema } from "./lib/ensure-workspace-trial-schema";
+import { ensureWorkspaceTrialPolicySchema } from "./lib/ensure-workspace-trial-policy-schema";
+import { ensureWorkspaceProfileSchema } from "./lib/ensure-workspace-profile-schema";
 import { ensureOwnershipTransferSchema } from "./lib/ensure-ownership-transfer-schema";
 import { ensureConversationTeamSchema } from "./lib/ensure-conversation-team-schema";
 import { ensureDmPairKeySchema } from "./lib/ensure-dm-pair-key-schema";
 import { ensureUsernameSchema } from "./lib/ensure-username-schema";
+import { ensureGetStartedSchema } from "./lib/ensure-get-started-schema";
 import { ensureConnectionsSchema } from "./lib/ensure-connections-schema";
+import { ensurePresenceSchema } from "./lib/ensure-presence-schema";
+import { ensureMomentumSchema } from "./lib/ensure-momentum-schema";
 import { ensureAccountActivitySchema } from "./lib/ensure-account-activity-schema";
 import { ensurePublicProfileSchema } from "./lib/ensure-public-profile-schema";
 import { validatePublicProfileUpdate } from "./lib/public-profile";
@@ -94,6 +123,7 @@ import { ensureNotificationPreferencesSchema } from "./lib/ensure-notification-p
 import { ensurePinnedMessageSchema } from "./lib/ensure-pinned-message-schema";
 import { ensureConversationImageSchema } from "./lib/ensure-conversation-image-schema";
 import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
+import { ensureTaskKindSchema } from "./lib/ensure-task-kind-schema";
 import { ensureTaskNotesSchema } from "./lib/ensure-task-notes-schema";
 import { ensureTeamHealthSnapshotSchema } from "./lib/ensure-team-health-snapshot-schema";
 import { ensureSenecaTeamBriefSchema } from "./lib/ensure-seneca-team-brief-schema";
@@ -102,13 +132,18 @@ import { ensureBetterAuthSchema } from "./lib/ensure-better-auth-schema";
 import { ensureOrganizationSchema } from "./lib/ensure-organization-schema";
 import { ensureOrgGoSchema } from "./lib/ensure-org-go-schema";
 import { ensureSenecaStudioSchema } from "./lib/ensure-seneca-studio-schema";
+import { ensureSenecaConversationSchema } from "./lib/ensure-seneca-conversation-schema";
+import { cleanupExpiredSenecaConversations } from "./lib/seneca-conversation-cleanup";
 import { webPublicBaseUrl } from "./lib/web-public-url";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
 import { senecaTeamRouter } from "./routes/seneca-team";
+import { senecaUnifiedRouter } from "./routes/seneca-unified";
+import { senecaConversationsRouter } from "./routes/seneca-conversations";
 import { senecaFocusRouter } from "./routes/seneca-focus";
 import { senecaStudioRouter } from "./routes/seneca-studio";
+import { memberNextActionRouter } from "./routes/member-next-action";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { enterpriseInvitesPublicRouter } from "./routes/enterprise-invites";
 import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
@@ -116,6 +151,7 @@ import { publicGoLinkRouter } from "./routes/public-go-link";
 import { publicGoWalksRouter } from "./routes/public-go-walks";
 import { walksRouter } from "./routes/walks";
 import { teamHealthHistoryRouter } from "./routes/team-health-history";
+import { teamMomentumRouter } from "./routes/team-momentum";
 import { captureMissingDailyTeamHealthSnapshots } from "./lib/team-health-snapshots";
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
@@ -126,6 +162,8 @@ import {
   expireEndedWorkspaceTrials,
   workspaceReadOnlyError,
 } from "./lib/workspace-access";
+import { getWorkspaceTrialEligibility } from "./lib/workspace-trial-policy";
+import { expirePendingWorkspaceCheckouts } from "./lib/pending-workspace-checkout";
 
 const isProduction = env.NODE_ENV === "production";
 
@@ -139,8 +177,16 @@ const startupSchemaReady = Promise.all([
   ensureBetterAuthSchema(prisma),
   // Read by syncAppUserFromAuth on every authenticated request, so it cannot be environment-gated.
   ensureUsernameSchema(prisma),
+  // Workspace boundaries depend on both additive timezone columns in every environment.
+  ensureUserTimezoneSchema(prisma).then(() => ensureTeamTimezoneSchema(prisma)),
+  ensureGetStartedSchema(prisma),
   // Backs messaging permission checks on chat paths shared by both environments.
   ensureConnectionsSchema(prisma),
+  ensurePresenceSchema(prisma),
+  // Momentum lifecycle is used in every environment and must be additive.
+  ensureMomentumSchema(prisma),
+  // Task kinds and immutable eligibility snapshots must exist in every environment.
+  ensureRecurrenceSeriesSchema(prisma).then(() => ensureTaskKindSchema(prisma)),
   ensurePublicProfileSchema(prisma),
   // Relaxes TeamActivity.teamId so account-level activity can be written.
   ensureAccountActivitySchema(prisma),
@@ -148,16 +194,40 @@ const startupSchemaReady = Promise.all([
   ensureSenecaTeamBriefSchema(prisma),
   ensureOrganizationSchema(prisma),
   ensureOrgGoSchema(prisma),
-  ensureSenecaStudioSchema(prisma),
+  ensureSenecaStudioSchema(prisma).then(() =>
+    ensureSenecaConversationSchema(prisma),
+  ),
   ensureWorkspaceTrialSchema(prisma),
+  ensureWorkspaceTrialPolicySchema(prisma),
+  ensureWorkspaceProfileSchema(prisma),
+  // Development goals are used in production and require additive schema upgrades.
+  ensureDevelopmentPlanSchema(prisma),
+  // Check-in history and follow-up task relations are read in every environment.
+  ensureOneOnOneSchema(prisma),
+  // Invites are used in every environment; keep additive role upgrades production-safe.
+  ensureTeamInviteSchema(prisma),
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureWalksSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureOwnershipTransferSchema(prisma), ensureConversationTeamSchema(prisma), ensureDmPairKeySchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma), ensurePinnedMessageSchema(prisma), ensureConversationImageSchema(prisma), ensureTaskArchiveSchema(prisma), ensureTaskNotesSchema(prisma)]
+    ? [
+        ensureGoLoginSchema(prisma),
+        ensureWorkplaceAlertsSchema(prisma),
+        ensureGoFrontendSettingsSchema(prisma),
+        ensureGoLeaderPinSchema(prisma),
+        ensureWorkspaceModulesSchema(prisma),
+        ensureWalksSchema(prisma),
+        ensureSubscriptionCancelSchema(prisma),
+        ensureOwnershipTransferSchema(prisma),
+        ensureConversationTeamSchema(prisma),
+        ensureDmPairKeySchema(prisma),
+        ensureGroupParticipantRolesSchema(prisma),
+        ensureCalendarOneOnOneSchema(prisma),
+        ensureTopicImageSchema(prisma),
+        ensureNotificationPreferencesSchema(prisma),
+        ensurePinnedMessageSchema(prisma),
+        ensureConversationImageSchema(prisma),
+        ensureTaskArchiveSchema(prisma),
+        ensureTaskNotesSchema(prisma),
+      ]
     : [
-        ensureOneOnOneSchema(prisma),
-        ensureDevelopmentPlanSchema(prisma),
-        ensureTeamInviteSchema(prisma),
-        ensureRecurrenceSeriesSchema(prisma),
-        ensureUserTimezoneSchema(prisma),
         ensureCalendarApprovalSchema(prisma),
         ensureCalendarOneOnOneSchema(prisma),
         ensureWorkplaceStandardsSchema(prisma),
@@ -206,7 +276,7 @@ function buildHealthPayload() {
       env.MICROSOFT_CLIENT_ID?.trim() && env.MICROSOFT_CLIENT_SECRET?.trim()
     ),
     /** Resend API key present — OTP, invites, and feedback emails can send. */
-    emailConfigured: !!(env.RESEND_API_KEY?.trim()),
+    emailConfigured: !!env.RESEND_API_KEY?.trim(),
     /** Public From address used by Resend (domain must be verified in Resend). */
     emailFrom: env.FROM_EMAIL?.trim() || "noreply@alenio.com",
   };
@@ -382,7 +452,7 @@ app.use(
   cors({
     origin: (origin) => (origin && isOriginAllowed(origin) ? origin : null),
     credentials: true,
-  })
+  }),
 );
 
 // Logging
@@ -401,7 +471,10 @@ app.onError((err, c) => {
   );
 });
 
-async function waitForStartupSchema(c: { req: { path: string } }, next: () => Promise<void>) {
+async function waitForStartupSchema(
+  c: { req: { path: string } },
+  next: () => Promise<void>,
+) {
   if (isFastPublicPath(c.req.path)) {
     await next();
     return;
@@ -437,10 +510,25 @@ app.use("*", async (c, next) => {
       finalAuthenticatedUserId: null,
     });
   } else {
+    if (session.user.emailVerified === false) {
+      c.set("user", null);
+      c.set("session", null);
+      c.set("authDebug", {
+        authUserFound: true,
+        matchedBy: "none",
+        authUserId: session.user.id,
+        authEmail: session.user.email?.trim() ?? null,
+        finalAuthenticatedUserId: null,
+      });
+      await next();
+      return;
+    }
+
     const sessionEmail = session.user.email?.trim() ?? null;
     const synced = await syncAppUserFromAuth(session.user);
     const user = synced?.user ?? null;
-    const matchedBy: "auth_user_id" | "email" | "created" | "none" = synced?.matchedBy ?? "none";
+    const matchedBy: "auth_user_id" | "email" | "created" | "none" =
+      synced?.matchedBy ?? "none";
 
     if (!user) {
       console.error(
@@ -473,10 +561,19 @@ app.use("*", async (c, next) => {
 
     if (user.email) {
       void redeemPendingInvitesForUser(user.id, user.email).catch((err) => {
-        console.error("[auth-middleware] redeemPendingInvitesForUser failed:", err);
+        console.error(
+          "[auth-middleware] redeemPendingInvitesForUser failed:",
+          err,
+        );
       });
-      void redeemPendingOrganizationSignupInvitesForUser(user.id, user.email).catch((err) => {
-        console.error("[auth-middleware] redeemPendingOrganizationSignupInvitesForUser failed:", err);
+      void redeemPendingOrganizationSignupInvitesForUser(
+        user.id,
+        user.email,
+      ).catch((err) => {
+        console.error(
+          "[auth-middleware] redeemPendingOrganizationSignupInvitesForUser failed:",
+          err,
+        );
       });
     }
   }
@@ -490,8 +587,7 @@ app.get("/", (c) => {
   const incoming = new URL(c.req.url);
   const webBase = webPublicBaseUrl();
   const webLogin = `${webBase}/login`;
-  const expectedCallback =
-    `${env.BACKEND_URL.replace(/\/$/, "")}/api/auth/callback/microsoft`;
+  const expectedCallback = `${env.BACKEND_URL.replace(/\/$/, "")}/api/auth/callback/microsoft`;
 
   // Entra redirect URI must be the callback path — NOT this homepage.
   // Forwarding code+state here would cause Microsoft `invalid_code` (redirect_uri mismatch).
@@ -543,7 +639,9 @@ app.get("/", (c) => {
 app.get("/auth/callback", (c) => {
   const dest = new URL(`${webPublicBaseUrl()}/auth/callback`);
   const incoming = new URL(c.req.url);
-  incoming.searchParams.forEach((value, key) => dest.searchParams.set(key, value));
+  incoming.searchParams.forEach((value, key) =>
+    dest.searchParams.set(key, value),
+  );
   return c.redirect(dest.toString(), 302);
 });
 
@@ -551,12 +649,20 @@ app.get("/auth/callback", (c) => {
 app.post("/api/auth/sync-user", (c) => {
   const user = c.get("user");
   if (!user) {
-    return c.json({ ok: false, error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+    return c.json(
+      { ok: false, error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
   }
   const debug = c.get("authDebug");
   return c.json({
     ok: true,
-    user: { id: user.id, email: user.email, name: user.name, image: user.image },
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      image: user.image,
+    },
     matchedBy: debug?.matchedBy ?? null,
   });
 });
@@ -629,7 +735,10 @@ app.get("/open-invite", (c) => {
   const token = c.req.query("token")?.trim();
   if (!token) return c.text("Missing invite token", 400);
   const deepLink = `${appEnv.APP_SCHEME}://invite/${encodeURIComponent(token)}`;
-  const webFallbackBase = (appEnv.WEB_PUBLIC_URL ?? appEnv.BACKEND_URL).replace(/\/$/, "");
+  const webFallbackBase = (appEnv.WEB_PUBLIC_URL ?? appEnv.BACKEND_URL).replace(
+    /\/$/,
+    "",
+  );
   const webFallback = `${webFallbackBase}/invite/${encodeURIComponent(token)}`;
   return c.html(`<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -660,7 +769,10 @@ app.get("/open-ownership-transfer", (c) => {
   if (sessionId) q.set("session_id", sessionId);
 
   const deepLink = `${appEnv.APP_SCHEME}://ownership-transfer?${q.toString()}`;
-  const webFallbackBase = (appEnv.WEB_PUBLIC_URL ?? appEnv.BACKEND_URL).replace(/\/$/, "");
+  const webFallbackBase = (appEnv.WEB_PUBLIC_URL ?? appEnv.BACKEND_URL).replace(
+    /\/$/,
+    "",
+  );
   const webFallback = `${webFallbackBase}/ownership-transfer?${q.toString()}`;
   return c.html(`<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -687,7 +799,6 @@ app.get("/static/:filename", async (c) => {
   return new Response(file);
 });
 
-const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 const MAX_ALERT_SOUND_BYTES = 5 * 1024 * 1024;
 const ALERT_SOUND_MIME_TYPES = new Set([
   "audio/mpeg",
@@ -703,7 +814,11 @@ const ALERT_SOUND_MIME_TYPES = new Set([
 type UploadPurpose = "profile" | "team" | "go_alert_sound" | "generic";
 
 function parseUploadPurpose(purposeRaw: string): UploadPurpose {
-  if (purposeRaw === "profile" || purposeRaw === "team" || purposeRaw === "go_alert_sound") {
+  if (
+    purposeRaw === "profile" ||
+    purposeRaw === "team" ||
+    purposeRaw === "go_alert_sound"
+  ) {
     return purposeRaw;
   }
   return "generic";
@@ -721,15 +836,21 @@ function fileFromBase64Json(payload: {
   contentType?: unknown;
 }): File | null {
   if (typeof payload.data !== "string" || !payload.data.trim()) return null;
+  const type =
+    String(payload.contentType ?? "image/jpeg").trim() || "image/jpeg";
   let bytes: Buffer;
   try {
     bytes = Buffer.from(payload.data, "base64");
   } catch {
     return null;
   }
-  if (bytes.length === 0 || bytes.length > MAX_UPLOAD_BYTES) return null;
+  if (
+    bytes.length === 0 ||
+    bytes.length > maxUploadBytesForContentType(type)
+  ) {
+    return null;
+  }
   const name = String(payload.filename ?? "photo.jpg").trim() || "photo.jpg";
-  const type = String(payload.contentType ?? "image/jpeg").trim() || "image/jpeg";
   return new File([bytes], name, { type });
 }
 
@@ -749,10 +870,14 @@ function friendlyMultipartError(detail: string): string {
   if (/boundary|mime type|form data|multipart/i.test(detail)) {
     return "Upload format was not recognized. Please update the app and try again.";
   }
-  return detail ? `Could not read upload. (${detail})` : "Could not read upload.";
+  return detail
+    ? `Could not read upload. (${detail})`
+    : "Could not read upload.";
 }
 
-async function parseJsonBase64Upload(c: UploadContext): Promise<UploadParseResult> {
+async function parseJsonBase64Upload(
+  c: UploadContext,
+): Promise<UploadParseResult> {
   let json: {
     purpose?: string;
     teamId?: string;
@@ -775,13 +900,17 @@ async function parseJsonBase64Upload(c: UploadContext): Promise<UploadParseResul
   const teamIdRaw = String(json.teamId ?? "").trim();
   const file = fileFromBase64Json(json);
   if (!file) {
+    const contentType =
+      String(json.contentType ?? "image/jpeg").trim() || "image/jpeg";
+    const maxBytes = maxUploadBytesForContentType(contentType);
     const tooLarge =
-      typeof json.data === "string" && Math.floor(json.data.length * 0.75) > MAX_UPLOAD_BYTES;
+      typeof json.data === "string" &&
+      Math.floor(json.data.length * 0.75) > maxBytes;
     return {
       ok: false,
       status: tooLarge ? 413 : 400,
       message: tooLarge
-        ? "Photo is too large. Choose a smaller image."
+        ? uploadTooLargeMessage(contentType)
         : "Invalid image data. Try selecting the photo again.",
       code: tooLarge ? "PAYLOAD_TOO_LARGE" : "VALIDATION_ERROR",
     };
@@ -791,12 +920,15 @@ async function parseJsonBase64Upload(c: UploadContext): Promise<UploadParseResul
   return { ok: true, file, purpose, teamId: teamIdRaw };
 }
 
-async function parseMultipartUpload(c: UploadContext): Promise<UploadParseResult> {
+async function parseMultipartUpload(
+  c: UploadContext,
+): Promise<UploadParseResult> {
   let body: Record<string, string | File>;
   try {
     body = await c.req.parseBody();
   } catch (parseErr) {
-    const detail = parseErr instanceof Error ? parseErr.message : "Invalid multipart body";
+    const detail =
+      parseErr instanceof Error ? parseErr.message : "Invalid multipart body";
     return {
       ok: false,
       status: 400,
@@ -807,7 +939,12 @@ async function parseMultipartUpload(c: UploadContext): Promise<UploadParseResult
 
   const raw = body["file"];
   if (!(raw instanceof File)) {
-    return { ok: false, status: 400, message: "No file provided", code: "VALIDATION_ERROR" };
+    return {
+      ok: false,
+      status: 400,
+      message: "No file provided",
+      code: "VALIDATION_ERROR",
+    };
   }
   if (raw.size === 0) {
     return {
@@ -817,14 +954,27 @@ async function parseMultipartUpload(c: UploadContext): Promise<UploadParseResult
       code: "VALIDATION_ERROR",
     };
   }
+  const maxBytes = maxUploadBytesForContentType(raw.type);
+  if (raw.size > maxBytes) {
+    return {
+      ok: false,
+      status: 413,
+      message: uploadTooLargeMessage(raw.type),
+      code: "PAYLOAD_TOO_LARGE",
+    };
+  }
 
-  const purposeRaw = body["purpose"] != null ? String(body["purpose"]).trim() : "";
+  const purposeRaw =
+    body["purpose"] != null ? String(body["purpose"]).trim() : "";
   const teamIdRaw = body["teamId"] != null ? String(body["teamId"]).trim() : "";
   const purpose = parseUploadPurpose(purposeRaw);
   return { ok: true, file: raw, purpose, teamId: teamIdRaw };
 }
 
-async function resolveUploadFile(c: UploadContext, mode: "json" | "multipart" | "auto"): Promise<UploadParseResult> {
+async function resolveUploadFile(
+  c: UploadContext,
+  mode: "json" | "multipart" | "auto",
+): Promise<UploadParseResult> {
   if (mode === "json") return parseJsonBase64Upload(c);
   if (mode === "multipart") return parseMultipartUpload(c);
 
@@ -839,37 +989,61 @@ async function resolveUploadFile(c: UploadContext, mode: "json" | "multipart" | 
   return parseJsonBase64Upload(c);
 }
 
-async function handleFileUpload(c: {
-  get: (key: "user") => AppUser | null;
-  json: (data: unknown, status?: number) => Response;
-  req: UploadContext["req"];
-}, mode: "json" | "multipart" | "auto") {
+async function handleFileUpload(
+  c: {
+    get: (key: "user") => AppUser | null;
+    json: (data: unknown, status?: number) => Response;
+    req: UploadContext["req"];
+  },
+  mode: "json" | "multipart" | "auto",
+) {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
   if (!isFirebaseStorageConfigured()) {
-    return c.json({
-      error: {
-        message: "File storage is not configured yet. Add Firebase Storage env vars on backend.",
-        code: "STORAGE_NOT_CONFIGURED",
+    return c.json(
+      {
+        error: {
+          message:
+            "File storage is not configured yet. Add Firebase Storage env vars on backend.",
+          code: "STORAGE_NOT_CONFIGURED",
+        },
       },
-    }, 503);
+      503,
+    );
   }
 
   try {
     const resolved = await resolveUploadFile(c, mode);
     if (!resolved.ok) {
-      return c.json({ error: { message: resolved.message, code: resolved.code } }, resolved.status);
+      return c.json(
+        { error: { message: resolved.message, code: resolved.code } },
+        resolved.status,
+      );
     }
     const { file, purpose, teamId: teamIdRaw } = resolved;
     if (purpose === "team" && !teamIdRaw) {
       return c.json(
-        { error: { message: "teamId is required for team photo uploads", code: "VALIDATION_ERROR" } },
+        {
+          error: {
+            message: "teamId is required for team photo uploads",
+            code: "VALIDATION_ERROR",
+          },
+        },
         400,
       );
     }
     if (purpose === "go_alert_sound" && !teamIdRaw) {
       return c.json(
-        { error: { message: "teamId is required for alert sound uploads", code: "VALIDATION_ERROR" } },
+        {
+          error: {
+            message: "teamId is required for alert sound uploads",
+            code: "VALIDATION_ERROR",
+          },
+        },
         400,
       );
     }
@@ -884,19 +1058,35 @@ async function handleFileUpload(c: {
       });
       if (!membership || !["owner", "team_leader"].includes(membership.role)) {
         return c.json(
-          { error: { message: "Only workspace owners and team leaders can upload alert sounds", code: "FORBIDDEN" } },
+          {
+            error: {
+              message:
+                "Only workspace owners and team leaders can upload alert sounds",
+              code: "FORBIDDEN",
+            },
+          },
           403,
         );
       }
       if (!isAllowedAlertSoundFile(file)) {
         return c.json(
-          { error: { message: "Upload an MP3, WAV, OGG, or M4A audio file", code: "VALIDATION_ERROR" } },
+          {
+            error: {
+              message: "Upload an MP3, WAV, OGG, or M4A audio file",
+              code: "VALIDATION_ERROR",
+            },
+          },
           400,
         );
       }
       if (file.size > MAX_ALERT_SOUND_BYTES) {
         return c.json(
-          { error: { message: "Alert sound must be 5 MB or smaller", code: "PAYLOAD_TOO_LARGE" } },
+          {
+            error: {
+              message: "Alert sound must be 5 MB or smaller",
+              code: "PAYLOAD_TOO_LARGE",
+            },
+          },
           413,
         );
       }
@@ -914,7 +1104,15 @@ async function handleFileUpload(c: {
         where: { userId_teamId: { userId: user.id, teamId: teamIdRaw } },
       });
       if (!membership || !["owner", "team_leader"].includes(membership.role)) {
-        return c.json({ error: { message: "Only team owners can change the team photo", code: "FORBIDDEN" } }, 403);
+        return c.json(
+          {
+            error: {
+              message: "Only team owners can change the team photo",
+              code: "FORBIDDEN",
+            },
+          },
+          403,
+        );
       }
       const team = await prisma.team.findUnique({
         where: { id: teamIdRaw },
@@ -971,19 +1169,29 @@ app.post("/api/upload", async (c) => handleFileUpload(c, "auto"));
 // Upload smoke test - verifies Firebase upload wiring end-to-end
 app.post("/api/upload/smoke", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
   if (!isFirebaseStorageConfigured()) {
-    return c.json({
-      error: {
-        message: "File storage is not configured yet. Add Firebase Storage env vars on backend.",
-        code: "STORAGE_NOT_CONFIGURED",
+    return c.json(
+      {
+        error: {
+          message:
+            "File storage is not configured yet. Add Firebase Storage env vars on backend.",
+          code: "STORAGE_NOT_CONFIGURED",
+        },
       },
-    }, 503);
+      503,
+    );
   }
 
   try {
     const content = `upload-smoke-test ${new Date().toISOString()} user=${user.id}`;
-    const file = new File([content], "upload-smoke-test.txt", { type: "text/plain" });
+    const file = new File([content], "upload-smoke-test.txt", {
+      type: "text/plain",
+    });
     const uploaded = await uploadFileToFirebaseStorage({
       userId: user.id,
       file,
@@ -996,20 +1204,28 @@ app.post("/api/upload/smoke", async (c) => {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Upload smoke test failed";
-    return c.json({
-      error: {
-        message,
-        code: "UPLOAD_SMOKE_TEST_FAILED",
+    const message =
+      err instanceof Error ? err.message : "Upload smoke test failed";
+    return c.json(
+      {
+        error: {
+          message,
+          code: "UPLOAD_SMOKE_TEST_FAILED",
+        },
       },
-    }, 500);
+      500,
+    );
   }
 });
 
 // Update account and public profile identity.
 app.patch("/api/profile", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   const body = await c.req.json();
   const {
@@ -1017,25 +1233,40 @@ app.patch("/api/profile", async (c) => {
     image,
     timezone,
     username,
+    profileTitle,
     profileWebsite,
     profileLocation,
     profileBio,
   } = body;
 
   const publicProfileUpdate = validatePublicProfileUpdate({
+    profileTitle,
     profileWebsite,
     profileLocation,
     profileBio,
   });
   if (!publicProfileUpdate.ok) {
     return c.json(
-      { error: { message: publicProfileUpdate.message, code: "INVALID_PROFILE" } },
+      {
+        error: {
+          message: publicProfileUpdate.message,
+          code: "INVALID_PROFILE",
+        },
+      },
       400,
     );
   }
-  if (name !== undefined && (typeof name !== "string" || !name.trim() || name.trim().length > 80)) {
+  if (
+    name !== undefined &&
+    (typeof name !== "string" || !name.trim() || name.trim().length > 80)
+  ) {
     return c.json(
-      { error: { message: "Enter a display name of 80 characters or fewer.", code: "INVALID_PROFILE" } },
+      {
+        error: {
+          message: "Enter a display name of 80 characters or fewer.",
+          code: "INVALID_PROFILE",
+        },
+      },
       400,
     );
   }
@@ -1043,11 +1274,17 @@ app.patch("/api/profile", async (c) => {
   let nextUsername: string | undefined;
   if (username !== undefined) {
     if (typeof username !== "string") {
-      return c.json({ error: { message: "Enter a username.", code: "INVALID_USERNAME" } }, 400);
+      return c.json(
+        { error: { message: "Enter a username.", code: "INVALID_USERNAME" } },
+        400,
+      );
     }
     const validation = validateUsername(username);
     if (!validation.ok) {
-      return c.json({ error: { message: validation.message, code: "INVALID_USERNAME" } }, 400);
+      return c.json(
+        { error: { message: validation.message, code: "INVALID_USERNAME" } },
+        400,
+      );
     }
 
     const current = await prisma.user.findUnique({
@@ -1055,7 +1292,9 @@ app.patch("/api/profile", async (c) => {
       select: { username: true, usernameUpdatedAt: true },
     });
     if (current?.username !== validation.username) {
-      const cooldownDays = usernameCooldownRemainingDays(current?.usernameUpdatedAt);
+      const cooldownDays = usernameCooldownRemainingDays(
+        current?.usernameUpdatedAt,
+      );
       if (cooldownDays > 0) {
         return c.json(
           {
@@ -1087,6 +1326,7 @@ app.patch("/api/profile", async (c) => {
     timezone: true,
     username: true,
     usernameAutoGenerated: true,
+    profileTitle: true,
     profileWebsite: true,
     profileLocation: true,
     profileBio: true,
@@ -1100,7 +1340,12 @@ app.patch("/api/profile", async (c) => {
         ...(image !== undefined ? { image } : {}),
         ...publicProfileUpdate.data,
         ...(timezone !== undefined
-          ? { timezone: typeof timezone === "string" && isValidTimeZone(timezone) ? timezone : null }
+          ? {
+              timezone:
+                typeof timezone === "string" && isValidTimeZone(timezone)
+                  ? timezone
+                  : null,
+            }
           : {}),
         ...(nextUsername
           ? {
@@ -1116,7 +1361,9 @@ app.patch("/api/profile", async (c) => {
   } catch (err) {
     if (nextUsername && isUniqueConstraintError(err)) {
       return c.json(
-        { error: { message: "That username is taken.", code: "USERNAME_TAKEN" } },
+        {
+          error: { message: "That username is taken.", code: "USERNAME_TAKEN" },
+        },
         409,
       );
     }
@@ -1126,55 +1373,108 @@ app.patch("/api/profile", async (c) => {
 
 app.post("/api/profile/email-change/request", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   const body = await c.req.json().catch(() => ({}));
   const newEmail = normalizeEmailInput(body.newEmail);
   if (!newEmail) {
-    return c.json({ error: { message: "Enter a valid email address.", code: "INVALID_EMAIL" } }, 400);
+    return c.json(
+      {
+        error: {
+          message: "Enter a valid email address.",
+          code: "INVALID_EMAIL",
+        },
+      },
+      400,
+    );
   }
 
   const fullUser = await prisma.user.findUnique({
     where: { id: user.id },
     select: { email: true },
   });
-  if (!fullUser) return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+  if (!fullUser)
+    return c.json(
+      { error: { message: "User not found", code: "NOT_FOUND" } },
+      404,
+    );
 
   try {
     await requestEmailChange(user.id, fullUser.email, newEmail);
     return c.json({ data: { ok: true, email: newEmail } });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not send verification code.";
-    return c.json({ error: { message, code: "EMAIL_CHANGE_REQUEST_FAILED" } }, 400);
+    const message =
+      err instanceof Error ? err.message : "Could not send verification code.";
+    return c.json(
+      { error: { message, code: "EMAIL_CHANGE_REQUEST_FAILED" } },
+      400,
+    );
   }
 });
 
 app.post("/api/profile/email-change/confirm", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   const body = await c.req.json().catch(() => ({}));
   const newEmail = normalizeEmailInput(body.newEmail);
   const otp = typeof body.otp === "string" ? body.otp.replace(/\D/g, "") : "";
   if (!newEmail) {
-    return c.json({ error: { message: "Enter a valid email address.", code: "INVALID_EMAIL" } }, 400);
+    return c.json(
+      {
+        error: {
+          message: "Enter a valid email address.",
+          code: "INVALID_EMAIL",
+        },
+      },
+      400,
+    );
   }
   if (otp.length < 6) {
-    return c.json({ error: { message: "Enter the full verification code.", code: "INVALID_OTP" } }, 400);
+    return c.json(
+      {
+        error: {
+          message: "Enter the full verification code.",
+          code: "INVALID_OTP",
+        },
+      },
+      400,
+    );
   }
 
   const fullUser = await prisma.user.findUnique({
     where: { id: user.id },
     select: { email: true },
   });
-  if (!fullUser) return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+  if (!fullUser)
+    return c.json(
+      { error: { message: "User not found", code: "NOT_FOUND" } },
+      404,
+    );
 
   try {
-    const updated = await confirmEmailChange(user.id, fullUser.email, newEmail, otp);
+    const updated = await confirmEmailChange(
+      user.id,
+      fullUser.email,
+      newEmail,
+      otp,
+    );
     return c.json({ data: updated });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not update email.";
-    return c.json({ error: { message, code: "EMAIL_CHANGE_CONFIRM_FAILED" } }, 400);
+    const message =
+      err instanceof Error ? err.message : "Could not update email.";
+    return c.json(
+      { error: { message, code: "EMAIL_CHANGE_CONFIRM_FAILED" } },
+      400,
+    );
   }
 });
 
@@ -1182,7 +1482,10 @@ app.post("/api/profile/email-change/confirm", async (c) => {
 app.get("/api/me", async (c) => {
   const user = c.get("user");
   if (!user) {
-    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
   }
   const fullUser = await prisma.user.findUnique({
     where: { id: user.id },
@@ -1196,14 +1499,61 @@ app.get("/api/me", async (c) => {
       username: true,
       usernameAutoGenerated: true,
       usernameUpdatedAt: true,
+      profileTitle: true,
       profileWebsite: true,
       profileLocation: true,
       profileBio: true,
+      getStartedCompletedAt: true,
       emailVerified: true,
       createdAt: true,
+      _count: { select: { teamMembers: true } },
     },
   });
-  return c.json({ data: fullUser });
+  if (!fullUser) return c.json({ data: null });
+  const { _count, ...profile } = fullUser;
+  const trial = await getWorkspaceTrialEligibility(fullUser.id, fullUser.email);
+  return c.json({
+    data: {
+      ...profile,
+      ...trial,
+      isWorkplaceConnected: _count.teamMembers > 0,
+    },
+  });
+});
+
+app.post("/api/me/get-started-completion", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
+  }
+
+  const existing = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { getStartedCompletedAt: true },
+  });
+  if (!existing) {
+    return c.json(
+      { error: { message: "User not found", code: "NOT_FOUND" } },
+      404,
+    );
+  }
+
+  const getStartedCompletedAt = existing.getStartedCompletedAt ?? new Date();
+  if (!existing.getStartedCompletedAt) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { getStartedCompletedAt },
+      select: { id: true },
+    });
+  }
+
+  const response: GetStartedCompletionResponse = {
+    data: { getStartedCompletedAt: getStartedCompletedAt.toISOString() },
+  };
+  return c.json(response);
 });
 
 // Debug: confirm auth session + app user row + active database target (non-production only)
@@ -1215,19 +1565,22 @@ app.get("/api/me/debug", async (c) => {
   const session = c.get("session");
   const authDebug = c.get("authDebug");
   if (!user || !session) {
-    return c.json({
-      error: { message: "Unauthorized", code: "UNAUTHORIZED" },
-      data: {
-        authenticated: false,
-        database: getDatabasePublicSummary(),
-        buildMarker: BACKEND_BUILD_MARKER,
-        authUserFound: authDebug?.authUserFound ?? false,
-        appUserFound: false,
-        matchedBy: authDebug?.matchedBy ?? "none",
-        authUserId: authDebug?.authUserId ?? null,
-        finalAuthenticatedUserId: null,
+    return c.json(
+      {
+        error: { message: "Unauthorized", code: "UNAUTHORIZED" },
+        data: {
+          authenticated: false,
+          database: getDatabasePublicSummary(),
+          buildMarker: BACKEND_BUILD_MARKER,
+          authUserFound: authDebug?.authUserFound ?? false,
+          appUserFound: false,
+          matchedBy: authDebug?.matchedBy ?? "none",
+          authUserId: authDebug?.authUserId ?? null,
+          finalAuthenticatedUserId: null,
+        },
       },
-    }, 401);
+      401,
+    );
   }
 
   const dbUser = await prisma.user.findUnique({
@@ -1264,8 +1617,14 @@ app.get("/api/me/debug", async (c) => {
 // Save push token (legacy endpoint — kept for older clients)
 app.post("/api/push-token", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-  const body = await c.req.json().catch(() => ({} as { token?: unknown; pushToken?: unknown }));
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
+  const body = await c.req
+    .json()
+    .catch(() => ({}) as { token?: unknown; pushToken?: unknown });
   const raw = body.pushToken ?? body.token;
   if (raw !== null && raw !== undefined && typeof raw !== "string") {
     return c.json({ error: { message: "Token must be string or null" } }, 400);
@@ -1284,23 +1643,48 @@ app.post("/api/push-token", async (c) => {
       data: { pushToken: next },
       select: { pushToken: true },
     });
-    console.log(`[push-token-legacy] saved user=${user.id} hasToken=${!!updated.pushToken}`);
+    console.log(
+      `[push-token-legacy] saved user=${user.id} hasToken=${!!updated.pushToken}`,
+    );
     return c.json({ data: { ok: true, hasToken: !!updated.pushToken } });
   } catch (err) {
     console.error(`[push-token-legacy] failed user=${user.id}:`, err);
-    return c.json({ error: { message: "Failed to save push token", code: "PUSH_TOKEN_SAVE_FAILED" } }, 500);
+    return c.json(
+      {
+        error: {
+          message: "Failed to save push token",
+          code: "PUSH_TOKEN_SAVE_FAILED",
+        },
+      },
+      500,
+    );
   }
 });
 // Test push notification (sends a real push to the current user's device)
 app.post("/api/push-test", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-  const record = await prisma.user.findUnique({ where: { id: user.id }, select: { pushToken: true } });
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
+  const record = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { pushToken: true },
+  });
   const token = record?.pushToken;
   if (!token) return c.json({ data: { ok: false, error: "no_token" } });
   try {
-    await sendPushNotificationsStrict([{ token, title: "Push Test", body: "Your push notifications are working!" }]);
-    return c.json({ data: { ok: true, token: token.substring(0, 30) + "..." } });
+    await sendPushNotificationsStrict([
+      {
+        token,
+        title: "Push Test",
+        body: "Your push notifications are working!",
+      },
+    ]);
+    return c.json({
+      data: { ok: true, token: token.substring(0, 30) + "..." },
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ data: { ok: false, error: msg } });
@@ -1310,7 +1694,11 @@ app.post("/api/push-test", async (c) => {
 // Get notification preferences (alert categories + tone). Does not modify push tokens.
 app.get("/api/notification-preferences", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   // Resolve admin flag first so Platform admin UI can render even if preference columns fail.
   const adminRow = await prisma.user.findUnique({
@@ -1379,7 +1767,11 @@ app.get("/api/notification-preferences", async (c) => {
 // Update notification preferences
 app.patch("/api/notification-preferences", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
   const body = await c.req.json();
   const {
     notifMessages,
@@ -1397,7 +1789,10 @@ app.patch("/api/notification-preferences", async (c) => {
   if (notifTone !== undefined) {
     const normalized = String(notifTone).trim().toLowerCase();
     if (!allowedTones.has(normalized)) {
-      return c.json({ error: { message: "Invalid alert tone", code: "INVALID" } }, 400);
+      return c.json(
+        { error: { message: "Invalid alert tone", code: "INVALID" } },
+        400,
+      );
     }
     nextTone = normalized;
   }
@@ -1417,8 +1812,12 @@ app.patch("/api/notification-preferences", async (c) => {
       ...(notifMeetings !== undefined ? { notifMeetings } : {}),
       ...(nextTone !== undefined ? { notifTone: nextTone } : {}),
       ...(isAdmin && notifAdminUsers !== undefined ? { notifAdminUsers } : {}),
-      ...(isAdmin && notifAdminWorkspaces !== undefined ? { notifAdminWorkspaces } : {}),
-      ...(isAdmin && notifAdminBilling !== undefined ? { notifAdminBilling } : {}),
+      ...(isAdmin && notifAdminWorkspaces !== undefined
+        ? { notifAdminWorkspaces }
+        : {}),
+      ...(isAdmin && notifAdminBilling !== undefined
+        ? { notifAdminBilling }
+        : {}),
     },
     select: {
       isAdmin: true,
@@ -1433,7 +1832,9 @@ app.patch("/api/notification-preferences", async (c) => {
     },
   });
   const responseTone =
-    updated.notifTone === "synth" || !updated.notifTone ? "default" : updated.notifTone;
+    updated.notifTone === "synth" || !updated.notifTone
+      ? "default"
+      : updated.notifTone;
   return c.json({
     data: {
       isAdmin,
@@ -1455,11 +1856,19 @@ app.patch("/api/notification-preferences", async (c) => {
 
 app.get("/api/privacy-settings", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   const row = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { messagePrivacy: true, discoverableByEmail: true },
+    select: {
+      messagePrivacy: true,
+      discoverableByEmail: true,
+      showActiveStatus: true,
+    },
   });
 
   return c.json({
@@ -1467,27 +1876,56 @@ app.get("/api/privacy-settings", async (c) => {
       messagePrivacy: isMessagePrivacy(row?.messagePrivacy)
         ? row.messagePrivacy
         : DEFAULT_MESSAGE_PRIVACY,
-      discoverableByEmail: row?.discoverableByEmail ?? false,
+      discoverableByEmail: row?.discoverableByEmail ?? true,
+      showActiveStatus: row?.showActiveStatus ?? true,
     },
   });
 });
 
 app.patch("/api/privacy-settings", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   const body = await c.req.json();
-  const { messagePrivacy, discoverableByEmail } = body;
+  const { messagePrivacy, discoverableByEmail, showActiveStatus } = body;
 
   if (messagePrivacy !== undefined && !isMessagePrivacy(messagePrivacy)) {
     return c.json(
-      { error: { message: "Unsupported messaging privacy option.", code: "VALIDATION_ERROR" } },
+      {
+        error: {
+          message: "Unsupported messaging privacy option.",
+          code: "VALIDATION_ERROR",
+        },
+      },
       400,
     );
   }
-  if (discoverableByEmail !== undefined && typeof discoverableByEmail !== "boolean") {
+  if (
+    discoverableByEmail !== undefined &&
+    typeof discoverableByEmail !== "boolean"
+  ) {
     return c.json(
-      { error: { message: "discoverableByEmail must be a boolean.", code: "VALIDATION_ERROR" } },
+      {
+        error: {
+          message: "discoverableByEmail must be a boolean.",
+          code: "VALIDATION_ERROR",
+        },
+      },
+      400,
+    );
+  }
+  if (showActiveStatus !== undefined && typeof showActiveStatus !== "boolean") {
+    return c.json(
+      {
+        error: {
+          message: "showActiveStatus must be a boolean.",
+          code: "VALIDATION_ERROR",
+        },
+      },
       400,
     );
   }
@@ -1497,8 +1935,13 @@ app.patch("/api/privacy-settings", async (c) => {
     data: {
       ...(messagePrivacy !== undefined ? { messagePrivacy } : {}),
       ...(discoverableByEmail !== undefined ? { discoverableByEmail } : {}),
+      ...(showActiveStatus !== undefined ? { showActiveStatus } : {}),
     },
-    select: { messagePrivacy: true, discoverableByEmail: true },
+    select: {
+      messagePrivacy: true,
+      discoverableByEmail: true,
+      showActiveStatus: true,
+    },
   });
 
   return c.json({ data: updated });
@@ -1506,12 +1949,21 @@ app.patch("/api/privacy-settings", async (c) => {
 
 app.get("/api/users/username-available", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   const validation = validateUsername(c.req.query("username") ?? "");
   if (!validation.ok) {
     return c.json({
-      data: { available: false, username: null, reason: validation.reason, message: validation.message },
+      data: {
+        available: false,
+        username: null,
+        reason: validation.reason,
+        message: validation.message,
+      },
     });
   }
 
@@ -1533,40 +1985,85 @@ app.get("/api/users/username-available", async (c) => {
 
 app.get("/api/users/search", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   const q = c.req.query("q")?.trim() ?? "";
-  if (!q) return c.json({ data: [] });
+  const scope = c.req.query("scope");
+  const requestedTeamId = c.req.query("teamId")?.trim() ?? "";
+  if (scope && scope !== "workspaces") {
+    return c.json(
+      { error: { message: "Invalid search scope.", code: "VALIDATION_ERROR" } },
+      400,
+    );
+  }
+  const isWorkspaceScope = scope === "workspaces";
+  if (requestedTeamId && !isWorkspaceScope) {
+    return c.json(
+      {
+        error: {
+          message: "A workspace filter requires workspace scope.",
+          code: "VALIDATION_ERROR",
+        },
+      },
+      400,
+    );
+  }
+  if (!isWorkspaceScope && !q) return c.json({ data: [] });
 
   // A leading @ is how people type a handle; strip it before matching.
   const handleQuery = q.replace(/^@/, "").toLowerCase();
   // Email is a lookup key only on an exact address, and only for people who opted in.
-  const exactEmail = q.includes("@") && !q.startsWith("@") ? q.toLowerCase() : null;
+  const exactEmail =
+    q.includes("@") && !q.startsWith("@") ? q.toLowerCase() : null;
 
   const [blocks, myTeams] = await Promise.all([
     prisma.userBlock.findMany({
       where: { OR: [{ blockerId: user.id }, { blockedId: user.id }] },
       select: { blockerId: true, blockedId: true },
     }),
-    prisma.teamMember.findMany({ where: { userId: user.id }, select: { teamId: true } }),
+    prisma.teamMember.findMany({
+      where: { userId: user.id },
+      select: { teamId: true },
+    }),
   ]);
   const blockedIds = Array.from(
-    new Set(blocks.flatMap((row) => [row.blockerId, row.blockedId]).filter((id) => id !== user.id)),
+    new Set(
+      blocks
+        .flatMap((row) => [row.blockerId, row.blockedId])
+        .filter((id) => id !== user.id),
+    ),
   );
   const myTeamIds = myTeams.map((row) => row.teamId);
+  if (requestedTeamId && !myTeamIds.includes(requestedTeamId)) {
+    return c.json(
+      {
+        error: { message: "Workspace membership required.", code: "FORBIDDEN" },
+      },
+      403,
+    );
+  }
+  const searchTeamIds = requestedTeamId ? [requestedTeamId] : myTeamIds;
+  const textMatch = {
+    OR: [
+      { name: { contains: q, mode: "insensitive" as const } },
+      { username: { contains: handleQuery } },
+      ...(exactEmail ? [{ email: exactEmail, discoverableByEmail: true }] : []),
+    ],
+  };
 
   const users = await prisma.user.findMany({
     where: {
       AND: [
         { id: { not: user.id } },
         ...(blockedIds.length > 0 ? [{ id: { notIn: blockedIds } }] : []),
-        {
-          OR: [
-            { name: { contains: q, mode: "insensitive" } },
-            { username: { contains: handleQuery } },
-            ...(exactEmail ? [{ email: exactEmail, discoverableByEmail: true }] : []),
-          ],
-        },
+        ...(isWorkspaceScope
+          ? [{ teamMembers: { some: { teamId: { in: searchTeamIds } } } }]
+          : []),
+        ...(q ? [textMatch] : []),
       ],
     },
     select: {
@@ -1574,42 +2071,80 @@ app.get("/api/users/search", async (c) => {
       name: true,
       username: true,
       image: true,
+      messagePrivacy: true,
+      _count: { select: { teamMembers: true } },
       teamMembers: {
-        where: { teamId: { in: myTeamIds } },
+        where: { teamId: { in: searchTeamIds } },
         select: { team: { select: { id: true, name: true } } },
         take: 1,
       },
     },
-    take: 20,
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+    take: isWorkspaceScope ? undefined : 20,
   });
 
   // Resolved inline so the client never has to fan out one status request per row.
-  const connections = await prisma.connection.findMany({
-    where: {
-      pairKey: { in: users.map((row) => buildConnectionPairKey(user.id, row.id)) },
-    },
-    select: { pairKey: true, requesterId: true, recipientId: true, status: true },
-  });
+  const candidateIds = users.map((row) => row.id);
+  const [connections, sharedConversationParticipants] = await Promise.all([
+    prisma.connection.findMany({
+      where: {
+        pairKey: {
+          in: candidateIds.map((id) => buildConnectionPairKey(user.id, id)),
+        },
+      },
+      select: {
+        pairKey: true,
+        requesterId: true,
+        recipientId: true,
+        status: true,
+      },
+    }),
+    prisma.conversationParticipant.findMany({
+      where: {
+        userId: { in: candidateIds },
+        conversation: { participants: { some: { userId: user.id } } },
+      },
+      select: { userId: true },
+      distinct: ["userId"],
+    }),
+  ]);
   const byPairKey = new Map(connections.map((row) => [row.pairKey, row]));
+  const sharedConversationUserIds = new Set(
+    sharedConversationParticipants.map((row) => row.userId),
+  );
 
   return c.json({
-    data: users.map((row) => ({
-      id: row.id,
-      name: row.name,
-      username: row.username,
-      image: row.image,
-      sharedWorkspaceName: row.teamMembers[0]?.team.name ?? null,
-      connectionStatus: describeConnectionStatus(
-        user.id,
-        byPairKey.get(buildConnectionPairKey(user.id, row.id)),
-      ),
-    })),
+    data: users.map((row) => {
+      const connection = byPairKey.get(buildConnectionPairKey(user.id, row.id));
+      const permission = evaluateUserSearchMessagePermission({
+        recipientPrivacy: row.messagePrivacy,
+        connected: connection?.status === "accepted",
+        reconnectRequired: connection?.status === "reconnect_required",
+        sharedWorkspace: row.teamMembers.length > 0,
+        sharedConversation: sharedConversationUserIds.has(row.id),
+      });
+      return {
+        id: row.id,
+        name: row.name,
+        username: row.username,
+        image: row.image,
+        isWorkplaceConnected: row._count.teamMembers > 0,
+        sharedWorkspaceName: row.teamMembers[0]?.team.name ?? null,
+        connectionStatus: describeConnectionStatus(user.id, connection),
+        canMessage: permission.allowed,
+        messagePermissionReason: permission.reason,
+      };
+    }),
   });
 });
 
 app.get("/api/user/deletion-readiness", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   const readiness = await getAccountDeletionReadiness(user.id);
   return c.json({ data: readiness });
@@ -1617,12 +2152,17 @@ app.get("/api/user/deletion-readiness", async (c) => {
 
 app.delete("/api/user", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
 
   try {
     await assertAccountDeletionAllowed(user.id);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Account cannot be deleted yet.";
+    const message =
+      err instanceof Error ? err.message : "Account cannot be deleted yet.";
     return c.json({ error: { message, code: "DELETION_BLOCKED" } }, 409);
   }
 
@@ -1630,18 +2170,28 @@ app.delete("/api/user", async (c) => {
   const { password } = body;
 
   if (!password || typeof password !== "string") {
-    return c.json({ error: { message: "Password required", code: "VALIDATION_ERROR" } }, 400);
+    return c.json(
+      { error: { message: "Password required", code: "VALIDATION_ERROR" } },
+      400,
+    );
   }
 
   // Verify password using Better Auth's own sign-in (handles its custom hash format)
   const fullUser = await prisma.user.findUnique({ where: { id: user.id } });
-  if (!fullUser) return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+  if (!fullUser)
+    return c.json(
+      { error: { message: "User not found", code: "NOT_FOUND" } },
+      404,
+    );
 
   try {
     const verified = await verifyEmailPassword(fullUser.email, password);
     if (!verified) throw new Error("Sign-in failed");
   } catch {
-    return c.json({ error: { message: "Incorrect password", code: "INVALID_PASSWORD" } }, 401);
+    return c.json(
+      { error: { message: "Incorrect password", code: "INVALID_PASSWORD" } },
+      401,
+    );
   }
 
   try {
@@ -1649,7 +2199,12 @@ app.delete("/api/user", async (c) => {
   } catch (err) {
     console.error("[delete-account] failed for user", user.id, err);
     return c.json(
-      { error: { message: "Could not delete account. Try again or contact support.", code: "DELETE_FAILED" } },
+      {
+        error: {
+          message: "Could not delete account. Try again or contact support.",
+          code: "DELETE_FAILED",
+        },
+      },
       500,
     );
   }
@@ -1667,17 +2222,22 @@ app.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRouter);
 app.route("/api/teams/:teamId/walks", walksRouter);
 app.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
 app.route("/api/teams/:teamId/members", developmentGoalsRouter);
+app.route("/api/teams/:teamId/members", memberNextActionRouter);
 app.route("/api/teams/:teamId/members", senecaRouter);
 app.route("/api/teams/:teamId/seneca", senecaTeamRouter);
+app.route("/api/seneca", senecaUnifiedRouter as any);
+app.route("/api/seneca/conversations", senecaConversationsRouter as any);
 app.route("/api/teams/:teamId/seneca/focus", senecaFocusRouter);
 app.route("/api/teams/:teamId/seneca-studio", senecaStudioRouter as any);
 app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/teams/:teamId/health-history", teamHealthHistoryRouter);
+app.route("/api/teams/:teamId/momentum", teamMomentumRouter);
 app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
 app.route("/api/billing", mobileBillingRouter);
 app.route("/api/teams", teamsRouter);
+app.route("/api/workspace-checkouts", workspaceCheckoutsRouter);
 app.route("/api/public/checklist-hubs", publicChecklistHubsRouter);
 app.route("/api/public/go", publicGoLinkRouter);
 app.route("/api/public/go/walks", publicGoWalksRouter);
@@ -1686,6 +2246,7 @@ app.route("/api/enterprise-invites", enterpriseInvitesPublicRouter);
 app.route("/api/tasks/mine", myTasksRouter);
 app.route("/api/dms", dmsRouter);
 app.route("/api/connections", connectionsRouter);
+app.route("/api/presence", presenceRouter);
 app.route("/api/join-requests", joinRequestsRouter);
 app.route("/api/ownership-transfers", ownershipTransfersRouter);
 app.route("/api/teams", calendarRouter);
@@ -1727,6 +2288,26 @@ async function runCleanup() {
   }
 
   try {
+    const expiredCheckouts = await expirePendingWorkspaceCheckouts();
+    if (expiredCheckouts > 0) {
+      console.log(`[cleanup] Expired ${expiredCheckouts} pending workspace checkout(s)`);
+    }
+  } catch (err) {
+    console.error("[cleanup] Pending workspace checkout expiry failed:", err);
+  }
+
+  try {
+    const conversations = await cleanupExpiredSenecaConversations();
+    if (conversations.selected > 0) {
+      console.log(
+        `[cleanup] Seneca conversations selected=${conversations.selected} deleted=${conversations.deleted} failed=${conversations.failed}`,
+      );
+    }
+  } catch (err) {
+    console.error("[cleanup] Seneca conversation retention failed:", err);
+  }
+
+  try {
     // Delete calendar events whose start date is older than 45 days.
     const deletedEvents = await prisma.calendarEvent.deleteMany({
       where: { startDate: { lt: eventsCutoff } },
@@ -1753,19 +2334,24 @@ async function runCleanup() {
 
     if (oldCompletedTasks.length > 0) {
       await Promise.all(
-        oldCompletedTasks.map((row) => deleteStorageObjectByUrlIfOwned(row.attachmentUrl)),
+        oldCompletedTasks.map((row) =>
+          deleteStorageObjectByUrlIfOwned(row.attachmentUrl),
+        ),
       );
     }
 
     if (deletedEvents.count > 0 || deletedTasks.count > 0) {
-      console.log(`[cleanup] Removed ${deletedEvents.count} events >45d and ${deletedTasks.count} completed tasks >7mo`);
+      console.log(
+        `[cleanup] Removed ${deletedEvents.count} events >45d and ${deletedTasks.count} completed tasks >7mo`,
+      );
     }
   } catch (err) {
     console.error("[cleanup] Error during cleanup:", err);
   }
 
   try {
-    const { expirePendingOwnershipTransfers } = await import("./lib/ownership-transfer");
+    const { expirePendingOwnershipTransfers } =
+      await import("./lib/ownership-transfer");
     const expired = await expirePendingOwnershipTransfers();
     if (expired > 0) {
       console.log(`[cleanup] Expired ${expired} ownership transfer(s)`);
@@ -1829,7 +2415,10 @@ void import("./lib/enterprise-org-access")
     }
   })
   .catch((err) => {
-    console.warn("[enterprise-org] detach org admins from workspaces failed:", err);
+    console.warn(
+      "[enterprise-org] detach org admins from workspaces failed:",
+      err,
+    );
   });
 
 import { handleRealtimeUpgrade, realtimeWebsocket } from "./lib/realtime-ws";
@@ -1846,7 +2435,7 @@ console.log("✅ Realtime messaging WebSocket enabled at /api/realtime");
 
 /** Mount Better Auth after boot so Railway /health is never blocked by auth package init. */
 void import("./lib/register-better-auth")
-  .then(({ registerBetterAuthRoutes }) => registerBetterAuthRoutes(app))
+  .then(({ registerBetterAuthRoutes }) => registerBetterAuthRoutes(app as any))
   .then((enabled) => {
     if (enabled) {
       console.log("[better-auth] ready");
@@ -1860,7 +2449,15 @@ export default {
   port,
   hostname: "0.0.0.0",
   maxRequestBodySize: 50 * 1024 * 1024,
-  async fetch(req: Request, server: { upgrade: (req: Request, options: { data: import("./lib/realtime-hub").RealtimeSocketData }) => boolean }) {
+  async fetch(
+    req: Request,
+    server: {
+      upgrade: (
+        req: Request,
+        options: { data: import("./lib/realtime-hub").RealtimeSocketData },
+      ) => boolean;
+    },
+  ) {
     const url = new URL(req.url);
     if (url.pathname === "/api/realtime") {
       return handleRealtimeUpgrade(req, server);

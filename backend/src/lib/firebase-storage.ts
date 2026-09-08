@@ -20,6 +20,61 @@ type UploadResult = {
   storagePath: string;
 };
 
+export type CopiedUserUploadResult = {
+  url: string;
+  contentType: string;
+  sizeBytes: number;
+  filename: string;
+  storagePath: string;
+};
+
+export class StorageCopyError extends Error {
+  constructor(
+    message: string,
+    readonly code:
+      | "STORAGE_NOT_CONFIGURED"
+      | "SOURCE_URL_INVALID"
+      | "SOURCE_NOT_FOUND"
+      | "SOURCE_NOT_IMAGE"
+      | "SOURCE_SIZE_INVALID"
+      | "COPY_FAILED",
+  ) {
+    super(message);
+    this.name = "StorageCopyError";
+  }
+}
+
+export function buildUserUploadStoragePath(params: {
+  userId: string;
+  filename: string;
+  nowMs?: number;
+  objectId?: string;
+}): string {
+  const filename = sanitizeFilename(params.filename) || "upload";
+  return `users/${params.userId}/uploads/${params.nowMs ?? Date.now()}-${params.objectId ?? crypto.randomUUID()}-${filename}`;
+}
+
+export function buildCopiedUserUploadMetadata(params: {
+  contentType: string;
+  userId: string;
+  filename: string;
+  sourcePath: string;
+  downloadToken: string;
+  sourceMetadata?: Record<string, string>;
+}) {
+  const metadata: Record<string, string> = {
+    ...(params.sourceMetadata ?? {}),
+    firebaseStorageDownloadTokens: params.downloadToken,
+    uploadedByUserId: params.userId,
+    originalFilename: params.filename,
+    copiedFromStoragePath: params.sourcePath,
+  };
+  return {
+    contentType: params.contentType,
+    metadata,
+  };
+}
+
 function hasFirebaseStorageConfig() {
   const e = getFirebaseEnv();
   return !!(e.projectId && e.clientEmail && e.privateKey && e.storageBucket);
@@ -44,7 +99,8 @@ function normalizeBucketName(bucket: string): string {
 
 /** Bucket IDs to try: exact env value first, then legacy *.appspot.com fallback. */
 function bucketCandidates(): string[] {
-  const raw = getFirebaseEnv().storageBucket!.trim();
+  const raw = getFirebaseEnv().storageBucket?.trim();
+  if (!raw) return [];
   const normalized = normalizeBucketName(raw);
   // New Firebase projects often only have *.firebasestorage.app; appspot may 404.
   return raw === normalized ? [raw] : [raw, normalized];
@@ -168,7 +224,8 @@ export function parseOwnedStorageObjectFromUrl(
 
 export async function readStorageObjectByUrl(
   url: string,
-): Promise<{ bytes: Buffer; contentType: string } | null> {
+  options?: { maxBytes?: number },
+): Promise<{ bytes: Buffer; contentType: string; sizeBytes: number } | null> {
   const parsed = parseObjectFromStorageUrl(url.trim());
   if (!parsed) return null;
   if (!ensureFirebaseStorageInitialized()) return null;
@@ -177,13 +234,23 @@ export async function readStorageObjectByUrl(
   for (const bucketId of bucketCandidates()) {
     try {
       const file = getStorage().bucket(bucketId).file(parsed.objectPath);
-      const [bytes] = await file.download();
       const [meta] = await file.getMetadata();
+      const sizeBytes = Number(meta.size);
+      if (
+        options?.maxBytes !== undefined &&
+        Number.isFinite(sizeBytes) &&
+        sizeBytes > options.maxBytes
+      ) {
+        throw new StorageObjectTooLargeError(sizeBytes, options.maxBytes);
+      }
+      const [bytes] = await file.download();
       return {
         bytes,
         contentType: meta.contentType || "application/octet-stream",
+        sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : bytes.length,
       };
     } catch (e) {
+      if (e instanceof StorageObjectTooLargeError) throw e;
       lastErr = e;
       if (isStorageNotFound(e)) continue;
       throw new Error(formatStorageError(e));
@@ -196,9 +263,101 @@ export async function readStorageObjectByUrl(
   return null;
 }
 
+/**
+ * Copies an owned Storage object into the durable generic-upload namespace.
+ * GCS performs the copy server-side; image bytes are never returned to callers.
+ */
+export async function copyOwnedStorageObjectToUserUploads(params: {
+  sourceUrl: string;
+  userId: string;
+  filename?: string;
+}): Promise<CopiedUserUploadResult> {
+  if (!ensureFirebaseStorageInitialized()) {
+    throw new StorageCopyError(
+      "Firebase Storage is not configured on the backend",
+      "STORAGE_NOT_CONFIGURED",
+    );
+  }
+  const parsed = parseObjectFromStorageUrl(params.sourceUrl.trim());
+  if (!parsed) {
+    throw new StorageCopyError("Source URL is not in configured Firebase Storage", "SOURCE_URL_INVALID");
+  }
+
+  let lastErr: unknown;
+  for (const bucketId of bucketCandidates()) {
+    const bucket = getStorage().bucket(bucketId);
+    const source = bucket.file(parsed.objectPath);
+    try {
+      const [meta] = await source.getMetadata();
+      const contentType = meta.contentType?.trim() || "";
+      if (!contentType.toLowerCase().startsWith("image/")) {
+        throw new StorageCopyError("Source object is not an image", "SOURCE_NOT_IMAGE");
+      }
+      const sizeBytes = Number(meta.size);
+      if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+        throw new StorageCopyError("Source image has an invalid size", "SOURCE_SIZE_INVALID");
+      }
+
+      const sourceMetadata = meta.metadata as Record<string, string> | undefined;
+      const pathFilename = parsed.objectPath.split("/").pop() || "seneca-image";
+      const filename = sanitizeFilename(
+        params.filename?.trim() ||
+          sourceMetadata?.originalFilename?.trim() ||
+          pathFilename,
+      ) || "seneca-image";
+      const objectId = crypto.randomUUID();
+      const storagePath = buildUserUploadStoragePath({
+        userId: params.userId,
+        filename,
+        objectId,
+      });
+      const target = bucket.file(storagePath);
+      const downloadToken = crypto.randomUUID();
+
+      await source.copy(target);
+      await target.setMetadata(buildCopiedUserUploadMetadata({
+        contentType,
+        userId: params.userId,
+        filename,
+        sourcePath: parsed.objectPath,
+        downloadToken,
+        sourceMetadata,
+      }));
+
+      return {
+        url: firebaseDownloadMediaUrl(bucketId, storagePath, downloadToken),
+        contentType,
+        sizeBytes,
+        filename,
+        storagePath,
+      };
+    } catch (error) {
+      if (error instanceof StorageCopyError) throw error;
+      lastErr = error;
+      if (isStorageNotFound(error)) continue;
+      throw new StorageCopyError(formatStorageError(error), "COPY_FAILED");
+    }
+  }
+
+  if (lastErr && !isStorageNotFound(lastErr)) {
+    throw new StorageCopyError(formatStorageError(lastErr), "COPY_FAILED");
+  }
+  throw new StorageCopyError("Source image no longer exists", "SOURCE_NOT_FOUND");
+}
+
+export class StorageObjectTooLargeError extends Error {
+  constructor(
+    readonly sizeBytes: number,
+    readonly maxBytes: number,
+  ) {
+    super(`Storage object is ${sizeBytes} bytes; maximum is ${maxBytes} bytes`);
+    this.name = "StorageObjectTooLargeError";
+  }
+}
+
 export async function fetchRemoteDocumentBytes(
   documentUrl: string,
-): Promise<{ bytes: Buffer; contentType: string }> {
+): Promise<{ bytes: Buffer; contentType: string; sizeBytes?: number }> {
   const fromStorage = await readStorageObjectByUrl(documentUrl);
   if (fromStorage) return fromStorage;
 
@@ -273,7 +432,13 @@ export async function deleteOwnedStorageUrls(
   await Promise.all(unique.map((url) => deleteStorageObjectByUrlIfOwned(url)));
 }
 
-export type UploadSlot = "generic" | "profile" | "team" | "go_alert_sound" | "go_walk_photo";
+export type UploadSlot =
+  | "generic"
+  | "profile"
+  | "team"
+  | "go_alert_sound"
+  | "go_walk_photo"
+  | "seneca_image";
 
 export async function uploadFileToFirebaseStorage(params: {
   userId: string;
@@ -310,6 +475,8 @@ export async function uploadFileToFirebaseStorage(params: {
     storagePath = `teams/${teamId!.trim()}/alert-sounds/${Date.now()}-${objectId}-${safeName}`;
   } else if (slot === "go_walk_photo") {
     storagePath = `teams/${teamId!.trim()}/walk-photos/${Date.now()}-${objectId}-${safeName}`;
+  } else if (slot === "seneca_image") {
+    storagePath = `users/${userId}/seneca-images/${Date.now()}-${objectId}-${safeName}`;
   } else {
     storagePath = `users/${userId}/uploads/${Date.now()}-${objectId}-${safeName}`;
   }

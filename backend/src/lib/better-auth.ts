@@ -15,6 +15,7 @@ type SessionUser = {
   email: string | null;
   name: string | null;
   image?: string | null;
+  emailVerified?: boolean;
 };
 
 export type AuthServer = {
@@ -24,7 +25,10 @@ export type AuthServer = {
   ) => Promise<{ user: SessionUser; expiresAt: Date | null; token: string | null } | null>;
   verifyEmailPassword: (email: string, password: string) => Promise<boolean>;
   createEmailPasswordUser: (email: string, password: string, name: string) => Promise<boolean>;
-  sendEmailVerificationOtp: (email: string) => Promise<void>;
+  sendEmailVerificationOtp: (
+    email: string,
+    purpose?: "email-verification" | "email-change",
+  ) => Promise<void>;
   verifyEmailVerificationOtp: (email: string, otp: string) => Promise<void>;
   /** Returns whether an OTP email was actually handed to Resend. */
   sendForgetPasswordOtp: (email: string) => Promise<"sent" | "no_user" | "error">;
@@ -117,6 +121,7 @@ export const isAuthServerEnabled = (() => {
 })();
 
 let authServerPromise: Promise<AuthServer | null> | null = null;
+const pendingEmailChangeOtpRecipients = new Set<string>();
 
 function readBearerToken(headers: Headers): string | null {
   const authHeader = headers.get("authorization");
@@ -209,10 +214,16 @@ async function createAuthServer(): Promise<AuthServer | null> {
           overrideDefaultEmailVerification: true,
           sendVerificationOnSignUp: true,
           async sendVerificationOTP({ email, otp, type }) {
+            const normalizedEmail = email.trim().toLowerCase();
+            const emailType =
+              type === "email-verification" &&
+              pendingEmailChangeOtpRecipients.delete(normalizedEmail)
+                ? "email-change"
+                : type;
             if (!env.RESEND_API_KEY) {
               console.warn(
                 "[better-auth] RESEND_API_KEY missing; OTP for",
-                type,
+                emailType,
                 "not sent to",
                 email,
                 "code=",
@@ -222,7 +233,11 @@ async function createAuthServer(): Promise<AuthServer | null> {
             }
             const resend = new Resend(env.RESEND_API_KEY);
             const { buildAuthOtpEmail } = await import("./auth-otp-email");
-            const mail = buildAuthOtpEmail({ type, otp, toEmail: email });
+            const mail = buildAuthOtpEmail({
+              type: emailType,
+              otp,
+              toEmail: email,
+            });
 
             const { data, error } = await resend.emails.send({
               from: env.FROM_EMAIL,
@@ -241,7 +256,7 @@ async function createAuthServer(): Promise<AuthServer | null> {
             }
             console.log(
               "[better-auth] Resend OTP sent",
-              type,
+              emailType,
               "to=",
               email,
               "id=",
@@ -307,13 +322,21 @@ async function createAuthServer(): Promise<AuthServer | null> {
           return false;
         }
       },
-      async sendEmailVerificationOtp(email: string) {
-        await auth.api.sendVerificationOTP({
-          body: {
-            email: email.trim().toLowerCase(),
-            type: "email-verification",
-          },
-        });
+      async sendEmailVerificationOtp(email: string, purpose = "email-verification") {
+        const normalizedEmail = email.trim().toLowerCase();
+        if (purpose === "email-change") {
+          pendingEmailChangeOtpRecipients.add(normalizedEmail);
+        }
+        try {
+          await auth.api.sendVerificationOTP({
+            body: {
+              email: normalizedEmail,
+              type: "email-verification",
+            },
+          });
+        } finally {
+          pendingEmailChangeOtpRecipients.delete(normalizedEmail);
+        }
       },
       async verifyEmailVerificationOtp(email: string, otp: string) {
         await auth.api.checkVerificationOTP({

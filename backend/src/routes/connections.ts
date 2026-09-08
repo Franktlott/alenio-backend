@@ -9,6 +9,7 @@ import {
   canMessage,
   isBlockedEitherWay,
   messagePermissionErrorMessage,
+  shareWorkspace,
 } from "../lib/messaging-permission";
 import { isUniqueConstraintError } from "../lib/username";
 import { recordAccountActivity } from "../lib/account-activity";
@@ -16,9 +17,25 @@ import { countMutualConnections } from "../lib/public-profile";
 import {
   buildConnectionSuggestions,
   CONNECTION_SUGGESTION_DEFAULT_LIMIT,
+  CONNECTION_SUGGESTION_DISMISSAL_DAYS,
   CONNECTION_SUGGESTION_MAX_LIMIT,
+  CONNECTION_SUGGESTION_MUTUAL_PREVIEW_LIMIT,
   type ConnectionSuggestionCandidate,
 } from "../lib/connection-suggestions";
+import { isConnectionActiveNow } from "../lib/presence";
+import { buildDmPairKey } from "../lib/dm-pair-key";
+import {
+  CONNECTION_RELEVANCE_WINDOW_DAYS,
+  rankConnectionsByRelevance,
+} from "../lib/connection-relevance";
+import {
+  CONNECTION_REQUEST_COOLDOWN_CODE,
+  DECLINED_CONNECTION_COOLDOWN_DAYS,
+  decideConnectionRequest,
+  type ConnectionRequestState,
+} from "../lib/connection-request-policy";
+import { serializeWorkplaceConnectedUser } from "../lib/workplace-connected";
+import { getBidirectionalBlockStatus } from "../lib/relationship-blocks";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -34,6 +51,14 @@ const personSelect = {
   name: true,
   username: true,
   image: true,
+  profileTitle: true,
+  _count: { select: { teamMembers: true } },
+} as const;
+
+const connectionListPersonSelect = {
+  ...personSelect,
+  lastActiveAt: true,
+  showActiveStatus: true,
 } as const;
 
 export type ConnectionStatus =
@@ -57,6 +82,7 @@ export function describeConnectionStatus(
   if (!connection) return "none";
   if (connection.status === "accepted") return "connected";
   if (connection.status === "declined") return "declined";
+  if (connection.status === "reconnect_required") return "none";
   return connection.requesterId === viewerId ? "pending_outgoing" : "pending_incoming";
 }
 
@@ -73,31 +99,146 @@ connectionsRouter.get("/", async (c) => {
   const rows = await prisma.connection.findMany({
     where: { OR: [{ requesterId: user.id }, { recipientId: user.id }] },
     include: {
-      requester: { select: personSelect },
-      recipient: { select: personSelect },
+      requester: { select: connectionListPersonSelect },
+      recipient: { select: connectionListPersonSelect },
     },
     orderBy: { updatedAt: "desc" },
   });
 
-  const accepted: unknown[] = [];
+  const acceptedPersonIds = rows
+    .filter((row) => row.status === "accepted")
+    .map((row) => (row.requesterId === user.id ? row.recipientId : row.requesterId));
+  const dmPairKeys = acceptedPersonIds.map((personId) => buildDmPairKey(user.id, personId));
+  const [blockRows, membershipRows, dmConversations] =
+    acceptedPersonIds.length === 0
+      ? [[], [], []]
+      : await Promise.all([
+          prisma.userBlock.findMany({
+            where: {
+              OR: [
+                { blockerId: user.id, blockedId: { in: acceptedPersonIds } },
+                { blockedId: user.id, blockerId: { in: acceptedPersonIds } },
+              ],
+            },
+            select: { blockerId: true, blockedId: true },
+          }),
+          prisma.teamMember.findMany({
+            where: { userId: { in: [user.id, ...acceptedPersonIds] } },
+            select: {
+              userId: true,
+              teamId: true,
+              team: { select: { name: true } },
+            },
+          }),
+          prisma.conversation.findMany({
+            where: { isGroup: false, dmPairKey: { in: dmPairKeys } },
+            select: { id: true, dmPairKey: true },
+          }),
+        ]);
+  const recentMessageCutoff = new Date(
+    Date.now() - CONNECTION_RELEVANCE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  );
+  // Conversation IDs must be resolved first, then one grouped query supplies
+  // count + latest activity for every DM. This remains constant-query, not N+1.
+  const recentMessageGroups =
+    dmConversations.length === 0
+      ? []
+      : await prisma.directMessage.groupBy({
+          by: ["conversationId"],
+          where: {
+            conversationId: { in: dmConversations.map((conversation) => conversation.id) },
+            createdAt: { gte: recentMessageCutoff },
+          },
+          _count: { _all: true },
+          _max: { createdAt: true },
+        });
+  const blockedPersonIds = new Set(
+    blockRows.map((row) => (row.blockerId === user.id ? row.blockedId : row.blockerId)),
+  );
+  const viewerTeamIds = new Set(
+    membershipRows
+      .filter((membership) => membership.userId === user.id)
+      .map((membership) => membership.teamId),
+  );
+  const sharedWorkspaceCountByPerson = new Map<string, number>();
+  const sharedWorkspaceNamesByPerson = new Map<string, string[]>();
+  for (const membership of membershipRows) {
+    if (membership.userId !== user.id && viewerTeamIds.has(membership.teamId)) {
+      sharedWorkspaceCountByPerson.set(
+        membership.userId,
+        (sharedWorkspaceCountByPerson.get(membership.userId) ?? 0) + 1,
+      );
+      const names = sharedWorkspaceNamesByPerson.get(membership.userId) ?? [];
+      if (!names.includes(membership.team.name)) names.push(membership.team.name);
+      sharedWorkspaceNamesByPerson.set(membership.userId, names);
+    }
+  }
+  const dmPairKeyByConversationId = new Map(
+    dmConversations.flatMap((conversation) =>
+      conversation.dmPairKey ? [[conversation.id, conversation.dmPairKey] as const] : [],
+    ),
+  );
+  const recentDmByPairKey = new Map(
+    recentMessageGroups.flatMap((group) => {
+      const pairKey = dmPairKeyByConversationId.get(group.conversationId);
+      return pairKey
+        ? [[
+            pairKey,
+            {
+              count: group._count._all,
+              lastMessageAt: group._max.createdAt,
+            },
+          ] as const]
+        : [];
+    }),
+  );
+
+  const accepted = [];
   const incoming: unknown[] = [];
   const outgoing: unknown[] = [];
 
   for (const row of rows) {
     const isRequester = row.requesterId === user.id;
     const person = isRequester ? row.recipient : row.requester;
+    const { lastActiveAt, showActiveStatus, ...personWithCount } = person;
+    const publicPerson = serializeWorkplaceConnectedUser(personWithCount);
     const entry = {
       id: row.id,
-      person,
+      person: publicPerson,
       status: describeConnectionStatus(user.id, row),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
-    if (row.status === "accepted") accepted.push(entry);
-    else if (row.status === "pending") (isRequester ? outgoing : incoming).push(entry);
+    if (row.status === "accepted") {
+      const dmSignals = recentDmByPairKey.get(buildDmPairKey(user.id, person.id));
+      accepted.push({
+        candidateId: person.id,
+        activeNow: isConnectionActiveNow({
+          connectionAccepted: true,
+          blockedEitherWay: blockedPersonIds.has(person.id),
+          showActiveStatus,
+          lastActiveAt,
+        }),
+        lastDirectMessageAt: dmSignals?.lastMessageAt ?? null,
+        recentDirectMessageCount: dmSignals?.count ?? 0,
+        connectionUpdatedAt: row.updatedAt,
+        sharedWorkspaceCount: sharedWorkspaceCountByPerson.get(person.id) ?? 0,
+        entry,
+      });
+    } else if (row.status === "pending") (isRequester ? outgoing : incoming).push(entry);
   }
 
-  return c.json({ data: { accepted, incoming, outgoing } });
+  const rankedAccepted = rankConnectionsByRelevance(accepted, { viewerId: user.id }).map(
+    ({ entry, activeNow, sharedWorkspaceCount }) => ({
+      ...entry,
+      activeNow,
+      sharesWorkspace: sharedWorkspaceCount > 0,
+      sharedWorkspaceNames:
+        sharedWorkspaceNamesByPerson.get(entry.person.id) ?? [],
+    }),
+  );
+
+  return c.json({ data: { accepted: rankedAccepted, incoming, outgoing } });
 });
 
 // GET /api/connections/suggestions — evidence-backed people the viewer may know
@@ -224,7 +365,10 @@ connectionsRouter.get(
     if (people.length === 0) return c.json({ data: [] });
 
     const candidateIds = people.map((person) => person.id);
-    const [connectionRows, blockRows] = await Promise.all([
+    const dismissalCutoff = new Date(
+      Date.now() - CONNECTION_SUGGESTION_DISMISSAL_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const [connectionRows, blockRows, dismissalRows] = await Promise.all([
       prisma.connection.findMany({
         where: {
           OR: [
@@ -248,6 +392,14 @@ connectionsRouter.get(
         },
         select: { blockerId: true, blockedId: true },
       }),
+      prisma.connectionSuggestionDismissal.findMany({
+        where: {
+          dismisserId: user.id,
+          suggestedUserId: { in: candidateIds },
+          dismissedAt: { gte: dismissalCutoff },
+        },
+        select: { suggestedUserId: true, dismissedAt: true },
+      }),
     ]);
 
     const connectionsByPerson = new Map(
@@ -258,6 +410,9 @@ connectionsRouter.get(
     );
     const blockedPersonIds = new Set(
       blockRows.map((row) => (row.blockerId === user.id ? row.blockedId : row.blockerId)),
+    );
+    const dismissedAtByPersonId = new Map(
+      dismissalRows.map((row) => [row.suggestedUserId, row.dismissedAt]),
     );
     const candidateIdSet = new Set(candidateIds);
     const mutualIdsByCandidate = new Map<string, Set<string>>();
@@ -275,14 +430,34 @@ connectionsRouter.get(
       }
     }
 
+    const previewMutualIds = [
+      ...new Set(
+        [...mutualIdsByCandidate.values()].flatMap((mutualIds) =>
+          [...mutualIds].slice(0, CONNECTION_SUGGESTION_MUTUAL_PREVIEW_LIMIT),
+        ),
+      ),
+    ];
+    const mutualPeopleById = new Map(
+      (previewMutualIds.length === 0
+        ? []
+        : await prisma.user.findMany({
+            where: { id: { in: previewMutualIds } },
+            select: { id: true, name: true, image: true },
+          })
+      ).map((person) => [person.id, person]),
+    );
+
     const candidates: ConnectionSuggestionCandidate[] = people.map((person) => {
       const connection = connectionsByPerson.get(person.id);
+      const mutualIds = [...(mutualIdsByCandidate.get(person.id) ?? [])];
       return {
         person: {
           id: person.id,
           name: person.name,
           username: person.username,
           image: person.image,
+          profileTitle: person.profileTitle,
+          isWorkplaceConnected: person._count.teamMembers > 0,
         },
         sharedWorkspaces: person.teamMembers.map((membership) => ({
           id: membership.team.id,
@@ -290,7 +465,13 @@ connectionsRouter.get(
           role: membership.role,
           joinedAt: membership.joinedAt,
         })),
-        mutualConnections: mutualIdsByCandidate.get(person.id)?.size ?? 0,
+        mutualConnections: mutualIds.length,
+        mutualPreview: mutualIds
+          .slice(0, CONNECTION_SUGGESTION_MUTUAL_PREVIEW_LIMIT)
+          .flatMap((mutualId) => {
+            const mutual = mutualPeopleById.get(mutualId);
+            return mutual ? [{ id: mutual.id, name: mutual.name, image: mutual.image }] : [];
+          }),
         sharesOrganization: person.organizationMemberships.length > 0,
         connection: connection
           ? { status: connection.status, updatedAt: connection.updatedAt }
@@ -304,7 +485,65 @@ connectionsRouter.get(
         candidates,
         currentTeamId: query.teamId,
         limit,
+        dismissedAtByPersonId,
       }),
+    });
+  },
+);
+
+// POST /api/connections/suggestions/dismiss — hide a suggestion for 90 days
+connectionsRouter.post(
+  "/suggestions/dismiss",
+  zValidator("json", targetSchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const { userId } = c.req.valid("json");
+
+    if (userId === user.id) {
+      return c.json(
+        { error: { message: "You cannot dismiss yourself.", code: "VALIDATION_ERROR" } },
+        400,
+      );
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!target) {
+      return c.json(
+        { error: { message: "Person not found.", code: "NOT_FOUND" } },
+        404,
+      );
+    }
+
+    const dismissedAt = new Date();
+    await prisma.connectionSuggestionDismissal.upsert({
+      where: {
+        dismisserId_suggestedUserId: {
+          dismisserId: user.id,
+          suggestedUserId: userId,
+        },
+      },
+      create: {
+        dismisserId: user.id,
+        suggestedUserId: userId,
+        dismissedAt,
+      },
+      update: { dismissedAt },
+    });
+
+    const dismissedUntil = new Date(
+      dismissedAt.getTime() +
+        CONNECTION_SUGGESTION_DISMISSAL_DAYS * 24 * 60 * 60 * 1000,
+    );
+    return c.json({
+      data: {
+        userId,
+        dismissedAt: dismissedAt.toISOString(),
+        dismissedUntil: dismissedUntil.toISOString(),
+        cooldownDays: CONNECTION_SUGGESTION_DISMISSAL_DAYS,
+      },
     });
   },
 );
@@ -317,22 +556,21 @@ connectionsRouter.get("/status", async (c) => {
     return c.json({ error: { message: "userId is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  const [connection, blocked, permission] = await Promise.all([
+  const [connection, blockStatus, permission] = await Promise.all([
     prisma.connection.findUnique({
       where: { pairKey: buildConnectionPairKey(user.id, userId) },
       select: { requesterId: true, recipientId: true, status: true },
     }),
-    prisma.userBlock.findUnique({
-      where: { blockerId_blockedId: { blockerId: user.id, blockedId: userId } },
-      select: { id: true },
-    }),
+    getBidirectionalBlockStatus(user.id, userId),
     canMessage(user.id, userId),
   ]);
 
   return c.json({
     data: {
       status: describeConnectionStatus(user.id, connection),
-      isBlockedByMe: blocked !== null,
+      isBlockedByMe: blockStatus.blockedByMe,
+      isBlockedByThem: blockStatus.blockedByThem,
+      blockStatus: blockStatus.status,
       canMessage: permission.allowed,
     },
   });
@@ -364,16 +602,13 @@ connectionsRouter.get("/person/:userId", async (c) => {
   });
   if (!person) return c.json({ error: { message: "Person not found", code: "NOT_FOUND" } }, 404);
 
-  const [connection, blocked, permission, personConnectionCount, viewerConnectionRows, personConnectionRows] =
+  const [connection, blockStatus, permission, personConnectionCount, viewerConnectionRows, personConnectionRows] =
     await Promise.all([
     prisma.connection.findUnique({
       where: { pairKey: buildConnectionPairKey(user.id, userId) },
       select: { requesterId: true, recipientId: true, status: true },
     }),
-    prisma.userBlock.findUnique({
-      where: { blockerId_blockedId: { blockerId: user.id, blockedId: userId } },
-      select: { id: true },
-    }),
+    getBidirectionalBlockStatus(user.id, userId),
     canMessage(user.id, userId),
     prisma.connection.count({
       where: {
@@ -403,8 +638,10 @@ connectionsRouter.get("/person/:userId", async (c) => {
       name: person.name,
       username: person.username,
       image: person.image,
+      isWorkplaceConnected: person._count.teamMembers > 0,
       emailVerified: person.emailVerified,
       memberSince: person.createdAt,
+      profileTitle: person.profileTitle,
       profileWebsite: person.profileWebsite,
       profileLocation: person.profileLocation,
       profileBio: person.profileBio,
@@ -428,7 +665,9 @@ connectionsRouter.get("/person/:userId", async (c) => {
         joinedAt: row.joinedAt,
       })),
       connectionStatus: describeConnectionStatus(user.id, connection),
-      isBlockedByMe: blocked !== null,
+      isBlockedByMe: blockStatus.blockedByMe,
+      isBlockedByThem: blockStatus.blockedByThem,
+      blockStatus: blockStatus.status,
       canMessage: permission.allowed,
       isSelf: person.id === user.id,
     },
@@ -444,7 +683,10 @@ connectionsRouter.post("/request", zValidator("json", targetSchema), async (c) =
     return c.json({ error: { message: "You cannot connect with yourself.", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, image: true },
+  });
   if (!target) {
     return c.json({ error: { message: "Person not found", code: "NOT_FOUND" } }, 404);
   }
@@ -456,48 +698,172 @@ connectionsRouter.post("/request", zValidator("json", targetSchema), async (c) =
   }
 
   const pairKey = buildConnectionPairKey(user.id, userId);
-  const existing = await prisma.connection.findUnique({ where: { pairKey } });
+  // TeamMember overlap is the sole workspace trust signal. Organization
+  // membership, historical membership, and workspace ownership are not used.
+  const sharesWorkspace = await shareWorkspace(user.id, userId);
+  const result = await applyConnectionRequest({
+    requesterId: user.id,
+    targetId: userId,
+    pairKey,
+    sharesWorkspace,
+  });
 
-  if (existing) {
-    if (existing.status === "accepted") {
-      return c.json({ data: { status: "connected" as const } });
-    }
-    if (existing.status === "pending") {
-      // Requesting someone who already asked you is an accept, which is what the user means.
-      if (existing.recipientId === user.id) {
-        const accepted = await prisma.connection.update({
-          where: { pairKey },
-          data: { status: "accepted" },
-        });
-        await notifyConnectionAccepted(accepted.requesterId, accepted.recipientId);
-        return c.json({ data: { status: "connected" as const } });
-      }
-      return c.json({ data: { status: "pending_outgoing" as const } });
-    }
-    // A previous decline is replaced by the new request, with direction reset.
-    await prisma.connection.update({
-      where: { pairKey },
-      data: { requesterId: user.id, recipientId: userId, status: "pending" },
-    });
-    return c.json({ data: { status: "pending_outgoing" as const } });
+  if (result.cooldown) {
+    return c.json(
+      {
+        error: {
+          message: "This connection request was recently declined. Try again after the cooldown.",
+          code: CONNECTION_REQUEST_COOLDOWN_CODE,
+          remainingSeconds: result.remainingSeconds,
+          retryAt: result.retryAt.toISOString(),
+          cooldownDays: DECLINED_CONNECTION_COOLDOWN_DAYS,
+        },
+      },
+      409,
+    );
   }
-
-  try {
-    await prisma.connection.create({
-      data: { requesterId: user.id, recipientId: userId, status: "pending", pairKey },
-    });
-  } catch (err) {
-    // Both sides pressed Connect at once; the unique pairKey settles it.
-    if (!isUniqueConstraintError(err)) throw err;
-    const raced = await prisma.connection.findUnique({
-      where: { pairKey },
-      select: { requesterId: true, recipientId: true, status: true },
-    });
-    return c.json({ data: { status: describeConnectionStatus(user.id, raced) } });
+  if (result.changed && result.status === "pending_outgoing") {
+    const requesterName = user.name?.trim() || "Someone";
+    const recipientName = target.name?.trim() || "Someone";
+    await Promise.all([
+      recordAccountActivity({
+        userId: user.id,
+        type: "connection_request_sent",
+        content: `You sent ${recipientName} a connection request`,
+        metadata: {
+          actorUserId: target.id,
+          actorName: recipientName,
+          actorImage: target.image,
+        },
+      }),
+      recordAccountActivity({
+        userId: target.id,
+        type: "connection_request_received",
+        content: `${requesterName} sent you a connection request`,
+        metadata: {
+          actorUserId: user.id,
+          actorName: requesterName,
+          actorImage: user.image ?? null,
+        },
+      }),
+    ]);
   }
-
-  return c.json({ data: { status: "pending_outgoing" as const } }, 201);
+  return c.json({ data: { status: result.status } }, result.created ? 201 : 200);
 });
+
+type RequestConnectionResult =
+  | {
+      cooldown: false;
+      status: "connected" | "pending_outgoing";
+      created: boolean;
+      changed: boolean;
+    }
+  | {
+      cooldown: true;
+      remainingSeconds: number;
+      retryAt: Date;
+    };
+
+async function applyConnectionRequest(input: {
+  requesterId: string;
+  targetId: string;
+  pairKey: string;
+  sharesWorkspace: boolean;
+}): Promise<RequestConnectionResult> {
+  // A retry loop turns a unique create race into the same state transition as
+  // the normal path. Compare-and-set updates ensure only the request that
+  // actually changes a row emits acceptance activity.
+  for (;;) {
+    const existing = await prisma.connection.findUnique({ where: { pairKey: input.pairKey } });
+    const state: ConnectionRequestState = !existing
+      ? "none"
+      : existing.status === "accepted"
+        ? "accepted"
+        : existing.status === "pending"
+          ? existing.recipientId === input.requesterId
+            ? "pending_incoming"
+            : "pending_outgoing"
+          : existing.status === "reconnect_required"
+            ? "reconnect_required"
+          : "declined";
+    const decision = decideConnectionRequest(state, input.sharesWorkspace, {
+      declinedAt: state === "declined" ? existing?.updatedAt : null,
+    });
+
+    if (decision.action === "blocked") {
+      return {
+        cooldown: true,
+        remainingSeconds: decision.remainingSeconds,
+        retryAt: decision.retryAt,
+      };
+    }
+
+    if (decision.action === "none") {
+      return {
+        cooldown: false,
+        status: decision.responseStatus,
+        created: false,
+        changed: false,
+      };
+    }
+
+    if (decision.action === "create") {
+      try {
+        await prisma.connection.create({
+          data: {
+            requesterId: input.requesterId,
+            recipientId: input.targetId,
+            status: decision.nextStatus,
+            pairKey: input.pairKey,
+          },
+        });
+        if (decision.nextStatus === "accepted") {
+          await notifyConnectionAccepted(input.requesterId, input.targetId);
+        }
+        return {
+          cooldown: false,
+          status: decision.responseStatus,
+          created: true,
+          changed: true,
+        };
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+        continue;
+      }
+    }
+
+    if (!existing) continue;
+    const nextDirection = decision.resetDirection
+      ? { requesterId: input.requesterId, recipientId: input.targetId }
+      : {};
+    const changed = await prisma.connection.updateMany({
+      where: {
+        id: existing.id,
+        status: existing.status,
+        requesterId: existing.requesterId,
+        recipientId: existing.recipientId,
+      },
+      data: {
+        ...nextDirection,
+        status: decision.nextStatus,
+      },
+    });
+    if (changed.count === 0) continue;
+
+    if (decision.nextStatus === "accepted") {
+      await notifyConnectionAccepted(
+        decision.resetDirection ? input.requesterId : existing.requesterId,
+        decision.resetDirection ? input.targetId : existing.recipientId,
+      );
+    }
+    return {
+      cooldown: false,
+      status: decision.responseStatus,
+      created: false,
+      changed: true,
+    };
+  }
+}
 
 // POST /api/connections/accept — recipient accepts a pending request
 connectionsRouter.post("/accept", zValidator("json", targetSchema), async (c) => {
@@ -510,8 +876,26 @@ connectionsRouter.post("/accept", zValidator("json", targetSchema), async (c) =>
     return c.json({ error: { message: "No pending request to accept", code: "NOT_FOUND" } }, 404);
   }
 
-  await prisma.connection.update({ where: { pairKey }, data: { status: "accepted" } });
-  await notifyConnectionAccepted(existing.requesterId, existing.recipientId);
+  const changed = await prisma.connection.updateMany({
+    where: {
+      id: existing.id,
+      status: "pending",
+      requesterId: existing.requesterId,
+      recipientId: existing.recipientId,
+    },
+    data: { status: "accepted" },
+  });
+  if (changed.count === 1) {
+    await notifyConnectionAccepted(existing.requesterId, existing.recipientId);
+  } else {
+    const raced = await prisma.connection.findUnique({
+      where: { pairKey },
+      select: { status: true },
+    });
+    if (raced?.status !== "accepted") {
+      return c.json({ error: { message: "No pending request to accept", code: "NOT_FOUND" } }, 404);
+    }
+  }
 
   return c.json({ data: { status: "connected" as const } });
 });
@@ -578,7 +962,29 @@ connectionsRouter.delete("/block", zValidator("json", targetSchema), async (c) =
   const user = c.get("user")!;
   const { userId } = c.req.valid("json");
 
-  await prisma.userBlock.deleteMany({ where: { blockerId: user.id, blockedId: userId } });
+  const existingBlock = await prisma.userBlock.findUnique({
+    where: { blockerId_blockedId: { blockerId: user.id, blockedId: userId } },
+    select: { id: true },
+  });
+  if (!existingBlock) {
+    return c.json({ data: { status: "none" as const } });
+  }
+
+  await prisma.$transaction([
+    prisma.userBlock.deleteMany({
+      where: { blockerId: user.id, blockedId: userId },
+    }),
+    prisma.connection.upsert({
+      where: { pairKey: buildConnectionPairKey(user.id, userId) },
+      create: {
+        requesterId: user.id,
+        recipientId: userId,
+        pairKey: buildConnectionPairKey(user.id, userId),
+        status: "reconnect_required",
+      },
+      update: { status: "reconnect_required" },
+    }),
+  ]);
   return c.json({ data: { status: "none" as const } });
 });
 
@@ -590,7 +996,13 @@ connectionsRouter.get("/blocked", async (c) => {
     include: { blocked: { select: personSelect } },
     orderBy: { createdAt: "desc" },
   });
-  return c.json({ data: rows.map((row) => ({ id: row.id, person: row.blocked, createdAt: row.createdAt })) });
+  return c.json({
+    data: rows.map((row) => ({
+      id: row.id,
+      person: serializeWorkplaceConnectedUser(row.blocked),
+      createdAt: row.createdAt,
+    })),
+  });
 });
 
 /** Only acceptance is worth an activity row; requests, declines and removals are not. */
@@ -605,11 +1017,13 @@ async function notifyConnectionAccepted(requesterId: string, recipientId: string
       userId: requesterId,
       type: "connection_accepted",
       content: `${recipient?.name ?? "Someone"} accepted your connection request`,
+      metadata: { actorUserId: recipientId },
     }),
     recordAccountActivity({
       userId: recipientId,
       type: "connection_accepted",
       content: `You are now connected with ${requester?.name ?? "someone"}`,
+      metadata: { actorUserId: requesterId },
     }),
   ]);
 }

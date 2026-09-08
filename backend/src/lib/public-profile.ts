@@ -1,6 +1,7 @@
 export type AcceptedConnectionPair = { requesterId: string; recipientId: string };
 
 export const PUBLIC_PROFILE_LIMITS = {
+  profileTitle: 80,
   profileWebsite: 2048,
   profileLocation: 100,
   profileBio: 500,

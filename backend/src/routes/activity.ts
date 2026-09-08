@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { canModerateWorkspaceContent } from "../lib/workspace-role-policy";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -160,8 +161,8 @@ activityRouter.delete("/:teamId/activity/:activityId", async (c) => {
   }
 
   const isCreator = activity.userId === user.id;
-  const isOwnerOrAdmin = ["owner", "admin"].includes(membership.role);
-  if (!isCreator && !isOwnerOrAdmin) {
+  const canModerate = canModerateWorkspaceContent(membership.role);
+  if (!isCreator && !canModerate) {
     return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
   }
 

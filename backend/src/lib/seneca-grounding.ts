@@ -6,6 +6,14 @@ export const SENECA_DATA_GROUNDING_RULES = `DATA GROUNDING (critical):
 - If the last check-in mentioned external overdue items (training, Workday Learning, compliance courses, etc.) and they are NOT listed in alenioOverdueTasks or openFollowUps, suggest the manager check whether support is still needed — do not assert they are still overdue.
 - When memberStats.overdueTasks > 0, cite the count and titles from alenioOverdueTasks as current Alenio overdue work.`;
 
+/** Rules for account-first Seneca with no workspace data attached. */
+export const SENECA_PERSONAL_GROUNDING_RULES = `PERSONAL SCOPE GROUNDING (critical):
+- scope is personal_only. Use only the authenticated user's profile fields and facts they provide in this conversation.
+- No workspace data is attached. Never imply access to workspace tasks, stored goals, check-ins, calendars, activity, rosters, performance, or team health.
+- You may help the user draft goals, recognition, feedback, coaching plans, interview preparation, and workplace communication using information they provide.
+- Do not infer facts about coworkers, managers, employers, or workplaces that are not stated by the user.
+- If current workplace facts are required, explain that the user can select an available workspace context or provide the relevant details.`;
+
 /** Extra rules for workspace Seneca chat (live team health for the current team only). */
 export const SENECA_WORKSPACE_CHAT_GROUNDING_RULES = `WORKSPACE CHAT GROUNDING (critical):
 - Live facts for THIS workspace only are in the team health JSON: teamHealth, members[], overdueTasks, openTasks, membersNeedingCheckIn, upcomingCalendar, activeGoalDetails, recentWins, and development goal alerts.

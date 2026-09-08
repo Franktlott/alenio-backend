@@ -1,11 +1,13 @@
+import { canManageWorkspaceCalendar } from "./workspace-role-policy";
+
 /** Owner or team leader — can manage the shared team calendar and virtual meetings. */
 export function isCalendarOwnerOrLeader(role: string): boolean {
-  return role === "owner" || role === "team_leader";
+  return canManageWorkspaceCalendar(role);
 }
 
 /** Roles that can manage any team member's calendar entry. */
 export function isCalendarManagerRole(role: string): boolean {
-  return isCalendarOwnerOrLeader(role) || role === "admin";
+  return canManageWorkspaceCalendar(role);
 }
 
 export type CalendarApprovalStatus = "pending" | "approved" | "rejected";
@@ -26,7 +28,7 @@ export type CalendarEventVisibility = {
 export function canViewCalendarEvent(
   event: CalendarEventVisibility,
   userId: string,
-  role: string,
+  _role: string,
   assigneeIds: string[] = [],
 ): boolean {
   if (event.isHidden) {
@@ -36,8 +38,7 @@ export function canViewCalendarEvent(
   }
 
   const status = (event.approvalStatus ?? "approved") as CalendarApprovalStatus;
-  if (status === "approved") return true;
-  return event.createdById === userId || isCalendarManagerRole(role);
+  return status === "approved";
 }
 
 export function canApproveCalendarEvent(role: string): boolean {
@@ -123,12 +124,10 @@ export function resolveCalendarUpdate(
       return { ok: false, message: "Only workspace owners and team leaders can schedule virtual meetings." };
     }
 
-    let resetApproval: CalendarApprovalStatus | undefined;
-    if (body.isHidden === false && existing.approvalStatus !== "approved") {
-      resetApproval = "pending";
-    } else if (body.isHidden === true) {
-      resetApproval = "approved";
-    }
+    const nextIsHidden = body.isHidden ?? existing.isHidden;
+    const resetApproval: CalendarApprovalStatus = nextIsHidden
+      ? "approved"
+      : "pending";
 
     return { ok: true, forbidVideo: true, resetApproval };
   }
@@ -137,7 +136,7 @@ export function resolveCalendarUpdate(
     return { ok: false, message: "Only workspace owners and team leaders can schedule virtual meetings." };
   }
 
-  if (body.isHidden === false && existing.approvalStatus === "pending") {
+  if (body.isHidden === true && existing.approvalStatus !== "approved") {
     return { ok: true, resetApproval: "approved" };
   }
 

@@ -5,6 +5,7 @@ export type GroupParticipantWithRole = {
   name: string | null;
   email: string | null;
   image: string | null;
+  isWorkplaceConnected: boolean;
   role: ConversationParticipantRole;
 };
 
@@ -38,7 +39,13 @@ export function canRemoveGroupParticipant(
 export function formatGroupParticipants(
   participants: Array<{
     role: ConversationParticipantRole;
-    user: { id: string; name: string | null; email: string | null; image: string | null };
+    user: {
+      id: string;
+      name: string | null;
+      email: string | null;
+      image: string | null;
+      _count?: { teamMembers: number };
+    };
   }>,
 ): GroupParticipantWithRole[] {
   return participants.map((participant) => ({
@@ -46,6 +53,7 @@ export function formatGroupParticipants(
     name: participant.user.name,
     email: participant.user.email,
     image: participant.user.image,
+    isWorkplaceConnected: (participant.user._count?.teamMembers ?? 0) > 0,
     role: participant.role,
   }));
 }

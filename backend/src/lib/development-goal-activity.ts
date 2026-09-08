@@ -6,6 +6,18 @@ export const DEVELOPMENT_GOAL_INACTIVITY_REMINDER_AFTER_DAYS =
 
 export type DevelopmentGoalLifecycleStatus = "active" | "inactive" | "closed";
 
+export function shouldEmitDevelopmentGoalCompleted(input: {
+  previousStatus: string | null | undefined;
+  nextStatus: string;
+  archivedAt?: Date | null;
+}): boolean {
+  return (
+    !input.archivedAt &&
+    input.nextStatus === "closed" &&
+    input.previousStatus !== "closed"
+  );
+}
+
 export const DEVELOPMENT_GOAL_ACTIVITY_KEY = {
   inactivityDays: DEVELOPMENT_GOAL_INACTIVITY_DAYS,
   reminderDaysBefore: DEVELOPMENT_GOAL_INACTIVITY_REMINDER_DAYS_BEFORE,
@@ -14,6 +26,7 @@ export const DEVELOPMENT_GOAL_ACTIVITY_KEY = {
   reminderSummary: `Seneca reminds you ${DEVELOPMENT_GOAL_INACTIVITY_REMINDER_DAYS_BEFORE} days before a goal goes inactive.`,
   activityCountsAs: [
     "Adding or editing progress notes",
+    "Completing or reopening action steps",
     "Updating the skill or action steps",
     "Reopening an inactive goal",
   ],

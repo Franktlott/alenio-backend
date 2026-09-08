@@ -16,7 +16,12 @@
     "test:seneca-focus": "bun test src/lib/seneca-focus-engine.test.ts",
     "ensure:seneca-focus": "bun run scripts/ensure-seneca-team-brief.ts",
     "backfill:usernames": "bun run scripts/backfill-usernames.ts",
-    "seed:cooler-walk": "bun run scripts/seed-cooler-walk.ts"
+    "seed:cooler-walk": "bun run scripts/seed-cooler-walk.ts",
+    "seed:people": "bun run scripts/seed-people-dev.ts seed",
+    "seed:people:active": "bun run scripts/seed-people-dev.ts presence",
+    "seed:people:cleanup": "bun run scripts/seed-people-dev.ts cleanup",
+    "seed:people:dry-run": "bun run scripts/seed-people-dev.ts dry-run",
+    "momentum:repair": "bun run scripts/repair-reset-momentum.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
@@ -28,6 +33,7 @@
   "dependencies": {
     "@hono/node-server": "1.12.0",
     "@hono/zod-validator": "^0.7.6",
+    "@js-temporal/polyfill": "^0.5.1",
     "@prisma/client": "6",
     "bcryptjs": "^3.0.3",
     "better-auth": "1.4.18",
@@ -37,6 +43,7 @@
     "pg": "^8.22.0",
     "resend": "^6.10.0",
     "stripe": "^22.1.1",
+    "unpdf": "^1.8.1",
     "zod": "4.1.11"
   }
 }

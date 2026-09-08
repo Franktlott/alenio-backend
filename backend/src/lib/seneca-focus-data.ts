@@ -38,11 +38,11 @@ export async function loadSenecaFocusFacts(
       select: { memberUserId: true, templateId: true, publishedAt: true, createdAt: true },
     }),
     prisma.developmentGoal.findMany({
-      where: { teamId, status: "active" },
+      where: { teamId, status: "active", archivedAt: null },
       select: { id: true, memberUserId: true, skill: true, createdAt: true, lastActivityAt: true },
     }),
     prisma.task.findMany({
-      where: { teamId, status: { not: "done" }, archivedAt: null },
+      where: { teamId, kind: "workspace_task", status: { not: "done" }, archivedAt: null },
       select: {
         id: true,
         title: true,

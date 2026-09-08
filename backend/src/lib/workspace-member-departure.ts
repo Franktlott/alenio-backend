@@ -1,9 +1,12 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { ONEONE_FEEDBACK_MARKER, parseFeedbackTaskDescription } from "./one-on-one-feedback";
+import { canManageWorkspaceRoster } from "./workspace-role-policy";
 
 export function canManageTeamRoster(role: string): boolean {
-  return role === "owner" || role === "team_leader";
+  return canManageWorkspaceRoster(role);
 }
+
+export const DEVELOPMENT_GOAL_ARCHIVE_REASON_MEMBER_DEPARTURE = "member_departure";
 
 export async function isActiveTeamMember(
   db: PrismaClient,
@@ -29,36 +32,51 @@ export async function hasArchivedCheckInRecords(
   return !!publishedCheckIn;
 }
 
-/** @deprecated Use hasArchivedCheckInRecords — development goals are deleted on departure. */
 export async function hasArchivedMemberRecords(
   db: PrismaClient,
   teamId: string,
   userId: string,
 ): Promise<boolean> {
-  return hasArchivedCheckInRecords(db, teamId, userId);
+  const [publishedCheckIn, archivedGoal] = await Promise.all([
+    db.oneOnOneMeeting.findFirst({
+      where: { teamId, memberUserId: userId, status: "published" },
+      select: { id: true },
+    }),
+    db.developmentGoal.findFirst({
+      where: { teamId, memberUserId: userId, archivedAt: { not: null } },
+      select: { id: true },
+    }),
+  ]);
+  return !!publishedCheckIn || !!archivedGoal;
 }
 
-async function deleteDepartedMemberDevelopmentGoals(
-  db: PrismaClient,
+async function archiveDepartedMemberDevelopmentGoals(
+  db: PrismaClient | Prisma.TransactionClient,
   teamId: string,
   userId: string,
+  archivedAt: Date,
 ): Promise<number> {
-  const result = await db.developmentGoal.deleteMany({
-    where: { teamId, memberUserId: userId },
+  const result = await db.developmentGoal.updateMany({
+    where: { teamId, memberUserId: userId, archivedAt: null },
+    data: {
+      archivedAt,
+      archiveReason: DEVELOPMENT_GOAL_ARCHIVE_REASON_MEMBER_DEPARTURE,
+    },
   });
   return result.count;
 }
 
 export async function cleanupWorkspaceMemberDeparture(
-  db: PrismaClient,
+  db: PrismaClient | Prisma.TransactionClient,
   teamId: string,
   userId: string,
-): Promise<{ deletedDraftCheckIns: number; deletedDevelopmentGoals: number; closedTasks: number }> {
-  const [draftResult, deletedDevelopmentGoals] = await Promise.all([
+  now = new Date(),
+): Promise<{ deletedDraftCheckIns: number; archivedDevelopmentGoals: number; closedTasks: number }> {
+  const [draftResult, archivedDevelopmentGoals] = await Promise.all([
     db.oneOnOneMeeting.deleteMany({
       where: { teamId, memberUserId: userId, status: "draft" },
     }),
-    deleteDepartedMemberDevelopmentGoals(db, teamId, userId),
+    archiveDepartedMemberDevelopmentGoals(db, teamId, userId, now),
   ]);
 
   const openTasks = await db.task.findMany({
@@ -84,23 +102,41 @@ export async function cleanupWorkspaceMemberDeparture(
 
   let closedTasks = 0;
   if (taskIdsToClose.length > 0) {
+    // Administrative closure is not a user completion and must bypass Momentum credit.
     const result = await db.task.updateMany({
       where: { id: { in: taskIdsToClose } },
-      data: { status: "done", completedAt: new Date() },
+      data: { status: "done", completedAt: now },
     });
     closedTasks = result.count;
   }
 
   return {
     deletedDraftCheckIns: draftResult.count,
-    deletedDevelopmentGoals,
+    archivedDevelopmentGoals,
     closedTasks,
   };
 }
 
+export async function cleanupWorkspaceMembersDeparture(
+  db: PrismaClient | Prisma.TransactionClient,
+  teamId: string,
+  userIds: readonly string[],
+  now = new Date(),
+): Promise<void> {
+  for (const userId of userIds) {
+    await cleanupWorkspaceMemberDeparture(db, teamId, userId, now);
+  }
+}
+
 export type FormerWorkspaceMember = {
   userId: string;
-  user: { id: string; name: string | null; email: string; image: string | null };
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    image: string | null;
+    isWorkplaceConnected: boolean;
+  };
   isFormer: true;
 };
 
@@ -114,31 +150,49 @@ export async function listFormerWorkspaceMembers(
   });
   const currentIds = new Set(currentMembers.map((member) => member.userId));
 
-  if (currentIds.size > 0) {
-    await db.developmentGoal.deleteMany({
-      where: {
-        teamId,
-        memberUserId: { notIn: [...currentIds] },
-      },
-    });
-  }
+  const [checkInMembers, goalMembers] = await Promise.all([
+    db.oneOnOneMeeting.groupBy({
+      by: ["memberUserId"],
+      where: { teamId, status: "published" },
+    }),
+    db.developmentGoal.groupBy({
+      by: ["memberUserId"],
+      where: { teamId, archivedAt: { not: null } },
+    }),
+  ]);
 
-  const checkInMembers = await db.oneOnOneMeeting.groupBy({
-    by: ["memberUserId"],
-    where: { teamId, status: "published" },
-  });
-
-  const formerIds = checkInMembers
-    .map((row) => row.memberUserId)
-    .filter((userId) => !currentIds.has(userId));
+  const formerIds = [
+    ...new Set(
+      [...checkInMembers, ...goalMembers]
+        .map((row) => row.memberUserId)
+        .filter((userId) => !currentIds.has(userId)),
+    ),
+  ];
 
   if (formerIds.length === 0) return [];
 
   const users = await db.user.findMany({
     where: { id: { in: formerIds } },
-    select: { id: true, name: true, email: true, image: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      _count: { select: { teamMembers: true } },
+    },
   });
-  const userById = new Map(users.map((user) => [user.id, user]));
+  const userById = new Map(
+    users.map((user) => [
+      user.id,
+      {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        isWorkplaceConnected: user._count.teamMembers > 0,
+      },
+    ]),
+  );
 
   return formerIds
     .map((userId): FormerWorkspaceMember | null => {

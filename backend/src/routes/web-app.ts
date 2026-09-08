@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { getSessionFromHeaders } from "../auth";
 import { sendPushToUsers } from "../lib/push";
@@ -20,6 +21,11 @@ import {
 } from "./subscription";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
 import { createWorkspaceForAuthUser } from "../lib/create-workspace";
+import { getWorkspaceTrialEligibility } from "../lib/workspace-trial-policy";
+import {
+  canChangeWorkspaceTimeZone,
+  validateWorkspaceTimeZone,
+} from "../lib/workspace-timezone";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken } from "../lib/team-name";
 import { deleteReplacedStorageObject } from "../lib/firebase-storage";
 import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
@@ -40,6 +46,26 @@ import {
   parseGoFrontendSettingsPatch,
   serializeGoFrontendSettings,
 } from "../lib/go-frontend-settings";
+import {
+  canManageWorkspaceRoster,
+  canManageWorkspaceSettings,
+  canManageWorkspaceTasks,
+} from "../lib/workspace-role-policy";
+import {
+  applyMomentumCompletion,
+  revokeMomentumCompletion,
+  withSerializableMomentumTransaction,
+  type MomentumLifecycleResult,
+} from "../lib/momentum-service";
+import {
+  canAccessTask,
+  canMutateTask,
+  resolveTaskCreationPolicy,
+  TASK_ASSIGNEE_INVALID,
+  TASK_KIND_INVALID,
+  taskVisibilityWhere,
+  workspaceTaskWhere,
+} from "../lib/task-policy";
 
 async function getWebUserTimeZone(userId: string, bodyTimeZone?: unknown): Promise<string> {
   if (typeof bodyTimeZone === "string" && isValidTimeZone(bodyTimeZone)) return bodyTimeZone;
@@ -109,8 +135,11 @@ webRouter.get("/api/me", async (c) => {
   // Do not return 200 + null — that lets the empty-workspace UI look "signed in" with a broken user row.
   if (!user) return c.json({ error: "Unauthorized" }, 401);
   const { listEnterpriseOrganizationsForUser } = await import("../lib/enterprise-org-access");
-  const organizations = await listEnterpriseOrganizationsForUser(userId);
-  return c.json({ data: { ...user, organizations } });
+  const [organizations, trial] = await Promise.all([
+    listEnterpriseOrganizationsForUser(userId),
+    getWorkspaceTrialEligibility(userId, user.email),
+  ]);
+  return c.json({ data: { ...user, ...trial, organizations } });
 });
 
 // ── API: teams list ───────────────────────────────────────────────────────────
@@ -123,8 +152,13 @@ webRouter.get("/api/teams", async (c) => {
     include: {
       team: {
         select: {
-          id: true, name: true, image: true, createdAt: true, inviteCode: true,
-          _count: { select: { members: true, tasks: true } },
+          id: true, name: true, image: true, timezone: true, createdAt: true, inviteCode: true,
+          _count: {
+            select: {
+              members: true,
+              tasks: { where: workspaceTaskWhere },
+            },
+          },
         },
       },
     },
@@ -209,8 +243,13 @@ webRouter.get("/api/teams/:id", async (c) => {
   const team = await prisma.team.findUnique({
     where: { id },
     select: {
-      id: true, name: true, image: true, createdAt: true, inviteCode: true, workplaceStandards: true, goFrontendSettings: true,
-      _count: { select: { members: true, tasks: true } },
+      id: true, name: true, image: true, timezone: true, createdAt: true, inviteCode: true, workplaceStandards: true, goFrontendSettings: true,
+      _count: {
+        select: {
+          members: true,
+          tasks: { where: workspaceTaskWhere },
+        },
+      },
     },
   });
   const members = await prisma.teamMember.findMany({
@@ -252,24 +291,30 @@ webRouter.patch("/api/teams/:id", async (c) => {
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
   const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
-  if (!membership || !["owner", "team_leader", "admin"].includes(membership.role)) {
+  if (!canManageWorkspaceSettings(membership?.role)) {
     return c.json({ error: { message: "Forbidden" } }, 403);
   }
   const body = await c.req.json().catch(() => ({})) as {
     name?: string;
     image?: string | null;
+    timezone?: string;
     workplaceStandards?: unknown;
     goFrontendSettings?: unknown;
   };
   const nameTrim = typeof body.name === "string" ? body.name.trim() : "";
   const hasImage = "image" in body;
+  const hasTimezone = body.timezone !== undefined;
+  if (hasTimezone && !canChangeWorkspaceTimeZone(membership?.role)) {
+    return c.json({ error: { message: "Only the workspace owner can change its timezone", code: "FORBIDDEN" } }, 403);
+  }
+  const parsedTimezone = hasTimezone ? validateWorkspaceTimeZone(body.timezone) : null;
+  if (parsedTimezone && !parsedTimezone.ok) {
+    return c.json({ error: { message: parsedTimezone.message, code: "VALIDATION_ERROR" } }, 400);
+  }
   const hasWorkplaceStandards = body.workplaceStandards !== undefined;
   const hasGoFrontendSettings = body.goFrontendSettings !== undefined;
-  if (hasWorkplaceStandards && membership.role !== "owner") {
-    return c.json({ error: { message: "Only the workspace owner can edit workplace standards" } }, 403);
-  }
-  if (!nameTrim && !hasImage && !hasWorkplaceStandards && !hasGoFrontendSettings) {
-    return c.json({ error: { message: "Name, image, workplace standards, or Alenio Go settings is required" } }, 400);
+  if (!nameTrim && !hasImage && !hasTimezone && !hasWorkplaceStandards && !hasGoFrontendSettings) {
+    return c.json({ error: { message: "Name, image, timezone, workplace standards, or Alenio Go settings is required" } }, 400);
   }
 
   let parsedStandards: ReturnType<typeof parseWorkplaceStandardsPatch> | null = null;
@@ -322,6 +367,7 @@ webRouter.patch("/api/teams/:id", async (c) => {
       data: {
         ...(nameTrim ? { name: nameTrim } : {}),
         ...(hasImage ? { image: body.image ?? null } : {}),
+        ...(parsedTimezone?.ok ? { timezone: parsedTimezone.value } : {}),
         ...(parsedStandards?.ok
           ? { workplaceStandards: serializeWorkplaceStandards(parsedStandards.value) }
           : {}),
@@ -329,7 +375,7 @@ webRouter.patch("/api/teams/:id", async (c) => {
           ? { goFrontendSettings: serializeGoFrontendSettings(parsedGoFrontendSettings.value) }
           : {}),
       },
-      select: { id: true, name: true, image: true, inviteCode: true, workplaceStandards: true, goFrontendSettings: true },
+      select: { id: true, name: true, image: true, timezone: true, inviteCode: true, workplaceStandards: true, goFrontendSettings: true },
     });
   } catch (err) {
     if (isPrismaUniqueOnName(err)) {
@@ -352,7 +398,7 @@ webRouter.delete("/api/teams/:id/members/:userId", async (c) => {
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id, userId: memberId } = c.req.param();
   const myMembership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
-  if (!myMembership || !["owner", "team_leader", "admin"].includes(myMembership.role)) {
+  if (!canManageWorkspaceRoster(myMembership?.role)) {
     return c.json({ error: { message: "Forbidden" } }, 403);
   }
   if (memberId === userId) {
@@ -365,7 +411,7 @@ webRouter.delete("/api/teams/:id/members/:userId", async (c) => {
   if (!targetMembership) {
     return c.json({ error: { message: "Member not found" } }, 404);
   }
-  if (["owner", "team_leader"].includes(targetMembership.role)) {
+  if (canManageWorkspaceRoster(targetMembership.role)) {
     return c.json({ error: { message: "Cannot remove an owner or team leader" } }, 403);
   }
   const pendingRecipientErr = await assertNoPendingRecipientRemoval(id, memberId);
@@ -420,7 +466,7 @@ webRouter.patch("/api/teams/:id/members/:userId/role", async (c) => {
   return c.json({ data: updated });
 });
 
-// ── API: task by id (any member of task's team) — before `/api/tasks` list
+// ── API: task by id (visible member task) — before `/api/tasks` list
 webRouter.get("/api/tasks/:id", async (c) => {
   if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
   const userId = webPrismaUserIdFromContext(c);
@@ -439,7 +485,9 @@ webRouter.get("/api/tasks/:id", async (c) => {
   const membership = await prisma.teamMember.findFirst({
     where: { teamId: task.teamId, userId: userId },
   });
-  if (!membership) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  if (!membership || !canAccessTask(task, userId)) {
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
   return c.json({ data: task });
 });
 
@@ -449,7 +497,7 @@ webRouter.get("/api/tasks", async (c) => {
   const userId = webPrismaUserIdFromContext(c);
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const assignments = await prisma.taskAssignment.findMany({
-    where: { userId: userId },
+    where: { userId: userId, task: taskVisibilityWhere(userId) },
     include: {
       task: {
         include: {
@@ -473,7 +521,7 @@ webRouter.get("/api/teams/:id/tasks/:taskId", async (c) => {
   const membership = await prisma.teamMember.findFirst({ where: { teamId, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
   const task = await prisma.task.findFirst({
-    where: { id: taskId, teamId },
+    where: { id: taskId, teamId, ...taskVisibilityWhere(userId) },
     include: {
       team: { select: { id: true, name: true } },
       creator: { select: { id: true, name: true, email: true, image: true } },
@@ -496,7 +544,7 @@ webRouter.get("/api/teams/:id/tasks", async (c) => {
   await materializeRecurringTasksForTeam(prisma, id);
   await archiveOldCompletedTasksForTeam(prisma, id);
   const tasks = await prisma.task.findMany({
-    where: { teamId: id },
+    where: { teamId: id, ...taskVisibilityWhere(userId) },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, image: true } } } },
       creator: { select: { id: true, name: true } },
@@ -532,7 +580,7 @@ webRouter.get("/api/team-tasks", async (c) => {
   const teamIds = memberships.map((m) => m.teamId);
   if (!teamIds.length) return c.json({ data: [] });
   const tasks = await prisma.task.findMany({
-    where: { teamId: { in: teamIds } },
+    where: { teamId: { in: teamIds }, ...workspaceTaskWhere },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, image: true } } } },
       creator: { select: { id: true, name: true } },
@@ -559,6 +607,7 @@ webRouter.post("/api/tasks", async (c) => {
     assigneeIds,
     isJoint,
     incognito,
+    kind,
     subtasks: subtasksRaw,
     timeZone: bodyTimeZone,
   } = body as Record<string, unknown>;
@@ -573,15 +622,38 @@ webRouter.post("/api/tasks", async (c) => {
   const membership = await prisma.teamMember.findFirst({ where: { teamId, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
 
-  let ids: string[] = Array.isArray(assigneeIds)
-    ? assigneeIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0).map((id) => id.trim())
-    : [];
-  ids = [...new Set(ids)];
-  if (ids.length === 0) ids = [userId];
-
-  for (const uid of ids) {
-    const m = await prisma.teamMember.findFirst({ where: { teamId, userId: uid } });
-    if (!m) return c.json({ error: { message: "One or more assignees are not on this team" } }, 400);
+  const creationPolicy = resolveTaskCreationPolicy({
+    requestedKind: kind,
+    creatorId: userId,
+    creatorRole: membership.role,
+    requestedAssigneeIds: assigneeIds,
+    requestedIncognito: incognito,
+    requestedIsJoint: isJoint,
+  });
+  if (!creationPolicy.ok) {
+    return c.json(
+      { error: { message: creationPolicy.message, code: creationPolicy.code } },
+      creationPolicy.code === TASK_KIND_INVALID ? 400 : 403,
+    );
+  }
+  const { classification } = creationPolicy;
+  const ids = creationPolicy.assigneeIds;
+  if (classification.kind === "workspace_task" && ids.length > 0) {
+    const activeAssignees = await prisma.teamMember.findMany({
+      where: { teamId, userId: { in: ids } },
+      select: { userId: true },
+    });
+    if (activeAssignees.length !== ids.length) {
+      return c.json(
+        {
+          error: {
+            message: "Workspace tasks may only be assigned to active workspace members",
+            code: TASK_ASSIGNEE_INVALID,
+          },
+        },
+        400,
+      );
+    }
   }
 
   const normalizedStatus = status === "done" ? "done" : "todo";
@@ -610,6 +682,23 @@ webRouter.post("/api/tasks", async (c) => {
     assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
     creator: { select: { id: true, name: true } },
   } as const;
+  type CreatedTask = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
+  const completionMomentumByTaskId = new Map<string, MomentumLifecycleResult>();
+  const createTask = async (args: { data: Prisma.TaskCreateArgs["data"] }): Promise<CreatedTask> => {
+    if (normalizedStatus !== "done" || classification.kind === "reminder") {
+      return prisma.task.create({ data: args.data, include: taskInclude });
+    }
+    return withSerializableMomentumTransaction(prisma, async (tx) => {
+      const task = await tx.task.create({ data: args.data, include: taskInclude });
+      const momentum = await applyMomentumCompletion(tx, {
+        taskId: task.id,
+        actorUserId: userId,
+        completedAt: task.completedAt ?? new Date(),
+      });
+      completionMomentumByTaskId.set(task.id, momentum);
+      return task;
+    });
+  };
 
   const baseTaskData = {
     title: title.trim(),
@@ -618,54 +707,80 @@ webRouter.post("/api/tasks", async (c) => {
     status: normalizedStatus,
     ...(normalizedStatus === "done" ? { completedAt: new Date() } : {}),
     dueDate: dueDateObj,
-    incognito: incognito === true,
+    incognito: creationPolicy.incognito,
+    kind: classification.kind,
+    momentumEligible: classification.momentumEligible,
     teamId,
     creatorId: userId,
   };
 
-  let tasks: Awaited<ReturnType<typeof prisma.task.create>>[];
+  let tasks: CreatedTask[];
 
-  const joint = isJoint === true && ids.length > 1;
+  const joint = creationPolicy.isJoint && ids.length > 1;
 
   if (joint) {
-    const task = await prisma.task.create({
+    const task = await createTask({
       data: {
         ...baseTaskData,
         isJoint: true,
         assignments: { create: ids.map((userId: string) => ({ userId })) },
         ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
       },
-      include: taskInclude,
     });
     tasks = [task];
   } else if (ids.length <= 1) {
-    const task = await prisma.task.create({
+    const task = await createTask({
       data: {
         ...baseTaskData,
         isJoint: false,
         ...(ids.length === 1 ? { assignments: { create: [{ userId: ids[0]! }] } } : {}),
         ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
       },
-      include: taskInclude,
     });
     tasks = [task];
   } else {
     tasks = await Promise.all(
       ids.map((assigneeId) =>
-        prisma.task.create({
+        createTask({
           data: {
             ...baseTaskData,
             isJoint: false,
             assignments: { create: [{ userId: assigneeId }] },
             ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
           },
-          include: taskInclude,
         }),
       ),
     );
   }
 
-  const assigneesToNotify = ids.filter((id) => id !== userId);
+  if (normalizedStatus === "done" && classification.kind === "workspace_task") {
+    for (const task of tasks) {
+      const completedAt = task.completedAt ?? new Date();
+      const momentum = completionMomentumByTaskId.get(task.id);
+      await logActivity({
+        teamId,
+        userId,
+        type: "task_completed",
+        metadata: {
+          taskId: task.id,
+          idempotencyKey: `task_completed:${teamId}:${task.id}:${completedAt.toISOString()}`,
+          momentumCreditIds: momentum?.creditIds ?? [],
+          taskTitle: task.incognito ? null : task.title,
+          dueDate: task.dueDate?.toISOString() ?? null,
+          completedAt: completedAt.toISOString(),
+          completedOnTime: task.dueDate ? completedAt <= task.dueDate : null,
+          assignees: task.assignments.map((assignment) => ({
+            id: assignment.userId,
+            name: assignment.user.name,
+            image: assignment.user.image ?? null,
+          })),
+        },
+      });
+    }
+  }
+
+  const assigneesToNotify =
+    classification.kind === "workspace_task" ? ids.filter((id) => id !== userId) : [];
   if (assigneesToNotify.length > 0 && tasks[0]) {
     try {
       await sendPushToUsers(
@@ -690,12 +805,18 @@ webRouter.patch("/api/tasks/:id", async (c) => {
   const userId = webPrismaUserIdFromContext(c);
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
-  // Must be assigned or creator
-  const [assignment, taskCheck] = await Promise.all([
-    prisma.taskAssignment.findFirst({ where: { taskId: id, userId: userId } }),
-    prisma.task.findFirst({ where: { id, creatorId: userId } }),
-  ]);
-  if (!assignment && !taskCheck) return c.json({ error: "Not found" }, 404);
+  const taskCheck = await prisma.task.findUnique({
+    where: { id },
+    select: {
+      kind: true,
+      creatorId: true,
+      assignments: { where: { userId }, select: { userId: true } },
+    },
+  });
+  if (!taskCheck || !canMutateTask(taskCheck, userId)) return c.json({ error: "Not found" }, 404);
+  if (taskCheck.creatorId !== userId && taskCheck.assignments.length === 0) {
+    return c.json({ error: "Not found" }, 404);
+  }
   const body = await c.req.json().catch(() => ({}));
   const { title, description, priority, dueDate, status, timeZone: bodyTimeZone } = body;
   const userTimeZone = await getWebUserTimeZone(userId, bodyTimeZone);
@@ -707,16 +828,71 @@ webRouter.patch("/api/tasks/:id", async (c) => {
     updateData.dueDate = dueDate ? parseCalendarDueDate(String(dueDate), userTimeZone) : null;
   }
   if (status !== undefined) updateData.status = status;
-  const task = await prisma.task.update({
-    where: { id },
-    data: updateData,
-    include: {
-      team: { select: { id: true, name: true } },
-      creator: { select: { id: true, name: true } },
-      assignments: { include: { user: { select: { id: true, name: true, image: true } } } },
-    },
+  const transitionAt = new Date();
+  const result = await withSerializableMomentumTransaction(prisma, async (tx) => {
+    const before = await tx.task.findUnique({ where: { id }, select: { status: true } });
+    if (!before) throw new Error(`Task ${id} not found`);
+    if (status !== undefined) {
+      if (status === "done" && before.status !== "done") {
+        updateData.completedAt = transitionAt;
+      } else if (status !== "done") {
+        updateData.completedAt = null;
+      }
+      updateData.archivedAt = null;
+    }
+    const task = await tx.task.update({
+      where: { id },
+      data: updateData,
+      include: {
+        team: { select: { id: true, name: true } },
+        creator: { select: { id: true, name: true } },
+        assignments: { include: { user: { select: { id: true, name: true, image: true } } } },
+      },
+    });
+    let momentum: MomentumLifecycleResult | null = null;
+    if (taskCheck.kind === "workspace_task" && status === "done" && before.status !== "done") {
+      momentum = await applyMomentumCompletion(tx, {
+        taskId: id,
+        actorUserId: userId,
+        completedAt: task.completedAt ?? transitionAt,
+      });
+    } else if (
+      taskCheck.kind === "workspace_task" &&
+      before.status === "done" &&
+      status !== undefined &&
+      status !== "done"
+    ) {
+      momentum = await revokeMomentumCompletion(tx, { taskId: id, revokedAt: transitionAt });
+    }
+    return { task, momentum, completed: status === "done" && before.status !== "done" };
   });
-  return c.json({ data: task });
+  if (result.completed && taskCheck.kind === "workspace_task") {
+    const completedAt = result.task.completedAt ?? transitionAt;
+    await logActivity({
+      teamId: result.task.teamId,
+      userId,
+      type: "task_completed",
+      metadata: {
+        taskId: id,
+        idempotencyKey: `task_completed:${result.task.teamId}:${id}:${completedAt.toISOString()}`,
+        momentumCreditIds: result.momentum?.creditIds ?? [],
+        taskTitle: result.task.incognito ? null : result.task.title,
+        dueDate: result.task.dueDate?.toISOString() ?? null,
+        completedAt: completedAt.toISOString(),
+        completedOnTime: result.task.dueDate ? completedAt <= result.task.dueDate : null,
+        assignees: result.task.assignments.map((assignment) => ({
+          id: assignment.userId,
+          name: assignment.user.name,
+          image: assignment.user.image ?? null,
+        })),
+      },
+    });
+  }
+  return c.json({
+    data: result.task,
+    ...(result.momentum?.milestoneCount != null ? { milestone: result.momentum.milestoneCount } : {}),
+    ...(result.momentum?.personalBestCount != null ? { comeback: result.momentum.personalBestCount } : {}),
+  });
 });
 
 // ── API: quick status update ──────────────────────────────────────────────────
@@ -725,17 +901,87 @@ webRouter.patch("/api/tasks/:id/status", async (c) => {
   const userId = webPrismaUserIdFromContext(c);
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
-  const assignment = await prisma.taskAssignment.findFirst({
-    where: { taskId: id, userId: userId },
-  });
-  if (!assignment) return c.json({ error: "Not found" }, 404);
-  const { status } = await c.req.json();
-  const task = await prisma.task.update({
+  const taskCheck = await prisma.task.findUnique({
     where: { id },
-    data: { status },
-    select: { id: true, title: true, status: true },
+    select: {
+      kind: true,
+      creatorId: true,
+      assignments: { where: { userId }, select: { userId: true } },
+    },
   });
-  return c.json({ data: task });
+  if (
+    !taskCheck ||
+    !canMutateTask(taskCheck, userId) ||
+    (taskCheck.creatorId !== userId && taskCheck.assignments.length === 0)
+  ) {
+    return c.json({ error: "Not found" }, 404);
+  }
+  const { status } = await c.req.json();
+  const transitionAt = new Date();
+  const result = await withSerializableMomentumTransaction(prisma, async (tx) => {
+    const before = await tx.task.findUnique({ where: { id }, select: { status: true } });
+    if (!before) throw new Error(`Task ${id} not found`);
+    const task = await tx.task.update({
+      where: { id },
+      data: {
+        status,
+        ...(status === "done"
+          ? before.status !== "done"
+            ? { completedAt: transitionAt }
+            : {}
+          : { completedAt: null }),
+        archivedAt: null,
+      },
+      select: {
+        id: true,
+        teamId: true,
+        title: true,
+        status: true,
+        dueDate: true,
+        completedAt: true,
+        incognito: true,
+        assignments: { select: { userId: true, user: { select: { name: true, image: true } } } },
+      },
+    });
+    let momentum: MomentumLifecycleResult | null = null;
+    if (taskCheck.kind === "workspace_task" && status === "done" && before.status !== "done") {
+      momentum = await applyMomentumCompletion(tx, {
+        taskId: id,
+        actorUserId: userId,
+        completedAt: task.completedAt ?? transitionAt,
+      });
+    } else if (taskCheck.kind === "workspace_task" && before.status === "done" && status !== "done") {
+      momentum = await revokeMomentumCompletion(tx, { taskId: id, revokedAt: transitionAt });
+    }
+    return { task, momentum, completed: status === "done" && before.status !== "done" };
+  });
+  if (result.completed && taskCheck.kind === "workspace_task") {
+    const completedAt = result.task.completedAt ?? transitionAt;
+    await logActivity({
+      teamId: result.task.teamId,
+      userId,
+      type: "task_completed",
+      metadata: {
+        taskId: id,
+        idempotencyKey: `task_completed:${result.task.teamId}:${id}:${completedAt.toISOString()}`,
+        momentumCreditIds: result.momentum?.creditIds ?? [],
+        taskTitle: result.task.incognito ? null : result.task.title,
+        dueDate: result.task.dueDate?.toISOString() ?? null,
+        completedAt: completedAt.toISOString(),
+        completedOnTime: result.task.dueDate ? completedAt <= result.task.dueDate : null,
+        assignees: result.task.assignments.map((assignment) => ({
+          id: assignment.userId,
+          name: assignment.user.name,
+          image: assignment.user.image ?? null,
+        })),
+      },
+    });
+  }
+  return c.json({
+    data: { id: result.task.id, title: result.task.title, status: result.task.status },
+    ...(result.momentum?.milestoneCount != null ? { milestone: result.momentum.milestoneCount } : {}),
+    ...(result.momentum?.personalBestCount != null ? { comeback: result.momentum.personalBestCount } : {}),
+  });
 });
 
 // ── API: delete task ──────────────────────────────────────────────────────────
@@ -750,12 +996,15 @@ webRouter.delete("/api/tasks/:id", async (c) => {
     include: { recurrenceRule: true },
   });
   if (!task) return c.json({ error: "Not found" }, 404);
+  if (!canAccessTask(task, userId) || !canMutateTask(task, userId)) {
+    return c.json({ error: "Not found" }, 404);
+  }
   // Must be creator or team admin/owner
   if (task.creatorId !== userId) {
     const membership = task.teamId
       ? await prisma.teamMember.findFirst({ where: { teamId: task.teamId, userId: userId } })
       : null;
-    if (!membership || !["owner", "admin"].includes(membership.role)) {
+    if (!canManageWorkspaceTasks(membership?.role)) {
       return c.json({ error: { message: "Forbidden" } }, 403);
     }
   }
@@ -983,6 +1232,28 @@ webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
       createdBy: { select: { id: true, name: true } },
     },
   });
+  if (
+    updatePolicy.resetApproval === "pending" &&
+    existing.approvalStatus !== "pending"
+  ) {
+    const managers = await prisma.teamMember.findMany({
+      where: { teamId: id, role: { in: ["owner", "team_leader"] } },
+      select: { userId: true },
+    });
+    const managerIds = managers
+      .map((member) => member.userId)
+      .filter((managerId) => managerId !== userId);
+    if (managerIds.length > 0) {
+      await sendPushToUsers(
+        managerIds,
+        "Calendar approval needed",
+        `${event.createdBy.name ?? "A team member"} submitted "${event.title}" for the team calendar.`,
+        { eventId: event.id, teamId: id, type: "calendar_event_pending" },
+        "notifMeetings",
+        id,
+      );
+    }
+  }
   return c.json({ data: event });
 });
 
@@ -2535,7 +2806,7 @@ webRouter.get("/", (c) => {
 
   function renderTeamDetail(team, tasks) {
     document.getElementById('team-detail-page-title').textContent = team.name;
-    var canEdit = team.myRole === 'owner' || team.myRole === 'admin';
+    var canEdit = team.myRole === 'owner' || team.myRole === 'team_leader';
     var members = team.members || [];
 
     // Header actions

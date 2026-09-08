@@ -17,6 +17,7 @@ import {
   normalizeQuickDevelopmentGoal,
   normalizeStringArray,
 } from "../lib/seneca-normalize";
+import { canManageDevelopmentGoals } from "../lib/workspace-role-policy";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -37,12 +38,9 @@ function canUseSeneca(role: string): boolean {
 }
 
 function canManageDevelopmentGoal(
-  membership: { role: string; userId: string },
-  memberUserId: string,
+  membership: { role: string },
 ): boolean {
-  const isLeaderRole =
-    membership.role === "owner" || membership.role === "team_leader" || membership.role === "admin";
-  return isLeaderRole || membership.userId === memberUserId;
+  return canManageDevelopmentGoals(membership.role);
 }
 
 const prepBodySchema = z.object({
@@ -458,7 +456,7 @@ senecaRouter.post("/:memberUserId/seneca/quick-goal", zValidator("json", quickGo
   const body = c.req.valid("json");
 
   const membership = await getMembership(user.id, teamId);
-  if (!membership || !canManageDevelopmentGoal(membership, memberUserId)) {
+  if (!membership || !canManageDevelopmentGoal(membership)) {
     return c.json({ error: { message: "Not allowed to create development goals for this member" } }, 403);
   }
 

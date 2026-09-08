@@ -3,6 +3,11 @@ import { syncAppUserFromAuth } from "./ensure-app-user";
 import type { AppUser } from "../auth";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "./team-name";
 import { trialEndsAtFrom } from "./workspace-access";
+import { normalizeWorkspaceLocation } from "./workspace-location";
+import { resolveTimeZone } from "./timezone";
+import { consumeWorkspaceTrial } from "./workspace-trial-policy";
+
+class WorkspaceTrialAlreadyUsedError extends Error {}
 
 function prismaCode(err: unknown): string | undefined {
   if (!err || typeof err !== "object") return undefined;
@@ -24,7 +29,9 @@ export type CreateWorkspaceResult =
         id: string;
         name: string;
         industry: string | null;
+        location: string | null;
         image: string | null;
+        timezone: string | null;
         createdAt: Date;
         _count: { members: number; tasks: number };
       };
@@ -47,12 +54,17 @@ export async function createWorkspaceForAuthUser(opts: {
   preferredUserId?: string | null;
   name: string;
   industry?: string | null;
+  location?: string | null;
   /** Self-serve callers must explicitly opt in to the Operations trial. */
   startTrial?: boolean;
 }): Promise<CreateWorkspaceResult> {
   const nameNorm = normalizeTeamName(opts.name);
   if (!nameNorm) {
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "Name is required" };
+  }
+  const location = normalizeWorkspaceLocation(opts.location ?? null);
+  if (!location.ok) {
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: location.message };
   }
 
   if (await isTeamDisplayNameTaken(nameNorm)) {
@@ -63,24 +75,40 @@ export async function createWorkspaceForAuthUser(opts: {
       message: "A workspace with this name already exists. Pick a different name.",
     };
   }
+  const reservedName = await prisma.pendingWorkspaceCheckout.findFirst({
+    where: {
+      nameKey: nameNorm.toLocaleLowerCase(),
+      status: "pending",
+      expiresAt: { gt: new Date() },
+    },
+    select: { id: true },
+  });
+  if (reservedName) {
+    return {
+      ok: false,
+      status: 409,
+      code: "TEAM_NAME_TAKEN",
+      message: "A workspace with this name is currently being created. Pick a different name.",
+    };
+  }
 
   let ownerId = opts.preferredUserId?.trim() || null;
   let owner = ownerId
-    ? await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, name: true } })
+    ? await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, name: true, email: true, timezone: true } })
     : null;
 
   if (!owner) {
     const synced = await syncAppUserFromAuth(opts.authUser);
     ownerId = synced?.user.id ?? null;
     owner = ownerId
-      ? await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, name: true } })
+      ? await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, name: true, email: true, timezone: true } })
       : null;
   }
 
   if (!owner && opts.authUser.id?.trim()) {
     owner = await prisma.user.findUnique({
       where: { id: opts.authUser.id.trim() },
-      select: { id: true, name: true },
+      select: { id: true, name: true, email: true, timezone: true },
     });
     ownerId = owner?.id ?? null;
   }
@@ -107,10 +135,19 @@ export async function createWorkspaceForAuthUser(opts: {
 
   try {
     const team = await prisma.$transaction(async (tx) => {
+      const trialStartedAt = new Date();
+      if (
+        opts.startTrial === true &&
+        !(await consumeWorkspaceTrial(tx, owner.id, owner.email, trialStartedAt))
+      ) {
+        throw new WorkspaceTrialAlreadyUsedError();
+      }
       const created = await tx.team.create({
         data: {
           name: nameNorm,
           industry: opts.industry?.trim().slice(0, 120) || null,
+          location: location.value,
+          timezone: resolveTimeZone(owner.timezone),
           inviteCode,
         },
       });
@@ -118,7 +155,6 @@ export async function createWorkspaceForAuthUser(opts: {
         data: { userId: owner.id, teamId: created.id, role: "owner" },
       });
       if (opts.startTrial === true) {
-        const trialStartedAt = new Date();
         await tx.teamSubscription.create({
           data: {
             teamId: created.id,
@@ -135,15 +171,30 @@ export async function createWorkspaceForAuthUser(opts: {
         id: true,
         name: true,
         industry: true,
+        location: true,
         image: true,
+        timezone: true,
         createdAt: true,
-        _count: { select: { members: true, tasks: true } },
+        _count: {
+          select: {
+            members: true,
+            tasks: { where: { kind: "workspace_task" } },
+          },
+        },
         },
       });
     });
 
     return { ok: true, team, ownerName: owner.name };
   } catch (err) {
+    if (err instanceof WorkspaceTrialAlreadyUsedError) {
+      return {
+        ok: false,
+        status: 409,
+        code: "TRIAL_ALREADY_USED",
+        message: "Your workspace trial has already been used. Choose a paid plan to create another workspace.",
+      };
+    }
     if (isPrismaUniqueOnName(err)) {
       return {
         ok: false,

@@ -27,6 +27,7 @@ describe("validateUsername", () => {
   });
 
   test("enforces length bounds", () => {
+    expect(USERNAME_MAX_LENGTH).toBe(15);
     expect(validateUsername("ab")).toMatchObject({ ok: false, reason: "too_short" });
     expect(validateUsername("a".repeat(USERNAME_MAX_LENGTH + 1))).toMatchObject({
       ok: false,

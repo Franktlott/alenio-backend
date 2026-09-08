@@ -57,7 +57,7 @@ describe("Seneca focus scoring", () => {
   test("limits manager briefs to approved leadership roles", () => {
     expect(canAccessSenecaFocus("owner")).toBe(true);
     expect(canAccessSenecaFocus("team_leader")).toBe(true);
-    expect(canAccessSenecaFocus("admin")).toBe(true);
+    expect(canAccessSenecaFocus("admin")).toBe(false);
     expect(canAccessSenecaFocus("member")).toBe(false);
     expect(canAccessSenecaFocus(null)).toBe(false);
   });

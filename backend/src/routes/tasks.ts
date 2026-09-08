@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
@@ -34,6 +35,24 @@ import {
   type MemberStandardsCompliance,
   type WorkplaceStandards,
 } from "../lib/workplace-standards";
+import { canManageWorkspaceTasks } from "../lib/workspace-role-policy";
+import {
+  applyMomentumCompletion,
+  revokeMomentumCompletion,
+  withSerializableMomentumTransaction,
+  type MomentumLifecycleResult,
+} from "../lib/momentum-service";
+import {
+  canAccessTask,
+  canMutateTask,
+  REMINDER_ASSIGNMENT_LOCKED,
+  REMINDER_CREATOR_REQUIRED,
+  resolveTaskCreationPolicy,
+  TASK_ASSIGNEE_INVALID,
+  TASK_KIND_INVALID,
+  taskVisibilityWhere,
+  workspaceTaskWhere,
+} from "../lib/task-policy";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -82,9 +101,7 @@ function canModerateTaskNote(
   return (
     noteCreatorId === userId ||
     taskCreatorId === userId ||
-    role === "owner" ||
-    role === "admin" ||
-    role === "team_leader"
+    canManageWorkspaceTasks(role)
   );
 }
 
@@ -114,6 +131,8 @@ async function buildRecurrenceTaskFields(
     incognito: boolean;
     isJoint: boolean;
     attachmentUrl?: string | null;
+    kind: "workspace_task" | "reminder";
+    momentumEligible: boolean;
   },
   recurrence: RecurrenceBody | undefined,
   dueDate: string | null | undefined,
@@ -122,7 +141,15 @@ async function buildRecurrenceTaskFields(
   if (!recurrence) return {};
 
   const occurrenceCount = resolveRecurrenceOccurrenceCount(recurrence);
-  const series = await createRecurrenceSeries(prisma, taskSeed, { ...recurrence, timeZone });
+  const series = await createRecurrenceSeries(
+    prisma,
+    {
+      ...taskSeed,
+      description: taskSeed.description ?? null,
+      attachmentUrl: taskSeed.attachmentUrl ?? null,
+    },
+    { ...recurrence, timeZone },
+  );
   const anchor =
     dueDate != null
       ? alignRecurringAnchorDueDate(
@@ -151,146 +178,6 @@ async function buildRecurrenceTaskFields(
 
 function parseRecurrenceScope(raw: unknown): RecurrenceScope {
   return raw === "series" ? "series" : "task";
-}
-
-type CompletionMeta = {
-  completedOnTime?: boolean;
-  dueDate?: string | null;
-  completedAt?: string | null;
-  assignees?: Array<{ id?: string }>;
-};
-
-function getCompletionMetaForUser(
-  activity: { userId: string | null; metadata: string | null },
-  userId: string
-): { completedOnTime: boolean } | null {
-  let meta: CompletionMeta = {};
-  if (activity.metadata) {
-    try {
-      meta = JSON.parse(activity.metadata) as CompletionMeta;
-    } catch {
-      meta = {};
-    }
-  }
-
-  const assigneeIds = (meta.assignees ?? []).map((a) => a.id).filter((id): id is string => typeof id === "string");
-  const isRelevant = activity.userId === userId || assigneeIds.includes(userId);
-  if (!isRelevant) return null;
-
-  let completedOnTime = true;
-  if (typeof meta.completedOnTime === "boolean") {
-    completedOnTime = meta.completedOnTime;
-  } else if (meta.completedAt && meta.dueDate) {
-    completedOnTime = new Date(meta.completedAt) <= new Date(meta.dueDate);
-  }
-
-  return { completedOnTime };
-}
-
-async function getUserCompletionOutcomes(teamId: string, userId: string): Promise<boolean[]> {
-  const completionActivities = await prisma.teamActivity.findMany({
-    where: { teamId, type: "task_completed" },
-    select: { userId: true, metadata: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const outcomes: boolean[] = [];
-  for (const activity of completionActivities) {
-    const parsed = getCompletionMetaForUser(activity, userId);
-    if (!parsed) continue;
-    outcomes.push(parsed.completedOnTime);
-  }
-  return outcomes;
-}
-
-// Recalculate and store streak without awarding milestones (used on recall)
-async function recalculateStreak(userId: string, teamId: string) {
-  const outcomes = await getUserCompletionOutcomes(teamId, userId);
-  let streak = 0;
-  for (const completedOnTime of outcomes) {
-    if (completedOnTime) streak++;
-    else break;
-  }
-  await prisma.teamMember.updateMany({
-    where: { userId, teamId },
-    data: { currentStreak: streak },
-  });
-}
-
-// Streak helper: calculate streak and award milestone/personal-best for a single user
-async function calculateAndAwardStreak(
-  userId: string,
-  teamId: string,
-  taskTitle: string,
-  taskIncognito: boolean,
-  userName: string | null
-): Promise<{ milestoneCount: number | null; personalBestCount: number | null }> {
-  let milestoneCount: number | null = null;
-  let personalBestCount: number | null = null;
-
-  // Consecutive on-time completions since last overdue (most recent first)
-  const outcomes = await getUserCompletionOutcomes(teamId, userId);
-  let streak = 0;
-  for (const completedOnTime of outcomes) {
-    if (completedOnTime) {
-      streak++;
-    } else {
-      break;
-    }
-  }
-
-  // Persist streak so it survives task deletion (updateMany: no throw if row missing)
-  await prisma.teamMember.updateMany({
-    where: { userId, teamId },
-    data: { currentStreak: streak },
-  });
-
-  const isMilestone = streak === 5 || streak === 10 || streak === 15 || (streak >= 20 && streak % 10 === 0);
-  if (isMilestone) {
-    milestoneCount = streak;
-    await logActivity({
-      teamId,
-      userId,
-      type: "task_milestone",
-      metadata: { count: streak, userName, incognito: taskIncognito },
-    });
-  }
-
-  const fullUser = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { personalBestStreak: true, personalBestCelebrated: true },
-  });
-
-  if (streak === 0) {
-    // Task was completed late — reset the flag so the next comeback can be celebrated
-    if (fullUser?.personalBestCelebrated) {
-      await prisma.user.update({ where: { id: userId }, data: { personalBestCelebrated: false } });
-    }
-  } else if (fullUser && streak >= fullUser.personalBestStreak && fullUser.personalBestStreak > 0) {
-    if (!fullUser.personalBestCelebrated) {
-      // First time crossing the personal best in this comeback — check for late task history
-      const lateCount = outcomes.filter((completedOnTime) => !completedOnTime).length;
-      if (lateCount > 0) {
-        // Celebrate once and mark as celebrated — won't fire again until next streak break
-        await prisma.user.update({ where: { id: userId }, data: { personalBestStreak: streak, personalBestCelebrated: true } });
-        personalBestCount = streak;
-        await logActivity({
-          teamId,
-          userId,
-          type: "personal_best",
-          metadata: { count: streak, userName, incognito: taskIncognito },
-        });
-      } else {
-        // No late history yet — update PB silently
-        await prisma.user.update({ where: { id: userId }, data: { personalBestStreak: streak } });
-      }
-    } else {
-      // Already celebrated this comeback — just update PB silently
-      await prisma.user.update({ where: { id: userId }, data: { personalBestStreak: streak } });
-    }
-  }
-
-  return { milestoneCount, personalBestCount };
 }
 
 // GET /api/teams/:teamId/tasks
@@ -354,6 +241,12 @@ tasksRouter.get("/", async (c) => {
   }
 
   const searchQ = (c.req.query("q") ?? "").trim();
+  const isPersonalListing =
+    Boolean(recurrenceSeriesId) ||
+    myTasks === "true" ||
+    resolvedAssigneeId === user.id ||
+    creatorId === "me" ||
+    creatorId === user.id;
 
   if (recurrenceSeriesId) {
     const series = await prisma.recurrenceSeries.findFirst({
@@ -361,6 +254,13 @@ tasksRouter.get("/", async (c) => {
       select: { id: true },
     });
     if (!series) {
+      return c.json({ error: { message: "Recurrence series not found", code: "NOT_FOUND" } }, 404);
+    }
+    const seriesRow = await prisma.recurrenceSeries.findUnique({
+      where: { id: recurrenceSeriesId },
+      select: { kind: true, creatorId: true },
+    });
+    if (seriesRow && !canAccessTask(seriesRow, user.id)) {
       return c.json({ error: { message: "Recurrence series not found", code: "NOT_FOUND" } }, 404);
     }
   }
@@ -399,10 +299,18 @@ tasksRouter.get("/", async (c) => {
           { creatorId: user.id, assignments: { none: {} } },
         ],
       } : {}),
-      ...(!recurrenceSeriesId && resolvedAssigneeId ? { assignments: { some: { userId: resolvedAssigneeId } } } : {}),
+      ...(!recurrenceSeriesId && resolvedAssigneeId
+        ? {
+            assignments: { some: { userId: resolvedAssigneeId } },
+            ...(resolvedAssigneeId !== user.id ? workspaceTaskWhere : {}),
+          }
+        : {}),
       // "me" is a shorthand that resolves to the authenticated user's ID
       ...(!recurrenceSeriesId && creatorId ? { creatorId: creatorId === "me" ? user.id : creatorId } : {}),
-      ...(monthFilters.length ? { AND: monthFilters } : {}),
+      AND: [
+        isPersonalListing ? taskVisibilityWhere(user.id) : workspaceTaskWhere,
+        ...monthFilters,
+      ],
       ...(searchQ
         ? {
             title: { contains: searchQ, mode: "insensitive" as const },
@@ -448,13 +356,44 @@ tasksRouter.post("/", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
-  const subscription = await getTeamSubscription(teamId);
-  if (!teamSubscriptionRowHasTeamFeatures(subscription)) {
-    return c.json({ error: { message: "Task manager requires a Pro or Operations plan", code: "SUBSCRIPTION_REQUIRED" } }, 403);
-  }
-
   const body = await c.req.json();
   const { title, description, priority, dueDate, status, assigneeIds, recurrence, attachmentUrl, incognito, isJoint, subtasks, timeZone: bodyTimeZone } = body;
+
+  const creationPolicy = resolveTaskCreationPolicy({
+    requestedKind: body.kind,
+    creatorId: user.id,
+    creatorRole: membership.role,
+    requestedAssigneeIds: assigneeIds,
+    requestedIncognito: incognito,
+    requestedIsJoint: isJoint,
+  });
+  if (!creationPolicy.ok) {
+    const status = creationPolicy.code === TASK_KIND_INVALID ? 400 : 403;
+    return c.json({ error: { message: creationPolicy.message, code: creationPolicy.code } }, status);
+  }
+  const { classification } = creationPolicy;
+  const ids = creationPolicy.assigneeIds;
+  const effectiveIncognito = creationPolicy.incognito;
+  const effectiveIsJoint = creationPolicy.isJoint;
+
+  if (classification.kind === "workspace_task") {
+    const subscription = await getTeamSubscription(teamId);
+    if (!teamSubscriptionRowHasTeamFeatures(subscription)) {
+      return c.json({ error: { message: "Task manager requires a Pro or Operations plan", code: "SUBSCRIPTION_REQUIRED" } }, 403);
+    }
+    if (ids.length > 0) {
+      const activeAssignees = await prisma.teamMember.findMany({
+        where: { teamId, userId: { in: ids } },
+        select: { userId: true },
+      });
+      if (activeAssignees.length !== ids.length) {
+        return c.json(
+          { error: { message: "Workspace tasks may only be assigned to active workspace members", code: TASK_ASSIGNEE_INVALID } },
+          400,
+        );
+      }
+    }
+  }
 
   if (!title?.trim()) {
     return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
@@ -468,6 +407,23 @@ tasksRouter.post("/", async (c) => {
     recurrenceRule: true,
     creator: { select: { id: true, name: true, email: true, image: true } },
   } as const;
+  type CreatedTask = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
+  const completionMomentumByTaskId = new Map<string, MomentumLifecycleResult>();
+  const createTask = async (args: { data: Prisma.TaskCreateArgs["data"] }): Promise<CreatedTask> => {
+    if (normalizedStatus !== "done") {
+      return prisma.task.create({ data: args.data, include: taskInclude });
+    }
+    return withSerializableMomentumTransaction(prisma, async (tx) => {
+      const task = await tx.task.create({ data: args.data, include: taskInclude });
+      const momentum = await applyMomentumCompletion(tx, {
+        taskId: task.id,
+        actorUserId: user.id,
+        completedAt: task.completedAt ?? new Date(),
+      });
+      completionMomentumByTaskId.set(task.id, momentum);
+      return task;
+    });
+  };
 
   const dueDateObj = dueDate
     ? recurrence
@@ -493,7 +449,9 @@ tasksRouter.post("/", async (c) => {
     status: normalizedStatus,
     ...(normalizedStatus === "done" ? { completedAt: new Date() } : {}),
     dueDate: dueDateObj,
-    incognito: incognito === true,
+    incognito: effectiveIncognito,
+    kind: classification.kind,
+    momentumEligible: classification.momentumEligible,
     teamId,
     creatorId: user.id,
     ...(attachmentUrl ? { attachmentUrl } : {}),
@@ -505,20 +463,19 @@ tasksRouter.post("/", async (c) => {
     title: title.trim(),
     description: description?.trim() ?? null,
     priority: priority || "medium",
-    incognito: incognito === true,
-    isJoint: isJoint === true,
+    incognito: effectiveIncognito,
+    isJoint: effectiveIsJoint,
     attachmentUrl: attachmentUrl ?? null,
+    kind: classification.kind,
+    momentumEligible: classification.momentumEligible,
   };
 
-  // Reminders are always self-assigned to the creator
-  const ids: string[] = assigneeIds?.length ? (assigneeIds as string[]) : [];
+  let tasks: CreatedTask[];
 
-  let tasks: Awaited<ReturnType<typeof prisma.task.create>>[];
-
-  if (isJoint === true && ids.length > 1) {
+  if (effectiveIsJoint && ids.length > 1) {
     // Joint task: one task shared by all assignees
     const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate, userTimeZone);
-    const task = await prisma.task.create({
+    const task = await createTask({
       data: {
         ...baseTaskData,
         ...recurrenceFields,
@@ -526,20 +483,18 @@ tasksRouter.post("/", async (c) => {
         assignments: { create: ids.map((uid: string) => ({ userId: uid })) },
         ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
       },
-      include: taskInclude,
     });
     tasks = [task];
   } else if (ids.length <= 1) {
     // Single task (0 or 1 assignee)
     const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate, userTimeZone);
-    const task = await prisma.task.create({
+    const task = await createTask({
       data: {
         ...baseTaskData,
         ...recurrenceFields,
         ...(ids.length === 1 ? { assignments: { create: [{ userId: ids[0]! }] } } : {}),
         ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
       },
-      include: taskInclude,
     });
     tasks = [task];
   } else {
@@ -547,21 +502,49 @@ tasksRouter.post("/", async (c) => {
     tasks = await Promise.all(
       ids.map(async (assigneeId) => {
         const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate, userTimeZone);
-        return prisma.task.create({
+        return createTask({
           data: {
             ...baseTaskData,
             ...recurrenceFields,
             assignments: { create: [{ userId: assigneeId }] },
             ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
           },
-          include: taskInclude,
         });
       }),
     );
   }
 
+  if (normalizedStatus === "done" && classification.kind === "workspace_task") {
+    for (const task of tasks) {
+      const completedAt = task.completedAt ?? new Date();
+      const momentum = completionMomentumByTaskId.get(task.id);
+      await logActivity({
+        teamId,
+        userId: user.id,
+        type: "task_completed",
+        metadata: {
+          taskId: task.id,
+          idempotencyKey: `task_completed:${teamId}:${task.id}:${completedAt.toISOString()}`,
+          momentumCreditIds: momentum?.creditIds ?? [],
+          taskTitle: task.incognito ? null : task.title,
+          dueDate: task.dueDate?.toISOString() ?? null,
+          completedAt: completedAt.toISOString(),
+          completedOnTime: task.dueDate ? completedAt <= task.dueDate : null,
+          assignees: (task as typeof task & {
+            assignments: Array<{ userId: string; user: { name: string | null; image: string | null } }>;
+          }).assignments.map((assignment) => ({
+            id: assignment.userId,
+            name: assignment.user.name,
+            image: assignment.user.image ?? null,
+          })),
+        },
+      });
+    }
+  }
+
   // Send push notifications to assignees (excluding the creator)
-  const assigneesToNotify = ids.filter((id) => id !== user.id);
+  const assigneesToNotify =
+    classification.kind === "workspace_task" ? ids.filter((id) => id !== user.id) : [];
   if (assigneesToNotify.length > 0) {
     await sendPushToUsers(
       assigneesToNotify,
@@ -575,16 +558,16 @@ tasksRouter.post("/", async (c) => {
 
   // Log activity for each assignee
   const assignedUsersForLog = await prisma.user.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: classification.kind === "workspace_task" ? ids : [] } },
     select: { id: true, name: true },
   });
   const userNameMapForLog = Object.fromEntries(assignedUsersForLog.map((u) => [u.id, u.name ?? ""]));
-  for (const assigneeId of ids) {
+  for (const assigneeId of classification.kind === "workspace_task" ? ids : []) {
     await logActivity({
       teamId,
       userId: assigneeId,
       type: "task_assigned",
-      metadata: { taskTitles: incognito ? [] : [title.trim()], taskCount: 1, assigneeName: userNameMapForLog[assigneeId] ?? "" },
+      metadata: { taskTitles: effectiveIncognito ? [] : [title.trim()], taskCount: 1, assigneeName: userNameMapForLog[assigneeId] ?? "" },
     });
   }
 
@@ -632,7 +615,7 @@ tasksRouter.get("/member-stats", async (c) => {
 
   // Fetch all assigned tasks for this team in one query
   const assignments = await prisma.taskAssignment.findMany({
-    where: { task: { teamId } },
+    where: { task: { teamId, ...workspaceTaskWhere } },
     include: {
       task: {
         select: {
@@ -652,11 +635,16 @@ tasksRouter.get("/member-stats", async (c) => {
     select: {
       userId: true,
       currentStreak: true,
+      personalBestStreak: true,
       user: { select: { name: true, email: true } },
     },
   });
   const storedStreaks: Record<string, number> = {};
-  for (const m of teamMembers) storedStreaks[m.userId] = m.currentStreak;
+  const storedPersonalBests: Record<string, number> = {};
+  for (const m of teamMembers) {
+    storedStreaks[m.userId] = m.currentStreak;
+    storedPersonalBests[m.userId] = m.personalBestStreak;
+  }
 
   // Group by userId
   const userTasks: Record<
@@ -736,7 +724,7 @@ tasksRouter.get("/member-stats", async (c) => {
       dueSoonTasks,
       completedTasks,
       streak,
-      personalBestStreak: 0,
+      personalBestStreak: storedPersonalBests[userId] ?? 0,
       activeDevGoals: 0,
       devEngagementPct: 0,
       daysSinceLastOneOnOne: null,
@@ -746,13 +734,13 @@ tasksRouter.get("/member-stats", async (c) => {
     };
   }
 
-  const emptyStats = (streak: number) => ({
+  const emptyStats = (streak: number, personalBestStreak = 0) => ({
     activeTasks: 0,
     overdueTasks: 0,
     dueSoonTasks: 0,
     completedTasks: 0,
     streak,
-    personalBestStreak: 0,
+    personalBestStreak,
     activeDevGoals: 0,
     devEngagementPct: 0,
     daysSinceLastOneOnOne: null as number | null,
@@ -764,13 +752,13 @@ tasksRouter.get("/member-stats", async (c) => {
   // Also include members with no tasks but a stored streak
   for (const m of teamMembers) {
     if (!statsMap[m.userId]) {
-      statsMap[m.userId] = emptyStats(m.currentStreak);
+      statsMap[m.userId] = emptyStats(m.currentStreak, m.personalBestStreak);
     }
   }
 
   const [devGoals, oneOnOnes] = await Promise.all([
     prisma.developmentGoal.findMany({
-      where: { teamId, status: { not: "closed" } },
+      where: { teamId, status: { not: "closed" }, archivedAt: null },
       select: {
         id: true,
         memberUserId: true,
@@ -862,20 +850,6 @@ tasksRouter.get("/member-stats", async (c) => {
     statsMap[m.userId] = row;
   }
 
-  // Fetch personalBestStreak for all users in the map
-  const userIds = Object.keys(statsMap);
-  if (userIds.length > 0) {
-    const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, personalBestStreak: true },
-    });
-    for (const u of users) {
-      if (statsMap[u.id]) {
-        statsMap[u.id]!.personalBestStreak = u.personalBestStreak;
-      }
-    }
-  }
-
   return c.json({ data: { stats: statsMap, workplaceStandards }, developmentGoalAlerts });
 });
 
@@ -891,6 +865,7 @@ tasksRouter.get("/count", async (c) => {
       task: {
         teamId,
         status: { not: "done" },
+        ...taskVisibilityWhere(user.id),
       },
     },
   });
@@ -993,8 +968,14 @@ tasksRouter.get("/:taskId/notes", async (c) => {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
-  const task = await prisma.task.findFirst({ where: { id: taskId, teamId }, select: { id: true } });
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, teamId },
+    select: { id: true, kind: true, creatorId: true },
+  });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canAccessTask(task, user.id)) {
+    return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  }
 
   const notes = await prisma.taskNote.findMany({
     where: { taskId },
@@ -1023,17 +1004,19 @@ tasksRouter.post("/:taskId/notes", async (c) => {
       title: true,
       incognito: true,
       creatorId: true,
+      kind: true,
       assignments: { select: { userId: true } },
     },
   });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can add notes", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
 
   const isParticipant =
     task.creatorId === user.id ||
     task.assignments.some((assignment) => assignment.userId === user.id) ||
-    membership.role === "owner" ||
-    membership.role === "admin" ||
-    membership.role === "team_leader";
+    canManageWorkspaceTasks(membership.role);
   if (!isParticipant) {
     return c.json(
       {
@@ -1090,9 +1073,12 @@ tasksRouter.patch("/:taskId/notes/:noteId", async (c) => {
 
   const task = await prisma.task.findFirst({
     where: { id: taskId, teamId },
-    select: { id: true, creatorId: true },
+    select: { id: true, creatorId: true, kind: true },
   });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can edit notes", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
 
   const existing = await prisma.taskNote.findFirst({ where: { id: noteId, taskId } });
   if (!existing) return c.json({ error: { message: "Note not found", code: "NOT_FOUND" } }, 404);
@@ -1127,9 +1113,12 @@ tasksRouter.delete("/:taskId/notes/:noteId", async (c) => {
 
   const task = await prisma.task.findFirst({
     where: { id: taskId, teamId },
-    select: { id: true, creatorId: true },
+    select: { id: true, creatorId: true, kind: true },
   });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can delete notes", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
 
   const existing = await prisma.taskNote.findFirst({ where: { id: noteId, taskId } });
   if (!existing) return c.json({ error: { message: "Note not found", code: "NOT_FOUND" } }, 404);
@@ -1161,6 +1150,9 @@ tasksRouter.get("/:taskId", async (c) => {
   });
 
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canAccessTask(task, user.id)) {
+    return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  }
 
   return c.json({ data: task });
 });
@@ -1179,6 +1171,9 @@ tasksRouter.patch("/:taskId", async (c) => {
     include: { recurrenceRule: true },
   });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can update this reminder", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
 
   const isCreator = task.creatorId === user.id;
 
@@ -1285,42 +1280,76 @@ tasksRouter.patch("/:taskId", async (c) => {
     });
   }
 
-  const updated = await prisma.task.update({
-    where: { id: taskId },
-    data: {
-      ...(title !== undefined ? { title: title.trim() } : {}),
-      ...(priority !== undefined ? { priority } : {}),
-      ...(dueDate !== undefined ? { dueDate: dueDate ? parseCalendarDueDate(dueDate, userTimeZone) : null } : {}),
-      ...(status !== undefined
-        ? {
-            status,
-            completedAt: status === "done" ? new Date() : null,
-            archivedAt: null,
-          }
-        : {}),
-    },
-    include: {
-      assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
-      subtasks: subtasksInclude,
-      recurrenceRule: true,
-      creator: { select: { id: true, name: true, email: true, image: true } },
-    },
-  });
+  const transitionAt = new Date();
+  const transactionResult = await withSerializableMomentumTransaction(prisma, async (tx) => {
+    const current = await tx.task.findUnique({
+      where: { id: taskId },
+      select: { status: true },
+    });
+    if (!current) throw new Error(`Task ${taskId} not found`);
 
-  // Handle recurrence: if completed, spawn next occurrence
-  let milestoneCount: number | null = null;
-  let personalBestCount: number | null = null;
-  if (status === "done" && task.status !== "done") {
+    const updated = await tx.task.update({
+      where: { id: taskId },
+      data: {
+        ...(title !== undefined ? { title: title.trim() } : {}),
+        ...(priority !== undefined ? { priority } : {}),
+        ...(dueDate !== undefined ? { dueDate: dueDate ? parseCalendarDueDate(dueDate, userTimeZone) : null } : {}),
+        ...(status !== undefined
+          ? {
+              status,
+              ...(status === "done"
+                ? current.status !== "done"
+                  ? { completedAt: transitionAt }
+                  : {}
+                : { completedAt: null }),
+              archivedAt: null,
+            }
+          : {}),
+      },
+      include: {
+        assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+        subtasks: subtasksInclude,
+        recurrenceRule: true,
+        creator: { select: { id: true, name: true, email: true, image: true } },
+      },
+    });
+
+    const completed = status === "done" && current.status !== "done";
+    const recalled = current.status === "done" && status !== undefined && status !== "done";
+    let momentum: MomentumLifecycleResult | null = null;
+    if (completed) {
+      momentum = await applyMomentumCompletion(tx, {
+        taskId,
+        actorUserId: user.id,
+        completedAt: updated.completedAt ?? transitionAt,
+      });
+    } else if (recalled) {
+      momentum = await revokeMomentumCompletion(tx, {
+        taskId,
+        revokedAt: transitionAt,
+      });
+    }
+    return { updated, momentum, completed };
+  });
+  const { updated, momentum, completed } = transactionResult;
+  const milestoneCount = momentum?.milestoneCount ?? null;
+  const personalBestCount = momentum?.personalBestCount ?? null;
+
+  if (completed && updated.kind === "workspace_task") {
+    const completedAt = updated.completedAt ?? transitionAt;
     // Log activity for task completion
     await logActivity({
       teamId,
       userId: user.id,
       type: "task_completed",
       metadata: {
-        taskTitle: task.incognito ? null : task.title,
-        dueDate: task.dueDate ? task.dueDate.toISOString() : null,
-        completedAt: updated.completedAt ? updated.completedAt.toISOString() : new Date().toISOString(),
-        completedOnTime: task.dueDate ? new Date(updated.completedAt ?? new Date()) <= new Date(task.dueDate) : true,
+        taskId,
+        idempotencyKey: `task_completed:${teamId}:${taskId}:${completedAt.toISOString()}`,
+        momentumCreditIds: momentum?.creditIds ?? [],
+        taskTitle: updated.incognito ? null : updated.title,
+        dueDate: updated.dueDate?.toISOString() ?? null,
+        completedAt: completedAt.toISOString(),
+        completedOnTime: updated.dueDate ? completedAt <= updated.dueDate : null,
         assignees: updated.assignments.map((a) => ({
           id: a.userId,
           name: a.user.name,
@@ -1343,40 +1372,22 @@ tasksRouter.patch("/:taskId", async (c) => {
         );
       })();
     }
-
-    // Award streak credit to the completing user
-    ({ milestoneCount, personalBestCount } = await calculateAndAwardStreak(
-      user.id,
-      teamId,
-      task.title,
-      task.incognito,
-      user.name
-    ));
-
-    // For joint tasks, also award streak credit to every other assignee — await so errors surface
-    if (task.isJoint) {
-      const allAssignments = await prisma.taskAssignment.findMany({ where: { taskId } });
-      const otherAssigneeIds = allAssignments.map((a) => a.userId).filter((id) => id !== user.id);
-      if (otherAssigneeIds.length > 0) {
-        const otherUsers = await prisma.user.findMany({
-          where: { id: { in: otherAssigneeIds } },
-          select: { id: true, name: true },
-        });
-        await Promise.all(
-          otherUsers.map((ou) =>
-            calculateAndAwardStreak(ou.id, teamId, task.title, task.incognito, ou.name)
-          )
-        );
-      }
+    if (milestoneCount !== null) {
+      await logActivity({
+        teamId,
+        userId: user.id,
+        type: "task_milestone",
+        metadata: { count: milestoneCount, userName: user.name, incognito: task.incognito, taskId },
+      });
     }
-  }
-
-  // On recall (done → todo/in_progress): recalculate streaks for all assignees so stored value is accurate
-  if (task.status === "done" && status !== undefined && status !== "done") {
-    const allAssignments = await prisma.taskAssignment.findMany({ where: { taskId } });
-    await Promise.all(
-      allAssignments.map((a) => recalculateStreak(a.userId, teamId))
-    );
+    if (personalBestCount !== null) {
+      await logActivity({
+        teamId,
+        userId: user.id,
+        type: "personal_best",
+        metadata: { count: personalBestCount, userName: user.name, incognito: task.incognito, taskId },
+      });
+    }
   }
 
   return c.json({ data: updated, ...(milestoneCount !== null ? { milestone: milestoneCount } : {}), ...(personalBestCount !== null ? { comeback: personalBestCount } : {}) });
@@ -1397,12 +1408,13 @@ tasksRouter.delete("/:taskId", async (c) => {
     include: { recurrenceRule: true },
   });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can delete this reminder", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
 
   const canDelete =
     task.creatorId === user.id ||
-    membership.role === "owner" ||
-    membership.role === "admin" ||
-    membership.role === "team_leader";
+    canManageWorkspaceTasks(membership.role);
   if (!canDelete) {
     return c.json(
       {
@@ -1431,13 +1443,32 @@ tasksRouter.post("/:taskId/assign", async (c) => {
 
   const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can update assignments", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
+  if (task.kind === "reminder") {
+    return c.json({ error: { message: "Reminder assignment is fixed to its creator", code: REMINDER_ASSIGNMENT_LOCKED } }, 400);
+  }
   if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
 
   const body = await c.req.json();
   const { userIds } = body;
+  const assignmentIds = Array.isArray(userIds)
+    ? [...new Set(userIds.filter((id): id is string => typeof id === "string" && id.length > 0))]
+    : [];
+  const activeAssignees = await prisma.teamMember.findMany({
+    where: { teamId, userId: { in: assignmentIds } },
+    select: { userId: true },
+  });
+  if (activeAssignees.length !== assignmentIds.length) {
+    return c.json(
+      { error: { message: "Workspace tasks may only be assigned to active workspace members", code: TASK_ASSIGNEE_INVALID } },
+      400,
+    );
+  }
 
   // Upsert each assignment
-  for (const userId of userIds as string[]) {
+  for (const userId of assignmentIds) {
     await prisma.taskAssignment.upsert({
       where: { taskId_userId: { taskId, userId } },
       create: { taskId, userId },
@@ -1456,7 +1487,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
   });
 
   // Notify assigned users (except the person doing the assigning)
-  const assignedUserIds = (userIds as string[]).filter((id) => id !== user.id);
+  const assignedUserIds = assignmentIds.filter((id) => id !== user.id);
   if (assignedUserIds.length > 0) {
     const taskForNotif = await prisma.task.findFirst({ where: { id: taskId }, select: { title: true } });
     await sendPushToUsers(assignedUserIds, "New task assigned", taskForNotif?.title ?? "You have a new task", { taskId, teamId }, "notifTaskAssigned", teamId);
@@ -1464,11 +1495,11 @@ tasksRouter.post("/:taskId/assign", async (c) => {
 
   // Log activity for each newly assigned user
   const assignedUsersForAssignLog = await prisma.user.findMany({
-    where: { id: { in: userIds as string[] } },
+    where: { id: { in: assignmentIds } },
     select: { id: true, name: true },
   });
   const assignUserNameMap = Object.fromEntries(assignedUsersForAssignLog.map((u) => [u.id, u.name ?? ""]));
-  for (const assignedUserId of userIds as string[]) {
+  for (const assignedUserId of assignmentIds) {
     await logActivity({
       teamId,
       userId: assignedUserId,
@@ -1491,12 +1522,18 @@ tasksRouter.delete("/:taskId/assign/:userId", async (c) => {
 
   const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can update assignments", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
+  if (task.kind === "reminder") {
+    return c.json({ error: { message: "Reminder assignment is fixed to its creator", code: REMINDER_ASSIGNMENT_LOCKED } }, 400);
+  }
   if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
 
   const isCreator = task.creatorId === user.id;
-  const isAdmin = membership.role === "owner" || membership.role === "admin" || membership.role === "team_leader";
+  const isManager = canManageWorkspaceTasks(membership.role);
   const isSelfUnassign = userId === user.id;
-  if (!isCreator && !isAdmin && !isSelfUnassign) {
+  if (!isCreator && !isManager && !isSelfUnassign) {
     return c.json({ error: { message: "Only the task creator or an admin can unassign other members", code: "FORBIDDEN" } }, 403);
   }
 
@@ -1515,6 +1552,9 @@ tasksRouter.post("/:taskId/subtasks", async (c) => {
 
   const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can update subtasks", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
   if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
 
   const body = await c.req.json();
@@ -1538,7 +1578,14 @@ tasksRouter.patch("/:taskId/subtasks/:subtaskId", async (c) => {
 
   const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can update subtasks", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
   if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
+  const existingSubtask = await prisma.subtask.findFirst({ where: { id: subtaskId, taskId }, select: { id: true } });
+  if (!existingSubtask) {
+    return c.json({ error: { message: "Subtask not found", code: "NOT_FOUND" } }, 404);
+  }
 
   const body = await c.req.json();
 
@@ -1582,7 +1629,14 @@ tasksRouter.delete("/:taskId/subtasks/:subtaskId", async (c) => {
 
   const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (!canMutateTask(task, user.id)) {
+    return c.json({ error: { message: "Only the reminder creator can delete subtasks", code: REMINDER_CREATOR_REQUIRED } }, 403);
+  }
   if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
+  const existingSubtask = await prisma.subtask.findFirst({ where: { id: subtaskId, taskId }, select: { id: true } });
+  if (!existingSubtask) {
+    return c.json({ error: { message: "Subtask not found", code: "NOT_FOUND" } }, 404);
+  }
 
   await prisma.subtask.delete({ where: { id: subtaskId } });
   return c.body(null, 204);

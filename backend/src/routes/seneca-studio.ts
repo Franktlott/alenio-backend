@@ -28,6 +28,7 @@ import {
 import { assembleForWorkspaceTeam } from "../lib/seneca-prompt-assembly";
 import { senecaAvailable, senecaText, senecaUnavailableMessage } from "../lib/seneca-openai";
 import { buildSenecaChatContext, senecaChatContextToPrompt } from "../lib/seneca-chat-context";
+import { canManageSenecaStudio } from "../lib/workspace-role-policy";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -44,11 +45,12 @@ async function getMembership(userId: string, teamId: string) {
 }
 
 function canViewStudio(role: string): boolean {
+  // Legacy workspace admins retain read-only visibility.
   return role === "owner" || role === "team_leader" || role === "admin";
 }
 
 function canEditStudio(role: string): boolean {
-  return role === "owner" || role === "admin";
+  return canManageSenecaStudio(role);
 }
 
 type StudioGate =

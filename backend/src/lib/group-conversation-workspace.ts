@@ -18,6 +18,7 @@ export type GroupMemberCandidate = {
   email: string | null;
   username: string | null;
   image: string | null;
+  isWorkplaceConnected: boolean;
   workspaces: GroupConversationWorkspace[];
   workspaceLabel: string;
 };
@@ -147,6 +148,7 @@ export async function listGroupMemberCandidates(
         email: entry.email,
         username: entry.username,
         image: entry.image,
+        isWorkplaceConnected: true,
         workspaces,
         workspaceLabel: formatWorkspaceListLabel(workspaces),
       };
@@ -154,31 +156,18 @@ export async function listGroupMemberCandidates(
     .sort((a, b) => (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? ""));
 }
 
-/**
- * People a workspace-less user can put in a personal group: accepted connections
- * plus anyone they already share a conversation with. No workspace labels, because
- * a personal group is not owned by any employer.
- */
+/** Accepted, unblocked connections a user can add to a personal group. */
 async function listPersonalGroupCandidates(
   userId: string,
   trimmedQuery: string,
 ): Promise<GroupMemberCandidate[]> {
-  const [connections, chatPartners, blocks] = await Promise.all([
+  const [connections, blocks] = await Promise.all([
     prisma.connection.findMany({
       where: {
         status: "accepted",
         OR: [{ requesterId: userId }, { recipientId: userId }],
       },
       select: { requesterId: true, recipientId: true },
-    }),
-    prisma.conversationParticipant.findMany({
-      where: {
-        userId: { not: userId },
-        conversation: { participants: { some: { userId } } },
-      },
-      select: { userId: true },
-      distinct: ["userId"],
-      take: 200,
     }),
     prisma.userBlock.findMany({
       where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
@@ -195,9 +184,6 @@ async function listPersonalGroupCandidates(
     const otherId = row.requesterId === userId ? row.recipientId : row.requesterId;
     if (!blockedIds.has(otherId)) candidateIds.add(otherId);
   }
-  for (const row of chatPartners) {
-    if (!blockedIds.has(row.userId)) candidateIds.add(row.userId);
-  }
   if (candidateIds.size === 0) return [];
 
   const users = await prisma.user.findMany({
@@ -212,7 +198,13 @@ async function listPersonalGroupCandidates(
           }
         : {}),
     },
-    select: { id: true, name: true, username: true, image: true },
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      image: true,
+      _count: { select: { teamMembers: true } },
+    },
     orderBy: { name: "asc" },
   });
 
@@ -223,6 +215,7 @@ async function listPersonalGroupCandidates(
     email: null,
     username: user.username,
     image: user.image,
+    isWorkplaceConnected: user._count.teamMembers > 0,
     workspaces: [],
     workspaceLabel: "",
   }));
@@ -236,9 +229,42 @@ export async function assertPersonalGroupParticipantsAllowed(
   creatorId: string,
   participantIds: string[],
 ): Promise<void> {
-  const blockedIds = await findUnmessageableUserIds(creatorId, participantIds);
+  const uniqueParticipantIds = Array.from(
+    new Set(participantIds.filter((id) => id && id !== creatorId)),
+  );
+  const connections = await prisma.connection.findMany({
+    where: {
+      status: "accepted",
+      OR: [
+        {
+          requesterId: creatorId,
+          recipientId: { in: uniqueParticipantIds },
+        },
+        {
+          recipientId: creatorId,
+          requesterId: { in: uniqueParticipantIds },
+        },
+      ],
+    },
+    select: { requesterId: true, recipientId: true },
+  });
+  const connectedIds = new Set(
+    connections.map((connection) =>
+      connection.requesterId === creatorId
+        ? connection.recipientId
+        : connection.requesterId,
+    ),
+  );
+  if (uniqueParticipantIds.some((id) => !connectedIds.has(id))) {
+    throw new Error("You can only add your connections to a personal group.");
+  }
+
+  const blockedIds = await findUnmessageableUserIds(
+    creatorId,
+    uniqueParticipantIds,
+  );
   if (blockedIds.length > 0) {
-    throw new Error("You can only add people you are able to message.");
+    throw new Error("One or more connections are unavailable.");
   }
 }
 

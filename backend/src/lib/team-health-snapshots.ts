@@ -3,7 +3,14 @@ import {
   computeMemberStandardsCompliance,
   parseWorkplaceStandards,
 } from "./workplace-standards";
-import { calendarDayFromInstant, resolveTimeZone } from "./timezone";
+import { calendarDayFromInstant } from "./timezone";
+import { resolveWorkspaceTimeZone } from "./workspace-timezone";
+
+export function preferredTeamHealthTimeZone(
+  members: Array<{ role: string; user: { timezone: string | null } }>,
+): string {
+  return resolveWorkspaceTimeZone(null, members);
+}
 
 function calendarDaysBetween(earlier: Date, later: Date, timeZone: string): number {
   const earlierDay = calendarDayFromInstant(earlier, timeZone);
@@ -19,8 +26,10 @@ export async function calculateCurrentTeamHealth(teamId: string, now = new Date(
     where: { id: teamId },
     select: {
       id: true,
+      timezone: true,
       workplaceStandards: true,
       members: {
+        orderBy: [{ joinedAt: "asc" }, { id: "asc" }],
         select: {
           userId: true,
           role: true,
@@ -31,13 +40,7 @@ export async function calculateCurrentTeamHealth(teamId: string, now = new Date(
   });
   if (!team) return null;
 
-  const preferredTimeZone =
-    team.members.find((member) => member.role === "owner")?.user.timezone ??
-    team.members.find((member) =>
-      ["team_leader", "admin"].includes(member.role),
-    )?.user.timezone ??
-    team.members[0]?.user.timezone;
-  const timeZone = resolveTimeZone(preferredTimeZone);
+  const timeZone = resolveWorkspaceTimeZone(team.timezone, team.members);
   const standards = parseWorkplaceStandards(team.workplaceStandards);
   const memberUserIds = [
     ...new Set(
@@ -78,13 +81,14 @@ export async function calculateCurrentTeamHealth(teamId: string, now = new Date(
           teamId,
           memberUserId: { in: memberUserIds },
           status: "active",
+          archivedAt: null,
         },
         select: { memberUserId: true },
       }),
       prisma.taskAssignment.count({
         where: {
           userId: { in: memberUserIds },
-          task: { teamId, status: { not: "done" }, archivedAt: null },
+          task: { teamId, kind: "workspace_task", status: { not: "done" }, archivedAt: null },
         },
       }),
       prisma.taskAssignment.count({
@@ -92,6 +96,7 @@ export async function calculateCurrentTeamHealth(teamId: string, now = new Date(
           userId: { in: memberUserIds },
           task: {
             teamId,
+            kind: "workspace_task",
             status: { not: "done" },
             archivedAt: null,
             dueDate: { lt: now },
@@ -189,7 +194,9 @@ export async function captureMissingDailyTeamHealthSnapshots(now = new Date()) {
   const teams = await prisma.team.findMany({
     select: {
       id: true,
+      timezone: true,
       members: {
+        orderBy: [{ joinedAt: "asc" }, { id: "asc" }],
         select: {
           role: true,
           user: { select: { timezone: true } },
@@ -200,13 +207,7 @@ export async function captureMissingDailyTeamHealthSnapshots(now = new Date()) {
   let captured = 0;
 
   for (const team of teams) {
-    const preferredTimeZone =
-      team.members.find((member) => member.role === "owner")?.user.timezone ??
-      team.members.find((member) =>
-        ["team_leader", "admin"].includes(member.role),
-      )?.user.timezone ??
-      team.members[0]?.user.timezone;
-    const timeZone = resolveTimeZone(preferredTimeZone);
+    const timeZone = resolveWorkspaceTimeZone(team.timezone, team.members);
     const snapshotDate = calendarDayFromInstant(now, timeZone);
     const existing = await prisma.teamHealthSnapshot.findUnique({
       where: {

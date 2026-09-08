@@ -37,6 +37,8 @@ const envSchema = z.object({
    * When set with a Postgres DATABASE_URL, the API mounts `/api/auth/*` against the `neon_auth` schema after boot.
    */
   BETTER_AUTH_SECRET: z.string().optional(),
+  /** Optional dedicated HMAC secret for durable, non-reversible trial identity hashes. */
+  TRIAL_IDENTITY_SECRET: z.string().optional(),
   // Backend URL
   BACKEND_URL: z.string().default("http://localhost:3000"),
   /** Comma-separated browser origins allowed for CORS (e.g. Firebase Hosting https://your-app.web.app). Localhost is always allowed. */
@@ -99,6 +101,10 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   /** OpenAI model for Seneca (default gpt-4o-mini). */
   OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
+  /** OpenAI image model used by Seneca. */
+  OPENAI_IMAGE_MODEL: z.string().optional().default("gpt-image-2"),
+  /** Maximum image generations allowed per user per UTC day. */
+  SENECA_IMAGE_DAILY_LIMIT: z.string().optional().default("5"),
   /**
    * Microsoft Entra sign-in (Better Auth social). Separate from calendar OAuth below.
    */

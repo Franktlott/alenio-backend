@@ -20,6 +20,9 @@ export type BillingCheckoutResult =
   | { upgraded: true }
   | { error: BillingError; status: BillingStatus };
 type BillingResult = { url: string } | { error: BillingError; status: BillingStatus };
+export type PendingWorkspaceCheckoutSessionResult =
+  | { url: string; stripeCheckoutSessionId: string }
+  | { error: BillingError; status: BillingStatus };
 
 async function assertOwnerMembership(userId: string, teamId: string): Promise<BillingError | null> {
   const membership = await prisma.teamMember.findUnique({
@@ -168,6 +171,55 @@ export async function createTeamCheckoutSession(opts: {
   }
 
   return { url: checkout.url };
+}
+
+export async function createPendingWorkspaceCheckoutSession(opts: {
+  checkoutId: string;
+  userId: string;
+  userEmail?: string | null;
+  plan: StripeCheckoutPlan;
+  expiresAt: Date;
+}): Promise<PendingWorkspaceCheckoutSessionResult> {
+  if (!isStripeCheckoutPlanConfigured(opts.plan)) {
+    return {
+      error: {
+        message: "Checkout is not available right now. Try again later or contact support.",
+        code: "NOT_CONFIGURED",
+      },
+      status: 503,
+    };
+  }
+
+  const stripe = getStripeClient()!;
+  const base = billingReturnBaseUrl()!;
+  const dbPlan = dbPlanForCheckoutPlan(opts.plan);
+  const checkout = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    allow_promotion_codes: true,
+    line_items: [{ price: stripePriceIdForCheckoutPlan(opts.plan)!, quantity: 1 }],
+    success_url: `${base}/billing?billing=success&workspace_checkout_id=${encodeURIComponent(opts.checkoutId)}`,
+    cancel_url: `${base}/billing?billing=cancel&workspace_checkout_id=${encodeURIComponent(opts.checkoutId)}`,
+    client_reference_id: opts.checkoutId,
+    customer_email: opts.userEmail?.trim() || undefined,
+    expires_at: Math.floor(opts.expiresAt.getTime() / 1000),
+    metadata: {
+      pending_workspace_checkout_id: opts.checkoutId,
+      user_id: opts.userId,
+      plan: dbPlan,
+    },
+    subscription_data: {
+      metadata: {
+        pending_workspace_checkout_id: opts.checkoutId,
+        user_id: opts.userId,
+        plan: dbPlan,
+      },
+    },
+  });
+
+  if (!checkout.url) {
+    return { error: { message: "Checkout did not return a URL", code: "STRIPE_ERROR" }, status: 502 };
+  }
+  return { url: checkout.url, stripeCheckoutSessionId: checkout.id };
 }
 
 export async function createTeamPortalSession(opts: {

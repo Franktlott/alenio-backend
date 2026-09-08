@@ -228,7 +228,7 @@ export async function buildSenecaWorkspaceContext(
         include: { user: { select: { id: true, name: true, email: true } } },
       }),
       prisma.taskAssignment.findMany({
-        where: { task: { teamId } },
+        where: { task: { teamId, kind: "workspace_task" } },
         include: {
           user: { select: { id: true, name: true, email: true } },
           task: {
@@ -245,7 +245,7 @@ export async function buildSenecaWorkspaceContext(
         },
       }),
       prisma.developmentGoal.findMany({
-        where: { teamId, status: { not: "closed" } },
+        where: { teamId, status: { not: "closed" }, archivedAt: null },
         select: {
           id: true,
           memberUserId: true,
@@ -275,7 +275,7 @@ export async function buildSenecaWorkspaceContext(
       prisma.calendarEvent.findMany({
         where: {
           teamId,
-          approvalStatus: { not: "rejected" },
+          approvalStatus: "approved",
           startDate: { lte: weekEnd },
         },
         orderBy: { startDate: "asc" },
@@ -366,6 +366,7 @@ export async function buildSenecaWorkspaceContext(
     const followUps = await prisma.task.findMany({
       where: {
         teamId,
+        kind: "workspace_task",
         oneOnOneMeetingId: { in: latestMeetingIds },
         status: { not: "done" },
       },

@@ -55,7 +55,7 @@ adminApiRouter.get("/stats", async (c) => {
   ] = await Promise.all([
     prisma.user.count(),
     prisma.team.count(),
-    prisma.task.count(),
+    prisma.task.count({ where: { kind: "workspace_task" } }),
     prisma.message.count(),
     prisma.teamSubscription.count({
       where: { status: "active", plan: { not: "free" } },
@@ -67,7 +67,7 @@ adminApiRouter.get("/stats", async (c) => {
       where: { status: "published", createdAt: { gte: weekAgo } },
     }),
     prisma.developmentGoal.count(),
-    prisma.developmentGoal.count({ where: { status: "active" } }),
+    prisma.developmentGoal.count({ where: { status: "active", archivedAt: null } }),
     prisma.user.findMany({
       select: {
         id: true,
@@ -313,7 +313,12 @@ adminApiRouter.get("/users/:id", async (c) => {
       createdAt: true,
       isAdmin: true,
       emailVerified: true,
-      _count: { select: { teamMembers: true, tasksCreated: true } },
+      _count: {
+        select: {
+          teamMembers: true,
+          tasksCreated: { where: { kind: "workspace_task" } },
+        },
+      },
       teamMembers: {
         select: {
           role: true,

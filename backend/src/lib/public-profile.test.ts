@@ -57,6 +57,27 @@ describe("validatePublicProfileUpdate", () => {
   });
 });
 
+describe("validatePublicProfileUpdate: profileTitle", () => {
+  test("trims a title and keeps it", () => {
+    const result = validatePublicProfileUpdate({ profileTitle: "  Operations Manager  " });
+    expect(result).toEqual({ ok: true, data: { profileTitle: "Operations Manager" } });
+  });
+
+  test("stores an empty title as null", () => {
+    const result = validatePublicProfileUpdate({ profileTitle: "   " });
+    expect(result).toEqual({ ok: true, data: { profileTitle: null } });
+  });
+
+  test("rejects a title over the limit", () => {
+    const result = validatePublicProfileUpdate({ profileTitle: "x".repeat(81) });
+    expect(result.ok).toBe(false);
+  });
+
+  test("ignores a title that was not sent", () => {
+    expect(validatePublicProfileUpdate({})).toEqual({ ok: true, data: {} });
+  });
+});
+
 describe("countMutualConnections", () => {
   test("counts accepted people shared by viewer and profile owner", () => {
     expect(

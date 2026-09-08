@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { taskVisibilityWhere } from "../lib/task-policy";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -17,7 +18,7 @@ myTasksRouter.get("/", async (c) => {
   const { status } = c.req.query();
 
   const assignments = await prisma.taskAssignment.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, task: taskVisibilityWhere(user.id) },
     include: {
       task: {
         include: {

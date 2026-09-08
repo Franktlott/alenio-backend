@@ -89,6 +89,24 @@ describe("buildConnectionSuggestions", () => {
     ]);
   });
 
+  test("keeps at most two mutual faces and the richer preview when merging", () => {
+    const faces = [
+      { id: "lee", name: "Lee Ann", image: null },
+      { id: "todd", name: "Todd A", image: null },
+      { id: "mira", name: "Mira B", image: null },
+    ];
+    const result = buildConnectionSuggestions({
+      limit: 20,
+      now: NOW,
+      candidates: [
+        candidate("person", { mutualConnections: 3 }),
+        candidate("person", { mutualConnections: 3, mutualPreview: faces }),
+      ],
+    });
+
+    expect(result[0]?.mutualPreview).toEqual(faces.slice(0, 2));
+  });
+
   test("excludes accepted, pending, blocked and declined people in cooldown", () => {
     const evidence = { sharedWorkspaces: [workspace("shared")] };
     const result = buildConnectionSuggestions({
@@ -133,6 +151,40 @@ describe("buildConnectionSuggestions", () => {
     });
 
     expect(result?.connectionStatus).toBe("declined");
+  });
+
+  test("excludes an actively dismissed suggestion", () => {
+    const result = buildConnectionSuggestions({
+      limit: 20,
+      now: NOW,
+      dismissedAtByPersonId: new Map([
+        ["dismissed", new Date("2026-07-20T12:00:00.000Z")],
+      ]),
+      candidates: [
+        candidate("dismissed", {
+          sharedWorkspaces: [workspace("shared")],
+        }),
+      ],
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  test("returns a dismissed suggestion after the 90-day cooldown expires", () => {
+    const result = buildConnectionSuggestions({
+      limit: 20,
+      now: NOW,
+      dismissedAtByPersonId: new Map([
+        ["eligible-again", new Date("2026-05-01T12:00:00.000Z")],
+      ]),
+      candidates: [
+        candidate("eligible-again", {
+          sharedWorkspaces: [workspace("shared")],
+        }),
+      ],
+    });
+
+    expect(result.map((entry) => entry.person.id)).toEqual(["eligible-again"]);
   });
 
   test("does not return a user whose only input is a prior relationship row", () => {

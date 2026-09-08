@@ -118,7 +118,7 @@ adminRouter.get("/api/stats", async (c) => {
   const [users, teams, tasks, messages] = await Promise.all([
     prisma.user.count(),
     prisma.team.count(),
-    prisma.task.count(),
+    prisma.task.count({ where: { kind: "workspace_task" } }),
     prisma.message.count(),
   ]);
   return c.json({ data: { users, teams, tasks, messages } });
@@ -141,7 +141,12 @@ adminRouter.get("/api/teams", async (c) => {
       id: true,
       name: true,
       createdAt: true,
-      _count: { select: { members: true, tasks: true } },
+      _count: {
+        select: {
+          members: true,
+          tasks: { where: { kind: "workspace_task" } },
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -152,6 +157,7 @@ adminRouter.get("/api/teams", async (c) => {
 // Tasks list
 adminRouter.get("/api/tasks", async (c) => {
   const tasks = await prisma.task.findMany({
+    where: { kind: "workspace_task" },
     select: {
       id: true,
       title: true,

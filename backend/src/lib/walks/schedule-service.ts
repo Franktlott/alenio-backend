@@ -1,6 +1,9 @@
 import type { Prisma } from "@prisma/client";
+import { Temporal } from "@js-temporal/polyfill";
 import { prisma } from "../../prisma";
 import { filterOccurrencesForViewer } from "./assign-filter";
+import { getWorkspaceTimeZone } from "../workspace-timezone";
+import { isValidTimeZone } from "../timezone";
 
 function parseDays(raw: unknown): number[] | null {
   if (!Array.isArray(raw)) return null;
@@ -71,59 +74,31 @@ function startOfZonedDay(date: Date, timeZone: string): Date {
 }
 
 /**
- * Convert a wall-clock local time in `timeZone` to a real UTC Date.
- * Iteratively corrects zone offset (handles DST; does not rely on GMT± labels).
+ * Convert wall time using Temporal's compatible policy: skipped times move
+ * forward and repeated times use the earlier occurrence.
  */
-function zonedLocalToUtc(
+export function zonedLocalToUtc(
   year: number,
   month: number,
   day: number,
   minutes: number,
   timeZone: string,
 ): Date {
-  const hour = Math.floor(minutes / 60);
-  const minute = minutes % 60;
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  });
-
-  const read = (ms: number) => {
-    const parts = Object.fromEntries(dtf.formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
-    return {
-      year: Number(parts.year),
-      month: Number(parts.month),
-      day: Number(parts.day),
-      hour: Number(parts.hour),
-      minute: Number(parts.minute),
-      second: Number(parts.second),
-    };
-  };
-
-  // Initial guess: treat wall time as UTC, then nudge until TZ wall matches.
-  let guess = Date.UTC(year, month - 1, day, hour, minute, 0);
-  for (let i = 0; i < 4; i++) {
-    const actual = read(guess);
-    const desiredAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
-    const actualAsUtc = Date.UTC(
-      actual.year,
-      actual.month - 1,
-      actual.day,
-      actual.hour,
-      actual.minute,
-      actual.second,
-    );
-    const delta = desiredAsUtc - actualAsUtc;
-    if (delta === 0) break;
-    guess += delta;
-  }
-  return new Date(guess);
+  const dayOffset = Math.floor(minutes / DAY_MINUTES);
+  const minuteOfDay =
+    ((minutes % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
+  const localDate = Temporal.PlainDate.from({
+    year,
+    month,
+    day,
+  }).add({ days: dayOffset });
+  const zoned = localDate
+    .toPlainDateTime({
+      hour: Math.floor(minuteOfDay / 60),
+      minute: minuteOfDay % 60,
+    })
+    .toZonedDateTime(timeZone, { disambiguation: "compatible" });
+  return new Date(zoned.epochMilliseconds);
 }
 
 /** Pure helper for INTERVAL materialization (unit-tested). */
@@ -206,6 +181,9 @@ export async function createSchedule(input: {
   ) {
     return { error: "VALIDATION" as const, message: "intervalMinutes must be at least 15" };
   }
+  if (input.timezone !== undefined && !isValidTimeZone(input.timezone)) {
+    return { error: "VALIDATION" as const, message: "timezone must be a valid IANA timezone" };
+  }
 
   const latestVersion =
     template.status === "PUBLISHED"
@@ -215,7 +193,7 @@ export async function createSchedule(input: {
         })
       : null;
 
-  const timezone = input.timezone ?? "America/New_York";
+  const timezone = input.timezone ?? await getWorkspaceTimeZone(prisma, input.teamId);
   const schedule = await prisma.walkSchedule.create({
     data: {
       templateId: template.id,
@@ -290,6 +268,9 @@ export async function updateSchedule(
 ) {
   const existing = await getOwnedSchedule(teamId, scheduleId);
   if (!existing) return { error: "NOT_FOUND" as const, message: "Schedule not found" };
+  if (input.timezone !== undefined && !isValidTimeZone(input.timezone)) {
+    return { error: "VALIDATION" as const, message: "timezone must be a valid IANA timezone" };
+  }
 
   if (input.windows && !input.windows.length) {
     return { error: "VALIDATION" as const, message: "Add at least one time window" };
@@ -539,7 +520,13 @@ export async function materializeOccurrencesForSchedule(scheduleId: string, days
       );
       // Overnight windows (e.g. 11:30 PM → 1:00 AM).
       if (dueAt <= windowStart) {
-        dueAt = new Date(dueAt.getTime() + 86_400_000);
+        dueAt = zonedLocalToUtc(
+          parts.year,
+          parts.month,
+          parts.day,
+          window.dueMinutes + DAY_MINUTES,
+          schedule.timezone,
+        );
       }
       const graceEndsAt = new Date(dueAt.getTime() + window.graceMinutes * 60_000);
 

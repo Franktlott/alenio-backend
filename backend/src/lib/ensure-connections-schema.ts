@@ -10,9 +10,12 @@ export async function ensureConnectionsSchema(prisma: PrismaClient): Promise<voi
   `);
   await prisma.$executeRawUnsafe(`
     DO $$ BEGIN
-      ALTER TABLE "User" ADD COLUMN "discoverableByEmail" BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE "User" ADD COLUMN "discoverableByEmail" BOOLEAN NOT NULL DEFAULT true;
     EXCEPTION WHEN duplicate_column THEN NULL;
     END $$;
+  `);
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "User" ALTER COLUMN "discoverableByEmail" SET DEFAULT true;
   `);
 
   await prisma.$executeRawUnsafe(`
@@ -56,6 +59,36 @@ export async function ensureConnectionsSchema(prisma: PrismaClient): Promise<voi
   `);
   await addForeignKey(prisma, "UserBlock", "UserBlock_blockerId_fkey", "blockerId");
   await addForeignKey(prisma, "UserBlock", "UserBlock_blockedId_fkey", "blockedId");
+
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "ConnectionSuggestionDismissal" (
+      "id" TEXT NOT NULL,
+      "dismisserId" TEXT NOT NULL,
+      "suggestedUserId" TEXT NOT NULL,
+      "dismissedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "ConnectionSuggestionDismissal_pkey" PRIMARY KEY ("id")
+    );
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "ConnectionSuggestionDismissal_dismisserId_suggestedUserId_key"
+      ON "ConnectionSuggestionDismissal"("dismisserId", "suggestedUserId");
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "ConnectionSuggestionDismissal_dismisserId_dismissedAt_idx"
+      ON "ConnectionSuggestionDismissal"("dismisserId", "dismissedAt");
+  `);
+  await addForeignKey(
+    prisma,
+    "ConnectionSuggestionDismissal",
+    "ConnectionSuggestionDismissal_dismisserId_fkey",
+    "dismisserId",
+  );
+  await addForeignKey(
+    prisma,
+    "ConnectionSuggestionDismissal",
+    "ConnectionSuggestionDismissal_suggestedUserId_fkey",
+    "suggestedUserId",
+  );
 }
 
 async function addForeignKey(

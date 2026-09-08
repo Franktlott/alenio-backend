@@ -5,6 +5,7 @@ import type {
   SenecaFocusImpact,
   SenecaFocusSourceMetrics,
 } from "../types";
+import { canAccessWorkspaceManagerInsights } from "./workspace-role-policy";
 
 export type FocusMemberFact = {
   id: string;
@@ -89,7 +90,7 @@ const WEIGHTS: Record<keyof FocusScoreParts, number> = {
 const clamp = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
 
 export function canAccessSenecaFocus(role: string | null | undefined): boolean {
-  return role === "owner" || role === "team_leader" || role === "admin";
+  return canAccessWorkspaceManagerInsights(role);
 }
 
 export function isFocusRefreshCoolingDown(

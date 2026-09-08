@@ -6,6 +6,9 @@ import { sendPushToUsers } from "../lib/push";
 import { publishTeamMessageCreated, publishUserInboxUpdated, publishTeamPinUpdated } from "../lib/realtime-hub";
 import { MAX_CHAT_PINS } from "../lib/ensure-pinned-message-schema";
 import { deleteStorageObjectByUrlIfOwned } from "../lib/firebase-storage";
+import { findBlockedDirectMentionIds } from "../lib/relationship-blocks";
+import { canModerateWorkspaceContent } from "../lib/workspace-role-policy";
+import { recordAccountActivity } from "../lib/account-activity";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -311,10 +314,24 @@ messagesRouter.post("/", async (c) => {
 
   const body = await c.req.json();
   const { content, mediaUrl, mediaType, replyToId, topicId, mentionedUserIds } = body;
-  const mentionIds: string[] = Array.isArray(mentionedUserIds) ? mentionedUserIds : [];
+  const mentionIds = Array.isArray(mentionedUserIds)
+    ? [...new Set(mentionedUserIds.filter((id): id is string => typeof id === "string" && id.length > 0))]
+    : [];
 
   if (!content?.trim() && !mediaUrl) {
     return c.json({ error: { message: "Content or media is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  if ((await findBlockedDirectMentionIds(user.id, mentionIds)).length > 0) {
+    return c.json(
+      {
+        error: {
+          message: "You cannot directly mention someone when either person has blocked the other.",
+          code: "MENTION_BLOCKED",
+        },
+      },
+      403,
+    );
   }
 
   if (topicId) {
@@ -403,13 +420,32 @@ messagesRouter.post("/", async (c) => {
       await sendPushToUsers(memberIds, notifTitle, notifBody, notifData, "notifMessages", teamId);
 
       if (capturedMentionIds.length > 0) {
+        const memberIdSet = new Set(memberIds);
+        const validMentionIds = capturedMentionIds.filter(
+          (mentionedId) =>
+            mentionedId !== user.id && memberIdSet.has(mentionedId),
+        );
         await sendPushToUsers(
-          capturedMentionIds,
+          validMentionIds,
           notifTitle,
           `${channelPrefix}: ${senderName} mentioned you — ${messageText}`,
           notifData,
           "notifMessages",
           teamId
+        );
+        await Promise.all(
+          validMentionIds.map((mentionedId) =>
+            recordAccountActivity({
+              userId: mentionedId,
+              type: "mention_in_conversation",
+              content: `${senderName} mentioned you in ${channelPrefix}`,
+              metadata: {
+                actorUserId: user.id,
+                teamId,
+                topicId: capturedTopicId ?? null,
+              },
+            }),
+          ),
         );
       }
     } catch (err) {
@@ -526,8 +562,11 @@ messagesRouter.delete("/:messageId", async (c) => {
     return c.json({ error: { message: "Message not found", code: "NOT_FOUND" } }, 404);
   }
 
-  // Only the sender or an owner/admin can delete
-  if (message.senderId !== user.id && !["owner", "admin"].includes(membership.role)) {
+  // Senders may delete their own message; workspace managers may moderate.
+  if (
+    message.senderId !== user.id &&
+    !canModerateWorkspaceContent(membership.role)
+  ) {
     return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
   }
 

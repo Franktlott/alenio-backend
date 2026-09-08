@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { Resend } from "resend";
 import { prisma } from "../prisma";
+import { canManageWorkspaceRoster } from "./workspace-role-policy";
 import { env } from "../env";
 import { logActivity } from "./activity";
 import { recordAccountActivity } from "./account-activity";
@@ -9,6 +10,25 @@ import { webPublicBaseUrl } from "./web-public-url";
 import { assertWorkspaceCanWrite } from "./workspace-access";
 
 const INVITE_TTL_DAYS = 7;
+
+export const TEAM_INVITE_ROLES = ["member", "team_leader"] as const;
+export type TeamInviteRole = (typeof TEAM_INVITE_ROLES)[number];
+
+export function isTeamInviteRole(role: unknown): role is TeamInviteRole {
+  return typeof role === "string" && TEAM_INVITE_ROLES.includes(role as TeamInviteRole);
+}
+
+export function normalizeTeamInviteRole(role: string | null | undefined): TeamInviteRole {
+  return role === "team_leader" ? "team_leader" : "member";
+}
+
+export function canInviteWorkspaceRole(
+  inviterRole: string | null | undefined,
+  requestedRole: TeamInviteRole,
+): boolean {
+  if (requestedRole === "team_leader") return inviterRole === "owner";
+  return canManageWorkspaceRoster(inviterRole);
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -23,9 +43,9 @@ function brandAssetUrl(path: string): string {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-function formatInviteRole(role: string | null | undefined): string {
+export function formatInviteRole(role: string | null | undefined): string {
   if (role === "owner") return "Owner";
-  if (role === "team_leader" || role === "admin") return "Team Leader";
+  if (role === "team_leader") return "Team Leader";
   return "Member";
 }
 
@@ -268,8 +288,7 @@ export async function canInviteMembers(teamId: string, userId: string): Promise<
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId, teamId } },
   });
-  if (!membership) return false;
-  return membership.role === "owner" || membership.role === "team_leader";
+  return canManageWorkspaceRoster(membership?.role);
 }
 
 async function teamHasOwner(teamId: string): Promise<boolean> {
@@ -277,7 +296,11 @@ async function teamHasOwner(teamId: string): Promise<boolean> {
   return row !== null;
 }
 
-export async function addUserToTeam(teamId: string, userId: string): Promise<{ role: string }> {
+export async function addUserToTeam(
+  teamId: string,
+  userId: string,
+  requestedRole: TeamInviteRole = "member",
+): Promise<{ role: string }> {
   const existing = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId, teamId } },
   });
@@ -285,7 +308,7 @@ export async function addUserToTeam(teamId: string, userId: string): Promise<{ r
     return { role: existing.role };
   }
 
-  let newMemberRole = "member";
+  let newMemberRole: string = requestedRole;
   await prisma.$transaction(async (tx) => {
     const hasOwner = await tx.teamMember.findFirst({ where: { teamId, role: "owner" } });
     if (!hasOwner) {
@@ -425,6 +448,7 @@ export function serializeTeamInvite(invite: {
   id: string;
   teamId: string;
   email: string;
+  role: string;
   invitedById: string;
   token: string;
   status: string;
@@ -439,6 +463,7 @@ export function serializeTeamInvite(invite: {
     id: invite.id,
     teamId: invite.teamId,
     email: invite.email,
+    role: normalizeTeamInviteRole(invite.role),
     invitedById: invite.invitedById,
     status: invite.status,
     acceptedUserId: invite.acceptedUserId,
@@ -475,7 +500,7 @@ export async function redeemInviteForUser(
   if (normalizeInviteEmail(userEmail) !== invite.email) return null;
   if (!(await assertWorkspaceCanWrite(invite.teamId)).ok) return null;
 
-  await addUserToTeam(invite.teamId, userId);
+  await addUserToTeam(invite.teamId, userId, normalizeTeamInviteRole(invite.role));
   await prisma.teamInvite.update({
     where: { id: invite.id },
     data: {
@@ -600,6 +625,7 @@ export async function previewInviteByEmail(teamId: string, email: string) {
 export async function inviteOrAddMemberByEmail(input: {
   teamId: string;
   email: string;
+  role: TeamInviteRole;
   invitedById: string;
   inviterName: string;
   teamName: string;
@@ -607,6 +633,9 @@ export async function inviteOrAddMemberByEmail(input: {
   | { kind: "added"; user: { id: string; name: string; email: string; image: string | null }; role: string }
   | { kind: "invited"; invite: ReturnType<typeof serializeTeamInvite>; emailSent: boolean }
 > {
+  if (!isTeamInviteRole(input.role)) {
+    throw new Error("INVALID_ROLE");
+  }
   const normalized = normalizeInviteEmail(input.email);
   if (!normalized || !normalized.includes("@")) {
     throw new Error("VALIDATION");
@@ -625,7 +654,7 @@ export async function inviteOrAddMemberByEmail(input: {
       throw new Error("ALREADY_MEMBER");
     }
 
-    const { role } = await addUserToTeam(input.teamId, existingUser.id);
+    const { role } = await addUserToTeam(input.teamId, existingUser.id, input.role);
     await prisma.teamInvite.updateMany({
       where: { teamId: input.teamId, email: normalized, status: "pending" },
       data: { status: "cancelled" },
@@ -644,7 +673,12 @@ export async function inviteOrAddMemberByEmail(input: {
     const token = generateInviteToken();
     invite = await prisma.teamInvite.update({
       where: { id: existingPending.id },
-      data: { token, expiresAt: inviteExpiresAt(), invitedById: input.invitedById },
+      data: {
+        token,
+        expiresAt: inviteExpiresAt(),
+        invitedById: input.invitedById,
+        role: input.role,
+      },
       include: inviteInclude,
     });
   } else {
@@ -652,6 +686,7 @@ export async function inviteOrAddMemberByEmail(input: {
       data: {
         teamId: input.teamId,
         email: normalized,
+        role: input.role,
         invitedById: input.invitedById,
         token: generateInviteToken(),
         expiresAt: inviteExpiresAt(),
@@ -689,7 +724,11 @@ export async function inviteOrAddMemberByEmail(input: {
       userId: invitee.id,
       type: "workspace_invitation_received",
       content: `${emailContext.inviterName ?? "Someone"} invited you to join ${emailContext.teamName}`,
-      metadata: { teamId: input.teamId, teamName: emailContext.teamName },
+      metadata: {
+        actorUserId: input.invitedById,
+        teamId: input.teamId,
+        teamName: emailContext.teamName,
+      },
     });
   }
 
