@@ -3,7 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-preDeployCommand = "bun install && bunx prisma generate && bunx prisma db push --accept-data-loss"
+preDeployCommand = "bun install && bunx prisma generate && bun run scripts/db-push.ts"
 startCommand = "bun src/index.ts"
 healthcheckPath = "/health"
 healthcheckTimeout = 300

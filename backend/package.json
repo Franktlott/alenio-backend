@@ -8,7 +8,7 @@
     "start": "bun run src/index.ts",
     "sync-env": "bun run scripts/sync-env-from-web.ts",
     "railway:set-openai": "bun run scripts/railway-set-openai.ts",
-    "db:push": "bun run sync-env && bunx prisma db push",
+    "db:push": "bun run sync-env && bun run scripts/db-push.ts",
     "studio": "bunx prisma studio",
     "typecheck": "tsc --noEmit",
     "test": "bun test src/lib/walks src/lib/dm-pair-key.test.ts src/lib/merge-users.test.ts src/lib/username.test.ts src/lib/workspace-access.test.ts",
