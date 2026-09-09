@@ -17,6 +17,7 @@ import {
   type OneOnOneTemplateFieldLike,
 } from "../lib/one-on-one-feedback";
 import { appendLeaderCommentsFields, readLeaderCommentsFromMeeting } from "../lib/check-in-leader-comments";
+import { validateCheckInResponses as validateResponses } from "../lib/check-in-responses";
 import { oneOnOnePublishedAt } from "../lib/one-on-one-meeting-dates";
 import { parseCalendarDueDate } from "../lib/recurrence-series";
 import { resolveTimeZone } from "../lib/timezone";
@@ -209,6 +210,7 @@ function serializeMeeting(meeting: {
   responses: string;
   status?: string;
   publishedAt?: Date | null;
+  captureMode?: string | null;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -225,6 +227,7 @@ function serializeMeeting(meeting: {
     responses: parseResponses(meeting.responses),
     status: meeting.status === "draft" ? "draft" : "published",
     publishedAt: oneOnOnePublishedAt(meeting)?.toISOString() ?? null,
+    captureMode: meeting.captureMode === "recorded" ? "recorded" : "manual",
     createdById: meeting.createdById,
     createdAt: meeting.createdAt.toISOString(),
     createdBy: meeting.createdBy,
@@ -272,6 +275,7 @@ async function serializeMeetingWithTasks(meeting: {
   responses: string;
   status?: string;
   publishedAt?: Date | null;
+  captureMode?: string | null;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -288,43 +292,6 @@ async function serializeMeetingWithTasks(meeting: {
     followUpTasks,
     associateFeedbackPending,
   };
-}
-
-function validateResponses(
-  fields: TemplateField[],
-  responses: Record<string, string | number>,
-  options?: { draft?: boolean },
-) {
-  const draft = options?.draft === true;
-  for (const field of fields) {
-    if (field.type === "section" || field.type === "associate_notes") continue;
-    if (isAssociateRequestedField(field)) continue;
-    const value = responses[field.id];
-    if (field.required && !draft) {
-      if (field.type === "rating") {
-        const num = typeof value === "number" ? value : Number(value);
-        if (!Number.isFinite(num) || num < 1) {
-          return `${field.label} is required.`;
-        }
-      } else if (value === undefined || value === null || String(value).trim() === "") {
-        return `${field.label} is required.`;
-      }
-    }
-    if (field.type === "rating" && value !== undefined && value !== "") {
-      const num = typeof value === "number" ? value : Number(value);
-      const max = field.ratingMax ?? 5;
-      if (!Number.isFinite(num) || num < 1 || num > max) {
-        return `${field.label} must be between 1 and ${max}.`;
-      }
-    }
-    if (field.type === "yes_no" && value !== undefined && value !== "") {
-      const answer = String(value).toLowerCase();
-      if (answer !== "yes" && answer !== "no") {
-        return `${field.label} must be Yes or No.`;
-      }
-    }
-  }
-  return null;
 }
 
 function canModifyMeeting(membership: { role: string }) {

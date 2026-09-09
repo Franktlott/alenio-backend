@@ -438,7 +438,8 @@ export type UploadSlot =
   | "team"
   | "go_alert_sound"
   | "go_walk_photo"
-  | "seneca_image";
+  | "seneca_image"
+  | "check_in_audio";
 
 export async function uploadFileToFirebaseStorage(params: {
   userId: string;
@@ -463,6 +464,9 @@ export async function uploadFileToFirebaseStorage(params: {
   if (slot === "go_walk_photo" && !teamId?.trim()) {
     throw new Error("teamId is required for walk photo uploads");
   }
+  if (slot === "check_in_audio" && !teamId?.trim()) {
+    throw new Error("teamId is required for check-in audio uploads");
+  }
 
   const safeName = sanitizeFilename(file.name || "upload");
   const objectId = crypto.randomUUID();
@@ -477,6 +481,9 @@ export async function uploadFileToFirebaseStorage(params: {
     storagePath = `teams/${teamId!.trim()}/walk-photos/${Date.now()}-${objectId}-${safeName}`;
   } else if (slot === "seneca_image") {
     storagePath = `users/${userId}/seneca-images/${Date.now()}-${objectId}-${safeName}`;
+  } else if (slot === "check_in_audio") {
+    // Deleted as soon as the segment is transcribed; never linked from a record.
+    storagePath = `teams/${teamId!.trim()}/check-in-audio/${Date.now()}-${objectId}-${safeName}`;
   } else {
     storagePath = `users/${userId}/uploads/${Date.now()}-${objectId}-${safeName}`;
   }
@@ -607,6 +614,37 @@ export async function listUserUploadObjects(): Promise<UserUploadObject[]> {
   }
 
   return out;
+}
+
+/** Reads an object's bytes by storage path, trying each bucket alias. */
+export async function downloadStorageObject(
+  objectPath: string,
+): Promise<Buffer | null> {
+  if (!objectPath?.trim()) return null;
+  if (!ensureFirebaseStorageInitialized()) return null;
+
+  for (const bucketId of bucketCandidates()) {
+    try {
+      const [bytes] = await getStorage().bucket(bucketId).file(objectPath).download();
+      return bytes;
+    } catch (e) {
+      if (isStorageNotFound(e)) continue;
+      throw new Error(formatStorageError(e));
+    }
+  }
+  return null;
+}
+
+/** Deletes an object without the caller needing to know which bucket alias holds it. */
+export async function deleteStorageObjectEverywhere(
+  objectPath: string,
+): Promise<boolean> {
+  if (!objectPath?.trim()) return false;
+  let deleted = false;
+  for (const bucketId of bucketCandidates()) {
+    if (await deleteStorageObjectByPath(bucketId, objectPath)) deleted = true;
+  }
+  return deleted;
 }
 
 export async function deleteStorageObjectByPath(

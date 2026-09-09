@@ -77,6 +77,7 @@ model User {
   templatesCreated                  TaskTemplate[]                  @relation("TemplateCreator")
   oneOnOneTemplatesCreated          OneOnOneTemplate[]              @relation("OneOnOneTemplateCreator")
   oneOnOneMeetingsCreated           OneOnOneMeeting[]               @relation("OneOnOneMeetingCreator")
+  checkInRecordingsCreated          CheckInRecording[]              @relation("CheckInRecordingCreator")
   developmentGoalsCreated           DevelopmentGoal[]               @relation("DevelopmentGoalCreator")
   developmentGoalNotesCreated       DevelopmentGoalNote[]           @relation("DevelopmentGoalNoteCreator")
   taskNotesCreated                  TaskNote[]                      @relation("TaskNoteCreator")
@@ -524,6 +525,7 @@ model Team {
   polls                 Poll[]
   oneOnOneTemplates     OneOnOneTemplate[]
   oneOnOneMeetings      OneOnOneMeeting[]
+  checkInRecordings     CheckInRecording[]
   developmentGoals      DevelopmentGoal[]
   recurrenceSeries      RecurrenceSeries[]
   checklistLocations    ChecklistLocation[]
@@ -973,10 +975,72 @@ model OneOnOneMeeting {
   createdBy      User              @relation("OneOnOneMeetingCreator", fields: [createdById], references: [id])
   createdAt      DateTime          @default(now())
   followUpTasks  Task[]
+  /**
+   * manual = typed into the form; recorded = drafted from a recorded conversation
+   */
+  captureMode    String?
+  recording      CheckInRecording?
 
   @@index([teamId, memberUserId])
   @@index([sourceVideoRoomId])
   @@index([calendarEventId])
+}
+
+model CheckInRecording {
+  id           String                    @id @default(cuid())
+  teamId       String
+  team         Team                      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  memberUserId String
+  createdById  String
+  createdBy    User                      @relation("CheckInRecordingCreator", fields: [createdById], references: [id])
+  templateId   String
+  /**
+   * recording = capture in progress; transcribing = stitching and mapping;
+   * ready = draft check-in created; failed = gave up, see error
+   */
+  status       String                    @default("recording")
+  /**
+   * When the leader confirmed the associate was told about the recording
+   */
+  consentAckAt DateTime?
+  durationSec  Int                       @default(0)
+  /**
+   * Stitched transcript of every segment; leader-visible only
+   */
+  transcript   String?
+  error        String?
+  meetingId    String?                   @unique
+  meeting      OneOnOneMeeting?          @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  segments     CheckInRecordingSegment[]
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  @@index([teamId, memberUserId])
+  @@index([status])
+}
+
+model CheckInRecordingSegment {
+  id          String           @id @default(cuid())
+  recordingId String
+  recording   CheckInRecording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  index       Int
+  /**
+   * Firebase object path; cleared as soon as the segment is transcribed
+   */
+  storagePath String?
+  /**
+   * uploaded = audio stored; transcribing = sent to the model; done; failed
+   */
+  status      String           @default("uploaded")
+  text        String?
+  durationSec Int              @default(0)
+  error       String?
+  attempts    Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([recordingId, index])
+  @@index([status])
 }
 
 model DevelopmentGoal {

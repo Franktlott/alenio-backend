@@ -43,6 +43,8 @@ import { templatesRouter } from "./routes/templates";
 import { oneOnOneTemplatesRouter } from "./routes/one-on-one-templates";
 import { checkInTemplateLibraryRouter } from "./routes/check-in-template-library";
 import { oneOnOneMeetingsRouter } from "./routes/one-on-one-meetings";
+import checkInRecordingsRouter from "./routes/check-in-recordings";
+import { sweepStalledRecordings } from "./lib/check-in-recording-service";
 import { joinRequestsRouter } from "./routes/join-requests";
 import { ownershipTransfersRouter } from "./routes/ownership-transfers";
 import { calendarRouter, initMeetingReminders } from "./routes/calendar";
@@ -2221,6 +2223,7 @@ app.route("/api/teams/:teamId/members/me", goLeaderPinRouter);
 app.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRouter);
 app.route("/api/teams/:teamId/walks", walksRouter);
 app.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
+app.route("/api/teams/:teamId/members", checkInRecordingsRouter);
 app.route("/api/teams/:teamId/members", developmentGoalsRouter);
 app.route("/api/teams/:teamId/members", memberNextActionRouter);
 app.route("/api/teams/:teamId/members", senecaRouter);
@@ -2294,6 +2297,21 @@ async function runCleanup() {
     }
   } catch (err) {
     console.error("[cleanup] Pending workspace checkout expiry failed:", err);
+  }
+
+  try {
+    const recordings = await sweepStalledRecordings();
+    if (
+      recordings.retriedSegments > 0 ||
+      recordings.finishedRecordings > 0 ||
+      recordings.purgedRecordings > 0
+    ) {
+      console.log(
+        `[cleanup] Check-in recordings retried=${recordings.retriedSegments} finished=${recordings.finishedRecordings} purged=${recordings.purgedRecordings}`,
+      );
+    }
+  } catch (err) {
+    console.error("[cleanup] Check-in recording sweep failed:", err);
   }
 
   try {

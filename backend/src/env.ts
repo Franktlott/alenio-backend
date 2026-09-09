@@ -103,6 +103,11 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
   /** OpenAI image model used by Seneca. */
   OPENAI_IMAGE_MODEL: z.string().optional().default("gpt-image-2"),
+  /** OpenAI speech-to-text model used for recorded check-ins. */
+  OPENAI_TRANSCRIBE_MODEL: z
+    .string()
+    .optional()
+    .default("gpt-4o-mini-transcribe"),
   /** Maximum image generations allowed per user per UTC day. */
   SENECA_IMAGE_DAILY_LIMIT: z.string().optional().default("5"),
   /**
