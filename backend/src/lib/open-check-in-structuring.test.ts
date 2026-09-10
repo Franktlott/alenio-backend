@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
   normalizeOpenCheckIn,
+  openCheckInRecapField,
   OPEN_CHECK_IN_MAX_ITEMS,
+  OPEN_CHECK_IN_RECAP_FIELD_ID,
   OPEN_CHECK_IN_TITLE,
 } from "./open-check-in-structuring";
 
 describe("normalizeOpenCheckIn", () => {
-  test("turns topics into ordered questions with matching answers", () => {
+  test("folds topics into one recap of questions and answers", () => {
     const result = normalizeOpenCheckIn({
       title: "Weekly catch-up",
       items: [
@@ -17,28 +19,10 @@ describe("normalizeOpenCheckIn", () => {
     });
 
     expect(result.title).toBe("Weekly catch-up");
-    expect(result.fields.map((field) => field.label)).toEqual([
-      "How is the new route going?",
-      "Any blockers?",
-    ]);
-    expect(result.fields.map((field) => field.order)).toEqual([0, 1]);
-    expect(result.fields.every((field) => field.type === "long_text")).toBe(true);
-    expect(result.responses[result.fields[0]!.id]).toBe("Settled in now.");
-    expect(result.responses[result.fields[1]!.id]).toBe("Waiting on the scanner.");
+    expect(result.recap).toBe(
+      "How is the new route going?\nSettled in now.\n\nAny blockers?\nWaiting on the scanner.",
+    );
     expect(result.summary).toBe("Route is settled. Scanner still outstanding.");
-  });
-
-  test("assigns its own ids so a repeated model id cannot merge two answers", () => {
-    const result = normalizeOpenCheckIn({
-      items: [
-        { question: "First?", answer: "One." },
-        { question: "Second?", answer: "Two." },
-      ],
-    });
-
-    const ids = result.fields.map((field) => field.id);
-    expect(new Set(ids).size).toBe(2);
-    expect(Object.keys(result.responses).sort()).toEqual([...ids].sort());
   });
 
   test("drops topics with no question or no answer", () => {
@@ -52,8 +36,7 @@ describe("normalizeOpenCheckIn", () => {
       ],
     });
 
-    expect(result.fields).toHaveLength(1);
-    expect(result.fields[0]!.label).toBe("Kept?");
+    expect(result.recap).toBe("Kept?\nYes.");
   });
 
   test("caps the number of topics", () => {
@@ -64,14 +47,24 @@ describe("normalizeOpenCheckIn", () => {
       })),
     });
 
-    expect(result.fields).toHaveLength(OPEN_CHECK_IN_MAX_ITEMS);
+    expect(result.recap.split("\n\n")).toHaveLength(OPEN_CHECK_IN_MAX_ITEMS);
   });
 
-  test("falls back to a usable title and empty structure", () => {
+  test("falls back to a usable title and empty recap", () => {
     expect(normalizeOpenCheckIn(null).title).toBe(OPEN_CHECK_IN_TITLE);
     expect(normalizeOpenCheckIn({ title: "   " }).title).toBe(OPEN_CHECK_IN_TITLE);
-    expect(normalizeOpenCheckIn(undefined).fields).toEqual([]);
-    expect(normalizeOpenCheckIn({ items: "nope" }).responses).toEqual({});
+    expect(normalizeOpenCheckIn(undefined).recap).toBe("");
+    expect(normalizeOpenCheckIn({ items: "nope" }).recap).toBe("");
     expect(normalizeOpenCheckIn({}).summary).toBe("");
+  });
+});
+
+describe("openCheckInRecapField", () => {
+  test("is a single optional long text question", () => {
+    const field = openCheckInRecapField();
+    expect(field.id).toBe(OPEN_CHECK_IN_RECAP_FIELD_ID);
+    expect(field.type).toBe("long_text");
+    expect(field.required).toBe(false);
+    expect(field.order).toBe(0);
   });
 });

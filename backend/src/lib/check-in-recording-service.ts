@@ -7,7 +7,9 @@ import {
 } from "./check-in-responses";
 import { mapTranscriptToTemplate } from "./check-in-transcript-mapping";
 import {
+  OPEN_CHECK_IN_RECAP_FIELD_ID,
   OPEN_CHECK_IN_TITLE,
+  openCheckInRecapField,
   structureOpenTranscript,
 } from "./open-check-in-structuring";
 import {
@@ -219,8 +221,12 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     } else {
       const structured = await structureOpenTranscript({ transcript, memberName });
       title = structured.title;
-      fields = appendLeaderCommentsFields(structured.fields as CheckInTemplateField[]);
-      responses = { ...structured.responses };
+      fields = appendLeaderCommentsFields([
+        openCheckInRecapField() as CheckInTemplateField,
+      ]);
+      responses = structured.recap
+        ? { [OPEN_CHECK_IN_RECAP_FIELD_ID]: structured.recap }
+        : {};
       // The summary is the leader's own section, the same as a guided check-in.
       const leaderField = findLeaderCommentsField(fields);
       if (leaderField && structured.summary) {
@@ -230,12 +236,16 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
   } catch (err) {
     console.error("[check-in-recordings] mapping failed", err);
     // Fall back to handing the leader the raw transcript rather than nothing.
-    if (!template) {
+    if (template) {
+      const leaderField = findLeaderCommentsField(fields);
+      responses = leaderField ? { [leaderField.id]: transcript } : {};
+    } else {
       title = OPEN_CHECK_IN_TITLE;
-      fields = appendLeaderCommentsFields([]);
+      fields = appendLeaderCommentsFields([
+        openCheckInRecapField() as CheckInTemplateField,
+      ]);
+      responses = { [OPEN_CHECK_IN_RECAP_FIELD_ID]: transcript };
     }
-    const leaderField = findLeaderCommentsField(fields);
-    responses = leaderField ? { [leaderField.id]: transcript } : {};
     unanswered = fields
       .filter((field) => field.type !== "section" && field.type !== "associate_notes")
       .map((field) => field.label);

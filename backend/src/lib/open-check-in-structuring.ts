@@ -14,10 +14,28 @@ export type OpenCheckInField = {
   helpText?: string | null;
 };
 
+/**
+ * The one question an open check-in asks. Everything discussed is recapped
+ * inside it, so the draft reads like a short check-in rather than a stack of
+ * one-off questions the leader never wrote and cannot edit.
+ */
+export const OPEN_CHECK_IN_RECAP_FIELD_ID = "open-recap";
+export const OPEN_CHECK_IN_RECAP_LABEL = "What we talked about";
+
+export function openCheckInRecapField(): OpenCheckInField {
+  return {
+    id: OPEN_CHECK_IN_RECAP_FIELD_ID,
+    label: OPEN_CHECK_IN_RECAP_LABEL,
+    type: "long_text",
+    order: 0,
+    required: false,
+  };
+}
+
 export type OpenCheckInStructure = {
   title: string;
-  fields: OpenCheckInField[];
-  responses: Record<string, string | number>;
+  /** Every topic as readable question-and-answer text, ready for one field. */
+  recap: string;
   summary: string;
 };
 
@@ -33,40 +51,30 @@ function cleanText(value: unknown, max: number): string {
 }
 
 /**
- * Builds the draft's questions from what the model heard. Ids are assigned here
- * rather than taken from the model, so a hallucinated or duplicated id cannot
- * detach an answer from its question.
+ * Folds the topics the model heard into one readable recap. Keeping them as
+ * text rather than separate fields means the leader can reword or delete a
+ * line freely, instead of typing under a question they did not write.
  */
 export function normalizeOpenCheckIn(
   raw: RawOpenCheckIn | null | undefined,
 ): OpenCheckInStructure {
   const rawItems = Array.isArray(raw?.items) ? raw.items : [];
-  const fields: OpenCheckInField[] = [];
-  const responses: Record<string, string | number> = {};
+  const blocks: string[] = [];
 
   for (const entry of rawItems) {
-    if (fields.length >= OPEN_CHECK_IN_MAX_ITEMS) break;
+    if (blocks.length >= OPEN_CHECK_IN_MAX_ITEMS) break;
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
     const item = entry as { question?: unknown; answer?: unknown };
     const question = cleanText(item.question, 200);
     const answer = cleanText(item.answer, 4000);
-    // A question with nothing behind it is noise the leader has to delete.
+    // A topic with nothing behind it is noise the leader has to delete.
     if (!question || !answer) continue;
-    const id = `open-${fields.length + 1}`;
-    fields.push({
-      id,
-      label: question,
-      type: "long_text",
-      order: fields.length,
-      required: false,
-    });
-    responses[id] = answer;
+    blocks.push(`${question}\n${answer}`);
   }
 
   return {
     title: cleanText(raw?.title, 60) || OPEN_CHECK_IN_TITLE,
-    fields,
-    responses,
+    recap: blocks.join("\n\n"),
     summary: typeof raw?.summary === "string" ? raw.summary.trim().slice(0, 4000) : "",
   };
 }
