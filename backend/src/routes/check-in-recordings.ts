@@ -330,15 +330,18 @@ checkInRecordingsRouter.get(
     }
 
     try {
-      // "ready" is left out on purpose: once the draft exists the meetings list
-      // shows it, so keeping it here would duplicate the row. Failures stay so
-      // the leader hears about them instead of the row vanishing.
+      // Only work the leader is waiting on. "recording" is left out because it
+      // is either happening behind the recording screen or was abandoned when
+      // the app closed, and neither is a check-in worth showing; the cleanup
+      // sweep decides whether an abandoned one becomes a draft or is dropped.
+      // "ready" is left out because the draft itself is then in the meetings
+      // list. Failures stay so the leader hears about them.
       const recordings = await prisma.checkInRecording.findMany({
         where: {
           teamId,
           memberUserId,
           createdById: user.id,
-          status: { in: ["recording", "transcribing", "failed"] },
+          status: { in: ["transcribing", "failed"] },
         },
         orderBy: { createdAt: "desc" },
         take: 10,

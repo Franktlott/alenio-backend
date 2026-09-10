@@ -18,6 +18,8 @@ export const RECORDING_MAX_DURATION_SEC = 90 * 60;
 export const RECORDING_SEGMENT_MAX_DURATION_SEC = 10 * 60;
 /** Segments stuck in `transcribing` past this are assumed lost to a restart. */
 export const SEGMENT_STALE_MS = 10 * 60 * 1000;
+/** How long a recording can sit untouched before we treat it as walked away from. */
+export const RECORDING_ABANDONED_MS = 2 * RECORDING_SEGMENT_MAX_DURATION_SEC * 1000;
 export const SEGMENT_MAX_ATTEMPTS = 3;
 
 export type RecordingStatus = "recording" | "transcribing" | "ready" | "failed";
@@ -287,21 +289,26 @@ export async function sweepStalledRecordings(): Promise<{
     if (result?.ok) finishedRecordings += 1;
   }
 
-  // A recording still "recording" hours later means the app never came back.
-  const abandonedBefore = new Date(Date.now() - 12 * 60 * 60 * 1000);
+  // A recording still "recording" long after its last segment means the app
+  // went away without stopping it. Segments land at least every
+  // RECORDING_SEGMENT_MAX_DURATION_SEC and each one touches the row, so a
+  // window of twice that cannot catch a live conversation.
+  const abandonedBefore = new Date(Date.now() - RECORDING_ABANDONED_MS);
   const abandoned = await prisma.checkInRecording.findMany({
     where: { status: "recording", updatedAt: { lt: abandonedBefore } },
-    select: { id: true },
+    select: { id: true, _count: { select: { segments: true } } },
     take: 50,
   });
   for (const recording of abandoned) {
+    if (recording._count.segments > 0) {
+      // The conversation did happen, so write it up rather than binning it.
+      const result = await finishRecording(recording.id).catch(() => null);
+      if (result?.ok) finishedRecordings += 1;
+      continue;
+    }
+    // Nothing was ever captured; drop it so it cannot show up as a dead row.
     await purgeRecordingAudio(recording.id);
-    await prisma.checkInRecording
-      .update({
-        where: { id: recording.id },
-        data: { status: "failed", error: "This recording was never finished." },
-      })
-      .catch(() => null);
+    await prisma.checkInRecording.delete({ where: { id: recording.id } }).catch(() => null);
     purgedRecordings += 1;
   }
 
