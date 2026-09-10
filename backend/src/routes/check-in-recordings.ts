@@ -313,6 +313,56 @@ checkInRecordingsRouter.post(
   },
 );
 
+// GET /api/teams/:teamId/members/:memberUserId/check-in-recordings/active
+// Backs the locked "writing up" rows in the check-ins list, so a leader can
+// leave the recording screen and still see work in flight when they come back.
+// Declared before the /:recordingId route so "active" is not read as an id.
+checkInRecordingsRouter.get(
+  "/:memberUserId/check-in-recordings/active",
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership || !canManageCheckIns(membership.role)) {
+      return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
+    }
+
+    try {
+      // "ready" is left out on purpose: once the draft exists the meetings list
+      // shows it, so keeping it here would duplicate the row. Failures stay so
+      // the leader hears about them instead of the row vanishing.
+      const recordings = await prisma.checkInRecording.findMany({
+        where: {
+          teamId,
+          memberUserId,
+          createdById: user.id,
+          status: { in: ["recording", "transcribing", "failed"] },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      });
+      if (recordings.length === 0) return c.json({ data: [] });
+
+      const templates = await prisma.oneOnOneTemplate.findMany({
+        where: { id: { in: [...new Set(recordings.map((r) => r.templateId))] } },
+        select: { id: true, title: true },
+      });
+      const titleById = new Map(templates.map((t) => [t.id, t.title]));
+
+      return c.json({
+        data: recordings.map((recording) => ({
+          ...serializeRecording(recording),
+          templateTitle: titleById.get(recording.templateId) ?? "Check-in",
+        })),
+      });
+    } catch (err) {
+      return prismaRouteError(c, err, "[check-in-recordings] active list failed");
+    }
+  },
+);
+
 // GET /api/teams/:teamId/members/:memberUserId/check-in-recordings/for-meeting/:meetingId
 // Lets a leader read back the transcript behind a saved check-in.
 checkInRecordingsRouter.get(
