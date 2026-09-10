@@ -15,6 +15,7 @@ export async function ensureCheckInAudioRetentionSchema(
         ADD COLUMN IF NOT EXISTS "audioCreatedAt" TIMESTAMP(3),
         ADD COLUMN IF NOT EXISTS "audioExpiresAt" TIMESTAMP(3),
         ADD COLUMN IF NOT EXISTS "audioDeletedAt" TIMESTAMP(3),
+        ADD COLUMN IF NOT EXISTS "audioDeleteReason" TEXT,
         ADD COLUMN IF NOT EXISTS "audioDeleteAttempts" INTEGER NOT NULL DEFAULT 0;
     `);
     await prisma.$executeRawUnsafe(`

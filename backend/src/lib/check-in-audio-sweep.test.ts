@@ -5,7 +5,7 @@ import {
   sweepExpiredRecordingAudio,
   type AudioStore,
 } from "./check-in-recording-service";
-import type { AudioStatus } from "./check-in-audio-access";
+import type { AudioDeleteReason, AudioStatus } from "./check-in-audio-access";
 
 const NOW = new Date("2026-09-16T12:00:00.000Z");
 
@@ -14,6 +14,7 @@ type FakeRecording = {
   audioStatus: AudioStatus;
   audioExpiresAt: Date | null;
   audioDeletedAt: Date | null;
+  audioDeleteReason: AudioDeleteReason | null;
   audioDeleteAttempts: number;
   transcript: string;
   segments: Array<{ id: string; storagePath: string | null }>;
@@ -56,6 +57,7 @@ function fakeStore(recordings: FakeRecording[], failing = new Set<string>()) {
       if (!recording) throw new Error(`unknown recording ${recordingId}`);
       recording.audioStatus = data.audioStatus;
       if (data.audioDeletedAt) recording.audioDeletedAt = data.audioDeletedAt;
+      if (data.audioDeleteReason) recording.audioDeleteReason = data.audioDeleteReason;
       if (data.bumpAttempts) recording.audioDeleteAttempts += 1;
       statusWrites.push({ id: recordingId, status: data.audioStatus });
     },
@@ -86,6 +88,7 @@ function expired(id: string, segments = 2): FakeRecording {
     audioStatus: "available",
     audioExpiresAt: new Date(NOW.getTime() - 1000),
     audioDeletedAt: null,
+    audioDeleteReason: null,
     audioDeleteAttempts: 0,
     transcript: "We opened with last week's numbers.",
     segments: Array.from({ length: segments }, (_, i) => ({
@@ -108,6 +111,20 @@ describe("deleteRecordingAudio", () => {
     expect(fake.objects.size).toBe(0);
     expect(fake.get("rec_1").audioStatus).toBe("deleted");
     expect(fake.get("rec_1").audioDeletedAt).toEqual(NOW);
+  });
+
+  test("records why the audio went, so the app can explain it", async () => {
+    await deleteRecordingAudio("rec_1", NOW, fake.store, "published");
+    expect(fake.get("rec_1").audioDeleteReason).toBe("published");
+  });
+
+  test("does not stamp a reason when the deletion failed", async () => {
+    const stubborn = fakeStore(
+      [expired("rec_2", 1)],
+      new Set(["check-in-audio/team_1/rec_2-0.m4a"]),
+    );
+    await deleteRecordingAudio("rec_2", NOW, stubborn.store, "published");
+    expect(stubborn.get("rec_2").audioDeleteReason).toBeNull();
   });
 
   test("revokes access before touching storage", async () => {
@@ -157,6 +174,7 @@ describe("sweepExpiredRecordingAudio", () => {
     const result = await sweepExpiredRecordingAudio(NOW, fake.store);
     expect(result).toEqual({ deletedRecordings: 2, failedRecordings: 0 });
     expect(fake.objects.size).toBe(0);
+    expect(fake.get("rec_1").audioDeleteReason).toBe("expired");
   });
 
   test("leaves audio that is still inside its window", async () => {

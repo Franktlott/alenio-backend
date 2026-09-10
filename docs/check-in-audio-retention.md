@@ -1,13 +1,23 @@
 # Check-in audio retention
 
-Recorded check-in audio is kept for seven days so the person who recorded the
-conversation can replay it, then deleted. Everything else the check-in produced
-— the structured answers, the transcript, the Seneca summary, notes and action
-items — is unaffected and stays for good.
+Audio deletes when the check-in is published, or after seven days — whichever
+happens first. Only the person who recorded the conversation can replay it in
+the meantime. Everything else the check-in produced — the structured answers,
+the transcript, the Seneca summary, notes and action items — is unaffected and
+stays for good.
+
+Seven days is a ceiling, not a promise. The audio exists to produce the
+write-up, so publishing ends its purpose, and in practice most recordings are
+deleted within minutes of the conversation. The seven days only cover a draft
+the leader has not finished reviewing yet.
 
 ## How deletion happens
 
-Three independent layers, so no single failure keeps audio alive:
+Publishing a check-in deletes its audio inline, on a best-effort basis: a
+storage problem must never block a leader from saving their check-in, so a
+failure there is left for the sweep below rather than surfaced as an error.
+
+Three further layers back that up, so no single failure keeps audio alive:
 
 1. **Access stops on time.** Every playback request re-checks the expiry against
    server time. Once `audioExpiresAt` has passed, the API refuses, whether or

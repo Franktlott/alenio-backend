@@ -12,6 +12,12 @@ export const AUDIO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 /** Long enough to start playing, short enough that a leaked link dies quickly. */
 export const AUDIO_PLAYBACK_URL_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * Why audio was removed. Retention is a ceiling: publishing the check-in ends
+ * the audio's purpose sooner, whichever comes first.
+ */
+export type AudioDeleteReason = "published" | "expired" | "manual";
+
 export type AudioStatus =
   | "pending"
   | "available"

@@ -1,5 +1,9 @@
 import { prisma } from "../prisma";
-import { audioExpiryFrom, type AudioStatus } from "./check-in-audio-access";
+import {
+  audioExpiryFrom,
+  type AudioDeleteReason,
+  type AudioStatus,
+} from "./check-in-audio-access";
 import { appendLeaderCommentsFields, findLeaderCommentsField } from "./check-in-leader-comments";
 import {
   parseTemplateFields,
@@ -390,7 +394,12 @@ export type AudioStore = {
   clearSegmentPath(segmentId: string): Promise<void>;
   setAudioStatus(
     recordingId: string,
-    data: { audioStatus: AudioStatus; audioDeletedAt?: Date; bumpAttempts?: boolean },
+    data: {
+      audioStatus: AudioStatus;
+      audioDeletedAt?: Date;
+      audioDeleteReason?: AudioDeleteReason;
+      bumpAttempts?: boolean;
+    },
   ): Promise<void>;
   expiredRecordings(now: Date, limit: number): Promise<Array<{ id: string }>>;
 };
@@ -415,6 +424,7 @@ export const prismaAudioStore: AudioStore = {
       data: {
         audioStatus: data.audioStatus,
         ...(data.audioDeletedAt ? { audioDeletedAt: data.audioDeletedAt } : {}),
+        ...(data.audioDeleteReason ? { audioDeleteReason: data.audioDeleteReason } : {}),
         ...(data.bumpAttempts ? { audioDeleteAttempts: { increment: 1 } } : {}),
       },
     });
@@ -441,6 +451,7 @@ export async function deleteRecordingAudio(
   recordingId: string,
   now: Date = new Date(),
   store: AudioStore = prismaAudioStore,
+  reason: AudioDeleteReason = "manual",
 ): Promise<boolean> {
   // Marked first so a playback request landing mid-delete is refused rather
   // than handed a URL to an object that is about to disappear.
@@ -468,8 +479,28 @@ export async function deleteRecordingAudio(
   await store.setAudioStatus(recordingId, {
     audioStatus: "deleted",
     audioDeletedAt: now,
+    audioDeleteReason: reason,
   });
   return true;
+}
+
+/**
+ * Audio exists to produce the write-up, so publishing the check-in ends its
+ * purpose: the seven days are a ceiling, not a promise. Best effort, because a
+ * storage problem must never block the leader from saving their check-in; the
+ * hourly sweep will pick up anything left behind.
+ */
+export async function deleteAudioForPublishedMeeting(meetingId: string): Promise<void> {
+  try {
+    const recording = await prisma.checkInRecording.findFirst({
+      where: { meetingId, audioStatus: { in: ["available", "pending", "deletion_failed"] } },
+      select: { id: true },
+    });
+    if (!recording) return;
+    await deleteRecordingAudio(recording.id, new Date(), prismaAudioStore, "published");
+  } catch (err) {
+    console.error(`[check-in-audio] publish delete failed for meeting ${meetingId}:`, err);
+  }
 }
 
 /** Recordings handled per pass, so one sweep cannot monopolise the hour. */
@@ -487,7 +518,9 @@ export async function sweepExpiredRecordingAudio(
   let failedRecordings = 0;
 
   for (const recording of await store.expiredRecordings(now, AUDIO_SWEEP_BATCH)) {
-    const ok = await deleteRecordingAudio(recording.id, now, store).catch(() => false);
+    const ok = await deleteRecordingAudio(recording.id, now, store, "expired").catch(
+      () => false,
+    );
     if (ok) {
       deletedRecordings += 1;
     } else {

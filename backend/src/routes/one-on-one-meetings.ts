@@ -39,6 +39,7 @@ import {
 import { logActivity } from "../lib/activity";
 import { workspaceTaskClassificationForRole } from "../lib/task-policy";
 import { publishUserInboxUpdated } from "../lib/realtime-hub";
+import { deleteAudioForPublishedMeeting } from "../lib/check-in-recording-service";
 import {
   contextIncludesCheckInSelection,
   resolveVideoCheckInContext,
@@ -80,6 +81,22 @@ const followUpTaskSchema = z.object({
   description: z.string().trim().max(2000).optional(),
   dueDate: z.string().optional(),
 });
+
+/**
+ * Reads back follow-ups stored on a draft. Malformed JSON yields nothing
+ * rather than failing the whole check-in load.
+ */
+function parseFollowUpDrafts(
+  raw: string | null | undefined,
+): Array<z.infer<typeof followUpTaskSchema>> {
+  if (!raw?.trim()) return [];
+  try {
+    const parsed = z.array(followUpTaskSchema).safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+}
 
 const createMeetingSchema = z.object({
   templateId: z.string().min(1),
@@ -211,6 +228,7 @@ function serializeMeeting(meeting: {
   status?: string;
   publishedAt?: Date | null;
   captureMode?: string | null;
+  followUpDraftsJson?: string | null;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -228,6 +246,9 @@ function serializeMeeting(meeting: {
     status: meeting.status === "draft" ? "draft" : "published",
     publishedAt: oneOnOnePublishedAt(meeting)?.toISOString() ?? null,
     captureMode: meeting.captureMode === "recorded" ? "recorded" : "manual",
+    // Jotted-down follow-ups, so resuming a draft shows them again. Empty once
+    // the check-in is published and they have become real tasks.
+    followUpDrafts: parseFollowUpDrafts(meeting.followUpDraftsJson),
     createdById: meeting.createdById,
     createdAt: meeting.createdAt.toISOString(),
     createdBy: meeting.createdBy,
@@ -826,8 +847,10 @@ oneOnOneMeetingsRouter.post(
 
     const templateFieldsJson = JSON.stringify(fields);
 
-    const followUpTasks = isDraft ? [] : (body.followUpTasks ?? []);
-    const followUpError = await validateFollowUpAssignees(teamId, memberUserId, user.id, followUpTasks);
+    const requestedFollowUps = body.followUpTasks ?? [];
+    // A draft holds its follow-ups as data; only publishing creates tasks.
+    const followUpTasks = isDraft ? [] : requestedFollowUps;
+    const followUpError = await validateFollowUpAssignees(teamId, memberUserId, user.id, requestedFollowUps);
     if (followUpError) {
       return c.json({ error: { message: followUpError, code: "VALIDATION_ERROR" } }, 400);
     }
@@ -863,6 +886,10 @@ oneOnOneMeetingsRouter.post(
             responses: JSON.stringify(body.responses),
             status: isDraft ? "draft" : "published",
             publishedAt: isDraft ? null : new Date(),
+            followUpDraftsJson:
+              isDraft && requestedFollowUps.length > 0
+                ? JSON.stringify(requestedFollowUps)
+                : null,
             createdById: user.id,
           },
           include: meetingInclude,
@@ -990,12 +1017,15 @@ oneOnOneMeetingsRouter.patch(
       return c.json({ error: { message: validationError, code: "VALIDATION_ERROR" } }, 400);
     }
 
-    const followUpTasks = isDraft ? [] : (body.followUpTasks ?? []);
+    const requestedFollowUps = body.followUpTasks ?? [];
+    // A draft keeps its follow-ups as data instead of creating Task rows, so
+    // the associate is never assigned work from an unpublished check-in.
+    const followUpTasks = isDraft ? [] : requestedFollowUps;
     const followUpError = await validateFollowUpAssignees(
       teamId,
       memberUserId,
       existing.createdById,
-      followUpTasks,
+      requestedFollowUps,
     );
     if (followUpError) {
       return c.json({ error: { message: followUpError, code: "VALIDATION_ERROR" } }, 400);
@@ -1033,6 +1063,15 @@ oneOnOneMeetingsRouter.patch(
             ? { calendarEventId: provenance.calendarEventId }
             : {}),
           ...(publishingNow ? { publishedAt: new Date() } : {}),
+          // Stored while a draft; cleared once they have become real tasks.
+          // Left untouched when the client did not send the field at all.
+          ...(body.followUpTasks === undefined && isDraft
+            ? {}
+            : {
+                followUpDraftsJson: isDraft
+                  ? JSON.stringify(requestedFollowUps)
+                  : null,
+              }),
         },
       });
 
@@ -1067,6 +1106,11 @@ oneOnOneMeetingsRouter.patch(
           actorUserId: user.id,
           actorRole: membership.role,
         });
+      }
+
+      if (publishingNow) {
+        // The write-up is saved, so the audio has served its purpose.
+        await deleteAudioForPublishedMeeting(meetingId);
       }
 
       const meeting = await prisma.oneOnOneMeeting.findUnique({

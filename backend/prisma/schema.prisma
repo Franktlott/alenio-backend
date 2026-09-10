@@ -976,6 +976,13 @@ model OneOnOneMeeting {
   createdAt      DateTime          @default(now())
   followUpTasks  Task[]
   /**
+   * Follow-up tasks a leader jotted down while the check-in is still a draft,
+   * as JSON: [{ title, assigneeUserId, dueDate? }]. Held here rather than as
+   * Task rows so the associate is not assigned work from an unpublished
+   * check-in; converted to real tasks on publish and then cleared
+   */
+  followUpDraftsJson String?
+  /**
    * manual = typed into the form; recorded = drafted from a recorded conversation
    */
   captureMode    String?
@@ -1028,6 +1035,11 @@ model CheckInRecording {
   audioCreatedAt      DateTime?
   audioExpiresAt      DateTime?
   audioDeletedAt      DateTime?
+  /**
+   * Why the audio went away: published (the check-in was saved), expired (the
+   * seven days ran out), or manual. Null while the audio is still there
+   */
+  audioDeleteReason   String?
   audioDeleteAttempts Int               @default(0)
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
