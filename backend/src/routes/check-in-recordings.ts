@@ -20,6 +20,7 @@ import {
   RECORDING_SEGMENT_MAX_DURATION_SEC,
   transcribeSegment,
 } from "../lib/check-in-recording-service";
+import { OPEN_CHECK_IN_TITLE } from "../lib/open-check-in-structuring";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -30,7 +31,8 @@ const checkInRecordingsRouter = new Hono<{ Variables: Variables }>();
 checkInRecordingsRouter.use("*", authGuard);
 
 const startSchema = z.object({
-  templateId: z.string().min(1),
+  /** Omitted for an open check-in, where Seneca structures the conversation itself. */
+  templateId: z.string().min(1).nullish(),
   /** The leader confirms the associate was told the conversation is recorded. */
   consentAcknowledged: z.literal(true),
 });
@@ -75,7 +77,8 @@ function serializeRecording(recording: {
   transcript: string | null;
   error: string | null;
   meetingId: string | null;
-  templateId: string;
+  /** Null for an open check-in. */
+  templateId: string | null;
   createdAt: Date;
 }) {
   return {
@@ -126,11 +129,13 @@ checkInRecordingsRouter.post(
     }
 
     const body = c.req.valid("json");
-    const template = await prisma.oneOnOneTemplate.findFirst({
-      where: { id: body.templateId, teamId },
-      select: { id: true },
-    });
-    if (!template) {
+    const template = body.templateId
+      ? await prisma.oneOnOneTemplate.findFirst({
+          where: { id: body.templateId, teamId },
+          select: { id: true },
+        })
+      : null;
+    if (body.templateId && !template) {
       return c.json({ error: { message: "Template not found", code: "NOT_FOUND" } }, 404);
     }
 
@@ -148,7 +153,7 @@ checkInRecordingsRouter.post(
           teamId,
           memberUserId,
           createdById: user.id,
-          templateId: template.id,
+          templateId: template?.id ?? null,
           status: "recording",
           consentAckAt: new Date(),
         },
@@ -348,8 +353,11 @@ checkInRecordingsRouter.get(
       });
       if (recordings.length === 0) return c.json({ data: [] });
 
+      const templateIds = recordings
+        .map((recording) => recording.templateId)
+        .filter((id): id is string => !!id);
       const templates = await prisma.oneOnOneTemplate.findMany({
-        where: { id: { in: [...new Set(recordings.map((r) => r.templateId))] } },
+        where: { id: { in: [...new Set(templateIds)] } },
         select: { id: true, title: true },
       });
       const titleById = new Map(templates.map((t) => [t.id, t.title]));
@@ -357,7 +365,11 @@ checkInRecordingsRouter.get(
       return c.json({
         data: recordings.map((recording) => ({
           ...serializeRecording(recording),
-          templateTitle: titleById.get(recording.templateId) ?? "Check-in",
+          // An open check-in has no template, and gets its title once Seneca
+          // has heard the conversation.
+          templateTitle: recording.templateId
+            ? (titleById.get(recording.templateId) ?? "Check-in")
+            : OPEN_CHECK_IN_TITLE,
         })),
       });
     } catch (err) {

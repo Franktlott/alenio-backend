@@ -85,6 +85,7 @@ import {
 import { cleanupOrphanUserUploads } from "./lib/orphan-upload-cleanup";
 import { syncPrismaSchemaOnStartup } from "./lib/sync-prisma-schema";
 import { ensureOneOnOneSchema } from "./lib/ensure-one-on-one-schema";
+import { ensureOpenCheckInSchema } from "./lib/ensure-open-check-in-schema";
 import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schema";
 import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
 import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-schema";
@@ -206,6 +207,8 @@ const startupSchemaReady = Promise.all([
   ensureDevelopmentPlanSchema(prisma),
   // Check-in history and follow-up task relations are read in every environment.
   ensureOneOnOneSchema(prisma),
+  // Open check-ins record without a template, so templateId must allow null.
+  ensureOpenCheckInSchema(prisma),
   // Invites are used in every environment; keep additive role upgrades production-safe.
   ensureTeamInviteSchema(prisma),
   ...(isProduction

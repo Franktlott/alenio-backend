@@ -7,6 +7,10 @@ import {
 } from "./check-in-responses";
 import { mapTranscriptToTemplate } from "./check-in-transcript-mapping";
 import {
+  OPEN_CHECK_IN_TITLE,
+  structureOpenTranscript,
+} from "./open-check-in-structuring";
+import {
   deleteStorageObjectEverywhere,
   downloadStorageObject,
 } from "./firebase-storage";
@@ -175,10 +179,14 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     return { ok: false, message: "We could not hear anything in that recording." };
   }
 
-  const template = await prisma.oneOnOneTemplate.findFirst({
-    where: { id: recording.templateId, teamId: recording.teamId },
-  });
-  if (!template) {
+  // An open check-in has no template: Seneca decides the questions from what
+  // was actually discussed, and the draft carries that structure instead.
+  const template = recording.templateId
+    ? await prisma.oneOnOneTemplate.findFirst({
+        where: { id: recording.templateId, teamId: recording.teamId },
+      })
+    : null;
+  if (recording.templateId && !template) {
     await prisma.checkInRecording.update({
       where: { id: recordingId },
       data: { status: "failed", error: "That check-in template no longer exists." },
@@ -191,28 +199,43 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     select: { name: true, email: true },
   });
   const memberName = member?.name?.trim() || member?.email || "the team member";
-  const fields: CheckInTemplateField[] = appendLeaderCommentsFields(
-    parseTemplateFields(template.fields),
-  );
 
+  let title = template?.title ?? OPEN_CHECK_IN_TITLE;
+  let fields: CheckInTemplateField[] = template
+    ? appendLeaderCommentsFields(parseTemplateFields(template.fields))
+    : [];
   let responses: Record<string, string | number> = {};
   let unanswered: string[] = [];
   try {
-    const mapped = await mapTranscriptToTemplate({
-      transcript,
-      templateTitle: template.title,
-      fields,
-      memberName,
-    });
-    responses = mapped.responses;
-    unanswered = mapped.unanswered;
+    if (template) {
+      const mapped = await mapTranscriptToTemplate({
+        transcript,
+        templateTitle: template.title,
+        fields,
+        memberName,
+      });
+      responses = mapped.responses;
+      unanswered = mapped.unanswered;
+    } else {
+      const structured = await structureOpenTranscript({ transcript, memberName });
+      title = structured.title;
+      fields = appendLeaderCommentsFields(structured.fields as CheckInTemplateField[]);
+      responses = { ...structured.responses };
+      // The summary is the leader's own section, the same as a guided check-in.
+      const leaderField = findLeaderCommentsField(fields);
+      if (leaderField && structured.summary) {
+        responses[leaderField.id] = structured.summary;
+      }
+    }
   } catch (err) {
     console.error("[check-in-recordings] mapping failed", err);
     // Fall back to handing the leader the raw transcript rather than nothing.
-    const leaderField = findLeaderCommentsField(fields);
-    if (leaderField) {
-      responses = { [leaderField.id]: transcript };
+    if (!template) {
+      title = OPEN_CHECK_IN_TITLE;
+      fields = appendLeaderCommentsFields([]);
     }
+    const leaderField = findLeaderCommentsField(fields);
+    responses = leaderField ? { [leaderField.id]: transcript } : {};
     unanswered = fields
       .filter((field) => field.type !== "section" && field.type !== "associate_notes")
       .map((field) => field.label);
@@ -227,8 +250,8 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     data: {
       teamId: recording.teamId,
       memberUserId: recording.memberUserId,
-      templateId: template.id,
-      templateTitle: template.title,
+      templateId: template?.id ?? null,
+      templateTitle: title,
       templateFields: JSON.stringify(fields),
       responses: JSON.stringify(responses),
       status: "draft",
