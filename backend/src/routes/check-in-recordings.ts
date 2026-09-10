@@ -90,6 +90,7 @@ function serializeRecording(
     templateId: string | null;
     createdById: string;
     audioStatus: string;
+    audioCreatedAt: Date | null;
     audioExpiresAt: Date | null;
     createdAt: Date;
   },
@@ -105,6 +106,9 @@ function serializeRecording(
     templateId: recording.templateId,
     audioStatus: recording.audioStatus,
     audioExpiresAt: recording.audioExpiresAt?.toISOString() ?? null,
+    // False for a check-in recorded before audio was kept at all, so the app
+    // can say the audio was never saved instead of claiming it expired.
+    audioRetained: recording.audioCreatedAt !== null,
     // Whether this viewer may replay it. No URL is ever included here: audio is
     // only ever handed out by the audio route, one short-lived link at a time.
     canPlayAudio: viewerUserId
