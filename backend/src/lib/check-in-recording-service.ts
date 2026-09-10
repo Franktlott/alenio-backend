@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import { audioExpiryFrom, type AudioStatus } from "./check-in-audio-access";
 import { appendLeaderCommentsFields, findLeaderCommentsField } from "./check-in-leader-comments";
 import {
   parseTemplateFields,
@@ -83,11 +84,12 @@ export async function transcribeSegment(
       mimeType: "audio/m4a",
       prompt: previous?.text ?? undefined,
     });
+    // The audio stays put: the creator can replay it until it expires, and a
+    // failed segment can still be retried from storage.
     await prisma.checkInRecordingSegment.update({
       where: { id: segment.id },
       data: { status: "done", text, error: null },
     });
-    await clearSegmentAudio({ id: segment.id, storagePath: segment.storagePath });
   } catch (err) {
     const attempts = segment.attempts + 1;
     const exhausted = attempts >= SEGMENT_MAX_ATTEMPTS;
@@ -96,13 +98,26 @@ export async function transcribeSegment(
       where: { id: segment.id },
       data: { status: exhausted ? "failed" : "uploaded", error: message },
     });
-    // Keep the audio while a retry is still possible; the sweep re-reads it.
-    if (exhausted) {
-      await clearSegmentAudio({ id: segment.id, storagePath: segment.storagePath });
-    } else {
-      throw err;
-    }
+    if (!exhausted) throw err;
   }
+}
+
+/**
+ * Opens the seven-day replay window. Idempotent: a recording that already has
+ * an expiry keeps it, so retries and the recovery sweep cannot extend it.
+ */
+export async function startAudioRetention(recordingId: string): Promise<void> {
+  const now = new Date();
+  await prisma.checkInRecording
+    .updateMany({
+      where: { id: recordingId, audioExpiresAt: null },
+      data: {
+        audioStatus: "available",
+        audioCreatedAt: now,
+        audioExpiresAt: audioExpiryFrom(now),
+      },
+    })
+    .catch(() => null);
 }
 
 async function readSegmentAudio(storagePath: string): Promise<Uint8Array> {
@@ -146,6 +161,11 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
   if (recording.meetingId) {
     return { ok: true, meetingId: recording.meetingId, unanswered: [] };
   }
+
+  // Finish means every segment is uploaded, so the retention window opens here
+  // rather than after transcription. Writing it up can then take as long as it
+  // needs, and a failed write-up still leaves the audio replayable for a retry.
+  await startAudioRetention(recordingId);
 
   const pending = recording.segments.filter(
     (segment) => segment.status === "uploaded" || segment.status === "transcribing",
@@ -357,4 +377,125 @@ export async function purgeRecordingAudio(recordingId: string): Promise<void> {
   for (const segment of segments) {
     await clearSegmentAudio(segment);
   }
+}
+
+/**
+ * The narrow slice of storage and database this deletion path touches, so the
+ * retry and idempotency rules can be tested without either.
+ */
+export type AudioStore = {
+  segments(recordingId: string): Promise<Array<{ id: string; storagePath: string | null }>>;
+  /** Resolves false when the object could not be removed and is worth retrying. */
+  removeObject(storagePath: string): Promise<boolean>;
+  clearSegmentPath(segmentId: string): Promise<void>;
+  setAudioStatus(
+    recordingId: string,
+    data: { audioStatus: AudioStatus; audioDeletedAt?: Date; bumpAttempts?: boolean },
+  ): Promise<void>;
+  expiredRecordings(now: Date, limit: number): Promise<Array<{ id: string }>>;
+};
+
+export const prismaAudioStore: AudioStore = {
+  segments: (recordingId) =>
+    prisma.checkInRecordingSegment.findMany({
+      where: { recordingId, storagePath: { not: null } },
+      select: { id: true, storagePath: true },
+    }),
+  // A missing object already resolves true, because delete passes
+  // ignoreNotFound, so re-running over deleted audio is not an error.
+  removeObject: (storagePath) => deleteStorageObjectEverywhere(storagePath),
+  clearSegmentPath: async (segmentId) => {
+    await prisma.checkInRecordingSegment
+      .update({ where: { id: segmentId }, data: { storagePath: null } })
+      .catch(() => null);
+  },
+  setAudioStatus: async (recordingId, data) => {
+    await prisma.checkInRecording.update({
+      where: { id: recordingId },
+      data: {
+        audioStatus: data.audioStatus,
+        ...(data.audioDeletedAt ? { audioDeletedAt: data.audioDeletedAt } : {}),
+        ...(data.bumpAttempts ? { audioDeleteAttempts: { increment: 1 } } : {}),
+      },
+    });
+  },
+  expiredRecordings: (now, limit) =>
+    prisma.checkInRecording.findMany({
+      // Rows left mid-delete or failed are picked up again on the next pass.
+      where: {
+        audioStatus: { in: ["available", "deleting", "deletion_failed"] },
+        audioExpiresAt: { lte: now },
+      },
+      orderBy: { audioExpiresAt: "asc" },
+      take: limit,
+      select: { id: true },
+    }),
+};
+
+/**
+ * Removes the audio for one recording and records that it is gone. The
+ * transcript, the draft, and everything saved on the check-in are untouched:
+ * only the sound is deleted.
+ */
+export async function deleteRecordingAudio(
+  recordingId: string,
+  now: Date = new Date(),
+  store: AudioStore = prismaAudioStore,
+): Promise<boolean> {
+  // Marked first so a playback request landing mid-delete is refused rather
+  // than handed a URL to an object that is about to disappear.
+  await store.setAudioStatus(recordingId, { audioStatus: "deleting" });
+
+  let allGone = true;
+  for (const segment of await store.segments(recordingId)) {
+    if (!segment.storagePath) continue;
+    const removed = await store.removeObject(segment.storagePath).catch(() => false);
+    if (removed) {
+      await store.clearSegmentPath(segment.id);
+    } else {
+      allGone = false;
+    }
+  }
+
+  if (!allGone) {
+    await store.setAudioStatus(recordingId, {
+      audioStatus: "deletion_failed",
+      bumpAttempts: true,
+    });
+    return false;
+  }
+
+  await store.setAudioStatus(recordingId, {
+    audioStatus: "deleted",
+    audioDeletedAt: now,
+  });
+  return true;
+}
+
+/** Recordings handled per pass, so one sweep cannot monopolise the hour. */
+export const AUDIO_SWEEP_BATCH = 50;
+
+/**
+ * Deletes audio whose seven days are up. Runs from the hourly cleanup; safe to
+ * run repeatedly, and anything that fails is retried on the next pass.
+ */
+export async function sweepExpiredRecordingAudio(
+  now: Date = new Date(),
+  store: AudioStore = prismaAudioStore,
+): Promise<{ deletedRecordings: number; failedRecordings: number }> {
+  let deletedRecordings = 0;
+  let failedRecordings = 0;
+
+  for (const recording of await store.expiredRecordings(now, AUDIO_SWEEP_BATCH)) {
+    const ok = await deleteRecordingAudio(recording.id, now, store).catch(() => false);
+    if (ok) {
+      deletedRecordings += 1;
+    } else {
+      failedRecordings += 1;
+      // Ids only: never the transcript, the audio, or a playback URL.
+      console.error(`[check-in-audio] delete failed for recording ${recording.id}`);
+    }
+  }
+
+  return { deletedRecordings, failedRecordings };
 }

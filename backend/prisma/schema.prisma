@@ -1016,11 +1016,25 @@ model CheckInRecording {
   meetingId    String?                   @unique
   meeting      OneOnOneMeeting?          @relation(fields: [meetingId], references: [id], onDelete: SetNull)
   segments     CheckInRecordingSegment[]
+  /**
+   * Audio lifecycle, kept apart from `status`, which tracks the write-up.
+   * pending = still capturing; available = the creator can replay it;
+   * deleting = access revoked while the objects go; deleted; deletion_failed
+   */
+  audioStatus         String            @default("pending")
+  /**
+   * When the last segment finished uploading, which starts the retention clock
+   */
+  audioCreatedAt      DateTime?
+  audioExpiresAt      DateTime?
+  audioDeletedAt      DateTime?
+  audioDeleteAttempts Int               @default(0)
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
 
   @@index([teamId, memberUserId])
   @@index([status])
+  @@index([audioStatus, audioExpiresAt])
 }
 
 model CheckInRecordingSegment {
@@ -1029,7 +1043,8 @@ model CheckInRecordingSegment {
   recording   CheckInRecording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
   index       Int
   /**
-   * Firebase object path; cleared as soon as the segment is transcribed
+   * Firebase object path; kept for replay until the recording's audio expires,
+   * then cleared when the object is deleted
    */
   storagePath String?
   /**

@@ -44,7 +44,10 @@ import { oneOnOneTemplatesRouter } from "./routes/one-on-one-templates";
 import { checkInTemplateLibraryRouter } from "./routes/check-in-template-library";
 import { oneOnOneMeetingsRouter } from "./routes/one-on-one-meetings";
 import checkInRecordingsRouter from "./routes/check-in-recordings";
-import { sweepStalledRecordings } from "./lib/check-in-recording-service";
+import {
+  sweepExpiredRecordingAudio,
+  sweepStalledRecordings,
+} from "./lib/check-in-recording-service";
 import { joinRequestsRouter } from "./routes/join-requests";
 import { ownershipTransfersRouter } from "./routes/ownership-transfers";
 import { calendarRouter, initMeetingReminders } from "./routes/calendar";
@@ -86,6 +89,7 @@ import { cleanupOrphanUserUploads } from "./lib/orphan-upload-cleanup";
 import { syncPrismaSchemaOnStartup } from "./lib/sync-prisma-schema";
 import { ensureOneOnOneSchema } from "./lib/ensure-one-on-one-schema";
 import { ensureOpenCheckInSchema } from "./lib/ensure-open-check-in-schema";
+import { ensureCheckInAudioRetentionSchema } from "./lib/ensure-check-in-audio-retention-schema";
 import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schema";
 import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
 import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-schema";
@@ -209,6 +213,8 @@ const startupSchemaReady = Promise.all([
   ensureOneOnOneSchema(prisma),
   // Open check-ins record without a template, so templateId must allow null.
   ensureOpenCheckInSchema(prisma),
+  // Recorded audio is kept for seven days and needs its retention columns.
+  ensureCheckInAudioRetentionSchema(prisma),
   // Invites are used in every environment; keep additive role upgrades production-safe.
   ensureTeamInviteSchema(prisma),
   ...(isProduction
@@ -2315,6 +2321,19 @@ async function runCleanup() {
     }
   } catch (err) {
     console.error("[cleanup] Check-in recording sweep failed:", err);
+  }
+
+  try {
+    // Seven-day audio retention. Anything missed here is caught by the bucket
+    // lifecycle rule a few days later.
+    const audio = await sweepExpiredRecordingAudio();
+    if (audio.deletedRecordings > 0 || audio.failedRecordings > 0) {
+      console.log(
+        `[cleanup] Check-in audio deleted=${audio.deletedRecordings} failed=${audio.failedRecordings}`,
+      );
+    }
+  } catch (err) {
+    console.error("[cleanup] Check-in audio retention sweep failed:", err);
   }
 
   try {

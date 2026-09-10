@@ -482,14 +482,19 @@ export async function uploadFileToFirebaseStorage(params: {
   } else if (slot === "seneca_image") {
     storagePath = `users/${userId}/seneca-images/${Date.now()}-${objectId}-${safeName}`;
   } else if (slot === "check_in_audio") {
-    // Deleted as soon as the segment is transcribed; never linked from a record.
-    storagePath = `teams/${teamId!.trim()}/check-in-audio/${Date.now()}-${objectId}-${safeName}`;
+    // Top-level prefix so a bucket lifecycle rule can target check-in audio as
+    // a backstop; a rule cannot wildcard the team id in the middle of a path.
+    storagePath = `check-in-audio/${teamId!.trim()}/${Date.now()}-${objectId}-${safeName}`;
   } else {
     storagePath = `users/${userId}/uploads/${Date.now()}-${objectId}-${safeName}`;
   }
   const bytes = Buffer.from(await file.arrayBuffer());
   const contentType = file.type || "application/octet-stream";
   const downloadToken: string = crypto.randomUUID();
+  // A download token is a permanent unauthenticated URL for anyone holding it.
+  // Check-in audio is private to one person, so it gets none and is read only
+  // through short-lived signed URLs.
+  const tokenless = slot === "check_in_audio";
 
   let lastErr: unknown;
   for (const bucketId of bucketCandidates()) {
@@ -502,7 +507,7 @@ export async function uploadFileToFirebaseStorage(params: {
         metadata: {
           contentType,
           metadata: {
-            firebaseStorageDownloadTokens: downloadToken,
+            ...(tokenless ? {} : { firebaseStorageDownloadTokens: downloadToken }),
             uploadedByUserId: userId,
             originalFilename: file.name || "upload",
           },
@@ -510,14 +515,18 @@ export async function uploadFileToFirebaseStorage(params: {
       });
 
       let urlToken = downloadToken;
-      try {
-        const [meta] = await target.getMetadata();
-        const userMeta = meta.metadata as Record<string, string> | undefined;
-        urlToken = pickFirebaseDownloadToken(downloadToken, userMeta);
-      } catch {
-        /* use upload-time token if metadata read fails */
+      if (!tokenless) {
+        try {
+          const [meta] = await target.getMetadata();
+          const userMeta = meta.metadata as Record<string, string> | undefined;
+          urlToken = pickFirebaseDownloadToken(downloadToken, userMeta);
+        } catch {
+          /* use upload-time token if metadata read fails */
+        }
       }
-      const url = firebaseDownloadMediaUrl(bucketId, storagePath, urlToken);
+      const url = tokenless
+        ? ""
+        : firebaseDownloadMediaUrl(bucketId, storagePath, urlToken);
 
       return {
         id: objectId,
@@ -630,6 +639,38 @@ export async function downloadStorageObject(
     } catch (e) {
       if (isStorageNotFound(e)) continue;
       throw new Error(formatStorageError(e));
+    }
+  }
+  return null;
+}
+
+/**
+ * Mints a time-limited read URL for one object, trying each bucket alias.
+ *
+ * Used for private audio that must not carry a permanent download token. The
+ * Admin SDK is initialised from a service-account private key, so v4 signing
+ * happens locally and needs no extra IAM grant.
+ */
+export async function createReadSignedUrl(
+  objectPath: string,
+  ttlMs: number,
+): Promise<string | null> {
+  if (!objectPath?.trim()) return null;
+  if (!ensureFirebaseStorageInitialized()) return null;
+
+  const expires = Date.now() + Math.max(30_000, ttlMs);
+  for (const bucketId of bucketCandidates()) {
+    try {
+      const file = getStorage().bucket(bucketId).file(objectPath);
+      const [exists] = await file.exists();
+      if (!exists) continue;
+      const [url] = await file.getSignedUrl({ version: "v4", action: "read", expires });
+      return url;
+    } catch (e) {
+      if (isStorageNotFound(e)) continue;
+      // Never surface the object path or signing detail to the caller.
+      console.error("[storage] signed url failed:", formatStorageError(e));
+      return null;
     }
   }
   return null;

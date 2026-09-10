@@ -6,13 +6,21 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prismaRouteError } from "../lib/prisma-errors";
 import { canManageCheckIns } from "../lib/workspace-role-policy";
-import { uploadFileToFirebaseStorage } from "../lib/firebase-storage";
+import {
+  createReadSignedUrl,
+  uploadFileToFirebaseStorage,
+} from "../lib/firebase-storage";
+import {
+  AUDIO_PLAYBACK_URL_TTL_MS,
+  audioAccessDecision,
+} from "../lib/check-in-audio-access";
 import {
   isSupportedCheckInAudio,
   transcriptionAvailable,
   transcriptionUnavailableMessage,
 } from "../lib/seneca-transcribe";
 import {
+  deleteRecordingAudio,
   finishRecording,
   purgeRecordingAudio,
   RECORDING_MAX_DURATION_SEC,
@@ -70,17 +78,23 @@ async function getMembership(
   return null;
 }
 
-function serializeRecording(recording: {
-  id: string;
-  status: string;
-  durationSec: number;
-  transcript: string | null;
-  error: string | null;
-  meetingId: string | null;
-  /** Null for an open check-in. */
-  templateId: string | null;
-  createdAt: Date;
-}) {
+function serializeRecording(
+  recording: {
+    id: string;
+    status: string;
+    durationSec: number;
+    transcript: string | null;
+    error: string | null;
+    meetingId: string | null;
+    /** Null for an open check-in. */
+    templateId: string | null;
+    createdById: string;
+    audioStatus: string;
+    audioExpiresAt: Date | null;
+    createdAt: Date;
+  },
+  viewerUserId?: string,
+) {
   return {
     id: recording.id,
     status: recording.status,
@@ -89,6 +103,13 @@ function serializeRecording(recording: {
     error: recording.error,
     meetingId: recording.meetingId,
     templateId: recording.templateId,
+    audioStatus: recording.audioStatus,
+    audioExpiresAt: recording.audioExpiresAt?.toISOString() ?? null,
+    // Whether this viewer may replay it. No URL is ever included here: audio is
+    // only ever handed out by the audio route, one short-lived link at a time.
+    canPlayAudio: viewerUserId
+      ? audioAccessDecision({ recording, userId: viewerUserId, now: new Date() }).allow
+      : false,
     createdAt: recording.createdAt.toISOString(),
   };
 }
@@ -158,7 +179,7 @@ checkInRecordingsRouter.post(
           consentAckAt: new Date(),
         },
       });
-      return c.json({ data: serializeRecording(recording) }, 201);
+      return c.json({ data: serializeRecording(recording, user.id) }, 201);
     } catch (err) {
       return prismaRouteError(c, err, "[check-in-recordings] POST failed");
     }
@@ -314,7 +335,7 @@ checkInRecordingsRouter.post(
     });
 
     const updated = await prisma.checkInRecording.findUnique({ where: { id: recordingId } });
-    return c.json({ data: serializeRecording(updated ?? recording) }, 202);
+    return c.json({ data: serializeRecording(updated ?? recording, user.id) }, 202);
   },
 );
 
@@ -364,7 +385,7 @@ checkInRecordingsRouter.get(
 
       return c.json({
         data: recordings.map((recording) => ({
-          ...serializeRecording(recording),
+          ...serializeRecording(recording, user.id),
           // An open check-in has no template, and gets its title once Seneca
           // has heard the conversation.
           templateTitle: recording.templateId
@@ -383,6 +404,7 @@ checkInRecordingsRouter.get(
 checkInRecordingsRouter.get(
   "/:memberUserId/check-in-recordings/for-meeting/:meetingId",
   async (c) => {
+    const user = c.get("user")!;
     const teamId = c.req.param("teamId") as string;
     const memberUserId = c.req.param("memberUserId") as string;
     const meetingId = c.req.param("meetingId") as string;
@@ -398,7 +420,9 @@ checkInRecordingsRouter.get(
     if (!recording) {
       return c.json({ error: { message: "Recording not found", code: "NOT_FOUND" } }, 404);
     }
-    return c.json({ data: serializeRecording(recording) });
+    // The transcript is readable by any leader here, but canPlayAudio narrows
+    // the recording itself to whoever made it.
+    return c.json({ data: serializeRecording(recording, user.id) });
   },
 );
 
@@ -420,7 +444,151 @@ checkInRecordingsRouter.get(
     if (!recording) {
       return c.json({ error: { message: "Recording not found", code: "NOT_FOUND" } }, 404);
     }
-    return c.json({ data: serializeRecording(recording) });
+    return c.json({ data: serializeRecording(recording, user.id) });
+  },
+);
+
+/**
+ * Finds a recording for the audio routes without narrowing to the creator, so
+ * someone else's recording can be refused as forbidden rather than silently
+ * reported as missing.
+ */
+async function loadRecordingForAudio(c: {
+  req: { param: (key: string) => string | undefined };
+}) {
+  const teamId = c.req.param("teamId") as string;
+  const memberUserId = c.req.param("memberUserId") as string;
+  const recordingId = c.req.param("recordingId") as string;
+  return prisma.checkInRecording.findFirst({
+    where: { id: recordingId, teamId, memberUserId },
+  });
+}
+
+// GET /api/teams/:teamId/members/:memberUserId/check-in-recordings/:id/audio
+// Hands back one short-lived link per segment. Authorisation is decided on
+// every call, so revoking or deleting takes effect on the next play.
+checkInRecordingsRouter.get(
+  "/:memberUserId/check-in-recordings/:recordingId/audio",
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership || !canManageCheckIns(membership.role)) {
+      return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
+    }
+
+    const recording = await loadRecordingForAudio(c);
+    if (!recording) {
+      return c.json({ error: { message: "Recording not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    const decision = audioAccessDecision({ recording, userId: user.id, now: new Date() });
+    if (!decision.allow) {
+      return c.json(
+        { error: { message: decision.message, code: decision.reason.toUpperCase() } },
+        decision.status,
+      );
+    }
+
+    try {
+      const segments = await prisma.checkInRecordingSegment.findMany({
+        where: { recordingId: recording.id, storagePath: { not: null } },
+        orderBy: { index: "asc" },
+        select: { index: true, storagePath: true, durationSec: true },
+      });
+
+      // A long conversation is stored as several parts, so the app plays them
+      // back to back rather than us stitching a single file server-side.
+      const parts: Array<{ index: number; url: string; durationSec: number }> = [];
+      for (const segment of segments) {
+        const url = await createReadSignedUrl(
+          segment.storagePath!,
+          AUDIO_PLAYBACK_URL_TTL_MS,
+        );
+        if (url) parts.push({ index: segment.index, url, durationSec: segment.durationSec });
+      }
+
+      if (parts.length === 0) {
+        // The rows said available but the objects are gone; say so honestly
+        // instead of handing back an empty player.
+        await prisma.checkInRecording
+          .update({
+            where: { id: recording.id },
+            data: { audioStatus: "deleted", audioDeletedAt: new Date() },
+          })
+          .catch(() => null);
+        return c.json(
+          { error: { message: "That recording has been deleted.", code: "DELETED" } },
+          410,
+        );
+      }
+
+      return c.json({
+        data: {
+          parts,
+          durationSec: recording.durationSec,
+          expiresAt: recording.audioExpiresAt?.toISOString() ?? null,
+          urlTtlSec: Math.floor(AUDIO_PLAYBACK_URL_TTL_MS / 1000),
+        },
+      });
+    } catch (err) {
+      return prismaRouteError(c, err, "[check-in-recordings] audio playback failed");
+    }
+  },
+);
+
+// DELETE /api/teams/:teamId/members/:memberUserId/check-in-recordings/:id/audio
+// Deletes the audio early, on purpose. The transcript, summary and saved
+// check-in are deliberately left alone.
+checkInRecordingsRouter.delete(
+  "/:memberUserId/check-in-recordings/:recordingId/audio",
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership || !canManageCheckIns(membership.role)) {
+      return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
+    }
+
+    const recording = await loadRecordingForAudio(c);
+    if (!recording) {
+      return c.json({ error: { message: "Recording not found", code: "NOT_FOUND" } }, 404);
+    }
+    if (recording.createdById !== user.id) {
+      return c.json(
+        {
+          error: {
+            message: "Only the person who recorded this check-in can delete it.",
+            code: "NOT_CREATOR",
+          },
+        },
+        403,
+      );
+    }
+    // Already gone is a success: tapping delete twice should not look broken.
+    if (recording.audioStatus === "deleted") {
+      return c.json({ data: { audioStatus: "deleted" } });
+    }
+
+    try {
+      const ok = await deleteRecordingAudio(recording.id);
+      if (!ok) {
+        return c.json(
+          {
+            error: {
+              message: "We could not delete that recording. Please try again.",
+              code: "DELETE_FAILED",
+            },
+          },
+          502,
+        );
+      }
+      return c.json({ data: { audioStatus: "deleted" } });
+    } catch (err) {
+      return prismaRouteError(c, err, "[check-in-recordings] audio delete failed");
+    }
   },
 );
 
