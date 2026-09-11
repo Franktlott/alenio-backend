@@ -1,5 +1,7 @@
 import type { Context } from "hono";
 import { prisma } from "../prisma";
+import { ensureCheckInAudioRetentionSchema } from "./ensure-check-in-audio-retention-schema";
+import { ensureOpenCheckInSchema } from "./ensure-open-check-in-schema";
 import { ensureWalksSchema } from "./ensure-walks-schema";
 
 export function isPrismaSchemaMissingError(err: unknown): boolean {
@@ -22,10 +24,28 @@ export async function healWalksSchemaIfNeeded(err: unknown): Promise<boolean> {
   return Boolean(result && typeof result === "object" && "ok" in result && (result as { ok: boolean }).ok);
 }
 
+let checkInSchemaHealInFlight: Promise<void> | null = null;
+
+/** Add missing CheckInRecording columns (source, audio retention) after a P2022. */
+export async function healCheckInRecordingSchemaIfNeeded(err: unknown): Promise<boolean> {
+  if (!isPrismaSchemaMissingError(err)) return false;
+  if (!checkInSchemaHealInFlight) {
+    checkInSchemaHealInFlight = Promise.all([
+      ensureCheckInAudioRetentionSchema(prisma),
+      ensureOpenCheckInSchema(prisma),
+    ]).then(() => undefined).finally(() => {
+      checkInSchemaHealInFlight = null;
+    });
+  }
+  await checkInSchemaHealInFlight;
+  return true;
+}
+
 export function prismaRouteError(c: Context, err: unknown, logLabel: string) {
   if (isPrismaSchemaMissingError(err)) {
     // Fire-and-forget heal so the next request succeeds after sync.
     void healWalksSchemaIfNeeded(err);
+    void healCheckInRecordingSchemaIfNeeded(err);
     return c.json(
       {
         error: {

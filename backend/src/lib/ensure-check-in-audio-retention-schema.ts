@@ -11,6 +11,7 @@ export async function ensureCheckInAudioRetentionSchema(
   try {
     await prisma.$executeRawUnsafe(`
       ALTER TABLE "public"."CheckInRecording"
+        ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'device_mic',
         ADD COLUMN IF NOT EXISTS "audioStatus" TEXT NOT NULL DEFAULT 'pending',
         ADD COLUMN IF NOT EXISTS "audioCreatedAt" TIMESTAMP(3),
         ADD COLUMN IF NOT EXISTS "audioExpiresAt" TIMESTAMP(3),

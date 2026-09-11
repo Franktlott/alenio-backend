@@ -53,6 +53,7 @@ import {
   type MeetingCheckInContext,
   type MeetingCheckInEligiblePair,
 } from "@/lib/meeting-check-in-tool";
+import { toast } from "burnt";
 import { createCheckInFromTranscript } from "@/lib/check-in-recordings-api";
 import { UserAvatar } from "@/components/UserAvatar";
 import { MeetingCheckInTool } from "@/components/video/MeetingCheckInTool";
@@ -695,7 +696,17 @@ export default function VideoCallScreen() {
   // check-in tool, so hanging up afterwards does not ask again.
   const [transcriptWrittenUp, setTranscriptWrittenUp] = useState(false);
   const [leaveNotesPromptOpen, setLeaveNotesPromptOpen] = useState(false);
+  /** Hang-up asks, then leaves. Stopping live notes asks, then stays on the call. */
+  const [leaveAfterWriteUp, setLeaveAfterWriteUp] = useState(false);
   const [leaveNotesSaving, setLeaveNotesSaving] = useState(false);
+  const [writeUpError, setWriteUpError] = useState<string | null>(null);
+  const [writeUpBanner, setWriteUpBanner] = useState<string | null>(null);
+  // Captured when the prompt opens, so stopping Daily cannot empty the notes
+  // before "Write it up" is tapped.
+  const writeUpPayloadRef = useRef<{
+    pair: MeetingCheckInEligiblePair;
+    transcript: string;
+  } | null>(null);
 
   /**
    * The one member this call's notes could be written up for. With nobody or
@@ -730,22 +741,79 @@ export default function VideoCallScreen() {
     }
   };
 
+  const openWriteUpPrompt = (leaveAfter: boolean, pair: MeetingCheckInEligiblePair) => {
+    const alreadyCaptured = writeUpPayloadRef.current?.transcript?.trim();
+    writeUpPayloadRef.current = {
+      pair,
+      transcript: alreadyCaptured || transcription.readTranscript(),
+    };
+    setWriteUpError(null);
+    setLeaveAfterWriteUp(leaveAfter);
+    setTimeout(() => setLeaveNotesPromptOpen(true), leaveAfter ? 0 : 180);
+  };
+
   const leaveCall = async () => {
     // The transcript only exists on this screen, so leaving without a decision
     // would throw the conversation away silently.
-    if (leaveNotesPending && !leaveNotesPromptOpen) {
+    if (leaveNotesPending && !leaveNotesPromptOpen && liveNotesWriteUpPair) {
+      openWriteUpPrompt(true, liveNotesWriteUpPair);
       void transcription.stop();
-      setLeaveNotesPromptOpen(true);
       return;
     }
     await finishLeaving();
   };
 
-  /** Hands the notes to Seneca as an open check-in, then leaves. */
-  const writeUpNotesAndLeave = async () => {
+  /**
+   * Stops live notes and, when there is enough conversation, offers to write
+   * the check-in up immediately — ending notes used to do nothing visible.
+   */
+  const stopLiveNotes = () => {
     const pair = liveNotesWriteUpPair;
-    const transcript = transcription.readTranscript();
-    if (!pair || !transcript.trim() || leaveNotesSaving) return;
+    const hadNotes = transcription.usable;
+    if (pair) {
+      writeUpPayloadRef.current = {
+        pair,
+        transcript: transcription.readTranscript(),
+      };
+    }
+    void transcription.stop();
+    if (transcriptWrittenUp) {
+      toast({ title: "Live notes stopped", preset: "done" });
+      return;
+    }
+    if (hadNotes && pair) {
+      openWriteUpPrompt(false, pair);
+      return;
+    }
+    if (hadNotes) {
+      setTimeout(() => setMeetingToolsOpen(true), 180);
+      return;
+    }
+    toast({
+      title: "Live notes stopped",
+      message: "There wasn't enough conversation yet to write a check-in.",
+      preset: "done",
+    });
+  };
+
+  /** Hands the notes to Seneca as an open check-in. Leaves only if hang-up asked. */
+  const writeUpNotes = async () => {
+    if (leaveNotesSaving) return;
+    const pair = writeUpPayloadRef.current?.pair ?? liveNotesWriteUpPair;
+    const transcript = (
+      writeUpPayloadRef.current?.transcript || transcription.readTranscript()
+    ).trim();
+    if (!pair) {
+      setWriteUpError(
+        "We couldn't tell who this check-in is for. Open check-in tools and pick them.",
+      );
+      return;
+    }
+    if (!transcript) {
+      setWriteUpError("There wasn't enough conversation to write up.");
+      return;
+    }
+    setWriteUpError(null);
     setLeaveNotesSaving(true);
     try {
       await createCheckInFromTranscript(pair.workspace.id, pair.member.id, {
@@ -753,15 +821,29 @@ export default function VideoCallScreen() {
         transcript,
       });
       setTranscriptWrittenUp(true);
-    } catch {
-      // Losing the notes to a failed request is worse than a moment's delay,
-      // so the prompt stays put and the leader can try again or discard.
+    } catch (error) {
       setLeaveNotesSaving(false);
+      setWriteUpError(
+        error instanceof Error
+          ? error.message
+          : "We could not write up that conversation. Try again.",
+      );
       return;
     }
     setLeaveNotesSaving(false);
     setLeaveNotesPromptOpen(false);
-    await finishLeaving();
+    const memberName =
+      pair.member.name?.trim() || pair.member.email.split("@")[0] || "them";
+    if (leaveAfterWriteUp) {
+      await finishLeaving();
+      return;
+    }
+    setWriteUpBanner(`Seneca is writing up the check-in for ${memberName}`);
+    toast({
+      title: "Writing up your check-in…",
+      message: "The draft will be waiting in check-ins.",
+      preset: "done",
+    });
   };
 
   const toggleCamera = () => {
@@ -1378,11 +1460,44 @@ export default function VideoCallScreen() {
         </View>
       ) : null}
 
-      {transcription.status === "active" && !checkInFormActive ? (
-        <View style={[s.liveNotesNotice, { top: insets.top + 75 }]}>
+      {!checkInFormActive && writeUpBanner ? (
+        <View
+          style={[s.liveNotesNotice, { top: insets.top + 75 }]}
+          testID="live-notes-write-up-banner"
+        >
           <Sparkles size={13} color="#FFFFFF" />
+          <Text style={s.liveNotesNoticeText}>{writeUpBanner}</Text>
+        </View>
+      ) : null}
+
+      {!checkInFormActive &&
+      (transcription.status === "active" ||
+        transcription.status === "starting" ||
+        transcription.status === "error") ? (
+        <View
+          style={[
+            s.liveNotesNotice,
+            { top: insets.top + 75 },
+            transcription.status === "error" ? s.liveNotesNoticeError : null,
+          ]}
+          testID={
+            transcription.status === "error"
+              ? "live-notes-error"
+              : "live-notes-status"
+          }
+        >
+          {transcription.status === "starting" ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Sparkles size={13} color="#FFFFFF" />
+          )}
           <Text style={s.liveNotesNoticeText}>
-            Seneca is taking notes on this call
+            {transcription.status === "active"
+              ? "Seneca is taking notes on this call"
+              : transcription.status === "starting"
+                ? "Starting live notes…"
+                : transcription.error ||
+                  "Live notes could not start. Transcription must be turned on for this Daily account."}
           </Text>
         </View>
       ) : null}
@@ -1639,7 +1754,7 @@ export default function VideoCallScreen() {
               onPress={() => {
                 setMoreMenuOpen(false);
                 if (transcriptionActive) {
-                  void transcription.stop();
+                  stopLiveNotes();
                   return;
                 }
                 setTimeout(() => setLiveNotesConsentOpen(true), 180);
@@ -1655,9 +1770,11 @@ export default function VideoCallScreen() {
                   {transcriptionActive ? "Stop live notes" : "Live notes"}
                 </Text>
                 <Text style={s.moreMenuSubtitle}>
-                  {transcriptionActive
-                    ? "Stop transcribing this conversation"
-                    : "Let Seneca write up the check-in for you"}
+                  {transcription.status === "error"
+                    ? transcription.error || "Live notes could not start"
+                    : transcriptionActive
+                      ? "Stop transcribing this conversation"
+                      : "Let Seneca write up the check-in for you"}
                 </Text>
               </View>
             </Pressable>
@@ -1822,8 +1939,16 @@ export default function VideoCallScreen() {
 
       <AlenioBottomSheet
         visible={leaveNotesPromptOpen}
-        title="Write this up before you go?"
-        subtitle="Your notes from this call are not saved yet"
+        title={
+          leaveAfterWriteUp
+            ? "Write this up before you go?"
+            : "Write this up?"
+        }
+        subtitle={
+          leaveAfterWriteUp
+            ? "Your notes from this call are not saved yet"
+            : "Live notes have stopped"
+        }
         onClose={() => setLeaveNotesPromptOpen(false)}
         compact
         showCloseButton
@@ -1838,13 +1963,24 @@ export default function VideoCallScreen() {
                 }. It will be waiting as a draft for you to review and publish.`
               : "Seneca can turn this conversation into a check-in draft."}
           </Text>
-          <Text style={s.liveNotesBody}>
-            Leave without writing it up and the notes are gone: nothing from
-            this call is stored anywhere else.
-          </Text>
-          <TouchableOpacity
-            style={s.sendBtn}
-            onPress={() => void writeUpNotesAndLeave()}
+          {leaveAfterWriteUp ? (
+            <Text style={s.liveNotesBody}>
+              Leave without writing it up and the notes are gone: nothing from
+              this call is stored anywhere else.
+            </Text>
+          ) : (
+            <Text style={s.liveNotesBody}>
+              You can write it up now, or keep the notes until you hang up.
+            </Text>
+          )}
+          {writeUpError ? (
+            <Text style={s.liveNotesError} testID="live-notes-write-up-error">
+              {writeUpError}
+            </Text>
+          ) : null}
+          <Pressable
+            style={[s.sendBtn, leaveNotesSaving ? { opacity: 0.7 } : null]}
+            onPress={() => void writeUpNotes()}
             disabled={leaveNotesSaving}
             accessibilityRole="button"
             testID="live-notes-write-up"
@@ -1857,20 +1993,32 @@ export default function VideoCallScreen() {
                 <Text style={s.sendBtnText}>Write it up</Text>
               </>
             )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={s.liveNotesDiscardBtn}
-            onPress={() => {
-              setLeaveNotesPromptOpen(false);
-              setTranscriptWrittenUp(true);
-              void finishLeaving();
-            }}
-            disabled={leaveNotesSaving}
-            accessibilityRole="button"
-            testID="live-notes-discard"
-          >
-            <Text style={s.liveNotesDiscardText}>Discard the notes and leave</Text>
-          </TouchableOpacity>
+          </Pressable>
+          {leaveAfterWriteUp ? (
+            <TouchableOpacity
+              style={s.liveNotesDiscardBtn}
+              onPress={() => {
+                setLeaveNotesPromptOpen(false);
+                setTranscriptWrittenUp(true);
+                void finishLeaving();
+              }}
+              disabled={leaveNotesSaving}
+              accessibilityRole="button"
+              testID="live-notes-discard"
+            >
+              <Text style={s.liveNotesDiscardText}>Discard the notes and leave</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={s.liveNotesDiscardBtn}
+              onPress={() => setLeaveNotesPromptOpen(false)}
+              disabled={leaveNotesSaving}
+              accessibilityRole="button"
+              testID="live-notes-keep"
+            >
+              <Text style={s.liveNotesDiscardText}>Not now</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </AlenioBottomSheet>
 
@@ -2371,10 +2519,17 @@ const s = StyleSheet.create({
     gap: 7,
     backgroundColor: "rgba(67,97,238,0.92)",
   },
+  liveNotesNoticeError: {
+    backgroundColor: "rgba(190,18,60,0.94)",
+    maxWidth: "88%",
+    minHeight: 40,
+    paddingVertical: 8,
+  },
   liveNotesNoticeText: {
     fontSize: 11,
     fontWeight: "800",
     color: "#FFFFFF",
+    flexShrink: 1,
   },
   liveNotesSheet: { gap: 14, paddingBottom: 4 },
   liveNotesDiscardBtn: {
@@ -2391,6 +2546,12 @@ const s = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: "#475569",
+  },
+  liveNotesError: {
+    fontSize: 13.5,
+    lineHeight: 19,
+    fontWeight: "700",
+    color: "#BE123C",
   },
   participantList: {
     gap: 8,
