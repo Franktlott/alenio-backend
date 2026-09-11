@@ -166,6 +166,19 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     return { ok: true, meetingId: recording.meetingId, unanswered: [] };
   }
 
+  // A video check-in arrives as a finished transcript with no audio segments,
+  // so there is nothing to transcribe or stitch: write it up as it stands.
+  if (recording.segments.length === 0 && recording.transcript?.trim()) {
+    return writeUpTranscript({
+      recordingId,
+      teamId: recording.teamId,
+      memberUserId: recording.memberUserId,
+      createdById: recording.createdById,
+      templateId: recording.templateId,
+      transcript: recording.transcript,
+    });
+  }
+
   // Finish means every segment is uploaded, so the retention window opens here
   // rather than after transcription. Writing it up can then take as long as it
   // needs, and a failed write-up still leaves the audio replayable for a retry.
@@ -205,14 +218,42 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     return { ok: false, message: "We could not hear anything in that recording." };
   }
 
+  return writeUpTranscript({
+    recordingId,
+    teamId: recording.teamId,
+    memberUserId: recording.memberUserId,
+    createdById: recording.createdById,
+    templateId: recording.templateId,
+    transcript,
+  });
+}
+
+/**
+ * Turns a finished transcript into a draft check-in for the leader to review.
+ *
+ * Shared by both capture routes: audio recorded in person, and the live
+ * transcript of a video call. Everything downstream of the transcript is
+ * identical, so the draft, the AI chips and the transcript view behave the same
+ * either way.
+ */
+export async function writeUpTranscript(params: {
+  recordingId: string;
+  teamId: string;
+  memberUserId: string;
+  createdById: string;
+  templateId: string | null;
+  transcript: string;
+}): Promise<FinishRecordingResult> {
+  const { recordingId, transcript } = params;
+
   // An open check-in has no template: Seneca decides the questions from what
   // was actually discussed, and the draft carries that structure instead.
-  const template = recording.templateId
+  const template = params.templateId
     ? await prisma.oneOnOneTemplate.findFirst({
-        where: { id: recording.templateId, teamId: recording.teamId },
+        where: { id: params.templateId, teamId: params.teamId },
       })
     : null;
-  if (recording.templateId && !template) {
+  if (params.templateId && !template) {
     await prisma.checkInRecording.update({
       where: { id: recordingId },
       data: { status: "failed", error: "That check-in template no longer exists." },
@@ -221,7 +262,7 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
   }
 
   const member = await prisma.user.findUnique({
-    where: { id: recording.memberUserId },
+    where: { id: params.memberUserId },
     select: { name: true, email: true },
   });
   const memberName = member?.name?.trim() || member?.email || "the team member";
@@ -282,15 +323,15 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
 
   const meeting = await prisma.oneOnOneMeeting.create({
     data: {
-      teamId: recording.teamId,
-      memberUserId: recording.memberUserId,
+      teamId: params.teamId,
+      memberUserId: params.memberUserId,
       templateId: template?.id ?? null,
       templateTitle: title,
       templateFields: JSON.stringify(fields),
       responses: JSON.stringify(responses),
       status: "draft",
       publishedAt: null,
-      createdById: recording.createdById,
+      createdById: params.createdById,
       captureMode: "recorded",
     },
   });

@@ -27,6 +27,7 @@ import {
   RECORDING_SEGMENT_MAX_BYTES,
   RECORDING_SEGMENT_MAX_DURATION_SEC,
   transcribeSegment,
+  writeUpTranscript,
 } from "../lib/check-in-recording-service";
 import { OPEN_CHECK_IN_TITLE } from "../lib/open-check-in-structuring";
 
@@ -50,6 +51,16 @@ const segmentSchema = z.object({
   data: z.string().min(1),
   contentType: z.string().min(1).max(100).optional(),
   durationSec: z.number().int().min(0).max(RECORDING_SEGMENT_MAX_DURATION_SEC).optional(),
+});
+
+/** Cap on a transcript posted from a call: ~90 minutes of speech, generously. */
+const TRANSCRIPT_MAX_CHARS = 120_000;
+
+const fromTranscriptSchema = z.object({
+  templateId: z.string().min(1).nullish(),
+  transcript: z.string().min(1).max(TRANSCRIPT_MAX_CHARS),
+  durationSec: z.number().int().min(0).max(RECORDING_MAX_DURATION_SEC).optional(),
+  consentAcknowledged: z.literal(true),
 });
 
 const finishSchema = z.object({
@@ -88,6 +99,7 @@ function serializeRecording(
     meetingId: string | null;
     /** Null for an open check-in. */
     templateId: string | null;
+    source: string;
     createdById: string;
     audioStatus: string;
     audioCreatedAt: Date | null;
@@ -105,6 +117,7 @@ function serializeRecording(
     error: recording.error,
     meetingId: recording.meetingId,
     templateId: recording.templateId,
+    source: recording.source,
     audioStatus: recording.audioStatus,
     audioExpiresAt: recording.audioExpiresAt?.toISOString() ?? null,
     // False for a check-in recorded before audio was kept at all, so the app
@@ -191,6 +204,104 @@ checkInRecordingsRouter.post(
     }
   },
 );
+
+// POST /api/teams/:teamId/members/:memberUserId/check-in-recordings/from-transcript
+//
+// A video check-in. Daily transcribes the call live and the app posts the text
+// when the conversation ends, so there is no audio on our side at any point.
+// From here it follows exactly the same path as an in-person recording.
+checkInRecordingsRouter.post(
+  "/:memberUserId/check-in-recordings/from-transcript",
+  zValidator("json", fromTranscriptSchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership || !canManageCheckIns(membership.role)) {
+      return c.json(
+        { error: { message: "You cannot record a check-in for this member", code: "FORBIDDEN" } },
+        403,
+      );
+    }
+    if (!transcriptionAvailable()) {
+      return c.json(
+        { error: { message: transcriptionUnavailableMessage(), code: "SENECA_UNAVAILABLE" } },
+        503,
+      );
+    }
+
+    const body = c.req.valid("json");
+    const transcript = body.transcript.trim();
+    if (!transcript) {
+      return c.json(
+        { error: { message: "There was nothing to write up", code: "EMPTY_TRANSCRIPT" } },
+        400,
+      );
+    }
+
+    const template = body.templateId
+      ? await prisma.oneOnOneTemplate.findFirst({
+          where: { id: body.templateId, teamId },
+          select: { id: true },
+        })
+      : null;
+    if (body.templateId && !template) {
+      return c.json({ error: { message: "Template not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    const member = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId: memberUserId, teamId } },
+      select: { userId: true },
+    });
+    if (!member) {
+      return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    try {
+      const recording = await prisma.checkInRecording.create({
+        data: {
+          teamId,
+          memberUserId,
+          createdById: user.id,
+          templateId: template?.id ?? null,
+          source: "video_call",
+          status: "transcribing",
+          transcript,
+          durationSec: body.durationSec ?? 0,
+          consentAckAt: new Date(),
+          // Nothing was ever stored, so the audio lifecycle does not apply.
+          audioStatus: "none",
+        },
+      });
+
+      // Writing it up takes a few seconds; the app polls the recording the same
+      // way it does for an in-person one.
+      void writeUpTranscript({
+        recordingId: recording.id,
+        teamId,
+        memberUserId,
+        createdById: user.id,
+        templateId: template?.id ?? null,
+        transcript,
+      }).catch(async (err) => {
+        console.error("[check-in-recordings] video write-up failed", err);
+        await prisma.checkInRecording
+          .update({
+            where: { id: recording.id },
+            data: { status: "failed", error: "We could not write up that conversation." },
+          })
+          .catch(() => null);
+      });
+
+      return c.json({ data: serializeRecording(recording, user.id) }, 202);
+    } catch (err) {
+      return prismaRouteError(c, err, "[check-in-recordings] from-transcript failed");
+    }
+  },
+);
+
 
 // POST /api/teams/:teamId/members/:memberUserId/check-in-recordings/:id/segments
 checkInRecordingsRouter.post(

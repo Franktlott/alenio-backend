@@ -103,6 +103,9 @@ async function ensurePrivateDailyRoom(
           enable_prejoin_ui: false,
           enable_screenshare: true,
           enable_chat: true,
+          // Lets the leader transcribe the conversation to draft a check-in.
+          // Transcripts stream as events and are never stored by Daily.
+          enable_transcription: true,
           meeting_join_hook: "",
         },
       }),
@@ -124,6 +127,7 @@ async function ensurePrivateDailyRoom(
         enable_prejoin_ui: false,
         enable_screenshare: true,
         enable_chat: true,
+        enable_transcription: true,
         meeting_join_hook: "",
         exp,
       },

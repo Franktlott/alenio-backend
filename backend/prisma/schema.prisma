@@ -1011,6 +1011,12 @@ model CheckInRecording {
    */
   status       String                    @default("recording")
   /**
+   * Where the transcript came from: device_mic = audio recorded in person and
+   * transcribed by us; video_call = live transcript of a Daily call, which
+   * never produces an audio file on our side
+   */
+  source       String                    @default("device_mic")
+  /**
    * When the leader confirmed the associate was told about the recording
    */
   consentAckAt DateTime?
