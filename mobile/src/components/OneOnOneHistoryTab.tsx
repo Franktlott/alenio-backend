@@ -147,6 +147,8 @@ type Props = {
   callTranscript?: string | null;
   callTranscriptActive?: boolean;
   onStopCallTranscript?: () => void;
+  /** Tells the call the transcript has been written up, so it need not ask again. */
+  onCallTranscriptWrittenUp?: () => void;
   /** Lets a parent summarize check-in history without fetching it again. */
   onMeetingsChange?: (meetings: OneOnOneMeeting[]) => void;
 };
@@ -388,6 +390,7 @@ export function OneOnOneHistoryTab({
   callTranscript = null,
   callTranscriptActive = false,
   onStopCallTranscript,
+  onCallTranscriptWrittenUp,
   onMeetingsChange,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -1353,6 +1356,7 @@ export function OneOnOneHistoryTab({
         transcript,
       });
       setProcessingRecordingId(recording.id);
+      onCallTranscriptWrittenUp?.();
       void refetchActiveRecordings();
       toast({ title: "Writing up your check-in\u2026", preset: "done" });
     } catch (e) {

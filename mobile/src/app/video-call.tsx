@@ -47,6 +47,13 @@ import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { api } from "@/lib/api/api";
 import { useCallTranscription } from "@/hooks/use-call-transcription";
+import {
+  activeMeetingCheckInPairs,
+  uniqueMeetingCheckInMembers,
+  type MeetingCheckInContext,
+  type MeetingCheckInEligiblePair,
+} from "@/lib/meeting-check-in-tool";
+import { createCheckInFromTranscript } from "@/lib/check-in-recordings-api";
 import { UserAvatar } from "@/components/UserAvatar";
 import { MeetingCheckInTool } from "@/components/video/MeetingCheckInTool";
 import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
@@ -251,7 +258,9 @@ export default function VideoCallScreen() {
   const [error, setError] = useState<string | null>(null);
   const [roomReady, setRoomReady] = useState(false);
   const [meetingToolsOpen, setMeetingToolsOpen] = useState(false);
-  const [checkInToolsAvailable, setCheckInToolsAvailable] = useState(false);
+  const [checkInContext, setCheckInContext] =
+    useState<MeetingCheckInContext | null>(null);
+  const checkInToolsAvailable = (checkInContext?.eligiblePairs.length ?? 0) > 0;
   const [checkInFormActive, setCheckInFormActive] = useState(false);
   const draftSaverRef = useRef<(() => Promise<void>) | null>(null);
   const interruptedConnectionsRef = useRef(new Set<string>());
@@ -577,14 +586,14 @@ export default function VideoCallScreen() {
     if (!roomId || !session?.user) return;
     let active = true;
     api
-      .get<{ eligiblePairs: unknown[] }>(
+      .get<MeetingCheckInContext>(
         `/api/video/room/${encodeURIComponent(roomId)}/check-in-context`,
       )
       .then((context) => {
-        if (active) setCheckInToolsAvailable(context.eligiblePairs.length > 0);
+        if (active) setCheckInContext(context);
       })
       .catch(() => {
-        if (active) setCheckInToolsAvailable(false);
+        if (active) setCheckInContext(null);
       });
     return () => {
       active = false;
@@ -682,8 +691,32 @@ export default function VideoCallScreen() {
   const [liveNotesConsentOpen, setLiveNotesConsentOpen] = useState(false);
   const transcriptionActive =
     transcription.status === "active" || transcription.status === "starting";
+  // Set once the leader has written the conversation up from inside the
+  // check-in tool, so hanging up afterwards does not ask again.
+  const [transcriptWrittenUp, setTranscriptWrittenUp] = useState(false);
+  const [leaveNotesPromptOpen, setLeaveNotesPromptOpen] = useState(false);
+  const [leaveNotesSaving, setLeaveNotesSaving] = useState(false);
 
-  const leaveCall = async () => {
+  /**
+   * The one member this call's notes could be written up for. With nobody or
+   * several to choose from there is no safe default, so the leader is sent to
+   * the check-in tool instead of being guessed at.
+   */
+  const liveNotesPairRef = useRef<MeetingCheckInEligiblePair | null>(null);
+  const liveNotesWriteUpPair = useMemo(() => {
+    const pairs = uniqueMeetingCheckInMembers(
+      activeMeetingCheckInPairs(checkInContext, activeParticipantUserIds),
+    );
+    // The associate often hangs up first. Keeping the last person we saw means
+    // the leader is still offered the write-up on the way out.
+    if (pairs.length === 1) liveNotesPairRef.current = pairs[0] ?? null;
+    return pairs.length === 1 ? pairs[0] : liveNotesPairRef.current;
+  }, [activeParticipantUserIds, checkInContext]);
+
+  const leaveNotesPending =
+    !transcriptWrittenUp && transcription.usable && liveNotesWriteUpPair !== null;
+
+  const finishLeaving = async () => {
     try {
       await draftSaverRef.current?.();
     } catch {
@@ -695,6 +728,40 @@ export default function VideoCallScreen() {
       setParticipants(null);
       goBack();
     }
+  };
+
+  const leaveCall = async () => {
+    // The transcript only exists on this screen, so leaving without a decision
+    // would throw the conversation away silently.
+    if (leaveNotesPending && !leaveNotesPromptOpen) {
+      void transcription.stop();
+      setLeaveNotesPromptOpen(true);
+      return;
+    }
+    await finishLeaving();
+  };
+
+  /** Hands the notes to Seneca as an open check-in, then leaves. */
+  const writeUpNotesAndLeave = async () => {
+    const pair = liveNotesWriteUpPair;
+    const transcript = transcription.readTranscript();
+    if (!pair || !transcript.trim() || leaveNotesSaving) return;
+    setLeaveNotesSaving(true);
+    try {
+      await createCheckInFromTranscript(pair.workspace.id, pair.member.id, {
+        templateId: null,
+        transcript,
+      });
+      setTranscriptWrittenUp(true);
+    } catch {
+      // Losing the notes to a failed request is worse than a moment's delay,
+      // so the prompt stays put and the leader can try again or discard.
+      setLeaveNotesSaving(false);
+      return;
+    }
+    setLeaveNotesSaving(false);
+    setLeaveNotesPromptOpen(false);
+    await finishLeaving();
   };
 
   const toggleCamera = () => {
@@ -1753,6 +1820,60 @@ export default function VideoCallScreen() {
         </View>
       </AlenioBottomSheet>
 
+      <AlenioBottomSheet
+        visible={leaveNotesPromptOpen}
+        title="Write this up before you go?"
+        subtitle="Your notes from this call are not saved yet"
+        onClose={() => setLeaveNotesPromptOpen(false)}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+      >
+        <View style={s.liveNotesSheet}>
+          <Text style={s.liveNotesBody}>
+            {liveNotesWriteUpPair
+              ? `Seneca can turn this conversation into a check-in for ${
+                  liveNotesWriteUpPair.member.name?.trim() ||
+                  liveNotesWriteUpPair.member.email.split("@")[0]
+                }. It will be waiting as a draft for you to review and publish.`
+              : "Seneca can turn this conversation into a check-in draft."}
+          </Text>
+          <Text style={s.liveNotesBody}>
+            Leave without writing it up and the notes are gone: nothing from
+            this call is stored anywhere else.
+          </Text>
+          <TouchableOpacity
+            style={s.sendBtn}
+            onPress={() => void writeUpNotesAndLeave()}
+            disabled={leaveNotesSaving}
+            accessibilityRole="button"
+            testID="live-notes-write-up"
+          >
+            {leaveNotesSaving ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Sparkles size={18} color="#FFFFFF" />
+                <Text style={s.sendBtnText}>Write it up</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.liveNotesDiscardBtn}
+            onPress={() => {
+              setLeaveNotesPromptOpen(false);
+              setTranscriptWrittenUp(true);
+              void finishLeaving();
+            }}
+            disabled={leaveNotesSaving}
+            accessibilityRole="button"
+            testID="live-notes-discard"
+          >
+            <Text style={s.liveNotesDiscardText}>Discard the notes and leave</Text>
+          </TouchableOpacity>
+        </View>
+      </AlenioBottomSheet>
+
       {roomId ? (
         <MeetingCheckInTool
           roomId={roomId}
@@ -1767,6 +1888,7 @@ export default function VideoCallScreen() {
           callTranscript={transcription.usable ? transcription.transcript : null}
           callTranscriptActive={transcription.status === "active"}
           onStopCallTranscript={() => void transcription.stop()}
+          onCallTranscriptWrittenUp={() => setTranscriptWrittenUp(true)}
         />
       ) : null}
     </View>
@@ -2255,6 +2377,16 @@ const s = StyleSheet.create({
     color: "#FFFFFF",
   },
   liveNotesSheet: { gap: 14, paddingBottom: 4 },
+  liveNotesDiscardBtn: {
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  liveNotesDiscardText: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: "#94A3B8",
+  },
   liveNotesBody: {
     fontSize: 14,
     lineHeight: 20,

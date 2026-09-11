@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Pressable,
   Modal,
   RefreshControl,
+  StyleSheet,
   Alert,
   Linking,
   Switch,
@@ -18,7 +19,7 @@ import {
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AtSign, Ban, Bell, Building2, Camera, CircleHelp, Clock3, FileText, ImageIcon, Info, LogOut, Mail, MessageSquareText, Palette, Pencil, Search, X, Check, AlertTriangle, ShieldAlert, ChevronLeft, ChevronRight, Lock, Settings, Shield, ShieldCheck, UserRound } from "lucide-react-native";
+import { Activity, AtSign, Ban, Bell, Building2, Camera, CircleHelp, Clock3, FileText, ImageIcon, Info, LogOut, Mail, MessageSquareText, Search, X, Check, AlertTriangle, ShieldAlert, ChevronLeft, ChevronRight, Lock, Settings, Shield, ShieldCheck, Sparkles, Trash2, UserRound } from "lucide-react-native";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
 import { authClient, agentDebugLog, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
 import {
@@ -26,11 +27,12 @@ import {
   markSessionSignedOut,
   useSession,
   clearMobileAuthCaches,
+  clearAllCachesForSignedOutUser,
   refreshMeInAuthCaches,
   useMobileAuthReady,
 } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
-import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
+import { router, useLocalSearchParams, useFocusEffect, usePathname } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { readJsonSafe } from "@/lib/api/api";
@@ -41,13 +43,10 @@ import { pickImage, takePhoto } from "@/lib/file-picker";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
 import { ACCOUNT_HUB_TITLE } from "@/lib/plan-access-copy";
-import { tabBarClearance } from "@/lib/tab-bar";
 import type { Team } from "@/lib/types";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import {
   AlenioBottomSheet,
-  AlenioSheetOption,
-  alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import {
   ProfileCard,
@@ -55,23 +54,15 @@ import {
   ProfileDivider,
   ProfileMenuRow,
   ProfileSection,
-  ProfileToolbarButton,
 } from "@/components/profile/ProfileEnterpriseUI";
 import { formatTeamRole } from "@/components/WorkspaceTeamUI";
-import { radii, space } from "@/theme";
-import { ProfileWorkspaceList } from "@/components/profile/ProfileWorkspaceList";
+import { radii } from "@/theme";
 import { OutlookCalendarCard } from "@/components/profile/OutlookCalendarCard";
-import { CurvedTabLayout } from "@/components/CurvedTabLayout";
+import { useProfileSheetStore } from "@/lib/state/seneca-sheet-store";
 import { formatOutlookUserError } from "@/lib/outlook-calendar-errors";
 import { UserAvatar } from "@/components/UserAvatar";
-import { useWorkspaceAccess } from "@/lib/workspace-access";
-
-type MyJoinRequest = {
-  id: string;
-  status: string;
-  createdAt: string;
-  team: { id: string; name: string; image: string | null };
-};
+import { GetStartedProgressCard } from "@/components/profile/GetStartedProgressCard";
+import { useGetStartedProgress } from "@/lib/use-get-started-progress";
 
 type NotifPrefs = {
   isAdmin?: boolean;
@@ -91,6 +82,7 @@ type MessagePrivacy = "everyone" | "connections_and_shared" | "connections_only"
 type PrivacySettings = {
   messagePrivacy: MessagePrivacy;
   discoverableByEmail: boolean;
+  showActiveStatus: boolean;
 };
 
 type BlockedPerson = {
@@ -129,21 +121,42 @@ const MESSAGE_PRIVACY_LABELS: Record<MessagePrivacy, string> = {
   connections_only: "Connections only",
 };
 
-export default function ProfileScreen() {
+export function ProfileScreen({
+  asSheet = false,
+  visible = true,
+  onClose,
+}: {
+  asSheet?: boolean;
+  visible?: boolean;
+  onClose?: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const { height: viewportHeight } = useWindowDimensions();
-  const { outlook, message } = useLocalSearchParams<{ outlook?: string; message?: string }>();
+  const pathname = usePathname();
+  const pathWhenOpened = useRef(pathname);
+  const { outlook, message, openPhoto } = useLocalSearchParams<{
+    outlook?: string;
+    message?: string;
+    openPhoto?: string;
+  }>();
   const { data: session } = useSession();
   const { data: authReady } = useMobileAuthReady();
   const queryClient = useQueryClient();
+  const getStartedProgress = useGetStartedProgress();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
-  const { access: activeWorkspaceAccess } = useWorkspaceAccess(activeTeamId);
   const user = session?.user;
-  const planAccessSubtitle =
-    activeWorkspaceAccess.status === "trialing"
-      ? `${activeWorkspaceAccess.remainingDays ?? 0} days left in trial · Plans from $39.99/mo`
-      : "Plans from $39.99 per workspace / month";
+
+  useEffect(() => {
+    if (visible) pathWhenOpened.current = pathname;
+  }, [visible]);
+
+  useEffect(() => {
+    if (!asSheet || !visible) return;
+    if (pathname !== pathWhenOpened.current) {
+      onClose?.();
+    }
+  }, [asSheet, visible, pathname, onClose]);
 
   useEffect(() => {
     if (outlook === "connected") {
@@ -162,6 +175,14 @@ export default function ProfileScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
+
+  useEffect(() => {
+    if (openPhoto !== "1") return;
+    setShowSettings(false);
+    setShowPhotoPicker(true);
+    router.setParams({ openPhoto: undefined });
+  }, [openPhoto]);
 
   // Delete account state
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
@@ -179,6 +200,9 @@ export default function ProfileScreen() {
   const [timezoneModalOpen, setTimezoneModalOpen] = useState(false);
   const [messagePrivacyOpen, setMessagePrivacyOpen] = useState(false);
   const [blockedOpen, setBlockedOpen] = useState(false);
+  const [unblockTarget, setUnblockTarget] = useState<
+    BlockedPerson["person"] | null
+  >(null);
   const [timezoneSaving, setTimezoneSaving] = useState(false);
 
   const { data: teams = [], isLoading: teamsLoading } = useQuery({
@@ -227,15 +251,28 @@ export default function ProfileScreen() {
     enabled: !!user,
   });
   const messagePrivacy: MessagePrivacy = privacySettings?.messagePrivacy ?? "connections_and_shared";
-  const discoverableByEmail = privacySettings?.discoverableByEmail ?? false;
+  const discoverableByEmail = privacySettings?.discoverableByEmail ?? true;
+  const showActiveStatus = privacySettings?.showActiveStatus ?? true;
 
   const privacyMutation = useMutation({
     mutationFn: (payload: Partial<PrivacySettings>) =>
       api.patch<PrivacySettings>("/api/privacy-settings", payload),
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: PRIVACY_SETTINGS_QUERY_KEY });
+      const previous = queryClient.getQueryData<PrivacySettings>(PRIVACY_SETTINGS_QUERY_KEY);
+      queryClient.setQueryData<PrivacySettings>(PRIVACY_SETTINGS_QUERY_KEY, (current) => ({
+        messagePrivacy: current?.messagePrivacy ?? "connections_and_shared",
+        discoverableByEmail: current?.discoverableByEmail ?? true,
+        showActiveStatus: current?.showActiveStatus ?? true,
+        ...payload,
+      }));
+      return { previous };
+    },
     onSuccess: (data) => {
       queryClient.setQueryData(PRIVACY_SETTINGS_QUERY_KEY, data);
     },
-    onError: () => {
+    onError: (_error, _payload, context) => {
+      queryClient.setQueryData(PRIVACY_SETTINGS_QUERY_KEY, context?.previous);
       Alert.alert("Couldn't save", "Please try again.");
     },
   });
@@ -248,9 +285,19 @@ export default function ProfileScreen() {
 
   const unblockMutation = useMutation({
     mutationFn: (userId: string) => api.delete("/api/connections/block", { userId }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["blocked-people"] });
+    onSuccess: (_data, userId) => {
+      setUnblockTarget(null);
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["blocked-people"] }),
+        queryClient.invalidateQueries({ queryKey: ["connections"] }),
+        queryClient.invalidateQueries({ queryKey: ["dms"] }),
+        queryClient.invalidateQueries({ queryKey: ["person", userId] }),
+        queryClient.invalidateQueries({ queryKey: ["profile"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-search"] }),
+      ]);
+      toast({ title: "Person unblocked", preset: "done" });
     },
+    onError: () => toast({ title: "Could not unblock", preset: "error" }),
   });
 
   const { data: notifPrefs } = useQuery({
@@ -281,23 +328,6 @@ export default function ProfileScreen() {
   const canContinueDelete = deletionReadiness?.canDelete === true;
 
   const activeTeam = teams.find((t) => t.id === activeTeamId) as (Team & { role?: string }) | undefined;
-
-  // Join requests the current user has sent (waiting for approval)
-  const { data: myPendingJoinRequests = [] } = useQuery({
-    queryKey: ["join-requests-mine"],
-    queryFn: () => api.get<MyJoinRequest[]>("/api/join-requests/mine"),
-    refetchInterval: 15000,
-  });
-
-  const cancelMyJoinRequestMutation = useMutation({
-    mutationFn: (requestId: string) => api.delete(`/api/join-requests/${requestId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
-    },
-    onError: (err: Error) => {
-      Alert.alert("Could not withdraw request", err.message || "Something went wrong. Try again.");
-    },
-  });
 
   // ── Profile mutations ──────────────────────────────────────────
   const uploadMutation = useMutation({
@@ -342,6 +372,43 @@ export default function ProfileScreen() {
     },
   });
 
+  const removePhotoMutation = useMutation({
+    mutationFn: () =>
+      api.patch<{ image: string | null }>("/api/profile", { image: null }),
+    onSuccess: async () => {
+      setShowRemovePhotoConfirm(false);
+      setLocalImage(null);
+      queryClient.setQueryData<
+        { id: string; name: string; email: string; image: string | null; isAdmin?: boolean; timezone?: string | null }
+      >(ME_QUERY_KEY, (current) => (current ? { ...current, image: null } : current));
+      await refreshMeInAuthCaches(queryClient);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: ["teams"] }),
+        queryClient.invalidateQueries({ queryKey: ["team"] }),
+        queryClient.invalidateQueries({ queryKey: ["dms"] }),
+        queryClient.invalidateQueries({ queryKey: ["dm-messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["messages"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-search"] }),
+        queryClient.invalidateQueries({ queryKey: ["group-member-candidates"] }),
+        queryClient.invalidateQueries({ queryKey: ["activity"] }),
+        queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+        queryClient.invalidateQueries({ queryKey: ["task"] }),
+        queryClient.invalidateQueries({ queryKey: ["task-notes"] }),
+        queryClient.invalidateQueries({ queryKey: ["calendar-events"] }),
+        queryClient.invalidateQueries({ queryKey: ["join-requests"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+      ]);
+      toast({ title: "Profile photo removed", preset: "done" });
+    },
+    onError: (err: Error) => {
+      Alert.alert(
+        "Could not remove photo",
+        err.message || "Something went wrong. Try again.",
+      );
+    },
+  });
+
   const deleteAccountMutation = useMutation({
     mutationFn: async () => {
       const authHeaders = await getAuthHeaders();
@@ -361,7 +428,7 @@ export default function ProfileScreen() {
       clearAccessToken();
       await clearMobileAuthCaches(queryClient);
       await authClient.signOut();
-      queryClient.clear();
+      clearAllCachesForSignedOutUser(queryClient);
       setActiveTeamId(null);
       router.replace("/welcome");
     },
@@ -372,13 +439,18 @@ export default function ProfileScreen() {
   });
 
   const handlePhotoPress = () => {
-    if (uploadMutation.isPending) return;
+    if (uploadMutation.isPending || removePhotoMutation.isPending) return;
     setShowPhotoPicker(true);
   };
 
   const pickProfilePhoto = (source: "library" | "camera") => {
     setShowPhotoPicker(false);
     setTimeout(() => uploadMutation.mutate(source), 280);
+  };
+
+  const removeProfilePhoto = () => {
+    setShowPhotoPicker(false);
+    setTimeout(() => setShowRemovePhotoConfirm(true), 280);
   };
 
   const handleSignOut = async () => {
@@ -392,7 +464,7 @@ export default function ProfileScreen() {
       // continue cleanup even if remote sign-out call fails
     }
     clearAccessToken();
-    queryClient.clear();
+    clearAllCachesForSignedOutUser(queryClient);
     setActiveTeamId(null);
     agentDebugLog("sign-out complete", { runId: "auth-simplify-v1", hypothesisId: "H15" });
     router.replace("/welcome");
@@ -401,7 +473,10 @@ export default function ProfileScreen() {
   const displayName = meProfile?.name ?? user?.name;
   const displayEmail = meProfile?.email ?? user?.email;
   const username = meProfile?.username ?? null;
-  const avatarUri = localImage ?? meProfile?.image ?? user?.image ?? null;
+  const avatarUri =
+    localImage ??
+    (meProfile !== undefined ? meProfile?.image : user?.image) ??
+    null;
   const isPlatformAdmin = meProfile?.isAdmin === true || authReady?.me?.isAdmin === true;
   const heroRoleLabel = isPlatformAdmin
     ? "Admin"
@@ -558,18 +633,22 @@ export default function ProfileScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refreshMeInAuthCaches(queryClient);
-    await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-    await queryClient.invalidateQueries({ queryKey: ["teams"] });
-    await queryClient.invalidateQueries({ queryKey: ["billing-workspaces"] });
-    await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
-    await queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
-    setRefreshing(false);
+    try {
+      await refreshMeInAuthCaches(queryClient);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: ["teams"] }),
+        queryClient.invalidateQueries({ queryKey: ["billing-workspaces"] }),
+        queryClient.invalidateQueries({ queryKey: ["notification-preferences"] }),
+        queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  const profileAvatarSize = compactNoWorkspace ? 78 : 84;
-  const profileAvatarBridgeShift = 14;
-  const profileAvatarBridge = !showSettings ? (
+  const profileAvatarSize = compactNoWorkspace ? 70 : 76;
+  const profileAvatarControl = !showSettings ? (
     <TouchableOpacity
       onPress={handlePhotoPress}
       disabled={uploadMutation.isPending}
@@ -582,11 +661,10 @@ export default function ProfileScreen() {
         padding: 4,
         backgroundColor: "#FFFFFF",
         shadowColor: "#312E81",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.16,
-        shadowRadius: 9,
-        elevation: 5,
-        transform: [{ translateY: profileAvatarBridgeShift }],
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.14,
+        shadowRadius: 7,
+        elevation: 4,
       }}
     >
       <View
@@ -594,11 +672,18 @@ export default function ProfileScreen() {
           width: profileAvatarSize,
           height: profileAvatarSize,
           borderRadius: profileAvatarSize / 2,
-          overflow: "hidden",
+          overflow: "visible",
         }}
       >
         <UserAvatar
-          user={{ name: displayName, email: displayEmail, image: avatarUri }}
+          user={{
+            name: displayName,
+            email: displayEmail,
+            image: avatarUri,
+            isWorkplaceConnected:
+              (meProfile as { isWorkplaceConnected?: boolean } | undefined)
+                ?.isWorkplaceConnected ?? (teams.length > 0),
+          }}
           size={profileAvatarSize}
           radius={profileAvatarSize / 2}
           backgroundColor="#EEF2FF"
@@ -606,6 +691,7 @@ export default function ProfileScreen() {
           fontSize={compactNoWorkspace ? 27 : 29}
           style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
           testID="profile-avatar"
+          workplaceConnectedInteractive
         />
         {uploadMutation.isPending ? (
           <View
@@ -615,6 +701,7 @@ export default function ProfileScreen() {
               left: 0,
               right: 0,
               bottom: 0,
+              borderRadius: profileAvatarSize / 2,
               backgroundColor: "rgba(255,255,255,0.62)",
               alignItems: "center",
               justifyContent: "center",
@@ -627,7 +714,7 @@ export default function ProfileScreen() {
       <View
         style={{
           position: "absolute",
-          bottom: 1,
+          top: 1,
           right: 1,
           width: 22,
           height: 22,
@@ -643,140 +730,470 @@ export default function ProfileScreen() {
       </View>
     </TouchableOpacity>
   ) : undefined;
-
-  return (
-    <CurvedTabLayout
-      topInset={insets.top}
-      title={showSettings ? "Settings" : ""}
-      workspaceTitleSelector={false}
-      hideHeaderTitle={!showSettings}
-      leftAction={
-        showSettings ? (
+  const profileSheetHero = !showSettings ? (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 16,
+        paddingHorizontal: 4,
+        paddingBottom: 18,
+      }}
+      testID="profile-sheet-hero"
+    >
+      {profileAvatarControl}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          style={{
+            fontSize: 21,
+            lineHeight: 26,
+            fontWeight: "800",
+            color: "#0F172A",
+            letterSpacing: -0.35,
+          }}
+          numberOfLines={1}
+        >
+          {displayName}
+        </Text>
+        {username ? (
           <Pressable
-            onPress={() => setShowSettings(false)}
-            hitSlop={10}
+            onPress={() => router.push("/username")}
+            style={{ alignSelf: "flex-start", marginTop: 1, paddingVertical: 2 }}
+            hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel="Back to profile"
-            testID="settings-back-to-profile"
-            style={({ pressed }) => ({
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: pressed ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.16)",
-            })}
+            accessibilityLabel="Edit username"
+            testID="profile-username"
           >
-            <ChevronLeft size={20} color="#FFFFFF" strokeWidth={2.4} />
+            <Text style={{ fontSize: 12, color: "#64748B" }} numberOfLines={1}>
+              @{username}
+            </Text>
           </Pressable>
-        ) : undefined
-      }
-      showNotifications={!showSettings}
-      testID="profile-screen"
-      headerTestID="profile-header"
-      headerBridge={profileAvatarBridge}
-      headerBridgeSize={profileAvatarSize + 8}
-      overlays={
+        ) : null}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 9,
+            marginTop: 7,
+            flexWrap: "wrap",
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Building2 size={12} color="#64748B" strokeWidth={2.2} />
+            <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B" }}>
+              {workspaceCountLabel}
+            </Text>
+          </View>
+          <View style={{ width: 1, height: 12, backgroundColor: "#E2E8F0" }} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Shield size={12} color="#64748B" strokeWidth={2.2} />
+            <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B" }}>
+              {heroRoleLabel}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  ) : null;
+
+  const closeProfile = () => {
+    setShowSettings(false);
+    onClose?.();
+  };
+
+  const profileOverlays = (
         <>
       {/* Profile photo sheet */}
       <AlenioBottomSheet
         visible={showPhotoPicker}
-        title="Profile Photo"
-        subtitle="Update your profile picture"
+        title="Profile photo"
+        subtitle="Choose how you appear across Alenio"
         onClose={() => setShowPhotoPicker(false)}
         compact
+        showCloseButton
         scrollEnabled={false}
+        sheetStyle={{ minHeight: avatarUri ? 430 : 370 }}
         testID="profile-photo-sheet"
-        footer={
-          <Pressable
-            testID="profile-photo-cancel"
-            onPress={() => setShowPhotoPicker(false)}
-            style={alenioSheetStyles.cancelButton}
-          >
-            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
-          </Pressable>
-        }
       >
-        <AlenioSheetOption
-          icon={<ImageIcon size={16} color="white" />}
-          title="Choose from Library"
-          subtitle="Pick an existing photo"
-          onPress={() => pickProfilePhoto("library")}
-          testID="profile-photo-library"
-        />
-        <AlenioSheetOption
-          icon={<Camera size={16} color="white" />}
-          title="Take Photo"
-          subtitle="Use your camera"
-          onPress={() => pickProfilePhoto("camera")}
-          testID="profile-photo-camera"
-        />
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 13,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            borderRadius: 17,
+            borderWidth: 1,
+            borderColor: "#E7E9F4",
+            backgroundColor: "#F8F8FD",
+          }}
+        >
+          <UserAvatar
+            user={{ name: displayName, email: displayEmail, image: avatarUri }}
+            size={52}
+            radius={26}
+            resetKey={avatarUri}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: "800", color: "#202A3E" }}>
+              {avatarUri ? "Current profile photo" : "Your profile initials"}
+            </Text>
+            <Text style={{ marginTop: 3, fontSize: 11.5, lineHeight: 16, color: "#7A8699" }}>
+              This is how people recognize you across Alenio.
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+          <TouchableOpacity
+            onPress={() => pickProfilePhoto("library")}
+            activeOpacity={0.78}
+            style={{
+              flex: 1,
+              minHeight: 104,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 10,
+              borderRadius: 17,
+              borderWidth: 1,
+              borderColor: "#E3E6F2",
+              backgroundColor: "#FFFFFF",
+            }}
+            testID="profile-photo-library"
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 13,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#EEF1FF",
+              }}
+            >
+              <ImageIcon size={19} color="#5364E8" strokeWidth={2} />
+            </View>
+            <Text style={{ marginTop: 9, fontSize: 13, fontWeight: "800", color: "#263148" }}>
+              Choose photo
+            </Text>
+            <Text style={{ marginTop: 2, fontSize: 10.5, color: "#8A95A7" }}>From your library</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => pickProfilePhoto("camera")}
+            activeOpacity={0.78}
+            style={{
+              flex: 1,
+              minHeight: 104,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 10,
+              borderRadius: 17,
+              borderWidth: 1,
+              borderColor: "#E3E6F2",
+              backgroundColor: "#FFFFFF",
+            }}
+            testID="profile-photo-camera"
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 13,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#F0ECFF",
+              }}
+            >
+              <Camera size={19} color="#744DE8" strokeWidth={2} />
+            </View>
+            <Text style={{ marginTop: 9, fontSize: 13, fontWeight: "800", color: "#263148" }}>
+              Take photo
+            </Text>
+            <Text style={{ marginTop: 2, fontSize: 10.5, color: "#8A95A7" }}>Use your camera</Text>
+          </TouchableOpacity>
+        </View>
+
+        {avatarUri ? (
+          <TouchableOpacity
+            onPress={removeProfilePhoto}
+            activeOpacity={0.72}
+            style={{
+              minHeight: 54,
+              marginTop: 10,
+              paddingHorizontal: 12,
+              borderRadius: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 11,
+              backgroundColor: "#FFFFFF",
+              borderWidth: 1,
+              borderColor: "#E5E8EF",
+              shadowColor: "#1F2937",
+              shadowOpacity: 0.045,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 4 },
+            }}
+            testID="profile-photo-remove"
+          >
+            <View
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#FBF0EE",
+              }}
+            >
+              <Trash2 size={14} color="#AC5148" strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12.5, fontWeight: "800", color: "#344054" }}>
+                Remove current photo
+              </Text>
+              <Text style={{ marginTop: 2, fontSize: 10.5, color: "#8A95A7" }}>
+                Return to your profile initials
+              </Text>
+            </View>
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#F6F7FA",
+              }}
+            >
+              <ChevronRight size={14} color="#98A2B3" strokeWidth={2.1} />
+            </View>
+          </TouchableOpacity>
+        ) : null}
+
+        <TouchableOpacity
+          testID="profile-photo-cancel"
+          onPress={() => setShowPhotoPicker(false)}
+          activeOpacity={0.65}
+          style={{ minHeight: 38, marginTop: 4, alignItems: "center", justifyContent: "center" }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "#68758A" }}>Cancel</Text>
+        </TouchableOpacity>
       </AlenioBottomSheet>
 
-      <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={() => setShowSignOutConfirm(false)}>
-        <Pressable className="flex-1 bg-black/40 items-center justify-center px-6" onPress={() => setShowSignOutConfirm(false)}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full">
-              <Text className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">Sign out?</Text>
-              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
-                You'll need to sign in again to access your account.
-              </Text>
-              <View className="flex-row" style={{ gap: 10 }}>
-                <TouchableOpacity
-                  onPress={() => setShowSignOutConfirm(false)}
-                  className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
-                  testID="cancel-sign-out-button"
-                >
-                  <Text className="font-semibold text-slate-600 dark:text-slate-300">Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleSignOut}
-                  className="flex-1 py-3 rounded-xl bg-red-500 items-center"
-                  testID="confirm-sign-out-button"
-                >
-                  <Text className="font-semibold text-white">Sign out</Text>
-                </TouchableOpacity>
-              </View>
+      <AlenioBottomSheet
+        visible={showRemovePhotoConfirm}
+        title="Profile photo"
+        subtitle="Manage how you appear across Alenio"
+        onClose={() => {
+          if (!removePhotoMutation.isPending) setShowRemovePhotoConfirm(false);
+        }}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+        sheetStyle={{ minHeight: 400 }}
+        testID="remove-profile-photo-confirmation"
+      >
+        <View style={{ alignItems: "center", paddingHorizontal: 14, paddingTop: 6 }}>
+          <View
+            style={{
+              width: 84,
+              height: 84,
+              borderRadius: 42,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#F1F3FF",
+              borderWidth: 1,
+              borderColor: "#E2E5FA",
+              shadowColor: "#273248",
+              shadowOpacity: 0.12,
+              shadowRadius: 14,
+              shadowOffset: { width: 0, height: 6 },
+            }}
+          >
+            <UserAvatar
+              user={{ name: displayName, email: displayEmail, image: avatarUri }}
+              size={70}
+              radius={35}
+              resetKey={avatarUri}
+            />
+            <View
+              style={{
+                position: "absolute",
+                right: -1,
+                bottom: -1,
+                width: 29,
+                height: 29,
+                borderRadius: 15,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#FBE8E4",
+                borderWidth: 3,
+                borderColor: "#FFFFFF",
+              }}
+            >
+              <Trash2 size={13} color="#B94A3F" strokeWidth={2.2} />
             </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+          <Text
+            style={{
+              marginTop: 17,
+              fontSize: 18,
+              lineHeight: 23,
+              fontWeight: "800",
+              letterSpacing: -0.3,
+              color: "#172033",
+              textAlign: "center",
+            }}
+          >
+            Remove your current photo?
+          </Text>
+          <Text
+            style={{
+              maxWidth: 310,
+              marginTop: 6,
+              fontSize: 12.5,
+              lineHeight: 18,
+              color: "#718096",
+              textAlign: "center",
+            }}
+          >
+            Your initials will appear across Alenio instead. You can add a new photo anytime.
+          </Text>
+        </View>
+        <View style={{ marginTop: 20, width: "100%", alignSelf: "stretch" }}>
+          <TouchableOpacity
+            onPress={() => removePhotoMutation.mutate()}
+            disabled={removePhotoMutation.isPending}
+            activeOpacity={0.82}
+            style={{
+              width: "100%",
+              alignSelf: "stretch",
+              minHeight: 48,
+              borderRadius: 15,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#B4473E",
+              opacity: removePhotoMutation.isPending ? 0.72 : 1,
+            }}
+            testID="confirm-remove-profile-photo"
+          >
+            {removePhotoMutation.isPending ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={{ fontSize: 14, fontWeight: "800", color: "#FFFFFF" }}>
+                Remove profile photo
+              </Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowRemovePhotoConfirm(false)}
+            disabled={removePhotoMutation.isPending}
+            activeOpacity={0.65}
+            style={{
+              width: "100%",
+              minHeight: 38,
+              marginTop: 5,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: removePhotoMutation.isPending ? 0.45 : 1,
+            }}
+            testID="cancel-remove-profile-photo"
+          >
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#68758A" }}>
+              Cancel
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </AlenioBottomSheet>
 
       {/* Delete Account Modal */}
       <Modal visible={deleteStep > 0} transparent animationType="slide" onRequestClose={closeDeleteModal}>
         <Pressable className="flex-1 bg-black/50 justify-end" onPress={closeDeleteModal}>
-          <SafeKeyboardAvoidingView>
-            <Pressable onPress={(e) => e.stopPropagation()}>
-              <View className="bg-white dark:bg-slate-900 rounded-t-2xl overflow-hidden">
-                <View className="items-center pt-3 pb-1">
-                  <View className="w-10 h-1 rounded-full bg-slate-200 dark:bg-slate-700" />
+          <SafeKeyboardAvoidingView style={{ width: "100%" }}>
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: 440,
+                maxHeight: "90%",
+                alignSelf: "center",
+                paddingHorizontal: 10,
+                marginBottom: Math.max(insets.bottom, 10),
+              }}
+            >
+              <View
+                className="bg-white dark:bg-slate-900 overflow-hidden"
+                style={{
+                  borderRadius: 28,
+                  borderWidth: 1,
+                  borderColor: "rgba(226,232,240,0.9)",
+                  shadowColor: "#0F172A",
+                  shadowOpacity: 0.22,
+                  shadowRadius: 32,
+                  shadowOffset: { width: 0, height: 12 },
+                  elevation: 18,
+                }}
+              >
+                <View className="items-center pt-3.5 pb-1">
+                  <View className="w-9 h-1 rounded-full bg-slate-200 dark:bg-slate-700" />
                 </View>
 
                 {/* Step 1: Impact */}
                 {deleteStep === 1 && (
-                  <View className="px-5 pt-3 pb-10">
-                    <View className="flex-row items-start justify-between mb-1">
-                      <View className="flex-1 pr-4">
-                        <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Account settings</Text>
-                        <Text className="text-xl font-bold text-slate-900 dark:text-white mt-1">Delete account</Text>
-                        <Text className="text-sm text-slate-500 mt-1 leading-5">
+                  <View className="px-5 pt-3 pb-8">
+                    <View className="flex-row items-start justify-between mb-1" style={{ gap: 12 }}>
+                      <View
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 14,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: "#FECACA",
+                          backgroundColor: "#FFF1F2",
+                        }}
+                      >
+                        <AlertTriangle size={20} color="#DC2626" strokeWidth={2.1} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-xl font-bold text-slate-900 dark:text-white">Delete account</Text>
+                        <Text className="text-[13px] text-slate-500 mt-1 leading-5">
                           Review what happens and resolve any blockers before continuing.
                         </Text>
                       </View>
                       <TouchableOpacity
                         onPress={closeDeleteModal}
-                        className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 items-center justify-center"
+                        className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 items-center justify-center"
+                        accessibilityLabel="Close delete account"
                       >
                         <X size={18} color="#64748B" />
                       </TouchableOpacity>
                     </View>
 
-                    <View className="mt-5 rounded-xl border border-red-200 bg-red-50/70 overflow-hidden">
-                      <View className="flex-row items-center px-4 py-3 border-b border-red-100" style={{ gap: 8 }}>
-                        <AlertTriangle size={16} color="#DC2626" />
-                        <Text className="text-sm font-semibold text-red-800">Permanent removal</Text>
+                    <View
+                      className="mt-5 border border-slate-200 bg-white overflow-hidden"
+                      style={{ borderRadius: 16 }}
+                    >
+                      <View className="flex-row items-center px-4 pt-3.5 pb-2" style={{ gap: 8 }}>
+                        <View
+                          style={{
+                            width: 26,
+                            height: 26,
+                            borderRadius: 8,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: "#FFF1F2",
+                          }}
+                        >
+                          <AlertTriangle size={13} color="#E11D48" strokeWidth={2.2} />
+                        </View>
+                        <Text className="text-[13px] font-bold text-slate-800">
+                          Deleting your account will
+                        </Text>
                       </View>
-                      <View className="px-4 py-3" style={{ gap: 10 }}>
+                      <View className="px-4 pb-4 pt-2" style={{ gap: 9 }}>
                         {[
                           "You'll be removed from all your teams",
                           "All your messages will be deleted",
@@ -784,8 +1201,8 @@ export default function ProfileScreen() {
                           "This action cannot be undone",
                         ].map((item) => (
                           <View key={item} className="flex-row items-start" style={{ gap: 10 }}>
-                            <View className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2" />
-                            <Text className="flex-1 text-sm text-slate-700 leading-5">{item}</Text>
+                            <View className="w-1.5 h-1.5 rounded-full bg-rose-400 mt-1.5" />
+                            <Text className="flex-1 text-[13px] text-slate-700 leading-5">{item}</Text>
                           </View>
                         ))}
                       </View>
@@ -799,30 +1216,67 @@ export default function ProfileScreen() {
                     ) : null}
 
                     {!deletionReadinessLoading && deleteBlockers.length > 0 ? (
-                      <View className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 overflow-hidden">
-                        <View className="flex-row items-center px-4 py-3 border-b border-amber-100" style={{ gap: 8 }}>
-                          <ShieldAlert size={16} color="#B45309" />
-                          <Text className="text-sm font-semibold text-amber-900">Action required</Text>
+                      <View
+                        className="mt-4 border border-slate-200 bg-white overflow-hidden"
+                        style={{
+                          borderRadius: 18,
+                          shadowColor: "#0F172A",
+                          shadowOpacity: 0.06,
+                          shadowRadius: 12,
+                          shadowOffset: { width: 0, height: 4 },
+                          elevation: 2,
+                        }}
+                      >
+                        <View className="flex-row items-center px-4 pt-4 pb-3" style={{ gap: 10 }}>
+                          <View
+                            style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: 11,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderWidth: 1,
+                              borderColor: "#FDE68A",
+                              backgroundColor: "#FFFBEB",
+                            }}
+                          >
+                            <ShieldAlert size={16} color="#B45309" strokeWidth={2.1} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text className="text-[14px] font-bold text-slate-900">
+                              Workspace ownership required
+                            </Text>
+                            <Text className="text-[11px] text-slate-500 mt-0.5">
+                              Complete this before deleting your account.
+                            </Text>
+                          </View>
                         </View>
-                        <View className="p-3" style={{ gap: 10 }}>
+                        <View className="px-4 pb-4" style={{ gap: 12 }}>
                           {deleteBlockers.map((issue) => (
                             <View
                               key={`${issue.code}-${issue.teamId}`}
-                              className="rounded-lg border border-amber-100 bg-white px-3 py-3"
-                              style={{ gap: 10 }}
+                              style={{ gap: 12 }}
                             >
-                              <Text className="text-sm text-slate-700 leading-5">{issue.message}</Text>
+                              <Text className="text-[13px] text-slate-700 leading-5">{issue.message}</Text>
                               {issue.code === "active_web_billing" || issue.code === "mobile_store_billing" ? (
                                 <TouchableOpacity
                                   onPress={() => {
                                     closeDeleteModal();
                                     router.push({ pathname: "/account-hub", params: { teamId: issue.teamId } });
                                   }}
-                                  className="self-start flex-row items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
-                                  style={{ gap: 6 }}
+                                  className="w-full flex-row items-center justify-center bg-indigo-600 px-3 py-3.5"
+                                  style={{
+                                    gap: 7,
+                                    borderRadius: 12,
+                                    shadowColor: "#4F46E5",
+                                    shadowOpacity: 0.18,
+                                    shadowRadius: 8,
+                                    shadowOffset: { width: 0, height: 4 },
+                                    elevation: 2,
+                                  }}
                                 >
-                                  <Text className="text-sm font-semibold text-[#4361EE]">Open {ACCOUNT_HUB_TITLE}</Text>
-                                  <ChevronRight size={14} color="#4361EE" />
+                                  <Text className="text-sm font-semibold text-white">Open {ACCOUNT_HUB_TITLE}</Text>
+                                  <ChevronRight size={14} color="#FFFFFF" />
                                 </TouchableOpacity>
                               ) : null}
                               {issue.code === "multi_member_owner" ? (
@@ -831,11 +1285,19 @@ export default function ProfileScreen() {
                                     closeDeleteModal();
                                     router.push("/(app)/team");
                                   }}
-                                  className="self-start flex-row items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
-                                  style={{ gap: 6 }}
+                                  className="w-full flex-row items-center justify-center bg-indigo-600 px-3 py-3.5"
+                                  style={{
+                                    gap: 7,
+                                    borderRadius: 12,
+                                    shadowColor: "#4F46E5",
+                                    shadowOpacity: 0.18,
+                                    shadowRadius: 8,
+                                    shadowOffset: { width: 0, height: 4 },
+                                    elevation: 2,
+                                  }}
                                 >
-                                  <Text className="text-sm font-semibold text-[#4361EE]">Go to Team</Text>
-                                  <ChevronRight size={14} color="#4361EE" />
+                                  <Text className="text-sm font-semibold text-white">Resolve in Team</Text>
+                                  <ChevronRight size={14} color="#FFFFFF" />
                                 </TouchableOpacity>
                               ) : null}
                             </View>
@@ -855,61 +1317,108 @@ export default function ProfileScreen() {
                       </View>
                     ) : null}
 
-                    {!deletionReadinessLoading && !canContinueDelete ? (
-                      <Text className="text-xs text-slate-500 text-center mt-4 leading-4">
-                        Complete the required steps above to enable account deletion.
-                      </Text>
-                    ) : null}
-
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (!canContinueDelete) return;
-                        setDeleteStep(2);
-                      }}
-                      disabled={deletionReadinessLoading || !canContinueDelete}
-                      className={`rounded-xl py-4 items-center mt-5 mb-2 ${
-                        deletionReadinessLoading || !canContinueDelete ? "bg-slate-100" : "bg-slate-900"
-                      }`}
-                      testID="delete-continue-step1"
-                    >
-                      <Text
-                        className={`font-semibold text-base ${
-                          deletionReadinessLoading || !canContinueDelete ? "text-slate-400" : "text-white"
-                        }`}
+                    {!deletionReadinessLoading && canContinueDelete ? (
+                      <>
+                        <TouchableOpacity
+                          onPress={() => setDeleteStep(2)}
+                          className="py-4 items-center mt-5 mb-2 bg-slate-900"
+                          style={{ borderRadius: 14 }}
+                          testID="delete-continue-step1"
+                        >
+                          <Text className="font-semibold text-base text-white">
+                            Continue to verification
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={closeDeleteModal} className="py-3 items-center">
+                          <Text className="text-slate-500 font-medium">Cancel</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : !deletionReadinessLoading ? (
+                      <TouchableOpacity
+                        onPress={closeDeleteModal}
+                        className="py-3.5 items-center mt-5 border border-slate-200 bg-slate-50"
+                        style={{ borderRadius: 14 }}
                       >
-                        Continue
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={closeDeleteModal} className="py-3 items-center">
-                      <Text className="text-slate-500 font-medium">Cancel</Text>
-                    </TouchableOpacity>
+                        <Text className="text-slate-600 font-semibold">Close</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 )}
 
                 {/* Step 2: Password + confirm deletion */}
                 {deleteStep === 2 && (
-                  <View className="px-5 pt-3 pb-10">
-                    <View className="flex-row items-start justify-between mb-1">
-                      <View className="flex-1 pr-4">
-                        <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Final confirmation</Text>
-                        <Text className="text-xl font-bold text-slate-900 dark:text-white mt-1">Verify your identity</Text>
-                        <Text className="text-sm text-slate-500 mt-1 leading-5">
+                  <View className="px-5 pt-3 pb-8">
+                    <View className="flex-row items-start justify-between mb-1" style={{ gap: 12 }}>
+                      <View
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 14,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: "#E0E7FF",
+                          backgroundColor: "#EEF2FF",
+                        }}
+                      >
+                        <Lock size={19} color="#4F46E5" strokeWidth={2.1} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-xl font-bold text-slate-900 dark:text-white">Verify your identity</Text>
+                        <Text className="text-[13px] text-slate-500 mt-1 leading-5">
                           Enter your password to permanently delete this account.
                         </Text>
                       </View>
                       <TouchableOpacity
                         onPress={closeDeleteModal}
-                        className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 items-center justify-center"
+                        className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 items-center justify-center"
+                        accessibilityLabel="Close delete account"
                       >
                         <X size={18} color="#64748B" />
                       </TouchableOpacity>
                     </View>
 
-                    <View className="mt-5 rounded-xl border border-red-200 bg-red-50/70 px-4 py-3 flex-row items-start" style={{ gap: 10 }}>
-                      <AlertTriangle size={16} color="#DC2626" style={{ marginTop: 2 }} />
-                      <Text className="flex-1 text-sm text-red-800 leading-5">
-                        This permanently deletes your account and all associated data. Recovery is not possible.
-                      </Text>
+                    <View
+                      className="mt-5 px-4 py-4 flex-row items-center"
+                      style={{
+                        gap: 12,
+                        borderRadius: 16,
+                        backgroundColor: "#FFF8F7",
+                        borderWidth: 1,
+                        borderColor: "#F5E4E1",
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: 12,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "#FCEAE7",
+                        }}
+                      >
+                        <Trash2 size={17} color="#B94A3F" strokeWidth={2} />
+                      </View>
+                      <View className="flex-1">
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            lineHeight: 13,
+                            fontWeight: "700",
+                            letterSpacing: 0.7,
+                            color: "#A75A52",
+                          }}
+                        >
+                          PERMANENT ACTION
+                        </Text>
+                        <Text className="text-[13px] font-semibold text-slate-800 mt-0.5">
+                          Your account cannot be restored
+                        </Text>
+                        <Text className="text-[12px] text-slate-500 mt-1 leading-[17px]">
+                          Your profile and associated account data will be permanently removed.
+                        </Text>
+                      </View>
                     </View>
 
                     <Text className="text-sm font-semibold text-slate-700 mt-5 mb-2">Account password</Text>
@@ -1050,224 +1559,214 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
-      <Modal
+      <AlenioBottomSheet
         visible={blockedOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setBlockedOpen(false)}
+        title="Blocked people"
+        subtitle="They cannot message you or send a connection request. Shared workspaces are unaffected."
+        onClose={() => setBlockedOpen(false)}
+        compact
+        showCloseButton
+        bodyHeightRatio={0.5}
+        showScrollIndicator={blockedPeople.length > 4}
+        sheetStyle={{ minHeight: 260 }}
+        testID="blocked-people-sheet"
       >
-        <Pressable className="flex-1 bg-black/40 justify-end" onPress={() => setBlockedOpen(false)}>
-          <Pressable
-            className="bg-white dark:bg-slate-900 rounded-t-3xl max-h-[70%]"
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <Text className="text-lg font-bold text-slate-900 dark:text-white">Blocked people</Text>
-              <Text className="text-sm text-slate-500 mt-1">
-                They cannot message you or send a connection request. Shared workspaces are unaffected.
-              </Text>
-            </View>
-            <ScrollView className="px-5 py-3">
-              {blockedPeople.length === 0 ? (
-                <Text className="text-sm text-slate-400 py-6 text-center">You have not blocked anyone.</Text>
-              ) : (
-                blockedPeople.map((row) => (
-                  <View
-                    key={row.id}
-                    className="py-3 border-b border-slate-100 dark:border-slate-800 flex-row items-center justify-between"
-                  >
-                    <View style={{ flex: 1, paddingRight: 12 }}>
-                      <Text className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                        {row.person.name ?? "Alenio member"}
-                      </Text>
-                      {row.person.username ? (
-                        <Text className="text-xs text-slate-400 mt-0.5">@{row.person.username}</Text>
-                      ) : null}
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => unblockMutation.mutate(row.person.id)}
-                      disabled={unblockMutation.isPending}
-                      testID={`unblock-${row.person.id}`}
-                    >
-                      <Text className="text-sm font-bold text-indigo-600">Unblock</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))
-              )}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-        </>
-      }
-    >
-      <View style={{ flex: 1, minHeight: 0 }}>
-        {!showSettings ? (
-        <>
-        {/* Centered profile identity hero */}
-        <View
-          style={{
-            flexShrink: 0,
-            marginHorizontal: space.pagePad,
-            marginTop: profileAvatarSize / 2 + profileAvatarBridgeShift + 12,
-            marginBottom: 0,
-          }}
-        >
+        <View style={{ paddingBottom: 12 }}>
+          {blockedPeople.length === 0 ? (
+            <Text className="text-sm text-slate-400 py-8 text-center">
+              You have not blocked anyone.
+            </Text>
+          ) : (
+            blockedPeople.map((row, index) => (
+              <View
+                key={row.id}
+                className="py-3 flex-row items-center justify-between"
+                style={{
+                  borderBottomWidth:
+                    index === blockedPeople.length - 1 ? 0 : 1,
+                  borderBottomColor: "#F1F3F7",
+                }}
+              >
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {row.person.name ?? "Alenio member"}
+                  </Text>
+                  {row.person.username ? (
+                    <Text className="text-xs text-slate-400 mt-0.5">
+                      @{row.person.username}
+                    </Text>
+                  ) : null}
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setBlockedOpen(false);
+                    setTimeout(() => setUnblockTarget(row.person), 250);
+                  }}
+                  disabled={unblockMutation.isPending}
+                  testID={`unblock-${row.person.id}`}
+                  style={{
+                    minHeight: 36,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#F1EFFF",
+                  }}
+                >
+                  <Text className="text-[12px] font-bold text-indigo-600">
+                    Unblock
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
+      </AlenioBottomSheet>
+
+      <AlenioBottomSheet
+        visible={unblockTarget !== null}
+        title="Unblock person"
+        subtitle="Review this privacy change"
+        onClose={() => {
+          if (!unblockMutation.isPending) setUnblockTarget(null);
+        }}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+        sheetStyle={{ minHeight: 390 }}
+        testID="unblock-person-confirmation"
+      >
+        <View style={{ alignItems: "center", paddingHorizontal: 12, paddingTop: 4 }}>
           <View
             style={{
-              paddingTop: 0,
-              paddingBottom: 8,
+              width: 76,
+              height: 76,
+              borderRadius: 38,
               alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#F1F0FF",
+              borderWidth: 1,
+              borderColor: "#E4E1FA",
             }}
           >
-            <Pressable
-              onPress={handlePhotoPress}
-              style={{
-                alignItems: "center",
-                marginTop: 0,
-                maxWidth: "88%",
+            <UserAvatar
+              user={{
+                name: unblockTarget?.name ?? "Alenio member",
+                image: unblockTarget?.image ?? null,
               }}
-              accessibilityRole="button"
-              accessibilityLabel="Edit profile photo"
-            >
-              <Text
-                style={{ fontSize: 19, lineHeight: 23, fontWeight: "700", color: "#172033", letterSpacing: -0.3 }}
-                numberOfLines={1}
-              >
-                {displayName}
-              </Text>
-            </Pressable>
-
-            {username ? (
-              <Pressable
-                onPress={() => router.push("/username")}
-                style={{ marginTop: 2, paddingHorizontal: 8, paddingVertical: 2 }}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel="Edit username"
-                testID="profile-username"
-              >
-                <Text style={{ fontSize: 12, color: "#7A869A" }} numberOfLines={1}>
-                  @{username}
-                </Text>
-              </Pressable>
-            ) : null}
-
+              size={64}
+              radius={32}
+            />
             <View
               style={{
-                flexDirection: "row",
+                position: "absolute",
+                right: -1,
+                bottom: -1,
+                width: 27,
+                height: 27,
+                borderRadius: 14,
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 7,
-                marginTop: compactNoWorkspace ? 4 : 6,
-                flexWrap: "wrap",
+                backgroundColor: "#E9F7F1",
+                borderWidth: 3,
+                borderColor: "#FFFFFF",
               }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Building2 size={11} color="#7A869A" strokeWidth={2.25} />
-                <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>
-                  {workspaceCountLabel}
-                </Text>
-              </View>
-              <Text style={{ fontSize: 10, color: "#B8C1CE" }}>•</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Shield size={11} color="#7A869A" strokeWidth={2.25} />
-                <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>
-                  {heroRoleLabel}
-                </Text>
-              </View>
+              <ShieldCheck size={13} color="#278668" strokeWidth={2.2} />
             </View>
-
           </View>
-        </View>
-        </>
-        ) : null}
 
-        {/* Profile and settings content */}
-        <ScrollView
-          style={{ flex: 1, minHeight: 0 }}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingTop: showSettings ? 24 : 0,
-            paddingBottom: tabBarClearance(insets.bottom, 12),
-          }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
-          keyboardShouldPersistTaps="handled"
-        >
+          <Text
+            style={{
+              marginTop: 15,
+              fontSize: 18,
+              lineHeight: 23,
+              fontWeight: "800",
+              letterSpacing: -0.25,
+              color: "#172033",
+              textAlign: "center",
+            }}
+          >
+            Unblock {unblockTarget?.name ?? "this person"}?
+          </Text>
+          <Text
+            style={{
+              maxWidth: 310,
+              marginTop: 6,
+              fontSize: 12,
+              lineHeight: 18,
+              color: "#718096",
+              textAlign: "center",
+            }}
+          >
+            They can find your profile again, but messaging, reactions, and video
+            remain unavailable until a new connection is accepted.
+          </Text>
+        </View>
+
+        <View style={{ marginTop: 20, width: "100%" }}>
+          <TouchableOpacity
+            onPress={() => {
+              if (unblockTarget) unblockMutation.mutate(unblockTarget.id);
+            }}
+            disabled={!unblockTarget || unblockMutation.isPending}
+            activeOpacity={0.82}
+            style={{
+              width: "100%",
+              minHeight: 48,
+              borderRadius: 15,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#4F46E5",
+              opacity: unblockMutation.isPending ? 0.72 : 1,
+            }}
+            testID="confirm-unblock-person"
+          >
+            {unblockMutation.isPending ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={{ fontSize: 14, fontWeight: "800", color: "#FFFFFF" }}>
+                Unblock person
+              </Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setUnblockTarget(null)}
+            disabled={unblockMutation.isPending}
+            activeOpacity={0.65}
+            style={{
+              minHeight: 40,
+              marginTop: 5,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            testID="cancel-unblock-person"
+          >
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#68758A" }}>
+              Keep blocked
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </AlenioBottomSheet>
+        </>
+  );
+
+  const profileMain = (
           <ProfileContent compact={compactNoWorkspace}>
           {!showSettings ? (
           <>
-          {!teamsLoading && teams.length === 0 ? (
-            <ProfileSection title="Public profile">
-              <ProfileCard>
-                <ProfileMenuRow
-                  icon={UserRound}
-                  title="View public profile"
-                  subtitle="See how others find and connect with you"
-                  onPress={() => {
-                    const userId = meProfile?.id ?? user?.id;
-                    if (!userId) return;
-                    router.push({ pathname: "/person", params: { userId } });
-                  }}
-                  testID="view-public-profile-row"
-                />
-              </ProfileCard>
-            </ProfileSection>
-          ) : null}
-
-          {/* Workspaces */}
-          <ProfileSection
-            title="Workspaces"
-            action={
-              teams.length >= 2 ? (
-                <ProfileToolbarButton
-                  label={`Manage (${teams.length})`}
-                  onPress={() => router.push("/manage-workspaces")}
-                  testID="view-all-workspaces"
-                  showChevron={false}
-                />
-              ) : undefined
-            }
-          >
-            <ProfileWorkspaceList
-              teams={teams as (Team & { role?: string })[]}
-              activeTeamId={activeTeamId}
-              teamsLoading={teamsLoading}
-              pendingJoinRequests={myPendingJoinRequests}
-              cancelingRequestId={cancelMyJoinRequestMutation.isPending ? cancelMyJoinRequestMutation.variables ?? null : null}
-              onCancelPendingRequest={(requestId) => cancelMyJoinRequestMutation.mutate(requestId)}
-              onOpenWorkspacePage={(teamId) =>
-                router.push({
-                  pathname: "/workspace-settings",
-                  params: { teamId },
-                })
-              }
-              onOpenPeople={(teamId) =>
-                router.push({
-                  pathname: "/team-directory",
-                  params: { teamId },
-                })
-              }
-              onOpenWorkspaceDetails={(teamId) =>
-                router.push({
-                  pathname: "/workspace-settings",
-                  params: { teamId },
-                })
-              }
-              onCreateWorkspace={() =>
-                router.push({
-                  pathname: "/onboarding",
-                  params: { intent: "add", mode: "create" },
-                })
-              }
-              onJoinWorkspace={() =>
-                router.push({
-                  pathname: "/onboarding",
-                  params: { intent: "add", mode: "join" },
-                })
-              }
+          {profileSheetHero}
+          {getStartedProgress.isResolved &&
+          !getStartedProgress.hasCompletedOnce &&
+          !getStartedProgress.isExpired ? (
+            <GetStartedProgressCard
+              completedCount={getStartedProgress.completedCount}
+              totalCount={getStartedProgress.totalCount}
+              remainingCount={getStartedProgress.remainingCount}
+              percent={getStartedProgress.percent}
+              onPress={() => router.push("/get-started")}
             />
-          </ProfileSection>
+          ) : null}
 
           {/* Account */}
           <ProfileSection title="Account">
@@ -1291,38 +1790,45 @@ export default function ProfileScreen() {
               <ProfileMenuRow
                 icon={Lock}
                 title={ACCOUNT_HUB_TITLE}
-                subtitle={planAccessSubtitle}
                 onPress={() => router.push("/account-hub")}
                 testID="account-hub-row"
               />
-            </ProfileCard>
-          </ProfileSection>
-
-          {!teamsLoading && teams.length > 0 ? (
-            <ProfileSection title="Integrations">
-              <OutlookCalendarCard />
-            </ProfileSection>
-          ) : null}
-
-          <ProfileSection title="Account controls">
-            <ProfileCard>
+              <ProfileDivider inset />
               <ProfileMenuRow
-                icon={Pencil}
+                icon={UserRound}
                 title="Public profile"
-                subtitle="Photo, name, website, location, and About"
-                onPress={() => router.push("/edit-profile")}
-                testID="edit-public-profile-menu-row"
+                subtitle="View your profile and edit what others see"
+                onPress={() => {
+                  const userId = meProfile?.id ?? user?.id;
+                  if (!userId) return;
+                  router.push({ pathname: "/person", params: { userId } });
+                }}
+                testID="public-profile-menu-row"
               />
               <ProfileDivider inset />
               <ProfileMenuRow
                 icon={Settings}
                 title="Settings"
-                subtitle="Notifications, appearance, security, and support"
+                subtitle="Notifications, appearance, integrations, and support"
                 onPress={() => setShowSettings(true)}
                 testID="open-settings-row"
               />
             </ProfileCard>
           </ProfileSection>
+
+          <View style={{ marginTop: 20 }}>
+            <ProfileCard>
+              <ProfileMenuRow
+                icon={LogOut}
+                title="Sign Out"
+                subtitle="Sign out of Alenio on this device"
+                onPress={() => setShowSignOutConfirm(true)}
+                testID="profile-sign-out-button"
+                destructive
+              />
+            </ProfileCard>
+          </View>
+
           </>
           ) : null}
 
@@ -1363,6 +1869,25 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {getStartedProgress.isResolved &&
+          !getStartedProgress.hasCompletedOnce &&
+          !getStartedProgress.isExpired ? (
+            <ProfileSection title="Getting started">
+              <ProfileCard>
+                <ProfileMenuRow
+                  icon={Sparkles}
+                  title="Get started"
+                  subtitle={`${getStartedProgress.remainingCount} ${
+                    getStartedProgress.remainingCount === 1 ? "step" : "steps"
+                  } remaining`}
+                  value={`${getStartedProgress.completedCount}/${getStartedProgress.totalCount}`}
+                  onPress={() => router.push("/get-started")}
+                  testID="settings-get-started-row"
+                />
+              </ProfileCard>
+            </ProfileSection>
+          ) : null}
+
           <ProfileSection
             title="Personal information"
             subtitle="Your Alenio identity across every workspace."
@@ -1382,7 +1907,7 @@ export default function ProfileScreen() {
                 title="Email"
                 subtitle="Used for sign-in and account notices"
                 value={displayEmail}
-                showChevron={false}
+                onPress={() => router.push("/change-email")}
                 testID="email-menu-row"
               />
             </ProfileCard>
@@ -1409,19 +1934,17 @@ export default function ProfileScreen() {
                 onPress={() => setTimezoneModalOpen(true)}
                 testID="timezone-menu-row"
               />
-              <ProfileDivider inset />
-              <ProfileMenuRow
-                icon={Palette}
-                title="Appearance"
-                subtitle="Match Alenio to your device display"
-                value="System"
-                onPress={() =>
-                  Alert.alert("Appearance", "Alenio currently follows your device appearance settings.")
-                }
-                testID="appearance-menu-row"
-              />
             </ProfileCard>
           </ProfileSection>
+
+          {!teamsLoading && teams.length > 0 ? (
+            <ProfileSection
+              title="Integrations"
+              subtitle="Connect calendars and other tools you use at work."
+            >
+              <OutlookCalendarCard />
+            </ProfileSection>
+          ) : null}
 
           <ProfileSection
             title="Privacy"
@@ -1446,11 +1969,29 @@ export default function ProfileScreen() {
                   <Switch
                     value={discoverableByEmail}
                     onValueChange={(next) => privacyMutation.mutate({ discoverableByEmail: next })}
+                    disabled={privacyMutation.isPending}
                     trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
                     testID="discoverable-by-email-switch"
                   />
                 }
                 testID="discoverable-by-email-row"
+              />
+              <ProfileDivider inset />
+              <ProfileMenuRow
+                icon={Activity}
+                title="Show active status"
+                subtitle="Only accepted connections can see when you’re active"
+                showChevron={false}
+                trailing={
+                  <Switch
+                    value={showActiveStatus}
+                    onValueChange={(next) => privacyMutation.mutate({ showActiveStatus: next })}
+                    disabled={privacyMutation.isPending}
+                    trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
+                    testID="show-active-status-switch"
+                  />
+                }
+                testID="show-active-status-row"
               />
               <ProfileDivider inset />
               <ProfileMenuRow
@@ -1561,7 +2102,7 @@ export default function ProfileScreen() {
                 icon={CircleHelp}
                 title="Help Center"
                 subtitle="Guides, answers, and product support"
-                onPress={() => void Linking.openURL("https://alenio.com")}
+                onPress={() => void Linking.openURL("https://alenio.com/help")}
                 testID="help-center-row"
               />
               <ProfileDivider inset />
@@ -1614,39 +2155,100 @@ export default function ProfileScreen() {
           </>
           ) : null}
         </ProfileContent>
-
-        {/* App Info / Environment */}
-        {false ? (<View className="mx-4 mt-2 mb-8 items-center">
-          <View className="flex-row items-center mb-1" style={{ gap: 6 }}>
-            <View
-              style={{
-                backgroundColor: __DEV__ ? "rgba(234, 179, 8, 0.12)" : "rgba(34, 197, 94, 0.12)",
-                borderRadius: 20,
-                paddingHorizontal: 10,
-                paddingVertical: 3,
-                borderWidth: 1,
-                borderColor: __DEV__ ? "rgba(234, 179, 8, 0.4)" : "rgba(34, 197, 94, 0.4)",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "600",
-                  color: __DEV__ ? "#B45309" : "#15803D",
-                  letterSpacing: 0.5,
-                  textTransform: "uppercase",
-                }}
-              >
-                {__DEV__ ? "Development" : "Production"}
-              </Text>
-            </View>
-          </View>
-          <Text className="text-xs text-slate-400" numberOfLines={1} style={{ maxWidth: "90%" }}>
-            {getBackendUrl()}
-          </Text>
-        </View>) : null}
-      </ScrollView>
-      </View>
-    </CurvedTabLayout>
   );
+
+  const signOutConfirm = showSignOutConfirm ? (
+    <Pressable
+      style={StyleSheet.absoluteFill}
+      className="bg-black/40 items-center justify-center px-6"
+      onPress={() => setShowSignOutConfirm(false)}
+    >
+      <Pressable onPress={(e) => e.stopPropagation()} style={{ width: "100%" }}>
+        <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full">
+          <Text className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">Sign out?</Text>
+          <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
+            You'll need to sign in again to access your account.
+          </Text>
+          <View className="flex-row" style={{ gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => setShowSignOutConfirm(false)}
+              className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
+              testID="cancel-sign-out-button"
+            >
+              <Text className="font-semibold text-slate-600 dark:text-slate-300">Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSignOut}
+              className="flex-1 py-3 rounded-xl bg-red-500 items-center"
+              testID="confirm-sign-out-button"
+            >
+              <Text className="font-semibold text-white">Sign out</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Pressable>
+    </Pressable>
+  ) : null;
+
+  return (
+    <>
+      <AlenioBottomSheet
+        visible={asSheet ? visible : true}
+        title={showSettings ? "Settings" : "Profile"}
+        onClose={closeProfile}
+        showCloseButton
+        bodyHeightRatio={0.88}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#4361EE"
+            colors={["#4361EE"]}
+          />
+        }
+        headerRight={
+          showSettings ? (
+            <Pressable
+              onPress={() => setShowSettings(false)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Back to profile"
+              testID="settings-back-to-profile"
+              style={({ pressed }) => ({
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: pressed ? "#E7ECF8" : "#F1F4FA",
+                marginRight: 6,
+              })}
+            >
+              <ChevronLeft size={20} color="#27304D" strokeWidth={2.4} />
+            </Pressable>
+          ) : undefined
+        }
+        testID="profile-screen"
+        overlay={signOutConfirm}
+      >
+        {profileMain}
+      </AlenioBottomSheet>
+      {profileOverlays}
+    </>
+  );
+}
+
+export default function ProfileRoute() {
+  const openSheet = useProfileSheetStore((state) => state.openSheet);
+  useFocusEffect(
+    useCallback(() => {
+      openSheet();
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/(app)/home");
+      }
+    }, [openSheet]),
+  );
+  return null;
 }

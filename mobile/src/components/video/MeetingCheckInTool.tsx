@@ -34,6 +34,7 @@ type Props = {
   callTranscript?: string | null;
   callTranscriptActive?: boolean;
   onStopCallTranscript?: () => void;
+  onCallTranscriptWrittenUp?: () => void;
 };
 
 function memberName(pair: MeetingCheckInEligiblePair): string {
@@ -53,6 +54,7 @@ export function MeetingCheckInTool({
   callTranscript,
   callTranscriptActive,
   onStopCallTranscript,
+  onCallTranscriptWrittenUp,
 }: Props) {
   const [context, setContext] = useState<MeetingCheckInContext | null>(null);
   const [loading, setLoading] = useState(false);
@@ -358,6 +360,7 @@ export function MeetingCheckInTool({
             callTranscript={callTranscript ?? null}
             callTranscriptActive={callTranscriptActive ?? false}
             onStopCallTranscript={onStopCallTranscript}
+            onCallTranscriptWrittenUp={onCallTranscriptWrittenUp}
           />
         </View>
       ) : null}

@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Platform,
   Dimensions,
+  type RefreshControlProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -25,6 +26,8 @@ type Props = {
   footer?: React.ReactNode;
   headerRight?: React.ReactNode;
   asScreen?: boolean;
+  /** When false, the sheet does not shift with the keyboard. Default true. */
+  avoidKeyboard?: boolean;
   testID?: string;
   sheetStyle?: StyleProp<ViewStyle>;
   compact?: boolean;
@@ -32,10 +35,21 @@ type Props = {
   showCloseButton?: boolean;
   /** Fraction of window height for scroll body (default 0.58, compact 0.5). */
   bodyHeightRatio?: number;
+  /** Optional fixed maximum body height. Takes precedence over bodyHeightRatio. */
+  bodyMaxHeight?: number;
   /** Show vertical scroll indicator (useful for tall forms). */
   showScrollIndicator?: boolean;
   /** When false, body does not scroll (content should fit). Default true. */
   scrollEnabled?: boolean;
+  /** Optional pull-to-refresh control for scrollable sheet content. */
+  refreshControl?: React.ReactElement<RefreshControlProps>;
+  /**
+   * Content drawn over the whole sheet, such as a confirmation dialog.
+   *
+   * iOS refuses to present a second Modal while this one is up, so anything
+   * that would otherwise be its own Modal belongs here instead.
+   */
+  overlay?: React.ReactNode;
 };
 
 function SheetContent({
@@ -50,26 +64,31 @@ function SheetContent({
   compact = false,
   showCloseButton = false,
   bodyHeightRatio,
+  bodyMaxHeight: bodyMaxHeightOverride,
   showScrollIndicator = false,
   scrollEnabled = true,
+  refreshControl,
+  overlay,
+  avoidKeyboard = true,
 }: Omit<Props, "visible" | "asScreen">) {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
   const windowH = Dimensions.get("window").height;
   const ratio = bodyHeightRatio ?? (compact ? 0.5 : 0.58);
   const reservedChrome = (compact ? 152 : 188) + bottomPad + Math.min(insets.top, 20);
-  const bodyMaxHeight = Math.max(
-    180,
-    Math.min(Math.round(windowH * ratio), Math.round(windowH - reservedChrome)),
-  );
+  const bodyMaxHeight =
+    bodyMaxHeightOverride ??
+    Math.max(
+      180,
+      Math.min(Math.round(windowH * ratio), Math.round(windowH - reservedChrome)),
+    );
 
   return (
     <View style={styles.backdrop} testID={testID}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
-      <SafeKeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <SheetKeyboardWrap
+        enabled={avoidKeyboard}
         style={styles.avoider}
-        keyboardVerticalOffset={0}
       >
         {/* View (not Pressable) so ScrollView can receive pan gestures */}
         <View
@@ -116,10 +135,11 @@ function SheetContent({
               showsVerticalScrollIndicator={showScrollIndicator}
               indicatorStyle="black"
               keyboardShouldPersistTaps="handled"
-              bounces={showScrollIndicator}
-              alwaysBounceVertical={showScrollIndicator}
+              bounces={showScrollIndicator || !!refreshControl}
+              alwaysBounceVertical={showScrollIndicator || !!refreshControl}
               nestedScrollEnabled
               scrollEventThrottle={16}
+              refreshControl={refreshControl}
             >
               {children}
             </ScrollView>
@@ -136,8 +156,32 @@ function SheetContent({
           )}
           {footer ? <View style={[styles.footer, compact ? styles.footerCompact : null]}>{footer}</View> : null}
         </View>
-      </SafeKeyboardAvoidingView>
+      </SheetKeyboardWrap>
+      {overlay}
     </View>
+  );
+}
+
+function SheetKeyboardWrap({
+  enabled,
+  style,
+  children,
+}: {
+  enabled: boolean;
+  style: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  if (!enabled) {
+    return <View style={style}>{children}</View>;
+  }
+  return (
+    <SafeKeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={style}
+      keyboardVerticalOffset={0}
+    >
+      {children}
+    </SafeKeyboardAvoidingView>
   );
 }
 
@@ -147,11 +191,19 @@ export function AlenioBottomSheet({
   ...props
 }: Props) {
   if (asScreen) {
+    if (!visible) return null;
     return <SheetContent {...props} />;
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={props.onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      onRequestClose={props.onClose}
+    >
       <SheetContent {...props} />
     </Modal>
   );
@@ -387,7 +439,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "transparent",
     marginLeft: 4,
   },
   logo: {
