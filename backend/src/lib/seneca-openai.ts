@@ -104,11 +104,20 @@ export function buildSenecaUserContent(
 export async function senecaJson<T>(
   instruction: string,
   context: string,
-  options?: { systemPrompt?: string; imageDataUrl?: string },
+  options?: {
+    systemPrompt?: string;
+    imageDataUrl?: string;
+    history?: Array<{ role: "user" | "assistant"; content: string }>;
+  },
 ): Promise<T> {
   if (!senecaAvailable()) {
     throw new Error(senecaUnavailableMessage());
   }
+
+  const historyMessages = (options?.history ?? []).map((message) => ({
+    role: message.role,
+    content: message.content,
+  }));
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -122,6 +131,7 @@ export async function senecaJson<T>(
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: options?.systemPrompt ?? COACHING_SYSTEM },
+        ...historyMessages,
         {
           role: "user",
           content: buildSenecaUserContent(
@@ -166,11 +176,20 @@ export async function senecaJson<T>(
 export async function senecaText(
   instruction: string,
   context: string,
-  options?: { systemPrompt?: string; imageDataUrl?: string },
+  options?: {
+    systemPrompt?: string;
+    imageDataUrl?: string;
+    history?: Array<{ role: "user" | "assistant"; content: string }>;
+  },
 ): Promise<string> {
   if (!senecaAvailable()) {
     throw new Error(senecaUnavailableMessage());
   }
+
+  const historyMessages = (options?.history ?? []).map((message) => ({
+    role: message.role,
+    content: message.content,
+  }));
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -183,6 +202,7 @@ export async function senecaText(
       temperature: 0.5,
       messages: [
         { role: "system", content: options?.systemPrompt ?? COACHING_SYSTEM },
+        ...historyMessages,
         {
           role: "user",
           content: buildSenecaUserContent(

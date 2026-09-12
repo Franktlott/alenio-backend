@@ -80,7 +80,7 @@ export async function askPersonalSeneca(
     insights?: BasicAskResult["insights"];
     suggestedActions?: BasicAskResult["suggestedActions"];
   }>(
-    `Answer the authenticated user's latest message using only their personal profile context.
+    `Answer the authenticated user's latest message using the conversation history and only their personal profile context.
 - This is personal scope, not a workspace.
 - Do not claim access to stored workspace, teammate, manager, task, goal, check-in, calendar, activity, or team-health data.
 - You may help draft or improve goals, recognition, feedback, coaching plans, interviews, and workplace communication from details the user supplies.
@@ -94,6 +94,7 @@ Return JSON with message (string), insights (array), and suggestedActions (array
     {
       systemPrompt: assembled.systemPrompt,
       imageDataUrl: attachment?.imageDataUrl,
+      history: messages,
     },
   );
   return normalizedResult(out);
@@ -117,7 +118,7 @@ export async function askMemberWorkspaceSeneca(
     insights?: BasicAskResult["insights"];
     suggestedActions?: BasicAskResult["suggestedActions"];
   }>(
-    `Answer the member's latest message using only the self-scoped context for this one workspace.
+    `Answer the member's latest message using the conversation history and only the self-scoped context for this one workspace.
 - Never reveal or infer another member's identity, work, goals, check-ins, performance, or private manager information.
 - Never provide team-wide metrics, rankings, comparisons, manager coaching proposals, task-assignment proposals, or check-in scheduling/cancellation proposals.
 - You may discuss only the requester's own profile, assigned tasks, goals, and published check-in metadata included in context.
@@ -127,7 +128,7 @@ ${conversation}
 
 Return JSON with message (string), insights (array), and suggestedActions (array).`,
     contextWithCurrentAttachment(senecaMemberWorkspaceContextToPrompt(context), attachment),
-    { imageDataUrl: attachment?.imageDataUrl },
+    { imageDataUrl: attachment?.imageDataUrl, history: messages },
   );
 
   const generation = await db.senecaGeneration

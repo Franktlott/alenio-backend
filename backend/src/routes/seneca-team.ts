@@ -87,7 +87,7 @@ function managerContextWithAttachment(
 }
 
 function formatConversationForPrompt(messages: SenecaChatTurn[], question: string): string {
-  const prior = messages.slice(-12);
+  const prior = messages.slice(-40);
   if (prior.length === 0) {
     return `Manager question: "${question}"`;
   }
@@ -95,7 +95,7 @@ function formatConversationForPrompt(messages: SenecaChatTurn[], question: strin
     message.role === "user" ? `Manager: ${message.content}` : `Seneca: ${message.content}`,
   );
   lines.push(`Manager: ${question}`);
-  return `Conversation so far:\n${lines.join("\n")}\n\nRespond to the manager's latest message only. Do not repeat your previous answer; add new information for this follow-up.`;
+  return `This is a continuing conversation. Use earlier turns for names, decisions, and context. Answer the latest manager message without ignoring what came before. Do not repeat your previous answer; add new information for this follow-up.\n\nConversation:\n${lines.join("\n")}`;
 }
 
 type SenecaAskActionId =
@@ -368,7 +368,8 @@ CREATING A TASK (critical):
     );
     const out = await senecaJson<SenecaAskAi>(
       `Answer using the conversation history and the LIVE team health context JSON for the CURRENT workspace only.
-- Respond ONLY to the manager's latest message. Do not restate or paraphrase your previous reply.
+- Use the conversation history. Follow-ups like "yes", "them", or "what about that" refer to earlier turns.
+- Answer the manager's latest message with new information. Do not ignore prior context or restate your previous reply.
 - If they ask a follow-up (e.g. "What about goals?"), answer that topic with the relevant live facts — omit check-in/health points already covered unless they ask again.
 - Be practical, specific, and concise. Prefer short lists when ranking people/tasks. Avoid generic coaching language.
 - REQUIRED when the question is about coaching, check-ins, workload, trends, or follow-ups:
@@ -398,6 +399,7 @@ Return JSON:
       {
         ...(assembledSystemPrompt ? { systemPrompt: assembledSystemPrompt } : {}),
         imageDataUrl: body.attachment?.imageDataUrl,
+        history: body.messages,
       },
     );
 

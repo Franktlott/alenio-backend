@@ -165,8 +165,8 @@ describe("Seneca grounding", () => {
     expect(grounding).not.toContain("teamHealth");
   });
 
-  test("conversation grounding keeps only the latest twelve prior turns", () => {
-    const messages = Array.from({ length: 14 }, (_, index) => ({
+  test("conversation grounding keeps a long running thread", () => {
+    const messages = Array.from({ length: 42 }, (_, index) => ({
       role: "user" as const,
       content: `message-${index}`,
     }));
@@ -175,5 +175,6 @@ describe("Seneca grounding", () => {
     expect(prompt).not.toContain("User: message-1\n");
     expect(prompt).toContain("User: message-2\n");
     expect(prompt).toContain("User: latest");
+    expect(prompt).toContain("continuing conversation");
   });
 });

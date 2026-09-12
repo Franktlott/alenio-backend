@@ -4,6 +4,7 @@ import {
   collectUrls,
   isSenecaStoredImageGenerationSource,
 } from "./seneca-conversation-cleanup";
+import { SENECA_CONVERSATION_HISTORY_LIMIT } from "./seneca-scope";
 import {
   SENECA_CONVERSATION_RETENTION_MS,
   contextForConversation,
@@ -70,7 +71,7 @@ describe("Seneca conversation retention helpers", () => {
       select: {
         messages: {
           orderBy: { order: "desc" },
-          take: 12,
+          take: SENECA_CONVERSATION_HISTORY_LIMIT,
         },
       },
     });

@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../prisma";
 import type { SenecaContextRef } from "../types";
-import { resolveSenecaScope, type ResolvedSenecaScope } from "./seneca-scope";
+import { resolveSenecaScope, SENECA_CONVERSATION_HISTORY_LIMIT, type ResolvedSenecaScope } from "./seneca-scope";
 
 export const SENECA_CONVERSATION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -233,7 +233,7 @@ export async function loadSenecaConversationHistory(
     select: {
       messages: {
         orderBy: { order: "desc" },
-        take: 12,
+        take: SENECA_CONVERSATION_HISTORY_LIMIT,
         select: { role: true, text: true },
       },
     },

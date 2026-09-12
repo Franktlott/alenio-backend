@@ -13,6 +13,8 @@ import {
   senecaAttachmentSchema,
 } from "./seneca-attachments";
 
+export const SENECA_CONVERSATION_HISTORY_LIMIT = 40;
+
 export const senecaChatMessageSchema = z
   .object({
     role: z.enum(["user", "assistant"]),
@@ -31,7 +33,7 @@ export const senecaAskBodySchema = z
     ]),
     question: z.string().trim().max(1000).optional(),
     attachment: senecaAttachmentSchema.optional(),
-    messages: z.array(senecaChatMessageSchema).max(20).optional().default([]),
+    messages: z.array(senecaChatMessageSchema).max(40).optional().default([]),
     conversationId: z.string().trim().min(1).optional(),
   })
   .strict()
@@ -150,12 +152,12 @@ export function formatSenecaConversation(
   question: string,
   userLabel = "User",
 ): string {
-  const prior = messages.slice(-12);
+  const prior = messages.slice(-SENECA_CONVERSATION_HISTORY_LIMIT);
   const lines = prior.map((message) =>
     message.role === "user" ? `${userLabel}: ${message.content}` : `Seneca: ${message.content}`,
   );
   lines.push(`${userLabel}: ${question}`);
   return prior.length === 0
     ? `${userLabel} question: "${question}"`
-    : `Conversation so far:\n${lines.join("\n")}\n\nRespond to the ${userLabel.toLowerCase()}'s latest message only.`;
+    : `This is a continuing conversation. Use earlier turns for names, decisions, and context. Answer the latest ${userLabel.toLowerCase()} message without ignoring what came before.\n\nConversation:\n${lines.join("\n")}`;
 }
