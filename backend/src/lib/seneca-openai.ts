@@ -252,6 +252,33 @@ type OpenAiChatMessage = {
   tool_call_id?: string;
 };
 
+function parseJsonContent<T>(raw: string): T | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) {
+      try {
+        return JSON.parse(fenced[1].trim()) as T;
+      } catch {
+        return null;
+      }
+    }
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(trimmed.slice(start, end + 1)) as T;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
 export async function senecaJsonWithTools<T>(
   instruction: string,
   context: string,
@@ -269,7 +296,7 @@ export async function senecaJsonWithTools<T>(
     throw new Error(senecaUnavailableMessage());
   }
 
-  const maxRounds = options.maxRounds ?? 4;
+  const maxRounds = options.maxRounds ?? 8;
   const messages: OpenAiChatMessage[] = [
     { role: "system", content: options.systemPrompt ?? COACHING_SYSTEM },
     ...(options.history ?? []).map((message) => ({
@@ -285,6 +312,7 @@ export async function senecaJsonWithTools<T>(
     },
   ];
 
+  let forceJson = false;
   for (let round = 0; round < maxRounds; round += 1) {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -295,10 +323,10 @@ export async function senecaJsonWithTools<T>(
       body: JSON.stringify({
         model: env.OPENAI_MODEL,
         temperature: 0.4,
-        response_format: { type: "json_object" },
-        tools: options.tools,
-        tool_choice: "auto",
         messages,
+        ...(forceJson
+          ? { response_format: { type: "json_object" } }
+          : { tools: options.tools, tool_choice: "auto" }),
       }),
     });
 
@@ -320,7 +348,7 @@ export async function senecaJsonWithTools<T>(
       }>;
     };
     const message = data.choices?.[0]?.message;
-    const toolCalls = message?.tool_calls ?? [];
+    const toolCalls = forceJson ? [] : (message?.tool_calls ?? []);
     if (toolCalls.length > 0) {
       messages.push({
         role: "assistant",
@@ -342,12 +370,22 @@ export async function senecaJsonWithTools<T>(
     }
 
     const raw = message?.content?.trim();
-    if (!raw) throw new Error("Seneca returned an empty response.");
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      throw new Error("Seneca returned invalid JSON.");
+    const parsed = raw ? parseJsonContent<T>(raw) : null;
+    if (parsed) return parsed;
+    if (!forceJson) {
+      if (raw) {
+        messages.push({ role: "assistant", content: raw });
+      }
+      messages.push({
+        role: "user",
+        content:
+          "Return JSON now with a complete message string (all facts in message, not only a heading), insights array, suggestedActions array, and null for planOneOnOne, cancelOneOnOne, and createTask unless drafting a confirmation the app will show.",
+      });
+      forceJson = true;
+      continue;
     }
+    if (!raw) throw new Error("Seneca returned an empty response.");
+    throw new Error("Seneca returned invalid JSON.");
   }
 
   throw new Error("I couldn’t complete that request right now. Please try again.");

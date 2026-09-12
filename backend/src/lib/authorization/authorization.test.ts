@@ -65,6 +65,7 @@ function dualRoleDb(): PrismaClient {
               priority: "high",
               dueDate: new Date("2020-01-01"),
               kind: "workspace_task",
+              assignments: [{ user: { id: "other", name: "Sam" } }],
             },
           ];
         }

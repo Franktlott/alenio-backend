@@ -6,6 +6,7 @@ import {
   listCheckInSummaries,
   listVisibleEvents,
   listVisibleGoals,
+  listVisibleRoster,
   listVisibleTasks,
 } from "./authorized-data";
 import {
@@ -15,7 +16,7 @@ import {
 } from "./seneca-tool-scope";
 
 export const SENECA_TOOL_MAX_PAGE = 20;
-export const SENECA_TOOL_MAX_ROUNDS = 4;
+export const SENECA_TOOL_MAX_ROUNDS = 8;
 export const SENECA_TOOL_MAX_RANGE_DAYS = 31;
 export const SENECA_EVENT_DEFAULT_DAYS = 7;
 
@@ -44,6 +45,22 @@ export const SENECA_READ_TOOLS = [
         properties: {
           workspaceId: { type: "string" },
           limit: { type: "integer", minimum: 1, maximum: SENECA_TOOL_MAX_PAGE },
+        },
+        required: ["workspaceId"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "list_visible_roster",
+      description:
+        "List people in one workspace the signed-in user may see (names, user ids, roles). Use this to resolve a person's name before asking about them. Requires workspaceId.",
+      parameters: {
+        type: "object",
+        properties: {
+          workspaceId: { type: "string" },
         },
         required: ["workspaceId"],
         additionalProperties: false,
@@ -215,6 +232,9 @@ export async function executeSenecaTool(input: {
   const limit = parseLimit(args);
   if (input.name === "list_attention_items") {
     return listAttentionItems(input.actor, { workspaceId, limit }, db);
+  }
+  if (input.name === "list_visible_roster") {
+    return listVisibleRoster(input.actor, { workspaceId }, db);
   }
   if (input.name === "list_visible_tasks") {
     return listVisibleTasks(input.actor, { workspaceId, limit }, db);

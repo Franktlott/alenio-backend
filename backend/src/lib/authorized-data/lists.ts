@@ -61,6 +61,9 @@ export async function listVisibleTasks(
       priority: true,
       dueDate: true,
       kind: true,
+      assignments: {
+        select: { user: { select: { id: true, name: true } } },
+      },
     },
     orderBy: { updatedAt: "desc" },
     take: clampLimit(input.limit),
@@ -74,6 +77,10 @@ export async function listVisibleTasks(
       status: task.status,
       priority: task.priority,
       dueDate: task.dueDate?.toISOString() ?? null,
+      assignees: task.assignments.map((assignment) => ({
+        userId: assignment.user.id,
+        name: assignment.user.name?.trim() || "Team member",
+      })),
       overdue:
         Boolean(task.dueDate) &&
         task.status !== "done" &&
