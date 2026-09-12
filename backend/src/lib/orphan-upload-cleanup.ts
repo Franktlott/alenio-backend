@@ -62,6 +62,7 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
     topics,
     users,
     teams,
+    calendarEvents,
     walkResponses,
     senecaMessages,
   ] = await Promise.all([
@@ -100,6 +101,10 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
     prisma.team.findMany({
       select: { image: true, goFrontendSettings: true },
     }),
+    prisma.calendarEvent.findMany({
+      where: { image: { not: null } },
+      select: { image: true },
+    }),
     prisma.walkItemResponse.findMany({
       where: { photoUrls: { not: Prisma.DbNull } },
       select: { photoUrls: true, response: true },
@@ -124,6 +129,7 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
     const settings = parseGoFrontendSettings(team.goFrontendSettings);
     addUrl(paths, settings.heroImageUrl);
   }
+  for (const row of calendarEvents) addUrl(paths, row.image);
 
   for (const row of walkResponses) {
     addJsonUrlList(paths, row.photoUrls);

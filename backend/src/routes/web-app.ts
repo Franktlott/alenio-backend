@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
+import { publishTeamTaskUpdated } from "../lib/realtime-hub";
 import { getSessionFromHeaders } from "../auth";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
@@ -796,6 +797,15 @@ webRouter.post("/api/tasks", async (c) => {
     }
   }
 
+  for (const created of tasks) {
+    publishTeamTaskUpdated({
+      teamId,
+      taskId: created.id,
+      reason: "created",
+      actorUserId: userId,
+    });
+  }
+
   return c.json({ data: { tasks } });
 });
 
@@ -888,6 +898,12 @@ webRouter.patch("/api/tasks/:id", async (c) => {
       },
     });
   }
+  publishTeamTaskUpdated({
+    teamId: result.task.teamId,
+    taskId: id,
+    reason: "details",
+    actorUserId: userId,
+  });
   return c.json({
     data: result.task,
     ...(result.momentum?.milestoneCount != null ? { milestone: result.momentum.milestoneCount } : {}),
@@ -977,6 +993,12 @@ webRouter.patch("/api/tasks/:id/status", async (c) => {
       },
     });
   }
+  publishTeamTaskUpdated({
+    teamId: result.task.teamId,
+    taskId: id,
+    reason: "details",
+    actorUserId: userId,
+  });
   return c.json({
     data: { id: result.task.id, title: result.task.title, status: result.task.status },
     ...(result.momentum?.milestoneCount != null ? { milestone: result.momentum.milestoneCount } : {}),
@@ -1012,6 +1034,14 @@ webRouter.delete("/api/tasks/:id", async (c) => {
   const { deleteStorageObjectByUrlIfOwned } = await import("../lib/firebase-storage");
   await deleteTaskWithScope(prisma, task, scope);
   await deleteStorageObjectByUrlIfOwned(task.attachmentUrl);
+  if (task.teamId) {
+    publishTeamTaskUpdated({
+      teamId: task.teamId,
+      taskId: id,
+      reason: "deleted",
+      actorUserId: userId,
+    });
+  }
   return c.json({ data: { ok: true } });
 });
 
@@ -1130,12 +1160,13 @@ webRouter.post("/api/teams/:id/events", async (c) => {
       description: description || null,
       startDate: start,
       endDate: end,
-      allDay: createPolicy.isVideoMeeting ? false : allDay !== undefined ? allDay : true,
+      allDay: false,
       color: color || "#4361EE",
       isHidden: createPolicy.isHidden,
       isVideoMeeting: createPolicy.isVideoMeeting,
       approvalStatus: createPolicy.approvalStatus,
       reminderMinutes: reminderMinutesStr,
+      image: typeof body.image === "string" && body.image.trim() ? body.image.trim() : null,
       teamId: id,
       createdById: userId,
     },
@@ -1208,8 +1239,12 @@ webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
   if (description !== undefined) updateData.description = description || null;
   if (startDate !== undefined) updateData.startDate = new Date(startDate);
   if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
-  if (allDay !== undefined) updateData.allDay = allDay;
+  if (allDay !== undefined) updateData.allDay = false;
   if (color !== undefined) updateData.color = color;
+  if (body.image !== undefined) {
+    updateData.image =
+      typeof body.image === "string" && body.image.trim() ? body.image.trim() : null;
+  }
   if (body.isHidden !== undefined) updateData.isHidden = body.isHidden;
   if (updatePolicy.resetApproval) updateData.approvalStatus = updatePolicy.resetApproval;
   if (bodyRec.isVideoMeeting !== undefined || bodyRec.videoMeeting !== undefined || updatePolicy.forbidVideo) {

@@ -97,6 +97,7 @@ import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-sch
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { ensureTeamTimezoneSchema } from "./lib/ensure-team-timezone-schema";
 import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
+import { ensureCalendarEventImageSchema } from "./lib/ensure-calendar-event-image-schema";
 import { ensureCalendarOneOnOneSchema } from "./lib/ensure-calendar-one-on-one-schema";
 import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards-schema";
 import { ensureGoLoginSchema } from "./lib/ensure-go-login-schema";
@@ -212,6 +213,7 @@ const startupSchemaReady = Promise.all([
   ensureDevelopmentPlanSchema(prisma),
   // Check-in history and follow-up task relations are read in every environment.
   ensureOneOnOneSchema(prisma),
+  ensureCalendarEventImageSchema(prisma),
   // Open check-ins record without a template, so templateId must allow null.
   ensureOpenCheckInSchema(prisma),
   // Recorded audio is kept for seven days and needs its retention columns.

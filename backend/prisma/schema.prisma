@@ -1881,6 +1881,7 @@ model CalendarEvent {
   endDate              DateTime?
   allDay               Boolean   @default(true)
   color                String    @default("#4361EE")
+  image                String?
   isHidden             Boolean   @default(false)
   isVideoMeeting       Boolean   @default(false)
   isOneOnOne           Boolean   @default(false)

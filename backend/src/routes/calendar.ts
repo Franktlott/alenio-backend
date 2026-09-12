@@ -250,6 +250,7 @@ const createEventSchema = z.object({
   oneOnOneTemplateId: z.string().optional(),
   reminderMinutes: z.array(z.number()).optional().default([]),
   assigneeIds: z.array(z.string()).optional().default([]),
+  image: z.string().url().nullable().optional(),
 });
 calendarRouter.post(
   "/:teamId/events",
@@ -328,7 +329,7 @@ calendarRouter.post(
         description: body.description,
         startDate: start,
         endDate: end,
-        allDay: isOneOnOne || isVideoMeeting ? false : (body.allDay ?? true),
+        allDay: false,
         color: body.color ?? (isOneOnOne ? "#7C3AED" : "#4361EE"),
         isHidden: isOneOnOne ? true : createPolicy.isHidden,
         isVideoMeeting,
@@ -337,6 +338,7 @@ calendarRouter.post(
         oneOnOneTemplateId: isOneOnOne ? body.oneOnOneTemplateId ?? null : null,
         approvalStatus: createPolicy.approvalStatus,
         reminderMinutes: JSON.stringify({ reminderMinutes: reminderMins, assigneeIds }),
+        image: body.image ?? null,
         teamId,
         createdById: user.id,
       },
@@ -406,6 +408,7 @@ const updateEventSchema = z.object({
   oneOnOneTemplateId: z.string().nullable().optional(),
   reminderMinutes: z.array(z.number()).optional(),
   assigneeIds: z.array(z.string()).optional(),
+  image: z.string().url().nullable().optional(),
 });
 
 // PATCH /api/teams/:teamId/events/:eventId — creator or owner/leader
@@ -500,7 +503,7 @@ calendarRouter.patch(
         ...(body.startDate !== undefined ? { startDate: nextStart } : {}),
         ...(body.endDate !== undefined ? { endDate: nextEnd } : {}),
         ...(body.allDay !== undefined
-          ? { allDay: nextIsVideoMeeting || nextIsOneOnOne ? false : body.allDay }
+          ? { allDay: false }
           : nextIsVideoMeeting || nextIsOneOnOne
             ? { allDay: false }
             : {}),
@@ -521,6 +524,7 @@ calendarRouter.patch(
           reminderMinutes: nextReminderMinutes,
           assigneeIds: mergedAssigneeIds,
         }),
+        ...(body.image !== undefined ? { image: body.image } : {}),
       },
       include: {
         createdBy: { select: { id: true, name: true, image: true } },
