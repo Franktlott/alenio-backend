@@ -44,7 +44,7 @@ describe("Momentum credit eligibility", () => {
     ).toEqual([]);
   });
 
-  test("joint tasks credit only assignees satisfying every own subtask", () => {
+  test("joint tasks credit assignees who completed any subtask", () => {
     expect(
       eligibleMomentumUserIds({
         dueAt,
@@ -52,11 +52,11 @@ describe("Momentum credit eligibility", () => {
         isJoint: true,
         assignedUserIds: ["a", "b", "c"],
         subtaskCompletionUserIds: [
-          ["a", "b"],
-          ["a", "c"],
+          ["a"],
+          ["b"],
         ],
       }),
-    ).toEqual(["a"]);
+    ).toEqual(["a", "b"]);
   });
 
   test("joint tasks without subtasks credit only the assigned completing actor", () => {
@@ -69,6 +69,18 @@ describe("Momentum credit eligibility", () => {
         subtaskCompletionUserIds: [],
       }),
     ).toEqual(["a"]);
+  });
+
+  test("joint tasks credit the closer even if a teammate finished the subtasks", () => {
+    expect(
+      eligibleMomentumUserIds({
+        dueAt,
+        actorUserId: "a",
+        isJoint: true,
+        assignedUserIds: ["a", "b"],
+        subtaskCompletionUserIds: [["b"], ["b"]],
+      }),
+    ).toEqual(["a", "b"]);
   });
 });
 

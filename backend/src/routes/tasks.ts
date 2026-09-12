@@ -53,6 +53,7 @@ import {
   taskVisibilityWhere,
   workspaceTaskWhere,
 } from "../lib/task-policy";
+import { isSubtaskSharedComplete } from "../lib/subtask-completion";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -1253,23 +1254,19 @@ tasksRouter.patch("/:taskId", async (c) => {
   }
 
   if (status === "done") {
-    if (task.isJoint) {
-      // For joint tasks, check if the current user has completed all subtasks via SubtaskCompletion
-      const subtasks = await prisma.subtask.findMany({ where: { taskId }, select: { id: true } });
-      const completedByMe = await prisma.subtaskCompletion.count({
-        where: { subtaskId: { in: subtasks.map((s) => s.id) }, userId: user.id },
-      });
-      const remaining = subtasks.length - completedByMe;
-      if (remaining > 0) {
-        return c.json({ error: { message: `Complete all subtasks first (${remaining} remaining)`, code: "SUBTASKS_INCOMPLETE" } }, 400);
-      }
-    } else {
-      const incompleteSubtasks = await prisma.subtask.count({
-        where: { taskId, completed: false },
-      });
-      if (incompleteSubtasks > 0) {
-        return c.json({ error: { message: `Complete all subtasks first (${incompleteSubtasks} remaining)`, code: "SUBTASKS_INCOMPLETE" } }, 400);
-      }
+    const subtasks = await prisma.subtask.findMany({
+      where: { taskId },
+      select: { completed: true, _count: { select: { completions: true } } },
+    });
+    const hasIncomplete = subtasks.some(
+      (subtask) =>
+        !isSubtaskSharedComplete({
+          completed: subtask.completed,
+          completionCount: subtask._count.completions,
+        }),
+    );
+    if (hasIncomplete) {
+      return c.json({ error: { message: "Complete all subtasks first", code: "SUBTASKS_INCOMPLETE" } }, 400);
     }
   }
 
@@ -1588,32 +1585,38 @@ tasksRouter.patch("/:taskId/subtasks/:subtaskId", async (c) => {
   }
 
   const body = await c.req.json();
+  const title = typeof body.title === "string" ? body.title.trim() : undefined;
+  const completed =
+    typeof body.completed === "boolean" ? body.completed : undefined;
 
-  // For joint tasks toggling completion: track per-user via SubtaskCompletion
-  if (task.isJoint && body.completed !== undefined) {
-    if (body.completed) {
-      await prisma.subtaskCompletion.upsert({
-        where: { subtaskId_userId: { subtaskId, userId: user.id } },
-        create: { subtaskId, userId: user.id },
-        update: {},
+  const subtask = await prisma.$transaction(async (tx) => {
+    if (completed === true && task.isJoint) {
+      const existing = await tx.subtaskCompletion.findFirst({
+        where: { subtaskId },
+        orderBy: { completedAt: "asc" },
       });
-    } else {
-      await prisma.subtaskCompletion.deleteMany({ where: { subtaskId, userId: user.id } });
+      if (!existing || existing.userId === user.id) {
+        await tx.subtaskCompletion.upsert({
+          where: { subtaskId_userId: { subtaskId, userId: user.id } },
+          create: { subtaskId, userId: user.id },
+          update: {},
+        });
+        await tx.subtaskCompletion.deleteMany({
+          where: { subtaskId, userId: { not: user.id } },
+        });
+      }
     }
-    const subtask = await prisma.subtask.findUnique({
+    if (completed === false) {
+      await tx.subtaskCompletion.deleteMany({ where: { subtaskId } });
+    }
+    return tx.subtask.update({
       where: { id: subtaskId },
+      data: {
+        ...(title !== undefined ? { title } : {}),
+        ...(completed !== undefined ? { completed } : {}),
+      },
       include: subtasksInclude.include,
     });
-    return c.json({ data: subtask });
-  }
-
-  const subtask = await prisma.subtask.update({
-    where: { id: subtaskId },
-    data: {
-      ...(body.title !== undefined ? { title: body.title.trim() } : {}),
-      ...(body.completed !== undefined ? { completed: body.completed } : {}),
-    },
-    include: subtasksInclude.include,
   });
   return c.json({ data: subtask });
 });

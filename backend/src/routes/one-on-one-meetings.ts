@@ -38,6 +38,7 @@ import {
 } from "../lib/momentum-service";
 import { logActivity } from "../lib/activity";
 import { workspaceTaskClassificationForRole } from "../lib/task-policy";
+import { deleteCheckInFollowUpTasks } from "../lib/check-in-follow-up-tasks";
 import { publishUserInboxUpdated } from "../lib/realtime-hub";
 import { deleteAudioForPublishedMeeting } from "../lib/check-in-recording-service";
 import {
@@ -1285,7 +1286,10 @@ oneOnOneMeetingsRouter.delete("/:memberUserId/one-on-ones/:meetingId", async (c)
   }
 
   try {
-    await prisma.oneOnOneMeeting.delete({ where: { id: meetingId } });
+    await prisma.$transaction(async (tx) => {
+      await deleteCheckInFollowUpTasks(tx, meetingId);
+      await tx.oneOnOneMeeting.delete({ where: { id: meetingId } });
+    });
     await publishTeamCheckInsUpdated(teamId);
     return c.json({ data: { deleted: true } });
   } catch (err) {

@@ -22,5 +22,8 @@ describe("ensureOneOnOneSchema video provenance", () => {
     expect(sql).toContain(
       'REFERENCES "CalendarEvent"("id") ON DELETE SET NULL ON UPDATE CASCADE',
     );
+    expect(sql).toContain(
+      'REFERENCES "public"."OneOnOneMeeting"("id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
   });
 });

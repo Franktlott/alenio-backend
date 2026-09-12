@@ -807,7 +807,7 @@ model Task {
   notes          TaskNote[]
 
   oneOnOneMeetingId String?
-  oneOnOneMeeting   OneOnOneMeeting? @relation(fields: [oneOnOneMeetingId], references: [id], onDelete: SetNull)
+  oneOnOneMeeting   OneOnOneMeeting? @relation(fields: [oneOnOneMeetingId], references: [id], onDelete: Cascade)
 
   recurrenceSeriesId String?
   recurrenceSeries   RecurrenceSeries? @relation(fields: [recurrenceSeriesId], references: [id], onDelete: Cascade)

@@ -34,11 +34,15 @@ export function eligibleMomentumUserIds(input: {
   if (input.subtaskCompletionUserIds.length === 0) {
     return assigned.includes(input.actorUserId) ? [input.actorUserId] : [];
   }
-  return assigned.filter((userId) =>
-    input.subtaskCompletionUserIds.every((completionUserIds) =>
+  const credited = new Set<string>();
+  if (assigned.includes(input.actorUserId)) credited.add(input.actorUserId);
+  for (const userId of assigned) {
+    const contributed = input.subtaskCompletionUserIds.some((completionUserIds) =>
       completionUserIds.includes(userId),
-    ),
-  );
+    );
+    if (contributed) credited.add(userId);
+  }
+  return assigned.filter((userId) => credited.has(userId));
 }
 
 function isMilestone(value: number): boolean {

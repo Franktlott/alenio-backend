@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { purgeOrphanCheckInFollowUpTasks } from "./check-in-follow-up-tasks";
 
 /**
  * Creates 1:1 tables if missing (idempotent). Works without prisma CLI at runtime.
@@ -28,6 +29,14 @@ export async function ensureOneOnOneSchema(prisma: PrismaClient): Promise<void> 
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "Task_oneOnOneMeetingId_idx"
         ON "public"."Task"("oneOnOneMeetingId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "public"."Task" DROP CONSTRAINT IF EXISTS "Task_oneOnOneMeetingId_fkey";
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "public"."Task"
+        ADD CONSTRAINT "Task_oneOnOneMeetingId_fkey"
+        FOREIGN KEY ("oneOnOneMeetingId") REFERENCES "public"."OneOnOneMeeting"("id") ON DELETE CASCADE ON UPDATE CASCADE;
     `);
 
     await prisma.$executeRawUnsafe(`
@@ -182,8 +191,6 @@ export async function ensureOneOnOneSchema(prisma: PrismaClient): Promise<void> 
       WHERE "status" = 'published' AND "publishedAt" IS NULL;
     `);
 
-    console.log("[startup] 1:1 database tables ensured");
-
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
         ALTER TABLE "Task" ADD COLUMN "oneOnOneMeetingId" TEXT;
@@ -197,12 +204,21 @@ export async function ensureOneOnOneSchema(prisma: PrismaClient): Promise<void> 
 
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
+        ALTER TABLE "Task" DROP CONSTRAINT IF EXISTS "Task_oneOnOneMeetingId_fkey";
         ALTER TABLE "Task"
           ADD CONSTRAINT "Task_oneOnOneMeetingId_fkey"
-          FOREIGN KEY ("oneOnOneMeetingId") REFERENCES "OneOnOneMeeting"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+          FOREIGN KEY ("oneOnOneMeetingId") REFERENCES "OneOnOneMeeting"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);
+
+    try {
+      await purgeOrphanCheckInFollowUpTasks(prisma);
+    } catch (err) {
+      console.error("[startup] purge orphan check-in follow-ups failed:", err);
+    }
+
+    console.log("[startup] 1:1 database tables ensured");
   } catch (err) {
     console.error("[startup] ensureOneOnOneSchema failed:", err);
   }
