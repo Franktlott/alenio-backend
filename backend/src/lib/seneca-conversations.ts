@@ -5,7 +5,23 @@ import { resolveSenecaScope, SENECA_CONVERSATION_HISTORY_LIMIT, type ResolvedSen
 
 export const SENECA_CONVERSATION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
-export type SenecaCapabilityMode = "personal" | "member" | "manager";
+export type SenecaTurnCapabilityMode = "personal" | "member" | "manager";
+export type SenecaCapabilityMode = SenecaTurnCapabilityMode | "unified";
+
+export const SENECA_UNIFIED_CONTEXT_TYPE = "unified";
+export const SENECA_UNIFIED_CAPABILITY_MODE = "unified" as const;
+
+export function isUnifiedConversation(row: {
+  contextType: string;
+  teamId: string | null;
+  capabilityMode: string;
+}): boolean {
+  return (
+    row.contextType === SENECA_UNIFIED_CONTEXT_TYPE &&
+    row.teamId === null &&
+    row.capabilityMode === SENECA_UNIFIED_CAPABILITY_MODE
+  );
+}
 
 export type SenecaConversationAccess =
   | {
@@ -34,7 +50,7 @@ export function senecaConversationPreview(text: string): string {
   return compact.length > 160 ? `${compact.slice(0, 157).trimEnd()}…` : compact;
 }
 
-export function capabilityModeForScope(scope: ResolvedSenecaScope): SenecaCapabilityMode {
+export function capabilityModeForScope(scope: ResolvedSenecaScope): SenecaTurnCapabilityMode {
   if (scope.type === "personal") return "personal";
   return scope.capabilities.canUseManagerContext ? "manager" : "member";
 }
@@ -52,6 +68,50 @@ export function contextForConversation(row: {
   return null;
 }
 
+export function contextFromTurnMetadata(metadata: unknown): SenecaContextRef | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+  const resolved = (metadata as { resolvedContext?: unknown }).resolvedContext;
+  if (!resolved || typeof resolved !== "object" || Array.isArray(resolved)) {
+    return null;
+  }
+  const record = resolved as { type?: unknown; workspaceId?: unknown };
+  if (record.type === "personal") return { type: "personal" };
+  if (record.type === "workspace" && typeof record.workspaceId === "string" && record.workspaceId.trim()) {
+    return { type: "workspace", workspaceId: record.workspaceId };
+  }
+  return null;
+}
+
+export function lastResolvedContextFromMessages(
+  messages: Array<{ metadata: unknown }>,
+): SenecaContextRef | null {
+  for (const message of messages) {
+    const context = contextFromTurnMetadata(message.metadata);
+    if (context) return context;
+  }
+  return null;
+}
+
+export function withResolvedScopeMetadata(
+  metadata: Prisma.InputJsonValue | undefined,
+  context: SenecaContextRef,
+  capabilityMode: SenecaTurnCapabilityMode,
+): Prisma.InputJsonValue {
+  const base =
+    metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : {};
+  return JSON.parse(
+    JSON.stringify({
+      ...base,
+      resolvedContext: context,
+      turnCapabilityMode: capabilityMode,
+    }),
+  ) as Prisma.InputJsonValue;
+}
+
 export async function resolveConversationAccess(
   userId: string,
   row: {
@@ -64,6 +124,13 @@ export async function resolveConversationAccess(
 ): Promise<SenecaConversationAccess> {
   if (row.userId !== userId) {
     return { ok: false, status: 404, code: "NOT_FOUND", message: "Conversation not found" };
+  }
+  if (isUnifiedConversation(row)) {
+    return {
+      ok: true,
+      scope: { type: "personal", userId },
+      capabilityMode: SENECA_UNIFIED_CAPABILITY_MODE,
+    };
   }
   const context = contextForConversation(row);
   if (!context) {
@@ -109,7 +176,7 @@ export async function saveSenecaConversationTurn(
 ): Promise<string> {
   const now = input.now ?? new Date();
   const expiresAt = senecaConversationExpiresAt(now);
-  const teamId = input.context.type === "workspace" ? input.context.workspaceId : null;
+  const turnTeamId = input.context.type === "workspace" ? input.context.workspaceId : null;
   let conversationId = input.conversationId;
 
   if (conversationId) {
@@ -122,11 +189,15 @@ export async function saveSenecaConversationTurn(
         capabilityMode: true,
       },
     });
+    if (!existing) {
+      throw new SenecaConversationError("Conversation not found", "NOT_FOUND", 404);
+    }
+    const unified = isUnifiedConversation(existing);
     if (
-      !existing ||
-      existing.teamId !== teamId ||
-      existing.contextType !== input.context.type ||
-      existing.capabilityMode !== input.capabilityMode
+      !unified &&
+      (existing.teamId !== turnTeamId ||
+        existing.contextType !== input.context.type ||
+        existing.capabilityMode !== input.capabilityMode)
     ) {
       throw new SenecaConversationError("Conversation not found", "NOT_FOUND", 404);
     }
@@ -134,9 +205,9 @@ export async function saveSenecaConversationTurn(
     const created = await db.senecaConversation.create({
       data: {
         userId: input.userId,
-        teamId,
-        contextType: input.context.type,
-        capabilityMode: input.capabilityMode,
+        teamId: null,
+        contextType: SENECA_UNIFIED_CONTEXT_TYPE,
+        capabilityMode: SENECA_UNIFIED_CAPABILITY_MODE,
         title: senecaConversationTitle(input.userText),
         preview: senecaConversationPreview(input.assistantText),
         expiresAt,
@@ -208,9 +279,33 @@ export class SenecaConversationError extends Error {
 
 type SenecaConversationContinuationExpected = {
   userId: string;
-  context: SenecaContextRef;
-  capabilityMode: SenecaCapabilityMode;
+  context?: SenecaContextRef;
+  capabilityMode?: SenecaCapabilityMode;
+  unified?: boolean;
 };
+
+function continuationWhere(
+  conversationId: string,
+  expected: SenecaConversationContinuationExpected,
+) {
+  if (expected.unified) {
+    return {
+      id: conversationId,
+      userId: expected.userId,
+      expiresAt: { gt: new Date() },
+    };
+  }
+  const teamId =
+    expected.context?.type === "workspace" ? expected.context.workspaceId : null;
+  return {
+    id: conversationId,
+    userId: expected.userId,
+    contextType: expected.context?.type,
+    teamId,
+    capabilityMode: expected.capabilityMode,
+    expiresAt: { gt: new Date() },
+  };
+}
 
 export async function loadSenecaConversationHistory(
   conversationId: string | undefined,
@@ -219,17 +314,8 @@ export async function loadSenecaConversationHistory(
   db: PrismaClient = prisma,
 ): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
   if (!conversationId) return clientMessages;
-  const teamId =
-    expected.context.type === "workspace" ? expected.context.workspaceId : null;
   const row = await db.senecaConversation.findFirst({
-    where: {
-      id: conversationId,
-      userId: expected.userId,
-      contextType: expected.context.type,
-      teamId,
-      capabilityMode: expected.capabilityMode,
-      expiresAt: { gt: new Date() },
-    },
+    where: continuationWhere(conversationId, expected),
     select: {
       messages: {
         orderBy: { order: "desc" },
@@ -251,23 +337,62 @@ export async function loadSenecaConversationHistory(
     );
 }
 
+export async function loadSenecaConversationForAsk(
+  conversationId: string | undefined,
+  userId: string,
+  db: PrismaClient = prisma,
+): Promise<{
+  id: string;
+  contextType: string;
+  teamId: string | null;
+  capabilityMode: string;
+  unified: boolean;
+  lastContext: SenecaContextRef | null;
+} | null> {
+  if (!conversationId) return null;
+  const row = await db.senecaConversation.findFirst({
+    where: {
+      id: conversationId,
+      userId,
+      expiresAt: { gt: new Date() },
+    },
+    select: {
+      id: true,
+      contextType: true,
+      teamId: true,
+      capabilityMode: true,
+      messages: {
+        orderBy: { order: "desc" },
+        take: SENECA_CONVERSATION_HISTORY_LIMIT,
+        select: { metadata: true },
+      },
+    },
+  });
+  if (!row) {
+    throw new SenecaConversationError("Conversation not found", "NOT_FOUND", 404);
+  }
+  const unified = isUnifiedConversation(row);
+  const lastContext = unified
+    ? lastResolvedContextFromMessages(row.messages)
+    : contextForConversation(row);
+  return {
+    id: row.id,
+    contextType: row.contextType,
+    teamId: row.teamId,
+    capabilityMode: row.capabilityMode,
+    unified,
+    lastContext,
+  };
+}
+
 export async function assertSenecaConversationContinuation(
   conversationId: string | undefined,
   expected: SenecaConversationContinuationExpected,
   db: PrismaClient = prisma,
 ): Promise<void> {
   if (!conversationId) return;
-  const teamId =
-    expected.context.type === "workspace" ? expected.context.workspaceId : null;
   const row = await db.senecaConversation.findFirst({
-    where: {
-      id: conversationId,
-      userId: expected.userId,
-      contextType: expected.context.type,
-      teamId,
-      capabilityMode: expected.capabilityMode,
-      expiresAt: { gt: new Date() },
-    },
+    where: continuationWhere(conversationId, expected),
     select: { id: true },
   });
   if (!row) {

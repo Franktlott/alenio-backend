@@ -5,15 +5,13 @@ import { auth } from "../auth";
 import { askMemberWorkspaceSeneca, askPersonalSeneca } from "../lib/seneca-ask-service";
 import {
   senecaAskBodySchema,
+  senecaContextRefSchema,
   resolveSenecaQuestion,
-  resolveSenecaScope,
-  workspaceHasSenecaEntitlement,
+  listSenecaContextOptions,
   type SenecaValidatedAsk,
 } from "../lib/seneca-scope";
-import { getWorkspaceAccess } from "../lib/workspace-access";
 import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
-import type { SenecaContextOption } from "../types";
 import { handleManagerWorkspaceAsk } from "./seneca-team";
 import {
   editSenecaImage,
@@ -22,12 +20,15 @@ import {
   SenecaImageError,
 } from "../lib/seneca-image-service";
 import {
-  assertSenecaConversationContinuation,
-  capabilityModeForScope,
   loadSenecaConversationHistory,
   saveSenecaConversationTurn,
   SenecaConversationError,
+  withResolvedScopeMetadata,
 } from "../lib/seneca-conversations";
+import {
+  resolveSenecaRequestScope,
+  resolvedContextPayload,
+} from "../lib/seneca-request-context";
 import {
   prepareSenecaAttachment,
   senecaAttachmentSchema,
@@ -49,7 +50,7 @@ senecaUnifiedRouter.use("*", authGuard);
 
 const senecaImageBodySchema = z
   .object({
-    context: senecaAskBodySchema.shape.context,
+    context: senecaContextRefSchema.optional(),
     prompt: z
       .string()
       .trim()
@@ -62,7 +63,7 @@ const senecaImageBodySchema = z
 
 export const senecaImageEditBodySchema = z
   .object({
-    context: senecaAskBodySchema.shape.context,
+    context: senecaContextRefSchema.optional(),
     prompt: z.string().trim().min(1, "Describe the edit you want").max(1000),
     attachment: senecaAttachmentSchema.extend({
       mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
@@ -71,30 +72,26 @@ export const senecaImageEditBodySchema = z
   })
   .strict();
 
+function continuationExpected(
+  userId: string,
+  request: {
+    unified: boolean;
+    context: { type: "personal" } | { type: "workspace"; workspaceId: string };
+    capabilityMode: "personal" | "member" | "manager";
+  },
+) {
+  return request.unified
+    ? { userId, unified: true as const }
+    : {
+        userId,
+        context: request.context,
+        capabilityMode: request.capabilityMode,
+      };
+}
+
 senecaUnifiedRouter.get("/contexts", async (c) => {
   const user = c.get("user")!;
-  const memberships = await prisma.teamMember.findMany({
-    where: { userId: user.id },
-    select: {
-      role: true,
-      teamId: true,
-      team: { select: { name: true } },
-    },
-    orderBy: { joinedAt: "asc" },
-  });
-  const access = await Promise.all(
-    memberships.map((membership) => getWorkspaceAccess(membership.teamId)),
-  );
-  const options: SenecaContextOption[] = [
-    { type: "personal", name: "Personal", available: true },
-    ...memberships.map((membership, index) => ({
-      type: "workspace" as const,
-      workspaceId: membership.teamId,
-      name: membership.team.name,
-      role: membership.role,
-      available: workspaceHasSenecaEntitlement(access[index] ?? { hasTeamFeatures: false }),
-    })),
-  ];
+  const options = await listSenecaContextOptions(user.id);
   return c.json({ data: options });
 });
 
@@ -104,27 +101,38 @@ senecaUnifiedRouter.post(
   async (c) => {
     const user = c.get("user")!;
     const body = c.req.valid("json");
-    const resolution = await resolveSenecaScope(user.id, body.context);
-    if (!resolution.ok) {
-      return c.json(
-        {
-          error: {
-            message: resolution.message,
-            code: resolution.code,
-          },
-        },
-        resolution.status,
-      );
-    }
-
     try {
-      const scope = resolution.scope;
-      const capabilityMode = capabilityModeForScope(scope);
-      await assertSenecaConversationContinuation(body.conversationId, {
+      const request = await resolveSenecaRequestScope({
         userId: user.id,
-        context: body.context,
-        capabilityMode,
+        question: body.prompt,
+        conversationId: body.conversationId,
+        hint: body.context,
+        preferLastOnClarify: true,
       });
+      if (!request.ok) {
+        return c.json(
+          { error: { message: request.message, code: request.code } },
+          request.status,
+        );
+      }
+      if (request.kind === "clarify") {
+        return c.json(
+          {
+            error: {
+              message: request.prompt,
+              code: "CONTEXT_REQUIRED",
+              clarify: { prompt: request.prompt, options: request.clarifyOptions },
+            },
+          },
+          400,
+        );
+      }
+      const scope = request.scope;
+      await loadSenecaConversationHistory(
+        body.conversationId,
+        continuationExpected(user.id, request),
+        [],
+      );
       const data = await generateSenecaImage({
         userId: user.id,
         ownerType: scope.type === "workspace" ? "WORKSPACE" : "PERSONAL",
@@ -135,15 +143,29 @@ senecaUnifiedRouter.post(
       const conversationId = await saveSenecaConversationTurn({
         conversationId: body.conversationId,
         userId: user.id,
-        context: body.context,
-        capabilityMode,
+        context: request.context,
+        capabilityMode: request.capabilityMode,
         userText: body.prompt,
         assistantText: "Generated an image from your prompt.",
-        userMetadata: { kind: "image_prompt", size: body.size ?? "1024x1024" },
-        assistantMetadata: JSON.parse(JSON.stringify({ kind: "image", ...data })),
+        userMetadata: withResolvedScopeMetadata(
+          { kind: "image_prompt", size: body.size ?? "1024x1024" },
+          request.context,
+          request.capabilityMode,
+        ),
+        assistantMetadata: withResolvedScopeMetadata(
+          JSON.parse(JSON.stringify({ kind: "image", ...data })),
+          request.context,
+          request.capabilityMode,
+        ),
         generationId: data.generationId,
       });
-      return c.json({ data: { ...data, conversationId } });
+      return c.json({
+        data: {
+          ...data,
+          conversationId,
+          resolvedContext: resolvedContextPayload(request.context, request.name),
+        },
+      });
     } catch (error) {
       if (error instanceof SenecaConversationError) {
         return c.json(
@@ -188,27 +210,38 @@ senecaUnifiedRouter.post(
   async (c) => {
     const user = c.get("user")!;
     const body = c.req.valid("json");
-    const resolution = await resolveSenecaScope(user.id, body.context);
-    if (!resolution.ok) {
-      return c.json(
-        {
-          error: {
-            message: resolution.message,
-            code: resolution.code,
-          },
-        },
-        resolution.status,
-      );
-    }
-
     try {
-      const scope = resolution.scope;
-      const capabilityMode = capabilityModeForScope(scope);
-      await assertSenecaConversationContinuation(body.conversationId, {
+      const request = await resolveSenecaRequestScope({
         userId: user.id,
-        context: body.context,
-        capabilityMode,
+        question: body.prompt,
+        conversationId: body.conversationId,
+        hint: body.context,
+        preferLastOnClarify: true,
       });
+      if (!request.ok) {
+        return c.json(
+          { error: { message: request.message, code: request.code } },
+          request.status,
+        );
+      }
+      if (request.kind === "clarify") {
+        return c.json(
+          {
+            error: {
+              message: request.prompt,
+              code: "CONTEXT_REQUIRED",
+              clarify: { prompt: request.prompt, options: request.clarifyOptions },
+            },
+          },
+          400,
+        );
+      }
+      const scope = request.scope;
+      await loadSenecaConversationHistory(
+        body.conversationId,
+        continuationExpected(user.id, request),
+        [],
+      );
       const attachment = await prepareSenecaAttachment(body.attachment, user.id);
       const data = await editSenecaImage({
         userId: user.id,
@@ -220,23 +253,37 @@ senecaUnifiedRouter.post(
       const conversationId = await saveSenecaConversationTurn({
         conversationId: body.conversationId,
         userId: user.id,
-        context: body.context,
-        capabilityMode,
+        context: request.context,
+        capabilityMode: request.capabilityMode,
         userText: body.prompt,
         assistantText: "Edited the attached image from your instructions.",
-        userMetadata: JSON.parse(
-          JSON.stringify({
-            kind: "attachment",
-            operation: "image_edit",
-            attachment: attachment.metadata,
-          }),
+        userMetadata: withResolvedScopeMetadata(
+          JSON.parse(
+            JSON.stringify({
+              kind: "attachment",
+              operation: "image_edit",
+              attachment: attachment.metadata,
+            }),
+          ),
+          request.context,
+          request.capabilityMode,
         ),
-        assistantMetadata: JSON.parse(
-          JSON.stringify({ kind: "image", operation: "image_edit", ...data }),
+        assistantMetadata: withResolvedScopeMetadata(
+          JSON.parse(
+            JSON.stringify({ kind: "image", operation: "image_edit", ...data }),
+          ),
+          request.context,
+          request.capabilityMode,
         ),
         generationId: data.generationId,
       });
-      return c.json({ data: { ...data, conversationId } });
+      return c.json({
+        data: {
+          ...data,
+          conversationId,
+          resolvedContext: resolvedContextPayload(request.context, request.name),
+        },
+      });
     } catch (error) {
       if (error instanceof SenecaConversationError) {
         return c.json(
@@ -258,7 +305,12 @@ senecaUnifiedRouter.post(
       }
       if (error instanceof SenecaImageError) {
         return c.json(
-          { error: { message: error.message, code: error.code } },
+          {
+            error: {
+              message: error.message,
+              code: error.code,
+            },
+          },
           error.status,
         );
       }
@@ -282,26 +334,15 @@ senecaUnifiedRouter.post(
   async (c) => {
     const user = c.get("user")!;
     const body = c.req.valid("json") as SenecaValidatedAsk;
-    const resolution = await resolveSenecaScope(user.id, body.context);
-    if (!resolution.ok) {
-      return c.json(
-        { error: { message: resolution.message, code: resolution.code } },
-        resolution.status,
-      );
-    }
-    const capabilityMode = capabilityModeForScope(resolution.scope);
     const question = resolveSenecaQuestion(body);
-    let conversationMessages = body.messages;
+    let request: Awaited<ReturnType<typeof resolveSenecaRequestScope>>;
     try {
-      conversationMessages = await loadSenecaConversationHistory(
-        body.conversationId,
-        {
-          userId: user.id,
-          context: body.context,
-          capabilityMode,
-        },
-        body.messages,
-      );
+      request = await resolveSenecaRequestScope({
+        userId: user.id,
+        question,
+        conversationId: body.conversationId,
+        hint: body.context,
+      });
     } catch (error) {
       if (error instanceof SenecaConversationError) {
         return c.json(
@@ -310,6 +351,78 @@ senecaUnifiedRouter.post(
         );
       }
       throw error;
+    }
+    if (!request.ok) {
+      return c.json(
+        { error: { message: request.message, code: request.code } },
+        request.status,
+      );
+    }
+
+    let conversationMessages = body.messages;
+    try {
+      if (request.kind === "clarify") {
+        conversationMessages = await loadSenecaConversationHistory(
+          body.conversationId,
+          { userId: user.id, unified: true },
+          body.messages,
+        );
+      } else {
+        conversationMessages = await loadSenecaConversationHistory(
+          body.conversationId,
+          continuationExpected(user.id, request),
+          body.messages,
+        );
+      }
+    } catch (error) {
+      if (error instanceof SenecaConversationError) {
+        return c.json(
+          { error: { message: error.message, code: error.code } },
+          error.status,
+        );
+      }
+      throw error;
+    }
+
+    if (request.kind === "clarify") {
+      try {
+        const conversationId = await saveSenecaConversationTurn({
+          conversationId: body.conversationId,
+          userId: user.id,
+          context: { type: "personal" },
+          capabilityMode: "personal",
+          userText: question,
+          assistantText: request.prompt,
+          assistantMetadata: {
+            kind: "clarify",
+            options: request.clarifyOptions,
+          },
+        });
+        return c.json({
+          data: {
+            available: true,
+            message: request.prompt,
+            insights: [],
+            suggestedActions: [],
+            planOneOnOne: null,
+            cancelOneOnOne: null,
+            createTask: null,
+            conversationId,
+            clarify: {
+              prompt: request.prompt,
+              options: request.clarifyOptions,
+            },
+          },
+        });
+      } catch (error) {
+        if (error instanceof SenecaConversationError) {
+          return c.json(
+            { error: { message: error.message, code: error.code } },
+            error.status,
+          );
+        }
+        throw error;
+      }
     }
 
     let attachment: PreparedSenecaAttachment | undefined;
@@ -341,16 +454,21 @@ senecaUnifiedRouter.post(
         throw error;
       }
     }
-    const userMetadata = attachment
-      ? JSON.parse(
-          JSON.stringify({ kind: "attachment", attachment: attachment.metadata }),
-        )
-      : undefined;
+    const userMetadata = withResolvedScopeMetadata(
+      attachment
+        ? JSON.parse(
+            JSON.stringify({ kind: "attachment", attachment: attachment.metadata }),
+          )
+        : undefined,
+      request.context,
+      request.capabilityMode,
+    );
+    const resolvedContext = resolvedContextPayload(request.context, request.name);
 
-    if (resolution.scope.type === "personal") {
+    if (request.scope.type === "personal") {
       try {
         const data = await askPersonalSeneca(
-          resolution.scope.userId,
+          request.scope.userId,
           question,
           conversationMessages,
           prisma,
@@ -359,14 +477,18 @@ senecaUnifiedRouter.post(
         const conversationId = await saveSenecaConversationTurn({
           conversationId: body.conversationId,
           userId: user.id,
-          context: body.context,
-          capabilityMode,
+          context: request.context,
+          capabilityMode: request.capabilityMode,
           userText: question,
           assistantText: data.message,
           userMetadata,
-          assistantMetadata: JSON.parse(JSON.stringify({ kind: "ask", ...data })),
+          assistantMetadata: withResolvedScopeMetadata(
+            JSON.parse(JSON.stringify({ kind: "ask", ...data })),
+            request.context,
+            request.capabilityMode,
+          ),
         });
-        return c.json({ data: { ...data, conversationId } });
+        return c.json({ data: { ...data, conversationId, resolvedContext } });
       } catch (error) {
         if (error instanceof SenecaConversationError) {
           return c.json(
@@ -381,8 +503,8 @@ senecaUnifiedRouter.post(
       }
     }
 
-    const teamId = resolution.scope.workspaceId;
-    const capabilities = resolution.scope.capabilities;
+    const teamId = request.scope.workspaceId;
+    const capabilities = request.scope.capabilities;
     if (capabilities.canUseManagerContext) {
       const legacyBody = { question, messages: conversationMessages, attachment };
       const response = await handleManagerWorkspaceAsk({
@@ -410,15 +532,19 @@ senecaUnifiedRouter.post(
         const conversationId = await saveSenecaConversationTurn({
           conversationId: body.conversationId,
           userId: user.id,
-          context: body.context,
-          capabilityMode,
+          context: request.context,
+          capabilityMode: request.capabilityMode,
           userText: question,
           assistantText: data.message,
           userMetadata,
-          assistantMetadata: JSON.parse(JSON.stringify({ kind: "ask", ...data })),
+          assistantMetadata: withResolvedScopeMetadata(
+            JSON.parse(JSON.stringify({ kind: "ask", ...data })),
+            request.context,
+            request.capabilityMode,
+          ),
           generationId,
         });
-        return c.json({ data: { ...data, conversationId } });
+        return c.json({ data: { ...data, conversationId, resolvedContext } });
       } catch (error) {
         if (error instanceof SenecaConversationError) {
           return c.json(
@@ -443,17 +569,19 @@ senecaUnifiedRouter.post(
       const conversationId = await saveSenecaConversationTurn({
         conversationId: body.conversationId,
         userId: user.id,
-        context: body.context,
-        capabilityMode,
+        context: request.context,
+        capabilityMode: request.capabilityMode,
         userText: question,
         assistantText: responseData.message,
         userMetadata,
-        assistantMetadata: JSON.parse(
-          JSON.stringify({ kind: "ask", ...responseData }),
+        assistantMetadata: withResolvedScopeMetadata(
+          JSON.parse(JSON.stringify({ kind: "ask", ...responseData })),
+          request.context,
+          request.capabilityMode,
         ),
         generationId,
       });
-      return c.json({ data: { ...responseData, conversationId } });
+      return c.json({ data: { ...responseData, conversationId, resolvedContext } });
     } catch (error) {
       if (error instanceof SenecaConversationError) {
         return c.json(

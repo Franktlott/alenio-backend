@@ -2193,7 +2193,7 @@ model SenecaGenerationFeedback {
 }
 
 /// A private, seven-day Seneca chat owned by one authenticated user.
-/// contextType: personal | workspace. capabilityMode: personal | member | manager.
+/// contextType: personal | workspace | unified. capabilityMode: personal | member | manager | unified.
 model SenecaConversation {
   id             String                      @id @default(cuid())
   userId         String

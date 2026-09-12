@@ -45,8 +45,8 @@ describe("Seneca scope validation", () => {
     expect(validateSenecaContextRef({ type: "workspace" })).toBeNull();
   });
 
-  test("rejects implicit and ambiguous ask payloads", () => {
-    expect(senecaAskBodySchema.safeParse({ question: "Help me" }).success).toBe(false);
+  test("accepts asks without an explicit context", () => {
+    expect(senecaAskBodySchema.safeParse({ question: "Help me" }).success).toBe(true);
     expect(
       senecaAskBodySchema.safeParse({
         context: { type: "personal" },

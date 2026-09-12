@@ -15,6 +15,7 @@ import {
 } from "./seneca-personal-context";
 import { assembleSenecaSystemPrompt } from "./seneca-prompt-assembly";
 import { formatSenecaConversation } from "./seneca-scope";
+import { SENECA_MIXED_THREAD_RULES } from "./seneca-grounding";
 
 type BasicAskResult = SenecaAskResponse["data"] & { generationId?: string };
 
@@ -87,6 +88,8 @@ export async function askPersonalSeneca(
 - Give practical self-coaching, reflection, communication, or professional-development help.
 - If the profile does not ground a fact, say it is unknown.
 
+${SENECA_MIXED_THREAD_RULES}
+
 ${conversation}
 
 Return JSON with message (string), insights (array), and suggestedActions (array).`,
@@ -123,6 +126,8 @@ export async function askMemberWorkspaceSeneca(
 - Never provide team-wide metrics, rankings, comparisons, manager coaching proposals, task-assignment proposals, or check-in scheduling/cancellation proposals.
 - You may discuss only the requester's own profile, assigned tasks, goals, and published check-in metadata included in context.
 - If asked about anyone else or manager-only information, explain that it is unavailable in this scope.
+
+${SENECA_MIXED_THREAD_RULES}
 
 ${conversation}
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
-import type { SenecaContextRef } from "../types";
+import type { SenecaContextOption, SenecaContextRef } from "../types";
 import { prisma } from "../prisma";
 import { getWorkspaceAccess, type WorkspaceAccessState } from "./workspace-access";
 import {
@@ -22,15 +22,17 @@ export const senecaChatMessageSchema = z
   })
   .strict();
 
+export const senecaContextRefSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("personal") }).strict(),
+  z.object({
+    type: z.literal("workspace"),
+    workspaceId: z.string().trim().min(1),
+  }).strict(),
+]);
+
 export const senecaAskBodySchema = z
   .object({
-    context: z.discriminatedUnion("type", [
-      z.object({ type: z.literal("personal") }).strict(),
-      z.object({
-        type: z.literal("workspace"),
-        workspaceId: z.string().trim().min(1),
-      }).strict(),
-    ]),
+    context: senecaContextRefSchema.optional(),
     question: z.string().trim().max(1000).optional(),
     attachment: senecaAttachmentSchema.optional(),
     messages: z.array(senecaChatMessageSchema).max(40).optional().default([]),
@@ -143,8 +145,40 @@ export async function resolveSenecaScope(
 }
 
 export function validateSenecaContextRef(value: unknown): SenecaContextRef | null {
-  const parsed = senecaAskBodySchema.shape.context.safeParse(value);
+  const parsed = senecaContextRefSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
+}
+
+export async function listSenecaContextOptions(
+  userId: string,
+  db: PrismaClient = prisma,
+): Promise<SenecaContextOption[]> {
+  const memberships = await db.teamMember.findMany({
+    where: { userId },
+    select: {
+      role: true,
+      teamId: true,
+      team: { select: { name: true } },
+    },
+    orderBy: { joinedAt: "asc" },
+  });
+  const access = await Promise.all(
+    memberships.map((membership) =>
+      getWorkspaceAccess(membership.teamId, new Date(), db),
+    ),
+  );
+  return [
+    { type: "personal", name: "Personal", available: true },
+    ...memberships.map((membership, index) => ({
+      type: "workspace" as const,
+      workspaceId: membership.teamId,
+      name: membership.team.name,
+      role: membership.role,
+      available: workspaceHasSenecaEntitlement(
+        access[index] ?? { hasTeamFeatures: false },
+      ),
+    })),
+  ];
 }
 
 export function formatSenecaConversation(

@@ -22,7 +22,7 @@ senecaConversationsRouter.use("*", authGuard);
 
 const contextQuerySchema = z
   .object({
-    type: z.enum(["personal", "workspace"]),
+    type: z.enum(["personal", "workspace"]).optional(),
     workspaceId: z.string().trim().min(1).optional(),
   })
   .strict()
@@ -41,6 +41,13 @@ const contextQuerySchema = z
         message: "workspaceId is not valid for personal conversations",
       });
     }
+    if (!value.type && value.workspaceId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["workspaceId"],
+        message: "workspaceId requires type=workspace",
+      });
+    }
   });
 
 senecaConversationsRouter.get(
@@ -49,6 +56,29 @@ senecaConversationsRouter.get(
   async (c) => {
     const user = c.get("user")!;
     const query = c.req.valid("query");
+    const now = new Date();
+    if (!query.type) {
+      const conversations = await prisma.senecaConversation.findMany({
+        where: {
+          userId: user.id,
+          expiresAt: { gt: now },
+        },
+        select: {
+          id: true,
+          contextType: true,
+          capabilityMode: true,
+          teamId: true,
+          title: true,
+          preview: true,
+          createdAt: true,
+          updatedAt: true,
+          expiresAt: true,
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        take: 100,
+      });
+      return c.json({ data: conversations });
+    }
     const context: SenecaContextRef =
       query.type === "workspace"
         ? { type: "workspace", workspaceId: query.workspaceId! }
@@ -61,7 +91,6 @@ senecaConversationsRouter.get(
       );
     }
     const capabilityMode = capabilityModeForScope(resolution.scope);
-    const now = new Date();
     const conversations = await prisma.senecaConversation.findMany({
       where: {
         userId: user.id,

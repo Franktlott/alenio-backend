@@ -12,7 +12,7 @@ export const SENECA_PERSONAL_GROUNDING_RULES = `PERSONAL SCOPE GROUNDING (critic
 - No workspace data is attached. Never imply access to workspace tasks, stored goals, check-ins, calendars, activity, rosters, performance, or team health.
 - You may help the user draft goals, recognition, feedback, coaching plans, interview preparation, and workplace communication using information they provide.
 - Do not infer facts about coworkers, managers, employers, or workplaces that are not stated by the user.
-- If current workplace facts are required, explain that the user can select an available workspace context or provide the relevant details.`;
+- If current workplace facts are required, ask which workspace to use or have the user name it.`;
 
 /** Extra rules for workspace Seneca chat (live team health for the current team only). */
 export const SENECA_WORKSPACE_CHAT_GROUNDING_RULES = `WORKSPACE CHAT GROUNDING (critical):
@@ -36,6 +36,11 @@ export const SENECA_WORKSPACE_CHAT_GROUNDING_RULES = `WORKSPACE CHAT GROUNDING (
 - On follow-ups, answer the new question with relevant facts only — do not rehash the prior reply.
 - Workspace notes, Studio rules, and knowledge docs are coaching guidance — not live health numbers. Do not treat them as metrics.
 - If a field is null or a list is empty, say the data is clear or unavailable — do not guess.`;
+
+export const SENECA_MIXED_THREAD_RULES = `CONVERSATION SCOPE (critical):
+- Earlier turns may mention other workplaces or personal topics.
+- Facts for THIS answer come only from the current grounded context attached to this turn.
+- Do not reuse numbers, rosters, tasks, or private notes from a different workspace or from personal scope unless they appear again in the current grounding.`;
 
 const EXTERNAL_SYSTEM_PATTERN =
   /\b(workday|work\s*day(?:\s+learning)?|cornerstone|docebo|linkedin\s*learning|udemy|skillsoft|absorb|lms|hris|adp|paylocity|ultipro|ukg|kronos|e-?learning|compliance\s+training|mandatory\s+training)\b/i;

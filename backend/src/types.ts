@@ -237,7 +237,7 @@ export type SenecaChatAttachment = {
 };
 
 type SenecaAskRequestBase = {
-  context: SenecaContextRef;
+  context?: SenecaContextRef;
   messages?: SenecaChatMessage[];
   conversationId?: string;
 };
@@ -268,14 +268,14 @@ export type SenecaGeneratedImage = {
 };
 
 export type SenecaImageRequest = {
-  context: SenecaContextRef;
+  context?: SenecaContextRef;
   prompt: string;
   size?: "1024x1024" | "1536x1024" | "1024x1536";
   conversationId?: string;
 };
 
 export type SenecaImageEditRequest = {
-  context: SenecaContextRef;
+  context?: SenecaContextRef;
   prompt: string;
   attachment: Omit<SenecaChatAttachment, "mimeType"> & {
     mimeType: "image/jpeg" | "image/png" | "image/webp";
@@ -338,6 +338,16 @@ export type SenecaAskResponse = {
     cancelOneOnOne: SenecaAskCancelOneOnOne | null;
     createTask: SenecaAskCreateTask | null;
     conversationId?: string;
+    resolvedContext?:
+      | { type: "personal"; name: "Personal" }
+      | { type: "workspace"; workspaceId: string; name: string };
+    clarify?: {
+      prompt: string;
+      options: Array<
+        | { type: "personal"; name: "Personal" }
+        | { type: "workspace"; workspaceId: string; name: string }
+      >;
+    };
   };
 };
 
