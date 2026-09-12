@@ -35,6 +35,23 @@ export type InboxUpdatedEvent = {
   resource?: "calendar" | "check_ins" | "goals";
 };
 
+export type TaskUpdatedReason =
+  | "created"
+  | "details"
+  | "deleted"
+  | "assignment"
+  | "subtask"
+  | "notes";
+
+export type TeamTaskUpdatedEvent = {
+  type: "task.updated";
+  channel: "tasks";
+  teamId: string;
+  taskId: string;
+  reason: TaskUpdatedReason;
+  actorUserId?: string;
+};
+
 export type TeamPinUpdatedEvent = {
   type: "pin.updated";
   channel: "team";
@@ -55,7 +72,8 @@ export type RealtimeEvent =
   | DmMessageCreatedEvent
   | InboxUpdatedEvent
   | TeamPinUpdatedEvent
-  | DmPinUpdatedEvent;
+  | DmPinUpdatedEvent
+  | TeamTaskUpdatedEvent;
 
 const rooms = new Map<string, Set<RealtimeSocket>>();
 
@@ -69,6 +87,10 @@ export function dmRealtimeKey(conversationId: string): string {
 
 export function userRealtimeKey(userId: string): string {
   return `user:${userId}`;
+}
+
+export function teamTasksRealtimeKey(teamId: string): string {
+  return `team:${teamId}:tasks`;
 }
 
 export function subscribeSocket(ws: RealtimeSocket, keys: string[]) {
@@ -207,5 +229,24 @@ export function publishDmPinUpdated(input: {
       pinnedMessages: input.pinnedMessages,
     },
     dmRealtimeKey(input.conversationId),
+  );
+}
+
+export function publishTeamTaskUpdated(input: {
+  teamId: string;
+  taskId: string;
+  reason: TaskUpdatedReason;
+  actorUserId?: string;
+}) {
+  publishRealtime(
+    {
+      type: "task.updated",
+      channel: "tasks",
+      teamId: input.teamId,
+      taskId: input.taskId,
+      reason: input.reason,
+      actorUserId: input.actorUserId,
+    },
+    teamTasksRealtimeKey(input.teamId),
   );
 }

@@ -6,6 +6,7 @@ import {
   dmRealtimeKey,
   subscribeSocket,
   teamRealtimeKey,
+  teamTasksRealtimeKey,
   unsubscribeSocket,
   userRealtimeKey,
   type RealtimeSocketData,
@@ -44,6 +45,17 @@ async function filterAllowedChannels(userId: string, channels: string[]): Promis
     if (userMatch) {
       const targetUserId = userMatch[1]!;
       if (targetUserId === userId) allowed.push(userRealtimeKey(userId));
+      continue;
+    }
+
+    const tasksMatch = /^team:([^:]+):tasks$/.exec(key);
+    if (tasksMatch) {
+      const teamId = tasksMatch[1]!;
+      const membership = await prisma.teamMember.findUnique({
+        where: { userId_teamId: { userId, teamId } },
+        select: { id: true },
+      });
+      if (membership) allowed.push(teamTasksRealtimeKey(teamId));
       continue;
     }
 

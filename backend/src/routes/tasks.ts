@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
+import { publishTeamTaskUpdated, type TaskUpdatedReason } from "../lib/realtime-hub";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
@@ -104,6 +105,15 @@ function canModerateTaskNote(
     taskCreatorId === userId ||
     canManageWorkspaceTasks(role)
   );
+}
+
+function emitTaskChange(
+  teamId: string,
+  taskId: string,
+  reason: TaskUpdatedReason,
+  actorUserId: string,
+) {
+  publishTeamTaskUpdated({ teamId, taskId, reason, actorUserId });
 }
 
 type RecurrenceBody = {
@@ -588,6 +598,10 @@ tasksRouter.post("/", async (c) => {
     }
   }
 
+  for (const task of tasks) {
+    emitTaskChange(teamId, task.id, "created", user.id);
+  }
+
   return c.json({ data: tasks }, 201);
 });
 
@@ -1058,6 +1072,7 @@ tasksRouter.post("/:taskId/notes", async (c) => {
     );
   }
 
+  emitTaskChange(teamId, taskId, "notes", user.id);
   return c.json({ data: note }, 201);
 });
 
@@ -1098,6 +1113,7 @@ tasksRouter.patch("/:taskId/notes/:noteId", async (c) => {
     data: { body: validated.body },
     include: { createdBy: { select: taskNoteAuthorSelect } },
   });
+  emitTaskChange(teamId, taskId, "notes", user.id);
   return c.json({ data: note });
 });
 
@@ -1128,6 +1144,7 @@ tasksRouter.delete("/:taskId/notes/:noteId", async (c) => {
   }
 
   await prisma.taskNote.delete({ where: { id: noteId } });
+  emitTaskChange(teamId, taskId, "notes", user.id);
   return c.body(null, 204);
 });
 
@@ -1387,6 +1404,7 @@ tasksRouter.patch("/:taskId", async (c) => {
     }
   }
 
+  emitTaskChange(teamId, taskId, "details", user.id);
   return c.json({ data: updated, ...(milestoneCount !== null ? { milestone: milestoneCount } : {}), ...(personalBestCount !== null ? { comeback: personalBestCount } : {}) });
 });
 
@@ -1426,6 +1444,7 @@ tasksRouter.delete("/:taskId", async (c) => {
 
   await deleteTaskWithScope(prisma, task, scope);
   await deleteStorageObjectByUrlIfOwned(task.attachmentUrl);
+  emitTaskChange(teamId, taskId, "deleted", user.id);
   return c.body(null, 204);
 });
 
@@ -1505,6 +1524,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
     });
   }
 
+  emitTaskChange(teamId, taskId, "assignment", user.id);
   return c.json({ data: updated });
 });
 
@@ -1535,6 +1555,7 @@ tasksRouter.delete("/:taskId/assign/:userId", async (c) => {
   }
 
   await prisma.taskAssignment.deleteMany({ where: { taskId, userId } });
+  emitTaskChange(teamId, taskId, "assignment", user.id);
   return c.body(null, 204);
 });
 
@@ -1561,6 +1582,7 @@ tasksRouter.post("/:taskId/subtasks", async (c) => {
   const subtask = await prisma.subtask.create({
     data: { title: body.title.trim(), taskId, order: count },
   });
+  emitTaskChange(teamId, taskId, "subtask", user.id);
   return c.json({ data: subtask }, 201);
 });
 
@@ -1618,6 +1640,7 @@ tasksRouter.patch("/:taskId/subtasks/:subtaskId", async (c) => {
       include: subtasksInclude.include,
     });
   });
+  emitTaskChange(teamId, taskId, "subtask", user.id);
   return c.json({ data: subtask });
 });
 
@@ -1642,6 +1665,7 @@ tasksRouter.delete("/:taskId/subtasks/:subtaskId", async (c) => {
   }
 
   await prisma.subtask.delete({ where: { id: subtaskId } });
+  emitTaskChange(teamId, taskId, "subtask", user.id);
   return c.body(null, 204);
 });
 
