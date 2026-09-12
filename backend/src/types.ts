@@ -340,7 +340,8 @@ export type SenecaAskResponse = {
     conversationId?: string;
     resolvedContext?:
       | { type: "personal"; name: "Personal" }
-      | { type: "workspace"; workspaceId: string; name: string };
+      | { type: "workspace"; workspaceId: string; name: string }
+      | { type: "workspaces"; name: string };
     clarify?: {
       prompt: string;
       options: Array<

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { correlationMiddleware } from "./middleware/correlation";
 import type { GetStartedCompletionResponse } from "./types";
 import { env } from "./env";
 import { senecaAvailable, senecaDiagnostics } from "./lib/seneca-openai";
@@ -474,6 +475,7 @@ app.use(
 
 // Logging
 app.use("*", logger());
+app.use("*", correlationMiddleware);
 
 app.onError((err, c) => {
   console.error("[hono] unhandled error", c.req.method, c.req.path, err);

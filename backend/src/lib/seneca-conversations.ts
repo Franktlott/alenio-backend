@@ -68,7 +68,9 @@ export function contextForConversation(row: {
   return null;
 }
 
-export function contextFromTurnMetadata(metadata: unknown): SenecaContextRef | null {
+export type SenecaAskLastContext = SenecaContextRef | { type: "workspaces" };
+
+export function contextFromTurnMetadata(metadata: unknown): SenecaAskLastContext | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
   }
@@ -78,15 +80,66 @@ export function contextFromTurnMetadata(metadata: unknown): SenecaContextRef | n
   }
   const record = resolved as { type?: unknown; workspaceId?: unknown };
   if (record.type === "personal") return { type: "personal" };
+  if (record.type === "workspaces") return { type: "workspaces" };
   if (record.type === "workspace" && typeof record.workspaceId === "string" && record.workspaceId.trim()) {
     return { type: "workspace", workspaceId: record.workspaceId };
   }
   return null;
 }
 
+export function citedWorkspaceIdsFromMetadata(metadata: unknown): string[] {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    const context = contextFromTurnMetadata(metadata);
+    return context?.type === "workspace" ? [context.workspaceId] : [];
+  }
+  const record = metadata as { citedWorkspaceIds?: unknown };
+  if (Array.isArray(record.citedWorkspaceIds)) {
+    const ids = record.citedWorkspaceIds.filter(
+      (id): id is string => typeof id === "string" && id.trim().length > 0,
+    );
+    if (ids.length > 0) return [...new Set(ids)];
+  }
+  const context = contextFromTurnMetadata(metadata);
+  return context?.type === "workspace" ? [context.workspaceId] : [];
+}
+
+export function turnCapabilityModeFromMetadata(
+  metadata: unknown,
+): SenecaTurnCapabilityMode | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const mode = (metadata as { turnCapabilityMode?: unknown }).turnCapabilityMode;
+  if (mode === "personal" || mode === "member" || mode === "manager") return mode;
+  return null;
+}
+
+export async function historyTurnStillAuthorized(
+  userId: string,
+  metadata: unknown,
+  db: PrismaClient,
+): Promise<boolean> {
+  const workspaceIds = citedWorkspaceIdsFromMetadata(metadata);
+  const mode = turnCapabilityModeFromMetadata(metadata);
+  if (workspaceIds.length === 0) {
+    if (mode === "manager") return false;
+    return true;
+  }
+  for (const workspaceId of workspaceIds) {
+    const resolution = await resolveSenecaScope(
+      userId,
+      { type: "workspace", workspaceId },
+      db,
+    );
+    if (!resolution.ok || resolution.scope.type !== "workspace") return false;
+    if (mode === "manager" && !resolution.scope.capabilities.canUseManagerContext) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function lastResolvedContextFromMessages(
   messages: Array<{ metadata: unknown }>,
-): SenecaContextRef | null {
+): SenecaAskLastContext | null {
   for (const message of messages) {
     const context = contextFromTurnMetadata(message.metadata);
     if (context) return context;
@@ -96,18 +149,29 @@ export function lastResolvedContextFromMessages(
 
 export function withResolvedScopeMetadata(
   metadata: Prisma.InputJsonValue | undefined,
-  context: SenecaContextRef,
+  context: SenecaAskLastContext,
   capabilityMode: SenecaTurnCapabilityMode,
+  extra?: { name?: string; citedWorkspaceIds?: string[] },
 ): Prisma.InputJsonValue {
   const base =
     metadata && typeof metadata === "object" && !Array.isArray(metadata)
       ? (metadata as Record<string, unknown>)
       : {};
+  const resolvedContext =
+    context.type === "personal"
+      ? { type: "personal" as const, name: "Personal" as const }
+      : context.type === "workspaces"
+        ? { type: "workspaces" as const, name: extra?.name ?? "your workspaces" }
+        : { type: "workspace" as const, workspaceId: context.workspaceId, name: extra?.name ?? "Workspace" };
+  const citedWorkspaceIds =
+    extra?.citedWorkspaceIds ??
+    (context.type === "workspace" ? [context.workspaceId] : []);
   return JSON.parse(
     JSON.stringify({
       ...base,
-      resolvedContext: context,
+      resolvedContext,
       turnCapabilityMode: capabilityMode,
+      citedWorkspaceIds,
     }),
   ) as Prisma.InputJsonValue;
 }
@@ -320,21 +384,22 @@ export async function loadSenecaConversationHistory(
       messages: {
         orderBy: { order: "desc" },
         take: SENECA_CONVERSATION_HISTORY_LIMIT,
-        select: { role: true, text: true },
+        select: { role: true, text: true, metadata: true },
       },
     },
   });
   if (!row) {
     throw new SenecaConversationError("Conversation not found", "NOT_FOUND", 404);
   }
-  return row.messages
-    .slice()
-    .reverse()
-    .flatMap((message) =>
-      message.role === "user" || message.role === "assistant"
-        ? [{ role: message.role, content: message.text }]
-        : [],
-    );
+  const chronological = row.messages.slice().reverse();
+  const allowed: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (const message of chronological) {
+    if (message.role !== "user" && message.role !== "assistant") continue;
+    const ok = await historyTurnStillAuthorized(expected.userId, message.metadata, db);
+    if (!ok) continue;
+    allowed.push({ role: message.role, content: message.text });
+  }
+  return allowed;
 }
 
 export async function loadSenecaConversationForAsk(
@@ -347,7 +412,7 @@ export async function loadSenecaConversationForAsk(
   teamId: string | null;
   capabilityMode: string;
   unified: boolean;
-  lastContext: SenecaContextRef | null;
+  lastContext: SenecaAskLastContext | null;
 } | null> {
   if (!conversationId) return null;
   const row = await db.senecaConversation.findFirst({

@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
 import { auth } from "../auth";
-import { askMemberWorkspaceSeneca, askPersonalSeneca } from "../lib/seneca-ask-service";
+import { askAllAuthorizedWorkspacesSeneca, askPersonalSeneca, askWorkspaceSeneca } from "../lib/seneca-ask-service";
 import {
   senecaAskBodySchema,
   senecaContextRefSchema,
@@ -12,7 +12,6 @@ import {
 } from "../lib/seneca-scope";
 import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
-import { handleManagerWorkspaceAsk } from "./seneca-team";
 import {
   editSenecaImage,
   generateSenecaImage,
@@ -28,6 +27,7 @@ import {
 import {
   resolveSenecaRequestScope,
   resolvedContextPayload,
+  type SenecaRequestScopeResult,
 } from "../lib/seneca-request-context";
 import {
   prepareSenecaAttachment,
@@ -72,21 +72,50 @@ export const senecaImageEditBodySchema = z
   })
   .strict();
 
+type ResolvedOrAllAuthorized = Extract<
+  SenecaRequestScopeResult,
+  { ok: true; kind: "resolved" | "all_authorized" }
+>;
+
 function continuationExpected(
   userId: string,
-  request: {
-    unified: boolean;
-    context: { type: "personal" } | { type: "workspace"; workspaceId: string };
-    capabilityMode: "personal" | "member" | "manager";
-  },
+  request: Extract<SenecaRequestScopeResult, { ok: true }>,
 ) {
-  return request.unified
-    ? { userId, unified: true as const }
-    : {
-        userId,
-        context: request.context,
-        capabilityMode: request.capabilityMode,
-      };
+  if (request.kind === "clarify" || request.kind === "all_authorized" || request.unified) {
+    return { userId, unified: true as const };
+  }
+  return {
+    userId,
+    context: request.context,
+    capabilityMode: request.capabilityMode,
+  };
+}
+
+function persistResolvedTurn(request: ResolvedOrAllAuthorized) {
+  if (request.kind === "all_authorized") {
+    return {
+      conversationContext: { type: "personal" as const },
+      capabilityMode: "member" as const,
+      metadataContext: { type: "workspaces" as const },
+      name: request.name,
+    };
+  }
+  return {
+    conversationContext: request.context,
+    capabilityMode: request.capabilityMode,
+    metadataContext: request.context,
+    name: request.name,
+  };
+}
+
+function imageOwnerForRequest(
+  userId: string,
+  request: ResolvedOrAllAuthorized,
+): { ownerType: "PERSONAL" | "WORKSPACE"; ownerId: string } {
+  if (request.kind === "resolved" && request.scope.type === "workspace") {
+    return { ownerType: "WORKSPACE", ownerId: request.scope.workspaceId };
+  }
+  return { ownerType: "PERSONAL", ownerId: userId };
 }
 
 senecaUnifiedRouter.get("/contexts", async (c) => {
@@ -127,7 +156,8 @@ senecaUnifiedRouter.post(
           400,
         );
       }
-      const scope = request.scope;
+      const persist = persistResolvedTurn(request);
+      const owner = imageOwnerForRequest(user.id, request);
       await loadSenecaConversationHistory(
         body.conversationId,
         continuationExpected(user.id, request),
@@ -135,27 +165,29 @@ senecaUnifiedRouter.post(
       );
       const data = await generateSenecaImage({
         userId: user.id,
-        ownerType: scope.type === "workspace" ? "WORKSPACE" : "PERSONAL",
-        ownerId: scope.type === "workspace" ? scope.workspaceId : user.id,
+        ownerType: owner.ownerType,
+        ownerId: owner.ownerId,
         prompt: body.prompt,
         size: body.size,
       });
       const conversationId = await saveSenecaConversationTurn({
         conversationId: body.conversationId,
         userId: user.id,
-        context: request.context,
-        capabilityMode: request.capabilityMode,
+        context: persist.conversationContext,
+        capabilityMode: persist.capabilityMode,
         userText: body.prompt,
         assistantText: "Generated an image from your prompt.",
         userMetadata: withResolvedScopeMetadata(
           { kind: "image_prompt", size: body.size ?? "1024x1024" },
-          request.context,
-          request.capabilityMode,
+          persist.metadataContext,
+          persist.capabilityMode,
+          { name: persist.name },
         ),
         assistantMetadata: withResolvedScopeMetadata(
           JSON.parse(JSON.stringify({ kind: "image", ...data })),
-          request.context,
-          request.capabilityMode,
+          persist.metadataContext,
+          persist.capabilityMode,
+          { name: persist.name },
         ),
         generationId: data.generationId,
       });
@@ -163,7 +195,7 @@ senecaUnifiedRouter.post(
         data: {
           ...data,
           conversationId,
-          resolvedContext: resolvedContextPayload(request.context, request.name),
+          resolvedContext: resolvedContextPayload(persist.metadataContext, persist.name),
         },
       });
     } catch (error) {
@@ -236,7 +268,8 @@ senecaUnifiedRouter.post(
           400,
         );
       }
-      const scope = request.scope;
+      const persist = persistResolvedTurn(request);
+      const owner = imageOwnerForRequest(user.id, request);
       await loadSenecaConversationHistory(
         body.conversationId,
         continuationExpected(user.id, request),
@@ -245,16 +278,16 @@ senecaUnifiedRouter.post(
       const attachment = await prepareSenecaAttachment(body.attachment, user.id);
       const data = await editSenecaImage({
         userId: user.id,
-        ownerType: scope.type === "workspace" ? "WORKSPACE" : "PERSONAL",
-        ownerId: scope.type === "workspace" ? scope.workspaceId : user.id,
+        ownerType: owner.ownerType,
+        ownerId: owner.ownerId,
         prompt: body.prompt,
         attachment,
       });
       const conversationId = await saveSenecaConversationTurn({
         conversationId: body.conversationId,
         userId: user.id,
-        context: request.context,
-        capabilityMode: request.capabilityMode,
+        context: persist.conversationContext,
+        capabilityMode: persist.capabilityMode,
         userText: body.prompt,
         assistantText: "Edited the attached image from your instructions.",
         userMetadata: withResolvedScopeMetadata(
@@ -265,15 +298,17 @@ senecaUnifiedRouter.post(
               attachment: attachment.metadata,
             }),
           ),
-          request.context,
-          request.capabilityMode,
+          persist.metadataContext,
+          persist.capabilityMode,
+          { name: persist.name },
         ),
         assistantMetadata: withResolvedScopeMetadata(
           JSON.parse(
             JSON.stringify({ kind: "image", operation: "image_edit", ...data }),
           ),
-          request.context,
-          request.capabilityMode,
+          persist.metadataContext,
+          persist.capabilityMode,
+          { name: persist.name },
         ),
         generationId: data.generationId,
       });
@@ -281,7 +316,7 @@ senecaUnifiedRouter.post(
         data: {
           ...data,
           conversationId,
-          resolvedContext: resolvedContextPayload(request.context, request.name),
+          resolvedContext: resolvedContextPayload(persist.metadataContext, persist.name),
         },
       });
     } catch (error) {
@@ -454,16 +489,68 @@ senecaUnifiedRouter.post(
         throw error;
       }
     }
+    const persist = persistResolvedTurn(request);
     const userMetadata = withResolvedScopeMetadata(
       attachment
         ? JSON.parse(
             JSON.stringify({ kind: "attachment", attachment: attachment.metadata }),
           )
         : undefined,
-      request.context,
-      request.capabilityMode,
+      persist.metadataContext,
+      persist.capabilityMode,
+      { name: persist.name },
     );
-    const resolvedContext = resolvedContextPayload(request.context, request.name);
+    const resolvedContext = resolvedContextPayload(persist.metadataContext, persist.name);
+
+    if (request.kind === "all_authorized") {
+      try {
+        const asked = await askAllAuthorizedWorkspacesSeneca(
+          user.id,
+          question,
+          conversationMessages,
+          prisma,
+          attachment,
+        );
+        const { citedWorkspaceIds, generationId, ...responseData } = asked;
+        const conversationId = await saveSenecaConversationTurn({
+          conversationId: body.conversationId,
+          userId: user.id,
+          context: persist.conversationContext,
+          capabilityMode: persist.capabilityMode,
+          userText: question,
+          assistantText: responseData.message,
+          userMetadata: withResolvedScopeMetadata(
+            attachment
+              ? JSON.parse(
+                  JSON.stringify({ kind: "attachment", attachment: attachment.metadata }),
+                )
+              : undefined,
+            persist.metadataContext,
+            persist.capabilityMode,
+            { name: persist.name, citedWorkspaceIds },
+          ),
+          assistantMetadata: withResolvedScopeMetadata(
+            JSON.parse(JSON.stringify({ kind: "ask", ...responseData })),
+            persist.metadataContext,
+            persist.capabilityMode,
+            { name: persist.name, citedWorkspaceIds },
+          ),
+          generationId,
+        });
+        return c.json({ data: { ...responseData, conversationId, resolvedContext } });
+      } catch (error) {
+        if (error instanceof SenecaConversationError) {
+          return c.json(
+            { error: { message: error.message, code: error.code } },
+            error.status,
+          );
+        }
+        return c.json(
+          { error: { message: error instanceof Error ? error.message : "Seneca request failed" } },
+          500,
+        );
+      }
+    }
 
     if (request.scope.type === "personal") {
       try {
@@ -504,60 +591,8 @@ senecaUnifiedRouter.post(
     }
 
     const teamId = request.scope.workspaceId;
-    const capabilities = request.scope.capabilities;
-    if (capabilities.canUseManagerContext) {
-      const legacyBody = { question, messages: conversationMessages, attachment };
-      const response = await handleManagerWorkspaceAsk({
-        get: (key: "user" | "session") => c.get(key),
-        req: {
-          param: (key: string) => (key === "teamId" ? teamId : undefined),
-          valid: () => legacyBody,
-        },
-        json: (data: unknown, status = 200) =>
-          new Response(JSON.stringify(data), {
-            status,
-            headers: { "Content-Type": "application/json" },
-          }),
-      });
-      if (!response.ok) return response;
-      const payload = (await response.json()) as {
-        data: {
-          message: string;
-          generationId?: string;
-          [key: string]: unknown;
-        };
-      };
-      const { generationId, ...data } = payload.data;
-      try {
-        const conversationId = await saveSenecaConversationTurn({
-          conversationId: body.conversationId,
-          userId: user.id,
-          context: request.context,
-          capabilityMode: request.capabilityMode,
-          userText: question,
-          assistantText: data.message,
-          userMetadata,
-          assistantMetadata: withResolvedScopeMetadata(
-            JSON.parse(JSON.stringify({ kind: "ask", ...data })),
-            request.context,
-            request.capabilityMode,
-          ),
-          generationId,
-        });
-        return c.json({ data: { ...data, conversationId, resolvedContext } });
-      } catch (error) {
-        if (error instanceof SenecaConversationError) {
-          return c.json(
-            { error: { message: error.message, code: error.code } },
-            error.status,
-          );
-        }
-        throw error;
-      }
-    }
-
     try {
-      const data = await askMemberWorkspaceSeneca(
+      const data = await askWorkspaceSeneca(
         teamId,
         user.id,
         question,

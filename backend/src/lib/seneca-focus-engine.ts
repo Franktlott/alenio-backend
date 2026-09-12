@@ -93,6 +93,13 @@ export function canAccessSenecaFocus(role: string | null | undefined): boolean {
   return canAccessWorkspaceManagerInsights(role);
 }
 
+export class SenecaFocusAccessError extends Error {
+  constructor() {
+    super("Not found");
+    this.name = "SenecaFocusAccessError";
+  }
+}
+
 export function isFocusRefreshCoolingDown(
   refreshAvailableAt: Date | null | undefined,
   now: Date,

@@ -6,6 +6,10 @@ import {
   type LastCheckInInsightSource,
 } from "./seneca-last-check-in-insights";
 import { oneOnOnePublishedAt } from "./one-on-one-meeting-dates";
+import { authorize, type AuthzActor } from "./authorization";
+import { canAccessWorkspaceManagerInsights } from "./workspace-role-policy";
+import { maskCheckInResponsesForViewer } from "./authorized-data";
+import { workspaceTaskWhere } from "./task-policy";
 
 function parseJsonRecord(raw: string): Record<string, string | number> {
   try {
@@ -71,10 +75,18 @@ export type SenecaRawContext = {
 };
 
 export async function buildSenecaRawContext(
+  actor: AuthzActor,
   teamId: string,
   memberUserId: string,
   options?: { templateId?: string; memberName?: string; managerName?: string | null },
-): Promise<SenecaRawContext> {
+): Promise<SenecaRawContext | null> {
+  const gate = await authorize({
+    actor,
+    action: "seneca.use",
+    resource: { type: "workspace", id: teamId },
+  });
+  if (!gate.allow || !canAccessWorkspaceManagerInsights(gate.role)) return null;
+
   const member = await prisma.user.findUnique({
     where: { id: memberUserId },
     select: { name: true, email: true },
@@ -87,7 +99,10 @@ export async function buildSenecaRawContext(
 
   const [assignments, devGoals, meetings, activities, template] = await Promise.all([
     prisma.taskAssignment.findMany({
-      where: { userId: memberUserId, task: { teamId, kind: "workspace_task", status: { not: "done" } } },
+      where: {
+        userId: memberUserId,
+        task: { teamId, ...workspaceTaskWhere, status: { not: "done" } },
+      },
       include: { task: { select: { title: true, status: true, dueDate: true } } },
       take: 20,
     }),
@@ -130,7 +145,7 @@ export async function buildSenecaRawContext(
   let completedThisMonth = 0;
 
   const allAssignments = await prisma.taskAssignment.findMany({
-    where: { userId: memberUserId, task: { teamId, kind: "workspace_task" } },
+    where: { userId: memberUserId, task: { teamId, ...workspaceTaskWhere } },
     include: { task: { select: { status: true, dueDate: true, completedAt: true } } },
   });
   for (const a of allAssignments) {
@@ -153,8 +168,23 @@ export async function buildSenecaRawContext(
   let lastCheckInInsights: string[] = [];
 
   if (lastMeeting) {
+    const summary = await authorize({
+      actor,
+      action: "checkin.view_summary",
+      resource: { type: "checkin", id: lastMeeting.id },
+    });
+    const notes = await authorize({
+      actor,
+      action: "checkin.view_leader_notes",
+      resource: { type: "checkin", id: lastMeeting.id },
+    });
+    if (summary.allow) {
     const fields = parseJsonArray<{ id: string; label: string; type: string }>(lastMeeting.templateFields);
-    const responses = parseJsonRecord(lastMeeting.responses);
+    const responses = maskCheckInResponsesForViewer(
+      fields,
+      parseJsonRecord(lastMeeting.responses),
+      notes.allow,
+    );
 
     const followUpTasks = await prisma.task.findMany({
       where: {
@@ -185,6 +215,7 @@ export async function buildSenecaRawContext(
         dueDate: t.dueDate?.toISOString() ?? null,
       })),
     };
+    }
   }
 
   const daysSinceLastOneOnOne = lastMeeting

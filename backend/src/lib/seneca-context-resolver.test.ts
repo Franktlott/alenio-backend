@@ -66,6 +66,29 @@ describe("resolveSenecaAskContext", () => {
     });
   });
 
+  test("routes across-workspace questions to all entitled workspaces", () => {
+    const result = resolveSenecaAskContext({
+      question: "What's going on across workspaces?",
+      workspaces: [acme, north],
+    });
+    expect(result).toEqual({
+      kind: "all_authorized",
+      name: "your workspaces",
+    });
+  });
+
+  test("does not keep personal scope for an across-workspace question", () => {
+    const result = resolveSenecaAskContext({
+      question: "What's going on across workspaces?",
+      workspaces: [acme, north],
+      lastContext: { type: "personal" },
+    });
+    expect(result).toEqual({
+      kind: "all_authorized",
+      name: "your workspaces",
+    });
+  });
+
   test("asks which workspace when work language is ambiguous", () => {
     const result = resolveSenecaAskContext({
       question: "What needs attention on the team?",
@@ -79,6 +102,15 @@ describe("resolveSenecaAskContext", () => {
         ),
       ).toEqual(["acme", "north"]);
     }
+  });
+
+  test("does not stay personal when work language is ambiguous", () => {
+    const result = resolveSenecaAskContext({
+      question: "What needs attention on the team?",
+      workspaces: [acme, north],
+      lastContext: { type: "personal" },
+    });
+    expect(result.kind).toBe("clarify");
   });
 
   test("sticks to the current workspace on follow-ups", () => {

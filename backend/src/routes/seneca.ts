@@ -4,7 +4,7 @@ import { z } from "zod";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
-import { buildSenecaRawContext, senecaContextToPrompt } from "../lib/seneca-context";
+import { buildSenecaRawContext, senecaContextToPrompt, type SenecaRawContext } from "../lib/seneca-context";
 import { mergeLastCheckInInsights } from "../lib/seneca-last-check-in-insights";
 import {
   applyGroundedLastCheckInInsights,
@@ -31,6 +31,15 @@ async function getMembership(userId: string, teamId: string) {
   return prisma.teamMember.findUnique({
     where: { userId_teamId: { userId, teamId } },
   });
+}
+
+async function loadCoachContext(
+  userId: string,
+  teamId: string,
+  memberUserId: string,
+  options?: { templateId?: string; memberName?: string; managerName?: string | null },
+) {
+  return buildSenecaRawContext({ userId }, teamId, memberUserId, options);
 }
 
 function canUseSeneca(role: string): boolean {
@@ -108,7 +117,7 @@ type SenecaPrepAi = {
 
 function finalizePrep(
   prep: Omit<SenecaPrepAi, "leaderPrepSteps">,
-  ctx: Awaited<ReturnType<typeof buildSenecaRawContext>>,
+  ctx: SenecaRawContext,
   leaderPrepSteps: string[],
 ): SenecaPrepAi {
   const aiInsights =
@@ -176,7 +185,7 @@ type SenecaDevPlanAi = {
   status: "active";
 };
 
-function ruleBasedPrep(ctx: Awaited<ReturnType<typeof buildSenecaRawContext>>): SenecaPrepAi {
+function ruleBasedPrep(ctx: SenecaRawContext): SenecaPrepAi {
   const talkingPoints: string[] = [];
   if (ctx.lastCheckIn?.openFollowUps.length) {
     talkingPoints.push(`Follow up on ${ctx.lastCheckIn.openFollowUps.length} open task(s) from the last check-in.`);
@@ -224,11 +233,14 @@ senecaRouter.post("/:memberUserId/seneca/prep", zValidator("json", prepBodySchem
     return c.json({ error: { message: "Only managers can use Seneca" } }, 403);
   }
 
-  const raw = await buildSenecaRawContext(teamId, memberUserId, {
+  const raw = await loadCoachContext(user.id, teamId, memberUserId, {
     templateId: body.templateId,
     memberName: body.memberName,
     managerName: body.managerName,
   });
+  if (!raw) {
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
 
   if (!senecaAvailable()) {
     return c.json({
@@ -297,11 +309,14 @@ senecaRouter.post("/:memberUserId/seneca/assist", zValidator("json", assistBodyS
     return c.json({ error: { message: senecaUnavailableMessage() } }, 503);
   }
 
-  const raw = await buildSenecaRawContext(teamId, memberUserId, {
+  const raw = await loadCoachContext(user.id, teamId, memberUserId, {
     templateId: body.templateId,
     memberName: body.memberName,
     managerName: body.managerName,
   });
+  if (!raw) {
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
 
   const liveContext = JSON.stringify(
     {
@@ -365,10 +380,13 @@ senecaRouter.post("/:memberUserId/seneca/summary", zValidator("json", summaryBod
     return c.json({ error: { message: senecaUnavailableMessage() } }, 503);
   }
 
-  const raw = await buildSenecaRawContext(teamId, memberUserId, {
+  const raw = await loadCoachContext(user.id, teamId, memberUserId, {
     memberName: body.memberName,
     managerName: body.managerName,
   });
+  if (!raw) {
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
 
   const payload = JSON.stringify({ background: raw, completedCheckIn: body }, null, 2);
 
@@ -415,10 +433,13 @@ senecaRouter.post("/:memberUserId/seneca/development-plan", zValidator("json", d
     return c.json({ error: { message: senecaUnavailableMessage() } }, 503);
   }
 
-  const raw = await buildSenecaRawContext(teamId, memberUserId, {
+  const raw = await loadCoachContext(user.id, teamId, memberUserId, {
     memberName: body.memberName,
     managerName: body.managerName,
   });
+  if (!raw) {
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
 
   const payload = JSON.stringify(
     { member: raw, contextNotes: body.contextNotes, checkInSummary: body.checkInSummary },
@@ -464,10 +485,13 @@ senecaRouter.post("/:memberUserId/seneca/quick-goal", zValidator("json", quickGo
     return c.json({ error: { message: senecaUnavailableMessage() } }, 503);
   }
 
-  const raw = await buildSenecaRawContext(teamId, memberUserId, {
+  const raw = await loadCoachContext(user.id, teamId, memberUserId, {
     memberName: body.memberName,
     managerName: body.managerName,
   });
+  if (!raw) {
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
 
   const payload = JSON.stringify(
     { member: raw, skillOrGoalRequest: body.skillOrGoal },

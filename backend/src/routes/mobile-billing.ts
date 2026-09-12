@@ -8,6 +8,7 @@ import {
 } from "./subscription";
 import { createTeamCheckoutSession, createTeamPortalSession } from "../lib/team-billing-sessions";
 import { resolveWorkspaceAccess } from "../lib/workspace-access";
+import { actorFromSession, authorize } from "../lib/authorization";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -79,6 +80,18 @@ mobileBillingRouter.post("/checkout-session", async (c) => {
   if (!teamId) {
     return c.json({ error: { message: "teamId is required", code: "VALIDATION_ERROR" } }, 400);
   }
+  const actor = actorFromSession(user);
+  if (!actor) {
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
+  const billing = await authorize({
+    actor,
+    action: "billing.view",
+    resource: { type: "workspace", id: teamId },
+  });
+  if (!billing.allow) {
+    return c.json({ error: { message: "Only the team owner can manage billing", code: "FORBIDDEN" } }, 403);
+  }
   const plan = body.plan === "operations" ? "operations" : "pro";
 
   const result = await createTeamCheckoutSession({
@@ -103,6 +116,19 @@ mobileBillingRouter.post("/portal-session", async (c) => {
   const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
   if (!teamId) {
     return c.json({ error: { message: "teamId is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const actor = actorFromSession(user);
+  if (!actor) {
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
+  const billing = await authorize({
+    actor,
+    action: "billing.view",
+    resource: { type: "workspace", id: teamId },
+  });
+  if (!billing.allow) {
+    return c.json({ error: { message: "Only the team owner can open the billing portal", code: "FORBIDDEN" } }, 403);
   }
 
   const result = await createTeamPortalSession({ teamId, userId: user.id });

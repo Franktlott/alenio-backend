@@ -7,6 +7,7 @@ import {
   getOrCreateSenecaFocus,
   recordSenecaFocusOpen,
   refreshSenecaFocus,
+  SenecaFocusAccessError,
   SenecaFocusCooldownError,
 } from "../lib/seneca-focus-service";
 import { resolveTimeZone } from "../lib/timezone";
@@ -42,8 +43,15 @@ senecaFocusRouter.get("/", async (c) => {
       403,
     );
   }
-  const data = await getOrCreateSenecaFocus(teamId, user.id, manager.timeZone);
-  return c.json({ data });
+  try {
+    const data = await getOrCreateSenecaFocus(teamId, user.id, manager.timeZone);
+    return c.json({ data });
+  } catch (error) {
+    if (error instanceof SenecaFocusAccessError) {
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    throw error;
+  }
 });
 
 senecaFocusRouter.post("/refresh", async (c) => {
@@ -72,6 +80,9 @@ senecaFocusRouter.post("/refresh", async (c) => {
         429,
       );
     }
+    if (error instanceof SenecaFocusAccessError) {
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
     throw error;
   }
 });
@@ -95,17 +106,24 @@ senecaFocusRouter.post("/:briefId/actions/:actionId/complete", async (c) => {
   if (!manager) {
     return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
   }
-  const data = await completeSenecaFocusAction({
-    teamId,
-    userId: user.id,
-    briefId: c.req.param("briefId") as string,
-    actionId: c.req.param("actionId") as string,
-    timeZone: manager.timeZone,
-  });
-  if (!data) {
-    return c.json({ error: { message: "Brief or action not found", code: "NOT_FOUND" } }, 404);
+  try {
+    const data = await completeSenecaFocusAction({
+      teamId,
+      userId: user.id,
+      briefId: c.req.param("briefId") as string,
+      actionId: c.req.param("actionId") as string,
+      timeZone: manager.timeZone,
+    });
+    if (!data) {
+      return c.json({ error: { message: "Brief or action not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data });
+  } catch (error) {
+    if (error instanceof SenecaFocusAccessError) {
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    throw error;
   }
-  return c.json({ data });
 });
 
 export { senecaFocusRouter };

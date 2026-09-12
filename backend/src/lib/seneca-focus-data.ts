@@ -6,6 +6,9 @@ import {
   parseWorkplaceStandards,
 } from "./workplace-standards";
 import type { SenecaFocusFacts } from "./seneca-focus-engine";
+import { authorize } from "./authorization";
+import { canAccessSenecaFocus, SenecaFocusAccessError } from "./seneca-focus-engine";
+import { taskVisibilityWhere, workspaceTaskWhere } from "./task-policy";
 
 function calendarDaysBetween(earlier: Date, later: Date, timeZone: string): number {
   const a = Date.parse(`${calendarDayFromInstant(earlier, timeZone)}T00:00:00.000Z`);
@@ -19,6 +22,15 @@ export async function loadSenecaFocusFacts(
   timeZone: string,
   now = new Date(),
 ): Promise<SenecaFocusFacts> {
+  const gate = await authorize({
+    actor: { userId: managerUserId },
+    action: "seneca.use",
+    resource: { type: "workspace", id: teamId },
+  });
+  if (!gate.allow || !canAccessSenecaFocus(gate.role)) {
+    throw new SenecaFocusAccessError();
+  }
+
   const recognitionSince = new Date(now.getTime() - 14 * 86_400_000);
   const upcomingThrough = new Date(now.getTime() + 7 * 86_400_000);
   const snapshotsSince = new Date(now.getTime() - 14 * 86_400_000);
@@ -42,7 +54,12 @@ export async function loadSenecaFocusFacts(
       select: { id: true, memberUserId: true, skill: true, createdAt: true, lastActivityAt: true },
     }),
     prisma.task.findMany({
-      where: { teamId, kind: "workspace_task", status: { not: "done" }, archivedAt: null },
+      where: {
+        teamId,
+        archivedAt: null,
+        status: { not: "done" },
+        AND: [taskVisibilityWhere(managerUserId), workspaceTaskWhere],
+      },
       select: {
         id: true,
         title: true,

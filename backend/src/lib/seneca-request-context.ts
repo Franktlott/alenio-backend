@@ -33,6 +33,13 @@ export type SenecaRequestScopeResult =
     }
   | {
       ok: true;
+      kind: "all_authorized";
+      name: string;
+      unified: true;
+      options: SenecaContextOption[];
+    }
+  | {
+      ok: true;
       kind: "clarify";
       prompt: string;
       clarifyOptions: SenecaClarifyOption[];
@@ -110,19 +117,35 @@ export async function resolveSenecaRequestScope(input: {
     lastContext: conversation?.lastContext ?? null,
   });
 
+  if (routed.kind === "all_authorized") {
+    return {
+      ok: true,
+      kind: "all_authorized",
+      name: routed.name,
+      unified: true,
+      options,
+    };
+  }
+
   if (routed.kind === "clarify") {
     if (input.preferLastOnClarify && conversation?.lastContext) {
-      const resolution = await resolveSenecaScope(
-        input.userId,
-        conversation.lastContext,
-        db,
-      );
+      const last = conversation.lastContext;
+      if (last.type === "workspaces") {
+        return {
+          ok: true,
+          kind: "all_authorized",
+          name: "your workspaces",
+          unified: true,
+          options,
+        };
+      }
+      const resolution = await resolveSenecaScope(input.userId, last, db);
       if (resolution.ok) {
         return {
           ok: true,
           kind: "resolved",
-          context: conversation.lastContext,
-          name: displayName(conversation.lastContext, options),
+          context: last,
+          name: displayName(last, options),
           scope: resolution.scope,
           capabilityMode: capabilityModeForScope(resolution.scope),
           unified: true,
@@ -156,13 +179,17 @@ export async function resolveSenecaRequestScope(input: {
 }
 
 export function resolvedContextPayload(
-  context: SenecaContextRef,
+  context: SenecaContextRef | { type: "workspaces" },
   name: string,
 ):
   | { type: "personal"; name: "Personal" }
-  | { type: "workspace"; workspaceId: string; name: string } {
+  | { type: "workspace"; workspaceId: string; name: string }
+  | { type: "workspaces"; name: string } {
   if (context.type === "personal") {
     return { type: "personal", name: "Personal" };
+  }
+  if (context.type === "workspaces") {
+    return { type: "workspaces", name };
   }
   return { type: "workspace", workspaceId: context.workspaceId, name };
 }

@@ -238,3 +238,117 @@ export async function senecaText(
   if (!text) throw new Error("Seneca returned an empty response.");
   return text;
 }
+
+type OpenAiToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
+type OpenAiChatMessage = {
+  role: "system" | "user" | "assistant" | "tool";
+  content?: SenecaOpenAiUserContent | string | null;
+  tool_calls?: OpenAiToolCall[];
+  tool_call_id?: string;
+};
+
+export async function senecaJsonWithTools<T>(
+  instruction: string,
+  context: string,
+  options: {
+    systemPrompt?: string;
+    imageDataUrl?: string;
+    history?: Array<{ role: "user" | "assistant"; content: string }>;
+    tools: unknown[];
+    maxRounds?: number;
+    executeTool: (name: string, argumentsJson: string) => Promise<unknown>;
+    wrapToolResult: (payload: unknown) => string;
+  },
+): Promise<T> {
+  if (!senecaAvailable()) {
+    throw new Error(senecaUnavailableMessage());
+  }
+
+  const maxRounds = options.maxRounds ?? 4;
+  const messages: OpenAiChatMessage[] = [
+    { role: "system", content: options.systemPrompt ?? COACHING_SYSTEM },
+    ...(options.history ?? []).map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    {
+      role: "user",
+      content: buildSenecaUserContent(
+        `${instruction}\n\n---\nContext:\n${context}`,
+        options.imageDataUrl,
+      ),
+    },
+  ];
+
+  for (let round = 0; round < maxRounds; round += 1) {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resolveOpenAiKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: env.OPENAI_MODEL,
+        temperature: 0.4,
+        response_format: { type: "json_object" },
+        tools: options.tools,
+        tool_choice: "auto",
+        messages,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("Seneca provider request failed", {
+        status: res.status,
+        detail: body.slice(0, 500),
+      });
+      throw new Error("I couldn’t complete that request right now. Please try again.");
+    }
+
+    const data = (await res.json()) as {
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+          tool_calls?: OpenAiToolCall[];
+        };
+      }>;
+    };
+    const message = data.choices?.[0]?.message;
+    const toolCalls = message?.tool_calls ?? [];
+    if (toolCalls.length > 0) {
+      messages.push({
+        role: "assistant",
+        content: message?.content ?? null,
+        tool_calls: toolCalls,
+      });
+      for (const call of toolCalls) {
+        const payload = await options.executeTool(
+          call.function.name,
+          call.function.arguments ?? "{}",
+        );
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: options.wrapToolResult(payload),
+        });
+      }
+      continue;
+    }
+
+    const raw = message?.content?.trim();
+    if (!raw) throw new Error("Seneca returned an empty response.");
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      throw new Error("Seneca returned invalid JSON.");
+    }
+  }
+
+  throw new Error("I couldn’t complete that request right now. Please try again.");
+}

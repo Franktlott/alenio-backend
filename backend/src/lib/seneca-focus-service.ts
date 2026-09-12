@@ -6,17 +6,31 @@ import type {
   SenecaFocusResponse,
   SenecaFocusSourceMetrics,
 } from "../types";
+import { authorize } from "./authorization";
 import { generateGroundedFocusCopy, type SenecaFocusCopy } from "./seneca-focus-copy";
 import { loadSenecaFocusFacts } from "./seneca-focus-data";
 import {
   buildMaterialFingerprint,
+  canAccessSenecaFocus,
   isFocusRefreshCoolingDown,
   isCandidateResolved,
   selectFocusCandidate,
+  SenecaFocusAccessError,
   sourceMetricsFromFacts,
   type SenecaFocusCandidate,
 } from "./seneca-focus-engine";
 import { calendarDayFromInstant, dueInstantFromCalendarDay } from "./timezone";
+
+async function assertLiveFocusAccess(teamId: string, userId: string) {
+  const decision = await authorize({
+    actor: { userId },
+    action: "seneca.use",
+    resource: { type: "workspace", id: teamId },
+  });
+  if (!decision.allow || !canAccessSenecaFocus(decision.role)) {
+    throw new SenecaFocusAccessError();
+  }
+}
 
 const REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 
@@ -165,6 +179,7 @@ export async function getOrCreateSenecaFocus(
   timeZone: string,
   now = new Date(),
 ): Promise<SenecaFocusResponse> {
+  await assertLiveFocusAccess(teamId, userId);
   const localDate = calendarDayFromInstant(now, timeZone);
   const existing = await latestForDay(teamId, userId, localDate);
   if (existing && !existing.completedAt) {
@@ -242,6 +257,7 @@ export async function refreshSenecaFocus(
   timeZone: string,
   now = new Date(),
 ): Promise<SenecaFocusResponse> {
+  await assertLiveFocusAccess(teamId, userId);
   const localDate = calendarDayFromInstant(now, timeZone);
   const existing = await latestForDay(teamId, userId, localDate);
   if (isFocusRefreshCoolingDown(existing?.refreshAvailableAt, now)) {
@@ -278,6 +294,7 @@ export async function completeSenecaFocusAction(input: {
   timeZone: string;
   now?: Date;
 }): Promise<SenecaFocusResponse | null> {
+  await assertLiveFocusAccess(input.teamId, input.userId);
   const now = input.now ?? new Date();
   const brief = await prisma.senecaTeamBrief.findFirst({
     where: {
@@ -322,3 +339,4 @@ export async function completeSenecaFocusAction(input: {
 }
 
 export type { SenecaFocusSourceMetrics };
+export { SenecaFocusAccessError } from "./seneca-focus-engine";

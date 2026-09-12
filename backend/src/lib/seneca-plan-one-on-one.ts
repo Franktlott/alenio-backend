@@ -1,4 +1,3 @@
-import type { SenecaWorkspaceContext } from "./seneca-workspace-context";
 import {
   addCalendarDaysInTimeZone,
   calendarDayFromInstant,
@@ -89,8 +88,8 @@ export function conversationSourceText(
 
 export function resolveMemberByName(
   query: string,
-  members: SenecaWorkspaceContext["members"],
-): SenecaWorkspaceContext["members"][number] | null {
+  members: Array<{ userId: string; name: string; role: string }>,
+): { userId: string; name: string; role: string } | null {
   const normalized = query.toLowerCase().trim().replace(/[.,!?]+$/, "");
   if (!normalized) return null;
 
@@ -106,7 +105,7 @@ export function resolveMemberByName(
     const firstNameMatches = searchable.filter((member) =>
       member.name.toLowerCase().startsWith(firstToken),
     );
-    if (firstNameMatches.length === 1) return firstNameMatches[0];
+    if (firstNameMatches.length === 1) return firstNameMatches[0] ?? null;
   }
 
   for (const member of searchable) {
@@ -315,7 +314,7 @@ function formatLabels(start: Date, timeZone: string) {
 export function finalizePlanOneOnOneProposal(
   draft: SenecaPlanOneOnOneDraft,
   question: string,
-  ctx: SenecaWorkspaceContext,
+  ctx: { members: Array<{ userId: string; name: string; role: string }> },
   managerTimeZone: string,
   sourceText?: string,
 ): SenecaPlanOneOnOneProposal | null {

@@ -17,16 +17,23 @@ export type SenecaResolvedAskContext =
       name: string;
     }
   | {
+      kind: "all_authorized";
+      name: string;
+    }
+  | {
       kind: "clarify";
       prompt: string;
       options: SenecaClarifyOption[];
     };
 
 const WORK_LANGUAGE =
-  /\b(tasks?|to-?dos?|overdue|check-?ins?|the team|my team|our team|workspace|roster|one-?on-?ones?|1:1s?|goals?|assignments?|calendar|who's behind|who is behind)\b/i;
+  /\b(tasks?|to-?dos?|overdue|check-?ins?|the team|my team|our team|workspaces?|roster|one-?on-?ones?|1:1s?|goals?|assignments?|calendar|who's behind|who is behind)\b/i;
 
 const PERSONAL_SWITCH =
   /\b(personal|for me personally|my personal|outside (of )?work|my sleep|my mood|my life|switch to personal|use personal)\b/i;
+
+const CROSS_WORKSPACE_LANGUAGE =
+  /\b(across (my |the |all )?(workspaces?|teams)|all (of )?(my )?(workspaces?|teams)|every workspace|each workspace|both workspaces)\b/i;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -54,6 +61,14 @@ export function namedEntitledWorkspaces(
   return entitledWorkspaces(workspaces).filter((workspace) =>
     workspaceNameMentioned(question, workspace.name),
   );
+}
+
+function allAuthorizedResult(): SenecaResolvedAskContext {
+  return { kind: "all_authorized", name: "your workspaces" };
+}
+
+export function isCrossWorkspaceQuestion(question: string): boolean {
+  return CROSS_WORKSPACE_LANGUAGE.test(question);
 }
 
 function personalResult(): SenecaResolvedAskContext {
@@ -116,7 +131,7 @@ export function resolveSenecaAskContext(input: {
   question: string;
   workspaces: SenecaResolverWorkspace[];
   hint?: SenecaContextRef | null;
-  lastContext?: SenecaContextRef | null;
+  lastContext?: SenecaContextRef | { type: "workspaces" } | null;
 }): SenecaResolvedAskContext {
   const available = entitledWorkspaces(input.workspaces);
   const named = namedEntitledWorkspaces(input.question, available);
@@ -135,13 +150,40 @@ export function resolveSenecaAskContext(input: {
     return personalResult();
   }
 
+  const crossWorkspace = isCrossWorkspaceQuestion(input.question);
+  if (crossWorkspace) {
+    if (available.length === 1) return workspaceResult(available[0]!);
+    if (available.length > 1) return allAuthorizedResult();
+    return personalResult();
+  }
+
+  if (WORK_LANGUAGE.test(input.question)) {
+    if (available.length === 1) return workspaceResult(available[0]!);
+    if (available.length > 1) {
+      const last = input.lastContext;
+      if (!last || last.type === "personal") {
+        return clarifyWorkspaces(
+          available,
+          "Which workspace should I use for this?",
+        );
+      }
+    }
+  }
+
+  if (input.lastContext?.type === "workspaces") {
+    if (available.length === 1) return workspaceResult(available[0]!);
+    if (available.length > 1) return allAuthorizedResult();
+  }
+
   if (input.lastContext) {
     if (input.lastContext.type === "personal") return personalResult();
-    const lastWorkspaceId = input.lastContext.workspaceId;
-    const lastWorkspace = available.find(
-      (workspace) => workspace.workspaceId === lastWorkspaceId,
-    );
-    if (lastWorkspace) return workspaceResult(lastWorkspace);
+    if (input.lastContext.type === "workspace") {
+      const lastWorkspaceId = input.lastContext.workspaceId;
+      const lastWorkspace = available.find(
+        (workspace) => workspace.workspaceId === lastWorkspaceId,
+      );
+      if (lastWorkspace) return workspaceResult(lastWorkspace);
+    }
   }
 
   const hinted = contextFromHint(input.hint, input.workspaces);
@@ -151,16 +193,6 @@ export function resolveSenecaAskContext(input: {
       context: hinted,
       name: nameForContext(hinted, input.workspaces),
     };
-  }
-
-  if (WORK_LANGUAGE.test(input.question)) {
-    if (available.length === 1) return workspaceResult(available[0]!);
-    if (available.length > 1) {
-      return clarifyWorkspaces(
-        available,
-        "Which workspace should I use for this?",
-      );
-    }
   }
 
   return personalResult();

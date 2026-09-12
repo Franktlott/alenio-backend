@@ -1,4 +1,3 @@
-import type { SenecaWorkspaceContext } from "./seneca-workspace-context";
 import {
   extractDateFromQuestion,
   extractMemberFromQuestion,
@@ -107,9 +106,9 @@ function matchPlannedCheckIn(
   if (time) {
     candidates = candidates.filter((event) => eventTimeKey(event.startDate, timeZone) === time);
   }
-  if (candidates.length === 1) return candidates[0];
+  if (candidates.length === 1) return candidates[0] ?? null;
   if (candidates.length > 1 && memberUserId && !dateOnly) {
-    return candidates[0];
+    return candidates[0] ?? null;
   }
   return null;
 }
@@ -119,7 +118,7 @@ export function finalizeCancelOneOnOneProposal(
   question: string,
   messages: Array<{ role: string; content: string }>,
   upcoming: PlannedCheckInEventRow[],
-  ctx: SenecaWorkspaceContext,
+  ctx: { members: Array<{ userId: string; name: string; role: string }> },
   managerTimeZone: string,
 ): SenecaCancelOneOnOneProposal | null {
   if (upcoming.length === 0) return null;

@@ -16,7 +16,7 @@ import {
   NO_FEEDBACK_VALUE,
   type OneOnOneTemplateFieldLike,
 } from "../lib/one-on-one-feedback";
-import { appendLeaderCommentsFields, readLeaderCommentsFromMeeting } from "../lib/check-in-leader-comments";
+import { appendLeaderCommentsFields } from "../lib/check-in-leader-comments";
 import { validateCheckInResponses as validateResponses } from "../lib/check-in-responses";
 import { oneOnOnePublishedAt } from "../lib/one-on-one-meeting-dates";
 import { parseCalendarDueDate } from "../lib/recurrence-series";
@@ -32,6 +32,7 @@ import {
 } from "../lib/workspace-member-departure";
 import { removePlannedCheckInCalendarEvent } from "../lib/remove-planned-check-in-event";
 import { canManageCheckIns, WORKSPACE_MANAGER_ROLES } from "../lib/workspace-role-policy";
+import { maskCheckInResponsesForViewer } from "../lib/authorized-data";
 import {
   applyMomentumCompletion,
   withSerializableMomentumTransaction,
@@ -216,24 +217,33 @@ function serializeFollowUpTask(task: {
   };
 }
 
-function serializeMeeting(meeting: {
-  id: string;
-  teamId: string;
-  memberUserId: string;
-  sourceVideoRoomId?: string | null;
-  calendarEventId?: string | null;
-  templateId: string | null;
-  templateTitle: string;
-  templateFields: string;
-  responses: string;
-  status?: string;
-  publishedAt?: Date | null;
-  captureMode?: string | null;
-  followUpDraftsJson?: string | null;
-  createdById: string;
-  createdAt: Date;
-  createdBy?: { id: string; name: string; email: string; image: string | null };
-}) {
+function serializeMeeting(
+  meeting: {
+    id: string;
+    teamId: string;
+    memberUserId: string;
+    sourceVideoRoomId?: string | null;
+    calendarEventId?: string | null;
+    templateId: string | null;
+    templateTitle: string;
+    templateFields: string;
+    responses: string;
+    status?: string;
+    publishedAt?: Date | null;
+    captureMode?: string | null;
+    followUpDraftsJson?: string | null;
+    createdById: string;
+    createdAt: Date;
+    createdBy?: { id: string; name: string; email: string; image: string | null };
+  },
+  viewer: { canViewLeaderNotes: boolean },
+) {
+  const templateFields = parseJsonArray(meeting.templateFields);
+  const responses = maskCheckInResponsesForViewer(
+    templateFields,
+    parseResponses(meeting.responses),
+    viewer.canViewLeaderNotes,
+  );
   return {
     id: meeting.id,
     teamId: meeting.teamId,
@@ -242,8 +252,8 @@ function serializeMeeting(meeting: {
     calendarEventId: meeting.calendarEventId ?? null,
     templateId: meeting.templateId,
     templateTitle: meeting.templateTitle,
-    templateFields: parseJsonArray(meeting.templateFields),
-    responses: parseResponses(meeting.responses),
+    templateFields,
+    responses,
     status: meeting.status === "draft" ? "draft" : "published",
     publishedAt: oneOnOnePublishedAt(meeting)?.toISOString() ?? null,
     captureMode: meeting.captureMode === "recorded" ? "recorded" : "manual",
@@ -285,23 +295,26 @@ async function loadFollowUpTasks(meetingId: string) {
   }
 }
 
-async function serializeMeetingWithTasks(meeting: {
-  id: string;
-  teamId: string;
-  memberUserId: string;
-  sourceVideoRoomId?: string | null;
-  calendarEventId?: string | null;
-  templateId: string | null;
-  templateTitle: string;
-  templateFields: string;
-  responses: string;
-  status?: string;
-  publishedAt?: Date | null;
-  captureMode?: string | null;
-  createdById: string;
-  createdAt: Date;
-  createdBy?: { id: string; name: string; email: string; image: string | null };
-}) {
+async function serializeMeetingWithTasks(
+  meeting: {
+    id: string;
+    teamId: string;
+    memberUserId: string;
+    sourceVideoRoomId?: string | null;
+    calendarEventId?: string | null;
+    templateId: string | null;
+    templateTitle: string;
+    templateFields: string;
+    responses: string;
+    status?: string;
+    publishedAt?: Date | null;
+    captureMode?: string | null;
+    createdById: string;
+    createdAt: Date;
+    createdBy?: { id: string; name: string; email: string; image: string | null };
+  },
+  viewer: { canViewLeaderNotes: boolean },
+) {
   const followUpTasks = await loadFollowUpTasks(meeting.id);
   const responses = parseResponses(meeting.responses);
   const isDraft = meeting.status === "draft";
@@ -310,7 +323,7 @@ async function serializeMeetingWithTasks(meeting: {
     !associateFeedbackAnswered(responses) &&
     (await feedbackRequestAlreadySent(meeting.id, ASSOCIATE_FEEDBACK_FIELD_ID));
   return {
-    ...serializeMeeting(meeting),
+    ...serializeMeeting(meeting, viewer),
     followUpTasks,
     associateFeedbackPending,
   };
@@ -776,12 +789,19 @@ oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
 
 // GET /api/teams/:teamId/members/:memberUserId/one-on-ones
 oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
+  const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
   const memberUserId = c.req.param("memberUserId") as string;
 
   const membership = await getMembership(c, teamId);
   if (!membership) {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const isSelf = user.id === memberUserId;
+  const isManager = canManageOneOnOne(membership);
+  if (!isSelf && !isManager) {
+    return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
   }
 
   const access = await resolveCheckInMemberAccess(membership, teamId, memberUserId, {});
@@ -791,7 +811,7 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
 
   try {
     const where: { teamId: string; memberUserId: string; status?: string } = { teamId, memberUserId };
-    if (!canManageOneOnOne(membership) || access.isFormer) {
+    if (!isManager || access.isFormer) {
       where.status = "published";
     }
 
@@ -801,7 +821,10 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
       orderBy: { createdAt: "desc" },
     });
 
-    const data = await Promise.all(meetings.map((meeting) => serializeMeetingWithTasks(meeting)));
+    const viewer = { canViewLeaderNotes: isManager };
+    const data = await Promise.all(
+      meetings.map((meeting) => serializeMeetingWithTasks(meeting, viewer)),
+    );
     return c.json({ data });
   } catch (err) {
     return prismaRouteError(c, err, "[one-on-one-meetings] GET failed");
@@ -962,7 +985,10 @@ oneOnOneMeetingsRouter.post(
       }
 
       await publishTeamCheckInsUpdated(teamId);
-      return c.json({ data: await serializeMeetingWithTasks(meeting) }, 201);
+      return c.json(
+        { data: await serializeMeetingWithTasks(meeting, { canViewLeaderNotes: true }) },
+        201,
+      );
     } catch (err) {
       return prismaRouteError(c, err, "[one-on-one-meetings] POST failed");
     }
@@ -1122,7 +1148,9 @@ oneOnOneMeetingsRouter.patch(
         return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
       }
       await publishTeamCheckInsUpdated(teamId);
-      return c.json({ data: await serializeMeetingWithTasks(meeting) });
+      return c.json({
+        data: await serializeMeetingWithTasks(meeting, { canViewLeaderNotes: true }),
+      });
     } catch (err) {
       return prismaRouteError(c, err, "[one-on-one-meetings] PATCH failed");
     }
@@ -1169,10 +1197,6 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
   const submitted =
     currentResponse !== undefined &&
     (String(currentResponse) === NO_FEEDBACK_VALUE || String(currentResponse).trim() !== "");
-  const leaderComments = readLeaderCommentsFromMeeting(fields, responses);
-  const leaderCommentsFrom = leaderComments
-    ? meeting.createdBy?.name?.trim() || meeting.createdBy?.email || "Your leader"
-    : null;
 
   return c.json({
     data: {
@@ -1183,9 +1207,9 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
       currentResponse: submitted ? String(currentResponse) : "",
       submitted,
       associateRequest: field.associateRequest,
-      leaderComments: leaderComments?.text ?? null,
-      leaderCommentsLabel: leaderComments?.label ?? null,
-      leaderCommentsFrom,
+      leaderComments: null,
+      leaderCommentsLabel: null,
+      leaderCommentsFrom: null,
     },
   });
 });
@@ -1253,7 +1277,9 @@ oneOnOneMeetingsRouter.post(
     }
 
     await publishTeamCheckInsUpdated(teamId);
-    return c.json({ data: await serializeMeetingWithTasks(updated) });
+    return c.json({
+      data: await serializeMeetingWithTasks(updated, { canViewLeaderNotes: false }),
+    });
   },
 );
 

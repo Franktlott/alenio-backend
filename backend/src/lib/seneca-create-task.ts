@@ -1,4 +1,3 @@
-import type { SenecaWorkspaceContext } from "./seneca-workspace-context";
 import {
   conversationSourceText,
   extractDateFromQuestion,
@@ -244,7 +243,7 @@ function formatDueDateLabel(dueDate: string, timeZone: string): string {
 export function finalizeCreateTaskProposal(
   draft: SenecaCreateTaskDraft,
   question: string,
-  ctx: SenecaWorkspaceContext,
+  ctx: { members: Array<{ userId: string; name: string; role: string }> },
   managerTimeZone: string,
   sourceText?: string,
 ): SenecaCreateTaskProposal | null {
