@@ -10,7 +10,7 @@ const WIKIMEDIA_ENDPOINT = "https://commons.wikimedia.org/w/api.php";
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export function normalizeStockPhotoQuery(raw: string): string | null {
-  const cleaned = raw.replace(/[^\p{L}\p{N}\s'-]/gu, " ").replace(/\s+/g, " ").trim();
+  const cleaned = raw.replace(/[^a-zA-Z0-9\s'-]/g, " ").replace(/\s+/g, " ").trim();
   if (cleaned.length < 2 || cleaned.length > 60) return null;
   return cleaned;
 }

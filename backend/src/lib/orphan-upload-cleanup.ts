@@ -101,10 +101,12 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
     prisma.team.findMany({
       select: { image: true, goFrontendSettings: true },
     }),
-    prisma.calendarEvent.findMany({
-      where: { image: { not: null } },
-      select: { image: true },
-    }),
+    prisma.calendarEvent
+      .findMany({
+        where: { image: { not: null } },
+        select: { image: true },
+      })
+      .catch(() => [] as Array<{ image: string | null }>),
     prisma.walkItemResponse.findMany({
       where: { photoUrls: { not: Prisma.DbNull } },
       select: { photoUrls: true, response: true },

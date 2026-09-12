@@ -6,11 +6,8 @@ export async function ensureCalendarEventImageSchema(
 ): Promise<void> {
   try {
     await prisma.$executeRawUnsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "CalendarEvent"
-          ADD COLUMN "image" TEXT;
-      EXCEPTION WHEN duplicate_column THEN NULL;
-      END $$;
+      ALTER TABLE public."CalendarEvent"
+        ADD COLUMN IF NOT EXISTS "image" TEXT
     `);
   } catch (err) {
     console.error("[startup] ensureCalendarEventImageSchema failed:", err);
