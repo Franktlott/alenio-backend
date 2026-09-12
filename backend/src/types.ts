@@ -527,6 +527,17 @@ export type CreatePersonalRecognitionResponse = {
   id: string;
 };
 
+export type StockPhoto = {
+  id: string;
+  title: string;
+  thumbUrl: string;
+  url: string;
+};
+
+export type StockPhotoSearchResponse = {
+  photos: StockPhoto[];
+};
+
 export type EndVideoMeetingResponse = {
   ended: true;
   roomId: string;
