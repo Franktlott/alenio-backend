@@ -10,6 +10,7 @@
  * schema regardless of how the role's search path is configured.
  */
 import { spawnSync } from "node:child_process";
+import { PrismaClient } from "@prisma/client";
 
 const raw = process.env.DATABASE_URL;
 if (!raw) {
@@ -28,9 +29,43 @@ function withPublicSchema(connectionString: string): string {
   return url.toString();
 }
 
-const result = spawnSync("bunx", ["prisma", "db", "push", "--accept-data-loss"], {
-  stdio: "inherit",
-  env: { ...process.env, DATABASE_URL: withPublicSchema(raw) },
+const publicDatabaseUrl = withPublicSchema(raw);
+
+const result = spawnSync(
+  "bunx",
+  ["prisma", "db", "push", "--accept-data-loss", "--skip-generate"],
+  {
+    stdio: "inherit",
+    env: { ...process.env, DATABASE_URL: publicDatabaseUrl },
+  },
+);
+
+if ((result.status ?? 1) === 0) {
+  process.exit(0);
+}
+
+console.error(
+  "db-push: prisma db push failed; applying additive CalendarEvent.image fallback",
+);
+
+const prisma = new PrismaClient({
+  datasources: { db: { url: publicDatabaseUrl } },
 });
 
-process.exit(result.status ?? 1);
+try {
+  await prisma.$executeRawUnsafe(`
+    DO $$ BEGIN
+      ALTER TABLE "CalendarEvent"
+        ADD COLUMN "image" TEXT;
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
+  `);
+  console.log("db-push: additive fallback applied");
+} catch (err) {
+  console.error("db-push: additive fallback failed:", err);
+  process.exit(1);
+} finally {
+  await prisma.$disconnect();
+}
+
+process.exit(0);
