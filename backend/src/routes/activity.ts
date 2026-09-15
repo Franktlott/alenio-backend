@@ -277,6 +277,58 @@ activityRouter.post(
   }
 );
 
+const POST_BODY_MAX = 2000;
+
+/** A member sharing something with the workspace: text, a photo, or both. */
+activityRouter.post(
+  "/:teamId/activity/posts",
+  zValidator(
+    "json",
+    z
+      .object({
+        body: z.string().trim().max(POST_BODY_MAX).optional(),
+        imageUrl: z.string().url().optional(),
+        imageWidth: z.number().int().positive().optional(),
+        imageHeight: z.number().int().positive().optional(),
+      })
+      .refine((value) => !!value.body || !!value.imageUrl, {
+        message: "Add a message or a photo",
+      }),
+  ),
+  async (c) => {
+    const user = c.get("user")!;
+    const { teamId } = c.req.param();
+    const { body, imageUrl, imageWidth, imageHeight } = c.req.valid("json");
+
+    const membership = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId: user.id, teamId } },
+    });
+    if (!membership) {
+      return c.json(
+        { error: { message: "Not a team member", code: "FORBIDDEN" } },
+        403,
+      );
+    }
+
+    const activity = await prisma.teamActivity.create({
+      data: {
+        teamId,
+        userId: user.id,
+        type: "post",
+        metadata: JSON.stringify({
+          body: body?.trim() || null,
+          imageUrl: imageUrl ?? null,
+          imageWidth: imageWidth ?? null,
+          imageHeight: imageHeight ?? null,
+        }),
+      },
+      include: activityInclude,
+    });
+
+    return c.json({ data: serializeActivity(activity, teamId) }, 201);
+  },
+);
+
 activityRouter.post(
   "/:teamId/activity/:activityId/react",
   zValidator("json", z.object({ emoji: z.string() })),
@@ -328,8 +380,16 @@ activityRouter.delete("/:teamId/activity/:activityId", async (c) => {
   }
   const { activity, membership } = access;
 
-  if (activity.type !== "celebration") {
-    return c.json({ error: { message: "Only celebrations can be deleted", code: "FORBIDDEN" } }, 403);
+  if (activity.type !== "celebration" && activity.type !== "post") {
+    return c.json(
+      {
+        error: {
+          message: "Only posts and celebrations can be deleted",
+          code: "FORBIDDEN",
+        },
+      },
+      403,
+    );
   }
 
   const isCreator = activity.userId === user.id;
