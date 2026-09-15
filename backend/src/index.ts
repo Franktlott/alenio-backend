@@ -136,6 +136,7 @@ import { ensureConversationImageSchema } from "./lib/ensure-conversation-image-s
 import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
 import { ensureTaskKindSchema } from "./lib/ensure-task-kind-schema";
 import { ensureTaskNotesSchema } from "./lib/ensure-task-notes-schema";
+import { ensureActivityCommentsSchema } from "./lib/ensure-activity-comments-schema";
 import { ensureTeamHealthSnapshotSchema } from "./lib/ensure-team-health-snapshot-schema";
 import { ensureSenecaTeamBriefSchema } from "./lib/ensure-seneca-team-brief-schema";
 import { ensureWalksSchema } from "./lib/ensure-walks-schema";
@@ -244,6 +245,7 @@ const startupSchemaReady = Promise.all([
         ensureConversationImageSchema(prisma),
         ensureTaskArchiveSchema(prisma),
         ensureTaskNotesSchema(prisma),
+        ensureActivityCommentsSchema(prisma),
       ]
     : [
         ensureCalendarApprovalSchema(prisma),
@@ -267,6 +269,7 @@ const startupSchemaReady = Promise.all([
         ensureConversationImageSchema(prisma),
         ensureTaskArchiveSchema(prisma),
         ensureTaskNotesSchema(prisma),
+        ensureActivityCommentsSchema(prisma),
       ]),
 ]);
 

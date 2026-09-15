@@ -115,6 +115,7 @@ model User {
   createdTopics                     Topic[]                         @relation("TopicCreator")
   topicMemberships                  TopicMember[]
   activityReactions                 TeamActivityReaction[]
+  activityComments                  TeamActivityComment[]
   pollsCreated                      Poll[]                          @relation("PollCreatedBy")
   pollVotes                         PollVote[]                      @relation("PollVoteUser")
   subtaskCompletions                SubtaskCompletion[]
@@ -1955,9 +1956,22 @@ model TeamActivity {
   metadata  String?
   createdAt DateTime               @default(now())
   reactions TeamActivityReaction[]
+  comments  TeamActivityComment[]
 
   @@index([teamId, createdAt])
   @@index([userId, createdAt])
+}
+
+model TeamActivityComment {
+  id         String       @id @default(cuid())
+  activityId String
+  userId     String
+  body       String
+  createdAt  DateTime     @default(now())
+  activity   TeamActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([activityId, createdAt])
 }
 
 model TeamActivityReaction {

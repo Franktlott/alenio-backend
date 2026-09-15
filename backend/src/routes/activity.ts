@@ -6,6 +6,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { canModerateWorkspaceContent } from "../lib/workspace-role-policy";
 import {
+  activityVisibleToTeam,
   parseActivityMetadata,
   personalCelebrationBelongsToTeam,
 } from "../lib/workspace-activity-feed";
@@ -20,6 +21,131 @@ const activityRouter = new Hono<{ Variables: Variables }>();
 const ACTIVITY_FEED_DAYS = 14;
 
 activityRouter.use("*", authGuard);
+
+const activityInclude = {
+  user: { select: { id: true, name: true, image: true } },
+  reactions: {
+    include: { user: { select: { id: true, name: true } } },
+  },
+  _count: { select: { comments: true } },
+} as const;
+
+type ReactionRow = { emoji: string; userId: string; user: { id: string; name: string } };
+
+function mapReactions(reactions: ReactionRow[]) {
+  return reactions.reduce(
+    (
+      acc: Record<
+        string,
+        { count: number; userIds: string[]; users: { id: string; name: string }[] }
+      >,
+      r,
+    ) => {
+      if (!acc[r.emoji]) acc[r.emoji] = { count: 0, userIds: [], users: [] };
+      acc[r.emoji]!.count++;
+      acc[r.emoji]!.userIds.push(r.userId);
+      acc[r.emoji]!.users.push({ id: r.user.id, name: r.user.name });
+      return acc;
+    },
+    {},
+  );
+}
+
+function serializeActivity(
+  activity: {
+    id: string;
+    type: string;
+    metadata: string | null;
+    createdAt: Date;
+    user: { id: string; name: string; image: string | null } | null;
+    reactions: ReactionRow[];
+    _count: { comments: number };
+  },
+  teamId: string,
+) {
+  return {
+    id: activity.id,
+    teamId,
+    type: activity.type,
+    createdAt: activity.createdAt,
+    metadata: activity.metadata ? JSON.parse(activity.metadata) : null,
+    user: activity.user,
+    reactions: mapReactions(activity.reactions),
+    commentCount: activity._count.comments,
+  };
+}
+
+type ActivityAccess =
+  | {
+      ok: true;
+      membership: { role: string };
+      activity: {
+        id: string;
+        teamId: string | null;
+        type: string;
+        userId: string | null;
+        metadata: string | null;
+      };
+    }
+  | { ok: false; status: 403 | 404; code: "FORBIDDEN" | "NOT_FOUND"; message: string };
+
+/**
+ * One gate for every per-activity route. Membership alone is not enough: the
+ * feed also surfaces personal celebrations that carry no teamId, and without
+ * this check any member could react to or comment on an unrelated activity id.
+ */
+async function loadActivityForTeam(
+  userId: string,
+  teamId: string,
+  activityId: string,
+): Promise<ActivityAccess> {
+  const [membership, activity] = await Promise.all([
+    prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId, teamId } },
+    }),
+    prisma.teamActivity.findUnique({ where: { id: activityId } }),
+  ]);
+
+  if (!membership) {
+    return {
+      ok: false,
+      status: 403,
+      code: "FORBIDDEN",
+      message: "Not a team member",
+    };
+  }
+  if (!activity) {
+    return {
+      ok: false,
+      status: 404,
+      code: "NOT_FOUND",
+      message: "Activity not found",
+    };
+  }
+
+  let visible = activity.teamId === teamId;
+  if (!visible) {
+    const members = await prisma.teamMember.findMany({
+      where: { teamId },
+      select: { userId: true },
+    });
+    visible = activityVisibleToTeam({
+      activity,
+      teamId,
+      memberIds: new Set(members.map((member) => member.userId)),
+    });
+  }
+  if (!visible) {
+    return {
+      ok: false,
+      status: 404,
+      code: "NOT_FOUND",
+      message: "Activity not found",
+    };
+  }
+
+  return { ok: true, membership, activity };
+}
 
 activityRouter.get("/:teamId/activity", async (c) => {
   const user = c.get("user")!;
@@ -39,13 +165,6 @@ activityRouter.get("/:teamId/activity", async (c) => {
   });
   const memberIds = members.map((member) => member.userId);
   const memberIdSet = new Set(memberIds);
-
-  const activityInclude = {
-    user: { select: { id: true, name: true, image: true } },
-    reactions: {
-      include: { user: { select: { id: true, name: true } } },
-    },
-  } as const;
 
   const [teamActivities, personalCelebrations] = await Promise.all([
     prisma.teamActivity.findMany({
@@ -86,22 +205,35 @@ activityRouter.get("/:teamId/activity", async (c) => {
     .slice(0, 100);
 
   return c.json({
-    data: activities.map((a) => ({
-      id: a.id,
-      teamId,
-      type: a.type,
-      createdAt: a.createdAt,
-      metadata: a.metadata ? JSON.parse(a.metadata) : null,
-      user: a.user,
-      reactions: a.reactions.reduce((acc: Record<string, { count: number; userIds: string[]; users: { id: string; name: string }[] }>, r) => {
-        if (!acc[r.emoji]) acc[r.emoji] = { count: 0, userIds: [], users: [] };
-        acc[r.emoji]!.count++;
-        acc[r.emoji]!.userIds.push(r.userId);
-        acc[r.emoji]!.users.push({ id: r.user.id, name: r.user.name });
-        return acc;
-      }, {}),
-    })),
+    data: activities.map((activity) => serializeActivity(activity, teamId)),
   });
+});
+
+/** One post, for the detail screen and for deep links into a thread. */
+activityRouter.get("/:teamId/activity/:activityId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, activityId } = c.req.param();
+
+  const access = await loadActivityForTeam(user.id, teamId, activityId);
+  if (!access.ok) {
+    return c.json(
+      { error: { message: access.message, code: access.code } },
+      access.status,
+    );
+  }
+
+  const activity = await prisma.teamActivity.findUnique({
+    where: { id: activityId },
+    include: activityInclude,
+  });
+  if (!activity) {
+    return c.json(
+      { error: { message: "Activity not found", code: "NOT_FOUND" } },
+      404,
+    );
+  }
+
+  return c.json({ data: serializeActivity(activity, teamId) });
 });
 
 activityRouter.post(
@@ -153,11 +285,12 @@ activityRouter.post(
     const { teamId, activityId } = c.req.param();
     const { emoji } = c.req.valid("json");
 
-    const membership = await prisma.teamMember.findUnique({
-      where: { userId_teamId: { userId: user.id, teamId } },
-    });
-    if (!membership) {
-      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    const access = await loadActivityForTeam(user.id, teamId, activityId);
+    if (!access.ok) {
+      return c.json(
+        { error: { message: access.message, code: access.code } },
+        access.status,
+      );
     }
 
     // Find any existing reaction from this user on this activity (one reaction per user max)
@@ -186,35 +319,15 @@ activityRouter.delete("/:teamId/activity/:activityId", async (c) => {
   const user = c.get("user")!;
   const { teamId, activityId } = c.req.param();
 
-  const membership = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: user.id, teamId } },
-  });
-  if (!membership) {
-    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  const access = await loadActivityForTeam(user.id, teamId, activityId);
+  if (!access.ok) {
+    return c.json(
+      { error: { message: access.message, code: access.code } },
+      access.status,
+    );
   }
+  const { activity, membership } = access;
 
-  const activity = await prisma.teamActivity.findUnique({
-    where: { id: activityId },
-  });
-  if (!activity) {
-    return c.json({ error: { message: "Activity not found", code: "NOT_FOUND" } }, 404);
-  }
-
-  let visibleOnTeam = activity.teamId === teamId;
-  if (!visibleOnTeam && activity.teamId == null && activity.type === "celebration") {
-    const members = await prisma.teamMember.findMany({
-      where: { teamId },
-      select: { userId: true },
-    });
-    visibleOnTeam = personalCelebrationBelongsToTeam({
-      actorUserId: activity.userId,
-      metadata: parseActivityMetadata(activity.metadata),
-      memberIds: new Set(members.map((member) => member.userId)),
-    });
-  }
-  if (!visibleOnTeam) {
-    return c.json({ error: { message: "Activity not found", code: "NOT_FOUND" } }, 404);
-  }
   if (activity.type !== "celebration") {
     return c.json({ error: { message: "Only celebrations can be deleted", code: "FORBIDDEN" } }, 403);
   }
@@ -228,6 +341,111 @@ activityRouter.delete("/:teamId/activity/:activityId", async (c) => {
   await prisma.teamActivity.delete({ where: { id: activityId } });
   return c.body(null, 204);
 });
+
+const COMMENT_MAX_LENGTH = 1000;
+
+function serializeComment(
+  comment: {
+    id: string;
+    body: string;
+    createdAt: Date;
+    userId: string;
+    user: { id: string; name: string; image: string | null };
+  },
+  viewerId: string,
+) {
+  return {
+    id: comment.id,
+    body: comment.body,
+    createdAt: comment.createdAt,
+    author: comment.user,
+    canDelete: comment.userId === viewerId,
+  };
+}
+
+activityRouter.get("/:teamId/activity/:activityId/comments", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, activityId } = c.req.param();
+
+  const access = await loadActivityForTeam(user.id, teamId, activityId);
+  if (!access.ok) {
+    return c.json(
+      { error: { message: access.message, code: access.code } },
+      access.status,
+    );
+  }
+
+  const comments = await prisma.teamActivityComment.findMany({
+    where: { activityId },
+    include: { user: { select: { id: true, name: true, image: true } } },
+    orderBy: { createdAt: "asc" },
+    take: 200,
+  });
+
+  return c.json({
+    data: comments.map((comment) => serializeComment(comment, user.id)),
+  });
+});
+
+activityRouter.post(
+  "/:teamId/activity/:activityId/comments",
+  zValidator(
+    "json",
+    z.object({ body: z.string().trim().min(1).max(COMMENT_MAX_LENGTH) }),
+  ),
+  async (c) => {
+    const user = c.get("user")!;
+    const { teamId, activityId } = c.req.param();
+    const { body } = c.req.valid("json");
+
+    const access = await loadActivityForTeam(user.id, teamId, activityId);
+    if (!access.ok) {
+      return c.json(
+        { error: { message: access.message, code: access.code } },
+        access.status,
+      );
+    }
+
+    const comment = await prisma.teamActivityComment.create({
+      data: { activityId, userId: user.id, body: body.trim() },
+      include: { user: { select: { id: true, name: true, image: true } } },
+    });
+
+    return c.json({ data: serializeComment(comment, user.id) }, 201);
+  },
+);
+
+activityRouter.delete(
+  "/:teamId/activity/:activityId/comments/:commentId",
+  async (c) => {
+    const user = c.get("user")!;
+    const { teamId, activityId, commentId } = c.req.param();
+
+    const access = await loadActivityForTeam(user.id, teamId, activityId);
+    if (!access.ok) {
+      return c.json(
+        { error: { message: access.message, code: access.code } },
+        access.status,
+      );
+    }
+
+    const comment = await prisma.teamActivityComment.findUnique({
+      where: { id: commentId },
+    });
+    if (!comment || comment.activityId !== activityId) {
+      return c.json(
+        { error: { message: "Comment not found", code: "NOT_FOUND" } },
+        404,
+      );
+    }
+    if (comment.userId !== user.id) {
+      return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+    }
+
+    await prisma.teamActivityComment.delete({ where: { id: commentId } });
+    return c.body(null, 204);
+  },
+);
 
 const RECOGNITION_TYPE_KEYS = [
   "leadership",
