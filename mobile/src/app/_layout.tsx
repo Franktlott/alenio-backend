@@ -1,5 +1,4 @@
 import { Toaster } from 'burnt/web';
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
 import { Stack, router, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -26,6 +25,8 @@ import Animated, {
 import { AppPageBackground } from '@/components/AppPageBackground';
 import { toast } from 'burnt';
 import { subscribeToWorkspaceReadOnly } from '@/lib/workspace-access';
+import { api } from '@/lib/api/api';
+import { createForegroundIntervalController } from '@/lib/foreground-interval';
 
 export const unstable_settings = {
   /** Run `index` first so session + `/api/me` gate to Chat or Sign-in stays consistent. */
@@ -119,7 +120,6 @@ function RootLayoutNav() {
   const { data: authReady } = useMobileAuthReady();
 
   const me = authReady?.me;
-  const session = authReady?.session;
   const hasBackendSession = !!authReady?.me?.id;
   const isAdmin = me?.isAdmin === true;
 
@@ -129,15 +129,22 @@ function RootLayoutNav() {
     coldStartBootstrapped.current = true;
     if (queryClient.getQueryState(AUTH_READY_QUERY_KEY)?.dataUpdatedAt) return;
     let active = true;
-    void bootstrapMobileAuth().then((data) => {
-      if (!active) return;
-      queryClient.setQueryData(AUTH_READY_QUERY_KEY, data, { updatedAt: Date.now() });
-      agentDebugLog("cold start bootstrap", {
-        runId: "auth-simplify-v4",
-        hypothesisId: "H15",
-        hasUser: !!data?.me?.id,
+    void bootstrapMobileAuth()
+      .then((data) => {
+        if (!active) return;
+        queryClient.setQueryData(AUTH_READY_QUERY_KEY, data, { updatedAt: Date.now() });
+        agentDebugLog("cold start bootstrap", {
+          runId: "auth-simplify-v4",
+          hypothesisId: "H15",
+          hasUser: !!data?.me?.id,
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        queryClient.setQueryData(AUTH_READY_QUERY_KEY, null, {
+          updatedAt: Date.now(),
+        });
       });
-    });
     return () => {
       active = false;
     };
@@ -167,6 +174,25 @@ function RootLayoutNav() {
     });
     return () => sub.remove();
   }, []);
+
+  useEffect(() => {
+    if (!authReady?.me?.id) return;
+
+    const heartbeat = createForegroundIntervalController({
+      intervalMs: 60_000,
+      task: () =>
+        api.post<{ ok: true }>("/api/presence/heartbeat", {}, { skipSignOut: true }),
+    });
+    heartbeat.setEnabled(AppState.currentState === "active");
+    const subscription = AppState.addEventListener("change", (state) => {
+      heartbeat.setEnabled(state === "active");
+    });
+
+    return () => {
+      subscription.remove();
+      heartbeat.stop();
+    };
+  }, [authReady?.me?.id]);
 
   // Enter the app once from bootstrap routes (cold start / sign-in). Do not hijack other screens.
   useEffect(() => {
@@ -212,8 +238,17 @@ function RootLayoutNav() {
       } else if (data?.type === "video_call" || data?.type === "meeting_reminder") {
         queryClient.invalidateQueries({ queryKey: ["video"] });
         queryClient.invalidateQueries({ queryKey: ["calendar"] });
+      } else if (
+        data?.type === "calendar_event_pending" ||
+        data?.type === "calendar_event_approved" ||
+        data?.type === "calendar_event_rejected"
+      ) {
+        queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+        queryClient.invalidateQueries({ queryKey: ["calendar-events-pending"] });
+        queryClient.invalidateQueries({ queryKey: ["activity"] });
       } else if (data?.type === "join_request" || data?.type === "join_approved" || data?.type === "join_rejected") {
         queryClient.invalidateQueries({ queryKey: ["teams"] });
+        queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
         queryClient.invalidateQueries({ queryKey: ["join-requests"] });
         queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
       } else if (data?.type === "admin_alert") {
@@ -258,7 +293,7 @@ function RootLayoutNav() {
       notificationListener.current?.remove();
       responseListener.remove();
     };
-  }, [hasBackendSession, session?.user?.id]);
+  }, [hasBackendSession]);
 
   useEffect(
     () =>
@@ -279,8 +314,7 @@ function RootLayoutNav() {
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <AppPageBackground />
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
           <Stack.Screen name="index" />
           <Stack.Protected guard={hasBackendSession}>
             <Stack.Screen name="(app)" />
@@ -321,7 +355,28 @@ function RootLayoutNav() {
               }}
             />
             <Stack.Screen
-              name="manage-workspaces"
+              name="workspace-advanced"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
+              }}
+            />
+            <Stack.Screen
+              name="workspace-permissions"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
+              }}
+            />
+            <Stack.Screen
+              name="check-in-templates"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
+              }}
+            />
+            <Stack.Screen
+              name="check-in-template-editor"
               options={{
                 headerShown: false,
                 animation: "slide_from_right",
@@ -341,15 +396,16 @@ function RootLayoutNav() {
                 animation: "slide_from_right",
               }}
             />
-            <Stack.Screen
-              name="team-directory"
-              options={{
-                headerShown: false,
-                animation: "slide_from_right",
-              }}
-            />
             <Stack.Screen name="team-chat" />
             <Stack.Screen name="dm-chat" />
+            <Stack.Screen
+              name="update-detail"
+              options={{ animation: "slide_from_right" }}
+            />
+            <Stack.Screen
+              name="create-post"
+              options={{ animation: "slide_from_bottom" }}
+            />
             <Stack.Screen
               name="video-call"
               options={{
@@ -396,8 +452,18 @@ function RootLayoutNav() {
               }}
             />
             <Stack.Screen name="notifications" />
+            <Stack.Screen name="get-started" />
             <Stack.Screen name="username" />
+            <Stack.Screen name="change-email" />
             <Stack.Screen name="person" />
+            <Stack.Screen name="workspace-activity" />
+            <Stack.Screen
+              name="recognition-hub"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
+              }}
+            />
           </Stack.Protected>
           <Stack.Protected guard={!hasBackendSession}>
             <Stack.Screen name="welcome" />
@@ -414,8 +480,7 @@ function RootLayoutNav() {
           <Stack.Screen name="ownership-transfer" options={{ headerShown: false }} />
           <Stack.Screen name="privacy-policy" />
           <Stack.Screen name="terms-of-service" />
-        </Stack>
-      </ThemeProvider>
+      </Stack>
       {showSplash ? <CustomSplash isReady={animDone && sessionSettled ? true : false} onDone={() => setShowSplash(false)} /> : null}
     </View>
   );

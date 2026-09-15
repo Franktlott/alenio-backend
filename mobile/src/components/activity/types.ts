@@ -10,7 +10,10 @@ export type ActivityFeedType =
   | "task_assigned"
   | "task_milestone"
   | "personal_best"
-  | "celebration";
+  | "connection_request_sent"
+  | "connection_request_received"
+  | "celebration"
+  | "post";
 
 export type ActivityReactionUser = { id: string; name: string };
 
@@ -42,6 +45,14 @@ export type ActivityMetadata = {
   assignees?: { id: string; name: string; image: string | null }[];
   completedOnTime?: boolean;
   dueDate?: string | null;
+  actorUserId?: string;
+  actorName?: string;
+  actorImage?: string | null;
+  /** Workspace post: what the person wrote and an optional photo. */
+  body?: string | null;
+  imageUrl?: string | null;
+  imageWidth?: number | null;
+  imageHeight?: number | null;
 };
 
 export type ActivityApiEvent = {
@@ -53,6 +64,7 @@ export type ActivityApiEvent = {
   metadata: ActivityMetadata | null;
   user: { id: string; name: string; image: string | null } | null;
   reactions: ActivityReactions;
+  commentCount?: number;
 };
 
 export type ActivityFeedItem = {
@@ -67,6 +79,7 @@ export type ActivityFeedItem = {
   dateGroup: ActivityDateGroup;
   metadata: ActivityMetadata;
   reactions: ActivityReactions;
+  commentCount?: number;
 };
 
 export type ActivityDateSection = {
@@ -237,23 +250,26 @@ export function groupRepetitiveActivities(
   items: ActivityFeedItem[],
 ): Array<ActivityFeedItem | ActivityFeedGroup> {
   const output: Array<ActivityFeedItem | ActivityFeedGroup> = [];
+  const consumedIndexes = new Set<number>();
   const clusterable = new Set<ActivityFeedType>([
     "task_completed",
     "task_assigned",
     "calendar_event_added",
   ]);
 
-  for (let index = 0; index < items.length; ) {
+  for (let index = 0; index < items.length; index += 1) {
+    if (consumedIndexes.has(index)) continue;
+
     const first = items[index]!;
     if (!clusterable.has(first.type)) {
       output.push(first);
-      index += 1;
       continue;
     }
 
     const cluster = [first];
-    let cursor = index + 1;
-    while (cursor < items.length) {
+    for (let cursor = index + 1; cursor < items.length; cursor += 1) {
+      if (consumedIndexes.has(cursor)) continue;
+
       const next = items[cursor]!;
       const sameIdentity =
         next.type === first.type &&
@@ -262,14 +278,20 @@ export function groupRepetitiveActivities(
       const withinHour =
         Math.abs(new Date(first.timestamp).getTime() - new Date(next.timestamp).getTime()) <=
         60 * 60 * 1000;
-      if (!sameIdentity || !withinHour) break;
-      cluster.push(next);
-      cursor += 1;
+      if (sameIdentity && withinHour) {
+        cluster.push(next);
+        consumedIndexes.add(cursor);
+        continue;
+      }
+
+      // Task activity can be separated by milestone or other feed cards.
+      // Keep scanning so all completions or assignments in the hour collapse.
+      if (first.type === "task_completed" || first.type === "task_assigned") continue;
+      break;
     }
 
     if (cluster.length < 2) {
       output.push(first);
-      index += 1;
       continue;
     }
 
@@ -306,7 +328,6 @@ export function groupRepetitiveActivities(
       actionLabel: first.type === "calendar_event_added" ? "View events" : first.type === "task_assigned" ? "View tasks" : "View activity",
       timestamp: first.timestamp,
     });
-    index = cursor;
   }
 
   return output;
@@ -447,6 +468,12 @@ export function mapApiActivityToFeedItem(event: ActivityApiEvent): ActivityFeedI
     case "celebration":
       mapped = mapCelebration(event);
       break;
+    case "post":
+      mapped = {
+        title: `${actorName(event)} shared an update`,
+        description: metadata.body ?? undefined,
+      };
+      break;
     default:
       mapped = { title: "Activity update", description: "Something happened on your team" };
   }
@@ -463,6 +490,7 @@ export function mapApiActivityToFeedItem(event: ActivityApiEvent): ActivityFeedI
     dateGroup: getDateGroup(event.createdAt),
     metadata,
     reactions: event.reactions ?? {},
+    commentCount: event.commentCount ?? 0,
   };
 }
 
