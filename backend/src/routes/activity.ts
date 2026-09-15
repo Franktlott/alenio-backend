@@ -5,6 +5,10 @@ import { authGuard } from "../middleware/auth-guard";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { canModerateWorkspaceContent } from "../lib/workspace-role-policy";
+import {
+  parseActivityMetadata,
+  personalCelebrationBelongsToTeam,
+} from "../lib/workspace-activity-feed";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -29,18 +33,57 @@ activityRouter.get("/:teamId/activity", async (c) => {
   }
 
   const feedStart = new Date(Date.now() - ACTIVITY_FEED_DAYS * 24 * 60 * 60 * 1000);
-
-  const activities = await prisma.teamActivity.findMany({
-    where: { teamId, createdAt: { gte: feedStart } },
-    include: {
-      user: { select: { id: true, name: true, image: true } },
-      reactions: {
-        include: { user: { select: { id: true, name: true } } },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
+  const members = await prisma.teamMember.findMany({
+    where: { teamId },
+    select: { userId: true },
   });
+  const memberIds = members.map((member) => member.userId);
+  const memberIdSet = new Set(memberIds);
+
+  const activityInclude = {
+    user: { select: { id: true, name: true, image: true } },
+    reactions: {
+      include: { user: { select: { id: true, name: true } } },
+    },
+  } as const;
+
+  const [teamActivities, personalCelebrations] = await Promise.all([
+    prisma.teamActivity.findMany({
+      where: { teamId, createdAt: { gte: feedStart } },
+      include: activityInclude,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    memberIds.length === 0
+      ? Promise.resolve([])
+      : prisma.teamActivity.findMany({
+          where: {
+            teamId: null,
+            type: "celebration",
+            userId: { in: memberIds },
+            createdAt: { gte: feedStart },
+          },
+          include: activityInclude,
+          orderBy: { createdAt: "desc" },
+          take: 100,
+        }),
+  ]);
+
+  const extras = personalCelebrations.filter((activity) =>
+    personalCelebrationBelongsToTeam({
+      actorUserId: activity.userId,
+      metadata: parseActivityMetadata(activity.metadata),
+      memberIds: memberIdSet,
+    }),
+  );
+
+  const byId = new Map<string, (typeof teamActivities)[number]>();
+  for (const activity of [...teamActivities, ...extras]) {
+    byId.set(activity.id, activity);
+  }
+  const activities = [...byId.values()]
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+    .slice(0, 100);
 
   return c.json({
     data: activities.map((a) => ({
@@ -150,10 +193,26 @@ activityRouter.delete("/:teamId/activity/:activityId", async (c) => {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
-  const activity = await prisma.teamActivity.findFirst({
-    where: { id: activityId, teamId },
+  const activity = await prisma.teamActivity.findUnique({
+    where: { id: activityId },
   });
   if (!activity) {
+    return c.json({ error: { message: "Activity not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  let visibleOnTeam = activity.teamId === teamId;
+  if (!visibleOnTeam && activity.teamId == null && activity.type === "celebration") {
+    const members = await prisma.teamMember.findMany({
+      where: { teamId },
+      select: { userId: true },
+    });
+    visibleOnTeam = personalCelebrationBelongsToTeam({
+      actorUserId: activity.userId,
+      metadata: parseActivityMetadata(activity.metadata),
+      memberIds: new Set(members.map((member) => member.userId)),
+    });
+  }
+  if (!visibleOnTeam) {
     return c.json({ error: { message: "Activity not found", code: "NOT_FOUND" } }, 404);
   }
   if (activity.type !== "celebration") {
@@ -200,18 +259,6 @@ function normalizeRecognitionType(value: string): RecognitionTypeKey | "other" {
     milestone: "leadership",
   };
   return legacy[value] ?? "other";
-}
-
-function parseActivityMetadata(raw: string | null): Record<string, unknown> | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 function startOfMonth(date: Date): Date {

@@ -100,6 +100,9 @@ userActivityRouter.get("/recognitions", async (c) => {
       include: {
         team: { select: { id: true, name: true } },
         user: { select: { id: true, name: true, image: true } },
+        reactions: {
+          include: { user: { select: { id: true, name: true } } },
+        },
       },
       orderBy: { createdAt: "desc" },
       skip: offset,
@@ -111,6 +114,9 @@ userActivityRouter.get("/recognitions", async (c) => {
       include: {
         team: { select: { id: true, name: true } },
         user: { select: { id: true, name: true, image: true } },
+        reactions: {
+          include: { user: { select: { id: true, name: true } } },
+        },
       },
       orderBy: { createdAt: "desc" },
       skip: offset,
@@ -141,6 +147,7 @@ userActivityRouter.get("/recognitions", async (c) => {
             name: user.name,
             image: user.image,
           },
+          reactions: mapReactions(recognition.reactions),
         };
       }),
       givenTotal,
@@ -173,6 +180,7 @@ userActivityRouter.get("/recognitions", async (c) => {
                       : null,
                 }
               : null,
+          reactions: mapReactions(recognition.reactions),
         };
       }),
     },
