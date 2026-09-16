@@ -404,22 +404,32 @@ activityRouter.delete("/:teamId/activity/:activityId", async (c) => {
 
 const COMMENT_MAX_LENGTH = 1000;
 
-function serializeComment(
-  comment: {
-    id: string;
-    body: string;
-    createdAt: Date;
-    userId: string;
-    user: { id: string; name: string; image: string | null };
+const commentInclude = {
+  user: { select: { id: true, name: true, image: true } },
+  reactions: {
+    include: { user: { select: { id: true, name: true } } },
   },
-  viewerId: string,
-) {
+} as const;
+
+type CommentRow = {
+  id: string;
+  body: string;
+  createdAt: Date;
+  userId: string;
+  parentId: string | null;
+  user: { id: string; name: string; image: string | null };
+  reactions: ReactionRow[];
+};
+
+function serializeComment(comment: CommentRow, viewerId: string) {
   return {
     id: comment.id,
     body: comment.body,
     createdAt: comment.createdAt,
+    parentId: comment.parentId,
     author: comment.user,
     canDelete: comment.userId === viewerId,
+    reactions: mapReactions(comment.reactions),
   };
 }
 
@@ -437,9 +447,9 @@ activityRouter.get("/:teamId/activity/:activityId/comments", async (c) => {
 
   const comments = await prisma.teamActivityComment.findMany({
     where: { activityId },
-    include: { user: { select: { id: true, name: true, image: true } } },
+    include: commentInclude,
     orderBy: { createdAt: "asc" },
-    take: 200,
+    take: 400,
   });
 
   return c.json({
@@ -451,12 +461,15 @@ activityRouter.post(
   "/:teamId/activity/:activityId/comments",
   zValidator(
     "json",
-    z.object({ body: z.string().trim().min(1).max(COMMENT_MAX_LENGTH) }),
+    z.object({
+      body: z.string().trim().min(1).max(COMMENT_MAX_LENGTH),
+      parentId: z.string().optional(),
+    }),
   ),
   async (c) => {
     const user = c.get("user")!;
     const { teamId, activityId } = c.req.param();
-    const { body } = c.req.valid("json");
+    const { body, parentId } = c.req.valid("json");
 
     const access = await loadActivityForTeam(user.id, teamId, activityId);
     if (!access.ok) {
@@ -466,12 +479,92 @@ activityRouter.post(
       );
     }
 
+    // Keep threads one level deep: replying to a reply attaches to its parent.
+    let resolvedParentId: string | null = null;
+    if (parentId) {
+      const parent = await prisma.teamActivityComment.findUnique({
+        where: { id: parentId },
+        select: { id: true, activityId: true, parentId: true },
+      });
+      if (!parent || parent.activityId !== activityId) {
+        return c.json(
+          { error: { message: "Comment not found", code: "NOT_FOUND" } },
+          404,
+        );
+      }
+      resolvedParentId = parent.parentId ?? parent.id;
+    }
+
     const comment = await prisma.teamActivityComment.create({
-      data: { activityId, userId: user.id, body: body.trim() },
-      include: { user: { select: { id: true, name: true, image: true } } },
+      data: {
+        activityId,
+        userId: user.id,
+        body: body.trim(),
+        parentId: resolvedParentId,
+      },
+      include: commentInclude,
     });
 
     return c.json({ data: serializeComment(comment, user.id) }, 201);
+  },
+);
+
+/** Toggles the viewer's emoji on a comment, same rules as reacting to a post. */
+activityRouter.post(
+  "/:teamId/activity/:activityId/comments/:commentId/react",
+  zValidator("json", z.object({ emoji: z.string().min(1).max(24) })),
+  async (c) => {
+    const user = c.get("user")!;
+    const { teamId, activityId, commentId } = c.req.param();
+    const { emoji } = c.req.valid("json");
+
+    const access = await loadActivityForTeam(user.id, teamId, activityId);
+    if (!access.ok) {
+      return c.json(
+        { error: { message: access.message, code: access.code } },
+        access.status,
+      );
+    }
+
+    const comment = await prisma.teamActivityComment.findUnique({
+      where: { id: commentId },
+      select: { id: true, activityId: true },
+    });
+    if (!comment || comment.activityId !== activityId) {
+      return c.json(
+        { error: { message: "Comment not found", code: "NOT_FOUND" } },
+        404,
+      );
+    }
+
+    const existing = await prisma.teamActivityCommentReaction.findUnique({
+      where: {
+        commentId_userId_emoji: { commentId, userId: user.id, emoji },
+      },
+    });
+
+    if (existing) {
+      await prisma.teamActivityCommentReaction.delete({
+        where: { id: existing.id },
+      });
+    } else {
+      // One reaction per person: swap whatever they had for the new emoji.
+      await prisma.teamActivityCommentReaction.deleteMany({
+        where: { commentId, userId: user.id },
+      });
+      await prisma.teamActivityCommentReaction.create({
+        data: { commentId, userId: user.id, emoji },
+      });
+    }
+
+    const updated = await prisma.teamActivityComment.findUnique({
+      where: { id: commentId },
+      include: commentInclude,
+    });
+
+    return c.json({
+      data: updated ? serializeComment(updated, user.id) : null,
+    });
   },
 );
 

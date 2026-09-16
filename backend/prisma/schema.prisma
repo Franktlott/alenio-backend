@@ -116,6 +116,7 @@ model User {
   topicMemberships                  TopicMember[]
   activityReactions                 TeamActivityReaction[]
   activityComments                  TeamActivityComment[]
+  activityCommentReactions          TeamActivityCommentReaction[]
   pollsCreated                      Poll[]                          @relation("PollCreatedBy")
   pollVotes                         PollVote[]                      @relation("PollVoteUser")
   subtaskCompletions                SubtaskCompletion[]
@@ -1963,15 +1964,36 @@ model TeamActivity {
 }
 
 model TeamActivityComment {
-  id         String       @id @default(cuid())
+  id         String                        @id @default(cuid())
   activityId String
   userId     String
   body       String
-  createdAt  DateTime     @default(now())
-  activity   TeamActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /**
+   * Set when this comment replies to another. Threads stay one level deep:
+   * a reply always points at a top-level comment.
+   */
+  parentId   String?
+  createdAt  DateTime                      @default(now())
+  activity   TeamActivity                  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user       User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent     TeamActivityComment?          @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    TeamActivityComment[]         @relation("CommentReplies")
+  reactions  TeamActivityCommentReaction[]
 
   @@index([activityId, createdAt])
+  @@index([parentId, createdAt])
+}
+
+model TeamActivityCommentReaction {
+  id        String              @id @default(cuid())
+  emoji     String
+  userId    String
+  commentId String
+  createdAt DateTime            @default(now())
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment   TeamActivityComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji])
 }
 
 model TeamActivityReaction {

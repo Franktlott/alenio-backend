@@ -43,6 +43,61 @@ export async function ensureActivityCommentsSchema(
       END $$;
     `);
 
+    // Replies: a comment may point at the comment it answers.
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE public."TeamActivityComment"
+        ADD COLUMN IF NOT EXISTS "parentId" TEXT;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "TeamActivityComment_parentId_createdAt_idx"
+        ON public."TeamActivityComment"("parentId", "createdAt");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE public."TeamActivityComment"
+          ADD CONSTRAINT "TeamActivityComment_parentId_fkey"
+          FOREIGN KEY ("parentId") REFERENCES public."TeamActivityComment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+
+    // Reactions on comments, mirroring TeamActivityReaction.
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS public."TeamActivityCommentReaction" (
+        "id" TEXT NOT NULL,
+        "emoji" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "commentId" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "TeamActivityCommentReaction_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "TeamActivityCommentReaction_commentId_userId_emoji_key"
+        ON public."TeamActivityCommentReaction"("commentId", "userId", "emoji");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE public."TeamActivityCommentReaction"
+          ADD CONSTRAINT "TeamActivityCommentReaction_commentId_fkey"
+          FOREIGN KEY ("commentId") REFERENCES public."TeamActivityComment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE public."TeamActivityCommentReaction"
+          ADD CONSTRAINT "TeamActivityCommentReaction_userId_fkey"
+          FOREIGN KEY ("userId") REFERENCES public."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+
     console.log("[startup] activity comments database table ensured");
     return { ok: true };
   } catch (err) {
