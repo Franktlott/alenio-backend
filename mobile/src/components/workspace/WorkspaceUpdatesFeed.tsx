@@ -29,6 +29,7 @@ import {
   workspaceUpdateBody,
   workspaceUpdateHeadline,
 } from "@/lib/workspace-updates";
+import { MilestoneUpdateCard } from "@/components/workspace/MilestoneUpdateCard";
 import { PostComposerRow } from "@/components/workspace/PostComposerRow";
 import { PostUpdateCard } from "@/components/workspace/PostUpdateCard";
 import { RecognitionUpdateCard } from "@/components/workspace/RecognitionUpdateCard";
@@ -183,6 +184,15 @@ function UpdatesFeedItem({
           currentUserId={currentUserId}
           onPressReact={onOpenPicker}
           onPressMore={onPressDelete}
+          onPressComment={openThread}
+          commentCount={item.commentCount ?? 0}
+          picker={picker}
+        />
+      ) : item.type === "task_milestone" ? (
+        <MilestoneUpdateCard
+          item={item}
+          currentUserId={currentUserId}
+          onPressReact={onOpenPicker}
           onPressComment={openThread}
           commentCount={item.commentCount ?? 0}
           picker={picker}

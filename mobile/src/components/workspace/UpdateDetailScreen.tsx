@@ -47,6 +47,7 @@ import {
   type ActivityFeedItem,
 } from "@/components/activity";
 import { ActivityReactionRow } from "@/components/activity/ActivityReactionRow";
+import { MilestoneUpdateCard } from "@/components/workspace/MilestoneUpdateCard";
 import { PostUpdateCard } from "@/components/workspace/PostUpdateCard";
 import { RecognitionUpdateCard } from "@/components/workspace/RecognitionUpdateCard";
 import { UpdateCommentRow } from "@/components/workspace/UpdateCommentRow";
@@ -229,6 +230,13 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
       <View style={styles.postWrap}>
         {item.type === "celebration" ? (
           <RecognitionUpdateCard
+            item={item}
+            currentUserId={currentUserId}
+            onPressReact={() => setShowPicker((open) => !open)}
+            picker={picker}
+          />
+        ) : item.type === "task_milestone" ? (
+          <MilestoneUpdateCard
             item={item}
             currentUserId={currentUserId}
             onPressReact={() => setShowPicker((open) => !open)}

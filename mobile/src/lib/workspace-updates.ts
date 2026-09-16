@@ -6,10 +6,11 @@ import type {
 } from "@/components/activity/types";
 import type { PersonalRecognition } from "@/lib/types";
 
-/** Posts, recognition and completed work shown on the Workspace Updates tab. */
+/** Posts, recognition, milestones and completed work on the Updates tab. */
 export const WORKSPACE_UPDATE_TYPES = [
   "post",
   "celebration",
+  "task_milestone",
   "task_completed",
 ] as const satisfies readonly ActivityFeedType[];
 
@@ -18,7 +19,40 @@ export type WorkspaceUpdateType = (typeof WORKSPACE_UPDATE_TYPES)[number];
 export function isWorkspaceUpdateActivity(
   type: ActivityFeedType,
 ): type is WorkspaceUpdateType {
-  return type === "post" || type === "celebration" || type === "task_completed";
+  return (
+    type === "post" ||
+    type === "celebration" ||
+    type === "task_milestone" ||
+    type === "task_completed"
+  );
+}
+
+/** Momentum celebrates 5, 10 and 15, then every tenth on-time completion. */
+const MILESTONE_STEPS = [5, 10, 15] as const;
+
+export function milestoneStreakCount(count: number | null | undefined): number {
+  return typeof count === "number" && count > 0 ? Math.floor(count) : 0;
+}
+
+/**
+ * The next streak the backend will celebrate. Mirrors isMilestone() in
+ * backend/src/lib/momentum-service.ts — keep the two in step.
+ */
+export function nextMilestoneTarget(count: number | null | undefined): number {
+  const streak = milestoneStreakCount(count);
+  const step = MILESTONE_STEPS.find((value) => value > streak);
+  if (step) return step;
+  return Math.floor(streak / 10) * 10 + 10;
+}
+
+/**
+ * Milestone counts are a run of on-time completions, not a weekly total, so
+ * the copy says "in a row" rather than "this week".
+ */
+export function milestoneSubtitle(count: number | null | undefined): string {
+  return milestoneStreakCount(count) === 0
+    ? "An on-time streak in progress."
+    : "All completed on time, in a row.";
 }
 
 export function recognitionInvolvesWorkspaceMembers(
