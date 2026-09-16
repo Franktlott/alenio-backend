@@ -16,13 +16,14 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { ChevronLeft, SendHorizontal } from "lucide-react-native";
+import { ChevronLeft, SendHorizontal, X } from "lucide-react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import {
   activityCommentsKey,
   activityDetailKey,
+  buildCommentThreads,
   commentCountLabel,
   COMMENT_MAX_LENGTH,
   pendingComment,
@@ -70,6 +71,8 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
 
   const [draft, setDraft] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+  const [replyTo, setReplyTo] = useState<ActivityComment | null>(null);
+  const [pickerCommentId, setPickerCommentId] = useState<string | null>(null);
 
   // Seed from the feed's cache so the post paints before the fetch lands.
   const cachedItem = useMemo(() => {
@@ -107,6 +110,16 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
 
   const comments = commentsQuery.data ?? [];
 
+  /** Flattened threads: each parent followed by its replies. */
+  const rows = useMemo(
+    () =>
+      buildCommentThreads(comments).flatMap((thread) => [
+        { comment: thread.comment, inset: false },
+        ...thread.replies.map((reply) => ({ comment: reply, inset: true })),
+      ]),
+    [comments],
+  );
+
   const refreshFeeds = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({
@@ -143,22 +156,27 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
   });
 
   const commentMutation = useMutation({
-    mutationFn: (body: string) =>
+    mutationFn: (input: { body: string; parentId: string | null }) =>
       api.post<ActivityComment>(
         `/api/teams/${teamId}/activity/${activityId}/comments`,
-        { body },
+        { body: input.body, parentId: input.parentId ?? undefined },
       ),
-    onMutate: (body: string) => {
+    onMutate: (input: { body: string; parentId: string | null }) => {
       if (!currentUserId) return;
       queryClient.setQueryData<ActivityComment[]>(
         activityCommentsKey(activityId),
-        (rows) => [
-          ...(rows ?? []),
-          pendingComment(body, {
-            id: currentUserId,
-            name: currentUserName,
-            image: currentUserImage,
-          }),
+        (existing) => [
+          ...(existing ?? []),
+          pendingComment(
+            input.body,
+            {
+              id: currentUserId,
+              name: currentUserName,
+              image: currentUserImage,
+            },
+            Date.now(),
+            input.parentId,
+          ),
         ],
       );
     },
@@ -173,6 +191,39 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
     },
   });
 
+  const commentReactionMutation = useMutation({
+    mutationFn: (input: { commentId: string; emoji: string }) =>
+      api.post(
+        `/api/teams/${teamId}/activity/${activityId}/comments/${input.commentId}/react`,
+        { emoji: input.emoji },
+      ),
+    onMutate: (input: { commentId: string; emoji: string }) => {
+      if (!currentUserId) return;
+      queryClient.setQueryData<ActivityComment[]>(
+        activityCommentsKey(activityId),
+        (existing) =>
+          existing?.map((row) =>
+            row.id === input.commentId
+              ? {
+                  ...row,
+                  reactions: applyReactionToggle(
+                    row.reactions ?? {},
+                    input.emoji,
+                    { id: currentUserId, name: currentUserName },
+                  ),
+                }
+              : row,
+          ),
+      );
+      setPickerCommentId(null);
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: activityCommentsKey(activityId),
+      });
+    },
+  });
+
   const deleteCommentMutation = useMutation({
     mutationFn: (commentId: string) =>
       api.delete(
@@ -181,7 +232,11 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
     onMutate: (commentId: string) => {
       queryClient.setQueryData<ActivityComment[]>(
         activityCommentsKey(activityId),
-        (rows) => rows?.filter((row) => row.id !== commentId),
+        // Replies cascade with their parent, so drop them here too.
+        (existing) =>
+          existing?.filter(
+            (row) => row.id !== commentId && row.parentId !== commentId,
+          ),
       );
     },
     onSettled: async () => {
@@ -196,7 +251,8 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
     const body = draft.trim();
     if (!body || commentMutation.isPending) return;
     setDraft("");
-    commentMutation.mutate(body);
+    commentMutation.mutate({ body, parentId: replyTo?.id ?? null });
+    setReplyTo(null);
   };
 
   const confirmDelete = (comment: ActivityComment) => {
@@ -321,10 +377,41 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
           </View>
         ) : (
           <FlatList
-            data={comments}
-            keyExtractor={(comment) => comment.id}
-            renderItem={({ item: comment }) => (
-              <UpdateCommentRow comment={comment} onDelete={confirmDelete} />
+            data={rows}
+            keyExtractor={(row) => row.comment.id}
+            renderItem={({ item: row }) => (
+              <UpdateCommentRow
+                comment={row.comment}
+                currentUserId={currentUserId}
+                inset={row.inset}
+                onDelete={confirmDelete}
+                onPressReact={(comment) =>
+                  setPickerCommentId((open) =>
+                    open === comment.id ? null : comment.id,
+                  )
+                }
+                onPressReply={(comment) => setReplyTo(comment)}
+                picker={
+                  pickerCommentId === row.comment.id ? (
+                    <ActivityReactionRow
+                      activityId={row.comment.id}
+                      reactions={row.comment.reactions ?? {}}
+                      currentUserId={currentUserId}
+                      onToggleReaction={(emoji) =>
+                        commentReactionMutation.mutate({
+                          commentId: row.comment.id,
+                          emoji,
+                        })
+                      }
+                      showPicker
+                      onClosePicker={() => setPickerCommentId(null)}
+                      floatPicker
+                      showPills={false}
+                      tone="default"
+                    />
+                  ) : null
+                }
+              />
             )}
             ListHeaderComponent={header}
             contentContainerStyle={styles.listContent}
@@ -334,6 +421,23 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
           />
         )}
 
+        {replyTo ? (
+          <View style={styles.replyBanner} testID="update-reply-banner">
+            <Text style={styles.replyBannerText} numberOfLines={1}>
+              Replying to {replyTo.author.name?.trim() || "Someone"}
+            </Text>
+            <Pressable
+              onPress={() => setReplyTo(null)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel reply"
+              testID="update-reply-cancel"
+            >
+              <X size={15} color="#7A879B" strokeWidth={2.4} />
+            </Pressable>
+          </View>
+        ) : null}
+
         <View
           style={[
             styles.composer,
@@ -342,7 +446,11 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
           testID="update-comment-composer"
         >
           <TextInput
-            placeholder="Add a comment"
+            placeholder={
+              replyTo
+                ? `Reply to ${replyTo.author.name?.trim() || "Someone"}`
+                : "Add a comment"
+            }
             placeholderTextColor="#94A3B8"
             value={draft}
             onChangeText={setDraft}
@@ -444,6 +552,23 @@ const styles = StyleSheet.create({
   retryText: {
     color: "#FFFFFF",
     fontWeight: "700",
+  },
+  replyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    backgroundColor: "#F4F6FB",
+    borderTopWidth: 1,
+    borderTopColor: "#EEF1F6",
+  },
+  replyBannerText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: "#64748B",
   },
   composer: {
     flexDirection: "row",
