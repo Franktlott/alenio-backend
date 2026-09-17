@@ -726,6 +726,8 @@ export async function inviteOrAddMemberByEmail(input: {
       content: `${emailContext.inviterName ?? "Someone"} invited you to join ${emailContext.teamName}`,
       metadata: {
         actorUserId: input.invitedById,
+        actorName: emailContext.inviterName,
+        actorImage: emailContext.inviterImage,
         teamId: input.teamId,
         teamName: emailContext.teamName,
       },

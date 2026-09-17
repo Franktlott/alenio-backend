@@ -1013,22 +1013,38 @@ connectionsRouter.get("/blocked", async (c) => {
 /** Only acceptance is worth an activity row; requests, declines and removals are not. */
 async function notifyConnectionAccepted(requesterId: string, recipientId: string): Promise<void> {
   const [requester, recipient] = await Promise.all([
-    prisma.user.findUnique({ where: { id: requesterId }, select: { name: true } }),
-    prisma.user.findUnique({ where: { id: recipientId }, select: { name: true } }),
+    prisma.user.findUnique({
+      where: { id: requesterId },
+      select: { name: true, image: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: recipientId },
+      select: { name: true, image: true },
+    }),
   ]);
 
+  // Each side stores the other person's name and photo so feeds can render the
+  // row without a second lookup.
   await Promise.all([
     recordAccountActivity({
       userId: requesterId,
       type: "connection_accepted",
       content: `${recipient?.name ?? "Someone"} accepted your connection request`,
-      metadata: { actorUserId: recipientId },
+      metadata: {
+        actorUserId: recipientId,
+        actorName: recipient?.name ?? null,
+        actorImage: recipient?.image ?? null,
+      },
     }),
     recordAccountActivity({
       userId: recipientId,
       type: "connection_accepted",
       content: `You are now connected with ${requester?.name ?? "someone"}`,
-      metadata: { actorUserId: requesterId },
+      metadata: {
+        actorUserId: requesterId,
+        actorName: requester?.name ?? null,
+        actorImage: requester?.image ?? null,
+      },
     }),
   ]);
 }

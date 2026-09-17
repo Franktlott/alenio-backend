@@ -441,6 +441,8 @@ messagesRouter.post("/", async (c) => {
               content: `${senderName} mentioned you in ${channelPrefix}`,
               metadata: {
                 actorUserId: user.id,
+                actorName: senderName,
+                actorImage: user.image ?? null,
                 teamId,
                 topicId: capturedTopicId ?? null,
               },

@@ -1192,7 +1192,12 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
                 userId: mentionedId,
                 type: "mention_in_conversation",
                 content: `${senderName} mentioned you in ${conversation.name ?? "a conversation"}`,
-                metadata: { actorUserId: user.id, conversationId },
+                metadata: {
+                  actorUserId: user.id,
+                  actorName: senderName,
+                  actorImage: user.image ?? null,
+                  conversationId,
+                },
               }),
             ),
           );
