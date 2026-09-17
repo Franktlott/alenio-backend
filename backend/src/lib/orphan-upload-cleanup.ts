@@ -65,6 +65,7 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
     calendarEvents,
     walkResponses,
     senecaMessages,
+    profilePhotos,
   ] = await Promise.all([
     prisma.message.findMany({
       where: { mediaUrl: { not: null } },
@@ -115,6 +116,7 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
       where: { conversation: { expiresAt: { gt: new Date() } } },
       select: { metadata: true },
     }),
+    prisma.userProfilePhoto.findMany({ select: { url: true } }),
   ]);
 
   for (const row of messages) addUrl(paths, row.mediaUrl);
@@ -125,6 +127,7 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
   for (const row of conversations) addUrl(paths, row.image);
   for (const row of topics) addUrl(paths, row.image);
   for (const row of users) addUrl(paths, row.image);
+  for (const row of profilePhotos) addUrl(paths, row.url);
 
   for (const team of teams) {
     addUrl(paths, team.image);

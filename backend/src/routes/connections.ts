@@ -590,6 +590,10 @@ connectionsRouter.get("/person/:userId", async (c) => {
       profileWebsite: true,
       profileLocation: true,
       profileBio: true,
+      profilePhotos: {
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+        select: { id: true, url: true, width: true, height: true },
+      },
       teamMembers: {
         where: { team: { members: { some: { userId: user.id } } } },
         select: {
@@ -645,6 +649,7 @@ connectionsRouter.get("/person/:userId", async (c) => {
       profileWebsite: person.profileWebsite,
       profileLocation: person.profileLocation,
       profileBio: person.profileBio,
+      photos: person.profilePhotos,
       stats: {
         connections: personConnectionCount,
         workspaces: person.teamMembers.length,

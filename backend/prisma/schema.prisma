@@ -49,6 +49,7 @@ model User {
   profileWebsite                    String?
   profileLocation                   String?
   profileBio                        String?
+  profilePhotos                     UserProfilePhoto[]
   /**
    * Sticky, account-level completion marker for the five-step mobile onboarding checklist.
    */
@@ -200,6 +201,24 @@ model Connection {
 
   @@index([recipientId, status])
   @@index([requesterId, status])
+}
+
+/**
+ * Public profile gallery. Capped at PROFILE_PHOTO_LIMIT rows per user in the API;
+ * `position` is the left-to-right order the owner arranged them in.
+ */
+model UserProfilePhoto {
+  id        String   @id @default(cuid())
+  userId    String
+  url       String
+  width     Int?
+  height    Int?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, position])
 }
 
 /**

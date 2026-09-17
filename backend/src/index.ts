@@ -85,6 +85,7 @@ import {
   deleteReplacedStorageObject,
   deleteStorageObjectByUrlIfOwned,
   isFirebaseStorageConfigured,
+  parseOwnedStorageObjectFromUrl,
   uploadFileToFirebaseStorage,
 } from "./lib/firebase-storage";
 import { cleanupOrphanUserUploads } from "./lib/orphan-upload-cleanup";
@@ -121,6 +122,7 @@ import { ensurePresenceSchema } from "./lib/ensure-presence-schema";
 import { ensureMomentumSchema } from "./lib/ensure-momentum-schema";
 import { ensureAccountActivitySchema } from "./lib/ensure-account-activity-schema";
 import { ensurePublicProfileSchema } from "./lib/ensure-public-profile-schema";
+import { ensureProfilePhotosSchema } from "./lib/ensure-profile-photos-schema";
 import { validatePublicProfileUpdate } from "./lib/public-profile";
 import {
   isUniqueConstraintError,
@@ -200,6 +202,8 @@ const startupSchemaReady = Promise.all([
   // Task kinds and immutable eligibility snapshots must exist in every environment.
   ensureRecurrenceSeriesSchema(prisma).then(() => ensureTaskKindSchema(prisma)),
   ensurePublicProfileSchema(prisma),
+  // Profile galleries are read on every public profile view.
+  ensureProfilePhotosSchema(prisma),
   // Relaxes TeamActivity.teamId so account-level activity can be written.
   ensureAccountActivitySchema(prisma),
   ensureTeamHealthSnapshotSchema(prisma),
@@ -1391,6 +1395,134 @@ app.patch("/api/profile", async (c) => {
     }
     throw err;
   }
+});
+
+/** Public profile gallery cap, enforced here and mirrored in the mobile UI. */
+const PROFILE_PHOTO_LIMIT = 5;
+
+const profilePhotoSelect = {
+  id: true,
+  url: true,
+  width: true,
+  height: true,
+} as const;
+
+app.get("/api/profile/photos", async (c) => {
+  const user = c.get("user");
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
+
+  const photos = await prisma.userProfilePhoto.findMany({
+    where: { userId: user.id },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    select: profilePhotoSelect,
+  });
+  return c.json({ data: photos });
+});
+
+app.post("/api/profile/photos", async (c) => {
+  const user = c.get("user");
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
+
+  const body = await c.req.json().catch(() => null);
+  const url = typeof body?.url === "string" ? body.url.trim() : "";
+  if (!url) {
+    return c.json(
+      { error: { message: "Photo URL is required.", code: "VALIDATION_ERROR" } },
+      400,
+    );
+  }
+  // The client uploads through /api/upload/json first, so a photo must point at
+  // an object this account owns — never an arbitrary URL someone pasted in.
+  const object = parseOwnedStorageObjectFromUrl(url);
+  if (!object?.objectPath.startsWith(`users/${user.id}/`)) {
+    return c.json(
+      {
+        error: {
+          message: "Upload the photo before adding it.",
+          code: "VALIDATION_ERROR",
+        },
+      },
+      400,
+    );
+  }
+
+  const existing = await prisma.userProfilePhoto.findMany({
+    where: { userId: user.id },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    select: { position: true },
+  });
+  if (existing.length >= PROFILE_PHOTO_LIMIT) {
+    return c.json(
+      {
+        error: {
+          message: `You can show up to ${PROFILE_PHOTO_LIMIT} photos. Remove one first.`,
+          code: "PHOTO_LIMIT",
+        },
+      },
+      400,
+    );
+  }
+
+  const toInt = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0
+      ? Math.round(value)
+      : null;
+
+  await prisma.userProfilePhoto.create({
+    data: {
+      userId: user.id,
+      url,
+      width: toInt(body?.width),
+      height: toInt(body?.height),
+      position: (existing.at(-1)?.position ?? -1) + 1,
+    },
+  });
+
+  const photos = await prisma.userProfilePhoto.findMany({
+    where: { userId: user.id },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    select: profilePhotoSelect,
+  });
+  return c.json({ data: photos });
+});
+
+app.delete("/api/profile/photos/:photoId", async (c) => {
+  const user = c.get("user");
+  if (!user)
+    return c.json(
+      { error: { message: "Unauthorized", code: "UNAUTHORIZED" } },
+      401,
+    );
+
+  const { photoId } = c.req.param();
+  const photo = await prisma.userProfilePhoto.findUnique({
+    where: { id: photoId },
+    select: { id: true, userId: true, url: true },
+  });
+  if (!photo || photo.userId !== user.id) {
+    return c.json(
+      { error: { message: "Photo not found", code: "NOT_FOUND" } },
+      404,
+    );
+  }
+
+  await prisma.userProfilePhoto.delete({ where: { id: photo.id } });
+  await deleteStorageObjectByUrlIfOwned(photo.url);
+
+  const photos = await prisma.userProfilePhoto.findMany({
+    where: { userId: user.id },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    select: profilePhotoSelect,
+  });
+  return c.json({ data: photos });
 });
 
 app.post("/api/profile/email-change/request", async (c) => {
