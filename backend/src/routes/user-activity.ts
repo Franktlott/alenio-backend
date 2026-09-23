@@ -314,6 +314,11 @@ async function collectScheduleItems(
   userId: string,
   start: Date,
   end: Date,
+  /**
+   * Today also owes you the work you already missed. Events stay inside the
+   * window either way: a meeting that has passed is history, not a to-do.
+   */
+  includeOverdueTasks = false,
 ): Promise<HomeTodayItem[]> {
   const memberships = await prisma.teamMember.findMany({
     where: { userId },
@@ -334,7 +339,9 @@ async function collectScheduleItems(
             {
               status: "todo",
               archivedAt: null,
-              dueDate: { gte: start, lt: end },
+              dueDate: includeOverdueTasks
+                ? { lt: end }
+                : { gte: start, lt: end },
             },
           ],
         },
@@ -384,6 +391,7 @@ async function collectScheduleItems(
       allDay: false,
       workspace: task.team,
       priority: task.priority,
+      overdue: task.dueDate! < start,
     }));
 
   const eventItems: HomeTodayItem[] = events.flatMap((event) => {
@@ -438,6 +446,8 @@ async function collectScheduleItems(
 
   return [...taskItems, ...eventItems, ...externalItems].sort(
     (a, b) =>
+      /** Late work leads, or it hides under today's all-day banners. */
+      Number(!!b.overdue) - Number(!!a.overdue) ||
       Number(b.allDay) - Number(a.allDay) ||
       new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
   );
@@ -468,7 +478,7 @@ userActivityRouter.get(
     const nextDate = shiftCalendarDate(date, 1);
     const start = instantFromCalendarDateAndTime(date, 0, 0, timeZone);
     const end = instantFromCalendarDateAndTime(nextDate, 0, 0, timeZone);
-    const items = await collectScheduleItems(user.id, start, end);
+    const items = await collectScheduleItems(user.id, start, end, true);
 
     return c.json({
       data: {

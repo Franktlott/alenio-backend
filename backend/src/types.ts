@@ -520,6 +520,8 @@ export type HomeTodayItem = {
   workspace: { id: string; name: string } | null;
   /** Tasks and reminders only, for the pill on the Home row. */
   priority?: string;
+  /** A task carried in from an earlier day, still unfinished. */
+  overdue?: boolean;
 };
 
 export type HomeUpcomingResponse = {
