@@ -300,6 +300,158 @@ const todayQuerySchema = z.object({
   timeZone: z.string().optional(),
 });
 
+const upcomingQuerySchema = z.object({
+  timeZone: z.string().optional(),
+  days: z.coerce.number().int().min(1).max(30).optional(),
+});
+
+/**
+ * Everything on one person's calendar in a window: assigned tasks and
+ * reminders, workspace events they may see, and their own external events.
+ * Both the day view and the days ahead read from here.
+ */
+async function collectScheduleItems(
+  userId: string,
+  start: Date,
+  end: Date,
+): Promise<HomeTodayItem[]> {
+  const memberships = await prisma.teamMember.findMany({
+    where: { userId },
+    select: { teamId: true, role: true },
+  });
+  const teamIds = memberships.map((membership) => membership.teamId);
+  const roleByTeamId = new Map(
+    memberships.map((membership) => [membership.teamId, membership.role]),
+  );
+
+  const [assignments, events, externalEvents] = await Promise.all([
+    prisma.taskAssignment.findMany({
+      where: {
+        userId,
+        task: {
+          AND: [
+            taskVisibilityWhere(userId),
+            {
+              status: "todo",
+              archivedAt: null,
+              dueDate: { gte: start, lt: end },
+            },
+          ],
+        },
+      },
+      select: {
+        task: {
+          select: {
+            id: true,
+            title: true,
+            kind: true,
+            priority: true,
+            dueDate: true,
+            team: { select: { id: true, name: true } },
+          },
+        },
+      },
+    }),
+    teamIds.length > 0
+      ? prisma.calendarEvent.findMany({
+          where: {
+            teamId: { in: teamIds },
+            startDate: { lt: end },
+            OR: [{ startDate: { gte: start } }, { endDate: { gt: start } }],
+          },
+          include: {
+            team: { select: { id: true, name: true } },
+          },
+        })
+      : Promise.resolve([]),
+    prisma.externalCalendarEvent.findMany({
+      where: {
+        userId,
+        startDate: { lt: end },
+        OR: [{ startDate: { gte: start } }, { endDate: { gt: start } }],
+      },
+    }),
+  ]);
+
+  const taskItems: HomeTodayItem[] = assignments
+    .filter(({ task }) => task.dueDate)
+    .map(({ task }) => ({
+      id: task.id,
+      type: task.kind === "reminder" ? "reminder" : "task",
+      title: task.title,
+      startAt: task.dueDate!.toISOString(),
+      endAt: null,
+      allDay: false,
+      workspace: task.team,
+      priority: task.priority,
+    }));
+
+  const eventItems: HomeTodayItem[] = events.flatMap((event) => {
+    let assigneeIds: string[] = [];
+    try {
+      const settings = JSON.parse(event.reminderMinutes) as unknown;
+      if (
+        settings &&
+        typeof settings === "object" &&
+        !Array.isArray(settings) &&
+        Array.isArray((settings as { assigneeIds?: unknown }).assigneeIds)
+      ) {
+        assigneeIds = (
+          settings as { assigneeIds: unknown[] }
+        ).assigneeIds.filter((id): id is string => typeof id === "string");
+      }
+    } catch {
+      // Legacy reminder data can be malformed; visibility safely defaults.
+    }
+
+    const role = roleByTeamId.get(event.teamId);
+    if (!role || !canViewCalendarEvent(event, userId, role, assigneeIds)) {
+      return [];
+    }
+
+    return [
+      {
+        id: event.id,
+        type: event.isOneOnOne
+          ? "check_in"
+          : event.isVideoMeeting
+            ? "meeting"
+            : "event",
+        title: event.title,
+        startAt: event.startDate.toISOString(),
+        endAt: event.endDate?.toISOString() ?? null,
+        allDay: event.allDay,
+        workspace: event.team,
+      } satisfies HomeTodayItem,
+    ];
+  });
+
+  const externalItems: HomeTodayItem[] = externalEvents.map((event) => ({
+    id: event.id,
+    type: "external",
+    title: event.titleDisplay,
+    startAt: event.startDate.toISOString(),
+    endAt: event.endDate?.toISOString() ?? null,
+    allDay: event.allDay,
+    workspace: null,
+  }));
+
+  return [...taskItems, ...eventItems, ...externalItems].sort(
+    (a, b) =>
+      Number(b.allDay) - Number(a.allDay) ||
+      new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+  );
+}
+
+/** The calendar date `offset` days after `date`, in that calendar's terms. */
+function shiftCalendarDate(date: string, offset: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year!, month! - 1, day! + offset));
+  return `${shifted.getUTCFullYear()}-${String(
+    shifted.getUTCMonth() + 1,
+  ).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
+}
+
 /** Items on the signed-in user's calendar today, across every workspace. */
 userActivityRouter.get(
   "/today",
@@ -313,145 +465,10 @@ userActivityRouter.get(
     });
     const timeZone = resolveTimeZone(profile?.timezone || requestedTimeZone);
     const date = calendarDayFromInstant(new Date(), timeZone);
-    const [year, month, day] = date.split("-").map(Number);
-    const nextDayUtc = new Date(Date.UTC(year!, month! - 1, day! + 1));
-    const nextDate = `${nextDayUtc.getUTCFullYear()}-${String(
-      nextDayUtc.getUTCMonth() + 1,
-    ).padStart(2, "0")}-${String(nextDayUtc.getUTCDate()).padStart(2, "0")}`;
+    const nextDate = shiftCalendarDate(date, 1);
     const start = instantFromCalendarDateAndTime(date, 0, 0, timeZone);
     const end = instantFromCalendarDateAndTime(nextDate, 0, 0, timeZone);
-
-    const memberships = await prisma.teamMember.findMany({
-      where: { userId: user.id },
-      select: { teamId: true, role: true },
-    });
-    const teamIds = memberships.map((membership) => membership.teamId);
-    const roleByTeamId = new Map(
-      memberships.map((membership) => [membership.teamId, membership.role]),
-    );
-
-    const [assignments, events, externalEvents] = await Promise.all([
-      prisma.taskAssignment.findMany({
-        where: {
-          userId: user.id,
-          task: {
-            AND: [
-              taskVisibilityWhere(user.id),
-              {
-                status: "todo",
-                archivedAt: null,
-                dueDate: { gte: start, lt: end },
-              },
-            ],
-          },
-        },
-        select: {
-          task: {
-            select: {
-              id: true,
-              title: true,
-              kind: true,
-              dueDate: true,
-              team: { select: { id: true, name: true } },
-            },
-          },
-        },
-      }),
-      teamIds.length > 0
-        ? prisma.calendarEvent.findMany({
-            where: {
-              teamId: { in: teamIds },
-              startDate: { lt: end },
-              OR: [
-                { startDate: { gte: start } },
-                { endDate: { gt: start } },
-              ],
-            },
-            include: {
-              team: { select: { id: true, name: true } },
-            },
-          })
-        : Promise.resolve([]),
-      prisma.externalCalendarEvent.findMany({
-        where: {
-          userId: user.id,
-          startDate: { lt: end },
-          OR: [
-            { startDate: { gte: start } },
-            { endDate: { gt: start } },
-          ],
-        },
-      }),
-    ]);
-
-    const taskItems: HomeTodayItem[] = assignments
-      .filter(({ task }) => task.dueDate)
-      .map(({ task }) => ({
-        id: task.id,
-        type: task.kind === "reminder" ? "reminder" : "task",
-        title: task.title,
-        startAt: task.dueDate!.toISOString(),
-        endAt: null,
-        allDay: false,
-        workspace: task.team,
-      }));
-
-    const eventItems: HomeTodayItem[] = events.flatMap((event) => {
-      let assigneeIds: string[] = [];
-      try {
-        const settings = JSON.parse(event.reminderMinutes) as unknown;
-        if (
-          settings &&
-          typeof settings === "object" &&
-          !Array.isArray(settings) &&
-          Array.isArray((settings as { assigneeIds?: unknown }).assigneeIds)
-        ) {
-          assigneeIds = (
-            settings as { assigneeIds: unknown[] }
-          ).assigneeIds.filter((id): id is string => typeof id === "string");
-        }
-      } catch {
-        // Legacy reminder data can be malformed; visibility safely defaults.
-      }
-
-      const role = roleByTeamId.get(event.teamId);
-      if (
-        !role ||
-        !canViewCalendarEvent(event, user.id, role, assigneeIds)
-      ) {
-        return [];
-      }
-
-      return [{
-        id: event.id,
-        type: event.isOneOnOne
-          ? "check_in"
-          : event.isVideoMeeting
-            ? "meeting"
-            : "event",
-        title: event.title,
-        startAt: event.startDate.toISOString(),
-        endAt: event.endDate?.toISOString() ?? null,
-        allDay: event.allDay,
-        workspace: event.team,
-      } satisfies HomeTodayItem];
-    });
-
-    const externalItems: HomeTodayItem[] = externalEvents.map((event) => ({
-      id: event.id,
-      type: "external",
-      title: event.titleDisplay,
-      startAt: event.startDate.toISOString(),
-      endAt: event.endDate?.toISOString() ?? null,
-      allDay: event.allDay,
-      workspace: null,
-    }));
-
-    const items = [...taskItems, ...eventItems, ...externalItems].sort(
-      (a, b) =>
-        Number(b.allDay) - Number(a.allDay) ||
-        new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
-    );
+    const items = await collectScheduleItems(user.id, start, end);
 
     return c.json({
       data: {
@@ -459,6 +476,38 @@ userActivityRouter.get(
         timeZone,
         dateStart: start.toISOString(),
         dateEnd: end.toISOString(),
+        items,
+      },
+    });
+  },
+);
+
+/** The same calendar, starting tomorrow: what is coming, not what is here. */
+userActivityRouter.get(
+  "/upcoming",
+  zValidator("query", upcomingQuerySchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const { timeZone: requestedTimeZone, days } = c.req.valid("query");
+    const profile = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { timezone: true },
+    });
+    const timeZone = resolveTimeZone(profile?.timezone || requestedTimeZone);
+    const span = days ?? 7;
+    const today = calendarDayFromInstant(new Date(), timeZone);
+    const startDate = shiftCalendarDate(today, 1);
+    const endDate = shiftCalendarDate(today, 1 + span);
+    const start = instantFromCalendarDateAndTime(startDate, 0, 0, timeZone);
+    const end = instantFromCalendarDateAndTime(endDate, 0, 0, timeZone);
+    const items = await collectScheduleItems(user.id, start, end);
+
+    return c.json({
+      data: {
+        timeZone,
+        days: span,
+        rangeStart: start.toISOString(),
+        rangeEnd: end.toISOString(),
         items,
       },
     });

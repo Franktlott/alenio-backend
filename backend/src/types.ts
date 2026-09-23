@@ -518,6 +518,16 @@ export type HomeTodayItem = {
   endAt: string | null;
   allDay: boolean;
   workspace: { id: string; name: string } | null;
+  /** Tasks and reminders only, for the pill on the Home row. */
+  priority?: string;
+};
+
+export type HomeUpcomingResponse = {
+  timeZone: string;
+  days: number;
+  rangeStart: string;
+  rangeEnd: string;
+  items: HomeTodayItem[];
 };
 
 export type HomeTodayResponse = {
