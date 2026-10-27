@@ -373,6 +373,8 @@ export type TeamMomentumMemberSummary = {
   momentumLastQualifiedAt: string | null;
   completedThisMonth: number;
   overdueTaskCount: number;
+  latestLateTaskTitle: string | null;
+  latestLateTaskIncognito: boolean;
 };
 
 export type TeamMomentumGroupedMember = TeamMomentumMemberSummary & {
@@ -385,6 +387,25 @@ export type TeamMomentumNotEnoughActivityMember = TeamMomentumMemberSummary & {
 
 export type TeamMomentumLeaderSummaryRequest = {
   teamId: string;
+};
+
+export type TeamMomentumWeekPoint = {
+  start: string;
+  onTime: number;
+  total: number;
+};
+
+export type TeamMomentumDashboardStats = {
+  onTimeCompletions: number;
+  previousOnTimeCompletions: number;
+  /** Null when last month had no on-time completions, so a percent is not invented. */
+  onTimeChangePercent: number | null;
+  weeks: TeamMomentumWeekPoint[];
+  taskStatus: {
+    onTime: number;
+    dueSoon: number;
+    overdue: number;
+  };
 };
 
 export type TeamMomentumLeaderSummary = {
@@ -402,6 +423,12 @@ export type TeamMomentumLeaderSummary = {
     count: number;
     members: TeamMomentumNotEnoughActivityMember[];
   };
+  dashboard: TeamMomentumDashboardStats;
+  /**
+   * Owners and team leaders see overdue counts and the task that reset a run.
+   * Every other member sees the crew rhythm without those coaching details.
+   */
+  coachingVisible: boolean;
 };
 
 export type TeamMomentumLeaderSummaryResponse = {

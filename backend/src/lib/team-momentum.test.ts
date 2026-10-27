@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { PrismaClient } from "@prisma/client";
 import {
   assertTeamMomentumAccess,
+  buildMomentumDashboard,
   buildTeamMomentumMemberDetail,
   buildTeamMomentumSummary,
   calendarMonthRange,
@@ -28,6 +29,17 @@ const member = (overrides: Record<string, unknown> = {}) => ({
 
 describe("Team Momentum access", () => {
   const paid = { hasTeamFeatures: true, status: "active" as const };
+
+  test("lets every member open the team summary and keeps coaching detail for leaders", () => {
+    expect(() => assertTeamMomentumAccess({ role: "member" }, paid, "summary")).not.toThrow();
+    try {
+      assertTeamMomentumAccess({ role: "member" }, paid, "coaching");
+      throw new Error("Expected access check to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(TeamMomentumAccessError);
+      expect((error as TeamMomentumAccessError).code).toBe(TEAM_MOMENTUM_LEADER_REQUIRED);
+    }
+  });
 
   test("requires manager insight role with stable code", () => {
     try {
@@ -71,6 +83,8 @@ describe("Team Momentum summary", () => {
       now,
       monthStart: new Date("2026-08-01T00:00:00.000Z"),
       monthEnd: new Date("2026-09-01T00:00:00.000Z"),
+      previousMonthStart: new Date("2026-07-01T00:00:00.000Z"),
+      previousMonthEnd: new Date("2026-08-01T00:00:00.000Z"),
       members: [
         member(),
         member({
@@ -98,6 +112,58 @@ describe("Team Momentum summary", () => {
     });
     expect(result.groups.readyToRebuild.map((item) => item.userId)).toEqual(["member-2"]);
     expect(result.notEnoughActivity.members.map((item) => item.userId)).toEqual(["member-3"]);
+    expect(result.dashboard.onTimeCompletions).toBe(1);
+    expect(result.dashboard.onTimeChangePercent).toBeNull();
+  });
+
+  test("compares on-time completions with last month and splits open tasks", () => {
+    const dashboard = buildMomentumDashboard({
+      now,
+      monthStart: new Date("2026-08-01T00:00:00.000Z"),
+      monthEnd: new Date("2026-09-01T00:00:00.000Z"),
+      previousMonthStart: new Date("2026-07-01T00:00:00.000Z"),
+      previousMonthEnd: new Date("2026-08-01T00:00:00.000Z"),
+      credits: [
+        {
+          creditedUserId: "member-1",
+          completedAt: new Date("2026-08-03T00:00:00.000Z"),
+          onTime: true,
+          sourceTaskId: "task-a",
+        },
+        {
+          creditedUserId: "member-1",
+          completedAt: new Date("2026-08-10T00:00:00.000Z"),
+          onTime: false,
+          sourceTaskId: "task-b",
+          sourceTaskTitle: "Closing checklist",
+        },
+        {
+          creditedUserId: "member-2",
+          completedAt: new Date("2026-08-03T12:00:00.000Z"),
+          onTime: true,
+          sourceTaskId: "task-a",
+        },
+        {
+          creditedUserId: "member-1",
+          completedAt: new Date("2026-07-15T00:00:00.000Z"),
+          onTime: true,
+          sourceTaskId: "task-old",
+        },
+      ],
+      openTasks: [
+        { id: "overdue-1", dueDate: new Date("2026-08-20T00:00:00.000Z") },
+        { id: "soon-1", dueDate: new Date("2026-08-30T00:00:00.000Z") },
+        { id: "later-1", dueDate: new Date("2026-09-20T00:00:00.000Z") },
+      ],
+    });
+
+    expect(dashboard.onTimeCompletions).toBe(2);
+    expect(dashboard.previousOnTimeCompletions).toBe(1);
+    expect(dashboard.onTimeChangePercent).toBe(100);
+    expect(dashboard.taskStatus).toEqual({ onTime: 1, dueSoon: 1, overdue: 1 });
+    expect(dashboard.weeks[0]).toMatchObject({ onTime: 2, total: 2 });
+    expect(dashboard.weeks[1]).toMatchObject({ onTime: 0, total: 1 });
+    expect(dashboard.weeks.length).toBeGreaterThanOrEqual(4);
   });
 
   test("query layer reads canonical credits and assignment projections", async () => {
@@ -143,12 +209,82 @@ describe("Team Momentum summary", () => {
           return [{ userId: "member-1" }];
         },
       },
+      task: {
+        findMany: async () => {
+          calls.push("tasks");
+          return [];
+        },
+      },
     } as unknown as PrismaClient;
 
     const result = await getTeamMomentumSummary("team-1", "leader-1", now, db);
-    expect(calls.sort()).toEqual(["assignments", "credits", "members"]);
+    expect(calls.sort()).toEqual(["assignments", "credits", "members", "tasks"]);
     expect(result.groups.strong[0]?.completedThisMonth).toBe(1);
     expect(result.groups.strong[0]?.overdueTaskCount).toBe(1);
+    expect(result.coachingVisible).toBe(true);
+  });
+
+  test("hides overdue counts and late-task names from members", async () => {
+    const calls: string[] = [];
+    const db = {
+      team: {
+        findUnique: async () => ({ timezone: "UTC", members: [] }),
+      },
+      teamMember: {
+        findUnique: async () => ({ role: "member", user: { timezone: "UTC" } }),
+        findMany: async () => {
+          calls.push("members");
+          return [member()];
+        },
+      },
+      teamSubscription: {
+        findUnique: async () => ({
+          teamId: "team-1",
+          plan: "team",
+          status: "active",
+          trialStartedAt: null,
+          trialEndsAt: null,
+        }),
+        updateMany: async () => ({ count: 0 }),
+      },
+      momentumCompletionCredit: {
+        findMany: async () => {
+          calls.push("credits");
+          return [
+            {
+              creditedUserId: "member-1",
+              completedAt: new Date("2026-08-10T00:00:00.000Z"),
+              onTime: false,
+              sourceTaskId: "task-late",
+              sourceTaskTitle: "Closing checklist",
+              sourceTaskIncognito: false,
+            },
+          ];
+        },
+      },
+      taskAssignment: {
+        findMany: async () => {
+          calls.push("assignments");
+          return [{ userId: "member-1" }];
+        },
+      },
+      task: {
+        findMany: async () => {
+          calls.push("tasks");
+          return [{ id: "overdue-1", dueDate: new Date("2026-08-20T00:00:00.000Z") }];
+        },
+      },
+    } as unknown as PrismaClient;
+
+    const result = await getTeamMomentumSummary("team-1", "member-1", now, db);
+    expect(calls).not.toContain("assignments");
+    expect(result.coachingVisible).toBe(false);
+    expect(result.groups.strong[0]).toMatchObject({
+      overdueTaskCount: 0,
+      latestLateTaskTitle: null,
+      latestLateTaskIncognito: false,
+    });
+    expect(result.dashboard.taskStatus.overdue).toBe(0);
   });
 });
 
@@ -329,5 +465,9 @@ describe("Team Momentum member detail", () => {
       db,
     );
     expect(ownDetail.member.userId).toBe("member-1");
+
+    await expect(
+      getTeamMomentumMemberDetail("team-1", "member-2", "member-1", 25, now, db),
+    ).rejects.toMatchObject({ code: TEAM_MOMENTUM_LEADER_REQUIRED });
   });
 });
