@@ -66,6 +66,7 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
     walkResponses,
     senecaMessages,
     profilePhotos,
+    networkPosts,
   ] = await Promise.all([
     prisma.message.findMany({
       where: { mediaUrl: { not: null } },
@@ -117,6 +118,10 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
       select: { metadata: true },
     }),
     prisma.userProfilePhoto.findMany({ select: { url: true } }),
+    prisma.teamActivity.findMany({
+      where: { teamId: null, type: "network_post", metadata: { not: null } },
+      select: { metadata: true },
+    }),
   ]);
 
   for (const row of messages) addUrl(paths, row.mediaUrl);
@@ -145,6 +150,14 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
   }
   for (const row of senecaMessages) {
     collectUploadObjectPathsFromValue(row.metadata, paths);
+  }
+  for (const row of networkPosts) {
+    if (!row.metadata) continue;
+    try {
+      collectUploadObjectPathsFromValue(JSON.parse(row.metadata), paths);
+    } catch {
+      // Malformed legacy metadata cannot safely reference a storage object.
+    }
   }
 
   return paths;
