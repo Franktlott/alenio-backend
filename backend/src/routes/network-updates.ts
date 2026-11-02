@@ -4,9 +4,10 @@ import { z } from "zod";
 import { auth } from "../auth";
 import { parseOwnedStorageObjectFromUrl } from "../lib/firebase-storage";
 import {
+  canAccessNetworkPost,
   isOwnedGenericUploadPath,
   isValidReactionEmoji,
-  visibleNetworkAuthorIds,
+  visibleNetworkAuthorCutoffs,
 } from "../lib/network-updates-policy";
 import { buildConnectionPairKey } from "../lib/messaging-permission";
 import { isBlockedEitherDirection } from "../lib/relationship-blocks";
@@ -122,21 +123,26 @@ function serializeComment(comment: {
   };
 }
 
-async function currentVisibleAuthorIds(viewerId: string): Promise<string[]> {
+async function currentVisibleAuthorCutoffs(viewerId: string) {
   const [connections, blocks] = await Promise.all([
     prisma.connection.findMany({
       where: {
         status: "accepted",
         OR: [{ requesterId: viewerId }, { recipientId: viewerId }],
       },
-      select: { requesterId: true, recipientId: true, status: true },
+      select: {
+        requesterId: true,
+        recipientId: true,
+        status: true,
+        updatedAt: true,
+      },
     }),
     prisma.userBlock.findMany({
       where: { OR: [{ blockerId: viewerId }, { blockedId: viewerId }] },
       select: { blockerId: true, blockedId: true },
     }),
   ]);
-  return visibleNetworkAuthorIds(viewerId, connections, blocks);
+  return visibleNetworkAuthorCutoffs(viewerId, connections, blocks);
 }
 
 async function loadAccessiblePost(viewerId: string, activityId: string) {
@@ -151,11 +157,22 @@ async function loadAccessiblePost(viewerId: string, activityId: string) {
   const [connection, blocked] = await Promise.all([
     prisma.connection.findUnique({
       where: { pairKey: buildConnectionPairKey(viewerId, activity.userId) },
-      select: { status: true },
+      select: { status: true, updatedAt: true },
     }),
     isBlockedEitherDirection(viewerId, activity.userId),
   ]);
-  return connection?.status === "accepted" && !blocked ? activity : null;
+  const authorCutoffs =
+    connection?.status === "accepted" && !blocked
+      ? [{ authorId: activity.userId, visibleFrom: connection.updatedAt }]
+      : [];
+  return canAccessNetworkPost(
+    viewerId,
+    activity.userId,
+    activity.createdAt,
+    authorCutoffs,
+  )
+    ? activity
+    : null;
 }
 
 function notFound(c: { json: (body: unknown, status: 404) => Response }, resource: string) {
@@ -199,22 +216,33 @@ networkUpdatesRouter.get(
       );
     }
 
-    const visibleAuthorIds = await currentVisibleAuthorIds(user.id);
-    const authorIds = [user.id, ...visibleAuthorIds];
+    const authorCutoffs = await currentVisibleAuthorCutoffs(user.id);
     const cursorDate = cursor ? new Date(cursor.createdAt) : null;
     const activities = await prisma.teamActivity.findMany({
       where: {
         teamId: null,
         type: NETWORK_POST_TYPE,
-        userId: { in: authorIds },
-        ...(cursorDate
-          ? {
-              OR: [
-                { createdAt: { lt: cursorDate } },
-                { createdAt: cursorDate, id: { lt: cursor!.id } },
-              ],
-            }
-          : {}),
+        AND: [
+          {
+            OR: [
+              { userId: user.id },
+              ...authorCutoffs.map(({ authorId, visibleFrom }) => ({
+                userId: authorId,
+                createdAt: { gte: visibleFrom },
+              })),
+            ],
+          },
+          ...(cursorDate
+            ? [
+                {
+                  OR: [
+                    { createdAt: { lt: cursorDate } },
+                    { createdAt: cursorDate, id: { lt: cursor!.id } },
+                  ],
+                },
+              ]
+            : []),
+        ],
       },
       include: activityInclude,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],

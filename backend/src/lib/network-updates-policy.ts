@@ -2,6 +2,7 @@ export type NetworkConnectionRow = {
   requesterId: string;
   recipientId: string;
   status: string;
+  updatedAt: Date;
 };
 
 export type NetworkBlockRow = {
@@ -9,12 +10,17 @@ export type NetworkBlockRow = {
   blockedId: string;
 };
 
-/** Current accepted, unblocked connections whose network posts a viewer may access. */
-export function visibleNetworkAuthorIds(
+export type NetworkAuthorCutoff = {
+  authorId: string;
+  visibleFrom: Date;
+};
+
+/** Current accepted, unblocked connections and the first post timestamp visible to a viewer. */
+export function visibleNetworkAuthorCutoffs(
   viewerId: string,
   connections: readonly NetworkConnectionRow[],
   blocks: readonly NetworkBlockRow[],
-): string[] {
+): NetworkAuthorCutoff[] {
   const blockedIds = new Set(
     blocks.flatMap((row) =>
       row.blockerId === viewerId
@@ -25,28 +31,34 @@ export function visibleNetworkAuthorIds(
     ),
   );
 
-  return [
-    ...new Set(
-      connections.flatMap((row) => {
-        if (row.status !== "accepted") return [];
-        const otherId =
-          row.requesterId === viewerId
-            ? row.recipientId
-            : row.recipientId === viewerId
-              ? row.requesterId
-              : null;
-        return otherId && !blockedIds.has(otherId) ? [otherId] : [];
-      }),
-    ),
-  ];
+  const cutoffs = new Map<string, Date>();
+  for (const row of connections) {
+    if (row.status !== "accepted") continue;
+    const authorId =
+      row.requesterId === viewerId
+        ? row.recipientId
+        : row.recipientId === viewerId
+          ? row.requesterId
+          : null;
+    if (!authorId || blockedIds.has(authorId)) continue;
+
+    const existing = cutoffs.get(authorId);
+    if (!existing || row.updatedAt > existing) cutoffs.set(authorId, row.updatedAt);
+  }
+
+  return [...cutoffs].map(([authorId, visibleFrom]) => ({ authorId, visibleFrom }));
 }
 
-export function canAccessNetworkAuthor(
+export function canAccessNetworkPost(
   viewerId: string,
   authorId: string | null,
-  visibleAuthorIds: readonly string[],
+  postCreatedAt: Date,
+  authorCutoffs: readonly NetworkAuthorCutoff[],
 ): boolean {
-  return authorId === viewerId || (!!authorId && visibleAuthorIds.includes(authorId));
+  if (authorId === viewerId) return true;
+  if (!authorId) return false;
+  const cutoff = authorCutoffs.find((entry) => entry.authorId === authorId);
+  return !!cutoff && postCreatedAt >= cutoff.visibleFrom;
 }
 
 export function isOwnedGenericUploadPath(userId: string, objectPath: string): boolean {
