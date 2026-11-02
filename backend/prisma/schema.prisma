@@ -118,6 +118,7 @@ model User {
   activityReactions                 TeamActivityReaction[]
   activityComments                  TeamActivityComment[]
   activityCommentReactions          TeamActivityCommentReaction[]
+  networkUpdateHides                NetworkUpdateHide[]
   pollsCreated                      Poll[]                          @relation("PollCreatedBy")
   pollVotes                         PollVote[]                      @relation("PollVoteUser")
   subtaskCompletions                SubtaskCompletion[]
@@ -1977,9 +1978,22 @@ model TeamActivity {
   createdAt DateTime               @default(now())
   reactions TeamActivityReaction[]
   comments  TeamActivityComment[]
+  hides     NetworkUpdateHide[]
 
   @@index([teamId, createdAt])
   @@index([userId, createdAt])
+}
+
+model NetworkUpdateHide {
+  id         String       @id @default(cuid())
+  viewerId   String
+  activityId String
+  createdAt  DateTime     @default(now())
+  viewer     User         @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  activity   TeamActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, activityId])
+  @@index([activityId])
 }
 
 model TeamActivityComment {

@@ -140,6 +140,7 @@ import { ensureTaskArchiveSchema } from "./lib/ensure-task-archive-schema";
 import { ensureTaskKindSchema } from "./lib/ensure-task-kind-schema";
 import { ensureTaskNotesSchema } from "./lib/ensure-task-notes-schema";
 import { ensureActivityCommentsSchema } from "./lib/ensure-activity-comments-schema";
+import { ensureNetworkUpdateHidesSchema } from "./lib/ensure-network-update-hides-schema";
 import { ensureTeamHealthSnapshotSchema } from "./lib/ensure-team-health-snapshot-schema";
 import { ensureSenecaTeamBriefSchema } from "./lib/ensure-seneca-team-brief-schema";
 import { ensureWalksSchema } from "./lib/ensure-walks-schema";
@@ -206,7 +207,7 @@ const startupSchemaReady = Promise.all([
   // Profile galleries are read on every public profile view.
   ensureProfilePhotosSchema(prisma),
   // Relaxes TeamActivity.teamId so account-level activity can be written.
-  ensureAccountActivitySchema(prisma),
+  ensureAccountActivitySchema(prisma).then(() => ensureNetworkUpdateHidesSchema(prisma)),
   ensureTeamHealthSnapshotSchema(prisma),
   ensureSenecaTeamBriefSchema(prisma),
   ensureOrganizationSchema(prisma),

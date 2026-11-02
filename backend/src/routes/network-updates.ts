@@ -145,7 +145,11 @@ async function currentVisibleAuthorCutoffs(viewerId: string) {
   return visibleNetworkAuthorCutoffs(viewerId, connections, blocks);
 }
 
-async function loadAccessiblePost(viewerId: string, activityId: string) {
+async function loadAccessiblePost(
+  viewerId: string,
+  activityId: string,
+  options: { includeHidden?: boolean } = {},
+) {
   const activity = await prisma.teamActivity.findFirst({
     where: { id: activityId, teamId: null, type: NETWORK_POST_TYPE },
     include: activityInclude,
@@ -154,12 +158,20 @@ async function loadAccessiblePost(viewerId: string, activityId: string) {
   if (activity.userId === viewerId) return activity;
   if (!activity.userId) return null;
 
-  const [connection, blocked] = await Promise.all([
+  const [connection, blocked, hide] = await Promise.all([
     prisma.connection.findUnique({
       where: { pairKey: buildConnectionPairKey(viewerId, activity.userId) },
       select: { status: true, updatedAt: true },
     }),
     isBlockedEitherDirection(viewerId, activity.userId),
+    options.includeHidden
+      ? null
+      : prisma.networkUpdateHide.findUnique({
+          where: {
+            viewerId_activityId: { viewerId, activityId: activity.id },
+          },
+          select: { id: true },
+        }),
   ]);
   const authorCutoffs =
     connection?.status === "accepted" && !blocked
@@ -170,6 +182,7 @@ async function loadAccessiblePost(viewerId: string, activityId: string) {
     activity.userId,
     activity.createdAt,
     authorCutoffs,
+    !!hide,
   )
     ? activity
     : null;
@@ -227,8 +240,11 @@ networkUpdatesRouter.get(
             OR: [
               { userId: user.id },
               ...authorCutoffs.map(({ authorId, visibleFrom }) => ({
-                userId: authorId,
-                createdAt: { gte: visibleFrom },
+                AND: [
+                  { userId: authorId },
+                  { createdAt: { gte: visibleFrom } },
+                  { hides: { none: { viewerId: user.id } } },
+                ],
               })),
             ],
           },
@@ -330,6 +346,40 @@ networkUpdatesRouter.get("/:activityId", async (c) => {
   const activity = await loadAccessiblePost(user.id, c.req.param("activityId"));
   if (!activity) return notFound(c, "Network update");
   return c.json({ data: serializeActivity(activity, user.id) });
+});
+
+networkUpdatesRouter.post("/:activityId/hide", async (c) => {
+  const user = c.get("user")!;
+  const activity = await loadAccessiblePost(user.id, c.req.param("activityId"), {
+    includeHidden: true,
+  });
+  if (!activity) return notFound(c, "Network update");
+  if (activity.userId === user.id) {
+    return c.json(
+      {
+        error: {
+          message: "You cannot hide your own network update",
+          code: "VALIDATION_ERROR",
+        },
+      },
+      400,
+    );
+  }
+
+  await prisma.networkUpdateHide.upsert({
+    where: {
+      viewerId_activityId: {
+        viewerId: user.id,
+        activityId: activity.id,
+      },
+    },
+    update: {},
+    create: {
+      viewerId: user.id,
+      activityId: activity.id,
+    },
+  });
+  return c.body(null, 204);
 });
 
 networkUpdatesRouter.delete("/:activityId", async (c) => {

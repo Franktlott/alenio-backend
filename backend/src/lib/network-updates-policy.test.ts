@@ -102,6 +102,23 @@ describe("network updates authorization policy", () => {
     expect(canAccessNetworkPost("me", null, firstAcceptance, [])).toBe(false);
   });
 
+  test("excludes a hidden post only for its viewer while preserving author access", () => {
+    const cutoffs = [{ authorId: "connection", visibleFrom: firstAcceptance }];
+    const postCreatedAt = new Date("2026-01-11T12:00:00.000Z");
+
+    expect(
+      canAccessNetworkPost("me", "connection", postCreatedAt, cutoffs, true),
+    ).toBe(false);
+    expect(
+      canAccessNetworkPost("other-viewer", "connection", postCreatedAt, [
+        { authorId: "connection", visibleFrom: firstAcceptance },
+      ]),
+    ).toBe(true);
+    expect(canAccessNetworkPost("connection", "connection", postCreatedAt, [], true)).toBe(
+      true,
+    );
+  });
+
   test("uses a later updatedAt after reconnection so old posts stay hidden", () => {
     const reconnection = new Date("2026-02-20T08:30:00.000Z");
     const cutoffs = visibleNetworkAuthorCutoffs(

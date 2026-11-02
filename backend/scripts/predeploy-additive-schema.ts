@@ -3,6 +3,7 @@
  * because a schema diff against Neon has been failing these deploys.
  */
 import { PrismaClient } from "@prisma/client";
+import { ensureNetworkUpdateHidesSchema } from "../src/lib/ensure-network-update-hides-schema";
 
 const raw = process.env.DATABASE_URL;
 if (!raw) {
@@ -34,6 +35,12 @@ try {
       ADD COLUMN IF NOT EXISTS "image" TEXT
   `);
   console.log("predeploy-additive-schema: CalendarEvent.image ready");
+
+  const networkUpdateHides = await ensureNetworkUpdateHidesSchema(prisma);
+  if (!networkUpdateHides.ok) {
+    throw new Error(networkUpdateHides.error);
+  }
+  console.log("predeploy-additive-schema: NetworkUpdateHide ready");
 } catch (err) {
   console.error(
     "predeploy-additive-schema: patch failed, continuing deploy for startup fallback:",

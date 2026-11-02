@@ -54,9 +54,11 @@ export function canAccessNetworkPost(
   authorId: string | null,
   postCreatedAt: Date,
   authorCutoffs: readonly NetworkAuthorCutoff[],
+  hiddenByViewer = false,
 ): boolean {
   if (authorId === viewerId) return true;
   if (!authorId) return false;
+  if (hiddenByViewer) return false;
   const cutoff = authorCutoffs.find((entry) => entry.authorId === authorId);
   return !!cutoff && postCreatedAt >= cutoff.visibleFrom;
 }
