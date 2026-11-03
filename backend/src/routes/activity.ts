@@ -19,6 +19,35 @@ type Variables = {
 const activityRouter = new Hono<{ Variables: Variables }>();
 
 const ACTIVITY_FEED_DAYS = 14;
+const ACTIVITY_PAGE_SIZE = 12;
+const ACTIVITY_PAGE_MAX = 25;
+
+const activityFeedQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(ACTIVITY_PAGE_MAX).optional(),
+  cursor: z.string().optional(),
+});
+
+type ActivityFeedCursor = { createdAt: string; id: string };
+
+function encodeActivityCursor(value: ActivityFeedCursor): string {
+  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+}
+
+function decodeActivityCursor(
+  value: string | undefined,
+): ActivityFeedCursor | null | undefined {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(value, "base64url").toString("utf8"),
+    ) as ActivityFeedCursor;
+    const date = new Date(parsed.createdAt);
+    if (!parsed.id || !Number.isFinite(date.getTime())) return undefined;
+    return { createdAt: date.toISOString(), id: parsed.id };
+  } catch {
+    return undefined;
+  }
+}
 
 activityRouter.use("*", authGuard);
 
@@ -147,67 +176,139 @@ async function loadActivityForTeam(
   return { ok: true, membership, activity };
 }
 
-activityRouter.get("/:teamId/activity", async (c) => {
-  const user = c.get("user")!;
-  const { teamId } = c.req.param();
+activityRouter.get(
+  "/:teamId/activity",
+  zValidator("query", activityFeedQuerySchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const { teamId } = c.req.param();
+    const paginated =
+      c.req.query("limit") != null || c.req.query("cursor") != null;
+    const { limit = ACTIVITY_PAGE_SIZE, cursor: rawCursor } =
+      c.req.valid("query");
+    const cursor = decodeActivityCursor(rawCursor);
+    if (cursor === undefined) {
+      return c.json(
+        { error: { message: "Invalid cursor", code: "VALIDATION_ERROR" } },
+        400,
+      );
+    }
 
-  const membership = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: user.id, teamId } },
-  });
-  if (!membership) {
-    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
-  }
+    const membership = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId: user.id, teamId } },
+    });
+    if (!membership) {
+      return c.json(
+        { error: { message: "Not a team member", code: "FORBIDDEN" } },
+        403,
+      );
+    }
 
-  const feedStart = new Date(Date.now() - ACTIVITY_FEED_DAYS * 24 * 60 * 60 * 1000);
-  const members = await prisma.teamMember.findMany({
-    where: { teamId },
-    select: { userId: true },
-  });
-  const memberIds = members.map((member) => member.userId);
-  const memberIdSet = new Set(memberIds);
+    const feedStart = new Date(
+      Date.now() - ACTIVITY_FEED_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const cursorDate = cursor ? new Date(cursor.createdAt) : null;
+    const cursorBoundary =
+      paginated && cursorDate && cursor
+        ? {
+            OR: [
+              { createdAt: { lt: cursorDate } },
+              { createdAt: cursorDate, id: { lt: cursor.id } },
+            ],
+          }
+        : {};
+    const members = await prisma.teamMember.findMany({
+      where: { teamId },
+      select: { userId: true },
+    });
+    const memberIds = members.map((member) => member.userId);
+    const memberIdSet = new Set(memberIds);
 
-  const [teamActivities, personalCelebrations] = await Promise.all([
-    prisma.teamActivity.findMany({
-      where: { teamId, createdAt: { gte: feedStart } },
-      include: activityInclude,
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    }),
-    memberIds.length === 0
-      ? Promise.resolve([])
-      : prisma.teamActivity.findMany({
-          where: {
-            teamId: null,
-            type: "celebration",
-            userId: { in: memberIds },
-            createdAt: { gte: feedStart },
-          },
-          include: activityInclude,
-          orderBy: { createdAt: "desc" },
-          take: 100,
-        }),
-  ]);
+    const [teamActivities, personalCelebrations] = await Promise.all([
+      prisma.teamActivity.findMany({
+        where: {
+          teamId,
+          createdAt: { gte: feedStart },
+          ...cursorBoundary,
+        },
+        include: activityInclude,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: paginated ? limit + 1 : 100,
+      }),
+      memberIds.length === 0
+        ? Promise.resolve([])
+        : prisma.teamActivity.findMany({
+            where: {
+              teamId: null,
+              type: "celebration",
+              userId: { in: memberIds },
+              createdAt: { gte: feedStart },
+              ...cursorBoundary,
+            },
+            include: activityInclude,
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            // Recognition metadata needs an in-memory membership check, so
+            // overfetch a bounded window rather than loading the full feed.
+            take: paginated ? Math.min(100, (limit + 1) * 4) : 100,
+          }),
+    ]);
 
-  const extras = personalCelebrations.filter((activity) =>
-    personalCelebrationBelongsToTeam({
-      actorUserId: activity.userId,
-      metadata: parseActivityMetadata(activity.metadata),
-      memberIds: memberIdSet,
-    }),
-  );
+    const extras = personalCelebrations.filter((activity) =>
+      personalCelebrationBelongsToTeam({
+        actorUserId: activity.userId,
+        metadata: parseActivityMetadata(activity.metadata),
+        memberIds: memberIdSet,
+      }),
+    );
 
-  const byId = new Map<string, (typeof teamActivities)[number]>();
-  for (const activity of [...teamActivities, ...extras]) {
-    byId.set(activity.id, activity);
-  }
-  const activities = [...byId.values()]
-    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
-    .slice(0, 100);
+    const byId = new Map<string, (typeof teamActivities)[number]>();
+    for (const activity of [...teamActivities, ...extras]) {
+      byId.set(activity.id, activity);
+    }
+    const activities = [...byId.values()]
+      .sort(
+        (left, right) =>
+          right.createdAt.getTime() - left.createdAt.getTime() ||
+          right.id.localeCompare(left.id),
+      )
+      .slice(0, 100);
 
-  return c.json({
-    data: activities.map((activity) => serializeActivity(activity, teamId)),
-  });
-});
+    // Preserve the original array response for older clients.
+    if (!paginated) {
+      return c.json({
+        data: activities.map((activity) => serializeActivity(activity, teamId)),
+      });
+    }
+
+    const cursorTime = cursor ? new Date(cursor.createdAt).getTime() : null;
+    const eligible = cursor
+      ? activities.filter((activity) => {
+          const time = activity.createdAt.getTime();
+          return (
+            time < cursorTime! ||
+            (time === cursorTime && activity.id.localeCompare(cursor.id) < 0)
+          );
+        })
+      : activities;
+    const page = eligible.slice(0, limit + 1);
+    const hasMore = page.length > limit;
+    if (hasMore) page.pop();
+    const last = page.at(-1);
+
+    return c.json({
+      data: {
+        items: page.map((activity) => serializeActivity(activity, teamId)),
+        nextCursor:
+          hasMore && last
+            ? encodeActivityCursor({
+                createdAt: last.createdAt.toISOString(),
+                id: last.id,
+              })
+            : null,
+      },
+    });
+  },
+);
 
 /** One post, for the detail screen and for deep links into a thread. */
 activityRouter.get("/:teamId/activity/:activityId", async (c) => {
