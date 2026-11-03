@@ -290,15 +290,20 @@ activityRouter.post(
         imageUrl: z.string().url().optional(),
         imageWidth: z.number().int().positive().optional(),
         imageHeight: z.number().int().positive().optional(),
+        mediaType: z.enum(["image", "video"]).optional(),
       })
       .refine((value) => !!value.body || !!value.imageUrl, {
-        message: "Add a message or a photo",
+        message: "Add a message or media",
+      })
+      .refine((value) => !value.mediaType || !!value.imageUrl, {
+        message: "Media type requires an uploaded file",
       }),
   ),
   async (c) => {
     const user = c.get("user")!;
     const { teamId } = c.req.param();
-    const { body, imageUrl, imageWidth, imageHeight } = c.req.valid("json");
+    const { body, imageUrl, imageWidth, imageHeight, mediaType } =
+      c.req.valid("json");
 
     const membership = await prisma.teamMember.findUnique({
       where: { userId_teamId: { userId: user.id, teamId } },
@@ -320,6 +325,7 @@ activityRouter.post(
           imageUrl: imageUrl ?? null,
           imageWidth: imageWidth ?? null,
           imageHeight: imageHeight ?? null,
+          mediaType: imageUrl ? (mediaType ?? "image") : null,
         }),
       },
       include: activityInclude,

@@ -286,10 +286,11 @@ const createPostSchema = z
     imageUrl: z.string().url().max(2_048).optional(),
     imageWidth: z.number().int().min(1).max(IMAGE_DIMENSION_MAX).optional(),
     imageHeight: z.number().int().min(1).max(IMAGE_DIMENSION_MAX).optional(),
+    mediaType: z.enum(["image", "video"]).optional(),
   })
   .superRefine((value, context) => {
     if (!value.body && !value.imageUrl) {
-      context.addIssue({ code: "custom", message: "Add a message or a photo" });
+      context.addIssue({ code: "custom", message: "Add a message or media" });
     }
     if (!!value.imageWidth !== !!value.imageHeight) {
       context.addIssue({
@@ -300,6 +301,12 @@ const createPostSchema = z
     if (!value.imageUrl && (value.imageWidth || value.imageHeight)) {
       context.addIssue({ code: "custom", message: "Image dimensions require a photo" });
     }
+    if (value.mediaType && !value.imageUrl) {
+      context.addIssue({
+        code: "custom",
+        message: "Media type requires an uploaded file",
+      });
+    }
   });
 
 networkUpdatesRouter.post(
@@ -307,7 +314,8 @@ networkUpdatesRouter.post(
   zValidator("json", createPostSchema),
   async (c) => {
     const user = c.get("user")!;
-    const { body, imageUrl, imageWidth, imageHeight } = c.req.valid("json");
+    const { body, imageUrl, imageWidth, imageHeight, mediaType } =
+      c.req.valid("json");
     if (imageUrl) {
       const object = parseOwnedStorageObjectFromUrl(imageUrl);
       if (!object || !isOwnedGenericUploadPath(user.id, object.objectPath)) {
@@ -333,6 +341,7 @@ networkUpdatesRouter.post(
           imageUrl: imageUrl ?? null,
           imageWidth: imageWidth ?? null,
           imageHeight: imageHeight ?? null,
+          mediaType: imageUrl ? (mediaType ?? "image") : null,
         }),
       },
       include: activityInclude,
