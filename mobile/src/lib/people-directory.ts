@@ -159,8 +159,7 @@ export function selectDirectoryBadges(person: DirectoryPerson): DirectoryBadge[]
   }
   if (
     person.member?.role === "owner" ||
-    person.member?.role === "team_leader" ||
-    person.member?.role === "admin"
+    person.member?.role === "team_leader"
   ) {
     badges.push({ key: "manager", label: "Manager" });
   }

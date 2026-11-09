@@ -41,7 +41,10 @@ import { logActivity } from "../lib/activity";
 import { workspaceTaskClassificationForRole } from "../lib/task-policy";
 import { deleteCheckInFollowUpTasks } from "../lib/check-in-follow-up-tasks";
 import { publishUserInboxUpdated } from "../lib/realtime-hub";
-import { deleteAudioForPublishedMeeting } from "../lib/check-in-recording-service";
+import {
+  deleteAudioForPublishedMeeting,
+  deleteRecordingForDeletedMeeting,
+} from "../lib/check-in-recording-service";
 import {
   contextIncludesCheckInSelection,
   resolveVideoCheckInContext,
@@ -119,6 +122,8 @@ const updateMeetingSchema = z.object({
   plannedCalendarEventId: z.string().min(1).optional(),
   sourceVideoRoomId: z.string().min(1).nullable().optional(),
   calendarEventId: z.string().min(1).nullable().optional(),
+  /** Open check-ins only. Guided templates keep the template name. */
+  templateTitle: z.string().trim().min(1).max(60).optional(),
 });
 
 const meetingInclude = {
@@ -1076,6 +1081,10 @@ oneOnOneMeetingsRouter.patch(
     }
 
     const publishingNow = existing.status === "draft" && nextStatus === "published";
+    const templateTitle =
+      existing.templateId == null && body.templateTitle
+        ? body.templateTitle
+        : existing.templateTitle;
 
     try {
       await prisma.oneOnOneMeeting.update({
@@ -1083,6 +1092,9 @@ oneOnOneMeetingsRouter.patch(
         data: {
           responses: JSON.stringify(body.responses),
           status: nextStatus,
+          ...(existing.templateId == null && body.templateTitle
+            ? { templateTitle }
+            : {}),
           ...(body.sourceVideoRoomId !== undefined
             ? { sourceVideoRoomId: body.sourceVideoRoomId }
             : {}),
@@ -1109,7 +1121,7 @@ oneOnOneMeetingsRouter.patch(
       const managerName = user.name?.trim() || user.email || "Your manager";
       if (!isDraft) {
         await createMeetingAssociateFeedbackRequest(
-          { id: meetingId, teamId, memberUserId, templateTitle: existing.templateTitle },
+          { id: meetingId, teamId, memberUserId, templateTitle },
           body.requestAssociateFeedback === true,
           body.responses,
           user.id,
@@ -1312,10 +1324,16 @@ oneOnOneMeetingsRouter.delete("/:memberUserId/one-on-ones/:meetingId", async (c)
   }
 
   try {
+    // Looked up first: deleting the check-in unlinks its recording.
+    const recording = await prisma.checkInRecording.findUnique({
+      where: { meetingId },
+      select: { id: true },
+    });
     await prisma.$transaction(async (tx) => {
       await deleteCheckInFollowUpTasks(tx, meetingId);
       await tx.oneOnOneMeeting.delete({ where: { id: meetingId } });
     });
+    if (recording) await deleteRecordingForDeletedMeeting(recording.id);
     await publishTeamCheckInsUpdated(teamId);
     return c.json({ data: { deleted: true } });
   } catch (err) {

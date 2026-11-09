@@ -30,7 +30,7 @@ export default function NoWorkspaceWelcomeRoute() {
     const nextTeamId = resolveActiveTeamId(teams, activeTeamId);
     if (nextTeamId) {
       if (nextTeamId !== activeTeamId) setActiveTeamId(nextTeamId);
-      router.replace("/(app)/chat");
+      router.replace("/(app)/home");
     }
   }, [activeTeamId, hasHydrated, isFetched, setActiveTeamId, teams]);
 

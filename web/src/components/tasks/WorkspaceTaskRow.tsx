@@ -9,6 +9,7 @@ import {
 } from "../../lib/task-display";
 import { formatTaskOneOnOneSource } from "../../lib/task-one-on-one-source";
 import { isRecurringTask } from "../../lib/recurring-task";
+import { isPrivateReminder } from "./task-presentation";
 
 type Props = {
   task: ApiTask;
@@ -50,10 +51,11 @@ export function WorkspaceTaskRow({
   const overdue = isTaskOverdue(task, now);
   const oneOnOneSource = formatTaskOneOnOneSource(task, { memberNameByUserId, viewerUserId });
   const dueDisplay = isDone ? formatDoneDueDisplay(task) : formatTaskDueDisplay(task.dueDate, now);
+  const isReminder = isPrivateReminder(task);
 
   return (
     <tr
-      className={`enterprise-workspace-task-row enterprise-table-row-clickable${isDone ? " enterprise-workspace-task-row--done" : ""}${overdue ? " enterprise-workspace-task-row--overdue" : ""}`}
+      className={`enterprise-workspace-task-row enterprise-table-row-clickable${isDone ? " enterprise-workspace-task-row--done" : ""}${overdue ? " enterprise-workspace-task-row--overdue" : ""}${isReminder ? " enterprise-workspace-task-row--reminder" : ""}`}
       data-testid={`workspace-task-${task.id}`}
       onClick={onOpen}
       onKeyDown={(e) => {
@@ -64,7 +66,7 @@ export function WorkspaceTaskRow({
       }}
       tabIndex={0}
       role="link"
-      aria-label={`Open task: ${task.title}`}
+      aria-label={`Open ${isReminder ? "private reminder" : "task"}: ${task.title}`}
     >
       <td className="enterprise-workspace-task-td-check" onClick={(e) => e.stopPropagation()}>
         <button
@@ -91,6 +93,7 @@ export function WorkspaceTaskRow({
           ) : null}
           <div className="enterprise-workspace-task-title-stack">
             <span className="enterprise-task-title">{task.title}</span>
+            {isReminder ? <span className="enterprise-workspace-task-source">Private reminder</span> : null}
             {oneOnOneSource ? <span className="enterprise-workspace-task-source">{oneOnOneSource}</span> : null}
           </div>
         </div>

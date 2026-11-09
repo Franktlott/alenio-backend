@@ -10,9 +10,7 @@ import {
   ClipboardList,
   Calendar,
   Video,
-  Users,
-  Building2,
-  CreditCard,
+  Megaphone,
 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +26,7 @@ export type NotifPrefs = {
   notifTaskAssigned: boolean;
   notifTaskDue: boolean;
   notifMeetings: boolean;
+  notifProductUpdates?: boolean;
   notifAdminUsers?: boolean;
   notifAdminWorkspaces?: boolean;
   notifAdminBilling?: boolean;
@@ -40,6 +39,7 @@ type AlertCategoryKey =
   | "notifTaskAssigned"
   | "notifTaskDue"
   | "notifMeetings"
+  | "notifProductUpdates"
   | "notifAdminUsers"
   | "notifAdminWorkspaces"
   | "notifAdminBilling";
@@ -65,29 +65,11 @@ const WORKSPACE_ALERT_CATEGORIES: AlertCategory[] = [
   { key: "notifTaskAssigned", label: "Task assignments", description: "Work assigned to you", Icon: ClipboardList },
   { key: "notifTaskDue", label: "Due date reminders", description: "Deadlines and overdue items", Icon: Calendar },
   { key: "notifMeetings", label: "Meetings", description: "Starts and reminders", Icon: Video },
-];
-
-const ADMIN_ALERT_CATEGORIES: AlertCategory[] = [
   {
-    key: "notifAdminUsers",
-    label: "Users & signups",
-    description: "New accounts and joins",
-    Icon: Users,
-    admin: true,
-  },
-  {
-    key: "notifAdminWorkspaces",
-    label: "New workplaces",
-    description: "Workplace created",
-    Icon: Building2,
-    admin: true,
-  },
-  {
-    key: "notifAdminBilling",
-    label: "Billing & plans",
-    description: "Subscriptions and past due",
-    Icon: CreditCard,
-    admin: true,
+    key: "notifProductUpdates",
+    label: "Product updates and announcements",
+    description: "New features and news from Alenio",
+    Icon: Megaphone,
   },
 ];
 
@@ -102,13 +84,6 @@ export function notificationToneLabel(tone: string | undefined): string {
 export function notificationPreferencesSummary(prefs: NotifPrefs | undefined): string {
   if (!prefs) return "Manage alerts and delivery";
   const flags = [prefs.notifMessages, prefs.notifTaskAssigned, prefs.notifTaskDue, prefs.notifMeetings];
-  if (prefs.isAdmin) {
-    flags.push(
-      prefs.notifAdminUsers ?? true,
-      prefs.notifAdminWorkspaces ?? true,
-      prefs.notifAdminBilling ?? true,
-    );
-  }
   const enabled = flags.filter(Boolean).length;
   const tone = notificationToneLabel(prefs.notifTone);
   if (enabled === 0) return `All categories off · ${tone}`;
@@ -304,8 +279,6 @@ export function NotificationPreferencesPanel() {
       : "default";
   const selectedToneMeta =
     NOTIFICATION_TONES.find((t) => t.value === resolvedTone) ?? NOTIFICATION_TONES[0];
-  const isAdmin = notifPrefs?.isAdmin === true;
-
   if (isLoading && !notifPrefs) {
     return (
       <View style={{ paddingVertical: 40, alignItems: "center" }}>
@@ -328,24 +301,6 @@ export function NotificationPreferencesPanel() {
           />
         ))}
       </View>
-
-      {isAdmin ? (
-        <>
-          <View style={{ height: 14 }} />
-          <SectionHeader title="Platform admin" />
-          <View style={UI.card}>
-            {ADMIN_ALERT_CATEGORIES.map((item, index) => (
-              <CategoryRow
-                key={item.key}
-                item={item}
-                showDivider={index > 0}
-                isEnabled={notifPrefs?.[item.key] ?? true}
-                onToggle={(val) => notifMutation.mutate({ [item.key]: val })}
-              />
-            ))}
-          </View>
-        </>
-      ) : null}
 
       <View style={{ height: 14 }} />
 

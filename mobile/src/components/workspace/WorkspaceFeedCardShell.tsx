@@ -1,11 +1,24 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { MoreVertical } from "lucide-react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import { MoreHorizontal } from "lucide-react-native";
 import { UserAvatar } from "@/components/UserAvatar";
 
 export const FEED_AVATAR = 36;
 export const FEED_ACCENT = "#4361EE";
-const PAIRED_AVATAR = 20;
+export const WORKSPACE_FEED_HORIZONTAL_INSET = 16;
+export const WORKSPACE_FEED_MAX_WIDTH = 680;
+export const WORKSPACE_FEED_GAP = 8;
+export const WORKSPACE_FEED_SECTION_GAP = 12;
+export const FEED_CARD_PADDING = 12;
+export const FEED_CARD_WIDE_PADDING = 14;
+export const FEED_WIDE_PADDING_BREAKPOINT = 430;
+const PAIRED_AVATAR = 18;
 
 type Props = {
   /** Author photo; falls back to initials when there is no image. */
@@ -22,8 +35,12 @@ type Props = {
   onLongPress?: () => void;
   children?: ReactNode;
   footer?: ReactNode;
+  /** Decorative layer behind the interactive card content. */
+  backgroundDecoration?: ReactNode;
   avatarResetKey?: string;
   testID?: string;
+  /** Automated activity uses less vertical padding than authored posts. */
+  compact?: boolean;
 };
 
 /** Shared chrome for every Updates feed item: white card, one header row, body, action row. */
@@ -37,11 +54,20 @@ export function WorkspaceFeedCardShell({
   onLongPress,
   children,
   footer,
+  backgroundDecoration,
   avatarResetKey,
   testID,
+  compact = false,
 }: Props) {
+  const { width } = useWindowDimensions();
+  const cardPadding =
+    width >= FEED_WIDE_PADDING_BREAKPOINT
+      ? FEED_CARD_WIDE_PADDING
+      : FEED_CARD_PADDING;
+
   return (
     <View style={styles.card}>
+      {backgroundDecoration}
       {/* css-interop drops function-form style props, so keep these plain. */}
       <Pressable
         onPress={onPress}
@@ -51,7 +77,13 @@ export function WorkspaceFeedCardShell({
         accessibilityRole={onPress ? "button" : undefined}
         accessibilityHint={onPress ? "Opens comments" : undefined}
         testID={testID}
-        style={styles.inner}
+        style={[
+          styles.inner,
+          {
+            paddingHorizontal: cardPadding,
+            paddingVertical: compact ? 10 : cardPadding,
+          },
+        ]}
       >
         <View style={styles.header}>
           <View style={pairedAvatar ? styles.avatarPair : undefined}>
@@ -97,7 +129,7 @@ export function WorkspaceFeedCardShell({
               testID={testID ? `${testID}-more` : undefined}
               style={styles.moreBtn}
             >
-              <MoreVertical size={17} color="#A7B0C0" strokeWidth={2.2} />
+              <MoreHorizontal size={19} color="#718096" strokeWidth={2.2} />
             </Pressable>
           ) : null}
         </View>
@@ -112,19 +144,22 @@ export function WorkspaceFeedCardShell({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#FFFFFF",
-    // Full-bleed white band; the gray edge is the break between posts.
-    borderBottomWidth: 6,
-    borderBottomColor: "#F0F3F8",
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#DFE5EE",
+    shadowColor: "#172554",
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
   inner: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 2,
+    padding: FEED_CARD_PADDING,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   },
   headerCopy: {
     flex: 1,
@@ -152,11 +187,10 @@ const styles = StyleSheet.create({
     color: "#93A0B4",
   },
   moreBtn: {
-    width: 26,
-    minHeight: 26,
+    width: 30,
+    height: 30,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: -4,
     alignSelf: "flex-start",
   },
 });

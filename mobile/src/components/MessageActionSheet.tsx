@@ -39,6 +39,7 @@ type MessageActionSheetProps = {
   alignRight?: boolean;
   onClose: () => void;
   myReaction?: string;
+  reactionsDisabled?: boolean;
   onReaction: (emoji: string) => void;
   actions: MessageActionSheetAction[];
   children: React.ReactNode;
@@ -194,6 +195,7 @@ export function MessageActionSheet({
   alignRight = false,
   onClose,
   myReaction,
+  reactionsDisabled = false,
   onReaction,
   actions,
   children,
@@ -315,48 +317,73 @@ export function MessageActionSheet({
               },
             ]}
           >
-            {MESSAGE_REACTION_EMOJIS.map((emoji) => {
-              const selected = emoji === myReaction;
-              const active = emoji === hoveredEmoji;
-              return (
-                <Pressable
-                  key={emoji}
-                  onPress={() => handleReaction(emoji)}
-                  onHoverIn={() => {
-                    setHoveredEmoji(emoji);
-                    lastHoveredRef.current = emoji;
-                  }}
-                  onHoverOut={() => {
-                    setHoveredEmoji((current) => (current === emoji ? null : current));
-                    if (lastHoveredRef.current === emoji) {
-                      lastHoveredRef.current = null;
+            {reactionsDisabled ? (
+              <Text
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: "#7A8498",
+                }}
+              >
+                Reactions unavailable
+              </Text>
+            ) : (
+              MESSAGE_REACTION_EMOJIS.map((emoji) => {
+                const selected = emoji === myReaction;
+                const active = emoji === hoveredEmoji;
+                return (
+                  <Pressable
+                    key={emoji}
+                    onPress={() => handleReaction(emoji)}
+                    onHoverIn={() => {
+                      setHoveredEmoji(emoji);
+                      lastHoveredRef.current = emoji;
+                    }}
+                    onHoverOut={() => {
+                      setHoveredEmoji((current) =>
+                        current === emoji ? null : current,
+                      );
+                      if (lastHoveredRef.current === emoji) {
+                        lastHoveredRef.current = null;
+                      }
+                    }}
+                    onPressIn={() => {
+                      setHoveredEmoji(emoji);
+                      lastHoveredRef.current = emoji;
+                      void Haptics.selectionAsync();
+                    }}
+                    onPressOut={() => {
+                      setHoveredEmoji((current) =>
+                        current === emoji ? null : current,
+                      );
+                      if (lastHoveredRef.current === emoji) {
+                        lastHoveredRef.current = null;
+                      }
+                    }}
+                    style={[
+                      styles.emojiPressable,
+                      active ? styles.emojiPressableActive : null,
+                    ]}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      selected
+                        ? `${emoji} reaction selected. Tap to remove or choose another reaction.`
+                        : `React with ${emoji}`
                     }
-                  }}
-                  onPressIn={() => {
-                    setHoveredEmoji(emoji);
-                    lastHoveredRef.current = emoji;
-                    void Haptics.selectionAsync();
-                  }}
-                  onPressOut={() => {
-                    setHoveredEmoji((current) => (current === emoji ? null : current));
-                    if (lastHoveredRef.current === emoji) {
-                      lastHoveredRef.current = null;
-                    }
-                  }}
-                  style={[styles.emojiPressable, active ? styles.emojiPressableActive : null]}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    selected
-                      ? `${emoji} reaction selected. Tap to remove or choose another reaction.`
-                      : `React with ${emoji}`
-                  }
-                  accessibilityState={{ selected }}
-                >
-                  <ReactionEmoji emoji={emoji} active={active} selected={selected} />
-                </Pressable>
-              );
-            })}
+                    accessibilityState={{ selected }}
+                  >
+                    <ReactionEmoji
+                      emoji={emoji}
+                      active={active}
+                      selected={selected}
+                    />
+                  </Pressable>
+                );
+              })
+            )}
           </View>
 
           <View

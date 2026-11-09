@@ -30,7 +30,6 @@ export function SettingsAiHubPage() {
             <h1 className="seneca-studio-title">AI</h1>
             <p className="seneca-studio-subtitle">
               Workspace context Seneca should keep in mind for {team?.name ?? "this workspace"}.
-              Platform coaching defaults live in Admin → Seneca Studio.
             </p>
           </div>
           {!access.canEdit ? (

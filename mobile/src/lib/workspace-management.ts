@@ -7,14 +7,13 @@ export function canManageWorkspace(role?: TeamRole | string | null) {
 export function canOpenWorkspaceTitleMenu({
   enabled,
   teamCount,
-  activeRole,
 }: {
   enabled: boolean;
   teamCount: number;
   activeRole?: TeamRole | string | null;
 }) {
   if (!enabled || teamCount < 1) return false;
-  return teamCount > 1 || canManageWorkspace(activeRole);
+  return true;
 }
 
 export function workspaceManagementCapabilities(

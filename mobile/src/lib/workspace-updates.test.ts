@@ -6,9 +6,11 @@ import {
   formatFeedTimestamp,
   hasReacted,
   isWorkspaceUpdateActivity,
+  joinedMemberName,
   milestoneSubtitle,
   myReactionEmoji,
   nextMilestoneTarget,
+  orderedReactionGroups,
   personalRecognitionToActivityEvent,
   reactionActionLabel,
   recognitionCategoryLabel,
@@ -36,9 +38,9 @@ function feedItem(
 }
 
 describe("isWorkspaceUpdateActivity", () => {
-  test("keeps recognition and completed tasks", () => {
+  test("keeps recognition and leaves individual completions off the feed", () => {
     expect(isWorkspaceUpdateActivity("celebration")).toBe(true);
-    expect(isWorkspaceUpdateActivity("task_completed")).toBe(true);
+    expect(isWorkspaceUpdateActivity("task_completed")).toBe(false);
   });
 
   test("keeps momentum milestones but not personal bests", () => {
@@ -46,10 +48,39 @@ describe("isWorkspaceUpdateActivity", () => {
     expect(isWorkspaceUpdateActivity("personal_best")).toBe(false);
   });
 
+  test("welcomes new members but not departures", () => {
+    expect(isWorkspaceUpdateActivity("member_joined")).toBe(true);
+    expect(isWorkspaceUpdateActivity("member_removed")).toBe(false);
+  });
+
   test("drops other workspace activity", () => {
     expect(isWorkspaceUpdateActivity("task_assigned")).toBe(false);
     expect(isWorkspaceUpdateActivity("calendar_event_added")).toBe(false);
-    expect(isWorkspaceUpdateActivity("member_joined")).toBe(false);
+  });
+});
+
+describe("joinedMemberName", () => {
+  test("prefers the name the join event recorded", () => {
+    expect(
+      joinedMemberName(
+        feedItem({
+          type: "member_joined",
+          title: "joined",
+          metadata: { userName: "Tyrell Lott" },
+        }),
+      ),
+    ).toBe("Tyrell Lott");
+  });
+
+  test("falls back to the actor, then to a neutral phrase", () => {
+    expect(
+      joinedMemberName(feedItem({ type: "member_joined", title: "joined" })),
+    ).toBe("Maya Chen");
+    expect(
+      joinedMemberName(
+        feedItem({ type: "member_joined", title: "joined", actor: undefined }),
+      ),
+    ).toBe("A new teammate");
   });
 });
 
@@ -200,6 +231,32 @@ describe("totalReactionCount", () => {
   test("reads zero for an untouched card", () => {
     expect(totalReactionCount(null)).toBe(0);
     expect(totalReactionCount({})).toBe(0);
+  });
+});
+
+describe("orderedReactionGroups", () => {
+  test("puts the most popular reaction first and keeps its people", () => {
+    const groups = orderedReactionGroups({
+      "🎉": { count: 1, userIds: ["u1"], users: [{ id: "u1", name: "Ada" }] },
+      "❤️": {
+        count: 2,
+        userIds: ["u2", "u3"],
+        users: [
+          { id: "u2", name: "Ben" },
+          { id: "u3", name: "Cleo" },
+        ],
+      },
+    });
+
+    expect(groups.map((group) => group.emoji)).toEqual(["❤️", "🎉"]);
+    expect(groups[0]?.users.map((user) => user.name)).toEqual(["Ben", "Cleo"]);
+  });
+
+  test("skips empty groups and missing reactions", () => {
+    expect(orderedReactionGroups(undefined)).toEqual([]);
+    expect(
+      orderedReactionGroups({ "❤️": { count: 0, userIds: [], users: [] } }),
+    ).toEqual([]);
   });
 });
 

@@ -81,6 +81,18 @@ export async function clearMobileAuthCaches(queryClient: QueryClient) {
   queryClient.removeQueries({ queryKey: ME_QUERY_KEY });
 }
 
+/**
+ * Clear user-specific app data without deleting the signed-out auth marker.
+ * The root auth bootstrap runs only once per app process, so auth-ready must
+ * be restored after QueryClient.clear() or the index gate can wait forever.
+ */
+export function clearAllCachesForSignedOutUser(queryClient: QueryClient) {
+  queryClient.clear();
+  const updatedAt = Date.now();
+  queryClient.setQueryData(AUTH_READY_QUERY_KEY, null, { updatedAt });
+  queryClient.setQueryData(SESSION_QUERY_KEY, null, { updatedAt });
+}
+
 /** Cold start only — sign-in/logout set `AUTH_READY_QUERY_KEY` directly. */
 export async function bootstrapMobileAuth(): Promise<MobileAuthReady | null> {
   const [{ hydratePendingTeamInviteToken }, { hydratePendingJoinCode }] = await Promise.all([
@@ -152,10 +164,32 @@ export function useMobileAuthReady() {
   });
 }
 
+/**
+ * The auth session has no photo URL, `isAdmin`, or `isWorkplaceConnected` —
+ * those only exist on `/api/me`, which is why the cache is primed with the two
+ * merged together. Refetching had been dropping back to the bare session and
+ * stripping them, which is what made the header avatar fall back to initials
+ * until something re-merged (opening the profile, which does it on focus).
+ *
+ * The cached profile is reused when there is one, so a session refetch does
+ * not pull the photo down again; it is only refetched when the profile itself
+ * has been cleared or updated.
+ */
+async function fetchSessionWithProfile(queryClient: QueryClient) {
+  const session = await fetchAuthSession();
+  if (!(session as { user?: unknown } | null)?.user) return session;
+  const cachedMe = queryClient.getQueryData<MeUser | null>(ME_QUERY_KEY);
+  const me = cachedMe?.id ? cachedMe : await fetchMeUser();
+  if (!me?.id) return session;
+  if (!cachedMe?.id) queryClient.setQueryData(ME_QUERY_KEY, me);
+  return sessionWithMe(session as { user: unknown }, me) as typeof session;
+}
+
 export const useSession = () => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: SESSION_QUERY_KEY,
-    queryFn: fetchAuthSession,
+    queryFn: () => fetchSessionWithProfile(queryClient),
     staleTime: 1000 * 60,
   });
 };

@@ -90,11 +90,63 @@ export const SKILL_PRESETS: SkillPreset[] = [
   },
 ];
 
+export type GoalStarterKey = "skill" | "performance" | "career";
+
+/** Starting points offered when a teammate has no goals yet. */
+export type GoalStarter = {
+  key: GoalStarterKey;
+  label: string;
+  blurb: string;
+  /** Prefilled skill and description for the create sheet. */
+  skill: string;
+  description: string;
+  steps: string[];
+};
+
+export const GOAL_STARTERS: GoalStarter[] = [
+  {
+    key: "skill",
+    label: "Skill Development",
+    blurb: "Build proficiency in a specific skill",
+    skill: "",
+    description: "Build proficiency in a specific skill through practice, observation, and feedback.",
+    steps: [
+      "Observe someone strong in this skill",
+      "Practice it during one shift this week",
+      "Ask for feedback on how it went",
+    ],
+  },
+  {
+    key: "performance",
+    label: "Performance",
+    blurb: "Improve a measurable result",
+    skill: "",
+    description: "Improve a measurable result, with a clear starting number and target.",
+    steps: [
+      "Agree on the number being improved",
+      "Review progress together each week",
+      "Adjust the approach after the first check-in",
+    ],
+  },
+  {
+    key: "career",
+    label: "Career Growth",
+    blurb: "Prepare for the next role or responsibility",
+    skill: "",
+    description: "Prepare for the next role or responsibility by taking on wider ownership.",
+    steps: [
+      "Name the role or responsibility being aimed at",
+      "Take on one piece of that work now",
+      "Debrief what the work revealed",
+    ],
+  },
+];
+
 export const DEVELOPMENT_PLAN_TIPS = [
-  "Keep steps specific and observable.",
+  "Keep actions specific and observable.",
   "Aim for 3–5 actions that can happen in the next 30–90 days.",
   "Mix practice, observation, and feedback.",
-  "Write steps the associate can own without waiting on others.",
+  "Write actions the associate can own without waiting on others.",
 ];
 
 export function defaultGoalDueDate(from = new Date()): Date {

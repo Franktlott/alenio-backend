@@ -1,5 +1,5 @@
 /** Single source of truth for in-app legal screens (keep in sync with product, web, and support). */
-export const LEGAL_LAST_UPDATED = "July 12, 2026";
+export const LEGAL_LAST_UPDATED = "August 10, 2026";
 export const LEGAL_APP_NAME = "Alenio";
 export const LEGAL_COMPANY_NAME = "Alenio Insights, LLC";
 /** Parent company (disclosed in legal documents and UI). */

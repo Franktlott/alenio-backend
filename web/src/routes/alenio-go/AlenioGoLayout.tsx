@@ -1,14 +1,10 @@
 import { Outlet, useLocation, useSearchParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlenioGoDevGate } from "../../components/alenio-go/AlenioGoDevGate";
 import { GoLeaderPinSetupModal } from "../../components/alenio-go/GoLeaderPinSetupModal";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import { usePendingApprovals } from "../../hooks/usePendingApprovals";
 import { fetchGoLeaderPinStatus } from "../../lib/api";
-import {
-  canManageEnterpriseGoForTeam,
-  enterpriseOrgTeams,
-} from "../../lib/enterprise-org";
 import { canManageApprovals } from "../../lib/pending-approvals";
 import type { AlenioGoOutletContext } from "./alenio-go-outlet-context";
 
@@ -17,7 +13,6 @@ const PIN_PROMPT_DISMISS_KEY = "alenio.go.pinPromptDismissed.";
 function roleLabelForTeam(role: string | undefined): string {
   if (role === "owner") return "Owner";
   if (role === "team_leader") return "Team Leader";
-  if (role === "org_admin") return "Org admin";
   return "Member";
 }
 
@@ -26,7 +21,6 @@ export function AlenioGoLayout() {
   const location = useLocation();
   const [params] = useSearchParams();
   const teamIdFromQuery = (params.get("teamId") ?? "").trim();
-  const orgTeams = useMemo(() => enterpriseOrgTeams(me), [me]);
   const effectiveGoTeamId = teamIdFromQuery || selectedTeamId || "";
 
   useEffect(() => {
@@ -36,9 +30,7 @@ export function AlenioGoLayout() {
   }, [teamIdFromQuery, selectedTeamId, setSelectedTeamId]);
 
   const personalTeam = teams?.find((t) => t.id === effectiveGoTeamId) ?? null;
-  const orgTeam = orgTeams.find((t) => t.id === effectiveGoTeamId) ?? null;
-  const orgManaged = canManageEnterpriseGoForTeam(me, effectiveGoTeamId || undefined);
-  const canManage = canManageApprovals(personalTeam?.role ?? "") || orgManaged;
+  const canManage = canManageApprovals(personalTeam?.role ?? "");
   const onPinPage = location.pathname.startsWith("/go/devices/pin");
 
   const [hasPin, setHasPin] = useState<boolean | null>(null);
@@ -83,14 +75,12 @@ export function AlenioGoLayout() {
 
   const outletContext: AlenioGoOutletContext = {
     teamId: effectiveGoTeamId || undefined,
-    teamName: personalTeam?.name ?? orgTeam?.name ?? "Workspace",
+    teamName: personalTeam?.name ?? "Workspace",
     teamImage: personalTeam?.image,
-    inviteCode: personalTeam?.inviteCode ?? orgTeam?.inviteCode,
+    workspaceTimeZone: personalTeam?.timezone,
+    inviteCode: personalTeam?.inviteCode,
     userName: me?.name,
-    roleLabel:
-      orgManaged && !canManageApprovals(personalTeam?.role ?? "")
-        ? "Org admin"
-        : roleLabelForTeam(personalTeam?.role),
+    roleLabel: roleLabelForTeam(personalTeam?.role),
     canManage,
     approvals,
   };

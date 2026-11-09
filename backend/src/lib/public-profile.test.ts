@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   countMutualConnections,
+  mutualConnectionIds,
   validatePublicProfileUpdate,
 } from "./public-profile";
 
@@ -111,6 +112,24 @@ describe("countMutualConnections", () => {
         ],
       ),
     ).toBe(1);
+  });
+
+  test("lists the shared people without the viewer or the profile owner", () => {
+    expect(
+      mutualConnectionIds(
+        "viewer",
+        "person",
+        [
+          { requesterId: "viewer", recipientId: "mutual-a" },
+          { requesterId: "mutual-b", recipientId: "viewer" },
+        ],
+        [
+          { requesterId: "person", recipientId: "viewer" },
+          { requesterId: "person", recipientId: "mutual-a" },
+          { requesterId: "mutual-b", recipientId: "person" },
+        ],
+      ).sort(),
+    ).toEqual(["mutual-a", "mutual-b"]);
   });
 
   test("returns zero when either side has no overlap", () => {

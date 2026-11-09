@@ -1,36 +1,56 @@
-import { Toaster } from 'burnt/web';
-import { Stack, router, usePathname } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { AppState, Image, View } from 'react-native';
-import { useColorScheme } from '@/lib/useColorScheme';
-import { QueryClient, QueryClientProvider, focusManager, useQuery } from '@tanstack/react-query';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeKeyboardProvider } from '@/lib/safe-keyboard-controller';
-import { useSession, AUTH_READY_QUERY_KEY, bootstrapMobileAuth, useMobileAuthReady } from '@/lib/auth/use-session';
-import { useEffect, useRef, useState } from 'react';
-import * as Notifications from 'expo-notifications';
-import * as Haptics from 'expo-haptics';
-import { registerForPushNotificationsAsync } from '@/lib/notifications';
-import { invalidateTaskCaches } from '@/lib/invalidate-task-caches';
-import { ensureSessionFreshOnForeground, agentDebugLog } from '@/lib/auth/auth-client';
-import { isAuthEntryPath, navigateToMobileHomeWithRetry } from '@/lib/auth/auth-entry';
+import { Toaster } from "burnt/web";
+import { Stack, router, usePathname } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { AppState, Image, View, useWindowDimensions } from "react-native";
+import { fitsFormSheet } from "@/lib/adaptive-layout";
+import { useScreenOrientation } from "@/lib/use-screen-orientation";
+import { useColorScheme } from "@/lib/useColorScheme";
+import {
+  QueryClient,
+  QueryClientProvider,
+  focusManager,
+  useQuery,
+} from "@tanstack/react-query";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeKeyboardProvider } from "@/lib/safe-keyboard-controller";
+import {
+  useSession,
+  AUTH_READY_QUERY_KEY,
+  bootstrapMobileAuth,
+  useMobileAuthReady,
+} from "@/lib/auth/use-session";
+import { useEffect, useRef, useState } from "react";
+import * as Notifications from "expo-notifications";
+import * as Haptics from "expo-haptics";
+import { registerForPushNotificationsAsync } from "@/lib/notifications";
+import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
+import {
+  ensureSessionFreshOnForeground,
+  agentDebugLog,
+} from "@/lib/auth/auth-client";
+import {
+  isAuthEntryPath,
+  navigateToMobileHomeWithRetry,
+} from "@/lib/auth/auth-entry";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
   runOnJS,
-} from 'react-native-reanimated';
-import { AppPageBackground } from '@/components/AppPageBackground';
-import { toast } from 'burnt';
-import { subscribeToWorkspaceReadOnly } from '@/lib/workspace-access';
-import { api } from '@/lib/api/api';
-import { createForegroundIntervalController } from '@/lib/foreground-interval';
+} from "react-native-reanimated";
+import { AppPageBackground } from "@/components/AppPageBackground";
+import { toast } from "burnt";
+import { subscribeToWorkspaceReadOnly } from "@/lib/workspace-access";
+import { api } from "@/lib/api/api";
+import { useSenecaSheetStore } from "@/lib/state/seneca-sheet-store";
+import { createForegroundIntervalController } from "@/lib/foreground-interval";
+import type { Team } from "@/lib/types";
 
 export const unstable_settings = {
   /** Run `index` first so session + `/api/me` gate to Chat or Sign-in stays consistent. */
-  initialRouteName: 'index',
+  initialRouteName: "index",
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -38,8 +58,8 @@ SplashScreen.preventAutoHideAsync();
 
 // Fix React Query's AppState focus listener for React Native
 focusManager.setEventListener((handleFocus) => {
-  const subscription = AppState.addEventListener('change', (state) => {
-    handleFocus(state === 'active');
+  const subscription = AppState.addEventListener("change", (state) => {
+    handleFocus(state === "active");
   });
   return () => subscription.remove();
 });
@@ -58,7 +78,13 @@ const queryClient = new QueryClient({
   },
 });
 
-function CustomSplash({ isReady, onDone }: { isReady: boolean; onDone: () => void }) {
+function CustomSplash({
+  isReady,
+  onDone,
+}: {
+  isReady: boolean;
+  onDone: () => void;
+}) {
   const logoOpacity = useSharedValue(0);
   const logoScale = useSharedValue(0.85);
   const containerOpacity = useSharedValue(1);
@@ -74,7 +100,10 @@ function CustomSplash({ isReady, onDone }: { isReady: boolean; onDone: () => voi
   useEffect(() => {
     if (!isReady || hasStartedFadeOut.current) return;
     hasStartedFadeOut.current = true;
-    containerOpacity.value = withDelay(300, withTiming(0, { duration: 400 }, () => runOnJS(onDone)()));
+    containerOpacity.value = withDelay(
+      300,
+      withTiming(0, { duration: 400 }, () => runOnJS(onDone)()),
+    );
   }, [isReady]);
 
   const logoStyle = useAnimatedStyle(() => ({
@@ -87,17 +116,31 @@ function CustomSplash({ isReady, onDone }: { isReady: boolean; onDone: () => voi
   }));
 
   return (
-    <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }, containerStyle]}>
-      <Animated.View style={[logoStyle, { alignItems: 'center' }]}>
+    <Animated.View
+      style={[
+        {
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "#fff",
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        containerStyle,
+      ]}
+    >
+      <Animated.View style={[logoStyle, { alignItems: "center" }]}>
         <Image
-          source={require('@/assets/alenio-logo.png')}
+          source={require("@/assets/alenio-logo.png")}
           style={{ width: 230, height: 230 }}
           resizeMode="contain"
         />
       </Animated.View>
-      <View style={{ position: 'absolute', bottom: 48, alignItems: 'center' }}>
+      <View style={{ position: "absolute", bottom: 48, alignItems: "center" }}>
         <Image
-          source={require('@/assets/lotttech-logo.png')}
+          source={require("@/assets/lotttech-logo.png")}
           style={{ width: 204, height: 66 }}
           resizeMode="contain"
         />
@@ -108,8 +151,17 @@ function CustomSplash({ isReady, onDone }: { isReady: boolean; onDone: () => voi
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  /**
+   * Phones stay upright; anything tablet-sized or unfolded turns with the
+   * device. See `use-screen-orientation` for why iOS needs the same rule
+   * stated natively as well.
+   */
+  const screenOrientation = useScreenOrientation();
   const { isLoading: sessionLoading } = useSession();
-  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
+  const notificationListener = useRef<Notifications.EventSubscription | null>(
+    null,
+  );
   const [showSplash, setShowSplash] = useState(true);
   const [animDone, setAnimDone] = useState(false);
   const [sessionSettled, setSessionSettled] = useState(false);
@@ -122,6 +174,16 @@ function RootLayoutNav() {
   const me = authReady?.me;
   const hasBackendSession = !!authReady?.me?.id;
   const isAdmin = me?.isAdmin === true;
+  const { data: bootTeams, isError: bootTeamsError } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    enabled: hasBackendSession,
+    staleTime: 120_000,
+  });
+  const authDecisionReady = authReady !== undefined;
+  const workspaceMembershipReady =
+    authDecisionReady &&
+    (!hasBackendSession || bootTeams !== undefined || bootTeamsError);
 
   // Cold start: populate auth-ready once (sign-in/logout write directly via setQueryData).
   useEffect(() => {
@@ -132,7 +194,9 @@ function RootLayoutNav() {
     void bootstrapMobileAuth()
       .then((data) => {
         if (!active) return;
-        queryClient.setQueryData(AUTH_READY_QUERY_KEY, data, { updatedAt: Date.now() });
+        queryClient.setQueryData(AUTH_READY_QUERY_KEY, data, {
+          updatedAt: Date.now(),
+        });
         agentDebugLog("cold start bootstrap", {
           runId: "auth-simplify-v4",
           hypothesisId: "H15",
@@ -169,8 +233,8 @@ function RootLayoutNav() {
 
   // Rotate JWT when returning from background if expiry is soon (consumer-app style persistence).
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void ensureSessionFreshOnForeground();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void ensureSessionFreshOnForeground();
     });
     return () => sub.remove();
   }, []);
@@ -181,7 +245,11 @@ function RootLayoutNav() {
     const heartbeat = createForegroundIntervalController({
       intervalMs: 60_000,
       task: () =>
-        api.post<{ ok: true }>("/api/presence/heartbeat", {}, { skipSignOut: true }),
+        api.post<{ ok: true }>(
+          "/api/presence/heartbeat",
+          {},
+          { skipSignOut: true },
+        ),
     });
     heartbeat.setEnabled(AppState.currentState === "active");
     const subscription = AppState.addEventListener("change", (state) => {
@@ -218,74 +286,115 @@ function RootLayoutNav() {
   useEffect(() => {
     if (!hasBackendSession) return;
     // Delay push registration so auth cookies are fully set before the API call
-    const pushTimer = setTimeout(() => registerForPushNotificationsAsync(), 1500);
-    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") {
-        registerForPushNotificationsAsync();
-        invalidateTaskCaches(queryClient);
-      }
-    });
-    notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const data = notification.request.content.data as Record<string, string>;
-      // Refresh the relevant data so the app updates automatically in the foreground
-      if (data?.conversationId) {
-        queryClient.invalidateQueries({ queryKey: ["dms"] });
-        queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
-        queryClient.invalidateQueries({ queryKey: ["dm-messages", data.conversationId] });
-      } else if (data?.taskId) {
-        invalidateTaskCaches(queryClient, data.teamId);
-      } else if (data?.type === "video_call" || data?.type === "meeting_reminder") {
-        queryClient.invalidateQueries({ queryKey: ["video"] });
-        queryClient.invalidateQueries({ queryKey: ["calendar"] });
-      } else if (
-        data?.type === "calendar_event_pending" ||
-        data?.type === "calendar_event_approved" ||
-        data?.type === "calendar_event_rejected"
-      ) {
-        queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
-        queryClient.invalidateQueries({ queryKey: ["calendar-events-pending"] });
-        queryClient.invalidateQueries({ queryKey: ["activity"] });
-      } else if (data?.type === "join_request" || data?.type === "join_approved" || data?.type === "join_rejected") {
-        queryClient.invalidateQueries({ queryKey: ["teams"] });
-        queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
-        queryClient.invalidateQueries({ queryKey: ["join-requests"] });
-        queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
-      } else if (data?.type === "admin_alert") {
-        queryClient.invalidateQueries({ queryKey: ["admin"] });
-      } else if (data?.type === "go_login_request") {
-        queryClient.invalidateQueries({ queryKey: ["team-go-login-requests"] });
-        queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
-      } else if (data?.teamId) {
-        // team message, poll, etc.
-        queryClient.invalidateQueries({ queryKey: ["messages"] });
-        queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
-        queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
-        queryClient.invalidateQueries({ queryKey: ["unread-counts"] });
-      }
-    });
-
-    const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as Record<string, string>;
-      if (data?.type === "admin_alert") {
-        if (data.entityKind === "user" && data.entityId) {
-          router.push({ pathname: "/(admin)/user-detail", params: { userId: data.entityId } });
-        } else {
-          router.push("/(admin)/(tabs)/activity");
+    const pushTimer = setTimeout(
+      () => registerForPushNotificationsAsync(),
+      1500,
+    );
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (nextState) => {
+        if (nextState === "active") {
+          registerForPushNotificationsAsync();
+          invalidateTaskCaches(queryClient);
         }
-      } else if (data?.taskId && data?.teamId) {
-        router.push({ pathname: '/task-detail', params: { taskId: data.taskId, teamId: data.teamId } });
-      } else if (data?.conversationId) {
-        // DM notification — go to the conversation
-        router.push({ pathname: '/dm-chat', params: { conversationId: data.conversationId } });
-      } else if (data?.teamId && data?.teamName !== undefined) {
-        // Legacy team/space message — soft-redirect to Chat inbox (Main Chat / Spaces hidden in V1)
-        router.push("/(app)/chat");
-      } else if (data?.teamId) {
-        // Join request or team update — go to team tab
-        router.push('/(app)/team');
-      }
-    });
+      },
+    );
+    notificationListener.current =
+      Notifications.addNotificationReceivedListener((notification) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        const data = notification.request.content.data as Record<
+          string,
+          string
+        >;
+        // Refresh the relevant data so the app updates automatically in the foreground
+        if (data?.conversationId) {
+          queryClient.invalidateQueries({ queryKey: ["dms"] });
+          queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
+          queryClient.invalidateQueries({
+            queryKey: ["dm-messages", data.conversationId],
+          });
+        } else if (data?.taskId) {
+          invalidateTaskCaches(queryClient, data.teamId);
+        } else if (
+          data?.type === "video_call" ||
+          data?.type === "meeting_reminder"
+        ) {
+          queryClient.invalidateQueries({ queryKey: ["video"] });
+          queryClient.invalidateQueries({ queryKey: ["calendar"] });
+        } else if (
+          data?.type === "calendar_event_pending" ||
+          data?.type === "calendar_event_approved" ||
+          data?.type === "calendar_event_rejected"
+        ) {
+          queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+          queryClient.invalidateQueries({
+            queryKey: ["calendar-events-pending"],
+          });
+          queryClient.invalidateQueries({ queryKey: ["activity"] });
+        } else if (
+          data?.type === "join_request" ||
+          data?.type === "join_approved" ||
+          data?.type === "join_rejected"
+        ) {
+          queryClient.invalidateQueries({ queryKey: ["teams"] });
+          queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
+          queryClient.invalidateQueries({ queryKey: ["join-requests"] });
+          queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
+        } else if (data?.type === "admin_alert") {
+          queryClient.invalidateQueries({ queryKey: ["admin"] });
+        } else if (data?.type === "go_login_request") {
+          queryClient.invalidateQueries({
+            queryKey: ["team-go-login-requests"],
+          });
+          queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
+        } else if (data?.teamId) {
+          // team message, poll, etc.
+          queryClient.invalidateQueries({ queryKey: ["messages"] });
+          queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
+          queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
+          queryClient.invalidateQueries({ queryKey: ["unread-counts"] });
+        }
+      });
+
+    const responseListener =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data as Record<
+          string,
+          string
+        >;
+        if (data?.type === "campaign") {
+          if (data.campaignId) {
+            api
+              .post(`/api/push-campaigns/${encodeURIComponent(data.campaignId)}/open`, {})
+              .catch(() => {});
+          }
+          if (data.linkKind === "discover" && data.linkValue) {
+            router.push({ pathname: "/discover/[slug]", params: { slug: data.linkValue } });
+          } else {
+            router.push("/(app)/home");
+            if (data.linkKind === "seneca") useSenecaSheetStore.getState().openSheet();
+          }
+        } else if (data?.type === "admin_alert") {
+          router.push("/(app)/home");
+        } else if (data?.taskId && data?.teamId) {
+          router.push({
+            pathname: "/task-detail",
+            params: { taskId: data.taskId, teamId: data.teamId },
+          });
+        } else if (data?.conversationId) {
+          // DM notification — go to the conversation
+          router.push({
+            pathname: "/dm-chat",
+            params: { conversationId: data.conversationId },
+          });
+        } else if (data?.teamId && data?.teamName !== undefined) {
+          // Legacy team/space message — soft-redirect to Chat inbox (Main Chat / Spaces hidden in V1)
+          router.push("/(app)/chat");
+        } else if (data?.teamId) {
+          // Join request or team update — go to team tab
+          router.push("/(app)/team");
+        }
+      });
 
     return () => {
       clearTimeout(pushTimer);
@@ -311,177 +420,228 @@ function RootLayoutNav() {
     [],
   );
 
+  /**
+   * On a tablet a task opens over the list it came from rather than replacing
+   * it: the detail is a short stack of fields, and losing the surrounding
+   * context to read it is the thing that made the full screen feel oversized.
+   */
+  const taskDetailAsSheet = fitsFormSheet(windowWidth, windowHeight);
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <AppPageBackground />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
-          <Stack.Screen name="index" />
-          <Stack.Protected guard={hasBackendSession}>
-            <Stack.Screen name="(app)" />
-            <Stack.Screen name="(admin)" />
-            <Stack.Screen
-              name="no-workspace-welcome"
-              options={{
-                headerShown: false,
-                animation: "fade",
-              }}
-            />
-            <Stack.Screen
-              name="onboarding"
-              options={{
-                presentation: "transparentModal",
-                animation: "slide_from_bottom",
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen
-              name="create-task"
-              options={{
-                presentation: "transparentModal",
-                animation: "slide_from_bottom",
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen name="create-event" />
-            <Stack.Screen name="plan-one-on-one" />
-            <Stack.Screen name="task-detail" />
-            <Stack.Screen name="member-profile" />
-            <Stack.Screen name="workspace" />
-            <Stack.Screen
-              name="workspace-settings"
-              options={{
-                headerShown: false,
-                animation: "slide_from_right",
-              }}
-            />
-            <Stack.Screen
-              name="workspace-advanced"
-              options={{
-                headerShown: false,
-                animation: "slide_from_right",
-              }}
-            />
-            <Stack.Screen
-              name="workspace-permissions"
-              options={{
-                headerShown: false,
-                animation: "slide_from_right",
-              }}
-            />
-            <Stack.Screen
-              name="check-in-templates"
-              options={{
-                headerShown: false,
-                animation: "slide_from_right",
-              }}
-            />
-            <Stack.Screen
-              name="check-in-template-editor"
-              options={{
-                headerShown: false,
-                animation: "slide_from_right",
-              }}
-            />
-            <Stack.Screen
-              name="team-priority"
-              options={{
-                headerShown: false,
-                animation: "slide_from_right",
-              }}
-            />
-            <Stack.Screen
-              name="team-focus"
-              options={{
-                headerShown: false,
-                animation: "slide_from_right",
-              }}
-            />
-            <Stack.Screen name="team-chat" />
-            <Stack.Screen name="dm-chat" />
-            <Stack.Screen
-              name="update-detail"
-              options={{ animation: "slide_from_right" }}
-            />
-            <Stack.Screen
-              name="create-post"
-              options={{ animation: "slide_from_bottom" }}
-            />
-            <Stack.Screen
-              name="video-call"
-              options={{
-                headerShown: false,
-                presentation: "fullScreenModal",
-              }}
-            />
-            <Stack.Screen
-              name="create-group"
-              options={{
-                presentation: "fullScreenModal",
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen
-              name="new-dm"
-              options={{
-                presentation: 'formSheet',
-                sheetAllowedDetents: [0.9],
-                sheetGrabberVisible: true,
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen name="account-hub" />
-            <Stack.Screen name="choose-plan" />
-            <Stack.Screen name="workspace-welcome" />
-            <Stack.Screen name="billing" />
-            <Stack.Screen name="subscription" />
-            <Stack.Screen
-              name="switch-workspace"
-              options={{
-                presentation: "transparentModal",
-                animation: "fade",
-                headerShown: false,
-                contentStyle: { backgroundColor: "transparent" },
-              }}
-            />
-            <Stack.Screen
-              name="feedback"
-              options={{
-                presentation: "transparentModal",
-                animation: "fade",
-                headerShown: false,
-              }}
-            />
-            <Stack.Screen name="notifications" />
-            <Stack.Screen name="get-started" />
-            <Stack.Screen name="username" />
-            <Stack.Screen name="change-email" />
-            <Stack.Screen name="person" />
-            <Stack.Screen name="workspace-activity" />
-            <Stack.Screen
-              name="recognition-hub"
-              options={{
-                headerShown: false,
-                animation: "slide_from_right",
-              }}
-            />
-          </Stack.Protected>
-          <Stack.Protected guard={!hasBackendSession}>
-            <Stack.Screen name="welcome" />
-            <Stack.Screen name="sign-in" />
-            <Stack.Screen name="sign-up" />
-            <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
-            <Stack.Screen name="forgot-password" />
-            <Stack.Screen name="verify-reset-code" />
-            <Stack.Screen name="reset-password" />
-            <Stack.Screen name="verify-otp" />
-          </Stack.Protected>
-          <Stack.Screen name="invite/[token]" />
-          <Stack.Screen name="join/[code]" />
-          <Stack.Screen name="ownership-transfer" options={{ headerShown: false }} />
-          <Stack.Screen name="privacy-policy" />
-          <Stack.Screen name="terms-of-service" />
+      <Stack
+        /**
+         * Keep Home mounted under an article so closing it does not flash a
+         * blank frame before Seneca opens.
+         */
+        detachInactiveScreens={false}
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: "transparent" },
+          orientation: screenOrientation,
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Protected guard={hasBackendSession}>
+          <Stack.Screen name="(app)" />
+          <Stack.Screen name="(admin)" />
+          <Stack.Screen
+            name="no-workspace-welcome"
+            options={{
+              headerShown: false,
+              animation: "fade",
+            }}
+          />
+          <Stack.Screen
+            name="onboarding"
+            options={{
+              presentation: "transparentModal",
+              animation: "slide_from_bottom",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="create-task"
+            options={{
+              presentation: "transparentModal",
+              /** A centred dialog has no edge to slide up from. */
+              animation: taskDetailAsSheet ? "fade" : "slide_from_bottom",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen name="create-event" />
+          <Stack.Screen name="plan-one-on-one" />
+          <Stack.Screen
+            name="task-detail"
+            options={
+              taskDetailAsSheet
+                ? {
+                    presentation: "formSheet",
+                    headerShown: false,
+                    // The whole task, including notes and completion, not a short peek.
+                    sheetAllowedDetents: [1],
+                    sheetGrabberVisible: true,
+                  }
+                : undefined
+            }
+          />
+          <Stack.Screen name="member-profile" />
+          <Stack.Screen name="workspace" />
+          <Stack.Screen
+            name="workspace-settings"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+          <Stack.Screen
+            name="workspace-advanced"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+          <Stack.Screen
+            name="workspace-permissions"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+          <Stack.Screen
+            name="check-in-templates"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+          <Stack.Screen
+            name="check-in-template-editor"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+          <Stack.Screen
+            name="team-priority"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+          <Stack.Screen
+            name="team-focus"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+          <Stack.Screen name="team-chat" />
+          <Stack.Screen name="dm-chat" />
+          <Stack.Screen
+            name="update-detail"
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="discover/index"
+            options={{ headerShown: false, animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="discover/[slug]"
+            options={{ headerShown: false, animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="network-update-detail"
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="create-post"
+            options={{ animation: "slide_from_bottom" }}
+          />
+          <Stack.Screen
+            name="video-call"
+            options={{
+              headerShown: false,
+              presentation: "fullScreenModal",
+            }}
+          />
+          <Stack.Screen
+            name="create-group"
+            options={{
+              presentation: "fullScreenModal",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="new-dm"
+            options={{
+              presentation: "formSheet",
+              sheetAllowedDetents: [0.9],
+              sheetGrabberVisible: true,
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen name="account-hub" />
+          <Stack.Screen name="choose-plan" />
+          <Stack.Screen name="workspace-welcome" />
+          <Stack.Screen name="billing" />
+          <Stack.Screen name="subscription" />
+          <Stack.Screen
+            name="switch-workspace"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+              contentStyle: { backgroundColor: "transparent" },
+            }}
+          />
+          <Stack.Screen
+            name="feedback"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen name="notifications" />
+          <Stack.Screen name="get-started" />
+          <Stack.Screen name="username" />
+          <Stack.Screen name="change-email" />
+          <Stack.Screen name="person" />
+          <Stack.Screen name="workspace-activity" />
+          <Stack.Screen
+            name="recognition-hub"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+        </Stack.Protected>
+        <Stack.Protected guard={!hasBackendSession}>
+          {/**
+           * One screen for all seven pages: they share the (auth) layout so the
+           * hero panel survives navigation between them instead of sliding out
+           * with the page.
+           */}
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Screen name="invite/[token]" />
+        <Stack.Screen name="join/[code]" />
+        <Stack.Screen
+          name="ownership-transfer"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen name="privacy-policy" />
+        <Stack.Screen name="terms-of-service" />
       </Stack>
-      {showSplash ? <CustomSplash isReady={animDone && sessionSettled ? true : false} onDone={() => setShowSplash(false)} /> : null}
+      {showSplash ? (
+        <CustomSplash
+          isReady={animDone && sessionSettled && workspaceMembershipReady}
+          onDone={() => setShowSplash(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -493,7 +653,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeKeyboardProvider>
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
           <RootLayoutNav />
           <Toaster />
         </SafeKeyboardProvider>
@@ -501,4 +661,3 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
-

@@ -10,7 +10,7 @@ import {
   TextInput,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Calendar, Flag, Users, UserRound } from "lucide-react-native";
+import { Calendar, Flag, Lock, Users, UserRound } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SenecaCreateTaskProposal } from "@/lib/seneca-api";
@@ -18,10 +18,12 @@ import { api } from "@/lib/api/api";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
-import type { TaskPriority } from "@/lib/types";
+import type { TaskPriority, TeamRole } from "@/lib/types";
+import { resolveTaskCreationPresentation } from "@/lib/task-kind";
 
 type Props = {
   teamId: string;
+  role: TeamRole;
   proposal: SenecaCreateTaskProposal;
   onSaved: (summary: string) => void;
   onDismiss: () => void;
@@ -43,11 +45,13 @@ function formatDueDate(date: Date): string {
   });
 }
 
-export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: Props) {
+export function SenecaCreateTaskCard({ teamId, role, proposal, onSaved, onDismiss }: Props) {
   const queryClient = useQueryClient();
+  const presentation = resolveTaskCreationPresentation(role);
+  const isReminder = presentation.kind === "reminder";
   const { data: meProfile } = useQuery({
     queryKey: ME_QUERY_KEY,
-    queryFn: () => api.get<{ timezone?: string | null }>("/api/me"),
+    queryFn: () => api.get<{ id: string; timezone?: string | null }>("/api/me"),
     enabled: !!teamId,
   });
   const timeZone = resolveTimeZone(meProfile?.timezone);
@@ -63,11 +67,13 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
   const [error, setError] = useState<string | null>(null);
   const [isJoint, setIsJoint] = useState(proposal.isJoint);
 
-  const assigneeLabel = proposal.assigneeNames.join(" and ");
-  const assigneeCount = proposal.assigneeUserIds.length;
+  const assigneeLabel = isReminder ? "Only you" : proposal.assigneeNames.join(" and ");
+  const assigneeCount = isReminder ? 1 : proposal.assigneeUserIds.length;
   const hasMultipleAssignees = assigneeCount > 1;
   const confirmLabel =
-    hasMultipleAssignees && !isJoint
+    isReminder
+      ? "Confirm & create reminder"
+      : hasMultipleAssignees && !isJoint
       ? `Create ${assigneeCount} separate tasks`
       : hasMultipleAssignees && isJoint
         ? "Confirm & create joint task"
@@ -76,24 +82,30 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
   const saveMutation = useMutation({
     mutationFn: async () => {
       const trimmedTitle = title.trim();
-      if (!trimmedTitle) throw new Error("Please enter a task title.");
+      if (!trimmedTitle) {
+        throw new Error(isReminder ? "Please enter a reminder title." : "Please enter a task title.");
+      }
       await api.post(`/api/teams/${teamId}/tasks`, {
+        kind: presentation.kind,
         title: trimmedTitle,
         description: description.trim() || undefined,
         status: "todo",
         priority,
         dueDate: dueDate ? calendarDueIso(dueDate, timeZone) : undefined,
         timeZone,
-        assigneeIds: proposal.assigneeUserIds,
-        isJoint: isJoint || undefined,
+        assigneeIds: isReminder
+          ? (meProfile?.id ? [meProfile.id] : undefined)
+          : proposal.assigneeUserIds,
+        isJoint: isReminder ? undefined : isJoint || undefined,
       });
     },
     onSuccess: () => {
       invalidateTaskCaches(queryClient, teamId);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const duePart = dueDate ? ` due ${formatDueDate(dueDate)}` : "";
-      const summary =
-        hasMultipleAssignees && !isJoint
+      const summary = isReminder
+        ? `Done — created your private reminder: "${title.trim()}"${duePart}. It won’t affect Team Momentum.`
+        : hasMultipleAssignees && !isJoint
           ? `Done — created ${assigneeCount} separate tasks for ${assigneeLabel}: "${title.trim()}"${duePart}.`
           : hasMultipleAssignees && isJoint
             ? `Done — "${title.trim()}" is assigned as a joint task for ${assigneeLabel}${duePart}.`
@@ -101,7 +113,13 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
       onSaved(summary);
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : "Could not create this task.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : isReminder
+            ? "Could not create this reminder."
+            : "Could not create this task.",
+      );
     },
   });
 
@@ -119,7 +137,7 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
     setError(null);
   };
 
-  const taskModeSelector = hasMultipleAssignees ? (
+  const taskModeSelector = !isReminder && hasMultipleAssignees ? (
     <View style={styles.modeRow}>
       <Pressable
         onPress={() => setIsJoint(false)}
@@ -142,7 +160,7 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
     </View>
   ) : null;
 
-  const taskModeSummary = hasMultipleAssignees ? (
+  const taskModeSummary = !isReminder && hasMultipleAssignees ? (
     <View style={styles.jointRow}>
       {isJoint ? <Users size={14} color="#4361EE" /> : <UserRound size={14} color="#4361EE" />}
       <Text style={styles.jointText}>
@@ -155,10 +173,24 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
 
   return (
     <View style={styles.card} testID="seneca-create-task-confirm">
-      <Text style={styles.title}>{editing ? "Edit task" : "Task details"}</Text>
+      <Text style={styles.title}>
+        {editing ? `Edit ${presentation.noun.toLowerCase()}` : `${presentation.noun} details`}
+      </Text>
+
+      {isReminder ? (
+        <View style={styles.privateNote} testID="seneca-reminder-private-note">
+          <View style={styles.privateNoteIcon}>
+            <Lock size={14} color="#635BDB" strokeWidth={2.2} />
+          </View>
+          <View style={styles.privateNoteCopy}>
+            <Text style={styles.privateNoteTitle}>Private to you</Text>
+            <Text style={styles.privateNoteText}>Hidden from your team · Excluded from Momentum</Text>
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.row}>
-        <Text style={styles.label}>Assignees</Text>
+        <Text style={styles.label}>{isReminder ? "Visibility" : "Assignees"}</Text>
         <Text style={styles.value}>{assigneeLabel}</Text>
       </View>
 
@@ -171,7 +203,7 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
             style={styles.input}
             value={title}
             onChangeText={setTitle}
-            placeholder="Task title"
+            placeholder={`${presentation.noun} title`}
             placeholderTextColor="#94A3B8"
             testID="seneca-create-task-title-input"
           />
@@ -349,6 +381,37 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.6,
     marginBottom: 2,
+  },
+  privateNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 2,
+    paddingVertical: 6,
+  },
+  privateNoteIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F0EFFF",
+  },
+  privateNoteCopy: {
+    flex: 1,
+  },
+  privateNoteTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
+  privateNoteText: {
+    marginTop: 1,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: "#64748B",
   },
   row: {
     flexDirection: "row",

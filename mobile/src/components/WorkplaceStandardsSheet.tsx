@@ -219,7 +219,7 @@ export function WorkplaceStandardsSheet({
       return result.workplaceStandards ?? standards;
     },
     onSuccess: (saved) => {
-      toast({ title: "Workplace settings saved", preset: "done" });
+      toast({ title: "Development standards saved", preset: "done" });
       queryClient.invalidateQueries({ queryKey: ["member-stats", teamId] });
       queryClient.invalidateQueries({ queryKey: ["team", teamId] });
       onSaved?.(saved);
@@ -234,8 +234,8 @@ export function WorkplaceStandardsSheet({
     <AlenioBottomSheet
       visible={visible}
       onClose={onClose}
-      title="Workplace Settings"
-      subtitle="Check-in and development goals for this workspace."
+      title="Development Standards"
+      subtitle="Check-in and goal expectations for this workspace."
       showCloseButton
       compact
       testID="workplace-standards-sheet"

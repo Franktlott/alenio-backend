@@ -1,23 +1,43 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { ImagePlus } from "lucide-react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { UserAvatar } from "@/components/UserAvatar";
+import {
+  FEED_CARD_PADDING,
+  FEED_CARD_WIDE_PADDING,
+  FEED_WIDE_PADDING_BREAKPOINT,
+} from "@/components/workspace/WorkspaceFeedCardShell";
 
 type Props = {
   author: { name: string; image?: string | null };
   onPress: () => void;
+  audience?: "workspace" | "network";
 };
 
 /** The "what's on your mind" row that opens the composer. */
-export function PostComposerRow({ author, onPress }: Props) {
+export function PostComposerRow({
+  author,
+  onPress,
+  audience = "workspace",
+}: Props) {
+  const { width } = useWindowDimensions();
+  const cardPadding =
+    width >= FEED_WIDE_PADDING_BREAKPOINT
+      ? FEED_CARD_WIDE_PADDING
+      : FEED_CARD_PADDING;
+  const destination = audience === "network" ? "network" : "workspace";
+  const rowTestID =
+    audience === "network"
+      ? "network-updates-compose"
+      : "workspace-post-composer-row";
+
   return (
-    <View style={styles.band}>
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel="Share an update with your workspace"
-        testID="workspace-post-composer-row"
-        style={styles.row}
-      >
+    <View style={[styles.card, { padding: cardPadding }]}>
+      <View style={styles.row}>
         <UserAvatar
           user={author}
           size={36}
@@ -27,52 +47,51 @@ export function PostComposerRow({ author, onPress }: Props) {
           fontSize={14}
           workplaceConnected={false}
         />
-        <View style={styles.field}>
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`Share an update with your ${destination}`}
+          testID={rowTestID}
+          style={styles.field}
+        >
           <Text style={styles.placeholder} numberOfLines={1}>
-            Share an update
+            Share an update with your {destination}…
           </Text>
-        </View>
-        <View style={styles.photo}>
-          <ImagePlus size={19} color="#4361EE" strokeWidth={2.1} />
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  band: {
+  card: {
+    padding: FEED_CARD_PADDING,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#DFE5EE",
     backgroundColor: "#FFFFFF",
-    borderBottomWidth: 6,
-    borderBottomColor: "#F0F3F8",
+    shadowColor: "#172554",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    gap: 8,
   },
   field: {
     flex: 1,
     minWidth: 0,
     justifyContent: "center",
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E6EBF3",
-    paddingHorizontal: 14,
+    height: 34,
+    borderRadius: 17,
+    paddingHorizontal: 11,
+    backgroundColor: "#F7F8FB",
   },
   placeholder: {
-    fontSize: 14,
-    color: "#94A3B8",
-  },
-  photo: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F3F6FF",
+    fontSize: 13,
+    color: "#7B8798",
   },
 });

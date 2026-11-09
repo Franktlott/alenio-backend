@@ -2,15 +2,27 @@ import type { EnterpriseNavId } from "../components/EnterpriseLayout";
 
 export const ENTERPRISE_NAV_TITLES: Record<EnterpriseNavId, string> = {
   activity: "Activity",
+  home: "Home",
   chat: "Chat",
+  workspace: "Workspace",
+  network: "Network",
   execute: "Workspace",
   go: "Alenio Go",
   workspaces: "Corporate Workspaces",
   users: "Users",
   team: "Team",
   plan: "Billing",
-  settings: "User Settings",
+  settings: "Workspaces",
   admin: "Admin",
+  discover: "Discover",
+  content: "Content",
+  adminUsers: "Users",
+  adminWorkspaces: "Workspaces",
+  adminSeneca: "Seneca",
+  adminActivity: "Activity",
+  adminNotifications: "Notifications",
+  adminPricing: "Pricing",
+  seneca: "Seneca",
 };
 
 export function enterpriseNavTitle(nav: EnterpriseNavId, opts?: { goLabel?: string }): string {

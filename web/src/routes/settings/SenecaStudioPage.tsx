@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { Link, Navigate } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
+import { staffCan } from "../../lib/staff-access";
 import {
   COACHING_STYLE_OPTIONS,
   DEFAULT_STUDIO_DATA,
@@ -217,8 +218,8 @@ export function SenecaStudioPage({
   const teamId = selectedTeamId || teams?.[0]?.id || "";
   const team = teams?.find((t) => t.id === teamId);
   const workspaceAccess = senecaStudioAccess(team?.role);
-  const canEdit = isPlatform ? me?.isAdmin === true : workspaceAccess.canEdit;
-  const canView = isPlatform ? me?.isAdmin === true : workspaceAccess.canView;
+  const canEdit = isPlatform ? staffCan(me, "seneca.edit") : workspaceAccess.canEdit;
+  const canView = isPlatform ? staffCan(me, "seneca.view") : workspaceAccess.canView;
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -526,7 +527,7 @@ export function SenecaStudioPage({
   }
 
   if (!canView) {
-    return <Navigate to={isPlatform ? "/dashboard" : "/settings"} replace />;
+    return <Navigate to={isPlatform ? "/admin" : "/settings"} replace />;
   }
 
   if (loading) {

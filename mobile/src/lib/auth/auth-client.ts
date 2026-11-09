@@ -226,10 +226,12 @@ function getAuthClientInstance(): MobileAuthClient {
 
 /** Lazy Better Auth client pointed at Alenio backend `/api/auth`. */
 export const authClient: MobileAuthClient = new Proxy({} as MobileAuthClient, {
-  get(_target, prop, receiver) {
+  get(_target, prop) {
     const client = getAuthClientInstance();
-    const value = Reflect.get(client as object, prop, receiver);
-    return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(client) : value;
+    // Better Auth endpoint methods are callable proxies. Calling `.bind()` on
+    // one is interpreted as another API path segment (for example,
+    // `/api/auth/get-session/bind`) instead of Function.prototype.bind.
+    return Reflect.get(client as object, prop, client);
   },
 });
 

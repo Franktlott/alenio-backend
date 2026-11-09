@@ -5,6 +5,7 @@ export type AlenioGoOutletContext = {
   teamId: string | undefined;
   teamName: string;
   teamImage?: string | null;
+  workspaceTimeZone?: string | null;
   inviteCode?: string | null;
   userName?: string | null;
   roleLabel: string;

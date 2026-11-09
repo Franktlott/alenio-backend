@@ -336,13 +336,24 @@ async function collectScheduleItems(
         task: {
           AND: [
             taskVisibilityWhere(userId),
-            {
-              status: "todo",
-              archivedAt: null,
-              dueDate: includeOverdueTasks
-                ? { lt: end }
-                : { gte: start, lt: end },
-            },
+            { archivedAt: null },
+            includeOverdueTasks
+              ? {
+                  OR: [
+                    { status: "todo", dueDate: { lt: end } },
+                    {
+                      status: "done",
+                      OR: [
+                        { completedAt: { gte: start, lt: end } },
+                        { dueDate: { gte: start, lt: end } },
+                      ],
+                    },
+                  ],
+                }
+              : {
+                  status: "todo",
+                  dueDate: { gte: start, lt: end },
+                },
           ],
         },
       },
@@ -353,6 +364,7 @@ async function collectScheduleItems(
             title: true,
             kind: true,
             priority: true,
+            status: true,
             dueDate: true,
             team: { select: { id: true, name: true } },
           },
@@ -391,7 +403,8 @@ async function collectScheduleItems(
       allDay: false,
       workspace: task.team,
       priority: task.priority,
-      overdue: task.dueDate! < start,
+      done: task.status === "done",
+      overdue: task.status !== "done" && task.dueDate! < start,
     }));
 
   const eventItems: HomeTodayItem[] = events.flatMap((event) => {

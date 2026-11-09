@@ -4,7 +4,7 @@ import { AppTabHeader } from "@/components/AppTabHeader";
 
 /** Shared curve so Chat / Workspace / Activity / Team / Settings stay consistent. */
 export const CURVED_HEADER_OVERLAP = 48;
-export const CURVED_SHEET_RADIUS = 48;
+export const CURVED_SHEET_RADIUS = 16;
 export const CURVED_SEARCH_DOCK_HEIGHT = 40;
 
 type Props = {
@@ -16,6 +16,7 @@ type Props = {
   leftAction?: React.ReactNode;
   rightAction?: React.ReactNode;
   showNotifications?: boolean;
+  notificationsSize?: "default" | "large";
   hideHeaderTitle?: boolean;
   children: React.ReactNode;
   /** Search field pinned to the top of the sheet, clear of the curve. */
@@ -28,11 +29,20 @@ type Props = {
   headerBridgeSize?: number;
   /** Additional gradient depth for screens whose bridge needs title clearance. */
   headerExtraHeight?: number;
+  /** Override the shared top radius for a screen-specific flat transition. */
+  sheetTopRadius?: number;
+  headerTone?: "brand" | "light";
+  /** Full-bleed node painted behind the header and sheet (e.g. a hero photo). */
+  backdrop?: React.ReactNode;
+  /** Header and sheet render transparent so the backdrop shows through. */
+  backdropVisible?: boolean;
+  headerTitlePlacement?: "center" | "leading";
+  showWorkspaceSubtitle?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
 /**
- * Gradient AppTabHeader + white sheet with large top radii overlapping the header.
+ * AppTabHeader + white sheet with rounded top corners overlapping the header.
  * Use on main tab screens; keep modals in `overlays` so they sit above the sheet.
  */
 export function CurvedTabLayout({
@@ -44,6 +54,7 @@ export function CurvedTabLayout({
   leftAction,
   rightAction,
   showNotifications,
+  notificationsSize,
   hideHeaderTitle,
   children,
   searchSlot,
@@ -51,10 +62,17 @@ export function CurvedTabLayout({
   headerBridge,
   headerBridgeSize = 84,
   headerExtraHeight = 0,
+  sheetTopRadius = CURVED_SHEET_RADIUS,
+  headerTone = "light",
+  backdrop,
+  backdropVisible = false,
+  headerTitlePlacement = "leading",
+  showWorkspaceSubtitle = false,
   style,
 }: Props) {
   return (
     <View style={[styles.screen, style]} testID={testID}>
+      {backdrop ?? null}
       <AppTabHeader
         topInset={topInset}
         testID={headerTestID}
@@ -65,9 +83,23 @@ export function CurvedTabLayout({
         overlapPad={CURVED_HEADER_OVERLAP + Math.max(0, headerExtraHeight)}
         rightAction={rightAction}
         showNotifications={showNotifications}
+        notificationsSize={notificationsSize}
+        tone={headerTone}
+        transparent={backdropVisible}
+        titlePlacement={headerTitlePlacement}
+        showWorkspaceSubtitle={showWorkspaceSubtitle}
       />
       <View style={styles.body}>
-        <View style={styles.sheet}>
+        <View
+          style={[
+            styles.sheet,
+            backdropVisible ? styles.sheetTransparent : null,
+            {
+              borderTopLeftRadius: sheetTopRadius,
+              borderTopRightRadius: sheetTopRadius,
+            },
+          ]}
+        >
           {searchSlot ? <View style={styles.searchDock}>{searchSlot}</View> : null}
           {children}
         </View>
@@ -91,9 +123,7 @@ export function CurvedTabLayout({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    // White (not purple): edge hairlines from the curve sit on white instead of
-    // showing a purple sliver beside the sheet. Purple still shows only under the
-    // header gradient in the curved notch.
+    position: "relative",
     backgroundColor: "#FFFFFF",
   },
   body: {
@@ -103,8 +133,7 @@ const styles = StyleSheet.create({
   },
   searchDock: {
     height: CURVED_SEARCH_DOCK_HEIGHT,
-    // Clear of the curved corners, so the field never crosses the rounded edge.
-    marginTop: 18,
+    marginTop: 12,
     marginHorizontal: 20,
     marginBottom: 6,
   },
@@ -113,14 +142,11 @@ const styles = StyleSheet.create({
     minHeight: 0,
     marginTop: -CURVED_HEADER_OVERLAP,
     zIndex: 1,
-    // Keep the side tangent just outside the viewport while preserving a
-    // pronounced curve. Equal padding keeps page content aligned.
-    marginHorizontal: -2,
-    paddingHorizontal: 2,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: CURVED_SHEET_RADIUS,
-    borderTopRightRadius: CURVED_SHEET_RADIUS,
     overflow: "hidden",
+  },
+  sheetTransparent: {
+    backgroundColor: "transparent",
   },
   headerBridge: {
     position: "absolute",

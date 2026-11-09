@@ -58,11 +58,12 @@ import {
 import { formatTeamRole } from "@/components/WorkspaceTeamUI";
 import { radii } from "@/theme";
 import { OutlookCalendarCard } from "@/components/profile/OutlookCalendarCard";
-import { useProfileSheetStore } from "@/lib/state/seneca-sheet-store";
 import { formatOutlookUserError } from "@/lib/outlook-calendar-errors";
 import { UserAvatar } from "@/components/UserAvatar";
 import { GetStartedProgressCard } from "@/components/profile/GetStartedProgressCard";
 import { useGetStartedProgress } from "@/lib/use-get-started-progress";
+import { useProfileSheetStore } from "@/lib/state/seneca-sheet-store";
+import { useTabBarClearanceFn } from "@/lib/tab-bar";
 
 type NotifPrefs = {
   isAdmin?: boolean;
@@ -125,12 +126,15 @@ export function ProfileScreen({
   asSheet = false,
   visible = true,
   onClose,
+  asTab = false,
 }: {
   asSheet?: boolean;
   visible?: boolean;
   onClose?: () => void;
+  asTab?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearanceFn();
   const { height: viewportHeight } = useWindowDimensions();
   const pathname = usePathname();
   const pathWhenOpened = useRef(pathname);
@@ -477,12 +481,7 @@ export function ProfileScreen({
     localImage ??
     (meProfile !== undefined ? meProfile?.image : user?.image) ??
     null;
-  const isPlatformAdmin = meProfile?.isAdmin === true || authReady?.me?.isAdmin === true;
-  const heroRoleLabel = isPlatformAdmin
-    ? "Admin"
-    : activeTeam?.role
-      ? formatTeamRole(activeTeam.role)
-      : "Member";
+  const heroRoleLabel = activeTeam?.role ? formatTeamRole(activeTeam.role) : "Member";
   const workspaceCountLabel = `${teams.length} Workspace${teams.length === 1 ? "" : "s"}`;
   const timezoneValue = formatTimeZoneLabel(resolveTimeZone(meProfile?.timezone));
 
@@ -1771,22 +1770,6 @@ export function ProfileScreen({
           {/* Account */}
           <ProfileSection title="Account">
             <ProfileCard>
-              {isPlatformAdmin ? (
-                <>
-                  <ProfileMenuRow
-                    icon={Shield}
-                    title="Alenio Admin"
-                    onPress={() => {
-                      void (async () => {
-                        await refreshMeInAuthCaches(queryClient);
-                        router.push("/(admin)/(tabs)");
-                      })();
-                    }}
-                    testID="alenio-admin-row"
-                  />
-                  <ProfileDivider inset />
-                </>
-              ) : null}
               <ProfileMenuRow
                 icon={Lock}
                 title={ACCOUNT_HUB_TITLE}
@@ -2194,10 +2177,12 @@ export function ProfileScreen({
     <>
       <AlenioBottomSheet
         visible={asSheet ? visible : true}
+        asScreen={asTab}
         title={showSettings ? "Settings" : "Profile"}
         onClose={closeProfile}
-        showCloseButton
-        bodyHeightRatio={0.88}
+        showCloseButton={!asTab}
+        bodyHeightRatio={asTab ? 0.78 : 0.88}
+        sheetStyle={asTab ? { marginBottom: tabClearance(4) } : undefined}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

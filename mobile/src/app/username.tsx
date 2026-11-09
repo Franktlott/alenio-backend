@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated as RNAnimated,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -23,16 +24,14 @@ import {
   CheckCircle2,
   Copy,
   LockKeyhole,
-  ShieldCheck,
-  UserRound,
   X,
 } from "lucide-react-native";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { ME_QUERY_KEY, type MeUser } from "@/lib/auth/me-query";
 
-const BRAND = "#4361EE";
-const USERNAME_MAX_LENGTH = 30;
+const BRAND = "#6D5EF8";
+const USERNAME_MAX_LENGTH = 15;
 const AVAILABILITY_DEBOUNCE_MS = 400;
 const USERNAME_CHANGE_COOLDOWN_DAYS = 30;
 
@@ -67,7 +66,6 @@ export default function UsernameScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
   const initialized = useRef(false);
-  const saveOpacity = useRef(new RNAnimated.Value(0.42)).current;
 
   const { data: me } = useQuery({
     queryKey: ME_QUERY_KEY,
@@ -125,6 +123,7 @@ export default function UsernameScreen() {
     onSuccess: async (updated) => {
       queryClient.setQueryData(ME_QUERY_KEY, updated);
       await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+      toast({ title: "Username updated", preset: "done" });
       router.back();
     },
     onError: (err: unknown) => {
@@ -138,14 +137,6 @@ export default function UsernameScreen() {
     !localError &&
     settled?.available === true &&
     !save.isPending;
-
-  useEffect(() => {
-    RNAnimated.timing(saveOpacity, {
-      toValue: canSave ? 1 : 0.42,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  }, [canSave, saveOpacity]);
 
   const status = useMemo<Status | null>(() => {
     if (saveError) return { tone: "error", text: saveError };
@@ -208,7 +199,24 @@ export default function UsernameScreen() {
           <ArrowLeft size={20} color="#0F172A" strokeWidth={2.25} />
         </Pressable>
         <Text style={styles.headerTitle}>Username</Text>
-        <View style={styles.headerSpacer} />
+        <Pressable
+          onPress={submit}
+          disabled={!canSave}
+          style={({ pressed }) => [
+            styles.headerSaveButton,
+            !canSave ? styles.headerSaveButtonDisabled : null,
+            pressed && canSave ? styles.headerSaveButtonPressed : null,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Save username"
+          testID="username-header-save-button"
+        >
+          {save.isPending ? (
+            <ActivityIndicator size="small" color={BRAND} />
+          ) : (
+            <Text style={styles.headerSaveText}>Save</Text>
+          )}
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView
@@ -224,151 +232,138 @@ export default function UsernameScreen() {
             { paddingBottom: Math.max(insets.bottom, 16) + 22 },
           ]}
         >
-          <View style={styles.descriptionCard}>
-            <View style={styles.leadingIcon}>
-              <UserRound size={22} color={BRAND} strokeWidth={1.9} />
+          <View style={styles.hero}>
+            <Image
+              source={require("@/assets/alenio-welcome-mountain-ridge-v2.jpg")}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={["rgba(246,243,255,0.97)", "rgba(246,243,255,0.78)", "rgba(246,243,255,0.12)"]}
+              locations={[0, 0.46, 1]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.heroIcon}>
+              <Text style={styles.heroAt}>@</Text>
             </View>
-            <View style={styles.descriptionCopy}>
-              <Text style={styles.descriptionTitle}>Your unique username</Text>
-              <Text style={styles.descriptionBody}>
-                People can use your username to find you, mention you, message you, and invite you
-                to workspaces across Alenio.
-              </Text>
-              <View style={styles.mutedLine}>
-                <CalendarDays size={12} color="#8A96A8" strokeWidth={1.9} />
-                <Text style={styles.mutedText}>Usernames can be changed once every 30 days.</Text>
-              </View>
-            </View>
+            <Text style={styles.heroTitle}>Make it yours.</Text>
+            <Text style={styles.heroBody}>
+              Your username helps people find and connect with you across Alenio.
+            </Text>
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.fieldLabel}>Username</Text>
-            <View
-              style={[
-                styles.inputShell,
-                focused ? styles.inputFocused : null,
-                status?.tone === "error" ? styles.inputError : null,
-              ]}
-            >
-              <View style={styles.prefix}>
-                <Text style={styles.prefixText}>@</Text>
-              </View>
-              <TextInput
-                value={value}
-                onChangeText={(next) => {
-                  setSaveError(null);
-                  setValue(next.trim().toLowerCase().slice(0, USERNAME_MAX_LENGTH));
-                }}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                onSubmitEditing={submit}
-                returnKeyType="done"
-                enablesReturnKeyAutomatically
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="username"
-                placeholderTextColor="#B8C1CE"
-                maxLength={USERNAME_MAX_LENGTH}
-                style={styles.input}
-                testID="username-input"
-              />
-              <Pressable
-                onPress={() => void copyUsername()}
-                hitSlop={8}
-                style={styles.copyButton}
-                accessibilityRole="button"
-                accessibilityLabel="Copy username"
-                testID="username-copy-button"
-              >
-                <Copy size={18} color="#778399" strokeWidth={1.9} />
-              </Pressable>
+          <Text style={styles.sectionLabel}>Your username</Text>
+          <View
+            style={[
+              styles.inputShell,
+              focused ? styles.inputFocused : null,
+              status?.tone === "error" ? styles.inputError : null,
+            ]}
+          >
+            <View style={styles.mark}>
+              <Text style={styles.markText}>@</Text>
             </View>
+            <TextInput
+              value={value}
+              onChangeText={(next) => {
+                setSaveError(null);
+                setValue(next.trim().toLowerCase().slice(0, USERNAME_MAX_LENGTH));
+              }}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              onSubmitEditing={submit}
+              returnKeyType="done"
+              enablesReturnKeyAutomatically
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="username"
+              placeholderTextColor="#B8C1CE"
+              maxLength={USERNAME_MAX_LENGTH}
+              style={styles.input}
+              testID="username-input"
+            />
+            <Pressable
+              onPress={() => void copyUsername()}
+              hitSlop={8}
+              style={styles.copyButton}
+              accessibilityRole="button"
+              accessibilityLabel="Copy username"
+              testID="username-copy-button"
+            >
+              <Copy size={16} color={BRAND} strokeWidth={2} />
+            </Pressable>
+          </View>
 
-            {status ? (
-              <Animated.View
-                key={`${status.tone}-${status.text}`}
-                entering={FadeIn.duration(160)}
-                exiting={FadeOut.duration(120)}
-                style={styles.statusRow}
-                testID="username-status"
+          {status ? (
+            <Animated.View
+              key={`${status.tone}-${status.text}`}
+              entering={FadeIn.duration(160)}
+              exiting={FadeOut.duration(120)}
+              style={styles.statusRow}
+              testID="username-status"
+            >
+              {status.loading ? (
+                <ActivityIndicator size="small" color="#7A869A" />
+              ) : status.tone === "error" ? (
+                <X size={14} color="#DC2626" strokeWidth={2.5} />
+              ) : (
+                <Check size={14} color="#16A34A" strokeWidth={2.6} />
+              )}
+              <Text
+                style={[
+                  styles.statusText,
+                  status.tone === "error"
+                    ? styles.statusTextError
+                    : status.tone === "ok"
+                      ? styles.statusTextOk
+                      : null,
+                ]}
               >
-                {status.loading ? (
-                  <ActivityIndicator size="small" color="#7A869A" />
-                ) : status.tone === "error" ? (
-                  <View style={[styles.statusIcon, styles.statusIconError]}>
-                    <X size={12} color="#DC2626" strokeWidth={2.5} />
-                  </View>
-                ) : (
-                  <View style={[styles.statusIcon, styles.statusIconOk]}>
-                    <Check size={12} color="#059669" strokeWidth={2.5} />
-                  </View>
-                )}
-                <Text
-                  style={[
-                    styles.statusText,
-                    status.tone === "error"
-                      ? styles.statusTextError
-                      : status.tone === "ok"
-                        ? styles.statusTextOk
-                        : null,
-                  ]}
-                >
-                  {status.text}
+                {status.text}
+              </Text>
+            </Animated.View>
+          ) : null}
+
+          <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Username requirements</Text>
+          <View style={styles.rules}>
+            <RuleRow label="3–15 characters" />
+            <RuleRow label="Letters, numbers, and underscores only" />
+            <RuleRow label="Must be unique across Alenio" />
+          </View>
+
+          <View style={styles.changesCard} testID="username-history-card">
+            <View style={styles.changesHeading}>
+              <View style={styles.changesIcon}>
+                <CalendarDays size={16} color={BRAND} strokeWidth={2} />
+              </View>
+              <View style={styles.changesCopy}>
+                <Text style={styles.changesTitle}>Username changes</Text>
+                <Text style={styles.changesBody}>
+                  You can change your username once every 30 days.
                 </Text>
-              </Animated.View>
+              </View>
+            </View>
+            {changedAt && nextChangeAt ? (
+              <View style={styles.historyRow}>
+                <View style={styles.historyColumn}>
+                  <Text style={styles.historyLabel}>Last changed</Text>
+                  <Text style={styles.historyDate}>{formatShortDate(changedAt)}</Text>
+                </View>
+                <View style={styles.historyDivider} />
+                <View style={styles.historyColumn}>
+                  <Text style={styles.historyLabel}>Next change available</Text>
+                  <Text style={styles.historyDate}>{formatShortDate(nextChangeAt)}</Text>
+                </View>
+              </View>
             ) : null}
           </View>
 
-          <View style={styles.card}>
-            <View style={styles.cardHeading}>
-              <View style={styles.leadingIconSmall}>
-                <ShieldCheck size={18} color={BRAND} strokeWidth={1.9} />
-              </View>
-              <Text style={styles.cardTitle}>Username rules</Text>
-            </View>
-            <View style={styles.rules}>
-              <RuleRow label="3–30 characters" />
-              <RuleRow label="Letters, numbers, and underscores only" />
-              <RuleRow label="Must be unique across Alenio" />
-            </View>
-          </View>
-
-          {changedAt && nextChangeAt ? (
-            <View style={[styles.card, styles.historyCard]} testID="username-history-card">
-              <View style={styles.historyColumn}>
-                <Text style={styles.historyLabel}>Last changed</Text>
-                <Text style={styles.historyDate}>{formatDate(changedAt)}</Text>
-              </View>
-              <View style={styles.historyDivider} />
-              <View style={styles.historyColumn}>
-                <Text style={styles.historyLabel}>Next change available</Text>
-                <Text style={styles.historyDate}>{formatDate(nextChangeAt)}</Text>
-              </View>
-            </View>
-          ) : null}
-
-          <RNAnimated.View style={{ opacity: saveOpacity }}>
-            <Pressable
-              onPress={submit}
-              disabled={!canSave}
-              style={({ pressed }) => [
-                styles.saveButton,
-                pressed && canSave ? styles.saveButtonPressed : null,
-              ]}
-              testID="username-save-button"
-            >
-              {save.isPending ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.saveText}>Save changes</Text>
-              )}
-            </Pressable>
-          </RNAnimated.View>
-
           <View style={styles.footer}>
-            <LockKeyhole size={12} color="#8A96A8" strokeWidth={1.9} />
+            <LockKeyhole size={13} color="#8B95A5" strokeWidth={1.9} />
             <Text style={styles.footerText}>
               Your username is public and visible across Alenio.
             </Text>
@@ -382,7 +377,7 @@ export default function UsernameScreen() {
 function RuleRow({ label }: { label: string }) {
   return (
     <View style={styles.ruleRow}>
-      <CheckCircle2 size={15} color="#4F7CF7" strokeWidth={2} />
+      <CheckCircle2 size={15} color={BRAND} strokeWidth={2} />
       <Text style={styles.ruleText}>{label}</Text>
     </View>
   );
@@ -409,132 +404,199 @@ function formatDate(date: Date): string {
   });
 }
 
+function formatShortDate(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F6F7FB" },
+  screen: { flex: 1, backgroundColor: "#F6F5FB" },
   header: {
     paddingHorizontal: 14,
-    paddingBottom: 12,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E2E8F0",
+    paddingBottom: 8,
+    backgroundColor: "#F6F5FB",
     flexDirection: "row",
     alignItems: "center",
   },
-  backButton: { width: 40, height: 36, alignItems: "center", justifyContent: "center" },
+  backButton: {
+    width: 56,
+    height: 36,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    paddingLeft: 6,
+  },
   headerTitle: {
     flex: 1,
     fontSize: 17,
-    fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.2,
+    fontWeight: "800",
+    color: "#111A2B",
+    letterSpacing: -0.3,
     textAlign: "center",
   },
-  headerSpacer: { width: 40 },
-  keyboardView: { flex: 1 },
-  content: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 18, gap: 14 },
-  descriptionCard: {
-    padding: 16,
-    borderRadius: 18,
-    backgroundColor: "#FFFFFF",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#E5EAF1",
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 13,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.035,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  leadingIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#EEF2FF",
-    alignItems: "center",
+  headerSaveButton: {
+    width: 56,
+    height: 36,
+    alignItems: "flex-end",
     justifyContent: "center",
+    paddingRight: 4,
   },
-  descriptionCopy: { flex: 1, minWidth: 0 },
-  descriptionTitle: {
-    fontSize: 16,
-    lineHeight: 21,
+  headerSaveButtonDisabled: { opacity: 0.38 },
+  headerSaveButtonPressed: { opacity: 0.65 },
+  headerSaveText: {
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: "700",
-    color: "#172033",
-    letterSpacing: -0.2,
+    color: BRAND,
   },
-  descriptionBody: { marginTop: 5, fontSize: 12, lineHeight: 18, color: "#5F6D82" },
-  mutedLine: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 6 },
-  mutedText: { flex: 1, fontSize: 10, lineHeight: 14, color: "#8A96A8" },
-  card: {
-    padding: 16,
+  keyboardView: { flex: 1 },
+  content: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 6 },
+  hero: {
+    height: 148,
+    borderRadius: 22,
+    overflow: "hidden",
+    backgroundColor: "#F3EEFF",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    justifyContent: "center",
+  },
+  heroImage: {
+    position: "absolute",
+    width: "150%",
+    aspectRatio: 16 / 9,
+    right: -12,
+    bottom: -6,
+  },
+  heroIcon: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    backgroundColor: "#FFFFFF",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#E5EAF1",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.035,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    backgroundColor: "rgba(255,255,255,0.82)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  fieldLabel: { marginBottom: 9, fontSize: 11, fontWeight: "700", color: "#64748B" },
+  heroAt: { fontSize: 18, fontWeight: "700", color: BRAND },
+  heroTitle: {
+    marginTop: 10,
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: "800",
+    color: "#111A2B",
+    letterSpacing: -0.5,
+  },
+  heroBody: {
+    marginTop: 4,
+    maxWidth: 230,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#5C6578",
+  },
+  sectionLabel: {
+    marginTop: 18,
+    marginBottom: 8,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "700",
+    color: "#98A2B3",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  sectionLabelSpaced: { marginTop: 20 },
   inputShell: {
-    height: 52,
-    borderRadius: 13,
+    height: 56,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#DDE3EC",
+    borderColor: "#E6E4F0",
     backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
-    overflow: "hidden",
+    paddingHorizontal: 8,
+    gap: 8,
   },
-  inputFocused: {
-    borderColor: BRAND,
-    shadowColor: BRAND,
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
+  inputFocused: { borderColor: BRAND },
   inputError: { borderColor: "#F3A6A6" },
-  prefix: {
-    alignSelf: "stretch",
-    width: 48,
+  mark: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#F3F0FF",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FAFBFD",
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: "#E3E8EF",
   },
-  prefixText: { fontSize: 16, fontWeight: "600", color: "#778399" },
+  markText: { fontSize: 16, fontWeight: "700", color: BRAND },
   input: {
     flex: 1,
     height: "100%",
-    paddingHorizontal: 14,
     fontSize: 16,
-    fontWeight: "600",
-    color: "#172033",
+    fontWeight: "700",
+    color: "#111A2B",
+    letterSpacing: -0.2,
   },
-  copyButton: { width: 46, height: 48, alignItems: "center", justifyContent: "center" },
-  statusRow: { marginTop: 11, flexDirection: "row", alignItems: "center", gap: 8 },
-  statusIcon: { width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  statusIconOk: { backgroundColor: "#EAF8F3" },
-  statusIconError: { backgroundColor: "#FEF0F0" },
-  statusText: { flex: 1, fontSize: 11, lineHeight: 15, color: "#7A869A" },
-  statusTextOk: { color: "#16836A" },
-  statusTextError: { color: "#C24141" },
-  cardHeading: { flexDirection: "row", alignItems: "center", gap: 10 },
-  leadingIconSmall: { width: 34, height: 34, borderRadius: 11, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" },
-  cardTitle: { fontSize: 14, fontWeight: "700", color: "#172033" },
-  rules: { marginTop: 14, marginLeft: 44, gap: 10 },
-  ruleRow: { flexDirection: "row", alignItems: "center", gap: 9 },
-  ruleText: { flex: 1, fontSize: 12, lineHeight: 16, color: "#334155" },
-  historyCard: { flexDirection: "row", alignItems: "stretch", paddingVertical: 14 },
-  historyColumn: { flex: 1, minWidth: 0, paddingHorizontal: 2 },
-  historyDivider: { width: StyleSheet.hairlineWidth, backgroundColor: "#E2E8F0", marginHorizontal: 14 },
-  historyLabel: { fontSize: 9, lineHeight: 12, fontWeight: "700", color: "#8A96A8", textTransform: "uppercase", letterSpacing: 0.35 },
-  historyDate: { marginTop: 6, fontSize: 12, lineHeight: 16, fontWeight: "600", color: "#334155" },
-  saveButton: { height: 52, borderRadius: 15, backgroundColor: BRAND, alignItems: "center", justifyContent: "center" },
-  saveButtonPressed: { transform: [{ scale: 0.995 }] },
-  saveText: { fontSize: 15, fontWeight: "700", color: "#FFFFFF", letterSpacing: -0.1 },
-  footer: { paddingTop: 2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  footerText: { fontSize: 10, lineHeight: 14, color: "#8A96A8", textAlign: "center" },
+  copyButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#F3F0FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 6 },
+  statusText: { flex: 1, fontSize: 13, lineHeight: 18, color: "#8B95A5" },
+  statusTextOk: { color: "#16A34A" },
+  statusTextError: { color: "#DC2626" },
+  rules: { gap: 12, paddingLeft: 2 },
+  ruleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  ruleText: { flex: 1, fontSize: 15, lineHeight: 20, fontWeight: "500", color: "#1F2937" },
+  changesCard: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: "#F3F0FF",
+  },
+  changesHeading: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  changesIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "#E7E1FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  changesCopy: { flex: 1, minWidth: 0 },
+  changesTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "800",
+    color: "#111A2B",
+    letterSpacing: -0.2,
+  },
+  changesBody: { marginTop: 2, fontSize: 13, lineHeight: 18, color: "#667085" },
+  historyRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E0D9F8",
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  historyColumn: { flex: 1, minWidth: 0 },
+  historyDivider: { width: StyleSheet.hairlineWidth, backgroundColor: "#E0D9F8", marginHorizontal: 12 },
+  historyLabel: { fontSize: 12, lineHeight: 16, color: "#98A2B3" },
+  historyDate: {
+    marginTop: 2,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: "#111A2B",
+  },
+  footer: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  footerText: { fontSize: 12, lineHeight: 16, color: "#98A2B3", textAlign: "center" },
 });

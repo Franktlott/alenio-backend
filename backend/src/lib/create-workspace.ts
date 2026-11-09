@@ -1,7 +1,7 @@
 import { prisma } from "../prisma";
 import { syncAppUserFromAuth } from "./ensure-app-user";
 import type { AppUser } from "../auth";
-import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "./team-name";
+import { isPrismaUniqueOnName, isTeamNameTakenForUser, normalizeTeamName, pendingWorkspaceNameKey } from "./team-name";
 import { trialEndsAtFrom } from "./workspace-access";
 import { normalizeWorkspaceLocation } from "./workspace-location";
 import { resolveTimeZone } from "./timezone";
@@ -67,31 +67,6 @@ export async function createWorkspaceForAuthUser(opts: {
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: location.message };
   }
 
-  if (await isTeamDisplayNameTaken(nameNorm)) {
-    return {
-      ok: false,
-      status: 409,
-      code: "TEAM_NAME_TAKEN",
-      message: "A workspace with this name already exists. Pick a different name.",
-    };
-  }
-  const reservedName = await prisma.pendingWorkspaceCheckout.findFirst({
-    where: {
-      nameKey: nameNorm.toLocaleLowerCase(),
-      status: "pending",
-      expiresAt: { gt: new Date() },
-    },
-    select: { id: true },
-  });
-  if (reservedName) {
-    return {
-      ok: false,
-      status: 409,
-      code: "TEAM_NAME_TAKEN",
-      message: "A workspace with this name is currently being created. Pick a different name.",
-    };
-  }
-
   let ownerId = opts.preferredUserId?.trim() || null;
   let owner = ownerId
     ? await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true, name: true, email: true, timezone: true } })
@@ -125,6 +100,31 @@ export async function createWorkspaceForAuthUser(opts: {
       status: 401,
       code: "USER_NOT_PROVISIONED",
       message: "Your account is not ready yet. Sign out and sign in again, then try creating a workspace.",
+    };
+  }
+
+  if (await isTeamNameTakenForUser(nameNorm, owner.id)) {
+    return {
+      ok: false,
+      status: 409,
+      code: "TEAM_NAME_TAKEN",
+      message: "You already have a workspace with this name. Pick a different name.",
+    };
+  }
+  const reservedName = await prisma.pendingWorkspaceCheckout.findFirst({
+    where: {
+      nameKey: pendingWorkspaceNameKey(owner.id, nameNorm),
+      status: "pending",
+      expiresAt: { gt: new Date() },
+    },
+    select: { id: true },
+  });
+  if (reservedName) {
+    return {
+      ok: false,
+      status: 409,
+      code: "TEAM_NAME_TAKEN",
+      message: "A workspace with this name is currently being created. Pick a different name.",
     };
   }
 
@@ -200,7 +200,7 @@ export async function createWorkspaceForAuthUser(opts: {
         ok: false,
         status: 409,
         code: "TEAM_NAME_TAKEN",
-        message: "A workspace with this name already exists. Pick a different name.",
+        message: "You already have a workspace with this name. Pick a different name.",
       };
     }
     const code = prismaCode(err);

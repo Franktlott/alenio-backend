@@ -1,25 +1,27 @@
-import type { ReactNode } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { useRef, type ReactNode } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { Heart, MessageCircle } from "lucide-react-native";
 import type { ActivityFeedItem } from "@/components/activity/types";
 import { FeedActionButton } from "@/components/workspace/FeedActionButton";
+import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
 import { WorkspaceFeedCardShell } from "@/components/workspace/WorkspaceFeedCardShell";
 import {
-  commentActionLabel,
   formatFeedTimestamp,
   myReactionEmoji,
-  reactionActionLabel,
   totalReactionCount,
 } from "@/lib/workspace-updates";
 import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
+import { PostMediaAttachment } from "@/components/PostMediaAttachment";
 
 type Props = {
   item: ActivityFeedItem;
   currentUserId?: string;
-  onPressReact: () => void;
+  onPressReact?: () => void;
   /** Only shown when the reader may delete this post. */
   onPressMore?: () => void;
   onPressComment?: () => void;
+  /** Opens the sheet listing everyone who reacted. */
+  onPressReactions?: () => void;
   commentCount?: number;
   picker?: ReactNode;
   testID?: string;
@@ -32,7 +34,7 @@ export function PostUpdateCard({
   onPressReact,
   onPressMore,
   onPressComment,
-  commentCount = 0,
+  onPressReactions,
   picker,
   testID,
 }: Props) {
@@ -40,9 +42,15 @@ export function PostUpdateCard({
   const imageUrl = item.metadata.imageUrl || null;
   const width = item.metadata.imageWidth ?? null;
   const height = item.metadata.imageHeight ?? null;
+  const mediaType = item.metadata.mediaType ?? "image";
   const reactionCount = totalReactionCount(item.reactions);
   const mine = myReactionEmoji(item.reactions, currentUserId);
   const cardTestID = testID ?? `post-update-card-${item.id}`;
+  const suppressOpenUntil = useRef(0);
+  const openPost = () => {
+    if (Date.now() < suppressOpenUntil.current) return;
+    onPressComment?.();
+  };
 
   return (
     <WorkspaceFeedCardShell
@@ -50,7 +58,7 @@ export function PostUpdateCard({
       avatarResetKey={item.id}
       meta={formatFeedTimestamp(item.timestamp)}
       onMore={onPressMore}
-      onPress={onPressComment}
+      onPress={onPressComment ? openPost : undefined}
       onLongPress={onPressReact}
       testID={cardTestID}
       identity={
@@ -62,11 +70,13 @@ export function PostUpdateCard({
         <View style={styles.footer}>
           {picker}
           <View style={styles.actions}>
+            {onPressReact ? (
             <FeedActionButton
               Icon={Heart}
               glyph={mine}
               activeColor={feedReaction(mine)?.color}
-              label={reactionActionLabel(reactionCount)}
+              // The facepile carries the count, so the button stays an icon.
+              label=""
               active={!!mine}
               filled
               onPress={onPressReact}
@@ -77,14 +87,24 @@ export function PostUpdateCard({
               }
               testID={`${cardTestID}-react`}
             />
+            ) : null}
             {onPressComment ? (
               <FeedActionButton
                 Icon={MessageCircle}
-                label={commentActionLabel(commentCount)}
+                label=""
                 onPress={onPressComment}
                 accessibilityLabel="Comment on this post"
                 testID={`${cardTestID}-comment`}
               />
+            ) : null}
+            {onPressReactions && reactionCount > 0 ? (
+              <View style={styles.summary}>
+                <ReactionFacepile
+                  reactions={item.reactions ?? {}}
+                  onPress={onPressReactions}
+                  testID={`${cardTestID}-reaction-facepile`}
+                />
+              </View>
             ) : null}
           </View>
         </View>
@@ -97,16 +117,15 @@ export function PostUpdateCard({
       ) : null}
 
       {imageUrl ? (
-        <Image
-          source={{ uri: imageUrl }}
-          // Keep the photo's own shape when we know it, so nothing is cropped.
-          style={[
-            styles.photo,
-            { aspectRatio: width && height ? width / height : 4 / 3 },
-          ]}
-          resizeMode="cover"
-          accessibilityIgnoresInvertColors
-          testID={`${cardTestID}-photo`}
+        <PostMediaAttachment
+          url={imageUrl}
+          mediaType={mediaType}
+          width={width}
+          height={height}
+          testID={`${cardTestID}-${mediaType === "video" ? "video" : "photo"}`}
+          onInteraction={() => {
+            suppressOpenUntil.current = Date.now() + 750;
+          }}
         />
       ) : null}
     </WorkspaceFeedCardShell>
@@ -121,23 +140,20 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
   body: {
-    marginTop: 8,
+    marginTop: 6,
     fontSize: 14,
     lineHeight: 19,
     color: "#1E293B",
   },
-  photo: {
-    marginTop: 10,
-    width: "100%",
-    borderRadius: 12,
-    backgroundColor: "#EEF1F6",
-  },
   footer: {
-    marginTop: 6,
-    gap: 4,
+    marginTop: 4,
+    gap: 2,
   },
   actions: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  summary: {
+    marginLeft: "auto",
   },
 });

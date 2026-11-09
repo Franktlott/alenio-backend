@@ -34,8 +34,22 @@ export function teamInitials(team: { name?: string | null }): string {
 
 export function dmOtherParticipant(
   conv: {
-    recipient?: { id: string; name?: string | null; email?: string | null; image?: string | null } | null;
-    participants?: { id: string; name?: string | null; email?: string | null; image?: string | null }[];
+    recipient?: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      isWorkplaceConnected?: boolean;
+      activeNow?: boolean;
+    } | null;
+    participants?: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      isWorkplaceConnected?: boolean;
+      activeNow?: boolean;
+    }[];
   },
   currentUserId: string,
 ) {

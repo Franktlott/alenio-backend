@@ -12,6 +12,9 @@ export type ActivityFeedType =
   | "personal_best"
   | "connection_request_sent"
   | "connection_request_received"
+  | "connection_accepted"
+  | "workspace_invitation_received"
+  | "mention_in_conversation"
   | "celebration"
   | "post";
 
@@ -48,11 +51,21 @@ export type ActivityMetadata = {
   actorUserId?: string;
   actorName?: string;
   actorImage?: string | null;
+  /**
+   * The sentence recordAccountActivity wrote when the event happened. Rows
+   * created before actorName existed still carry the name only in here.
+   */
+  content?: string;
+  /** Account-level rows: where the update points back to. */
+  teamName?: string;
+  topicId?: string | null;
+  conversationId?: string;
   /** Workspace post: what the person wrote and an optional photo. */
   body?: string | null;
   imageUrl?: string | null;
   imageWidth?: number | null;
   imageHeight?: number | null;
+  mediaType?: "image" | "video" | null;
 };
 
 export type ActivityApiEvent = {
@@ -105,13 +118,14 @@ export type ActivitySummary = {
   events: number;
 };
 
-export const ACTIVITY_FILTER_OPTIONS: { key: ActivityFilter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "tasks", label: "Tasks" },
-  { key: "calendar", label: "Calendar" },
-  { key: "team", label: "Team" },
-  { key: "updates", label: "Updates" },
-];
+export const ACTIVITY_FILTER_OPTIONS: { key: ActivityFilter; label: string }[] =
+  [
+    { key: "all", label: "All" },
+    { key: "tasks", label: "Tasks" },
+    { key: "calendar", label: "Calendar" },
+    { key: "team", label: "Team" },
+    { key: "updates", label: "Updates" },
+  ];
 
 function startOfDay(d: Date): Date {
   const next = new Date(d);
@@ -135,7 +149,9 @@ export function getDateGroup(iso: string): ActivityDateGroup {
   const now = new Date();
   const today = startOfDay(now);
   const eventDay = startOfDay(date);
-  const diffDays = Math.floor((today.getTime() - eventDay.getTime()) / 86400000);
+  const diffDays = Math.floor(
+    (today.getTime() - eventDay.getTime()) / 86400000,
+  );
 
   if (diffDays === 0) return "today";
   if (diffDays === 1) return "yesterday";
@@ -174,15 +190,23 @@ export function activityDateLabel(iso: string): string {
   });
 }
 
-export function matchesActivityFilter(type: ActivityFeedType, filter: ActivityFilter): boolean {
+export function matchesActivityFilter(
+  type: ActivityFeedType,
+  filter: ActivityFilter,
+): boolean {
   if (filter === "all") return true;
   if (filter === "tasks") {
     return type === "task_completed" || type === "task_assigned";
   }
   if (filter === "calendar") return type === "calendar_event_added";
-  if (filter === "team") return type === "member_joined" || type === "member_removed";
+  if (filter === "team")
+    return type === "member_joined" || type === "member_removed";
   if (filter === "updates") {
-    return type === "celebration" || type === "task_milestone" || type === "personal_best";
+    return (
+      type === "celebration" ||
+      type === "task_milestone" ||
+      type === "personal_best"
+    );
   }
   return true;
 }
@@ -196,7 +220,10 @@ export function isImportantActivity(item: ActivityFeedItem): boolean {
   );
 }
 
-export function matchesActivitySearch(item: ActivityFeedItem, query: string): boolean {
+export function matchesActivitySearch(
+  item: ActivityFeedItem,
+  query: string,
+): boolean {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
   return [
@@ -213,12 +240,15 @@ export function matchesActivitySearch(item: ActivityFeedItem, query: string): bo
     .some((value) => String(value).toLowerCase().includes(normalized));
 }
 
-export function buildActivitySummary(items: ActivityFeedItem[]): ActivitySummary {
+export function buildActivitySummary(
+  items: ActivityFeedItem[],
+): ActivitySummary {
   let tasks = 0;
   let events = 0;
 
   for (const item of items) {
-    if (item.type === "task_completed" || item.type === "task_assigned") tasks += 1;
+    if (item.type === "task_completed" || item.type === "task_assigned")
+      tasks += 1;
     if (item.type === "calendar_event_added") events += 1;
   }
 
@@ -229,7 +259,9 @@ export function buildActivitySummary(items: ActivityFeedItem[]): ActivitySummary
   };
 }
 
-export function groupActivitiesByDate(items: ActivityFeedItem[]): ActivityDateSection[] {
+export function groupActivitiesByDate(
+  items: ActivityFeedItem[],
+): ActivityDateSection[] {
   const buckets = new Map<string, ActivityFeedItem[]>();
 
   for (const item of items) {
@@ -256,12 +288,15 @@ export function groupRepetitiveActivities(
     "task_assigned",
     "calendar_event_added",
   ]);
+  const isClusterable = (
+    type: ActivityFeedType,
+  ): type is ActivityFeedGroup["activityType"] => clusterable.has(type);
 
   for (let index = 0; index < items.length; index += 1) {
     if (consumedIndexes.has(index)) continue;
 
     const first = items[index]!;
-    if (!clusterable.has(first.type)) {
+    if (!isClusterable(first.type)) {
       output.push(first);
       continue;
     }
@@ -276,7 +311,10 @@ export function groupRepetitiveActivities(
         next.teamId === first.teamId &&
         next.actor?.id === first.actor?.id;
       const withinHour =
-        Math.abs(new Date(first.timestamp).getTime() - new Date(next.timestamp).getTime()) <=
+        Math.abs(
+          new Date(first.timestamp).getTime() -
+            new Date(next.timestamp).getTime(),
+        ) <=
         60 * 60 * 1000;
       if (sameIdentity && withinHour) {
         cluster.push(next);
@@ -286,7 +324,8 @@ export function groupRepetitiveActivities(
 
       // Task activity can be separated by milestone or other feed cards.
       // Keep scanning so all completions or assignments in the hour collapse.
-      if (first.type === "task_completed" || first.type === "task_assigned") continue;
+      if (first.type === "task_completed" || first.type === "task_assigned")
+        continue;
       break;
     }
 
@@ -300,8 +339,8 @@ export function groupRepetitiveActivities(
       (sum, item) =>
         sum +
         (item.type === "calendar_event_added"
-          ? item.metadata.eventCount ?? 1
-          : item.metadata.taskCount ?? 1),
+          ? (item.metadata.eventCount ?? 1)
+          : (item.metadata.taskCount ?? 1)),
       0,
     );
     const noun = first.type === "calendar_event_added" ? "events" : "tasks";
@@ -325,7 +364,12 @@ export function groupRepetitiveActivities(
       items: cluster,
       title: `${actorName} ${verb} ${count} ${noun}`,
       subtitle: `Including “${firstTitle}” and ${Math.max(0, count - 1)} others`,
-      actionLabel: first.type === "calendar_event_added" ? "View events" : first.type === "task_assigned" ? "View tasks" : "View activity",
+      actionLabel:
+        first.type === "calendar_event_added"
+          ? "View events"
+          : first.type === "task_assigned"
+            ? "View tasks"
+            : "View activity",
       timestamp: first.timestamp,
     });
   }
@@ -337,7 +381,9 @@ function actorName(item: ActivityApiEvent): string {
   return item.user?.name ?? item.metadata?.userName ?? "Someone";
 }
 
-function mapTaskCompleted(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
+function mapTaskCompleted(
+  item: ActivityApiEvent,
+): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const title = item.metadata?.taskTitle ?? "Task completed";
   const description = item.metadata?.taskTitle
@@ -350,7 +396,9 @@ function mapTaskCompleted(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
   };
 }
 
-function mapTaskAssigned(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
+function mapTaskAssigned(
+  item: ActivityApiEvent,
+): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const count = item.metadata?.taskCount ?? 1;
 
@@ -361,10 +409,14 @@ function mapTaskAssigned(item: ActivityApiEvent): Pick<ActivityFeedItem, "title"
     };
   }
 
-  const taskTitle = item.metadata?.taskTitles?.[0] ?? item.metadata?.taskTitle ?? "Task assigned";
-  const description = item.metadata?.taskTitles?.[0] ?? item.metadata?.taskTitle
-    ? `${name} was assigned "${taskTitle}"`
-    : `${name} was assigned a task`;
+  const taskTitle =
+    item.metadata?.taskTitles?.[0] ??
+    item.metadata?.taskTitle ??
+    "Task assigned";
+  const description =
+    (item.metadata?.taskTitles?.[0] ?? item.metadata?.taskTitle)
+      ? `${name} was assigned "${taskTitle}"`
+      : `${name} was assigned a task`;
 
   return {
     title: taskTitle,
@@ -372,7 +424,9 @@ function mapTaskAssigned(item: ActivityApiEvent): Pick<ActivityFeedItem, "title"
   };
 }
 
-function mapCalendarEvent(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
+function mapCalendarEvent(
+  item: ActivityApiEvent,
+): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const count = item.metadata?.eventCount ?? 1;
 
@@ -383,10 +437,12 @@ function mapCalendarEvent(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
     };
   }
 
-  const eventTitle = item.metadata?.eventTitles?.[0] ?? item.metadata?.eventTitle ?? "New event";
-  const description = item.metadata?.eventTitles?.[0] ?? item.metadata?.eventTitle
-    ? `${name} added "${eventTitle}" to the calendar`
-    : `${name} added an event to the calendar`;
+  const eventTitle =
+    item.metadata?.eventTitles?.[0] ?? item.metadata?.eventTitle ?? "New event";
+  const description =
+    (item.metadata?.eventTitles?.[0] ?? item.metadata?.eventTitle)
+      ? `${name} added "${eventTitle}" to the calendar`
+      : `${name} added an event to the calendar`;
 
   return {
     title: eventTitle,
@@ -394,7 +450,9 @@ function mapCalendarEvent(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
   };
 }
 
-function mapMemberJoined(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
+function mapMemberJoined(
+  item: ActivityApiEvent,
+): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   return {
     title: `${name} joined`,
@@ -402,7 +460,9 @@ function mapMemberJoined(item: ActivityApiEvent): Pick<ActivityFeedItem, "title"
   };
 }
 
-function mapMemberRemoved(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
+function mapMemberRemoved(
+  item: ActivityApiEvent,
+): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   return {
     title: `${name} left`,
@@ -410,7 +470,9 @@ function mapMemberRemoved(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
   };
 }
 
-function mapTaskMilestone(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
+function mapTaskMilestone(
+  item: ActivityApiEvent,
+): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const count = item.metadata?.count ?? 10;
   return {
@@ -419,7 +481,9 @@ function mapTaskMilestone(item: ActivityApiEvent): Pick<ActivityFeedItem, "title
   };
 }
 
-function mapPersonalBest(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
+function mapPersonalBest(
+  item: ActivityApiEvent,
+): Pick<ActivityFeedItem, "title" | "description"> {
   const name = actorName(item);
   const count = item.metadata?.count ?? 0;
   return {
@@ -428,7 +492,9 @@ function mapPersonalBest(item: ActivityApiEvent): Pick<ActivityFeedItem, "title"
   };
 }
 
-function mapCelebration(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" | "description"> {
+function mapCelebration(
+  item: ActivityApiEvent,
+): Pick<ActivityFeedItem, "title" | "description"> {
   const fromName = item.user?.name ?? "Someone";
   const toName = item.metadata?.targetName ?? "a teammate";
   return {
@@ -439,7 +505,9 @@ function mapCelebration(item: ActivityApiEvent): Pick<ActivityFeedItem, "title" 
   };
 }
 
-export function mapApiActivityToFeedItem(event: ActivityApiEvent): ActivityFeedItem {
+export function mapApiActivityToFeedItem(
+  event: ActivityApiEvent,
+): ActivityFeedItem {
   const metadata = event.metadata ?? {};
   let mapped: Pick<ActivityFeedItem, "title" | "description">;
 
@@ -475,7 +543,10 @@ export function mapApiActivityToFeedItem(event: ActivityApiEvent): ActivityFeedI
       };
       break;
     default:
-      mapped = { title: "Activity update", description: "Something happened on your team" };
+      mapped = {
+        title: "Activity update",
+        description: "Something happened on your team",
+      };
   }
 
   return {
@@ -494,6 +565,8 @@ export function mapApiActivityToFeedItem(event: ActivityApiEvent): ActivityFeedI
   };
 }
 
-export function mapApiActivitiesToFeedItems(events: ActivityApiEvent[]): ActivityFeedItem[] {
+export function mapApiActivitiesToFeedItems(
+  events: ActivityApiEvent[],
+): ActivityFeedItem[] {
   return events.map(mapApiActivityToFeedItem);
 }

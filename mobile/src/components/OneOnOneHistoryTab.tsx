@@ -9,8 +9,6 @@ import {
   FlatList,
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
-  InputAccessoryView,
   Platform,
   Image,
   Alert,
@@ -20,6 +18,7 @@ import {
   PanResponder,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path } from "react-native-svg";
 import { toast } from "burnt";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,6 +29,7 @@ import {
   ChevronLeft,
   ClipboardList,
   ChevronRight,
+  MessageCircle,
   FileAudio,
   CircleAlert,
   Mic,
@@ -97,6 +97,7 @@ import {
 } from "@/lib/check-in-leader-comments";
 import { validateCheckInResponses } from "@/lib/validate-check-in-responses";
 import { meetingNumberFor, downloadOneOnOneMeetingPdf, printOneOnOneMeeting } from "@/lib/one-on-one-print";
+import { checkInQuestionLabels } from "@/lib/meeting-check-in-tool";
 import { oneOnOneDisplayDate, oneOnOneDisplayDateMs } from "@/lib/one-on-one-dates";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
@@ -146,6 +147,13 @@ type Props = {
    */
   callTranscript?: string | null;
   callTranscriptActive?: boolean;
+  /** Host can start Daily transcription from this check-in flow. */
+  liveNotesAvailable?: boolean;
+  onStartLiveNotes?: (input: {
+    templateId: string | null;
+    templateTitle: string;
+    questions: string[];
+  }) => void;
   onStopCallTranscript?: () => void;
   /** Tells the call the transcript has been written up, so it need not ask again. */
   onCallTranscriptWrittenUp?: () => void;
@@ -180,8 +188,16 @@ type OneOneView = "list" | "mode" | "pick" | "capture" | "fill";
 
 /** Title for a recording with no template, until Seneca names it. */
 const OPEN_CHECK_IN_TITLE = "Open check-in";
+const OPEN_CHECK_IN_TITLE_MAX = 60;
 
-const CHECK_IN_INPUT_ACCESSORY_ID = "check-in-save-actions";
+function openCheckInTitleForSave(title: string): string {
+  const trimmed = title.trim().slice(0, OPEN_CHECK_IN_TITLE_MAX);
+  return trimmed || OPEN_CHECK_IN_TITLE;
+}
+
+function questionLabelsForTemplate(template: OneOnOneTemplate | null | undefined): string[] {
+  return checkInQuestionLabels(template?.fields ?? []);
+}
 
 type CheckInActionMenu =
   | { kind: "planned"; event: PlannedOneOnOneEvent }
@@ -389,6 +405,8 @@ export function OneOnOneHistoryTab({
   onDraftSaveReady,
   callTranscript = null,
   callTranscriptActive = false,
+  liveNotesAvailable = false,
+  onStartLiveNotes,
   onStopCallTranscript,
   onCallTranscriptWrittenUp,
   onMeetingsChange,
@@ -424,7 +442,8 @@ export function OneOnOneHistoryTab({
    */
   const micRecordingAvailable = recordingSupported && !meetingToolMode;
   const callWriteUpAvailable = meetingToolMode && (callTranscript?.trim().length ?? 0) > 0;
-  const senecaCaptureAvailable = micRecordingAvailable || callWriteUpAvailable;
+  const senecaCaptureAvailable =
+    micRecordingAvailable || liveNotesAvailable || callWriteUpAvailable;
   const [callWriteUpBusy, setCallWriteUpBusy] = useState(false);
   /** Fields Alenio filled in from a recording, so the leader knows what to verify. */
   const [aiDraftFieldIds, setAiDraftFieldIds] = useState<Set<string>>(new Set());
@@ -465,6 +484,7 @@ export function OneOnOneHistoryTab({
   const [highlightRequiredFieldId, setHighlightRequiredFieldId] = useState<string | null>(null);
   const fillScrollRef = useRef<ScrollView>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openCheckInTitleRef = useRef("");
   const editingMeetingRef = useRef<OneOnOneMeeting | null>(null);
   const saveDraftNowRef = useRef<() => Promise<void>>(async () => {});
   const lastStartCheckInTokenRef = useRef(0);
@@ -814,7 +834,11 @@ export function OneOnOneHistoryTab({
               <Pressable
                 key={meeting.id}
                 onPress={onPress ?? (() => setPreviewMeeting(meeting))}
-                onLongPress={canModify ? () => openHistoryMeetingMenu(meeting) : undefined}
+                onLongPress={
+                  canModify || canPrintCheckIn(meeting)
+                    ? () => openHistoryMeetingMenu(meeting)
+                    : undefined
+                }
                 delayLongPress={400}
                 style={{
                   backgroundColor: "white",
@@ -1114,7 +1138,7 @@ export function OneOnOneHistoryTab({
   };
 
   const openHistoryMeetingMenu = (meeting: OneOnOneMeeting) => {
-    if (!canModify) return;
+    if (!canModify && !canPrintCheckIn(meeting)) return;
     setCheckInActionDeleteConfirm(false);
     setCheckInActionMenu({ kind: "history", meeting });
   };
@@ -1240,7 +1264,7 @@ export function OneOnOneHistoryTab({
       setErr(null);
       setEditingMeeting(null);
       setLoadingTemplates(true);
-      setView("pick");
+      setView(preferredTemplateId ? "pick" : senecaCaptureAvailable ? "mode" : "pick");
       try {
         const list = templateCatalog.length > 0 ? templateCatalog : await fetchOneOnOneTemplates(teamId);
         setTemplates(list);
@@ -1267,6 +1291,7 @@ export function OneOnOneHistoryTab({
     closeCheckInActionMenu();
     setEditingMeeting(meeting);
     setLinkedPlannedEventId(null);
+    openCheckInTitleRef.current = meeting.templateTitle;
     setSelectedTemplate(meetingToFillTemplate(meeting));
     setResponses({ ...meeting.responses });
     // Bring back anything jotted down before the draft was put away.
@@ -1366,6 +1391,21 @@ export function OneOnOneHistoryTab({
     } finally {
       setCallWriteUpBusy(false);
     }
+  };
+
+  /**
+   * Closes this modal first so the call's consent sheet can appear, then asks
+   * the video call to start Daily transcription for this person and form.
+   */
+  const requestLiveNotes = (template: OneOnOneTemplate | null) => {
+    setCaptureTemplate(null);
+    setOpenRecording(false);
+    setView("list");
+    onStartLiveNotes?.({
+      templateId: template?.id ?? null,
+      templateTitle: template?.title ?? OPEN_CHECK_IN_TITLE,
+      questions: questionLabelsForTemplate(template),
+    });
   };
 
   /** Opens the draft Alenio built from a recording, flagging what it filled in. */
@@ -1511,6 +1551,13 @@ export function OneOnOneHistoryTab({
         followUpTasks,
         requestAssociateFeedback,
         status: "published" as const,
+        ...(editingMeeting && editingMeeting.templateId == null
+          ? {
+              templateTitle: openCheckInTitleForSave(
+                openCheckInTitleRef.current || selectedTemplate.title,
+              ),
+            }
+          : {}),
         ...(linkedPlannedEventId ? { plannedCalendarEventId: linkedPlannedEventId } : {}),
         ...(sourceVideoRoomId ? { sourceVideoRoomId } : {}),
         ...(sourceCalendarEventId ? { calendarEventId: sourceCalendarEventId } : {}),
@@ -1595,19 +1642,26 @@ export function OneOnOneHistoryTab({
               ? raw
               : String(raw ?? "");
       }
+      const currentMeeting = editingMeetingRef.current;
       const payload = {
         responses: normalized,
         status: "draft" as const,
         // Kept with the draft so putting it down and coming back does not
         // throw away the follow-ups. They become tasks only on publish.
-        followUpTasks: buildFollowUpPayload(editingMeetingRef.current),
+        followUpTasks: buildFollowUpPayload(currentMeeting),
+        ...(currentMeeting && currentMeeting.templateId == null
+          ? {
+              templateTitle: openCheckInTitleForSave(
+                openCheckInTitleRef.current || selectedTemplate.title,
+              ),
+            }
+          : {}),
         ...(linkedPlannedEventId
           ? { plannedCalendarEventId: linkedPlannedEventId }
           : {}),
         ...(sourceVideoRoomId ? { sourceVideoRoomId } : {}),
         ...(sourceCalendarEventId ? { calendarEventId: sourceCalendarEventId } : {}),
       };
-      const currentMeeting = editingMeetingRef.current;
       const savedMeeting = currentMeeting
         ? await updateOneOnOneMeeting(
             teamId,
@@ -1890,7 +1944,6 @@ export function OneOnOneHistoryTab({
         value={String(value)}
         onChangeText={(v) => setFieldValue(field.id, v)}
         multiline={isLong}
-        inputAccessoryViewID={Platform.OS === "ios" ? CHECK_IN_INPUT_ACCESSORY_ID : undefined}
         placeholder={placeholder}
         placeholderTextColor="#94A3B8"
         style={{
@@ -1984,7 +2037,7 @@ export function OneOnOneHistoryTab({
       .filter((f) => f.type !== "section" && f.type !== "associate_notes")
       .sort((a, b) => a.order - b.order);
 
-    const renderSaveActions = (keyboardAccessory = false) => {
+    const renderSaveActions = () => {
       if (activePlannedVideoEvent && videoCheckInSubmitted) {
         return (
           <View
@@ -1993,9 +2046,7 @@ export function OneOnOneHistoryTab({
               alignItems: "center",
               paddingHorizontal: 12,
               paddingTop: 8,
-              paddingBottom: keyboardAccessory
-                ? 8
-                : Math.max(16, insets.bottom + 8),
+              paddingBottom: Math.max(16, insets.bottom + 8),
               borderTopWidth: 1,
               borderTopColor: "#DDF3E6",
               backgroundColor: "#F5FCF8",
@@ -2059,7 +2110,7 @@ export function OneOnOneHistoryTab({
           flexDirection: "row",
           paddingHorizontal: 12,
           paddingTop: 8,
-          paddingBottom: keyboardAccessory ? 8 : Math.max(16, insets.bottom + 8),
+          paddingBottom: Math.max(16, insets.bottom + 8),
           borderTopWidth: 1,
           borderTopColor: "#F1F5F9",
           backgroundColor: "white",
@@ -2399,7 +2450,7 @@ export function OneOnOneHistoryTab({
             </View>
           </View>
         ) : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={{ flex: 1 }}>
           <ScrollView
             ref={fillScrollRef}
             contentContainerStyle={{
@@ -2466,6 +2517,61 @@ export function OneOnOneHistoryTab({
                     Transcript
                   </Text>
                 </Pressable>
+              </View>
+            ) : null}
+            {editingMeeting && editingMeeting.templateId == null ? (
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#E8ECFA",
+                  borderRadius: 12,
+                  padding: 10,
+                  backgroundColor: "#FFFFFF",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: "700",
+                    color: "#0F172A",
+                    marginBottom: 6,
+                    lineHeight: 17,
+                  }}
+                >
+                  Check-in title
+                </Text>
+                <TextInput
+                  value={selectedTemplate.title}
+                  onChangeText={(next) => {
+                    const title = next.slice(0, OPEN_CHECK_IN_TITLE_MAX);
+                    openCheckInTitleRef.current = title;
+                    setSelectedTemplate((current) =>
+                      current ? { ...current, title } : current,
+                    );
+                    if (!meetingToolMode) return;
+                    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+                    autosaveTimerRef.current = setTimeout(() => {
+                      autosaveTimerRef.current = null;
+                      void performSaveDraft(false, true);
+                    }, 900);
+                  }}
+                  placeholder={OPEN_CHECK_IN_TITLE}
+                  placeholderTextColor="#94A3B8"
+                  maxLength={OPEN_CHECK_IN_TITLE_MAX}
+                  style={{
+                    fontSize: 15,
+                    fontWeight: "700",
+                    color: "#0F172A",
+                    paddingVertical: 8,
+                    paddingHorizontal: 10,
+                    borderRadius: 10,
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                  }}
+                  accessibilityLabel="Check-in title"
+                  testID="open-check-in-title"
+                />
               </View>
             ) : null}
             {fillFields.map((field) => {
@@ -2711,7 +2817,7 @@ export function OneOnOneHistoryTab({
           </ScrollView>
 
           {renderSaveActions()}
-        </KeyboardAvoidingView>
+        </View>
         )}
         </Animated.View>
         <AlenioBottomSheet
@@ -2944,11 +3050,6 @@ export function OneOnOneHistoryTab({
             </View>
           ) : null}
         </AlenioBottomSheet>
-        {Platform.OS === "ios" ? (
-          <InputAccessoryView nativeID={CHECK_IN_INPUT_ACCESSORY_ID}>
-            {renderSaveActions(true)}
-          </InputAccessoryView>
-        ) : null}
       </View>
     );
   };
@@ -2978,17 +3079,17 @@ export function OneOnOneHistoryTab({
         backgroundColor: options.surface,
         overflow: "hidden",
         shadowColor: options.shadow,
-        shadowOpacity: pressed ? 0.03 : 0.07,
+        shadowOpacity: pressed ? 0.04 : 0.1,
         shadowRadius: 14,
         shadowOffset: { width: 0, height: 5 },
-        elevation: pressed ? 0 : 2,
+        elevation: pressed ? 1 : 3,
         transform: [{ scale: pressed ? 0.995 : 1 }],
       })}
       accessibilityRole="button"
       accessibilityLabel={options.action}
       testID={options.testID}
     >
-      <View style={{ flexDirection: "row", gap: 12, padding: 15 }}>
+      <View style={{ flexDirection: "row", gap: 12, padding: 15, alignItems: "flex-start" }}>
         <LinearGradient
           colors={options.tileColors}
           start={{ x: 0, y: 0 }}
@@ -3072,127 +3173,253 @@ export function OneOnOneHistoryTab({
             ))}
           </View>
         </View>
+        <ChevronRight
+          size={19}
+          color={options.recommended ? options.accent : "#94A3B8"}
+          strokeWidth={2.3}
+          style={{ alignSelf: "center" }}
+        />
       </View>
+    </Pressable>
+  );
 
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 15,
-          paddingVertical: 12,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: options.border,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 12.5,
-            fontWeight: "800",
-            letterSpacing: -0.1,
-            color: options.accent,
-          }}
-        >
-          {options.action}
-        </Text>
-        <ChevronRight size={17} color={options.accent} strokeWidth={2.3} />
+  const renderStyleChoice = (options: {
+    testID: string;
+    icon: React.ReactNode;
+    iconBackground: string;
+    accent: string;
+    chipBackground: string;
+    border: string;
+    title: string;
+    description: string;
+    chips: string[];
+    recommended?: boolean;
+    action: string;
+    onPress: () => void;
+  }) => (
+    <Pressable
+      onPress={options.onPress}
+      style={{
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: options.border,
+        backgroundColor: "#FFFFFF",
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={options.action}
+      testID={options.testID}
+    >
+      <View style={{ padding: 14, gap: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: options.iconBackground,
+            }}
+          >
+            {options.icon}
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text
+                style={{
+                  flexShrink: 1,
+                  fontSize: 16,
+                  lineHeight: 20,
+                  fontWeight: "800",
+                  letterSpacing: -0.3,
+                  color: "#121826",
+                }}
+                numberOfLines={1}
+              >
+                {options.title}
+              </Text>
+              {options.recommended ? (
+                <View
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 999,
+                    backgroundColor: "#F3EEFF",
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#6D4AFF" }}>
+                    Recommended
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <Text
+              style={{
+                marginTop: 3,
+                fontSize: 13,
+                lineHeight: 18,
+                color: "#667085",
+              }}
+            >
+              {options.description}
+            </Text>
+          </View>
+          <ChevronRight size={18} color={options.accent} strokeWidth={2.3} />
+        </View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {options.chips.map((chip) => (
+            <View
+              key={chip}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: options.chipBackground,
+              }}
+            >
+              <Check size={12} color={options.accent} strokeWidth={2.6} />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#3F4658" }}>
+                {chip}
+              </Text>
+            </View>
+          ))}
+        </View>
       </View>
     </Pressable>
   );
 
   const renderModeView = () => {
-    const firstName = memberName.trim().split(/\s+/)[0] || memberName;
+    const openDescription = callWriteUpAvailable
+      ? "Write this conversation up from what you both just said."
+      : liveNotesAvailable
+        ? callTranscriptActive
+          ? "Live notes are already following this call."
+          : "Seneca listens on this call and organizes the takeaways."
+        : "Have a flexible conversation without a predefined template.";
+    const openChips = callWriteUpAvailable
+      ? ["From this call", "Review before saving"]
+      : liveNotesAvailable
+        ? ["On this call", "Review before saving"]
+        : ["Flexible format", "Capture takeaways"];
     return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <ScrollView
         style={{ flex: 1, backgroundColor: "#FFFFFF" }}
-        contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 8, paddingBottom: 26, gap: 13 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 12 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ gap: 3 }}>
-          <Text style={{ fontSize: 21, lineHeight: 26, fontWeight: "800", letterSpacing: -0.6, color: "#0F172A" }}>
+        <View style={{ gap: 4, marginBottom: 4 }}>
+          <Text style={{ fontSize: 22, lineHeight: 27, fontWeight: "800", letterSpacing: -0.5, color: "#121826" }}>
             Choose a check-in style
           </Text>
-          <Text style={{ fontSize: 12.5, lineHeight: 17, color: "#64748B" }}>
+          <Text style={{ fontSize: 14, lineHeight: 19, color: "#7B8794" }}>
             Either way, Alenio writes it up for you to review.
           </Text>
         </View>
 
-        {renderModeCard({
+        {renderStyleChoice({
           testID: "guided-check-in-mode",
           icon: <ClipboardList size={20} color="#6D4AFF" strokeWidth={2.2} />,
+          iconBackground: "#F3EEFF",
           accent: "#6D4AFF",
-          tileColors: ["#F1ECFF", "#E2D9FF"],
-          tileBorder: "#E4DBFF",
-          surface: "#F9F7FF",
-          border: "#E6E0FB",
-          shadow: "#4B3BA8",
+          chipBackground: "#F6F3FF",
+          border: "#DDD6FE",
           title: "Guided check-in",
-          description: "Follow a template with consistent questions.",
-          points: ["Best for recurring check-ins", "Easier to compare over time"],
-          action: "Choose guided check-in",
+          description: "Use a template to guide a focused, structured conversation.",
+          chips: ["Consistent questions", "Track progress"],
           recommended: true,
+          action: "Choose guided check-in",
           onPress: () => setView("pick"),
         })}
 
-        {renderModeCard({
+        {renderStyleChoice({
           testID: "open-check-in-mode",
-          icon: callWriteUpAvailable ? (
-            <Sparkles size={20} color="#2F80ED" strokeWidth={2.2} />
-          ) : (
-            <Mic size={20} color="#2F80ED" strokeWidth={2.2} />
-          ),
-          accent: "#2F80ED",
-          tileColors: ["#EAF3FF", "#D9E9FF"],
-          tileBorder: "#D8E7FB",
-          surface: "#FFFFFF",
-          border: "#E7ECF3",
-          shadow: "#0F172A",
+          icon: <MessageCircle size={20} color="#3B82F6" strokeWidth={2.2} />,
+          iconBackground: "#EAF3FF",
+          accent: "#3B82F6",
+          chipBackground: "#F3F7FC",
+          border: "#E4EAF2",
           title: "Open check-in",
-          description: "Have a natural conversation without a template.",
-          points: callWriteUpAvailable
-            ? [
-                "Written up from what you both just said",
-                "Alenio organizes the important takeaways",
-              ]
-            : [
-                "Record the conversation as you talk",
-                "Alenio organizes the important takeaways",
-              ],
+          description: openDescription,
+          chips: openChips,
           action: callWriteUpAvailable
             ? "Write up this conversation"
-            : "Choose open check-in",
+            : liveNotesAvailable
+              ? callTranscriptActive
+                ? "Live notes are on"
+                : "Start live notes"
+              : "Choose open check-in",
           onPress: () => {
             if (callWriteUpAvailable) {
               void writeUpFromCall(null);
               return;
             }
+            if (liveNotesAvailable) {
+              if (callTranscriptActive) {
+                setView("list");
+                return;
+              }
+              requestLiveNotes(null);
+              return;
+            }
             setOpenRecording(true);
           },
         })}
-
+      </ScrollView>
+      <View style={{ backgroundColor: "#FFFFFF" }}>
         <View
           style={{
+            paddingHorizontal: 22,
+            paddingTop: 8,
+            paddingBottom: 14,
             flexDirection: "row",
             alignItems: "center",
-            gap: 11,
-            padding: 13,
-            borderRadius: 16,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: "#E9E4FA",
-            backgroundColor: "#FAF9FE",
+            gap: 12,
           }}
         >
-          <Sparkles size={19} color="#6D4AFF" strokeWidth={2.2} />
+          <Sparkles size={18} color="#6D4AFF" strokeWidth={2.2} />
+          <View
+            style={{
+              width: 2,
+              height: 38,
+              borderRadius: 1,
+              backgroundColor: "#DDD6FE",
+            }}
+          />
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: -0.1, color: "#1F2739" }}>
-              Seneca handles the recap
+            <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: "800", color: "#17142B" }}>
+              Seneca helps with both
             </Text>
-            <Text style={{ marginTop: 1, fontSize: 11, lineHeight: 15, color: "#7A8496" }}>
-              {`Review and edit the structured summary before saving it to ${firstName}'s record.`}
+            <Text style={{ marginTop: 2, fontSize: 13, lineHeight: 18, color: "#667085" }}>
+              Review and refine your check-in summary before saving.
             </Text>
           </View>
         </View>
-      </ScrollView>
+        <View
+          style={{ height: 78 + Math.max(insets.bottom, 18) }}
+          pointerEvents="none"
+        >
+          <Svg
+            width="100%"
+            height="100%"
+            viewBox="0 0 360 90"
+            preserveAspectRatio="none"
+          >
+            <Path
+              d="M0 34 C80 12 150 22 210 38 C280 56 320 24 360 32 L360 90 L0 90 Z"
+              fill="#F4F0FF"
+            />
+            <Path
+              d="M0 58 C90 44 170 66 250 52 C310 42 340 54 360 50 L360 90 L0 90 Z"
+              fill="#E9E2FF"
+            />
+          </Svg>
+        </View>
+      </View>
+      </View>
     );
   };
 
@@ -3275,6 +3502,35 @@ export function OneOnOneHistoryTab({
               recommended: true,
               onPress: () => void writeUpFromCall(template),
             })
+          : liveNotesAvailable
+            ? renderModeCard({
+                testID: "capture-live-notes-method",
+                icon: <Sparkles size={20} color="#6D4AFF" strokeWidth={2.2} />,
+                accent: "#6D4AFF",
+                tileColors: ["#F1ECFF", "#E2D9FF"],
+                tileBorder: "#E4DBFF",
+                surface: "#F9F7FF",
+                border: "#E6E0FB",
+                shadow: "#4B3BA8",
+                title: callTranscriptActive ? "Live notes are on" : "Live notes",
+                description: callTranscriptActive
+                  ? `Questions stay on the call while you talk with ${firstName}.`
+                  : `Seneca listens on this call and fills in ${template.title}.`,
+                points: [
+                  "You will see the questions while you talk",
+                  "Review and approve every answer before it is saved",
+                ],
+                action: callTranscriptActive ? "Back to the call" : "Start live notes",
+                recommended: true,
+                onPress: () => {
+                  if (callTranscriptActive) {
+                    setCaptureTemplate(null);
+                    setView("list");
+                    return;
+                  }
+                  requestLiveNotes(template);
+                },
+              })
           : micRecordingAvailable
             ? renderModeCard({
                 testID: "capture-record-method",
@@ -3533,7 +3789,9 @@ export function OneOnOneHistoryTab({
     if (!checkInActionMenu) return null;
     if (
       (checkInActionMenu.kind === "planned" && !canCreate) ||
-      (checkInActionMenu.kind === "history" && !canModify)
+      (checkInActionMenu.kind === "history" &&
+        !canModify &&
+        !canPrintCheckIn(checkInActionMenu.meeting))
     ) {
       return null;
     }
@@ -3756,28 +4014,64 @@ export function OneOnOneHistoryTab({
                 </View>
               ) : historyMeeting ? (
                 <View style={{ paddingBottom: 4 }}>
-                  <Pressable
-                    onPress={() => {
-                      const meeting = historyMeeting;
-                      closeCheckInActionMenu();
-                      startEdit(meeting);
-                    }}
-                    style={bottomSheetMenu.row}
-                    testID="history-check-in-edit"
-                  >
-                    <Text style={[bottomSheetMenu.rowLabel, { color: "#4361EE" }]}>
-                      {checkInEditMenuLabel(historyMeeting)}
-                    </Text>
-                    <Pencil size={bottomSheetMenu.iconSize} color="#4361EE" />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setCheckInActionDeleteConfirm(true)}
-                    style={bottomSheetMenu.row}
-                    testID="history-check-in-delete"
-                  >
-                    <Text style={bottomSheetMenu.rowLabelDestructive}>Delete check-in</Text>
-                    <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
-                  </Pressable>
+                  {canModify ? (
+                    <Pressable
+                      onPress={() => {
+                        const meeting = historyMeeting;
+                        closeCheckInActionMenu();
+                        startEdit(meeting);
+                      }}
+                      style={bottomSheetMenu.row}
+                      testID="history-check-in-edit"
+                    >
+                      <Text style={[bottomSheetMenu.rowLabel, { color: "#4361EE" }]}>
+                        {checkInEditMenuLabel(historyMeeting)}
+                      </Text>
+                      <Pencil size={bottomSheetMenu.iconSize} color="#4361EE" />
+                    </Pressable>
+                  ) : null}
+                  {canPrintCheckIn(historyMeeting) ? (
+                    <>
+                      <Pressable
+                        onPress={() => void onDownloadPdf(historyMeeting)}
+                        disabled={downloadingPdfId === historyMeeting.id}
+                        style={[
+                          bottomSheetMenu.row,
+                          downloadingPdfId === historyMeeting.id ? { opacity: 0.55 } : null,
+                        ]}
+                        testID="history-check-in-save-pdf"
+                      >
+                        <Text style={bottomSheetMenu.rowLabel}>
+                          {downloadingPdfId === historyMeeting.id ? "Saving PDF\u2026" : "Save PDF"}
+                        </Text>
+                        <Download size={bottomSheetMenu.iconSize} color="#4361EE" />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void onPrint(historyMeeting)}
+                        disabled={printingPdf}
+                        style={[
+                          bottomSheetMenu.row,
+                          printingPdf ? { opacity: 0.55 } : null,
+                        ]}
+                        testID="history-check-in-print"
+                      >
+                        <Text style={bottomSheetMenu.rowLabel}>
+                          {printingPdf ? "Printing\u2026" : "Print"}
+                        </Text>
+                        <Printer size={bottomSheetMenu.iconSize} color="#4361EE" />
+                      </Pressable>
+                    </>
+                  ) : null}
+                  {canModify ? (
+                    <Pressable
+                      onPress={() => setCheckInActionDeleteConfirm(true)}
+                      style={bottomSheetMenu.row}
+                      testID="history-check-in-delete"
+                    >
+                      <Text style={bottomSheetMenu.rowLabelDestructive}>Delete check-in</Text>
+                      <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -4067,12 +4361,7 @@ export function OneOnOneHistoryTab({
   // Section headings and the leader's own notes field are not things to ask
   // about, so they stay off the prompt list shown while recording.
   const recordingQuestions = useMemo(
-    () =>
-      (recordingTemplate?.fields ?? [])
-        .filter((field) => field.type !== "section" && field.type !== "manager_notes")
-        .slice()
-        .sort((a, b) => a.order - b.order)
-        .map((field) => field.label),
+    () => questionLabelsForTemplate(recordingTemplate),
     [recordingTemplate],
   );
 
@@ -4451,6 +4740,7 @@ export function OneOnOneHistoryTab({
       >
         <Text
           style={{
+            flexShrink: 1,
             fontSize: 11,
             lineHeight: 14,
             fontWeight: "800",
@@ -4462,7 +4752,7 @@ export function OneOnOneHistoryTab({
           Check-ins
         </Text>
       {canCreate || upcomingPlanned.length > visibleUpcomingCount ? (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <View style={{ flexShrink: 0, flexDirection: "row", alignItems: "center", gap: 6 }}>
           {upcomingPlanned.length > visibleUpcomingCount ? (
             <Pressable
               onPress={() => setUpcomingListOpen(true)}
@@ -4488,10 +4778,9 @@ export function OneOnOneHistoryTab({
               }
               hitSlop={8}
               style={{
-                width: 28,
-                height: 28,
+                minHeight: 28,
+                paddingHorizontal: 8,
                 borderRadius: 9,
-                alignItems: "center",
                 justifyContent: "center",
                 borderWidth: 1,
                 borderColor: "#E2E5EA",
@@ -4501,17 +4790,21 @@ export function OneOnOneHistoryTab({
               accessibilityLabel="Manage check-in templates"
               testID="manage-check-in-templates-button"
             >
-              <LayoutTemplate size={14} color="#111827" strokeWidth={2.2} />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <LayoutTemplate size={13} color="#172033" strokeWidth={2.2} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#172033" }}>
+                  Templates
+                </Text>
+              </View>
             </Pressable>
           ) : null}
           <Pressable
             onPress={() => void startCreate()}
             hitSlop={8}
             style={{
-              width: 28,
-              height: 28,
+              minHeight: 28,
+              paddingHorizontal: 8,
               borderRadius: 9,
-              alignItems: "center",
               justifyContent: "center",
               borderWidth: 1,
               borderColor: "#E2E5EA",
@@ -4521,7 +4814,12 @@ export function OneOnOneHistoryTab({
             accessibilityLabel="Start a new check-in"
             testID="new-check-in-button"
           >
-            <Plus size={15} color="#111827" strokeWidth={2.4} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Plus size={14} color="#172033" strokeWidth={2.4} />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#172033" }}>
+                New check-in
+              </Text>
+            </View>
           </Pressable>
           </>
           ) : null}
@@ -4564,6 +4862,7 @@ export function OneOnOneHistoryTab({
           <CheckInEmptyState
             memberName={memberName}
             memberImage={memberImage}
+            isSelf={isSelf}
             canCreate={canCreate}
             recordingSupported={recordingSupported}
             compact={meetingToolMode || !embeddedListScroll}
@@ -4687,7 +4986,7 @@ export function OneOnOneHistoryTab({
               >
                 CHECK-IN
               </Text>
-              {canModify ? (
+              {previewMeeting && (canModify || canPrintCheckIn(previewMeeting)) ? (
                 <Pressable
                   onPress={() => {
                     const meeting = previewMeeting;
@@ -4704,6 +5003,8 @@ export function OneOnOneHistoryTab({
                     justifyContent: "center",
                     backgroundColor: "#F5F6F9",
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Check-in actions"
                 >
                   <MoreHorizontal
                     size={19}

@@ -181,7 +181,7 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
       );
     }
     if (topPerformer.streak >= 3) {
-      detailParts.push(`${topPerformer.streak}-day completion streak`);
+      detailParts.push(`${topPerformer.streak}-completion task streak`);
     }
 
     cards.push({
@@ -274,15 +274,15 @@ export function briefingActionPath(actionId: string, teamId: string): string {
     case "coach_owner":
     case "prepare_1on1":
     case "create_dev_note":
-      return `/team?teamId=${ws}`;
+      return `/go?teamId=${ws}`;
     case "view_tasks":
-      return `/dashboard?teamId=${ws}&overdue=1`;
+      return `/go?teamId=${ws}`;
     case "send_reminder":
     case "create_shoutout":
     case "add_recognition_note":
-      return `/chat?teamId=${ws}`;
+      return `/go?teamId=${ws}`;
     default:
-      return `/dashboard?teamId=${ws}`;
+      return `/go?teamId=${ws}`;
   }
 }
 
@@ -294,9 +294,9 @@ export function quickActionPath(actionId: SenecaQuickAction["id"], teamId: strin
     case "task":
       return `/tasks/new?teamId=${ws}`;
     case "check_in":
-      return `/team?teamId=${ws}`;
+      return `/go?teamId=${ws}`;
     case "recognize":
-      return `/chat?teamId=${ws}`;
+      return `/go?teamId=${ws}`;
   }
 }
 

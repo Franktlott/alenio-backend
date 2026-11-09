@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { SiteIcon, type SiteIconName } from "../components/SiteHeader";
 import { WebsiteChrome } from "../components/WebsiteChrome";
 import {
   MARKETING_CTA_REQUEST_DEMO,
@@ -9,33 +10,43 @@ import {
 } from "../lib/marketing-constants";
 import { LEGAL_CONTACT_EMAIL } from "../lib/legal-constants";
 
+const SECTION_ICONS: SiteIconName[] = ["shield", "layers", "check"];
+
 export function SecurityPage() {
   return (
-    <WebsiteChrome activeNav="security">
-      <main className="site-marketing-main" data-testid="security-page">
-        <header className="site-marketing-hero">
-          <p className="site-marketing-eyebrow">Security</p>
+    <WebsiteChrome
+      activeNav="security"
+      hero={
+        <>
+          <p className="lp-badge">Security</p>
           <h1>{SECURITY_PAGE_HERO.title}</h1>
           <p>{SECURITY_PAGE_HERO.subcopy}</p>
-          <div className="site-v2-hero-cta site-marketing-hero-actions">
-            <a href={MARKETING_DEMO_HREF} className="site-v2-btn site-v2-btn-primary">
+          <div className="lp-band-actions">
+            <a href={MARKETING_DEMO_HREF} className="lp-btn lp-btn--primary lp-btn--lg">
               {MARKETING_CTA_REQUEST_DEMO}
+              <SiteIcon name="arrow" size={18} />
             </a>
-            <Link to="/privacy" className="site-v2-btn site-v2-btn-outline site-marketing-btn-outline">
+            <Link to="/privacy" className="lp-btn lp-btn--ghost lp-btn--lg">
               Privacy Policy
             </Link>
           </div>
-        </header>
-
-        <section className="site-marketing-security-grid" aria-labelledby="security-sections-heading">
-          <h2 id="security-sections-heading" className="site-marketing-section-title">
-            How we protect your workspace
-          </h2>
-          <div className="site-marketing-pillar-grid">
-            {SECURITY_PAGE_SECTIONS.map((section) => (
-              <article key={section.title} className="site-marketing-pillar-card">
+        </>
+      }
+    >
+      <main data-testid="security-page">
+        <section className="lp-section lp-section--tight" aria-labelledby="security-sections-heading">
+          <div className="lp-section-head">
+            <p className="lp-kicker">Trust & safety</p>
+            <h2 id="security-sections-heading">How we protect your workspace</h2>
+          </div>
+          <div className="lp-info-grid">
+            {SECURITY_PAGE_SECTIONS.map((section, index) => (
+              <article key={section.title} className="lp-info-card">
+                <span className="lp-info-icon">
+                  <SiteIcon name={SECTION_ICONS[index % SECTION_ICONS.length]} size={24} />
+                </span>
                 <h3>{section.title}</h3>
-                <ul>
+                <ul className="lp-checks">
                   {section.points.map((point) => (
                     <li key={point}>{point}</li>
                   ))}
@@ -45,32 +56,39 @@ export function SecurityPage() {
           </div>
         </section>
 
-        <section className="site-marketing-notes">
-          <h2>Documentation &amp; requests</h2>
-          <ul>
-            <li>
-              Read our <Link to="/privacy">Privacy Policy</Link> and <Link to="/terms">Terms of Service</Link>.
-            </li>
-            <li>
-              Users can follow the <Link to="/account-deletion">account deletion</Link> instructions at any time.
-            </li>
-            <li>
-              For security questionnaires or incident reports, email{" "}
-              <a href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a>.
-            </li>
-          </ul>
+        <section className="lp-section lp-section--tight">
+          <div className="lp-notes">
+            <h2>Documentation &amp; requests</h2>
+            <ul>
+              <li>
+                Read our <Link to="/privacy">Privacy Policy</Link> and <Link to="/terms">Terms of Service</Link>.
+              </li>
+              <li>
+                Users can follow the <Link to="/account-deletion">account deletion</Link> instructions at any time.
+              </li>
+              <li>
+                For security questionnaires or incident reports, email{" "}
+                <a href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a>.
+              </li>
+            </ul>
+          </div>
         </section>
 
-        <section className="site-marketing-bottom-cta">
-          <h2>Questions about your deployment?</h2>
-          <p>Our team can walk through authentication, data handling, and workspace controls with your stakeholders.</p>
-          <div className="site-v2-hero-cta site-marketing-hero-actions">
-            <a href={MARKETING_DEMO_HREF} className="site-v2-btn site-v2-btn-primary">
-              {MARKETING_CTA_REQUEST_DEMO}
-            </a>
-            <Link to="/sign-up" className="site-v2-btn site-v2-btn-outline site-pricing-btn-on-light">
-              {MARKETING_CTA_START_FREE}
-            </Link>
+        <section className="lp-section lp-final">
+          <div className="lp-final-card">
+            <div>
+              <h2>Questions about your deployment?</h2>
+              <p>Our team can walk through authentication, data handling, and workspace controls with your stakeholders.</p>
+            </div>
+            <div className="lp-final-actions">
+              <a href={MARKETING_DEMO_HREF} className="lp-btn lp-btn--light lp-btn--lg">
+                {MARKETING_CTA_REQUEST_DEMO}
+                <SiteIcon name="arrow" size={18} />
+              </a>
+              <Link to="/sign-up" className="lp-btn lp-btn--ghost lp-btn--lg">
+                {MARKETING_CTA_START_FREE}
+              </Link>
+            </div>
           </div>
         </section>
       </main>

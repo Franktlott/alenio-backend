@@ -31,7 +31,7 @@ export function isTaskOverdue(task: Pick<ApiTask, "status" | "dueDate">, now = n
   if (task.status === "done" || !task.dueDate) return false;
   const due = new Date(task.dueDate);
   if (Number.isNaN(due.getTime())) return false;
-  return due < startOfDay(now);
+  return due.getTime() < now.getTime();
 }
 
 export function statusLabel(task: Pick<ApiTask, "status" | "dueDate">, now = new Date()): string {
@@ -56,7 +56,7 @@ export function formatTaskDue(iso: string | null, now: Date): string {
   const datePart = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   if (isSameDay(d, today)) {
     const timePart = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-    return `Today · ${timePart}`;
+    return d.getTime() < now.getTime() ? `Overdue · ${timePart}` : `Today · ${timePart}`;
   }
   if (d < today) return `Overdue · ${datePart}`;
   return datePart;
@@ -78,7 +78,7 @@ export function formatTaskDueDisplay(iso: string | null, now = new Date()): Task
   const dueDay = startOfDay(d);
   const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
-  if (dueDay < today) {
+  if (d.getTime() < now.getTime()) {
     return { date, status: "Overdue", tone: "overdue" };
   }
 

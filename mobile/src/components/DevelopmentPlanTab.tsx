@@ -11,8 +11,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  StyleSheet,
 } from "react-native";
 import { toast } from "burnt";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Plus,
@@ -20,9 +22,19 @@ import {
   Target,
   ChevronDown,
   ChevronUp,
-  MoreVertical,
+  MoreHorizontal,
+  ChevronLeft,
   Pencil,
   Trash2,
+  ChevronRight,
+  Check,
+  Printer,
+  Download,
+  Calendar,
+  UserRound,
+  ArrowDown,
+  ChartColumn,
+  CircleCheck,
 } from "lucide-react-native";
 import {
   addDevelopmentGoalNote,
@@ -32,25 +44,35 @@ import {
   fetchDevelopmentGoals,
   setDevelopmentGoalStatus,
   updateDevelopmentGoal,
+  updateDevelopmentGoalStepCompletion,
   updateDevelopmentGoalNote,
   type DevelopmentGoal,
   type DevelopmentGoalNote,
 } from "@/lib/member-profile-api";
+import {
+  canMarkGoalComplete,
+  developmentPlanSummary,
+  goalProgress,
+  isGoalStepComplete,
+  type DevelopmentPlanSummary,
+} from "@/lib/development-goal-progress";
+import { realtimeClient } from "@/lib/realtime-client";
 import { printDevelopmentPlan, downloadDevelopmentPlanPdf } from "@/lib/development-plan-print";
 import {
-  goalDaysUntilInactive,
   goalStatusLabel,
-  isGoalNearingInactive,
   normalizeDevelopmentGoalStatus,
 } from "@/lib/development-goal-activity";
 import {
   extractGoalDuePriorityFromNotes,
-  latestCoachingNotePreview,
+  parseGoalBootstrapNote,
+  type GoalStarter,
 } from "@/lib/development-goal-presets";
 import {
   CreateDevelopmentGoalModal,
   type CreateDevelopmentGoalPayload,
 } from "@/components/CreateDevelopmentGoalModal";
+import { invalidateDevelopmentCaches } from "@/lib/invalidate-development-caches";
+import { GoalEmptyState } from "@/components/development/GoalEmptyState";
 
 type Props = {
   teamId: string;
@@ -60,8 +82,42 @@ type Props = {
   managerName?: string | null;
   canCreate: boolean;
   canAddNotes: boolean;
+  canCompleteSteps?: boolean;
   autoOpenCreate?: boolean;
+  onAutoOpenCreateHandled?: () => void;
+  embeddedListScroll?: boolean;
+  /** Lets a parent summarize the plan without fetching the goals again. */
+  onGoalsChange?: (goals: DevelopmentGoal[]) => void;
+  /** Off when the parent already shows these numbers in its own summary card. */
+  showProgressCard?: boolean;
 };
+
+const VISIBLE_DETAIL_ROWS = 3;
+const GOAL_LIST_ROW_GAP = 5;
+const GOAL_STEP_ROW_HEIGHT = 44;
+const GOAL_NOTE_ROW_HEIGHT = 48;
+const DETAIL_ROW_GAP = 4;
+
+function GoalListContainer({
+  scroll,
+  children,
+}: {
+  scroll: boolean;
+  children: React.ReactNode;
+}) {
+  if (scroll) {
+    return (
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1, gap: 14, paddingBottom: 20 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
+    );
+  }
+  return <View style={{ gap: 14 }}>{children}</View>;
+}
 
 function formatWhen(iso: string): string {
   try {
@@ -73,6 +129,41 @@ function formatWhen(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+function formatNoteWhen(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function goalDuePriority(goal: DevelopmentGoal): {
+  dueLabel: string;
+  priorityLabel: string;
+} | null {
+  if (goal.dueDate) {
+    const priorityLabel =
+      goal.priority === "low" ? "Low" : goal.priority === "high" ? "High" : "Normal";
+    return { dueLabel: formatWhen(goal.dueDate), priorityLabel };
+  }
+  return extractGoalDuePriorityFromNotes(goal.notes);
+}
+
+function visibleGoalNotes(goal: DevelopmentGoal) {
+  return goal.notes
+    .map((note) => {
+      const legacy = parseGoalBootstrapNote(note.body);
+      return legacy ? { ...note, body: legacy.coachingBody ?? "" } : note;
+    })
+    .filter((note) => note.body.trim().length > 0);
 }
 
 function lastUpdatedAt(goal: DevelopmentGoal): string {
@@ -87,143 +178,188 @@ function displayUserName(user: { name: string; email: string } | undefined): str
   return user?.name?.trim() || user?.email || "Someone";
 }
 
-function GrowthEmptyState({
-  memberName,
-  canCreate,
-  hasAnyGoals,
-  error,
-  onStart,
+function DevelopmentProgressCard({
+  summary,
 }: {
-  memberName: string;
-  canCreate: boolean;
-  hasAnyGoals: boolean;
-  error?: string | null;
-  onStart?: () => void;
+  summary: DevelopmentPlanSummary;
 }) {
-  const firstName = memberName.trim().split(/\s+/)[0] || memberName || "this teammate";
+  const stats = [
+    {
+      key: "active",
+      icon: Target,
+      color: "#6D4AFF",
+      bg: "#F1EDFF",
+      value: String(summary.activeCount),
+      label: summary.activeCount === 1 ? "Active goal" : "Active goals",
+    },
+    {
+      key: "completed",
+      icon: CircleCheck,
+      color: "#0F9D6E",
+      bg: "#E7F8F1",
+      value: String(summary.completedCount),
+      label: "Completed",
+    },
+    {
+      key: "overall",
+      icon: ChartColumn,
+      color: "#3B6FF5",
+      bg: "#EAF1FE",
+      value: `${summary.overallPercent}%`,
+      label: "Overall progress",
+    },
+  ];
 
-  if (error) {
+  return (
+    <View style={progressStyles.card} testID="development-progress-card">
+      <Text style={progressStyles.eyebrow}>DEVELOPMENT PROGRESS</Text>
+      <View style={progressStyles.row}>
+        {stats.map((stat, index) => {
+          const Icon = stat.icon;
+          return (
+            <React.Fragment key={stat.key}>
+              {index > 0 ? <View style={progressStyles.divider} /> : null}
+              <View style={progressStyles.cell}>
+                <View style={progressStyles.cellHead}>
+                  <View
+                    style={[progressStyles.icon, { backgroundColor: stat.bg }]}
+                  >
+                    <Icon size={14} color={stat.color} strokeWidth={2.3} />
+                  </View>
+                  <Text style={progressStyles.value} numberOfLines={1}>
+                    {stat.value}
+                  </Text>
+                </View>
+                <Text style={progressStyles.label} numberOfLines={1}>
+                  {stat.label}
+                </Text>
+              </View>
+            </React.Fragment>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const progressStyles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#ECEFF5",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 10,
+  },
+  eyebrow: {
+    fontSize: 9.5,
+    lineHeight: 12,
+    fontWeight: "800",
+    letterSpacing: 0.75,
+    color: "#66748C",
+  },
+  row: { flexDirection: "row", alignItems: "stretch" },
+  divider: {
+    width: StyleSheet.hairlineWidth,
+    marginHorizontal: 8,
+    backgroundColor: "#EDF0F6",
+  },
+  cell: { flex: 1, minWidth: 0 },
+  cellHead: { flexDirection: "row", alignItems: "center", gap: 6 },
+  icon: {
+    width: 26,
+    height: 26,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  value: {
+    flexShrink: 1,
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    color: "#0F172A",
+  },
+  label: {
+    marginTop: 5,
+    fontSize: 10.5,
+    lineHeight: 13,
+    fontWeight: "700",
+    color: "#3C4A61",
+  },
+});
+
+/**
+ * Heading over one group of goals. Groups that can be folded away pass
+ * onToggle; the active group is always open, so it has no chevron to tap.
+ */
+function GoalSectionHeader({
+  title,
+  count,
+  open,
+  onToggle,
+  testID,
+}: {
+  title: string;
+  count: number;
+  open?: boolean;
+  onToggle?: () => void;
+  testID?: string;
+}) {
+  const content = (
+    <>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Text style={sectionStyles.title}>{title}</Text>
+        <Text style={sectionStyles.count}>{count}</Text>
+      </View>
+      {onToggle ? (
+        open ? (
+          <ChevronUp size={16} color="#94A3B8" />
+        ) : (
+          <ChevronDown size={16} color="#94A3B8" />
+        )
+      ) : null}
+    </>
+  );
+
+  if (!onToggle) {
     return (
-      <View
-        style={{
-          flexGrow: 1,
-          justifyContent: "center",
-          paddingHorizontal: 16,
-          paddingTop: 20,
-          paddingBottom: 16,
-          alignItems: "center",
-        }}
-        testID="growth-empty-state-error"
-      >
-        <View
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: "#EEF2FF",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 14,
-          }}
-        >
-          <Target size={26} color="#4361EE" />
-        </View>
-        <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A", textAlign: "center", marginBottom: 8 }}>
-          Could not load goals
-        </Text>
-        <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", lineHeight: 20, maxWidth: 300 }}>
-          {error}
-        </Text>
+      <View style={sectionStyles.row} testID={testID}>
+        {content}
       </View>
     );
   }
 
   return (
-    <View
-      style={{
-        flexGrow: 1,
-        justifyContent: "center",
-        paddingHorizontal: 16,
-        paddingTop: 8,
-        paddingBottom: 16,
-        alignItems: "center",
-      }}
-      testID="growth-empty-state"
+    <Pressable
+      onPress={onToggle}
+      style={sectionStyles.row}
+      accessibilityRole="button"
+      accessibilityLabel={`${open ? "Hide" : "Show"} ${title.toLowerCase()}`}
+      testID={testID}
     >
-      <Image
-        source={require("@/assets/growth-empty-goals.png")}
-        style={{ width: 168, height: 168, marginBottom: 8 }}
-        resizeMode="contain"
-        accessibilityIgnoresInvertColors
-      />
-      <Text
-        style={{
-          fontSize: 18,
-          fontWeight: "800",
-          color: "#0F172A",
-          textAlign: "center",
-          letterSpacing: -0.3,
-          lineHeight: 25,
-          marginBottom: 8,
-          maxWidth: 300,
-        }}
-      >
-        {hasAnyGoals ? (
-          <>
-            Ready for the{"\n"}
-            <Text style={{ color: "#7C3AED" }}>next growth step.</Text>
-          </>
-        ) : (
-          <>
-            Growth starts with{"\n"}
-            <Text style={{ color: "#7C3AED" }}>a clear goal.</Text>
-          </>
-        )}
-      </Text>
-      <Text
-        style={{
-          fontSize: 13.5,
-          color: "#64748B",
-          textAlign: "center",
-          lineHeight: 20,
-          maxWidth: 300,
-          marginBottom: 10,
-        }}
-      >
-        {canCreate
-          ? hasAnyGoals
-            ? `Create a new goal for ${firstName}, or reactivate an inactive goal below to keep momentum going.`
-            : `Set development goals for ${firstName}. Build skills, track action steps, and celebrate progress over time.`
-          : `Development goals for ${firstName} will appear here once a leader adds them.`}
-      </Text>
-      {canCreate && onStart ? (
-        <Pressable
-          onPress={onStart}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            backgroundColor: "#4361EE",
-            borderRadius: 12,
-            paddingHorizontal: 18,
-            paddingVertical: 12,
-            width: "100%",
-            maxWidth: 280,
-          }}
-          testID="growth-empty-start-button"
-          accessibilityRole="button"
-          accessibilityLabel={hasAnyGoals ? "Add goal" : "Start first goal"}
-        >
-          <Plus size={16} color="white" />
-          <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>
-            {hasAnyGoals ? "Add goal" : "Start first goal"}
-          </Text>
-        </Pressable>
-      ) : null}
-    </View>
+      {content}
+    </Pressable>
   );
 }
+
+const sectionStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  title: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
+  },
+  count: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
+});
 
 export function DevelopmentPlanTab({
   teamId,
@@ -233,17 +369,62 @@ export function DevelopmentPlanTab({
   managerName = null,
   canCreate,
   canAddNotes,
+  canCompleteSteps = false,
   autoOpenCreate = false,
+  onAutoOpenCreateHandled,
+  embeddedListScroll = false,
+  onGoalsChange,
+  showProgressCard = true,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const canUpdate = canCreate || canAddNotes;
+  const queryClient = useQueryClient();
   const [goals, setGoals] = useState<DevelopmentGoal[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [closedOpen, setClosedOpen] = useState(false);
   const [inactiveOpen, setInactiveOpen] = useState(false);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
+  const [stepSavingKey, setStepSavingKey] = useState<string | null>(null);
+  const [stepCompletionConfirmation, setStepCompletionConfirmation] = useState<{
+    goal: DevelopmentGoal;
+    stepIndex: number;
+  } | null>(null);
+  const [completeGoal, setCompleteGoal] = useState<DevelopmentGoal | null>(null);
+  const [deleteGoalConfirmation, setDeleteGoalConfirmation] =
+    useState<DevelopmentGoal | null>(null);
+  const [deletingGoal, setDeletingGoal] = useState(false);
+  const [planActionsOpen, setPlanActionsOpen] = useState(false);
+  const detailScrollRef = React.useRef<ScrollView>(null);
+  const [detailScrollContentHeight, setDetailScrollContentHeight] = useState(0);
+  const [detailScrollViewportHeight, setDetailScrollViewportHeight] = useState(0);
+  const [detailScrollOffset, setDetailScrollOffset] = useState(0);
   const [previewGoal, setPreviewGoal] = useState<DevelopmentGoal | null>(null);
+  const previewGoalCanComplete = previewGoal
+    ? canMarkGoalComplete(previewGoal)
+    : false;
+  const previewGoalRemainingSteps = previewGoal
+    ? Math.max(
+        0,
+        goalProgress(previewGoal).totalStepCount -
+          goalProgress(previewGoal).completedStepCount,
+      )
+    : 0;
+  /**
+   * True when the action awaiting confirmation is the only one left, so
+   * confirming it also completes the goal. Worth saying up front, since that
+   * is a bigger change than ticking a box.
+   */
+  const stepCompletionFinishesGoal = (() => {
+    if (!stepCompletionConfirmation) return false;
+    const { goal, stepIndex } = stepCompletionConfirmation;
+    const progress = goalProgress(goal);
+    return (
+      progress.totalStepCount > 0 &&
+      progress.completedStepCount === progress.totalStepCount - 1 &&
+      !progress.completedStepIndexes.includes(stepIndex)
+    );
+  })();
+  const previewGoalNotes = previewGoal ? visibleGoalNotes(previewGoal) : [];
   const [goalActionMenu, setGoalActionMenu] = useState<DevelopmentGoal | null>(null);
   const [noteGoal, setNoteGoal] = useState<DevelopmentGoal | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
@@ -252,8 +433,14 @@ export function DevelopmentPlanTab({
   const autoCreateHandledRef = React.useRef(false);
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [starterPrefill, setStarterPrefill] = useState<{
+    skill: string;
+    description: string;
+    steps: string[];
+  } | null>(null);
   const [updateGoal, setUpdateGoal] = useState<DevelopmentGoal | null>(null);
   const [skill, setSkill] = useState("");
+  const [skillDescription, setSkillDescription] = useState("");
   const [steps, setSteps] = useState<string[]>([""]);
   const [modalErr, setModalErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -263,17 +450,23 @@ export function DevelopmentPlanTab({
   const [newNotes, setNewNotes] = useState<string[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
-  const loadGoals = useCallback(async () => {
-    setLoading(true);
+  const loadGoals = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setErr(null);
     try {
       const list = await fetchDevelopmentGoals(teamId, memberUserId);
       setGoals(list);
+      setPreviewGoal((current) =>
+        current ? list.find((goal) => goal.id === current.id) ?? null : null,
+      );
+      setUpdateGoal((current) =>
+        current ? list.find((goal) => goal.id === current.id) ?? null : null,
+      );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not load development plan.");
       setGoals([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [memberUserId, teamId]);
 
@@ -281,9 +474,33 @@ export function DevelopmentPlanTab({
     void loadGoals();
   }, [loadGoals]);
 
+  useEffect(() => {
+    onGoalsChange?.(goals);
+  }, [goals, onGoalsChange]);
+
+  useEffect(
+    () =>
+      realtimeClient.onInboxUpdated((event) => {
+        if (
+          event.kind !== "team" ||
+          event.teamId !== teamId ||
+          (event.resource && event.resource !== "goals")
+        ) {
+          return;
+        }
+        void loadGoals(true);
+      }),
+    [loadGoals, teamId],
+  );
+
   const activeGoals = goals.filter((g) => g.status === "active");
   const inactiveGoals = goals.filter((g) => g.status === "inactive");
   const closedGoals = goals.filter((g) => g.status === "closed");
+  const planSummary = developmentPlanSummary(goals);
+  const isReadOnlyPlan = goals.length > 0 && goals.every((goal) => goal.readOnly);
+  const isArchivedPlan = goals.length > 0 && goals.every((goal) => goal.isArchived);
+  const canUpdate = (canCreate || canAddNotes) && !isReadOnlyPlan;
+  const canCreateGoal = canCreate && !isReadOnlyPlan;
 
   const onPrint = async () => {
     if (goals.length === 0) return;
@@ -323,16 +540,35 @@ export function DevelopmentPlanTab({
     }
   };
 
-  const openCreate = () => {
+  const openCreate = (starter?: GoalStarter) => {
     setModalErr(null);
+    setStarterPrefill(
+      starter
+        ? {
+            skill: starter.skill,
+            description: starter.description,
+            steps: starter.steps,
+          }
+        : null,
+    );
     setCreateOpen(true);
   };
 
   useEffect(() => {
-    if (!autoOpenCreate || !canCreate || autoCreateHandledRef.current || loading) return;
+    if (!autoOpenCreate) {
+      autoCreateHandledRef.current = false;
+      return;
+    }
+    if (!canCreateGoal || autoCreateHandledRef.current || loading) return;
     autoCreateHandledRef.current = true;
+    onAutoOpenCreateHandled?.();
     openCreate();
-  }, [autoOpenCreate, canCreate, loading]);
+  }, [
+    autoOpenCreate,
+    canCreateGoal,
+    loading,
+    onAutoOpenCreateHandled,
+  ]);
 
   const onCreateGoalFromSheet = async (payload: CreateDevelopmentGoalPayload) => {
     if (!payload.skill.trim()) {
@@ -340,7 +576,7 @@ export function DevelopmentPlanTab({
       return;
     }
     if (payload.steps.length === 0) {
-      setModalErr("Add at least one action step.");
+      setModalErr("Add at least one action.");
       return;
     }
     setSaving(true);
@@ -348,6 +584,9 @@ export function DevelopmentPlanTab({
     try {
       const created = await createDevelopmentGoal(teamId, memberUserId, {
         skill: payload.skill.trim(),
+        description: payload.description?.trim() || null,
+        dueDate: payload.dueDate,
+        priority: payload.priority,
         steps: payload.steps,
       });
       if (payload.managerNotes?.trim()) {
@@ -356,6 +595,7 @@ export function DevelopmentPlanTab({
       toast({ title: "Goal created", preset: "done" });
       closeModal();
       await loadGoals();
+      void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
     } catch (e) {
       setModalErr(e instanceof Error ? e.message : "Could not create goal.");
     } finally {
@@ -366,6 +606,7 @@ export function DevelopmentPlanTab({
   const openUpdate = (goal: DevelopmentGoal) => {
     setUpdateGoal(goal);
     setSkill(goal.skill);
+    setSkillDescription(goal.description ?? "");
     setSteps(goal.steps.length > 0 ? [...goal.steps] : [""]);
     setNewNotes([]);
     setEditingNoteId(null);
@@ -380,9 +621,11 @@ export function DevelopmentPlanTab({
   };
 
   const closeNoteModal = () => {
+    const goal = noteGoal;
     setNoteGoal(null);
     setNoteDraft("");
     setNoteErr(null);
+    if (goal) setPreviewGoal(goal);
   };
 
   const onSaveProgressNote = async () => {
@@ -395,10 +638,21 @@ export function DevelopmentPlanTab({
     setNoteSaving(true);
     setNoteErr(null);
     try {
-      await addDevelopmentGoalNote(teamId, memberUserId, noteGoal.id, body);
+      const updated = await addDevelopmentGoalNote(
+        teamId,
+        memberUserId,
+        noteGoal.id,
+        body,
+      );
+      setGoals((current) =>
+        current.map((goal) => (goal.id === updated.id ? updated : goal)),
+      );
       toast({ title: "Progress note added", preset: "done" });
-      closeNoteModal();
-      await loadGoals();
+      setNoteGoal(null);
+      setNoteDraft("");
+      setNoteErr(null);
+      setPreviewGoal(updated);
+      void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
     } catch (e) {
       setNoteErr(e instanceof Error ? e.message : "Could not save note.");
     } finally {
@@ -416,6 +670,7 @@ export function DevelopmentPlanTab({
 
   const onSaveGoal = async () => {
     const trimmedSkill = skill.trim();
+    const trimmedDescription = skillDescription.trim();
     const trimmedSteps = steps.map((s) => s.trim()).filter(Boolean);
     if (!trimmedSkill) {
       setModalErr("Enter a developmental skill.");
@@ -425,12 +680,14 @@ export function DevelopmentPlanTab({
     setModalErr(null);
     try {
       if (updateGoal) {
-        const skillOrStepsChanged =
+        const goalDetailsChanged =
           trimmedSkill !== updateGoal.skill ||
+          trimmedDescription !== (updateGoal.description ?? "") ||
           JSON.stringify(trimmedSteps) !== JSON.stringify(updateGoal.steps);
-        if (skillOrStepsChanged) {
+        if (goalDetailsChanged) {
           await updateDevelopmentGoal(teamId, memberUserId, updateGoal.id, {
             skill: trimmedSkill,
+            description: trimmedDescription || null,
             steps: trimmedSteps,
           });
         }
@@ -442,6 +699,7 @@ export function DevelopmentPlanTab({
         closeModal();
       }
       await loadGoals();
+      void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
     } catch (e) {
       setModalErr(e instanceof Error ? e.message : "Could not save goal.");
     } finally {
@@ -450,24 +708,83 @@ export function DevelopmentPlanTab({
   };
 
   const onMarkComplete = (goal: DevelopmentGoal) => {
-    Alert.alert("Mark complete?", `Close "${goal.skill}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Mark complete",
-        onPress: async () => {
-          setStatusSavingId(goal.id);
-          try {
-            await setDevelopmentGoalStatus(teamId, memberUserId, goal.id, "closed");
-            await loadGoals();
-            toast({ title: "Goal closed", preset: "done" });
-          } catch (e) {
-            toast({ title: e instanceof Error ? e.message : "Could not update", preset: "error" });
-          } finally {
-            setStatusSavingId(null);
-          }
-        },
-      },
-    ]);
+    setCompleteGoal(goal);
+  };
+
+  const toggleGoalStep = async (
+    goal: DevelopmentGoal,
+    stepIndex: number,
+  ) => {
+    const key = `${goal.id}:${stepIndex}`;
+    const completed = !isGoalStepComplete(goal, stepIndex);
+    setStepSavingKey(key);
+    try {
+      const updated = await updateDevelopmentGoalStepCompletion(
+        teamId,
+        memberUserId,
+        goal.id,
+        { stepIndex, completed },
+      );
+      setGoals((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setPreviewGoal((current) =>
+        current?.id === updated.id ? updated : current,
+      );
+      void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
+
+      // Ticking off the last action leaves nothing to do, so the goal closes
+      // itself instead of waiting to be marked complete by hand.
+      if (
+        completed &&
+        normalizeDevelopmentGoalStatus(updated.status) === "active" &&
+        canMarkGoalComplete(updated)
+      ) {
+        await closeGoalAfterFinalAction(updated);
+      }
+    } catch (error) {
+      toast({
+        title:
+          error instanceof Error
+            ? error.message
+            : "Could not update action",
+        preset: "error",
+      });
+    } finally {
+      setStepSavingKey(null);
+    }
+  };
+
+  /**
+   * Closes a goal whose final action was just ticked off. A failure here is
+   * not worth an error: the action itself is saved either way, and the goal
+   * can still be completed from its menu.
+   */
+  const closeGoalAfterFinalAction = async (goal: DevelopmentGoal) => {
+    try {
+      await setDevelopmentGoalStatus(teamId, memberUserId, goal.id, "closed");
+      await loadGoals();
+      void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
+      toast({ title: "Goal completed", preset: "done" });
+    } catch {
+      /* left active, completable by hand */
+    }
+  };
+
+  const confirmMarkComplete = async () => {
+    if (!completeGoal) return;
+    setStatusSavingId(completeGoal.id);
+    try {
+      await setDevelopmentGoalStatus(teamId, memberUserId, completeGoal.id, "closed");
+      await loadGoals();
+      void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
+      toast({ title: "Goal completed", preset: "done" });
+      setCompleteGoal(null);
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Could not update", preset: "error" });
+    } finally {
+      setStatusSavingId(null);
+    }
   };
 
   const onReopen = (goal: DevelopmentGoal) => {
@@ -486,6 +803,7 @@ export function DevelopmentPlanTab({
             try {
               await setDevelopmentGoalStatus(teamId, memberUserId, goal.id, "active");
               await loadGoals();
+              void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
               toast({
                 title: isInactive ? "Goal reactivated" : "Goal reopened",
                 preset: "done",
@@ -505,66 +823,96 @@ export function DevelopmentPlanTab({
   };
 
   const onDelete = (goal: DevelopmentGoal) => {
-    Alert.alert("Delete goal?", `Remove "${goal.skill}"? This cannot be undone.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteDevelopmentGoal(teamId, memberUserId, goal.id);
-            await loadGoals();
-            toast({ title: "Goal deleted", preset: "done" });
-          } catch (e) {
-            toast({ title: e instanceof Error ? e.message : "Could not delete", preset: "error" });
-          }
-        },
-      },
-    ]);
+    setDeleteGoalConfirmation(goal);
+  };
+
+  const confirmDeleteGoal = async () => {
+    if (!deleteGoalConfirmation) return;
+    setDeletingGoal(true);
+    try {
+      await deleteDevelopmentGoal(
+        teamId,
+        memberUserId,
+        deleteGoalConfirmation.id,
+      );
+      setDeleteGoalConfirmation(null);
+      await loadGoals();
+      void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
+      toast({ title: "Goal deleted", preset: "done" });
+    } catch (error) {
+      toast({
+        title: error instanceof Error ? error.message : "Could not delete",
+        preset: "error",
+      });
+    } finally {
+      setDeletingGoal(false);
+    }
   };
 
   const openGoalMenu = (goal: DevelopmentGoal, closePreview = false) => {
+    if (goal.readOnly) return;
     if (closePreview) setPreviewGoal(null);
     setGoalActionMenu(goal);
   };
 
   const renderGoalRow = (
     goal: DevelopmentGoal,
-    index: number,
     section: "active" | "inactive" | "closed",
   ) => {
     const status = normalizeDevelopmentGoalStatus(goal.status);
     const isClosed = status === "closed";
     const isInactive = status === "inactive";
     const accent = isClosed ? "#94A3B8" : isInactive ? "#F59E0B" : "#4361EE";
+    const iconBackground = isClosed ? "#F1F5F9" : isInactive ? "#FFF3E0" : "#F0ECFF";
     const showStatusBadge = section !== "active";
-    const duePriority = extractGoalDuePriorityFromNotes(goal.notes);
-    const latestPreview = latestCoachingNotePreview(goal.notes);
-    const nearingInactive = !isClosed && !isInactive && isGoalNearingInactive(goal);
-    const daysUntilInactive = nearingInactive ? goalDaysUntilInactive(goal) : null;
+    const duePriority = goalDuePriority(goal);
     const stepCount = goal.steps?.length ?? 0;
-    const noteCount = goal.notes.length;
+    const progress = goalProgress(goal);
+    const metadata = [
+      duePriority ? `Due ${duePriority.dueLabel}` : null,
+      `${stepCount} action${stepCount === 1 ? "" : "s"}`,
+    ].filter(Boolean);
 
     return (
       <Pressable
         key={goal.id}
-        onPress={() => setPreviewGoal(goal)}
+        onPress={() => {
+          setDetailScrollOffset(0);
+          setPreviewGoal(goal);
+        }}
         style={{
-          flexDirection: "row",
-          borderTopWidth: index === 0 ? 0 : 1,
-          borderTopColor: "#F1F5F9",
-          backgroundColor: "white",
+          backgroundColor: "#FFFFFF",
+          borderRadius: 11,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: "#ECEEF5",
+          paddingHorizontal: 10,
+          paddingVertical: 7,
+          shadowColor: "#1E1B4B",
+          shadowOpacity: 0.025,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 2 },
         }}
         accessibilityRole="button"
         accessibilityLabel={`View ${goal.skill} goal summary`}
       >
-        <View style={{ width: 3, backgroundColor: accent }} />
-        <View style={{ flex: 1, paddingVertical: 12, paddingLeft: 12, paddingRight: 10 }}>
-          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 9,
+                backgroundColor: iconBackground,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Target size={15} color={accent} strokeWidth={2.3} />
+            </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text
-                  style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", letterSpacing: -0.2, flexShrink: 1 }}
+                  style={{ fontSize: 12, fontWeight: "500", color: "#0F172A", flexShrink: 1 }}
                   numberOfLines={1}
                 >
                   {goal.skill}
@@ -591,137 +939,61 @@ export function DevelopmentPlanTab({
                     </Text>
                   </View>
                 ) : null}
+                {goal.isArchived ? (
+                  <View style={{ borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: "#F1F5F9" }}>
+                    <Text style={{ fontSize: 9, fontWeight: "800", color: "#64748B", textTransform: "uppercase" }}>
+                      Archived
+                    </Text>
+                  </View>
+                ) : null}
+                <Text
+                  style={{
+                    marginLeft: "auto",
+                    fontSize: 9.5,
+                    fontWeight: "700",
+                    color:
+                      isClosed ? "#64748B" : isInactive ? "#A16207" : "#684BFF",
+                  }}
+                >
+                  {progress.progressPercent}%
+                </Text>
               </View>
 
-              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 3, lineHeight: 15 }} numberOfLines={1}>
-                {[
-                  isClosed
-                    ? `Closed ${formatWhen(goal.closedAt ?? lastUpdatedAt(goal))}`
-                    : `Updated ${formatWhen(lastUpdatedAt(goal))}`,
-                  noteCount > 0 ? `${noteCount} note${noteCount === 1 ? "" : "s"}` : "No notes",
-                ].join(" · ")}
+              <Text
+                style={{
+                  marginTop: 1,
+                  fontSize: 9.5,
+                  fontWeight: "400",
+                  color: "#64748B",
+                }}
+                numberOfLines={1}
+              >
+                {metadata.join("  ·  ")}
               </Text>
 
-              {duePriority || stepCount > 0 ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                  {duePriority ? (
-                    <View
-                      style={{
-                        backgroundColor: "#F8FAFC",
-                        borderWidth: 1,
-                        borderColor: "#E2E8F0",
-                        borderRadius: 6,
-                        paddingHorizontal: 7,
-                        paddingVertical: 3,
-                      }}
-                    >
-                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#475569" }}>
-                        Due {duePriority.dueLabel}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {duePriority ? (
-                    <View
-                      style={{
-                        backgroundColor: "#F8FAFC",
-                        borderWidth: 1,
-                        borderColor: "#E2E8F0",
-                        borderRadius: 6,
-                        paddingHorizontal: 7,
-                        paddingVertical: 3,
-                      }}
-                    >
-                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#475569" }}>
-                        {duePriority.priorityLabel}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {stepCount > 0 ? (
-                    <View
-                      style={{
-                        backgroundColor: "#EEF2FF",
-                        borderWidth: 1,
-                        borderColor: "#E0E7FF",
-                        borderRadius: 6,
-                        paddingHorizontal: 7,
-                        paddingVertical: 3,
-                      }}
-                    >
-                      <Text style={{ fontSize: 10, fontWeight: "700", color: "#4361EE" }}>
-                        {stepCount} step{stepCount === 1 ? "" : "s"}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-
-              {nearingInactive && daysUntilInactive != null ? (
-                <Text style={{ marginTop: 8, fontSize: 12, color: "#B45309", lineHeight: 16 }} numberOfLines={1}>
-                  Inactive in {daysUntilInactive} day{daysUntilInactive === 1 ? "" : "s"}
-                </Text>
-              ) : null}
-
-              {isInactive ? (
-                <Text style={{ marginTop: 8, fontSize: 12, color: "#B45309", lineHeight: 16 }} numberOfLines={2}>
-                  Inactive after {goal.daysSinceActivity ?? 0} days. Add a progress note to reactivate.
-                </Text>
-              ) : null}
-
-              {latestPreview ? (
-                <Text style={{ marginTop: 6, fontSize: 12, color: "#64748B", lineHeight: 16 }} numberOfLines={2}>
-                  Latest: {latestPreview}
-                </Text>
-              ) : null}
-            </View>
-            {canCreate ? (
-              <Pressable
-                onPress={(event) => {
-                  event.stopPropagation();
-                  openGoalMenu(goal);
-                }}
-                hitSlop={10}
+              <View
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  backgroundColor: "#F8FAFC",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  height: 4,
+                  marginTop: 3,
+                  borderRadius: 2,
+                  overflow: "hidden",
+                  backgroundColor: "#E9ECF3",
                 }}
-                testID={`goal-menu-${goal.id}`}
               >
-                <MoreVertical size={15} color="#64748B" />
-              </Pressable>
-            ) : null}
-          </View>
+                <View
+                  style={{
+                    width: `${progress.progressPercent}%`,
+                    height: "100%",
+                    borderRadius: 2,
+                    backgroundColor:
+                      isClosed ? "#94A3B8" : isInactive ? "#B48A4C" : "#684BFF",
+                  }}
+                />
+              </View>
 
-          {canUpdate ? (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 16,
-                marginTop: 10,
-                paddingTop: 10,
-                borderTopWidth: 1,
-                borderTopColor: "#F1F5F9",
-              }}
-            >
-              {!isClosed ? (
-                <Pressable onPress={() => openAddNote(goal)} hitSlop={6} testID={`add-progress-note-${goal.id}`}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#4361EE" }}>Add note</Text>
-                </Pressable>
-              ) : null}
-
-              {!isClosed ? (
-                <Pressable onPress={() => onMarkComplete(goal)} disabled={statusSavingId === goal.id} hitSlop={6}>
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#166534" }}>
-                    {statusSavingId === goal.id ? "…" : "Complete"}
-                  </Text>
-                </Pressable>
-              ) : null}
             </View>
-          ) : null}
+            <ChevronRight size={16} color="#A0A9B8" />
+          </View>
         </View>
       </Pressable>
     );
@@ -731,17 +1003,8 @@ export function DevelopmentPlanTab({
     list: DevelopmentGoal[],
     section: "active" | "inactive" | "closed",
   ) => (
-    <View
-      style={{
-        backgroundColor: "white",
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        overflow: "hidden",
-        ...(section === "active" ? { flex: 1, minHeight: 140 } : null),
-      }}
-    >
-      {list.map((goal, index) => renderGoalRow(goal, index, section))}
+    <View style={{ gap: GOAL_LIST_ROW_GAP }}>
+      {list.map((goal) => renderGoalRow(goal, section))}
     </View>
   );
 
@@ -760,6 +1023,7 @@ export function DevelopmentPlanTab({
       if (refreshed) setUpdateGoal(refreshed);
       setEditingNoteId(null);
       setEditDraft("");
+      void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
     } catch (e) {
       setModalErr(e instanceof Error ? e.message : "Could not save note.");
     } finally {
@@ -780,7 +1044,19 @@ export function DevelopmentPlanTab({
             const updated = await fetchDevelopmentGoals(teamId, memberUserId);
             setGoals(updated);
             const refreshed = updated.find((g) => g.id === goalId);
-            if (refreshed) setUpdateGoal(refreshed);
+            if (refreshed) {
+              setUpdateGoal((current) =>
+                current?.id === refreshed.id ? refreshed : current,
+              );
+              setPreviewGoal((current) =>
+                current?.id === refreshed.id ? refreshed : current,
+              );
+            }
+            void invalidateDevelopmentCaches(
+              queryClient,
+              teamId,
+              memberUserId,
+            );
           } catch (e) {
             toast({ title: e instanceof Error ? e.message : "Could not remove", preset: "error" });
           } finally {
@@ -795,156 +1071,506 @@ export function DevelopmentPlanTab({
   const previewStatus = previewGoal
     ? normalizeDevelopmentGoalStatus(previewGoal.status)
     : null;
+  const showDetailScrollHint =
+    detailScrollContentHeight > detailScrollViewportHeight + 8 &&
+    detailScrollOffset <
+      detailScrollContentHeight - detailScrollViewportHeight - 8;
   const showCenteredEmpty = !loading && activeGoals.length === 0 && inactiveGoals.length === 0 && closedGoals.length === 0;
 
   return (
-    <View style={{ gap: 14, flex: 1, flexGrow: 1 }}>
-      {goals.length > 0 || canCreate ? (
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, flexWrap: "wrap" }}>
-          {goals.length > 0 ? (
-            <>
-              <Pressable
-                onPress={() => void onPrint()}
-                disabled={loading || printingPdf}
+    <View
+      style={{
+        gap: 14,
+        flex: embeddedListScroll ? 1 : undefined,
+        flexGrow: embeddedListScroll ? 1 : undefined,
+      }}
+    >
+      {isArchivedPlan ? (
+        <View style={{ padding: 11, borderRadius: 11, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#F8FAFC" }} testID="development-plan-read-only">
+          <Text style={{ fontSize: 12, fontWeight: "800", color: "#334155" }}>Archived development plan</Text>
+          <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 16, color: "#64748B" }}>
+            This former member&apos;s goals are available for reference only.
+          </Text>
+        </View>
+      ) : null}
+      {goals.length > 0 || canCreateGoal ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+              <Text
                 style={{
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                  borderRadius: 9,
-                  paddingHorizontal: 10,
-                  paddingVertical: 7,
-                  opacity: loading || printingPdf ? 0.55 : 1,
+                  fontSize: 11,
+                  lineHeight: 14,
+                  fontWeight: "800",
+                  color: "#475569",
+                  letterSpacing: 0.75,
+                  textTransform: "uppercase",
                 }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>
-                  {printingPdf ? "Printing…" : "Print"}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void onDownloadPdf()}
-                disabled={loading || downloadingPdf}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                  borderRadius: 9,
-                  paddingHorizontal: 10,
-                  paddingVertical: 7,
-                  opacity: loading || downloadingPdf ? 0.55 : 1,
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>
-                  {downloadingPdf ? "Downloading…" : "Download PDF"}
-                </Text>
-              </Pressable>
-            </>
-          ) : null}
-          {canCreate ? (
+                Goals
+              </Text>
+              {/* The whole plan, now that each section carries its own count. */}
+              {goals.length > 0 ? (
+                <View
+                  style={{
+                    minWidth: 22,
+                    height: 22,
+                    paddingHorizontal: 6,
+                    borderRadius: 11,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#F0ECFF",
+                  }}
+                >
+                  <Text
+                    style={{ fontSize: 11, fontWeight: "800", color: "#684BFF" }}
+                  >
+                    {goals.length}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+          {canCreateGoal ? (
             <Pressable
-              onPress={openCreate}
+              onPress={() => openCreate()}
+              hitSlop={8}
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                backgroundColor: "#4361EE",
+                width: 28,
+                height: 28,
                 borderRadius: 9,
-                paddingHorizontal: 10,
-                paddingVertical: 7,
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 1,
+                borderColor: "#E2E5EA",
+                backgroundColor: "#FFFFFF",
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Add development goal"
               testID="new-development-goal-button"
             >
-              <Plus size={14} color="white" />
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>New goal</Text>
+              <Plus size={15} color="#111827" strokeWidth={2.4} />
             </Pressable>
           ) : null}
         </View>
       ) : null}
 
+      {showProgressCard && !loading && goals.length > 0 ? (
+        <DevelopmentProgressCard summary={planSummary} />
+      ) : null}
+
       {loading ? (
         <ActivityIndicator color="#4361EE" style={{ marginVertical: 24 }} />
       ) : (
-        <View style={{ flex: 1, gap: 14 }}>
+        <GoalListContainer scroll={embeddedListScroll}>
           {activeGoals.length === 0 ? (
             <View style={showCenteredEmpty ? { flexGrow: 1, justifyContent: "center" } : undefined}>
-              <GrowthEmptyState
+              <GoalEmptyState
                 memberName={memberName}
-                canCreate={canCreate}
+                canCreate={canCreateGoal}
                 hasAnyGoals={goals.length > 0}
                 error={err}
-                onStart={canCreate ? openCreate : undefined}
+                onCreate={() => openCreate()}
               />
             </View>
           ) : (
-            <View style={{ gap: 8, flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    color: "#64748B",
-                    textTransform: "uppercase",
-                    letterSpacing: 1.1,
-                  }}
-                >
-                  Active goals
-                </Text>
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{activeGoals.length}</Text>
-              </View>
+            <View style={{ gap: 8 }}>
+              <GoalSectionHeader
+                title="Active goals"
+                count={activeGoals.length}
+                testID="active-goals-section"
+              />
               {renderGoalList(activeGoals, "active")}
             </View>
           )}
 
           {inactiveGoals.length > 0 ? (
             <View style={{ gap: 8 }}>
-              <Pressable
-                onPress={() => setInactiveOpen(!inactiveOpen)}
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: "700",
-                      color: "#64748B",
-                      textTransform: "uppercase",
-                      letterSpacing: 1.1,
-                    }}
-                  >
-                    Inactive goals
-                  </Text>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{inactiveGoals.length}</Text>
-                </View>
-                {inactiveOpen ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
-              </Pressable>
+              <GoalSectionHeader
+                title="Inactive goals"
+                count={inactiveGoals.length}
+                open={inactiveOpen}
+                onToggle={() => setInactiveOpen(!inactiveOpen)}
+                testID="inactive-goals-section"
+              />
               {inactiveOpen ? renderGoalList(inactiveGoals, "inactive") : null}
             </View>
           ) : null}
 
           {closedGoals.length > 0 ? (
             <View style={{ gap: 8 }}>
-              <Pressable
-                onPress={() => setClosedOpen(!closedOpen)}
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      fontWeight: "700",
-                      color: "#64748B",
-                      textTransform: "uppercase",
-                      letterSpacing: 1.1,
-                    }}
-                  >
-                    Closed goals
-                  </Text>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{closedGoals.length}</Text>
-                </View>
-                {closedOpen ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
-              </Pressable>
+              <GoalSectionHeader
+                title="Completed goals"
+                count={closedGoals.length}
+                open={closedOpen}
+                onToggle={() => setClosedOpen(!closedOpen)}
+                testID="completed-goals-section"
+              />
               {closedOpen ? renderGoalList(closedGoals, "closed") : null}
             </View>
           ) : null}
-        </View>
+        </GoalListContainer>
       )}
+
+      <Modal
+        visible={planActionsOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPlanActionsOpen(false)}
+      >
+        <Pressable
+          onPress={() => setPlanActionsOpen(false)}
+          style={{
+            flex: 1,
+            justifyContent: "flex-end",
+            backgroundColor: "rgba(15, 23, 42, 0.4)",
+          }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation?.()}
+            style={{
+              paddingHorizontal: 18,
+              paddingTop: 12,
+              paddingBottom: Math.max(18, insets.bottom),
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              backgroundColor: "#FFFFFF",
+            }}
+          >
+            <View
+              style={{
+                width: 38,
+                height: 5,
+                borderRadius: 3,
+                alignSelf: "center",
+                backgroundColor: "#D8DCE5",
+                marginBottom: 16,
+              }}
+            />
+            <Text style={{ fontSize: 18, fontWeight: "800", color: "#172033" }}>
+              Development plan
+            </Text>
+            <Text
+              style={{
+                marginTop: 4,
+                marginBottom: 14,
+                fontSize: 13,
+                color: "#7C8798",
+              }}
+            >
+              Export or print the current plan.
+            </Text>
+            {[
+              {
+                key: "print",
+                label: printingPdf ? "Printing…" : "Print plan",
+                icon: Printer,
+                disabled: loading || printingPdf,
+                onPress: async () => {
+                  setPlanActionsOpen(false);
+                  await onPrint();
+                },
+              },
+              {
+                key: "download",
+                label: downloadingPdf ? "Downloading…" : "Download PDF",
+                icon: Download,
+                disabled: loading || downloadingPdf,
+                onPress: async () => {
+                  setPlanActionsOpen(false);
+                  await onDownloadPdf();
+                },
+              },
+            ].map((action) => {
+              const Icon = action.icon;
+              return (
+                <Pressable
+                  key={action.key}
+                  onPress={() => void action.onPress()}
+                  disabled={action.disabled}
+                  style={{
+                    minHeight: 54,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    paddingHorizontal: 12,
+                    borderRadius: 14,
+                    backgroundColor: "#F8FAFC",
+                    marginBottom: 8,
+                    opacity: action.disabled ? 0.55 : 1,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 11,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#F0ECFF",
+                    }}
+                  >
+                    <Icon size={16} color="#684BFF" />
+                  </View>
+                  <Text
+                    style={{ fontSize: 14, fontWeight: "700", color: "#243047" }}
+                  >
+                    {action.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={!!deleteGoalConfirmation}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {
+          if (!deletingGoal) setDeleteGoalConfirmation(null);
+        }}
+      >
+        <Pressable
+          onPress={() => {
+            if (!deletingGoal) setDeleteGoalConfirmation(null);
+          }}
+          style={{
+            flex: 1,
+            paddingHorizontal: 24,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(15, 23, 42, 0.46)",
+          }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation?.()}
+            style={{
+              width: "100%",
+              maxWidth: 360,
+              padding: 20,
+              borderRadius: 24,
+              backgroundColor: "#FFFFFF",
+              shadowColor: "#312E81",
+              shadowOpacity: 0.2,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 12 },
+              elevation: 12,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#FEF2F2",
+                marginBottom: 15,
+              }}
+            >
+              <Trash2 size={22} color="#DC2626" strokeWidth={2.2} />
+            </View>
+            <Text style={{ fontSize: 20, lineHeight: 25, fontWeight: "800", color: "#111827" }}>
+              Delete this goal?
+            </Text>
+            <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 20, color: "#667085" }}>
+              {deleteGoalConfirmation
+                ? `“${deleteGoalConfirmation.skill}” and its progress notes will be permanently removed. This cannot be undone.`
+                : ""}
+            </Text>
+            <View
+              style={{
+                marginTop: 20,
+                paddingTop: 14,
+                borderTopWidth: 1,
+                borderTopColor: "#EEF0F5",
+                flexDirection: "row",
+                gap: 10,
+              }}
+            >
+              <Pressable
+                onPress={() => setDeleteGoalConfirmation(null)}
+                disabled={deletingGoal}
+                style={{
+                  flex: 1,
+                  minHeight: 46,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "#E0E5EF",
+                  backgroundColor: "#FFFFFF",
+                  opacity: deletingGoal ? 0.55 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#53627A" }}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void confirmDeleteGoal()}
+                disabled={deletingGoal}
+                style={{
+                  flex: 1.25,
+                  minHeight: 46,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  backgroundColor: "#DC2626",
+                  opacity: deletingGoal ? 0.6 : 1,
+                  shadowColor: "#DC2626",
+                  shadowOpacity: 0.18,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 3,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "800", color: "#FFFFFF" }}>
+                  {deletingGoal ? "Deleting…" : "Delete goal"}
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={!!completeGoal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {
+          if (!statusSavingId) setCompleteGoal(null);
+        }}
+      >
+        <Pressable
+          onPress={() => {
+            if (!statusSavingId) setCompleteGoal(null);
+          }}
+          style={{
+            flex: 1,
+            paddingHorizontal: 24,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(15, 23, 42, 0.46)",
+          }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation?.()}
+            style={{
+              width: "100%",
+              maxWidth: 360,
+              padding: 20,
+              borderRadius: 24,
+              backgroundColor: "#FFFFFF",
+              shadowColor: "#312E81",
+              shadowOpacity: 0.2,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 12 },
+              elevation: 12,
+            }}
+            accessibilityRole="alert"
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#F0ECFF",
+                marginBottom: 15,
+              }}
+            >
+              <Target size={22} color="#684BFF" strokeWidth={2.3} />
+            </View>
+            <Text
+              style={{
+                fontSize: 20,
+                lineHeight: 25,
+                fontWeight: "800",
+                color: "#111827",
+              }}
+            >
+              Complete this goal?
+            </Text>
+            <Text
+              style={{
+                marginTop: 8,
+                fontSize: 14,
+                lineHeight: 20,
+                color: "#667085",
+              }}
+            >
+              {completeGoal
+                ? `Mark “${completeGoal.skill}” complete? It will move to completed goals and can be reopened later.`
+                : ""}
+            </Text>
+            <View
+              style={{
+                marginTop: 20,
+                paddingTop: 14,
+                borderTopWidth: 1,
+                borderTopColor: "#EEF0F5",
+                flexDirection: "row",
+                gap: 10,
+              }}
+            >
+              <Pressable
+                onPress={() => setCompleteGoal(null)}
+                disabled={!!statusSavingId}
+                style={{
+                  flex: 1,
+                  minHeight: 46,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "#E0E5EF",
+                  backgroundColor: "#FFFFFF",
+                  opacity: statusSavingId ? 0.55 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#53627A" }}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void confirmMarkComplete()}
+                disabled={!!statusSavingId}
+                style={{
+                  flex: 1.25,
+                  minHeight: 46,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  backgroundColor: "#5B42F3",
+                  opacity: statusSavingId ? 0.6 : 1,
+                  shadowColor: "#5B42F3",
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 3,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "800", color: "#FFFFFF" }}>
+                  {statusSavingId ? "Completing…" : "Mark complete"}
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={!!goalActionMenu}
@@ -1012,7 +1638,7 @@ export function DevelopmentPlanTab({
                 />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }} numberOfLines={1}>
+                <Text style={{ fontSize: 15, fontWeight: "500", color: "#0F172A" }} numberOfLines={1}>
                   {goalActionMenu?.skill}
                 </Text>
                 <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
@@ -1113,283 +1739,891 @@ export function DevelopmentPlanTab({
         memberImage={memberImage}
         saving={saving}
         error={modalErr}
+        prefill={starterPrefill}
         onClose={closeModal}
         onCreate={(payload) => {
           void onCreateGoalFromSheet(payload);
         }}
       />
 
+      {previewGoal ? (
       <Modal
-        visible={!!previewGoal}
+        key={previewGoal.id}
+        visible
         animationType="slide"
-        presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
+        presentationStyle="fullScreen"
         onRequestClose={() => setPreviewGoal(null)}
       >
         <View
           style={{
             flex: 1,
-            backgroundColor: "#F8FAFC",
-            paddingTop: Platform.OS === "ios" ? 18 : insets.top + 8,
+            backgroundColor: "#FFFFFF",
             paddingBottom: insets.bottom,
           }}
         >
           <View
             style={{
+              paddingTop: insets.top + 8,
+              paddingHorizontal: 18,
+              paddingBottom: 14,
               flexDirection: "row",
               alignItems: "center",
-              paddingHorizontal: 14,
-              paddingBottom: 10,
-              gap: 10,
+              justifyContent: "space-between",
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: "#ECEEF3",
+              backgroundColor: "#FFFFFF",
             }}
           >
-            <View
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 17,
-                backgroundColor: "#EEF2FF",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Target size={16} color="#4F46E5" />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                style={{
-                  fontSize: 9,
-                  fontWeight: "700",
-                  color: "#818CF8",
-                  letterSpacing: 0.6,
-                  textTransform: "uppercase",
-                }}
-              >
-                Development goal
-              </Text>
-              <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }} numberOfLines={1}>
-                {previewGoal?.skill}
-              </Text>
-            </View>
-            {previewGoal && canCreate ? (
-              <Pressable
-                onPress={() => openGoalMenu(previewGoal, true)}
-                hitSlop={8}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 15,
-                  backgroundColor: "#F1F5F9",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <MoreVertical size={16} color="#64748B" />
-              </Pressable>
-            ) : null}
             <Pressable
               onPress={() => setPreviewGoal(null)}
               hitSlop={10}
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                backgroundColor: "#F1F5F9",
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#F2EEFF",
+              }}
+            >
+              <ChevronLeft size={20} color="#684BFF" strokeWidth={2.1} />
+            </Pressable>
+            <Text
+              style={{
+                fontSize: 10,
+                fontWeight: "800",
+                letterSpacing: 2.2,
+                color: "#606B80",
+              }}
+            >
+              GROWTH
+            </Text>
+            {!previewGoal.readOnly ? <Pressable
+              onPress={() => openGoalMenu(previewGoal, true)}
+              hitSlop={10}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#F5F6F9",
+              }}
+            >
+              <MoreHorizontal size={19} color="#596277" strokeWidth={2.2} />
+            </Pressable> : <View style={{ width: 34, height: 34 }} />}
+          </View>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              paddingHorizontal: 18,
+              paddingTop: 12,
+              paddingBottom: 10,
+              gap: 12,
+              backgroundColor: "#FFFFFF",
+            }}
+          >
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 14,
+                backgroundColor: "#F2EEFF",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <X size={16} color="#64748B" />
-            </Pressable>
+              <Target size={21} color="#684BFF" strokeWidth={2.3} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={{ fontSize: 18, lineHeight: 22, fontWeight: "500", color: "#192033" }}
+                numberOfLines={2}
+              >
+                {previewGoal?.skill}
+              </Text>
+              <View
+                style={{
+                  marginTop: 5,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <View
+                  style={{
+                    borderRadius: 999,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    backgroundColor:
+                      previewStatus === "closed"
+                        ? "#F1F5F9"
+                        : previewStatus === "inactive"
+                          ? "#FFF4E5"
+                          : "#ECFDF3",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 9,
+                      fontWeight: "800",
+                      color:
+                        previewStatus === "closed"
+                          ? "#64748B"
+                          : previewStatus === "inactive"
+                            ? "#B45309"
+                            : "#15803D",
+                    }}
+                  >
+                    {goalStatusLabel(previewStatus ?? "active")}
+                  </Text>
+                </View>
+                {previewGoal &&
+                goalDuePriority(previewGoal) ? (
+                  <Text style={{ fontSize: 11, color: "#667085" }}>
+                    Due{" "}
+                    {
+                      goalDuePriority(previewGoal)?.dueLabel
+                    }
+                  </Text>
+                ) : null}
+              </View>
+              <Text
+                style={{
+                  marginTop: 7,
+                  fontSize: 11,
+                  lineHeight: 15,
+                  color: "#6F788C",
+                }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.82}
+              >
+                {previewGoal?.description?.trim() ||
+                  "Build progress through clear actions and regular coaching."}
+              </Text>
+            </View>
           </View>
 
           {previewGoal ? (
             <>
               <ScrollView
+                ref={detailScrollRef}
                 style={{ flex: 1 }}
-                contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 24, gap: 10 }}
+                contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 12, gap: 8 }}
                 showsVerticalScrollIndicator={false}
+                onContentSizeChange={(_width, height) =>
+                  setDetailScrollContentHeight(height)
+                }
+                onLayout={(event) =>
+                  setDetailScrollViewportHeight(
+                    event.nativeEvent.layout.height,
+                  )
+                }
+                onScroll={(event) =>
+                  setDetailScrollOffset(event.nativeEvent.contentOffset.y)
+                }
+                scrollEventThrottle={16}
               >
                 <View
                   style={{
                     backgroundColor: "#FFFFFF",
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: "#E8ECFA",
-                    padding: 12,
+                    borderRadius: 18,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: "#E8E3FF",
+                    padding: 11,
+                    shadowColor: "#33218A",
+                    shadowOffset: { width: 0, height: 5 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 12,
+                    elevation: 1,
                   }}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View
-                      style={{
-                        backgroundColor:
-                          previewStatus === "closed"
-                            ? "#F1F5F9"
-                            : previewStatus === "inactive"
-                              ? "#FFEDD5"
-                              : "#ECFDF5",
-                        borderRadius: 999,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                      }}
-                    >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "flex-end",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <View>
                       <Text
                         style={{
                           fontSize: 9,
                           fontWeight: "800",
-                          color:
-                            previewStatus === "closed"
-                              ? "#64748B"
-                              : previewStatus === "inactive"
-                                ? "#C2410C"
-                                : "#15803D",
-                          textTransform: "uppercase",
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.65,
+                          color: "#718096",
                         }}
                       >
-                        {goalStatusLabel(previewStatus ?? "active")}
+                        OVERALL PROGRESS
+                      </Text>
+                      <Text
+                        style={{
+                          marginTop: 5,
+                          fontSize: 11,
+                          color: "#667085",
+                        }}
+                      >
+                        {goalProgress(previewGoal).label} complete
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 11, color: "#64748B", flex: 1 }} numberOfLines={1}>
-                      Updated {formatWhen(lastUpdatedAt(previewGoal))}
+                    <Text
+                      style={{
+                        fontSize: 23,
+                        fontWeight: "800",
+                        color: "#684BFF",
+                      }}
+                    >
+                      {goalProgress(previewGoal).progressPercent}%
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>
-                    Created by {previewGoal.createdBy ? displayUserName(previewGoal.createdBy) : "a team leader"}
-                  </Text>
+                  <View
+                    style={{
+                      height: 6,
+                      marginTop: 8,
+                      flexDirection: "row",
+                      gap: 3,
+                    }}
+                  >
+                    {previewGoal.steps.map((_step, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          flex: 1,
+                          height: "100%",
+                          borderRadius: 999,
+                          backgroundColor: isGoalStepComplete(previewGoal, index)
+                            ? "#684BFF"
+                            : "#E9ECF3",
+                        }}
+                      />
+                    ))}
+                  </View>
                 </View>
 
                 <View
                   style={{
                     backgroundColor: "#FFFFFF",
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: "#E8ECFA",
-                    padding: 12,
+                    borderRadius: 18,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: "#ECEEF5",
+                    padding: 10,
+                    shadowColor: "#26335E",
+                    shadowOffset: { width: 0, height: 5 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 12,
+                    elevation: 1,
                   }}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#0F172A", marginBottom: 8 }}>
-                    Action steps
-                  </Text>
+                  <View
+                    style={{
+                      marginBottom: 6,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "800",
+                        letterSpacing: 0.65,
+                        color: "#718096",
+                      }}
+                    >
+                      GOAL ACTIONS
+                    </Text>
+                  </View>
                   {previewGoal.steps.length > 0 ? (
-                    <View style={{ gap: 7 }}>
-                      {previewGoal.steps.map((step, index) => (
-                        <View key={`${index}-${step}`} style={{ flexDirection: "row", gap: 8 }}>
-                          <View
-                            style={{
-                              width: 18,
-                              height: 18,
-                              borderRadius: 9,
-                              backgroundColor: "#EEF2FF",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Text style={{ fontSize: 9, fontWeight: "800", color: "#4F46E5" }}>
-                              {index + 1}
-                            </Text>
-                          </View>
-                          <Text style={{ flex: 1, fontSize: 12, color: "#334155", lineHeight: 18 }}>
-                            {step}
-                          </Text>
-                        </View>
-                      ))}
+                    <View
+                      style={{
+                        position: "relative",
+                        height:
+                          GOAL_STEP_ROW_HEIGHT *
+                            Math.min(previewGoal.steps.length, VISIBLE_DETAIL_ROWS) +
+                          DETAIL_ROW_GAP *
+                            (Math.min(previewGoal.steps.length, VISIBLE_DETAIL_ROWS) - 1),
+                      }}
+                    >
+                      <ScrollView
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={
+                          previewGoal.steps.length > VISIBLE_DETAIL_ROWS
+                        }
+                        persistentScrollbar
+                        scrollEnabled={previewGoal.steps.length > VISIBLE_DETAIL_ROWS}
+                        contentContainerStyle={{ gap: DETAIL_ROW_GAP }}
+                      >
+                        {previewGoal.steps.map((step, index) => {
+                          const completed = isGoalStepComplete(previewGoal, index);
+                          const saving = stepSavingKey === `${previewGoal.id}:${index}`;
+                          return (
+                            <Pressable
+                              key={`${index}-${step}`}
+                              onPress={() => void toggleGoalStep(previewGoal, index)}
+                              disabled={
+                                (!canUpdate && !canCompleteSteps) ||
+                                saving ||
+                                previewStatus === "closed"
+                              }
+                              style={{
+                                height: GOAL_STEP_ROW_HEIGHT,
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 9,
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderRadius: 12,
+                                borderWidth: StyleSheet.hairlineWidth,
+                                borderColor: completed ? "#D8F2E2" : "#EEF0F5",
+                                backgroundColor: completed ? "#F2FBF6" : "#FFFFFF",
+                                opacity: saving ? 0.6 : 1,
+                              }}
+                            >
+                              <View
+                                style={{
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: completed ? 10 : 6,
+                                  borderWidth: completed ? 0 : 1.5,
+                                  borderColor: "#C9D0DC",
+                                  backgroundColor: completed ? "#16A34A" : "#FFFFFF",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                {saving ? (
+                                  <ActivityIndicator size="small" color="#684BFF" />
+                                ) : completed ? (
+                                  <Check size={13} color="#FFFFFF" strokeWidth={2.8} />
+                                ) : null}
+                              </View>
+                              <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text
+                                  style={{
+                                    fontSize: 11.5,
+                                    fontWeight: "500",
+                                    lineHeight: 15,
+                                    color: "#111827",
+                                  }}
+                                  numberOfLines={1}
+                                >
+                                  {step}
+                                </Text>
+                                {completed ? (
+                                  <Text
+                                    style={{
+                                      marginTop: 1,
+                                      fontSize: 9.5,
+                                      color: "#667085",
+                                    }}
+                                    numberOfLines={1}
+                                  >
+                                    {previewGoal.completedStepDates?.[index]
+                                      ? `Completed on ${formatWhen(previewGoal.completedStepDates[index])}`
+                                      : "Completed"}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
                     </View>
                   ) : (
-                    <Text style={{ fontSize: 12, color: "#94A3B8" }}>No action steps.</Text>
+                    <Text style={{ fontSize: 12, color: "#94A3B8" }}>No actions.</Text>
                   )}
                 </View>
 
                 <View
                   style={{
                     backgroundColor: "#FFFFFF",
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: "#E8ECFA",
-                    padding: 12,
+                    borderRadius: 18,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: "#ECEEF5",
+                    padding: 10,
+                    shadowColor: "#26335E",
+                    shadowOffset: { width: 0, height: 5 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 12,
+                    elevation: 1,
                   }}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#0F172A", marginBottom: 8 }}>
-                    Progress notes
-                  </Text>
-                  {previewGoal.notes.length > 0 ? (
-                    <View style={{ gap: 8 }}>
-                      {[...previewGoal.notes]
-                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                        .map((note) => (
-                          <View
-                            key={note.id}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 6,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "800",
+                        letterSpacing: 0.65,
+                        color: "#718096",
+                      }}
+                    >
+                      NOTES
+                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      {canUpdate && previewStatus !== "closed" ? (
+                        <Pressable
+                          onPress={() => {
+                            const goal = previewGoal;
+                            setPreviewGoal(null);
+                            openAddNote(goal);
+                          }}
+                          hitSlop={8}
+                        >
+                          <Text
                             style={{
-                              backgroundColor: "#F8FAFC",
-                              borderRadius: 9,
-                              padding: 9,
+                              fontSize: 10.5,
+                              fontWeight: "800",
+                              color: "#684BFF",
+                              paddingHorizontal: 9,
+                              paddingVertical: 5,
+                              borderRadius: 999,
+                              backgroundColor: "#F2EEFF",
                             }}
                           >
-                            <Text style={{ fontSize: 12, color: "#334155", lineHeight: 17 }}>
-                              {note.body}
-                            </Text>
-                            <Text style={{ fontSize: 10, color: "#94A3B8", marginTop: 4 }}>
-                              {formatWhen(note.createdAt)} · {displayUserName(note.createdBy)}
-                            </Text>
-                          </View>
-                        ))}
+                            + Add note
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </View>
+                  {previewGoalNotes.length > 0 ? (
+                    <View
+                      style={{
+                        position: "relative",
+                        height:
+                          GOAL_NOTE_ROW_HEIGHT *
+                            Math.min(previewGoalNotes.length, VISIBLE_DETAIL_ROWS) +
+                          DETAIL_ROW_GAP *
+                            (Math.min(previewGoalNotes.length, VISIBLE_DETAIL_ROWS) - 1),
+                      }}
+                    >
+                      <ScrollView
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={
+                          previewGoalNotes.length > VISIBLE_DETAIL_ROWS
+                        }
+                        persistentScrollbar
+                        scrollEnabled={previewGoalNotes.length > VISIBLE_DETAIL_ROWS}
+                        contentContainerStyle={{ gap: DETAIL_ROW_GAP }}
+                      >
+                        {[...previewGoalNotes]
+                          .sort(
+                            (a, b) =>
+                              new Date(b.createdAt).getTime() -
+                              new Date(a.createdAt).getTime(),
+                          )
+                          .map((note) => (
+                            <View
+                              key={note.id}
+                              style={{
+                                height: GOAL_NOTE_ROW_HEIGHT,
+                                borderRadius: 12,
+                                borderWidth: StyleSheet.hairlineWidth,
+                                borderColor: "#EEF0F5",
+                                backgroundColor: "#FFFFFF",
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 8,
+                              }}
+                            >
+                              <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text
+                                  style={{ fontSize: 11.5, color: "#334155", lineHeight: 15 }}
+                                  numberOfLines={1}
+                                >
+                                  {note.body}
+                                </Text>
+                                <Text
+                                  style={{ fontSize: 9.5, color: "#94A3B8", marginTop: 2 }}
+                                  numberOfLines={1}
+                                >
+                                  {formatNoteWhen(note.createdAt)} ·{" "}
+                                  {displayUserName(note.createdBy)}
+                                </Text>
+                              </View>
+                              {canUpdate ? (
+                                <Pressable
+                                  onPress={() => removeNote(previewGoal.id, note)}
+                                  disabled={saving}
+                                  hitSlop={8}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Delete progress note"
+                                  style={{
+                                    width: 22,
+                                    height: 22,
+                                    borderRadius: 7,
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    backgroundColor: "#F5F6F8",
+                                    opacity: saving ? 0.5 : 1,
+                                  }}
+                                >
+                                  <Trash2 size={11} color="#111827" strokeWidth={2} />
+                                </Pressable>
+                              ) : null}
+                            </View>
+                          ))}
+                      </ScrollView>
                     </View>
                   ) : (
                     <Text style={{ fontSize: 12, color: "#94A3B8" }}>No progress notes yet.</Text>
                   )}
                 </View>
+
               </ScrollView>
+
+              {showDetailScrollHint ? (
+                <Pressable
+                  onPress={() =>
+                    detailScrollRef.current?.scrollToEnd({ animated: true })
+                  }
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    marginLeft: -20,
+                    bottom:
+                      (canUpdate && previewStatus !== "closed" ? 154 : 90) +
+                      Math.max(0, insets.bottom - 8),
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderWidth: 1,
+                    borderColor: "#E2E6EF",
+                    shadowColor: "#1E1B4B",
+                    shadowOpacity: 0.16,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 5 },
+                    elevation: 6,
+                    zIndex: 20,
+                  }}
+                  accessibilityLabel="Scroll to more goal details"
+                >
+                  <ArrowDown size={18} color="#684BFF" strokeWidth={2.3} />
+                </Pressable>
+              ) : null}
+
+              <View
+                style={{
+                  paddingHorizontal: 14,
+                  paddingTop: 6,
+                  backgroundColor: "#FFFFFF",
+                  transform: [{ translateY: -6 }],
+                }}
+              >
+                <Text
+                  style={{
+                    marginBottom: 4,
+                    marginLeft: 2,
+                    fontSize: 10,
+                    fontWeight: "800",
+                    letterSpacing: 0.65,
+                    color: "#718096",
+                  }}
+                >
+                  GOAL DETAILS
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    borderRadius: 16,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: "#E7EAF2",
+                    backgroundColor: "#FFFFFF",
+                    paddingVertical: 8,
+                    shadowColor: "#26335E",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 10,
+                    elevation: 1,
+                  }}
+                >
+                  {[
+                    {
+                      label: "Created",
+                      value: formatWhen(previewGoal.createdAt),
+                    },
+                    {
+                      label: "Due date",
+                      value:
+                        goalDuePriority(previewGoal)?.dueLabel ?? "Not set",
+                    },
+                    { label: "Owner", value: memberName },
+                  ].map((detail, index) => (
+                    <View
+                      key={detail.label}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                        paddingHorizontal: 8,
+                        borderLeftWidth: index === 0 ? 0 : 1,
+                        borderLeftColor: "#EEF0F5",
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 25,
+                          height: 25,
+                          borderRadius: 8,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "#F0ECFF",
+                        }}
+                      >
+                        {index < 2 ? (
+                          <Calendar size={13} color="#684BFF" strokeWidth={2.2} />
+                        ) : (
+                          <UserRound size={13} color="#684BFF" strokeWidth={2.2} />
+                        )}
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          style={{ fontSize: 9, fontWeight: "700", color: "#8A96AA" }}
+                        >
+                          {detail.label}
+                        </Text>
+                        <Text
+                          style={{
+                            marginTop: 3,
+                            fontSize: 10,
+                            fontWeight: "700",
+                            color: "#334155",
+                          }}
+                          numberOfLines={1}
+                        >
+                          {detail.value}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
 
               {canUpdate && previewStatus !== "closed" ? (
                 <View
                   style={{
-                    flexDirection: "row",
+                    flexDirection: "column",
                     gap: 8,
                     paddingHorizontal: 14,
-                    paddingTop: 8,
-                    paddingBottom: Math.max(8, insets.bottom),
-                    borderTopWidth: 1,
-                    borderTopColor: "#E8ECFA",
+                    paddingTop: 7,
+                    paddingBottom:
+                      Platform.OS === "android"
+                        ? Math.max(40, insets.bottom + 24)
+                        : Math.max(8, insets.bottom),
                     backgroundColor: "#FFFFFF",
                   }}
                 >
+                  {!previewGoalCanComplete ? (
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        fontSize: 10.5,
+                        lineHeight: 14,
+                        fontWeight: "600",
+                        color: "#7C8799",
+                      }}
+                    >
+                      Complete {previewGoalRemainingSteps} remaining goal{" "}
+                      {previewGoalRemainingSteps === 1 ? "action" : "actions"} to
+                      finish this goal.
+                    </Text>
+                  ) : null}
                   <Pressable
                     onPress={() => {
-                      const goal = previewGoal;
-                      setPreviewGoal(null);
-                      openAddNote(goal);
-                    }}
-                    style={{
-                      flex: 1,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor: "#C7D2FE",
-                      paddingVertical: 11,
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Add note</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
+                      if (!previewGoalCanComplete) return;
                       const goal = previewGoal;
                       setPreviewGoal(null);
                       onMarkComplete(goal);
                     }}
+                    disabled={!previewGoalCanComplete}
                     style={{
                       flex: 1,
-                      borderRadius: 10,
-                      backgroundColor: "#166534",
-                      paddingVertical: 11,
+                      minHeight: 42,
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      gap: 7,
+                      borderRadius: 13,
+                      backgroundColor: previewGoalCanComplete
+                        ? "#684BFF"
+                        : "#F3F4F7",
                       alignItems: "center",
+                      shadowColor: previewGoalCanComplete ? "#4A2DCC" : "#FFFFFF",
+                      shadowOffset: { width: 0, height: 5 },
+                      shadowOpacity: previewGoalCanComplete ? 0.18 : 0,
+                      shadowRadius: 10,
+                      elevation: previewGoalCanComplete ? 2 : 0,
                     }}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFFFFF" }}>Complete</Text>
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: previewGoalCanComplete
+                          ? "#FFFFFF"
+                          : "#B7C0CE",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Check
+                        size={12}
+                        color={previewGoalCanComplete ? "#FFFFFF" : "#98A2B3"}
+                        strokeWidth={2.5}
+                      />
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "800",
+                        color: previewGoalCanComplete ? "#FFFFFF" : "#98A2B3",
+                      }}
+                    >
+                      Mark goal complete
+                    </Text>
                   </Pressable>
                 </View>
               ) : null}
             </>
           ) : null}
         </View>
+      </Modal>
+      ) : null}
+
+      <Modal
+        visible={!!stepCompletionConfirmation}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setStepCompletionConfirmation(null)}
+      >
+        <Pressable
+          onPress={() => setStepCompletionConfirmation(null)}
+          style={{
+            flex: 1,
+            paddingHorizontal: 24,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(15, 23, 42, 0.46)",
+          }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation?.()}
+            style={{
+              width: "100%",
+              maxWidth: 360,
+              padding: 20,
+              borderRadius: 24,
+              backgroundColor: "#FFFFFF",
+              shadowColor: "#312E81",
+              shadowOpacity: 0.2,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 12 },
+              elevation: 12,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#F0ECFF",
+                marginBottom: 15,
+              }}
+            >
+              <Check size={22} color="#684BFF" strokeWidth={2.5} />
+            </View>
+            <Text style={{ fontSize: 20, lineHeight: 25, fontWeight: "800", color: "#111827" }}>
+              {stepCompletionFinishesGoal
+                ? "Complete this goal?"
+                : "Mark action complete?"}
+            </Text>
+            <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 20, color: "#667085" }}>
+              {stepCompletionConfirmation
+                ? `Confirm that “${stepCompletionConfirmation.goal.steps[stepCompletionConfirmation.stepIndex]}” is complete.${
+                    stepCompletionFinishesGoal
+                      ? " This is the last action, so the goal will be marked complete. You can reopen it later."
+                      : ""
+                  }`
+                : ""}
+            </Text>
+            <View
+              style={{
+                marginTop: 20,
+                paddingTop: 14,
+                borderTopWidth: 1,
+                borderTopColor: "#EEF0F5",
+                flexDirection: "row",
+                gap: 10,
+              }}
+            >
+              <Pressable
+                onPress={() => setStepCompletionConfirmation(null)}
+                style={{
+                  flex: 1,
+                  minHeight: 46,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "#E0E5EF",
+                  backgroundColor: "#FFFFFF",
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#53627A" }}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const confirmation = stepCompletionConfirmation;
+                  if (!confirmation) return;
+                  setStepCompletionConfirmation(null);
+                  void toggleGoalStep(
+                    confirmation.goal,
+                    confirmation.stepIndex,
+                  );
+                }}
+                style={{
+                  flex: 1.25,
+                  minHeight: 46,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  backgroundColor: "#5B42F3",
+                  shadowColor: "#5B42F3",
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 3,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "800", color: "#FFFFFF" }}>
+                  Mark complete
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal
@@ -1444,14 +2678,45 @@ export function DevelopmentPlanTab({
                   color: "#0F172A",
                 }}
               />
+              <Text
+                style={{
+                  marginTop: 12,
+                  marginBottom: 6,
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: "#334155",
+                }}
+              >
+                Skill description (optional)
+              </Text>
+              <TextInput
+                value={skillDescription}
+                onChangeText={setSkillDescription}
+                placeholder="Describe what success in this skill looks like"
+                multiline
+                textAlignVertical="top"
+                maxLength={1000}
+                style={{
+                  minHeight: 80,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderRadius: 10,
+                  padding: 12,
+                  fontSize: 14,
+                  lineHeight: 19,
+                  color: "#0F172A",
+                }}
+              />
             </View>
 
             <View>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>Steps to develop</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>
+                  Development Plan Actions
+                </Text>
                 {canCreate || updateGoal ? (
                   <Pressable onPress={() => setSteps([...steps, ""])}>
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Add step</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Add action</Text>
                   </Pressable>
                 ) : null}
               </View>
@@ -1460,7 +2725,7 @@ export function DevelopmentPlanTab({
                   <TextInput
                     value={step}
                     onChangeText={(v) => setSteps(steps.map((s, i) => (i === index ? v : s)))}
-                    placeholder={`Step ${index + 1}`}
+                    placeholder={`Action ${index + 1}`}
                     style={{
                       flex: 1,
                       borderWidth: 1,

@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.alenio'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.playexternallinks"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // External content links APIs need Play Billing 8.2.1+.
+  implementation 'com.android.billingclient:billing:9.1.0'
+}

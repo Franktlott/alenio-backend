@@ -8,9 +8,9 @@ export function memberMatchesUserId<
   return false;
 }
 
-/** Owner / team leader / admin — can view other members' profiles. */
+/** Canonical coaching managers. Legacy admins remain read-only. */
 export function isLeaderRole(role?: string | null): boolean {
-  return role === "owner" || role === "team_leader" || role === "admin";
+  return role === "owner" || role === "team_leader";
 }
 
 type RosterMember = {

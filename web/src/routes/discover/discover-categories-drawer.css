@@ -1,0 +1,380 @@
+/* Categories drawer: slides in from the right over the Content page. */
+
+.dcat-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2300;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(17, 26, 43, 0.32);
+  animation: dcat-fade 0.18s ease;
+}
+
+.dcat-drawer {
+  --dcat-purple: #6d5ef8;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  height: 100%;
+  background: #fff;
+  color: #111a2b;
+  box-shadow: -16px 0 48px rgba(17, 26, 43, 0.18);
+  animation: dcat-slide 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes dcat-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dcat-slide {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.dcat-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid #ece8f8;
+}
+
+.dcat-head-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: #ede9fe;
+  color: var(--dcat-purple);
+}
+
+.dcat-head-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.dcat-head h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.dcat-head p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: #667085;
+}
+
+.dcat-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #667085;
+  cursor: pointer;
+}
+
+.dcat-close:hover {
+  background: #f4f2fb;
+  color: #111a2b;
+}
+
+.dcat-error {
+  margin: 12px 18px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.dcat-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #667085;
+}
+
+.dcat-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 18px 18px;
+}
+
+.dcat-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dcat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid #ece8f8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.dcat-row--hidden {
+  background: #fafafc;
+}
+
+.dcat-row--hidden .dcat-row-name {
+  color: #667085;
+}
+
+.dcat-row--editing {
+  display: block;
+  padding: 12px;
+  border-color: #c4b5fd;
+  background: #fbfaff;
+}
+
+.dcat-swatch {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.dcat-row-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dcat-row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  line-height: 18px;
+  font-weight: 700;
+}
+
+.dcat-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #f1f3f7;
+  color: #667085;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.dcat-row-meta {
+  font-size: 12px;
+  line-height: 16px;
+  color: #667085;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dcat-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.dcat-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #667085;
+  cursor: pointer;
+}
+
+.dcat-icon-btn:hover:not(:disabled) {
+  background: #f4f2fb;
+  color: var(--dcat-purple);
+}
+
+.dcat-icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Visibility switch */
+.dcat-switch {
+  position: relative;
+  display: inline-flex;
+  margin-left: 6px;
+  cursor: pointer;
+}
+
+.dcat-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.dcat-switch span {
+  display: block;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: #d5d9e2;
+  transition: background 0.15s;
+}
+
+.dcat-switch span::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(17, 26, 43, 0.2);
+  transition: transform 0.15s;
+}
+
+.dcat-switch input:checked + span {
+  background: var(--dcat-purple);
+}
+
+.dcat-switch input:checked + span::after {
+  transform: translateX(14px);
+}
+
+.dcat-switch input:focus-visible + span {
+  outline: 2px solid var(--dcat-purple);
+  outline-offset: 2px;
+}
+
+.dcat-switch input:disabled + span {
+  opacity: 0.5;
+}
+
+/* Inline form */
+.dcat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dcat-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dcat-field span {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #667085;
+}
+
+.dcat-field input,
+.dcat-field textarea {
+  padding: 8px 10px;
+  border: 1px solid #e4e1f3;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-size: 13.5px;
+  color: #111a2b;
+}
+
+.dcat-field textarea {
+  resize: vertical;
+}
+
+.dcat-field input:focus,
+.dcat-field textarea:focus {
+  outline: none;
+  border-color: var(--dcat-purple);
+}
+
+.dcat-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #344054;
+  cursor: pointer;
+}
+
+.dcat-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--dcat-purple);
+}
+
+.dcat-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dcat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid #e4e1f3;
+  border-radius: 10px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dcat-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.dcat-btn--primary {
+  border-color: transparent;
+  background: var(--dcat-purple);
+  color: #fff;
+}
+
+.dcat-btn--primary:hover:not(:disabled) {
+  background: #5d4ee6;
+}
+
+.dcat-foot {
+  padding: 12px 18px 18px;
+  border-top: 1px solid #ece8f8;
+}
+
+.dcat-add {
+  width: 100%;
+  justify-content: center;
+  height: 40px;
+}

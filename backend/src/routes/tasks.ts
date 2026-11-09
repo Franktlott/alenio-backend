@@ -15,7 +15,7 @@ import {
   getNextDueDate,
   isRecurringTask,
   materializeRecurringTasksForTeam,
-  parseCalendarDueDate,
+  parseTaskDueDate,
   resolveRecurrenceOccurrenceCount,
   spawnAllRecurrenceTasks,
   updateTaskWithSeriesScope,
@@ -55,6 +55,7 @@ import {
   workspaceTaskWhere,
 } from "../lib/task-policy";
 import { isSubtaskSharedComplete } from "../lib/subtask-completion";
+import { checkTaskNudge, getLastTaskNudge, recordTaskNudge, taskNudgeBody } from "../lib/task-nudge";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -165,7 +166,7 @@ async function buildRecurrenceTaskFields(
     dueDate != null
       ? alignRecurringAnchorDueDate(
           recurrence.type,
-          parseCalendarDueDate(dueDate, timeZone),
+          parseTaskDueDate(dueDate, timeZone),
           recurrence.daysOfWeek,
           recurrence.dayOfMonth,
           timeZone,
@@ -440,12 +441,12 @@ tasksRouter.post("/", async (c) => {
     ? recurrence
       ? alignRecurringAnchorDueDate(
           recurrence.type,
-          parseCalendarDueDate(dueDate, userTimeZone),
+          parseTaskDueDate(dueDate, userTimeZone),
           recurrence.daysOfWeek,
           recurrence.dayOfMonth,
           userTimeZone,
         )
-      : parseCalendarDueDate(dueDate, userTimeZone)
+      : parseTaskDueDate(dueDate, userTimeZone)
     : null;
   const normalizedStatus = status ? normalizeTaskStatus(status) : "todo";
 
@@ -1307,7 +1308,7 @@ tasksRouter.patch("/:taskId", async (c) => {
       data: {
         ...(title !== undefined ? { title: title.trim() } : {}),
         ...(priority !== undefined ? { priority } : {}),
-        ...(dueDate !== undefined ? { dueDate: dueDate ? parseCalendarDueDate(dueDate, userTimeZone) : null } : {}),
+        ...(dueDate !== undefined ? { dueDate: dueDate ? parseTaskDueDate(dueDate, userTimeZone) : null } : {}),
         ...(status !== undefined
           ? {
               status,
@@ -1557,6 +1558,57 @@ tasksRouter.delete("/:taskId/assign/:userId", async (c) => {
   await prisma.taskAssignment.deleteMany({ where: { taskId, userId } });
   emitTaskChange(teamId, taskId, "assignment", user.id);
   return c.body(null, 204);
+});
+
+// POST /api/teams/:teamId/tasks/:taskId/nudge — leader sends an assignee a push reminder
+tasksRouter.post("/:taskId/nudge", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const body = await c.req.json().catch(() => ({}));
+  const targetUserId = typeof body?.userId === "string" ? body.userId : "";
+  if (!targetUserId) return c.json({ error: { message: "Pick who to nudge", code: "VALIDATION_ERROR" } }, 400);
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, teamId },
+    select: {
+      title: true,
+      kind: true,
+      status: true,
+      archivedAt: true,
+      dueDate: true,
+      incognito: true,
+      assignments: { select: { userId: true } },
+    },
+  });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+
+  const now = Date.now();
+  const check = checkTaskNudge({
+    actorUserId: user.id,
+    actorRole: membership.role,
+    targetUserId,
+    task: { ...task, assigneeIds: task.assignments.map((a) => a.userId) },
+    lastNudgedAt: getLastTaskNudge(taskId, targetUserId),
+    now,
+  });
+  if (!check.ok) return c.json({ error: { message: check.message, code: check.code } }, check.status);
+
+  recordTaskNudge(taskId, targetUserId, now);
+  const title = task.incognito ? "a task" : task.title;
+  const delivered = await sendPushToUsers(
+    [targetUserId],
+    "Task reminder",
+    taskNudgeBody(user.name, title, task.dueDate, new Date(now)),
+    { taskId, teamId },
+    "notifTaskDue",
+    teamId,
+  );
+  return c.json({ data: { ok: true, delivered: delivered > 0 } });
 });
 
 // POST /api/teams/:teamId/tasks/:taskId/subtasks

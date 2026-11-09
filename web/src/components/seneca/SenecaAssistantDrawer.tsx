@@ -23,7 +23,6 @@ import {
   type TeamPulseMetric,
 } from "../../lib/seneca-briefing";
 import { fetchSenecaAsk, type SenecaAskActionId } from "../../lib/seneca-api";
-import { SenecaIcon } from "./SenecaShared";
 
 type Props = {
   open: boolean;
@@ -315,7 +314,14 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
               </button>
             ) : (
               <div className="seneca-drawer-brand">
-                <SenecaIcon size={40} className="seneca-drawer-brand-icon" />
+                <img
+                  src="/seneca-button-icon.png"
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="seneca-icon seneca-drawer-brand-icon"
+                  aria-hidden
+                />
                 <div>
                   <h2 id="seneca-drawer-title" className="seneca-drawer-title">
                     Seneca
@@ -430,7 +436,14 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
 
             <div className="seneca-drawer-chat-response">
               <div className="seneca-drawer-chat-seneca-head">
-                <SenecaIcon size={24} />
+                <img
+                  src="/seneca-button-icon.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="seneca-icon"
+                  aria-hidden
+                />
                 <span>Seneca</span>
               </div>
               {thinking ? (

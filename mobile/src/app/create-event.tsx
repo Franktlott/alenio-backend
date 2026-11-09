@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -12,12 +12,11 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { SafeKeyboardAwareScrollView as KeyboardAwareScrollView } from "@/lib/safe-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { X, Calendar, Trash2, UserRound, Video, Clock, Users } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import {
   VIDEO_MEETING_DURATION_OPTIONS,
@@ -27,7 +26,15 @@ import {
   videoMeetingEndFromDuration,
 } from "@/lib/video-meeting-duration";
 import { resolveCalendarEventColor } from "@/lib/calendar-event-colors";
-import { HEADER_GRADIENT } from "@/lib/header-gradient";
+import { HEADER_BRAND_COLOR } from "@/lib/header-brand";
+import type { Team } from "@/lib/types";
+import { resolveTimeZone } from "@/lib/timezone";
+import {
+  formatWorkspaceTimeZoneContext,
+  resolveWorkspacePickerDate,
+  workspaceInstantToPickerDate,
+  workspaceTimeZoneDiffersFromDevice,
+} from "@/lib/workspace-event-time";
 
 type CalendarEvent = {
   id: string;
@@ -65,12 +72,28 @@ export default function CreateEventScreen() {
 
   const queryClient = useQueryClient();
   const isEditing = !!eventId;
+  const cachedTeam = queryClient
+    .getQueryData<Team[]>(["teams"])
+    ?.find((candidate) => candidate.id === teamId);
+  const { data: team } = useQuery({
+    queryKey: ["team", teamId],
+    queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
+    enabled: Boolean(teamId),
+    initialData: cachedTeam,
+  });
+  const workspaceTimeZone = resolveTimeZone(team?.timezone);
 
-  const defaultStart = startDate ? new Date(startDate) : new Date();
+  const initialStart = startDate ? new Date(startDate) : new Date();
+  const defaultStart =
+    eventIsVideoMeeting === "true"
+      ? workspaceInstantToPickerDate(initialStart, workspaceTimeZone)
+      : initialStart;
   const defaultEnd = eventEndDate
-    ? new Date(eventEndDate)
+    ? eventIsVideoMeeting === "true"
+      ? workspaceInstantToPickerDate(eventEndDate, workspaceTimeZone)
+      : new Date(eventEndDate)
     : startDate
-    ? new Date(startDate)
+    ? defaultStart
     : new Date();
 
   const [eventTitle, setEventTitle] = useState(initialTitle ?? "");
@@ -93,27 +116,49 @@ export default function CreateEventScreen() {
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const appliedFetchedTimezone = useRef(Boolean(cachedTeam?.timezone));
 
-  const onSuccess = () => {
+  useEffect(() => {
+    if (
+      eventIsVideoMeeting !== "true" ||
+      !team?.timezone ||
+      appliedFetchedTimezone.current
+    ) {
+      return;
+    }
+    appliedFetchedTimezone.current = true;
+    setEventStart(
+      workspaceInstantToPickerDate(
+        startDate ? new Date(startDate) : new Date(),
+        team.timezone,
+      ),
+    );
+    if (eventEndDate) {
+      setEventEnd(workspaceInstantToPickerDate(eventEndDate, team.timezone));
+    }
+  }, [eventEndDate, eventIsVideoMeeting, startDate, team?.timezone]);
+
+  const onSuccess = (saved: CalendarEvent) => {
     queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
+    if (
+      !isOwnerOrLeader &&
+      !saved.isHidden &&
+      saved.approvalStatus === "pending"
+    ) {
+      Alert.alert(
+        "Submitted for approval",
+        "It was sent to workspace leaders and will appear on the calendar after approval.",
+        [{ text: "OK", onPress: () => router.back() }],
+      );
+      return;
+    }
     router.back();
   };
 
   const createMutation = useMutation({
     mutationFn: (data: object) =>
       api.post<CalendarEvent>(`/api/teams/${teamId}/events`, data),
-    onSuccess: (created) => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
-      if (!isOwnerOrLeader && !created.isHidden && created.approvalStatus === "pending") {
-        Alert.alert(
-          "Submitted for approval",
-          "Your public event was sent to your team leader or owner for approval.",
-          [{ text: "OK", onPress: () => router.back() }],
-        );
-        return;
-      }
-      router.back();
-    },
+    onSuccess,
   });
 
   const updateMutation = useMutation({
@@ -124,42 +169,56 @@ export default function CreateEventScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/api/teams/${teamId}/events/${id}`),
-    onSuccess,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
+      router.back();
+    },
   });
 
-  const handleSave = () => {
+  const handleSave = (skipDaylightSavingConfirmation = false) => {
     if (!eventTitle.trim()) {
       setFormError("Please enter an event title");
       return;
     }
-    const end = isVideoMeeting
+    const pickerEnd = isVideoMeeting
       ? videoMeetingEndFromDuration(eventStart, meetingDurationMinutes)
       : eventEnd < eventStart
         ? eventStart
         : eventEnd;
+    const startResolution = isVideoMeeting
+      ? resolveWorkspacePickerDate(eventStart, workspaceTimeZone)
+      : null;
+    const startInstant = startResolution?.instant ?? eventStart;
+    const endInstant = isVideoMeeting
+      ? new Date(startInstant.getTime() + meetingDurationMinutes * 60_000)
+      : pickerEnd;
+    if (
+      startResolution?.adjustedForDaylightSaving &&
+      !skipDaylightSavingConfirmation
+    ) {
+      const adjustedTime = startResolution.resolvedPickerDate.toLocaleTimeString(
+        "en-US",
+        { hour: "numeric", minute: "2-digit" },
+      );
+      Alert.alert(
+        "Time adjusted for daylight saving",
+        `That local time does not occur in ${workspaceTimeZone}. Alenio will schedule it at ${adjustedTime}, the next valid time.`,
+        [
+          { text: "Choose another time", style: "cancel" },
+          { text: "Continue", onPress: () => handleSave(true) },
+        ],
+      );
+      return;
+    }
     if (isVideoMeeting && !isOwnerOrLeader) {
       setFormError("Only workspace owners and team leaders can schedule virtual meetings.");
       return;
     }
-    if (isVideoMeeting) {
-      const existingEvents = queryClient.getQueryData<CalendarEvent[]>(["calendar-events", teamId]) ?? [];
-      const hasOverlap = existingEvents
-        .filter((e) => e.isVideoMeeting && e.id !== eventId)
-        .some((e) => {
-          const eStart = new Date(e.startDate);
-          const eEnd = e.endDate ? new Date(e.endDate) : eStart;
-          return eventStart < eEnd && end > eStart;
-        });
-      if (hasOverlap) {
-        Alert.alert("Scheduling Conflict", "This time overlaps with another video meeting. Please choose a different time.");
-        return;
-      }
-    }
     const payload = {
       title: eventTitle.trim(),
       description: eventDescription.trim() || undefined,
-      startDate: eventStart.toISOString(),
-      endDate: end.toISOString(),
+      startDate: startInstant.toISOString(),
+      endDate: endInstant.toISOString(),
       color: resolveCalendarEventColor({
         isHidden,
         isVideoMeeting: isOwnerOrLeader && isVideoMeeting,
@@ -181,7 +240,7 @@ export default function CreateEventScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top"]} testID="event-modal">
       {/* Gradient header */}
-      <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <View style={{ backgroundColor: HEADER_BRAND_COLOR }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Pressable
             onPress={() => router.back()}
@@ -196,7 +255,7 @@ export default function CreateEventScreen() {
           </Text>
 
           <Pressable
-            onPress={handleSave}
+            onPress={() => handleSave()}
             disabled={isSaving}
             style={{ backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 }}
             testID="save-event-button"
@@ -205,12 +264,16 @@ export default function CreateEventScreen() {
               <ActivityIndicator size="small" color="white" />
             ) : (
               <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>
-                {isEditing ? "Save" : "Create"}
+                {!isOwnerOrLeader && !isHidden
+                  ? "Submit"
+                  : isEditing
+                    ? "Save"
+                    : "Create"}
               </Text>
             )}
           </Pressable>
         </View>
-      </LinearGradient>
+      </View>
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
@@ -499,6 +562,14 @@ export default function CreateEventScreen() {
             <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 14, marginTop: -6 }}>
               Ends at {formatVideoMeetingEndPreview(eventStart, meetingDurationMinutes)}
             </Text>
+            {workspaceTimeZoneDiffersFromDevice(workspaceTimeZone) ? (
+              <Text
+                style={{ fontSize: 11, color: "#64748B", marginBottom: 14, marginTop: -8 }}
+                testID="event-workspace-timezone-context"
+              >
+                {formatWorkspaceTimeZoneContext(workspaceTimeZone)}
+              </Text>
+            ) : null}
           </>
         ) : null}
 
@@ -510,7 +581,13 @@ export default function CreateEventScreen() {
               <Users size={18} color={!isHidden ? "#4361EE" : "#CBD5E1"} />
               <View>
                 <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{!isHidden ? "Public" : "Private"}</Text>
-                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{!isHidden ? "Visible to the whole team" : "Only visible to you"}</Text>
+                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
+                  {!isHidden
+                    ? isOwnerOrLeader
+                      ? "Visible to the whole team"
+                      : "Visible after a leader approves it"
+                    : "Only visible to you"}
+                </Text>
               </View>
             </View>
             <Switch

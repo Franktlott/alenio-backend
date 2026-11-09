@@ -1,66 +1,86 @@
+import { Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthGate } from "./components/AuthGate";
 import { DocumentTitle } from "./components/DocumentTitle";
 import { SessionIdleGuard } from "./components/SessionIdleGuard";
-import { AlenioGoLinkPage } from "./routes/AlenioGoLinkPage";
-import { AlenioGoLayout } from "./routes/alenio-go/AlenioGoLayout";
-import { AlenioGoHomePage } from "./routes/alenio-go/AlenioGoHomePage";
-import { AlenioGoAlertsModulePage } from "./routes/alenio-go/AlenioGoAlertsModulePage";
-import { AlenioGoLinkedDevicesRoutes } from "./routes/alenio-go/AlenioGoLinkedDevicesRoutes";
-import { AlenioGoModuleSettingsPage } from "./routes/alenio-go/AlenioGoModuleSettingsPage";
-import { WalkItemCreatePage } from "./routes/alenio-go/WalkItemCreatePage";
-import { WalkItemLibraryPage } from "./routes/alenio-go/WalkItemLibraryPage";
-import { WalkBuilderPage } from "./routes/alenio-go/WalkBuilderPage";
-import { WalkDetailsPage } from "./routes/alenio-go/WalkDetailsPage";
-import { WalksListPage } from "./routes/alenio-go/WalksListPage";
-import { WalkSchedulesPage } from "./routes/alenio-go/WalkSchedulesPage";
-import { TempsModuleLayout } from "./routes/alenio-go/TempsModuleLayout";
-import { TempsDashboardPage } from "./routes/alenio-go/TempsDashboardPage";
-import { TempsReportsPage } from "./routes/alenio-go/TempsReportsPage";
-import { EnterpriseOrgGoLayout } from "./routes/alenio-go/EnterpriseOrgGoLayout";
-import { EnterpriseOrgRoot } from "./routes/alenio-go/EnterpriseOrgRoot";
-import { EnterpriseOrgDashboardShell } from "./routes/alenio-go/EnterpriseOrgDashboardShell";
-import { EnterpriseOrgGoOverviewPage } from "./routes/alenio-go/EnterpriseOrgGoOverviewPage";
-import { EnterpriseOrgGoModulesPage } from "./routes/alenio-go/EnterpriseOrgGoModulesPage";
-import { EnterpriseOrgGoLibraryPage } from "./routes/alenio-go/EnterpriseOrgGoLibraryPage";
-import { EnterpriseOrgGoWorkspacesPage } from "./routes/alenio-go/EnterpriseOrgGoWorkspacesPage";
-import { EnterpriseOrgUsersPage } from "./routes/alenio-go/EnterpriseOrgUsersPage";
-import { EnterpriseOrgGoStubPage } from "./routes/alenio-go/EnterpriseOrgGoStubPage";
-import { ActivityPage } from "./routes/ActivityPage";
-import { AdminPage } from "./routes/AdminPage";
-import { BillingPage } from "./routes/BillingPage";
-import { OwnershipTransferReturnPage } from "./routes/OwnershipTransferReturnPage";
-import { ChatPage } from "./routes/ChatPage";
-import { CreateTaskPage } from "./routes/CreateTaskPage";
-import { DashboardPage } from "./routes/DashboardPage";
-import { EnterpriseShellLayout } from "./routes/EnterpriseShellLayout";
-import { OneOnOneFeedbackPage } from "./routes/OneOnOneFeedbackPage";
-import { TaskDetailPage } from "./routes/TaskDetailPage";
-import { TeamPage } from "./routes/TeamPage";
-import { ProfilePage } from "./routes/ProfilePage";
-import { SettingsAiHubPage } from "./routes/settings/SettingsAiHubPage";
-import { SenecaWorkspaceContextPage } from "./routes/settings/SenecaWorkspaceContextPage";
-import { SettingsOktaSsoPage } from "./routes/settings/SettingsOktaSsoPage";
-import { ForgotPasswordPage } from "./routes/ForgotPasswordPage";
-import { LoginPage } from "./routes/LoginPage";
-import { SignUpPage } from "./routes/SignUpPage";
-import { AuthCallbackPage } from "./routes/AuthCallbackPage";
-import { ResetPasswordPage } from "./routes/ResetPasswordPage";
-import { VerifyPage } from "./routes/VerifyPage";
-import { VerifyResetCodePage } from "./routes/VerifyResetCodePage";
-import { AccountDeletionPage } from "./routes/AccountDeletionPage";
-import { PrivacyPolicyPage } from "./routes/PrivacyPolicyPage";
-import { TermsOfServicePage } from "./routes/TermsOfServicePage";
-import { WebsiteHomePage } from "./routes/WebsiteHomePage";
-import { PricingPage } from "./routes/PricingPage";
-import { EnterprisePage } from "./routes/EnterprisePage";
-import { SecurityPage } from "./routes/SecurityPage";
-import { InvitePage } from "./routes/InvitePage";
-import { EnterpriseInvitePage } from "./routes/EnterpriseInvitePage";
-import { WorkspaceChecklistHubPage } from "./routes/WorkspaceChecklistHubPage";
-import { GoKioskSessionLayout } from "./routes/GoKioskSessionLayout";
-import { GetAppPage } from "./routes/GetAppPage";
+import { lazyPage } from "./lib/lazy-page";
 import { getActiveApiTarget, getWebEnvConfigError } from "./lib/env-config";
+
+const AlenioGoLinkPage = lazyPage(() => import("./routes/AlenioGoLinkPage"), "AlenioGoLinkPage");
+const WebHomePage = lazyPage(() => import("./routes/WebHomePage"), "WebHomePage");
+const WebWorkspacePage = lazyPage(() => import("./routes/WebWorkspacePage"), "WebWorkspacePage");
+const WebWorkspaceMemberPage = lazyPage(() => import("./routes/WebWorkspaceMemberPage"), "WebWorkspaceMemberPage");
+const WebNetworkPage = lazyPage(() => import("./routes/WebNetworkPage"), "WebNetworkPage");
+const PersonProfilePage = lazyPage(() => import("./routes/PersonProfilePage"), "PersonProfilePage");
+const SenecaPage = lazyPage(() => import("./routes/seneca/SenecaPage"), "SenecaPage");
+const DiscoverIndexPage = lazyPage(() => import("./routes/discover/DiscoverIndexPage"), "DiscoverIndexPage");
+const DiscoverReaderPage = lazyPage(() => import("./routes/discover/DiscoverReaderPage"), "DiscoverReaderPage");
+const DiscoverListPage = lazyPage(() => import("./routes/discover/DiscoverListPage"), "DiscoverListPage");
+const DiscoverEditorPage = lazyPage(() => import("./routes/discover/DiscoverEditorPage"), "DiscoverEditorPage");
+const HelpCenterPage = lazyPage(() => import("./routes/HelpCenterPage"), "HelpCenterPage");
+const HelpArticlePage = lazyPage(() => import("./routes/HelpArticlePage"), "HelpArticlePage");
+const AdminPage = lazyPage(() => import("./routes/AdminPage"), "AdminPage");
+const AdminUsersPage = lazyPage(() => import("./routes/admin/AdminUsersPage"), "AdminUsersPage");
+const AdminActivityPage = lazyPage(() => import("./routes/admin/AdminActivityPage"), "AdminActivityPage");
+const AdminPricingPage = lazyPage(() => import("./routes/admin/AdminPricingPage"), "AdminPricingPage");
+const AdminNotificationsPage = lazyPage(
+  () => import("./routes/admin/AdminNotificationsPage"),
+  "AdminNotificationsPage",
+);
+const BillingPage = lazyPage(() => import("./routes/BillingPage"), "BillingPage");
+const OwnershipTransferReturnPage = lazyPage(
+  () => import("./routes/OwnershipTransferReturnPage"),
+  "OwnershipTransferReturnPage",
+);
+const CreateTaskPage = lazyPage(() => import("./routes/CreateTaskPage"), "CreateTaskPage");
+const EnterpriseShellLayout = lazyPage(() => import("./routes/EnterpriseShellLayout"), "EnterpriseShellLayout");
+const OneOnOneFeedbackPage = lazyPage(() => import("./routes/OneOnOneFeedbackPage"), "OneOnOneFeedbackPage");
+const TaskDetailPage = lazyPage(() => import("./routes/TaskDetailPage"), "TaskDetailPage");
+const ProfilePage = lazyPage(() => import("./routes/ProfilePage"), "ProfilePage");
+const SettingsAiHubPage = lazyPage(() => import("./routes/settings/SettingsAiHubPage"), "SettingsAiHubPage");
+const SenecaWorkspaceContextPage = lazyPage(
+  () => import("./routes/settings/SenecaWorkspaceContextPage"),
+  "SenecaWorkspaceContextPage",
+);
+const SettingsOktaSsoPage = lazyPage(() => import("./routes/settings/SettingsOktaSsoPage"), "SettingsOktaSsoPage");
+const ForgotPasswordPage = lazyPage(() => import("./routes/ForgotPasswordPage"), "ForgotPasswordPage");
+const LoginPage = lazyPage(() => import("./routes/LoginPage"), "LoginPage");
+const SignUpPage = lazyPage(() => import("./routes/SignUpPage"), "SignUpPage");
+const AuthCallbackPage = lazyPage(() => import("./routes/AuthCallbackPage"), "AuthCallbackPage");
+const ResetPasswordPage = lazyPage(() => import("./routes/ResetPasswordPage"), "ResetPasswordPage");
+const VerifyPage = lazyPage(() => import("./routes/VerifyPage"), "VerifyPage");
+const VerifyResetCodePage = lazyPage(() => import("./routes/VerifyResetCodePage"), "VerifyResetCodePage");
+const AccountDeletionPage = lazyPage(() => import("./routes/AccountDeletionPage"), "AccountDeletionPage");
+const PrivacyPolicyPage = lazyPage(() => import("./routes/PrivacyPolicyPage"), "PrivacyPolicyPage");
+const TermsOfServicePage = lazyPage(() => import("./routes/TermsOfServicePage"), "TermsOfServicePage");
+const WebsiteHomePage = lazyPage(() => import("./routes/WebsiteHomePage"), "WebsiteHomePage");
+const PricingPage = lazyPage(() => import("./routes/PricingPage"), "PricingPage");
+const EnterprisePage = lazyPage(() => import("./routes/EnterprisePage"), "EnterprisePage");
+const SecurityPage = lazyPage(() => import("./routes/SecurityPage"), "SecurityPage");
+const InvitePage = lazyPage(() => import("./routes/InvitePage"), "InvitePage");
+const WorkspaceChecklistHubPage = lazyPage(
+  () => import("./routes/WorkspaceChecklistHubPage"),
+  "WorkspaceChecklistHubPage",
+);
+const GoKioskSessionLayout = lazyPage(() => import("./routes/GoKioskSessionLayout"), "GoKioskSessionLayout");
+const GetAppPage = lazyPage(() => import("./routes/GetAppPage"), "GetAppPage");
+
+function PageLoading() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        color: "#334155",
+        fontFamily: "system-ui, sans-serif",
+        fontWeight: 600,
+      }}
+    >
+      Opening Alenio…
+    </div>
+  );
+}
 
 function missingWebEnvMessage(): string | null {
   return getWebEnvConfigError();
@@ -133,6 +153,7 @@ export default function App() {
     <BrowserRouter>
       <DocumentTitle />
       <SessionIdleGuard />
+      <Suspense fallback={<PageLoading />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/sign-up" element={<SignUpPage />} />
@@ -142,7 +163,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
-        <Route path="/enterprise-invite/:token" element={<EnterpriseInvitePage />} />
+        <Route path="/enterprise-invite/:token" element={<Navigate to="/login" replace />} />
         <Route path="/checklist/:hubToken" element={<GoKioskSessionLayout />}>
           <Route index element={<WorkspaceChecklistHubPage />} />
           <Route path=":checklistId" element={<Navigate to=".." replace />} />
@@ -152,6 +173,8 @@ export default function App() {
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsOfServicePage />} />
         <Route path="/account-deletion" element={<AccountDeletionPage />} />
+        <Route path="/help" element={<HelpCenterPage />} />
+        <Route path="/help/:slug" element={<HelpArticlePage />} />
         <Route path="/" element={<WebsiteHomePage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/enterprise" element={<EnterprisePage />} />
@@ -163,76 +186,46 @@ export default function App() {
             </AuthGate>
           }
         >
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/go" element={<AlenioGoLayout />}>
-            <Route index element={<AlenioGoHomePage />} />
-            <Route path="org" element={<EnterpriseOrgRoot />}>
-              <Route element={<EnterpriseOrgDashboardShell />}>
-                <Route index element={<Navigate to="overview" replace />} />
-                <Route path="overview" element={<EnterpriseOrgGoOverviewPage />} />
-                <Route path="workspaces" element={<EnterpriseOrgGoWorkspacesPage />} />
-                <Route path="users" element={<EnterpriseOrgUsersPage />} />
-              </Route>
-              <Route element={<EnterpriseOrgGoLayout />}>
-                <Route path="modules" element={<EnterpriseOrgGoModulesPage />} />
-                <Route path="library" element={<EnterpriseOrgGoLibraryPage />} />
-                <Route path="templates" element={<EnterpriseOrgGoStubPage title="Templates" />} />
-                <Route path="procedures" element={<EnterpriseOrgGoStubPage title="Procedures" />} />
-                <Route path="devices" element={<EnterpriseOrgGoStubPage title="Devices" />} />
-                <Route path="policies" element={<EnterpriseOrgGoStubPage title="Policies" />} />
-                <Route path="reports" element={<EnterpriseOrgGoStubPage title="Reports" />} />
-              </Route>
-            </Route>
-            <Route path="alerts" element={<AlenioGoAlertsModulePage />} />
-            <Route path="devices/*" element={<AlenioGoLinkedDevicesRoutes />} />
-            <Route path="setup" element={<Navigate to="/go/devices" replace />} />
-            <Route path="frontend" element={<Navigate to="/go/devices/display" replace />} />
-            <Route path="checklists" element={<AlenioGoModuleSettingsPage moduleKey="checklists" />} />
-            {/* Module lifecycle (Testing/Live) lives on Go Admin — not inside Temps product chrome */}
-            <Route
-              path="temp-checks/module"
-              element={<AlenioGoModuleSettingsPage moduleKey="temp-checks" />}
-            />
-            <Route path="temp-checks/settings" element={<Navigate to="/go/temp-checks/module" replace />} />
-            <Route path="temp-checks" element={<TempsModuleLayout />}>
-              <Route index element={<Navigate to="overview" replace />} />
-              <Route path="overview" element={<TempsDashboardPage />} />
-              <Route path="library" element={<WalkItemLibraryPage />} />
-              <Route path="library/new" element={<WalkItemCreatePage />} />
-              <Route path="library/:itemId/edit" element={<WalkItemCreatePage />} />
-            {/* Builder routes must stay above walks/:templateId so "builder" is never treated as an id */}
-            <Route path="walks/builder/:templateId" element={<WalkBuilderPage />} />
-            <Route path="walks/builder" element={<WalkBuilderPage />} />
-            <Route path="walks/:templateId" element={<WalkDetailsPage />} />
-            <Route path="walks" element={<WalksListPage />} />
-              <Route path="schedule" element={<WalkSchedulesPage />} />
-              <Route path="reports" element={<TempsReportsPage />} />
-            </Route>
-            <Route path="briefings/*" element={<AlenioGoModuleSettingsPage moduleKey="briefings" />} />
-            <Route path="walks" element={<AlenioGoModuleSettingsPage moduleKey="walks" />} />
-          </Route>
-          <Route path="/activity" element={<ActivityPage />} />
-          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/home" element={<WebHomePage />} />
+          <Route path="/workspace" element={<WebWorkspacePage />} />
+          <Route path="/workspace/tasks" element={<WebWorkspacePage section="tasks" />} />
+          <Route path="/workspace/calendar" element={<WebWorkspacePage section="calendar" />} />
+          <Route path="/workspace/members" element={<WebWorkspacePage section="members" />} />
+          <Route path="/workspace/momentum" element={<WebWorkspacePage section="momentum" />} />
+          <Route path="/workspace/members/:userId" element={<WebWorkspaceMemberPage />} />
+          <Route path="/network" element={<WebNetworkPage />} />
+          <Route path="/people/:userId" element={<PersonProfilePage />} />
+          <Route path="/seneca" element={<SenecaPage />} />
+          <Route path="/discover" element={<DiscoverIndexPage />} />
+          <Route path="/discover/:slug" element={<DiscoverReaderPage />} />
+          <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+          <Route path="/chat" element={<Navigate to="/home" replace />} />
+          <Route path="/activity" element={<Navigate to="/workspace" replace />} />
+          <Route path="/team" element={<Navigate to="/network" replace />} />
+          {/* Alenio Go is hidden on the web for now; its pages stay in routes/alenio-go. */}
+          <Route path="/go/*" element={<Navigate to="/home" replace />} />
           <Route path="/billing" element={<BillingPage />} />
           <Route path="/ownership-transfer" element={<OwnershipTransferReturnPage />} />
-          <Route path="/team" element={<TeamPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/activity" element={<AdminActivityPage />} />
+          <Route path="/admin/workspaces" element={<AdminPage section="workspaces" />} />
+          <Route path="/admin/seneca" element={<AdminPage section="seneca-studio" />} />
+          <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
+          <Route path="/admin/pricing" element={<AdminPricingPage />} />
+          <Route path="/admin/discover" element={<DiscoverListPage />} />
+          <Route path="/admin/discover/categories" element={<Navigate to="/admin/discover?categories=1" replace />} />
+          <Route path="/admin/discover/new" element={<DiscoverEditorPage />} />
+          <Route path="/admin/discover/:articleId" element={<DiscoverEditorPage />} />
           <Route path="/settings" element={<ProfilePage />} />
           <Route path="/settings/ai" element={<SettingsAiHubPage />} />
-          <Route path="/settings/ai/seneca-studio" element={<Navigate to="/admin?tab=seneca-studio" replace />} />
+          <Route path="/settings/ai/seneca-studio" element={<Navigate to="/admin/seneca" replace />} />
           <Route path="/settings/ai/workspace-context" element={<SenecaWorkspaceContextPage />} />
           <Route path="/settings/sso/okta" element={<SettingsOktaSsoPage />} />
           <Route path="/profile" element={<Navigate to="/settings" replace />} />
           <Route path="/tasks/new" element={<CreateTaskPage />} />
+          <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
         </Route>
-        <Route
-          path="/tasks/:taskId"
-          element={
-            <AuthGate>
-              <TaskDetailPage />
-            </AuthGate>
-          }
-        />
         <Route
           path="/one-on-one-feedback"
           element={
@@ -241,8 +234,9 @@ export default function App() {
             </AuthGate>
           }
         />
-        <Route path="*" element={<Navigate to="/chat" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

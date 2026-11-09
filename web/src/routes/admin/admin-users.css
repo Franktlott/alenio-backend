@@ -1,0 +1,437 @@
+/* User Management page: builds on the dm-* layout from the Content page. */
+
+.au-table th.au-col-ws,
+.au-table td.au-col-ws {
+  width: 120px;
+}
+
+.au-table th.au-col-role,
+.au-table td.au-col-role {
+  width: 110px;
+}
+
+.au-user-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.au-user-cell:hover .dm-article-title-text {
+  color: #6d5ef8;
+}
+
+.au-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #ede9fe;
+  color: #5b4ddc;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+}
+
+.au-avatar--sm {
+  width: 30px;
+  height: 30px;
+  font-size: 11px;
+}
+
+.au-avatar--lg {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+}
+
+.au-avatar--blank {
+  background: #f1f3f7;
+}
+
+.au-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.au-you {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #5b4ddc;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.au-ws-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #344054;
+}
+
+/* Side panels */
+.au-recent {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.au-recent li + li {
+  border-top: 1px solid #f1eff9;
+}
+
+.au-recent button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.au-recent button:hover .dm-ranked-title {
+  color: #6d5ef8;
+}
+
+.au-recent-chevron {
+  flex-shrink: 0;
+  color: #b7b3cc;
+}
+
+.au-growth {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.au-growth div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 7px 0;
+}
+
+.au-growth div + div {
+  border-top: 1px solid #f1eff9;
+}
+
+.au-growth dt {
+  font-size: 13px;
+  color: #667085;
+}
+
+.au-growth dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #111a2b;
+}
+
+.au-growth-link {
+  margin-top: 10px;
+}
+
+/* Drawer additions */
+.au-drawer-head {
+  align-items: center;
+}
+
+.au-drawer-email {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 17px;
+}
+
+.au-drawer-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.au-drawer-badges .dm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.au-drawer-badges .au-you {
+  margin-left: 0;
+}
+
+.au-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 16px;
+}
+
+.au-edit {
+  padding: 12px;
+  border: 1px solid #c4b5fd;
+  border-radius: 12px;
+  background: #fbfaff;
+}
+
+.au-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.au-facts div {
+  padding: 10px 12px;
+  border: 1px solid #ece8f8;
+  border-radius: 12px;
+  background: #fafafc;
+}
+
+.au-facts dt {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #667085;
+}
+
+.au-facts dd {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 3px 0 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #111a2b;
+}
+
+.au-facts dd.au-ok {
+  color: #15803d;
+}
+
+.au-facts dd.au-dim {
+  color: #667085;
+  font-weight: 600;
+}
+
+.au-section h3,
+.au-danger h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #667085;
+}
+
+.au-section-empty {
+  margin: 0;
+}
+
+.au-ws-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.au-ws-list a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px 9px 12px;
+  border: 1px solid #ece8f8;
+  border-radius: 12px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+}
+
+.au-ws-list a:hover {
+  border-color: #c4b5fd;
+}
+
+.au-ws-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: #ede9fe;
+  color: #6d5ef8;
+}
+
+.au-admin-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid #ece8f8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.au-admin-row--on {
+  border-color: #c4b5fd;
+  background: #fbfaff;
+}
+
+.au-admin-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: #f1f3f7;
+  color: #667085;
+}
+
+.au-admin-row--on .au-admin-icon {
+  background: #ede9fe;
+  color: #6d5ef8;
+}
+
+.au-admin-row .dcat-switch {
+  margin-left: 0;
+}
+
+.au-danger {
+  padding: 12px;
+  border: 1px solid #fecdd3;
+  border-radius: 12px;
+  background: #fff7f7;
+}
+
+.au-danger h3 {
+  color: #be123c;
+}
+
+.au-danger p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 18px;
+  color: #4b5565;
+}
+
+.au-danger .dcat-form-actions {
+  margin-top: 10px;
+}
+
+.au-btn-danger {
+  border-color: transparent;
+  background: #e11d48;
+  color: #fff;
+}
+
+.au-btn-danger:hover:not(:disabled) {
+  background: #be123c;
+}
+
+.au-btn-danger-ghost {
+  color: #be123c;
+}
+
+.au-btn-danger-ghost:hover:not(:disabled) {
+  background: #fff1f2;
+}
+
+.au-drawer-foot {
+  display: flex;
+  gap: 8px;
+}
+
+.au-drawer-foot .dcat-btn:first-child {
+  flex: 1;
+  justify-content: center;
+}
+
+.au-new-form {
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.au-new-actions {
+  margin-top: auto;
+}
+
+@container (max-width: 720px) {
+  .au-table th.au-col-ws,
+  .au-table td.au-col-ws,
+  .au-table th.au-col-role,
+  .au-table td.au-col-role {
+    display: none;
+  }
+}
+
+.au-role-field {
+  margin-top: 10px;
+}
+
+.au-role-field select {
+  padding: 8px 10px;
+  border: 1px solid #e4e1f3;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-size: 13.5px;
+  color: #111a2b;
+}
+
+.au-role-field select:focus {
+  outline: none;
+  border-color: #6d5ef8;
+}
+
+.au-activity-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.au-activity-table .au-col-who {
+  width: 220px;
+}
+
+.au-activity-table .au-col-area {
+  width: 130px;
+}
+
+.au-activity-table .dm-col-when {
+  width: 170px;
+}
+
+.au-activity-summary {
+  font-weight: var(--al-fw-medium);
+  line-height: 20px;
+}

@@ -93,3 +93,111 @@ export function eventCalendarDayRange(event: {
   const end = event.endDate ? startOfDay(new Date(event.endDate)) : start;
   return { start, end };
 }
+
+export type MonthWeekLaneItem = {
+  id: string;
+  startIso: string;
+  endIso: string;
+};
+
+export type MonthWeekLaneCell = {
+  id: string;
+  showTitle: boolean;
+  continuesLeft: boolean;
+  continuesRight: boolean;
+};
+
+/** Pack multi-day events into a shared row so they stay aligned across the week. */
+export function layoutMonthWeekLanes(input: {
+  weekIsos: string[];
+  spans: MonthWeekLaneItem[];
+  singlesByDay: Record<string, string[]>;
+  maxLanes: number;
+}): {
+  lanesByDay: Array<Array<MonthWeekLaneCell | null>>;
+  overflowByDay: number[];
+} {
+  const weekIsos = input.weekIsos;
+  const weekStart = weekIsos[0] ?? "";
+  const weekEnd = weekIsos[weekIsos.length - 1] ?? "";
+  const colOf = (iso: string) => weekIsos.indexOf(iso);
+
+  const occupied = weekIsos.map(() => new Set<number>());
+  const lanesByDay: Array<Array<MonthWeekLaneCell | null>> = weekIsos.map(() =>
+    Array.from({ length: input.maxLanes }, () => null),
+  );
+  const overflowByDay = weekIsos.map(() => 0);
+
+  const firstFreeLane = (colStart: number, colEnd: number): number | null => {
+    for (let lane = 0; lane < input.maxLanes; lane++) {
+      let free = true;
+      for (let col = colStart; col <= colEnd; col++) {
+        if (occupied[col]?.has(lane)) {
+          free = false;
+          break;
+        }
+      }
+      if (free) return lane;
+    }
+    return null;
+  };
+
+  const clippedSpans = input.spans
+    .filter((span) => span.endIso >= weekStart && span.startIso <= weekEnd)
+    .map((span) => {
+      const startIso = span.startIso < weekStart ? weekStart : span.startIso;
+      const endIso = span.endIso > weekEnd ? weekEnd : span.endIso;
+      return {
+        ...span,
+        colStart: colOf(startIso),
+        colEnd: colOf(endIso),
+      };
+    })
+    .filter((span) => span.colStart >= 0 && span.colEnd >= span.colStart)
+    .sort((a, b) => {
+      if (a.startIso !== b.startIso) return a.startIso < b.startIso ? -1 : 1;
+      const aLen = a.colEnd - a.colStart;
+      const bLen = b.colEnd - b.colStart;
+      return bLen - aLen;
+    });
+
+  for (const span of clippedSpans) {
+    const lane = firstFreeLane(span.colStart, span.colEnd);
+    if (lane == null) {
+      for (let col = span.colStart; col <= span.colEnd; col++) {
+        overflowByDay[col] = (overflowByDay[col] ?? 0) + 1;
+      }
+      continue;
+    }
+    for (let col = span.colStart; col <= span.colEnd; col++) {
+      const iso = weekIsos[col]!;
+      occupied[col]!.add(lane);
+      lanesByDay[col]![lane] = {
+        id: span.id,
+        showTitle: col === span.colStart,
+        continuesLeft: span.startIso < iso,
+        continuesRight: span.endIso > iso,
+      };
+    }
+  }
+
+  for (let col = 0; col < weekIsos.length; col++) {
+    const ids = input.singlesByDay[weekIsos[col]!] ?? [];
+    for (const id of ids) {
+      const lane = firstFreeLane(col, col);
+      if (lane == null) {
+        overflowByDay[col] = (overflowByDay[col] ?? 0) + 1;
+        continue;
+      }
+      occupied[col]!.add(lane);
+      lanesByDay[col]![lane] = {
+        id,
+        showTitle: true,
+        continuesLeft: false,
+        continuesRight: false,
+      };
+    }
+  }
+
+  return { lanesByDay, overflowByDay };
+}

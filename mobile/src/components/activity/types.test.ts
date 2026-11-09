@@ -67,6 +67,36 @@ describe("activity feed helpers", () => {
     }
   });
 
+  test("groups task completions separated by other feed activity", () => {
+    const grouped = groupRepetitiveActivities([
+      item("1", "task_completed", { timestamp: "2026-07-29T14:00:00.000Z" }),
+      item("milestone", "celebration", { timestamp: "2026-07-29T13:50:00.000Z" }),
+      item("2", "task_completed", { timestamp: "2026-07-29T13:20:00.000Z" }),
+    ]);
+
+    expect(grouped).toHaveLength(2);
+    expect(grouped[0]?.type).toBe("group");
+    if (grouped[0]?.type === "group") {
+      expect(grouped[0].items.map((entry) => entry.id)).toEqual(["1", "2"]);
+    }
+    expect(grouped[1]?.id).toBe("milestone");
+  });
+
+  test("groups task assignments separated by other feed activity", () => {
+    const grouped = groupRepetitiveActivities([
+      item("1", "task_assigned", { timestamp: "2026-07-29T14:00:00.000Z" }),
+      item("update", "celebration", { timestamp: "2026-07-29T13:50:00.000Z" }),
+      item("2", "task_assigned", { timestamp: "2026-07-29T13:20:00.000Z" }),
+    ]);
+
+    expect(grouped).toHaveLength(2);
+    expect(grouped[0]?.type).toBe("group");
+    if (grouped[0]?.type === "group") {
+      expect(grouped[0].items.map((entry) => entry.id)).toEqual(["1", "2"]);
+    }
+    expect(grouped[1]?.id).toBe("update");
+  });
+
   test("does not group across workspaces", () => {
     const grouped = groupRepetitiveActivities([
       item("1", "task_completed"),

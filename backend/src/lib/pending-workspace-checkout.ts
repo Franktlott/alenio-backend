@@ -1,7 +1,7 @@
 import type Stripe from "stripe";
 import { prisma } from "../prisma";
 import { createPendingWorkspaceCheckoutSession } from "./team-billing-sessions";
-import { isTeamDisplayNameTaken, normalizeTeamName } from "./team-name";
+import { isTeamNameTakenForUser, normalizeTeamName, pendingWorkspaceNameKey } from "./team-name";
 import { normalizeWorkspaceLocation } from "./workspace-location";
 import { getWorkspaceTrialEligibility } from "./workspace-trial-policy";
 import { resolveTimeZone } from "./timezone";
@@ -58,6 +58,7 @@ export async function createPendingWorkspaceCheckout(opts: {
   industry?: string | null;
   location?: string | null;
   plan: "pro" | "operations";
+  playToken?: string | null;
 }): Promise<CreatePendingWorkspaceCheckoutResult> {
   const name = normalizeTeamName(opts.name);
   if (!name) {
@@ -76,12 +77,12 @@ export async function createPendingWorkspaceCheckout(opts: {
       message: "Your free workspace trial is still available.",
     };
   }
-  if (await isTeamDisplayNameTaken(name)) {
+  if (await isTeamNameTakenForUser(name, opts.userId)) {
     return {
       ok: false,
       status: 409,
       code: "TEAM_NAME_TAKEN",
-      message: "A workspace with this name already exists. Pick a different name.",
+      message: "You already have a workspace with this name. Pick a different name.",
     };
   }
 
@@ -93,7 +94,7 @@ export async function createPendingWorkspaceCheckout(opts: {
     return { ok: false, status: 400, code: "USER_NOT_FOUND", message: "Your account could not be found." };
   }
 
-  const nameKey = name.toLocaleLowerCase();
+  const nameKey = pendingWorkspaceNameKey(opts.userId, name);
   const now = new Date();
   await prisma.pendingWorkspaceCheckout.updateMany({
     where: { nameKey, status: "pending", expiresAt: { lte: now } },
@@ -146,6 +147,7 @@ export async function createPendingWorkspaceCheckout(opts: {
     userEmail: opts.userEmail,
     plan: opts.plan,
     expiresAt,
+    playToken: opts.playToken,
   });
   if ("error" in session) {
     await prisma.pendingWorkspaceCheckout.delete({ where: { id: draft.id } }).catch(() => undefined);

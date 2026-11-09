@@ -12,12 +12,24 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ScanLine, Building2, Users, X, Camera, CheckCircle2, ShieldCheck, Clock3 } from "lucide-react-native";
+import {
+  AlertCircle,
+  Building2,
+  Camera,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  ScanLine,
+  ShieldCheck,
+  Users,
+  X,
+} from "lucide-react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
+import { usePlans } from "@/lib/plans";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
 import { useSession } from "@/lib/auth/use-session";
@@ -30,12 +42,25 @@ import {
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { uploadFile } from "@/lib/upload";
+import { BillingPortalWebViewModal } from "@/components/BillingPortalWebViewModal";
+import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { isPlayCheckoutCanceled } from "@/lib/play-external-links";
+import {
+  createPaidWorkspaceCheckout,
+  fetchPaidWorkspaceCheckout,
+  workspaceCreationErrorMessage,
+  type WorkspaceCheckoutPlan,
+} from "@/lib/workspace-creation";
 
 const INVITE_CODE_MAX_LENGTH = 12;
-const INDUSTRIES = ["Retail", "Hospitality", "Healthcare", "Food service", "Operations", "Other"] as const;
 type JoinResult =
   | { status: "pending"; teamName: string; requestId: string }
   | (Team & { status?: undefined });
+type JoinPreview = {
+  id: string;
+  name: string;
+  image: string | null;
+};
 
 function ModeToggle({
   mode,
@@ -72,6 +97,7 @@ function FieldLabel({ children }: { children: string }) {
 
 export default function OnboardingScreen() {
   const { data: session, isLoading: isSessionLoading } = useSession();
+  const plans = usePlans();
   const { intent, mode: modeParam, focus: focusParam, action: actionParam, code: codeParam } = useLocalSearchParams<{
     intent?: string;
     mode?: string;
@@ -80,6 +106,10 @@ export default function OnboardingScreen() {
     code?: string;
   }>();
   const isAddFlow = intent === "add";
+  const isDirectCodeEntry =
+    isAddFlow && modeParam === "join" && actionParam === "code";
+  const isDirectScanner =
+    isAddFlow && modeParam === "join" && actionParam === "scan";
   const initialCode =
     typeof codeParam === "string"
       ? codeParam.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, INVITE_CODE_MAX_LENGTH)
@@ -87,16 +117,33 @@ export default function OnboardingScreen() {
   const [mode, setMode] = useState<"create" | "join">(modeParam === "join" || !!initialCode ? "join" : "create");
   const [teamName, setTeamName] = useState("");
   const [createStep, setCreateStep] = useState<1 | 2>(1);
-  const [industry, setIndustry] = useState("");
   const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<WorkspaceCheckoutPlan>("pro");
+  const [billingUrl, setBillingUrl] = useState<string | null>(null);
+  const [paidCheckoutId, setPaidCheckoutId] = useState<string | null>(null);
+  const [isFinalizingCheckout, setIsFinalizingCheckout] = useState(false);
   const [inviteCode, setInviteCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
   const [cooldownUntilMs, setCooldownUntilMs] = useState<number>(0);
   const queryClient = useQueryClient();
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const insets = useSafeAreaInsets();
+  const { data: me, isPending: isTrialEligibilityLoading } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () => fetchMeUser(),
+    enabled: !!session?.user,
+  });
+  const canStartWorkspaceTrial = me?.canStartWorkspaceTrial !== false;
 
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannedWorkspace, setScannedWorkspace] = useState<{
+    code: string;
+    team: JoinPreview;
+  } | null>(null);
+  const [scanPreviewError, setScanPreviewError] = useState<string | null>(null);
+  const [requestSentTeamName, setRequestSentTeamName] = useState<string | null>(
+    null,
+  );
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
   const inviteCodeInputRef = useRef<TextInput>(null);
@@ -124,42 +171,92 @@ export default function OnboardingScreen() {
     }
   }, [isSessionLoading, session?.user]);
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post<Team>("/api/teams", {
-        name: teamName.trim(),
-        industry: industry.trim() || undefined,
-        startTrial: true,
-      }),
-    onSuccess: async (team) => {
-      if (logoUri) {
-        try {
-          const uploaded = await uploadFile(logoUri, "workspace-logo.jpg", "image/jpeg", {
-            purpose: "team",
-            teamId: team.id,
-          });
-          await api.patch<Team>(`/api/teams/${team.id}`, { image: uploaded.url });
-        } catch {
-          // The workspace is still valid; its logo can be added later in settings.
-        }
+  const finishCreatedWorkspace = async (team: Team, access: "trial" | "paid") => {
+    if (logoUri) {
+      try {
+        const uploaded = await uploadFile(logoUri, "workspace-logo.jpg", "image/jpeg", {
+          purpose: "team",
+          teamId: team.id,
+        });
+        await api.patch<Team>(`/api/teams/${team.id}`, { image: uploaded.url });
+      } catch {
+        // The workspace is still valid; its logo can be added later in settings.
       }
-      setActiveTeamId(team.id);
-      await queryClient.invalidateQueries({ queryKey: ["teams"] });
-      await queryClient.invalidateQueries({ queryKey: ["subscription", team.id] });
-      await queryClient.invalidateQueries({ queryKey: ["billing-workspaces"] });
-      router.replace({ pathname: "/workspace-welcome", params: { teamId: team.id, teamName: team.name } });
+    }
+    setActiveTeamId(team.id);
+    await queryClient.invalidateQueries({ queryKey: ["teams"] });
+    await queryClient.invalidateQueries({ queryKey: ["subscription", team.id] });
+    await queryClient.invalidateQueries({ queryKey: ["billing-workspaces"] });
+    await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    router.replace({
+      pathname: "/workspace-welcome",
+      params: { teamId: team.id, teamName: team.name, access },
+    });
+  };
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      if (canStartWorkspaceTrial) {
+        const team = await api.post<Team>("/api/teams", {
+          name: teamName.trim(),
+          startTrial: true,
+        });
+        return { kind: "trial" as const, team };
+      }
+      const checkout = await createPaidWorkspaceCheckout({
+        name: teamName.trim(),
+        plan: selectedPlan,
+      });
+      return { kind: "checkout" as const, checkout };
+    },
+    onSuccess: async (result) => {
+      if (result.kind === "checkout") {
+        setPaidCheckoutId(result.checkout.checkoutId);
+        setBillingUrl(result.checkout.url);
+        return;
+      }
+      await finishCreatedWorkspace(result.team, "trial");
     },
     onError: (err: unknown) => {
+      if (isPlayCheckoutCanceled(err)) return;
       const rawMsg = err instanceof Error ? err.message : "";
+      const code = (err as { body?: { error?: { code?: string } } } | null)?.body?.error?.code;
+      if (code === "TRIAL_ALREADY_USED" || code === "PAID_PLAN_REQUIRED") {
+        void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+      }
       if (/too many requests|over.*rate.*limit|429/i.test(rawMsg)) {
         const waitMs = 20_000;
         setCooldownUntilMs(Date.now() + waitMs);
         setError("Too many requests right now. Please wait 20 seconds, then try again.");
         return;
       }
-      setError(rawMsg || "Could not create team right now. Please try again.");
+      setError(workspaceCreationErrorMessage(err));
     },
   });
+
+  const finishPaidCheckout = async () => {
+    if (!paidCheckoutId || isFinalizingCheckout) return;
+    setIsFinalizingCheckout(true);
+    setError(null);
+    try {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const status = await fetchPaidWorkspaceCheckout(paidCheckoutId);
+        if (status.status === "completed" && status.team) {
+          await finishCreatedWorkspace(status.team, "paid");
+          return;
+        }
+        if (status.status === "expired" || status.status === "failed") {
+          throw new Error("Checkout did not complete. No workspace was created.");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      }
+      throw new Error("Workspace setup is still finishing. Tap Check Workspace Status in a moment.");
+    } catch (err) {
+      setError(workspaceCreationErrorMessage(err));
+    } finally {
+      setIsFinalizingCheckout(false);
+    }
+  };
 
   const joinMutation = useMutation({
     mutationFn: (code: string) =>
@@ -169,6 +266,11 @@ export default function OnboardingScreen() {
     onSuccess: (result) => {
       if (result.status === "pending") {
         queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
+        if (isDirectScanner) {
+          setScannedWorkspace(null);
+          setRequestSentTeamName(result.teamName);
+          return;
+        }
         if (isAddFlow && router.canGoBack()) {
           router.back();
         } else if (router.canGoBack()) {
@@ -184,7 +286,7 @@ export default function OnboardingScreen() {
       if (isAddFlow && router.canGoBack()) {
         router.back();
       } else {
-        router.replace("/(app)/chat");
+        router.replace("/(app)/home");
       }
     },
     onError: (err: unknown) => {
@@ -201,6 +303,13 @@ export default function OnboardingScreen() {
       }
       if (/request already pending/i.test(rawMsg)) {
         queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
+        if (isDirectScanner) {
+          setRequestSentTeamName(
+            scannedWorkspace?.team.name ?? "Workspace request",
+          );
+          setScannedWorkspace(null);
+          return;
+        }
         if (router.canGoBack()) {
           router.back();
         } else {
@@ -218,13 +327,40 @@ export default function OnboardingScreen() {
     },
   });
 
+  const previewJoinMutation = useMutation({
+    mutationFn: (code: string) =>
+      api.get<JoinPreview>(
+        `/api/teams/join-preview/${encodeURIComponent(code)}`,
+      ),
+    onSuccess: (team, code) => {
+      setScanPreviewError(null);
+      setScannedWorkspace({ code, team });
+    },
+    onError: (err: unknown) => {
+      scannedRef.current = false;
+      setScanPreviewError(
+        err instanceof Error
+          ? err.message
+          : "This workspace QR code could not be verified.",
+      );
+    },
+  });
+
   const handleBarcodeScan = ({ data }: { data: string }) => {
-    if (scannedRef.current || joinMutation.isPending) return;
+    if (
+      scannedRef.current ||
+      joinMutation.isPending ||
+      previewJoinMutation.isPending
+    ) {
+      return;
+    }
     const match = data.match(/alenio:\/\/join\/([A-Z0-9]+)/i) ?? data.match(/^([A-Z0-9]{6,12})$/i);
     if (!match) return;
+    const code = match[1]!.toUpperCase();
     scannedRef.current = true;
     setScannerOpen(false);
-    joinMutation.mutate(match[1]!.toUpperCase());
+    setScanPreviewError(null);
+    previewJoinMutation.mutate(code);
   };
 
   const openScanner = async () => {
@@ -233,7 +369,23 @@ export default function OnboardingScreen() {
         "Camera access needed",
         "Alenio uses your camera to scan workspace QR codes. You can also enter an invite code manually.",
         [
-          { text: "Enter code manually", style: "cancel" },
+          {
+            text: "Enter code manually",
+            style: "cancel",
+            onPress: () => {
+              if (isDirectScanner) {
+                router.replace({
+                  pathname: "/onboarding",
+                  params: {
+                    intent: "add",
+                    mode: "join",
+                    action: "code",
+                    focus: "code",
+                  },
+                });
+              }
+            },
+          },
           {
             text: "Continue",
             onPress: async () => {
@@ -258,13 +410,25 @@ export default function OnboardingScreen() {
   };
 
   useEffect(() => {
-    if (mode !== "join" || actionParam !== "scan" || scanActionHandledRef.current) return;
+    if (
+      mode !== "join" ||
+      actionParam !== "scan" ||
+      cameraPermission == null ||
+      scanActionHandledRef.current
+    ) {
+      return;
+    }
     scanActionHandledRef.current = true;
     void openScanner();
-  }, [actionParam, mode]);
+  }, [actionParam, cameraPermission, mode]);
 
   const isCoolingDown = Date.now() < cooldownUntilMs;
-  const isLoading = createMutation.isPending || joinMutation.isPending || isCoolingDown;
+  const isLoading =
+    createMutation.isPending ||
+    joinMutation.isPending ||
+    isFinalizingCheckout ||
+    isCoolingDown ||
+    (mode === "create" && isTrialEligibilityLoading);
 
   const handleSubmit = () => {
     setError(null);
@@ -278,12 +442,12 @@ export default function OnboardingScreen() {
         setError("Please enter a workspace name");
         return;
       }
-      if (!industry.trim()) {
-        setError("Please choose an industry");
-        return;
-      }
       if (createStep === 1) {
         setCreateStep(2);
+        return;
+      }
+      if (!canStartWorkspaceTrial && paidCheckoutId) {
+        void finishPaidCheckout();
         return;
       }
       createMutation.mutate();
@@ -308,33 +472,79 @@ export default function OnboardingScreen() {
     router.replace(NO_WORKSPACE_WELCOME_PATH);
   };
 
+  const closeScanner = () => {
+    setScannerOpen(false);
+    scannedRef.current = false;
+    if (isDirectScanner) handleClose();
+  };
+
+  const enterCodeFromScanner = () => {
+    setScannerOpen(false);
+    scannedRef.current = false;
+    if (isDirectScanner) {
+      router.replace({
+        pathname: "/onboarding",
+        params: {
+          intent: "add",
+          mode: "join",
+          action: "code",
+          focus: "code",
+        },
+      });
+    }
+  };
+
+  const scanAgain = () => {
+    setScannedWorkspace(null);
+    setScanPreviewError(null);
+    setRequestSentTeamName(null);
+    scannedRef.current = false;
+    setScannerOpen(true);
+  };
+
   const isModeLocked = modeParam === "join" || modeParam === "create";
 
   const sheetTitle =
     mode === "create"
       ? createStep === 1
         ? "Create a workspace"
-        : "Start your trial"
-      : isAddFlow
-        ? "Add workplace"
+        : canStartWorkspaceTrial
+          ? "Start your trial"
+          : "Choose a plan"
+      : isDirectCodeEntry
+        ? "Join with invite code"
+        : isDirectScanner
+          ? "Scan workspace QR code"
+          : isAddFlow
+            ? "Add workplace"
         : "Join a workspace";
   const sheetSubtitle =
     mode === "create"
       ? createStep === 1
         ? "Tell us about your operation"
-        : "14 days of Operations, no card required"
-      : "Connect with your organization";
+        : canStartWorkspaceTrial
+          ? "14 days of Operations, no card required"
+          : "Your workspace is created after secure checkout"
+      : isDirectCodeEntry
+        ? "Enter the code shared by your workspace."
+        : isDirectScanner
+          ? "Point your camera at a workspace invitation."
+          : "Connect with your organization";
 
   const sheetFooter = (
     <>
       <TouchableOpacity
         onPress={handleSubmit}
         disabled={isLoading}
-        style={[alenioSheetStyles.primaryButton, isLoading ? alenioSheetStyles.primaryButtonDisabled : null]}
+        style={[
+          alenioSheetStyles.primaryButton,
+          mode === "join" ? styles.joinPrimaryButton : null,
+          isLoading ? alenioSheetStyles.primaryButtonDisabled : null,
+        ]}
         testID="submit-button"
         activeOpacity={0.92}
       >
-        {createMutation.isPending || joinMutation.isPending ? (
+        {createMutation.isPending || joinMutation.isPending || isFinalizingCheckout ? (
           <ActivityIndicator color="white" />
         ) : isCoolingDown ? (
           <Text style={alenioSheetStyles.primaryButtonText}>
@@ -345,28 +555,28 @@ export default function OnboardingScreen() {
             {mode === "create"
               ? createStep === 1
                 ? "Continue"
-                : "Start 14-Day Trial"
+                : canStartWorkspaceTrial
+                  ? "Start 14-Day Trial"
+                  : paidCheckoutId
+                    ? "Check Workspace Status"
+                    : "Continue to Secure Checkout"
               : "Join workspace"}
           </Text>
         )}
       </TouchableOpacity>
-      <TouchableOpacity
-        onPress={() => {
-          if (mode === "create" && createStep === 2) {
+      {mode === "create" && createStep === 2 ? (
+        <TouchableOpacity
+          onPress={() => {
             setCreateStep(1);
             setError(null);
-          } else {
-            handleClose();
-          }
-        }}
-        style={alenioSheetStyles.cancelButton}
-        testID="onboarding-cancel"
-        activeOpacity={0.8}
-      >
-        <Text style={alenioSheetStyles.cancelButtonText}>
-          {mode === "create" && createStep === 2 ? "Back" : "Cancel"}
-        </Text>
-      </TouchableOpacity>
+          }}
+          style={alenioSheetStyles.cancelButton}
+          testID="onboarding-back"
+          activeOpacity={0.8}
+        >
+          <Text style={alenioSheetStyles.cancelButtonText}>Back</Text>
+        </TouchableOpacity>
+      ) : null}
     </>
   );
 
@@ -436,29 +646,8 @@ export default function OnboardingScreen() {
               <Text style={styles.logoSubtitle}>You can change this later.</Text>
             </View>
           </Pressable>
-          <FieldLabel>Industry</FieldLabel>
-          <View style={styles.industryGrid}>
-            {INDUSTRIES.map((value) => {
-              const selected = industry === value;
-              return (
-                <Pressable
-                  key={value}
-                  onPress={() => {
-                    setIndustry(value);
-                    setError(null);
-                  }}
-                  style={[styles.industryChip, selected ? styles.industryChipSelected : null]}
-                  testID={`industry-${value.toLowerCase().replace(/\s+/g, "-")}`}
-                >
-                  <Text style={[styles.industryText, selected ? styles.industryTextSelected : null]}>
-                    {value}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
         </AlenioSheetCard>
-      ) : mode === "create" ? (
+      ) : mode === "create" && canStartWorkspaceTrial ? (
         <AlenioSheetCard tint="purple" compact>
           <View style={styles.trialHero}>
             <View style={styles.trialIcon}>
@@ -494,26 +683,73 @@ export default function OnboardingScreen() {
             </Text>
           </View>
         </AlenioSheetCard>
+      ) : mode === "create" ? (
+        <AlenioSheetCard tint="purple" compact>
+          <View style={styles.trialHero}>
+            <View style={styles.trialIcon}>
+              <ShieldCheck size={24} color="white" />
+            </View>
+            <Text style={styles.trialEyebrow}>PLAN REQUIRED</Text>
+            <Text style={styles.trialTitle}>Choose your workspace plan</Text>
+            <Text style={styles.trialSubtitle}>
+              Your free trial was used previously. Nothing is created or charged until secure checkout succeeds.
+            </Text>
+          </View>
+          {([
+            {
+              id: "pro",
+              name: plans.pro.name,
+              price: `${plans.pro.priceLabel} / ${plans.pro.interval}`,
+              detail: "Tasks, calendars, coaching, insights, and Seneca",
+            },
+            {
+              id: "operations",
+              name: plans.operations.name,
+              price: `${plans.operations.priceLabel} / ${plans.operations.interval}`,
+              detail: `Everything in ${plans.pro.name}, plus Alenio Go operations tools`,
+            },
+          ] as const).map((plan) => {
+            const selected = selectedPlan === plan.id;
+            return (
+              <Pressable
+                key={plan.id}
+                onPress={() => setSelectedPlan(plan.id)}
+                style={[styles.paidPlanCard, selected ? styles.paidPlanCardSelected : null]}
+                accessibilityState={{ selected }}
+                testID={`workspace-plan-${plan.id}`}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.paidPlanName}>{plan.name}</Text>
+                  <Text style={styles.paidPlanDetail}>{plan.detail}</Text>
+                  <Text style={styles.paidPlanPrice}>{plan.price}</Text>
+                </View>
+                <View style={[styles.planRadio, selected ? styles.planRadioSelected : null]}>
+                  {selected ? <CheckCircle2 size={16} color="white" /> : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </AlenioSheetCard>
       ) : (
         <>
-          <AlenioSheetCard tint="purple" compact>
-            <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
-              <AlenioSheetIcon color="#7C3AED" compact>
+          <View style={styles.joinCodeCard}>
+            <View style={styles.joinCardHeader}>
+              <View style={styles.joinIcon}>
                 <Users size={16} color="white" />
-              </AlenioSheetIcon>
-              <View style={{ flex: 1 }}>
-                <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]}>Join with invite code</Text>
-                <Text style={[alenioSheetStyles.optionSubtitle, alenioSheetStyles.optionSubtitleCompact]}>
+              </View>
+              <View style={styles.joinCardCopy}>
+                <Text style={styles.joinCardTitle}>Join with invite code</Text>
+                <Text style={styles.joinCardSubtitle}>
                   Enter the code shared by your team admin.
                 </Text>
               </View>
             </View>
-            <FieldLabel>Invite code</FieldLabel>
+            <Text style={styles.joinFieldLabel}>INVITE CODE</Text>
             <TextInput
               ref={inviteCodeInputRef}
-              style={[alenioSheetStyles.fieldInput, styles.codeInput]}
-              placeholder="Enter invite code"
-              placeholderTextColor="#94A3B8"
+              style={styles.joinCodeInput}
+              placeholder="E.G. L7MGHETS"
+              placeholderTextColor="#A7AEC0"
               autoCapitalize="characters"
               autoCorrect={false}
               autoComplete="off"
@@ -528,50 +764,240 @@ export default function OnboardingScreen() {
               maxLength={INVITE_CODE_MAX_LENGTH}
               testID="invite-code-input"
             />
-          </AlenioSheetCard>
+            <Text style={styles.joinCodeHint}>Codes are letters and numbers only</Text>
+          </View>
 
-          <TouchableOpacity onPress={openScanner} activeOpacity={0.92} testID="scan-qr-button">
-            <AlenioSheetCard compact>
-              <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
-                <AlenioSheetIcon compact>
-                  <ScanLine size={16} color="white" />
-                </AlenioSheetIcon>
-                <View style={{ flex: 1 }}>
-                  <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]}>Scan QR code</Text>
-                  <Text style={[alenioSheetStyles.optionSubtitle, alenioSheetStyles.optionSubtitleCompact]}>
-                    Point at your team QR code to join automatically.
-                  </Text>
-                </View>
+          {!isDirectCodeEntry ? (
+            <TouchableOpacity
+              onPress={openScanner}
+              activeOpacity={0.86}
+              style={styles.scanCard}
+              testID="scan-qr-button"
+            >
+              <View style={styles.scanIcon}>
+                    <ScanLine size={16} color="white" />
               </View>
-            </AlenioSheetCard>
-          </TouchableOpacity>
+              <View style={styles.joinCardCopy}>
+                    <Text style={styles.joinCardTitle}>Scan QR code</Text>
+                    <Text style={styles.joinCardSubtitle}>
+                      Point at your team QR code to join automatically.
+                    </Text>
+              </View>
+              <View style={styles.scanChevron}>
+                <ChevronRight size={17} color="#64748B" strokeWidth={2.2} />
+              </View>
+            </TouchableOpacity>
+          ) : null}
         </>
       )}
 
       {error ? (
-        <View style={alenioSheetStyles.errorBox}>
-          <Text style={alenioSheetStyles.errorText}>{error}</Text>
+        <View style={styles.joinErrorBox}>
+          <View style={styles.joinErrorIcon}>
+            <AlertCircle size={16} color="#DC2626" strokeWidth={2.2} />
+          </View>
+          <View style={styles.joinErrorCopy}>
+            <Text style={styles.joinErrorTitle}>We couldn’t find that workspace</Text>
+            <Text style={styles.joinErrorText}>{error}</Text>
+          </View>
         </View>
       ) : null}
     </>
   );
 
+  const directScannerContent = requestSentTeamName ? (
+    <AlenioBottomSheet
+      asScreen
+      compact
+      title="Request sent"
+      subtitle="Workspace leaders can now review your request."
+      onClose={handleClose}
+      footer={
+        <TouchableOpacity
+          onPress={handleClose}
+          style={alenioSheetStyles.primaryButton}
+          activeOpacity={0.92}
+          testID="join-request-sent-done"
+        >
+          <Text style={alenioSheetStyles.primaryButtonText}>Done</Text>
+        </TouchableOpacity>
+      }
+      testID="join-request-sent-sheet"
+    >
+      <AlenioSheetCard tint="purple" compact>
+        <View style={styles.scanResultContent}>
+          <View style={styles.scanSuccessIcon}>
+            <CheckCircle2 size={27} color="#FFFFFF" strokeWidth={2.4} />
+          </View>
+          <Text style={styles.scanResultEyebrow}>REQUEST DELIVERED</Text>
+          <Text style={styles.scanResultTitle}>{requestSentTeamName}</Text>
+          <Text style={styles.scanResultBody}>
+            Your request is waiting for approval. You’ll see the workspace after
+            a leader approves it.
+          </Text>
+        </View>
+      </AlenioSheetCard>
+    </AlenioBottomSheet>
+  ) : scannedWorkspace ? (
+    <AlenioBottomSheet
+      asScreen
+      compact
+      title="Confirm workspace"
+      subtitle="Make sure this is the workspace you want to join."
+      onClose={handleClose}
+      footer={
+        <>
+          <TouchableOpacity
+            onPress={() => {
+              setError(null);
+              joinMutation.mutate(scannedWorkspace.code);
+            }}
+            disabled={joinMutation.isPending}
+            style={[
+              alenioSheetStyles.primaryButton,
+              joinMutation.isPending
+                ? alenioSheetStyles.primaryButtonDisabled
+                : null,
+            ]}
+            activeOpacity={0.92}
+            testID="confirm-scanned-workspace"
+          >
+            {joinMutation.isPending ? (
+              <View style={styles.sendingRequestRow}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={alenioSheetStyles.primaryButtonText}>
+                  Sending request…
+                </Text>
+              </View>
+            ) : (
+              <Text style={alenioSheetStyles.primaryButtonText}>
+                Send join request
+              </Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={scanAgain}
+            disabled={joinMutation.isPending}
+            style={alenioSheetStyles.cancelButton}
+            activeOpacity={0.8}
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>
+              Scan a different code
+            </Text>
+          </TouchableOpacity>
+        </>
+      }
+      testID="confirm-scanned-workspace-sheet"
+    >
+      <AlenioSheetCard compact>
+        <View style={styles.scannedWorkspaceRow}>
+          {scannedWorkspace.team.image ? (
+            <Image
+              source={{ uri: scannedWorkspace.team.image }}
+              style={styles.scannedWorkspaceImage}
+            />
+          ) : (
+            <View style={styles.scannedWorkspaceFallback}>
+              <Building2 size={22} color="#5368E8" strokeWidth={2.1} />
+            </View>
+          )}
+          <View style={styles.scannedWorkspaceCopy}>
+            <Text style={styles.scanResultEyebrow}>WORKSPACE FOUND</Text>
+            <Text style={styles.scannedWorkspaceName} numberOfLines={2}>
+              {scannedWorkspace.team.name}
+            </Text>
+            <Text style={styles.scannedWorkspaceNote}>
+              A leader must approve your request.
+            </Text>
+          </View>
+        </View>
+      </AlenioSheetCard>
+      {error ? (
+        <View style={alenioSheetStyles.errorBox}>
+          <Text style={alenioSheetStyles.errorText}>{error}</Text>
+        </View>
+      ) : null}
+    </AlenioBottomSheet>
+  ) : scanPreviewError ? (
+    <AlenioBottomSheet
+      asScreen
+      compact
+      title="QR code not recognized"
+      subtitle="This code could not be matched to an Alenio workspace."
+      onClose={handleClose}
+      footer={
+        <>
+          <TouchableOpacity
+            onPress={scanAgain}
+            style={alenioSheetStyles.primaryButton}
+            activeOpacity={0.92}
+          >
+            <Text style={alenioSheetStyles.primaryButtonText}>Scan again</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={enterCodeFromScanner}
+            style={alenioSheetStyles.cancelButton}
+            activeOpacity={0.8}
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>
+              Enter code manually
+            </Text>
+          </TouchableOpacity>
+        </>
+      }
+    >
+      <View style={alenioSheetStyles.errorBox}>
+        <Text style={alenioSheetStyles.errorText}>{scanPreviewError}</Text>
+      </View>
+    </AlenioBottomSheet>
+  ) : previewJoinMutation.isPending ? (
+    <View style={styles.scanLookupScreen}>
+      <ActivityIndicator color={WELCOME_UI.primary} size="large" />
+      <Text style={styles.scanLookupTitle}>Confirming workspace…</Text>
+      <Text style={styles.scanLookupBody}>
+        Checking the invitation before anything is sent.
+      </Text>
+    </View>
+  ) : (
+    <View style={styles.scannerLaunchScreen} />
+  );
+
   return (
     <>
-      <AlenioBottomSheet
-        asScreen
-        compact
-        title={sheetTitle}
-        subtitle={sheetSubtitle}
-        onClose={handleClose}
-        footer={sheetFooter}
-        testID="onboarding-screen"
-      >
-        {modalBody}
-      </AlenioBottomSheet>
+      {isDirectScanner ? (
+        directScannerContent
+      ) : (
+        <AlenioBottomSheet
+          asScreen
+          compact
+          title={sheetTitle}
+          subtitle={sheetSubtitle}
+          onClose={handleClose}
+          showCloseButton
+          footer={sheetFooter}
+          testID="onboarding-screen"
+        >
+          {modalBody}
+        </AlenioBottomSheet>
+      )}
+
+      <BillingPortalWebViewModal
+        visible={!!billingUrl}
+        url={billingUrl}
+        workspaceName={teamName.trim()}
+        onClose={() => setBillingUrl(null)}
+        onFlowComplete={(result) => {
+          if (result === "success") {
+            void finishPaidCheckout();
+          } else {
+            setPaidCheckoutId(null);
+            setError("Checkout was canceled. No workspace was created.");
+          }
+        }}
+      />
 
       {/* QR Scanner Modal — unchanged */}
-      <Modal visible={scannerOpen} animationType="slide" onRequestClose={() => { setScannerOpen(false); scannedRef.current = false; }}>
+      <Modal visible={scannerOpen} animationType="slide" onRequestClose={closeScanner}>
         <View style={{ flex: 1, backgroundColor: "#000" }}>
           <CameraView
             style={{ flex: 1 }}
@@ -584,7 +1010,7 @@ export default function OnboardingScreen() {
               <View style={{ paddingTop: insets.top }}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 12 }}>
                   <Pressable
-                    onPress={() => { setScannerOpen(false); scannedRef.current = false; }}
+                    onPress={closeScanner}
                     style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}
                     testID="scanner-close"
                   >
@@ -639,7 +1065,7 @@ export default function OnboardingScreen() {
                     You&apos;ll join automatically when it&apos;s detected
                   </Text>
                   <Pressable
-                    onPress={() => { setScannerOpen(false); scannedRef.current = false; }}
+                    onPress={enterCodeFromScanner}
                     style={{ marginTop: 12, paddingVertical: 6 }}
                     testID="scanner-enter-code-manually"
                   >
@@ -656,6 +1082,112 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
+  scannerLaunchScreen: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  scanLookupScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    backgroundColor: "#FFFFFF",
+  },
+  scanLookupTitle: {
+    marginTop: 16,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "700",
+    color: "#172033",
+  },
+  scanLookupBody: {
+    marginTop: 5,
+    textAlign: "center",
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#7C8798",
+  },
+  scannedWorkspaceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 13,
+  },
+  scannedWorkspaceImage: {
+    width: 58,
+    height: 58,
+    borderRadius: 15,
+    backgroundColor: "#EEF2F7",
+  },
+  scannedWorkspaceFallback: {
+    width: 58,
+    height: 58,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF2FF",
+    borderWidth: 1,
+    borderColor: "#DDE3FF",
+  },
+  scannedWorkspaceCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  scannedWorkspaceName: {
+    marginTop: 2,
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  scannedWorkspaceNote: {
+    marginTop: 4,
+    fontSize: 11,
+    lineHeight: 15,
+    color: "#7C8798",
+  },
+  scanResultContent: {
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  scanSuccessIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#4361EE",
+  },
+  scanResultEyebrow: {
+    marginTop: 10,
+    fontSize: 9.5,
+    lineHeight: 13,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: "#6D4AE8",
+  },
+  scanResultTitle: {
+    marginTop: 4,
+    textAlign: "center",
+    fontSize: 19,
+    lineHeight: 24,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  scanResultBody: {
+    maxWidth: 285,
+    marginTop: 7,
+    textAlign: "center",
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#7C8798",
+  },
+  sendingRequestRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+  },
   modeToggle: {
     flexDirection: "row",
     backgroundColor: WELCOME_UI.pageBg,
@@ -681,9 +1213,159 @@ const styles = StyleSheet.create({
   modeOptionTextActive: {
     color: "#FFFFFF",
   },
-  codeInput: {
-    letterSpacing: 1.5,
-    fontWeight: "600",
+  joinCodeCard: {
+    padding: 15,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E5E7F0",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#27305F",
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  joinCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    marginBottom: 17,
+  },
+  joinIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#6D4AFF",
+    shadowColor: "#6D4AFF",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.25,
+    shadowRadius: 9,
+    elevation: 3,
+  },
+  joinCardCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  joinCardTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: "#151B32",
+  },
+  joinCardSubtitle: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 15,
+    color: "#7B8499",
+  },
+  joinFieldLabel: {
+    marginBottom: 7,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "800",
+    letterSpacing: 1.15,
+    color: "#6D4AFF",
+  },
+  joinCodeInput: {
+    height: 50,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    borderColor: "#D9DDEC",
+    paddingHorizontal: 14,
+    backgroundColor: "#FAFBFF",
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "700",
+    letterSpacing: 2,
+    color: "#151B32",
+  },
+  joinCodeHint: {
+    marginTop: 7,
+    marginLeft: 2,
+    fontSize: 9.5,
+    lineHeight: 13,
+    color: "#9AA2B4",
+  },
+  scanCard: {
+    minHeight: 66,
+    marginTop: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#E5E7F0",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#27305F",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  scanIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#4361EE",
+  },
+  scanChevron: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F4F6FB",
+  },
+  joinErrorBox: {
+    marginTop: 11,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#FED7D7",
+    backgroundColor: "#FFF7F7",
+  },
+  joinErrorIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FEE2E2",
+  },
+  joinErrorCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  joinErrorTitle: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    color: "#B91C1C",
+  },
+  joinErrorText: {
+    marginTop: 2,
+    fontSize: 10,
+    lineHeight: 15,
+    color: "#C24141",
+  },
+  joinPrimaryButton: {
+    minHeight: 50,
+    borderRadius: 15,
+    backgroundColor: "#536DFE",
+    shadowColor: "#4361EE",
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.25,
+    shadowRadius: 13,
+    elevation: 4,
   },
   logoPicker: {
     minHeight: 58,
@@ -706,18 +1388,6 @@ const styles = StyleSheet.create({
   logoPreview: { width: 42, height: 42, borderRadius: 10 },
   logoTitle: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
   logoSubtitle: { fontSize: 11, color: "#64748B", marginTop: 2 },
-  industryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  industryChip: {
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    backgroundColor: "#FFFFFF",
-  },
-  industryChipSelected: { borderColor: WELCOME_UI.primary, backgroundColor: "#EEF2FF" },
-  industryText: { fontSize: 12, fontWeight: "600", color: "#475569" },
-  industryTextSelected: { color: WELCOME_UI.primary },
   trialHero: { alignItems: "center", paddingBottom: 12 },
   trialIcon: {
     width: 48,
@@ -742,4 +1412,29 @@ const styles = StyleSheet.create({
   comingSoonText: { fontSize: 8, fontWeight: "800", letterSpacing: 0.5, color: "#B45309" },
   trialNote: { marginTop: 10, borderRadius: 9, backgroundColor: "#F8FAFC", padding: 10 },
   trialNoteText: { fontSize: 11, lineHeight: 16, color: "#64748B", textAlign: "center" },
+  paidPlanCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 13,
+    marginTop: 9,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 13,
+    backgroundColor: "#FFFFFF",
+  },
+  paidPlanCardSelected: { borderColor: WELCOME_UI.primary, backgroundColor: "#EEF2FF" },
+  paidPlanName: { fontSize: 14, fontWeight: "700", color: "#0F172A" },
+  paidPlanDetail: { marginTop: 3, fontSize: 11, lineHeight: 16, color: "#64748B" },
+  paidPlanPrice: { marginTop: 6, fontSize: 12, fontWeight: "700", color: WELCOME_UI.primary },
+  planRadio: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  planRadioSelected: { borderColor: WELCOME_UI.primary, backgroundColor: WELCOME_UI.primary },
 });

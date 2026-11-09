@@ -109,7 +109,7 @@ function lifecycleRowFromModule(mod: WorkspaceModule): WorkspaceModuleRow {
   };
   return {
     moduleKey: mod.moduleKey,
-    moduleName: mod.moduleKey === "temp-checks" ? "Temp checks" : mod.moduleName,
+    moduleName: mod.moduleName,
     description: mod.description,
     icon: iconMap[mod.moduleKey as LifecycleModuleKey] ?? "checklists",
     configureHref: mod.baseHref,
@@ -122,7 +122,7 @@ export function defaultWorkspaceModules(): WorkspaceModule[] {
   return [
     {
       moduleKey: "temp-checks",
-      moduleName: "Temperature Checks",
+      moduleName: "Food Safety",
       description: "Configure temps in Go; associates take checks in the Alenio Temps app.",
       icon: "temp",
       tone: "emerald",
@@ -173,7 +173,7 @@ export function defaultWorkspaceModules(): WorkspaceModule[] {
     },
     {
       moduleKey: "walks",
-      moduleName: "Walks",
+      moduleName: "Guided Walks",
       description: "Structured manager observations with saved walk history.",
       icon: "walks",
       tone: "violet",

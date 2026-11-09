@@ -61,9 +61,25 @@ export function ActiveFilterChips({
   return (
     <View style={{ minHeight: hasChips ? 28 : 0, justifyContent: "center" }}>
       {hasChips ? (
-        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 4,
+          }}
+        >
           <Filter size={10} color="#94A3B8" />
-          <Text style={{ fontSize: 10, color: "#94A3B8", fontWeight: "600", marginRight: 2 }}>Filters:</Text>
+          <Text
+            style={{
+              fontSize: 10,
+              color: "#94A3B8",
+              fontWeight: "600",
+              marginRight: 2,
+            }}
+          >
+            Filters:
+          </Text>
           {chips.map((chip) => (
             <Pressable
               key={chip.key}
@@ -77,11 +93,17 @@ export function ActiveFilterChips({
                 paddingVertical: 3,
               }}
             >
-              <Text style={{ fontSize: 10, fontWeight: "600", color: "#4361EE" }}>{chip.label} ×</Text>
+              <Text
+                style={{ fontSize: 10, fontWeight: "600", color: "#4361EE" }}
+              >
+                {chip.label} ×
+              </Text>
             </Pressable>
           ))}
           <Pressable onPress={onClearAll} hitSlop={6}>
-            <Text style={{ fontSize: 10, fontWeight: "600", color: "#4361EE" }}>Clear all</Text>
+            <Text style={{ fontSize: 10, fontWeight: "600", color: "#4361EE" }}>
+              Clear all
+            </Text>
           </Pressable>
         </View>
       ) : null}

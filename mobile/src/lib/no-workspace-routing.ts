@@ -51,7 +51,7 @@ export async function resolveAuthenticatedDestination(
     return `/onboarding?mode=join&code=${encodeURIComponent(joinCode)}&focus=code`;
   }
 
-  // Chat is home whether or not you have a workspace — the account is the anchor.
+  // Home is the account-first anchor with or without a workspace.
   const teams = await fetchUserTeams(queryClient);
   const storedTeamId = useTeamStore.getState().activeTeamId;
   const nextTeamId = resolveActiveTeamId(teams, storedTeamId);
@@ -59,7 +59,7 @@ export async function resolveAuthenticatedDestination(
     useTeamStore.getState().setActiveTeamId(nextTeamId);
   }
 
-  return "/(app)/chat";
+  return "/(app)/home";
 }
 
 export function navigateToAuthenticatedHome(isAdmin: boolean, queryClient?: QueryClient) {
@@ -69,7 +69,7 @@ export function navigateToAuthenticatedHome(isAdmin: boolean, queryClient?: Quer
     if (cancelled) return;
     try {
       const destination = await resolveAuthenticatedDestination(isAdmin, queryClient);
-      router.replace(destination);
+      router.replace(destination as never);
     } catch {
       // expo-router can throw if the target stack is not mounted yet
     }

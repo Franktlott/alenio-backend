@@ -120,7 +120,7 @@ export function OwnershipTransferReturnPage() {
           const res = await completeOwnershipTransferPayment(teamId, transferId);
           if (res.data.completed) {
             setStatus("done");
-            window.setTimeout(() => navigate("/team", { replace: true }), 1400);
+            window.setTimeout(() => navigate("/go", { replace: true }), 1400);
             return;
           }
           if (res.data.paymentSetupUrl) setSetupUrl(res.data.paymentSetupUrl);
@@ -138,7 +138,7 @@ export function OwnershipTransferReturnPage() {
         });
         if (res.data.completed) {
           setStatus("done");
-          window.setTimeout(() => navigate("/team", { replace: true }), 1600);
+          window.setTimeout(() => navigate("/go", { replace: true }), 1600);
           return;
         }
         setStatus("needs_card");
@@ -184,8 +184,8 @@ export function OwnershipTransferReturnPage() {
             </a>
           ) : null}
           {status === "working" || status === "done" ? null : (
-            <Link className="ownership-return-secondary" to="/team">
-              Return to Team
+            <Link className="ownership-return-secondary" to="/go">
+              Return to Alenio
             </Link>
           )}
         </div>

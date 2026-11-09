@@ -4,6 +4,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import type { ActivityComment } from "@/lib/activity-comments";
 import { isPendingComment } from "@/lib/activity-comments";
 import { formatFeedTimestamp, myReactionEmoji } from "@/lib/workspace-updates";
+import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
 import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
 
 type Props = {
@@ -14,10 +15,14 @@ type Props = {
   onPressReact?: (comment: ActivityComment) => void;
   /** Aims the composer at this comment's thread. */
   onPressReply?: (comment: ActivityComment) => void;
+  /** Opens the sheet listing everyone who reacted to this comment. */
+  onPressReactions?: (comment: ActivityComment) => void;
   /** Emoji tray, rendered under the bubble while it is open. */
   picker?: React.ReactNode;
   /** Replies sit indented under their parent. */
   inset?: boolean;
+  /** Denser type and spacing, for the thread pane beside the feed. */
+  compact?: boolean;
 };
 
 /** One comment: avatar beside a soft bubble, the way chat threads read. */
@@ -27,8 +32,10 @@ export function UpdateCommentRow({
   onDelete,
   onPressReact,
   onPressReply,
+  onPressReactions,
   picker,
   inset = false,
+  compact = false,
 }: Props) {
   const pending = isPendingComment(comment);
   const name = comment.author.name?.trim() || "Someone";
@@ -39,13 +46,14 @@ export function UpdateCommentRow({
     0,
   );
   const mineColor = feedReaction(mine)?.color;
-  const size = inset ? 26 : 32;
+  const size = compact ? (inset ? 24 : 28) : inset ? 26 : 32;
 
   return (
     <View
       style={[
         styles.row,
-        inset ? styles.rowInset : null,
+        compact ? styles.rowCompact : null,
+        inset ? (compact ? styles.rowInsetCompact : styles.rowInset) : null,
         pending ? styles.pending : null,
       ]}
       testID={`update-comment-${comment.id}`}
@@ -56,13 +64,16 @@ export function UpdateCommentRow({
         radius={size / 2}
         backgroundColor="#EEF2FF"
         textColor="#4361EE"
-        fontSize={inset ? 11 : 13}
+        fontSize={compact ? (inset ? 10 : 11.5) : inset ? 11 : 13}
         workplaceConnected={false}
       />
       <View style={styles.main}>
         <View style={styles.bubble}>
           <View style={styles.header}>
-            <Text style={styles.name} numberOfLines={1}>
+            <Text
+              style={[styles.name, compact ? styles.nameCompact : null]}
+              numberOfLines={1}
+            >
               {name}
             </Text>
             <Text style={styles.time}>
@@ -80,25 +91,14 @@ export function UpdateCommentRow({
               </Pressable>
             ) : null}
           </View>
-          <Text style={styles.body}>{comment.body}</Text>
-
-          {reactionCount > 0 ? (
-            <View style={styles.reactionSummary}>
-              {Object.entries(reactions)
-                .filter(([, group]) => group.count > 0)
-                .map(([emoji, group]) => (
-                  <View key={emoji} style={styles.reactionChip}>
-                    <Text style={styles.reactionEmoji}>{emoji}</Text>
-                    <Text style={styles.reactionCount}>{group.count}</Text>
-                  </View>
-                ))}
-            </View>
-          ) : null}
+          <Text style={[styles.body, compact ? styles.bodyCompact : null]}>
+            {comment.body}
+          </Text>
         </View>
 
         {picker}
 
-        {!pending && (onPressReact || onPressReply) ? (
+        {!pending && (onPressReact || onPressReply || reactionCount > 0) ? (
           <View style={styles.actions}>
             {onPressReact ? (
               <Pressable
@@ -113,9 +113,7 @@ export function UpdateCommentRow({
                 testID={`react-update-comment-${comment.id}`}
                 style={styles.actionBtn}
               >
-                {mine ? (
-                  <Text style={styles.actionGlyph}>{mine}</Text>
-                ) : null}
+                {mine ? <Text style={styles.actionGlyph}>{mine}</Text> : null}
                 <Text
                   style={[
                     styles.actionText,
@@ -138,6 +136,16 @@ export function UpdateCommentRow({
                 <Text style={styles.actionText}>Reply</Text>
               </Pressable>
             ) : null}
+            {reactionCount > 0 && onPressReactions ? (
+              <View style={styles.reactionSummary}>
+                <ReactionFacepile
+                  reactions={reactions}
+                  onPress={() => onPressReactions(comment)}
+                  compact
+                  testID={`update-comment-${comment.id}-reaction-facepile`}
+                />
+              </View>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -155,6 +163,23 @@ const styles = StyleSheet.create({
   },
   rowInset: {
     paddingLeft: 46,
+  },
+  /** A pane sits beside the feed, where the surrounding type is a step smaller. */
+  rowCompact: {
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  rowInsetCompact: {
+    paddingLeft: 38,
+  },
+  nameCompact: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  bodyCompact: {
+    fontSize: 12.5,
+    lineHeight: 17,
   },
   pending: {
     opacity: 0.6,
@@ -195,29 +220,8 @@ const styles = StyleSheet.create({
     color: "#1E293B",
   },
   reactionSummary: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 5,
-    marginTop: 7,
-  },
-  reactionChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    borderRadius: 11,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    backgroundColor: "#FFFFFF",
-  },
-  reactionEmoji: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  reactionCount: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "600",
-    color: "#64748B",
+    // Opposite edge from React, so reading and reacting stay apart.
+    marginLeft: "auto",
   },
   actions: {
     flexDirection: "row",

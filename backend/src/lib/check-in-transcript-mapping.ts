@@ -120,6 +120,9 @@ const MAPPING_INSTRUCTION = `You are turning the transcript of a real check-in c
 Rules:
 - Only use what was actually said. Never infer, embellish, or fill gaps with plausible-sounding content.
 - If a question was not discussed, OMIT its id from responses entirely. A blank is far better than a guess.
+- Never pick a rating or a yes/no unless someone actually said it in the conversation.
+- Lines like "[part of this conversation could not be transcribed]" are gaps, not content. Never guess what was said in them.
+- If the transcript has no real conversation (silence, noise, a few stray words, only gap notes), return "responses": {} and "summary": "". An empty result is correct; a made-up one is never acceptable.
 - Write answers as concise notes in the leader's voice, not as a transcript quote.
 - The transcript comes from automatic speech recognition and may contain errors; ignore garbled fragments.
 - Speakers are not labelled. Attribute carefully and stay neutral when it is unclear who said what.

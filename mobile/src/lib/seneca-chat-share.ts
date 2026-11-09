@@ -4,6 +4,8 @@ import { ALENIO_LOGO_URL, downloadHtmlAsPdf, escapeHtml, printHtml, safePdfFilen
 export type SenecaChatShareMessage = {
   role: "user" | "assistant";
   text: string;
+  attachmentFileName?: string | null;
+  generatedImageUrl?: string | null;
 };
 
 function formatTimestamp(date = new Date()): string {
@@ -32,7 +34,13 @@ export function formatSenecaChatTranscript(
   const body = messages
     .map((message) => {
       const label = message.role === "user" ? "You" : "Seneca";
-      return `${label}:\n${message.text.trim()}`;
+      const attachment = message.attachmentFileName
+        ? `\nAttachment: ${message.attachmentFileName}`
+        : "";
+      const generatedImage = message.generatedImageUrl
+        ? `\nGenerated image: ${message.generatedImageUrl}`
+        : "";
+      return `${label}:\n${message.text.trim()}${attachment}${generatedImage}`;
     })
     .join("\n\n");
 
@@ -47,7 +55,13 @@ function buildSenecaChatHtml(
     .map((message) => {
       const label = message.role === "user" ? "You" : "Seneca";
       const cls = message.role === "user" ? "user" : "seneca";
-      return `<div class="msg ${cls}"><div class="label">${escapeHtml(label)}</div><div class="body">${escapeHtml(message.text).replace(/\n/g, "<br/>")}</div></div>`;
+      const attachment = message.attachmentFileName
+        ? `<div class="attachment">Attachment: ${escapeHtml(message.attachmentFileName)}</div>`
+        : "";
+      const generatedImage = message.generatedImageUrl
+        ? `<div class="attachment">Generated image: ${escapeHtml(message.generatedImageUrl)}</div>`
+        : "";
+      return `<div class="msg ${cls}"><div class="label">${escapeHtml(label)}</div><div class="body">${escapeHtml(message.text).replace(/\n/g, "<br/>")}</div>${attachment}${generatedImage}</div>`;
     })
     .join("\n");
 
@@ -67,6 +81,7 @@ function buildSenecaChatHtml(
     .label { font-size: 8pt; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #4361ee; margin-bottom: 4px; }
     .msg.user .label { color: #3730a3; }
     .body { white-space: pre-wrap; }
+    .attachment { margin-top: 6px; color: #64748b; font-size: 9pt; }
     .foot { margin-top: 18px; padding-top: 8px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 8pt; }
   </style>
 </head>

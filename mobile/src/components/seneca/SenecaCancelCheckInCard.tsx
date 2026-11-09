@@ -4,6 +4,7 @@ import * as Haptics from "expo-haptics";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import type { SenecaCancelOneOnOneProposal } from "@/lib/seneca-api";
+import { invalidateDevelopmentCaches } from "@/lib/invalidate-development-caches";
 
 type Props = {
   teamId: string;
@@ -24,6 +25,11 @@ export function SenecaCancelCheckInCard({ teamId, proposal, onCancelled, onDismi
       void queryClient.invalidateQueries({
         queryKey: ["planned-one-on-ones", teamId, proposal.memberUserId],
       });
+      void invalidateDevelopmentCaches(
+        queryClient,
+        teamId,
+        proposal.memberUserId,
+      );
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onCancelled(
         `Done — I removed your check-in with ${proposal.memberName} on ${proposal.dateLabel} at ${proposal.timeLabel}.`,

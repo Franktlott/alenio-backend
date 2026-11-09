@@ -7,7 +7,7 @@ import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useUnreadStore } from "@/lib/state/unread-store";
-import { tabBarClearance } from "@/lib/tab-bar";
+import { useTabBarClearanceFn } from "@/lib/tab-bar";
 import type { Team } from "@/lib/types";
 import type { SpaceTopic } from "@/components/SpacesSection";
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
@@ -47,6 +47,7 @@ function UnreadBadge({ count }: { count: number }) {
 
 export function WorkspacesSection({ activeTeamId, onSelectTeam, cardStyle }: Props) {
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearanceFn();
   const { data: session } = useSession();
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
   const rowStyle = cardStyle ?? defaultRowStyle;
@@ -159,7 +160,7 @@ export function WorkspacesSection({ activeTeamId, onSelectTeam, cardStyle }: Pro
         <ScrollView
           style={{ flex: 1, minHeight: 0 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: tabBarClearance(insets.bottom, 8) }}
+          contentContainerStyle={{ paddingBottom: tabClearance(8) }}
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled"
         >

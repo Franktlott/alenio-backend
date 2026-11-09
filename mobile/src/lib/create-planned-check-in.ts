@@ -1,10 +1,5 @@
 import { api } from "@/lib/api/api";
-import {
-  ONE_ON_ONE_EVENT_COLOR,
-  ONE_ON_ONE_REMINDER_MINUTES,
-  oneOnOneEndFromDuration,
-  oneOnOneEventTitle,
-} from "@/lib/plan-one-on-one";
+import { buildScheduledCheckInPayload } from "@/lib/regular-meeting-payload";
 
 export type CreatePlannedCheckInInput = {
   memberUserId: string;
@@ -16,21 +11,7 @@ export type CreatePlannedCheckInInput = {
 };
 
 export function buildPlannedCheckInPayload(input: CreatePlannedCheckInInput) {
-  const end = oneOnOneEndFromDuration(input.startDate, input.durationMinutes);
-  return {
-    title: oneOnOneEventTitle(input.memberName),
-    startDate: input.startDate.toISOString(),
-    endDate: end.toISOString(),
-    allDay: false,
-    color: ONE_ON_ONE_EVENT_COLOR,
-    isHidden: true,
-    isOneOnOne: true,
-    oneOnOneMemberUserId: input.memberUserId,
-    oneOnOneTemplateId: input.templateId || undefined,
-    isVideoMeeting: input.isVideoMeeting ?? false,
-    reminderMinutes: ONE_ON_ONE_REMINDER_MINUTES,
-    assigneeIds: [input.memberUserId],
-  };
+  return buildScheduledCheckInPayload(input);
 }
 
 export async function createPlannedCheckIn(teamId: string, input: CreatePlannedCheckInInput) {

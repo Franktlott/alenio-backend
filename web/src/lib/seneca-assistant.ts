@@ -544,19 +544,19 @@ export function senecaActionPath(actionId: SenecaActionId, teamId: string, taskI
     case "create_follow_up_task":
       return `/tasks/new?teamId=${encodeURIComponent(teamId)}`;
     case "schedule_check_in":
-      return `/team?teamId=${encodeURIComponent(teamId)}`;
+      return `/go?teamId=${encodeURIComponent(teamId)}`;
     case "create_recognition":
-      return `/chat?teamId=${encodeURIComponent(teamId)}`;
+      return `/go?teamId=${encodeURIComponent(teamId)}`;
     case "build_checklist":
       return `/go?teamId=${encodeURIComponent(teamId)}`;
     case "view_overdue_tasks":
-      return `/dashboard?teamId=${encodeURIComponent(teamId)}&overdue=1`;
+      return `/go?teamId=${encodeURIComponent(teamId)}`;
     case "open_task":
       return taskId
         ? `/tasks/${encodeURIComponent(taskId)}?teamId=${encodeURIComponent(teamId)}`
-        : `/dashboard?teamId=${encodeURIComponent(teamId)}&overdue=1`;
+        : `/go?teamId=${encodeURIComponent(teamId)}`;
     case "open_team":
-      return `/team?teamId=${encodeURIComponent(teamId)}`;
+      return `/go?teamId=${encodeURIComponent(teamId)}`;
     default:
       return "/";
   }

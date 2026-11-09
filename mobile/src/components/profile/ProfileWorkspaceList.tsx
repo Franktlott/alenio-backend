@@ -95,12 +95,12 @@ const WorkspaceCardSeparator = memo(function WorkspaceCardSeparator() {
   return <View style={{ width: CARD_GAP }} />;
 });
 
-const CARD_HEIGHT = 166;
-const IMAGE_HEIGHT = 92;
+const CARD_HEIGHT = 148;
+const IMAGE_HEIGHT = 78;
 const META_COLOR = "#6B728F";
-const CARD_RADIUS = 17;
-const CARD_BACKGROUND = "#F8F7FF";
-const CURRENT_CARD_BACKGROUND = "#F3F0FF";
+const CARD_RADIUS = 18;
+const CARD_BACKGROUND = "#FFFFFF";
+const CURRENT_CARD_BACKGROUND = "#FCFBFF";
 
 const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
   workspace,
@@ -113,10 +113,22 @@ const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
   const name = workspace.name?.trim() || "Workspace";
   const role = formatTeamRole(workspace.role) || "Member";
   const status = workspaceStatusDisplay(workspace.subscription);
+  const isTrialing = workspace.subscription?.status?.trim().toLowerCase() === "trialing";
+  const trialDaysRemaining =
+    workspace.subscription?.remainingDays ??
+    (workspace.subscription?.trialEndsAt
+      ? Math.max(
+          0,
+          Math.ceil(
+            (new Date(workspace.subscription.trialEndsAt).getTime() - Date.now()) /
+              86_400_000,
+          ),
+        )
+      : null);
   const imageUri = workspace.image?.trim() || null;
   const [imageFailed, setImageFailed] = useState(false);
   const showImage = Boolean(imageUri) && !imageFailed;
-  const contentWidth = Math.max(0, width - 20);
+  const contentWidth = Math.max(0, width - 22);
 
   useEffect(() => {
     setImageFailed(false);
@@ -141,11 +153,11 @@ const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
         height: CARD_HEIGHT,
         borderRadius: CARD_RADIUS,
         backgroundColor: isCurrent ? CURRENT_CARD_BACKGROUND : CARD_BACKGROUND,
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowColor: "#312E81",
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: isCurrent ? 0.13 : 0.08,
+        shadowRadius: 14,
+        elevation: 3,
       }}
     >
       <Pressable
@@ -159,8 +171,8 @@ const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
           width,
           height: CARD_HEIGHT,
           borderRadius: CARD_RADIUS,
-          borderWidth: isCurrent ? 2 : 1,
-          borderColor: isCurrent ? "#6657F5" : "#DDE0EE",
+          borderWidth: isCurrent ? 1.5 : 1,
+          borderColor: isCurrent ? "#A99CFF" : "#E5E7EF",
           backgroundColor: isCurrent ? CURRENT_CARD_BACKGROUND : CARD_BACKGROUND,
           overflow: "hidden",
           opacity: pressed || isSwitching ? 0.78 : 1,
@@ -171,15 +183,15 @@ const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
             style={{
               width: "100%",
               height: IMAGE_HEIGHT,
-              padding: 5,
+              padding: 7,
             }}
           >
             <View
               style={{
                 flex: 1,
                 width: "100%",
-                borderRadius: 12,
-                backgroundColor: "#EDE9FE",
+                borderRadius: 14,
+                backgroundColor: "#F2EFFF",
                 overflow: "hidden",
               }}
             >
@@ -195,19 +207,31 @@ const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
                 />
               ) : (
                 <LinearGradient
-                  colors={["#F8F7FF", "#EDE9FE", "#DDD8FF"]}
+                  colors={["#F7F5FF", "#ECE8FF", "#DDD6FF"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+                  style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
                 >
-                  <Text style={{ color: "#6657F5", fontSize: 20, fontWeight: "800" }}>
-                    {workspaceInitials(name)}
-                  </Text>
+                  <View
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 16,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "rgba(255,255,255,0.82)",
+                      borderWidth: 1,
+                      borderColor: "rgba(255,255,255,0.96)",
+                      shadowColor: "#4C3DB8",
+                      shadowOpacity: 0.12,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 3 },
+                    }}
+                  >
+                    <Text style={{ color: "#654CF4", fontSize: 18, fontWeight: "900", letterSpacing: -0.4 }}>
+                      {workspaceInitials(name)}
+                    </Text>
+                  </View>
                 </LinearGradient>
               )}
 
@@ -216,12 +240,12 @@ const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
                   pointerEvents="none"
                   style={{
                     position: "absolute",
-                    left: 8,
-                    top: 8,
-                    borderRadius: 7,
-                    paddingHorizontal: 6,
+                    left: 7,
+                    top: 7,
+                    borderRadius: 999,
+                    paddingHorizontal: 7,
                     paddingVertical: 3,
-                    backgroundColor: "#6657F5",
+                    backgroundColor: "#684BFF",
                   }}
                   testID={`workspace-current-badge-${workspace.id}`}
                 >
@@ -273,10 +297,9 @@ const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
             style={{
               width: "100%",
               height: CARD_HEIGHT - IMAGE_HEIGHT,
-              paddingHorizontal: 10,
-              paddingTop: 8,
-              paddingBottom: 9,
-              justifyContent: "space-between",
+              paddingHorizontal: 11,
+              paddingVertical: 8,
+              justifyContent: "center",
               backgroundColor: isCurrent ? CURRENT_CARD_BACKGROUND : CARD_BACKGROUND,
             }}
           >
@@ -286,10 +309,10 @@ const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
                 ellipsizeMode="tail"
                 style={{
                   width: contentWidth,
-                  fontSize: 13,
-                  lineHeight: 16,
-                  fontWeight: "700",
-                  color: "#111827",
+                  fontSize: 14,
+                  lineHeight: 17,
+                  fontWeight: "800",
+                  color: "#15152B",
                   letterSpacing: -0.15,
                 }}
               >
@@ -304,27 +327,28 @@ const WorkspacePreviewCard = memo(function WorkspacePreviewCard({
                   fontSize: 10,
                   lineHeight: 12,
                   fontWeight: "500",
-                  color: META_COLOR,
+                  color: "#737D91",
                 }}
               >
                 {role}
               </Text>
+              {isTrialing && trialDaysRemaining != null ? (
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    width: contentWidth,
+                    marginTop: 3,
+                    fontSize: 9,
+                    lineHeight: 11,
+                    fontWeight: "700",
+                    color: "#684BFF",
+                  }}
+                >
+                  {trialDaysRemaining} {trialDaysRemaining === 1 ? "day" : "days"} left in trial
+                </Text>
+              ) : null}
             </View>
 
-            <Text
-              numberOfLines={1}
-              ellipsizeMode="tail"
-              testID={`workspace-status-${workspace.id}`}
-              style={{
-                width: contentWidth,
-                fontSize: 9,
-                lineHeight: 11,
-                fontWeight: "600",
-                color: status.kind === "trial" ? "#5B47D6" : META_COLOR,
-              }}
-            >
-              {status.line}
-            </Text>
           </View>
         </View>
       </Pressable>

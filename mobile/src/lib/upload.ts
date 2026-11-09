@@ -3,6 +3,8 @@ import * as FileSystem from "expo-file-system/legacy";
 import { getAuthHeaders, refreshSessionTokens } from "./auth/auth-client";
 import { readJsonSafe } from "./api/api";
 import { getBackendUrl } from "./backend-url";
+import { uploadFileExtension } from "./upload-file-normalization";
+import { uploadMaxBytes, uploadSizeLimitMessage } from "./upload-limits";
 
 type UploadResult = {
   id: string;
@@ -12,7 +14,7 @@ type UploadResult = {
   sizeBytes: number;
 };
 
-export type UploadPurpose = "profile" | "team";
+export type UploadPurpose = "profile" | "team" | "generic";
 
 type JsonUploadBody = {
   purpose?: UploadPurpose;
@@ -23,14 +25,18 @@ type JsonUploadBody = {
 };
 
 function asciiFilename(name: string): string {
-  const trimmed = name.trim() || "photo.jpg";
+  const trimmed = name.trim() || "file";
   const safe = trimmed.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "");
-  return safe.length > 0 ? safe : "photo.jpg";
+  return safe.length > 0 ? safe : "file";
 }
 
-async function ensureUploadableUri(uri: string): Promise<string> {
+async function ensureUploadableUri(
+  uri: string,
+  filename: string,
+  mimeType: string,
+): Promise<string> {
   if (uri.startsWith("file://")) return uri;
-  const ext = uri.toLowerCase().includes(".png") ? "png" : "jpg";
+  const ext = uploadFileExtension(filename, mimeType);
   const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
   if (!cacheDir) return uri;
   const dest = `${cacheDir}upload-${Date.now()}.${ext}`;
@@ -44,7 +50,8 @@ function formatUploadError(
 ): string {
   const errCode = data?.error?.code ?? "";
   const prefix = errCode ? `${errCode}: ` : "";
-  let message = data?.error?.message || `Upload failed (HTTP ${response.status})`;
+  let message =
+    data?.error?.message || `Upload failed (HTTP ${response.status})`;
 
   if (response.status === 503 && errCode === "STORAGE_NOT_CONFIGURED") {
     message += " File storage is not set up on the server yet.";
@@ -53,10 +60,10 @@ function formatUploadError(
     message += " Sign out and sign in again, then retry.";
   }
   if (response.status === 400 && errCode === "VALIDATION_ERROR") {
-    message += " Try choosing the photo again.";
+    message += " Try choosing the file again.";
   }
   if (response.status === 413 || errCode === "PAYLOAD_TOO_LARGE") {
-    message += " Choose a smaller photo.";
+    message += " Choose a smaller file.";
   }
 
   return `${prefix}${message}`;
@@ -84,7 +91,11 @@ async function postJsonUpload(body: JsonUploadBody): Promise<Response> {
       authHeaders = await getAuthHeaders();
       response = await fetch(`${BACKEND_URL}/api/upload/json`, {
         method: "POST",
-        headers: { ...authHeaders, "Content-Type": "application/json", "X-Alenio-Upload": "base64" },
+        headers: {
+          ...authHeaders,
+          "Content-Type": "application/json",
+          "X-Alenio-Upload": "base64",
+        },
         body: JSON.stringify(body),
       });
     }
@@ -99,13 +110,21 @@ export async function uploadFile(
   mimeType: string,
   options?: { purpose?: UploadPurpose; teamId?: string },
 ): Promise<UploadResult> {
-  const uploadUri = await ensureUploadableUri(uri);
+  const uploadUri = await ensureUploadableUri(uri, filename, mimeType);
+  const fileInfo = await FileSystem.getInfoAsync(uploadUri);
+  if (
+    fileInfo.exists &&
+    typeof fileInfo.size === "number" &&
+    fileInfo.size > uploadMaxBytes(mimeType)
+  ) {
+    throw new Error(uploadSizeLimitMessage(mimeType));
+  }
   const base64 = await FileSystem.readAsStringAsync(uploadUri, {
     encoding: FileSystem.EncodingType.Base64,
   });
 
   if (!base64?.length) {
-    throw new Error("Could not read the selected photo. Try again.");
+    throw new Error("Could not read the selected file. Try again.");
   }
 
   const body: JsonUploadBody = {
@@ -117,7 +136,10 @@ export async function uploadFile(
   };
 
   const response = await postJsonUpload(body);
-  const data = await readJsonSafe<{ data: UploadResult; error?: { message?: string; code?: string } }>(response);
+  const data = await readJsonSafe<{
+    data: UploadResult;
+    error?: { message?: string; code?: string };
+  }>(response);
 
   if (!response.ok) {
     throw new Error(formatUploadError(response, data));

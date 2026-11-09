@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Plus, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
+import { Button, Checkbox, ErrorState, Field, Input, PageHeader, SegmentedControl, Select, Textarea } from "../components/ui";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
   createWebTask,
@@ -9,6 +11,12 @@ import {
 } from "../lib/api";
 import { queryKeys } from "../lib/query-keys";
 import { resolveTimeZone } from "../lib/timezone";
+import {
+  canCreateWorkspaceTask,
+  resolveCreateTaskKind,
+  type TaskKind,
+} from "../components/tasks/task-presentation";
+import "./create-task.css";
 
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -35,8 +43,11 @@ export function CreateTaskPage() {
   const teamIdFromUrl = params.get("teamId")?.trim() ?? "";
 
   const { me, teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
+  const selectedTeam = teams?.find((team) => team.id === selectedTeamId);
+  const canChooseKind = canCreateWorkspaceTask(selectedTeam?.role);
 
   const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<TaskKind>(() => resolveCreateTaskKind(selectedTeam?.role));
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<string>("medium");
   const [status, setStatus] = useState<string>("todo");
@@ -48,6 +59,9 @@ export function CreateTaskPage() {
 
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
+  const [titleErr, setTitleErr] = useState<string | null>(null);
+  const [assigneeErr, setAssigneeErr] = useState<string | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
   const teamDetailQuery = useQuery({
     queryKey: queryKeys.teamDetail(selectedTeamId),
     queryFn: () => fetchWebTeam(selectedTeamId),
@@ -74,6 +88,12 @@ export function CreateTaskPage() {
     });
   }, [me?.id, teamDetail?.members]);
 
+  useEffect(() => {
+    setKind(resolveCreateTaskKind(selectedTeam?.role));
+  }, [selectedTeamId, selectedTeam?.role]);
+
+  const isReminder = kind === "reminder";
+
   const toggleAssignee = (userId: string) => {
     setAssigneeIds((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]));
   };
@@ -95,12 +115,15 @@ export function CreateTaskPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setFormErr(null);
+    setTitleErr(null);
+    setAssigneeErr(null);
     if (!title.trim()) {
-      setFormErr("Please enter a task title.");
+      setTitleErr("Please enter a task title.");
+      titleRef.current?.focus();
       return;
     }
-    if (assigneeIds.length === 0) {
-      setFormErr("Assign the task to at least one teammate.");
+    if (!isReminder && assigneeIds.length === 0) {
+      setAssigneeErr("Assign the task to at least one teammate.");
       return;
     }
     if (!selectedTeamId) {
@@ -112,16 +135,17 @@ export function CreateTaskPage() {
       await createWebTask({
         teamId: selectedTeamId,
         title: title.trim(),
+        kind,
         description: description.trim() || null,
         priority,
         status,
         dueDate: dueIso,
         timeZone: userTimeZone,
-        assigneeIds,
-        isJoint: assigneeIds.length > 1 && isJoint,
+        assigneeIds: isReminder && me?.id ? [me.id] : assigneeIds,
+        isJoint: !isReminder && assigneeIds.length > 1 && isJoint,
         subtasks: subtasks.map((s) => s.trim()).filter(Boolean),
       });
-      navigate("/dashboard");
+      navigate("/workspace/tasks");
     } catch (err) {
       setFormErr(err instanceof Error ? err.message : "Could not create task.");
     } finally {
@@ -133,154 +157,178 @@ export function CreateTaskPage() {
     return <EnterprisePageLoading label="Preparing your task" />;
   }
 
+  const noun = isReminder ? "reminder" : "task";
+
   return (
-    <>
-      <div className="enterprise-dashboard-inner create-task-page" data-testid="create-task-screen">
-        <div className="create-task-head">
-          <Link to="/dashboard" className="create-task-back">
-            ← Back to dashboard
-          </Link>
-          <h1 className="create-task-title">Create task</h1>
-          <p className="enterprise-muted create-task-sub">Same core fields as the Alenio app: assign teammates, priority, due date, and subtasks.</p>
-        </div>
+    <div className="enterprise-dashboard-inner create-task-page al-ds" data-testid="create-task-screen">
+      <Link to="/workspace/tasks" className="ct-back">
+        ← Back
+      </Link>
+      <PageHeader
+        title={`Create ${noun}`}
+        subtitle={
+          isReminder
+            ? "This reminder is private to you and does not affect workspace activity or Momentum."
+            : "Assign teammates, choose a priority and due date, and add subtasks."
+        }
+      />
 
-        <form className="enterprise-card create-task-form" onSubmit={submit}>
-          {formErr ? (
-            <p className="auth-error" role="alert">
-              {formErr}
-            </p>
-          ) : null}
+      <form className="al-card ct-form" onSubmit={submit} noValidate>
+        {formErr ? <ErrorState>{formErr}</ErrorState> : null}
 
-          <label className="auth-label" htmlFor="ct-title">
-            Title
-          </label>
-          <input
+        {canChooseKind ? (
+          <SegmentedControl<TaskKind>
+            label="Create type"
+            value={kind}
+            onChange={setKind}
+            options={[
+              { value: "workspace_task", label: "Workspace task", testId: "create-task-kind-task" },
+              { value: "reminder", label: "Private reminder", testId: "create-task-kind-reminder" },
+            ]}
+          />
+        ) : (
+          <p className="ct-note">Private reminder · visible only to you</p>
+        )}
+
+        <Field label="Title" required error={titleErr}>
+          <Input
+            ref={titleRef}
             id="ct-title"
-            className="auth-input"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (titleErr) setTitleErr(null);
+            }}
             placeholder="What needs to be done?"
             autoComplete="off"
             data-testid="create-task-title"
           />
+        </Field>
 
-          <label className="auth-label" htmlFor="ct-desc">
-            Description
-          </label>
-          <textarea
-            id="ct-desc"
-            className="auth-input create-task-textarea"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Optional details"
-            rows={3}
-          />
+        <Field label="Description" optional>
+          <Textarea id="ct-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add details" rows={3} />
+        </Field>
 
-          <div className="create-task-row">
-            <div className="create-task-field">
-              <label className="auth-label" htmlFor="ct-priority">
-                Priority
-              </label>
-              <select id="ct-priority" className="auth-input" value={priority} onChange={(e) => setPriority(e.target.value)}>
-                {PRIORITIES.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="create-task-field">
-              <label className="auth-label" htmlFor="ct-status">
-                Status
-              </label>
-              <select id="ct-status" className="auth-input" value={status} onChange={(e) => setStatus(e.target.value)}>
-                {STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="create-task-field">
-              <label className="auth-label" htmlFor="ct-due">
-                Due date
-              </label>
-              <input id="ct-due" className="auth-input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </div>
-          </div>
+        <div className="ct-row">
+          <Field label="Priority">
+            <Select id="ct-priority" value={priority} onChange={(e) => setPriority(e.target.value)}>
+              {PRIORITIES.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Status">
+            <Select id="ct-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              {STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Due date">
+            <Input id="ct-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </Field>
+        </div>
 
-          <fieldset className="create-task-fieldset">
-            <legend className="auth-label">Assign to</legend>
+        {!isReminder ? (
+          <fieldset className="al-field ct-fieldset" aria-describedby={assigneeErr ? "ct-assignee-err" : undefined}>
+            <legend className="al-field-label">
+              Assign to
+              <span className="al-field-req" aria-hidden>
+                *
+              </span>
+            </legend>
             {!teamDetail?.members.length ? (
-              <p className="enterprise-muted">Loading members…</p>
+              <p className="ct-muted">Loading members…</p>
             ) : (
-              <ul className="create-task-assignees">
+              <ul className={`ct-assignees${assigneeErr ? " is-invalid" : ""}`} data-testid="create-task-assignees">
                 {teamDetail.members.map((m) => (
                   <li key={m.userId}>
-                    <label className="create-task-assignee-label">
-                      <input
-                        type="checkbox"
-                        checked={assigneeIds.includes(m.user.id)}
-                        onChange={() => toggleAssignee(m.user.id)}
-                      />
-                      <span>{m.user.name ?? m.user.email ?? m.user.id}</span>
-                    </label>
+                    <Checkbox
+                      checked={assigneeIds.includes(m.user.id)}
+                      onChange={() => {
+                        toggleAssignee(m.user.id);
+                        if (assigneeErr) setAssigneeErr(null);
+                      }}
+                      label={m.user.name ?? m.user.email ?? m.user.id}
+                    />
                   </li>
                 ))}
               </ul>
             )}
+            {assigneeErr ? (
+              <div className="al-field-foot">
+                <span className="al-field-error" id="ct-assignee-err" role="alert">
+                  {assigneeErr}
+                </span>
+              </div>
+            ) : null}
           </fieldset>
+        ) : null}
 
-          {assigneeIds.length > 1 ? (
-            <label className="create-task-checkbox-row">
-              <input type="checkbox" checked={isJoint} onChange={(e) => setIsJoint(e.target.checked)} />
-              <span>
-                <strong>Shared task</strong> — one task everyone is assigned to together. If off, each person gets their own copy (like the app).
-              </span>
-            </label>
-          ) : null}
+        {!isReminder && assigneeIds.length > 1 ? (
+          <Checkbox
+            checked={isJoint}
+            onChange={(e) => setIsJoint(e.target.checked)}
+            label="Shared task"
+            description="One task everyone is assigned to together. If off, each person gets their own copy (like the app)."
+          />
+        ) : null}
 
-          <div className="create-task-subtasks">
-            <span className="auth-label">Subtasks</span>
-            <ul className="create-task-subtask-list">
+        <div className="al-field">
+          <span className="al-field-label" id="ct-subtasks-label">
+            Subtasks
+            <span className="al-field-optional">Optional</span>
+          </span>
+          {subtasks.length > 0 ? (
+            <ul className="ct-subtasks" aria-labelledby="ct-subtasks-label">
               {subtasks.map((st, i) => (
-                <li key={`${i}-${st}`} className="create-task-subtask-item">
+                <li key={`${i}-${st}`} className="ct-subtask">
                   <span>{st}</span>
-                  <button type="button" className="create-task-subtask-remove" onClick={() => removeSubtask(i)} aria-label="Remove subtask">
-                    ×
-                  </button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    iconOnly
+                    icon={<X size={16} strokeWidth={2} />}
+                    aria-label={`Remove subtask: ${st}`}
+                    onClick={() => removeSubtask(i)}
+                  />
                 </li>
               ))}
             </ul>
-            <div className="create-task-subtask-add">
-              <input
-                className="auth-input"
-                value={newSubtask}
-                onChange={(e) => setNewSubtask(e.target.value)}
-                placeholder="Add a subtask"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addSubtaskLine();
-                  }
-                }}
-              />
-              <button type="button" className="auth-btn-secondary create-task-add-btn" onClick={addSubtaskLine}>
-                Add
-              </button>
-            </div>
+          ) : null}
+          <div className="ct-subtask-add">
+            <Input
+              value={newSubtask}
+              onChange={(e) => setNewSubtask(e.target.value)}
+              placeholder="Add a subtask"
+              aria-labelledby="ct-subtasks-label"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addSubtaskLine();
+                }
+              }}
+              data-testid="create-task-subtask-input"
+            />
+            <Button variant="secondary" size="lg" icon={<Plus size={16} strokeWidth={2.2} />} onClick={addSubtaskLine} disabled={!newSubtask.trim()}>
+              Add
+            </Button>
           </div>
+        </div>
 
-          <div className="create-task-actions">
-            <button type="submit" className="auth-btn-primary" disabled={saving} data-testid="create-task-submit">
-              {saving ? "Creating…" : "Create task"}
-            </button>
-            <Link to="/dashboard" className="create-task-cancel">
-              Cancel
-            </Link>
-          </div>
-        </form>
-      </div>
-    </>
+        <div className="ct-actions">
+          <Link to="/workspace/tasks" className="al-btn al-btn--secondary al-btn--lg">
+            Cancel
+          </Link>
+          <Button type="submit" variant="primary" size="lg" loading={saving} data-testid="create-task-submit">
+            {`Create ${noun}`}
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }

@@ -4,7 +4,7 @@
     "slug": "alenio",
     "scheme": "alenio",
     "version": "1.0.03",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "extra": {
@@ -16,16 +16,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
-      "buildNumber": "54",
-      "entitlements": {
-        "aps-environment": "production"
-      },
+      "buildNumber": "74",
       "infoPlist": {
         "NSCameraUsageDescription": "Alenio uses the camera to capture photos inside the app before you publish them.",
-        "NSMicrophoneUsageDescription": "Alenio uses the microphone to record audio clips that stay with your in-app creations.",
+        "NSMicrophoneUsageDescription": "Alenio uses the microphone to record check-in conversations you choose to capture, and for audio clips that stay with your in-app creations.",
         "NSPhotoLibraryUsageDescription": "Alenio accesses your photo library to generate thumbnails for your videos.",
         "UIBackgroundModes": [
-          "remote-notification"
+          "remote-notification",
+          "audio"
         ],
         "NSPhotoLibraryAddUsageDescription": "Alenio saves media you export from the app into your photo library.",
         "ITSAppUsesNonExemptEncryption": false
@@ -36,16 +34,31 @@
       "softwareKeyboardLayoutMode": "resize",
       "edgeToEdgeEnabled": false,
       "usesCleartextTraffic": true,
-      "package": "com.vibecode.alenio9iqp9v",
+      "package": "com.lotttechnologies.alenio",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
+      "./plugins/with-foldable-orientation",
       "expo-dev-client",
       "expo-router",
       "expo-camera",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Alenio uses the microphone to record check-in conversations you choose to capture."
+        }
+      ],
+      [
+        "@daily-co/config-plugin-rn-daily-js",
+        {
+          "enableCamera": true,
+          "enableMicrophone": true,
+          "enableScreenShare": false
+        }
+      ],
       [
         "expo-media-library",
         {
@@ -94,13 +107,24 @@
       [
         "expo-build-properties",
         {
+          "ios": {
+            "deploymentTarget": "16.4"
+          },
           "android": {
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
             "minSdkVersion": 24
           }
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font",
+      "expo-image",
+      "expo-sharing",
+      "expo-splash-screen",
+      "expo-sqlite",
+      "expo-video",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

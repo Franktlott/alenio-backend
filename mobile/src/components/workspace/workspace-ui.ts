@@ -24,3 +24,17 @@ export const WS = {
   chipBg: colors.surfaceSecondary,
   accent: colors.brand,
 };
+
+/**
+ * The frame both columns of a split Workspace page share. Same radius, stroke,
+ * and fill as the calendar month card, so switching tabs does not change the box.
+ */
+export const splitPaneCard = {
+  flex: 1,
+  minHeight: 0,
+  backgroundColor: colors.surface,
+  borderRadius: radii.card,
+  borderWidth: 1,
+  borderColor: colors.borderCard,
+  overflow: "hidden" as const,
+};

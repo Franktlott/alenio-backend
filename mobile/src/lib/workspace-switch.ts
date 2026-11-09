@@ -3,11 +3,26 @@ import { api } from "@/lib/api/api";
 import type { Team, Task, CalendarEvent } from "@/lib/types";
 import { hasTeamPlan, toPersistedPlan } from "@/lib/plan-access-copy";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { useTeamStore } from "@/lib/state/team-store";
+
+/** Later switches win. An older prefetch must not rewrite the plan afterward. */
+let workspaceSwitchGeneration = 0;
 
 function removeTeamScopedQueries(queryClient: QueryClient, teamId: string) {
   queryClient.removeQueries({
     predicate: (q) => Array.isArray(q.queryKey) && q.queryKey.includes(teamId),
   });
+}
+
+async function invalidateRelationshipQueries(queryClient: QueryClient) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["connections"] }),
+    queryClient.invalidateQueries({ queryKey: ["person"] }),
+    queryClient.invalidateQueries({ queryKey: ["profile"] }),
+    queryClient.invalidateQueries({ queryKey: ["connection-suggestions"] }),
+    queryClient.invalidateQueries({ queryKey: ["user-search"] }),
+    queryClient.invalidateQueries({ queryKey: ["dms"] }),
+  ]);
 }
 
 async function fetchFreshTeams(queryClient: QueryClient): Promise<Team[]> {
@@ -27,6 +42,7 @@ export async function applyTeamRemovedFromAccount(
   queryClient: QueryClient,
 ): Promise<Team[]> {
   removeTeamScopedQueries(queryClient, removedTeamId);
+  await invalidateRelationshipQueries(queryClient);
 
   const freshTeams = await fetchFreshTeams(queryClient);
 
@@ -56,6 +72,7 @@ export async function reconcileActiveTeamAfterRemoval(
   if (freshTeams.some((team) => team.id === activeTeamId)) return;
 
   removeTeamScopedQueries(queryClient, activeTeamId);
+  await invalidateRelationshipQueries(queryClient);
 
   if (freshTeams.length > 0) {
     await performWorkspaceSwitch(freshTeams[0].id, activeTeamId, setActiveTeamId, queryClient);
@@ -77,57 +94,79 @@ export async function performWorkspaceSwitch(
   setActiveTeamId: (id: string | null) => void,
   queryClient: QueryClient,
 ): Promise<boolean> {
-  if (!teamId || teamId === activeTeamId) return false;
+  // Read the store at call time. A closed-over id makes a second switch look
+  // like a no-op, or lets an older call finish against the wrong workspace.
+  const currentTeamId = useTeamStore.getState().activeTeamId ?? activeTeamId;
+  if (!teamId || teamId === currentTeamId) return false;
 
+  const generation = ++workspaceSwitchGeneration;
   setActiveTeamId(teamId);
+  void loadSwitchedWorkspace(teamId, generation, queryClient);
+  return true;
+}
 
-  await queryClient.invalidateQueries({
-    predicate: (q) => {
-      const key = q.queryKey;
-      if (!Array.isArray(key)) return false;
-      if (key[0] === "teams") return true;
-      return key.includes(teamId);
-    },
-  });
+async function loadSwitchedWorkspace(
+  teamId: string,
+  generation: number,
+  queryClient: QueryClient,
+): Promise<void> {
+  const stillSelected = () =>
+    generation === workspaceSwitchGeneration &&
+    useTeamStore.getState().activeTeamId === teamId;
 
-  const [, , subscription] = await Promise.all([
-    queryClient.fetchQuery({
-      queryKey: ["teams"],
-      queryFn: () => api.get<Team[]>("/api/teams"),
-    }),
-    queryClient.fetchQuery({
-      queryKey: ["team", teamId],
-      queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
-    }),
-    queryClient.fetchQuery({
-      queryKey: ["subscription", teamId],
-      queryFn: () =>
-        api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
-          `/api/teams/${teamId}/subscription`,
-        ),
-    }),
-  ]);
+  try {
+    await queryClient.invalidateQueries({
+      predicate: (q) => {
+        const key = q.queryKey;
+        if (!Array.isArray(key)) return false;
+        if (key[0] === "teams") return true;
+        return key.includes(teamId);
+      },
+    });
 
-  useSubscriptionStore.getState().setPlan(toPersistedPlan(subscription));
+    if (!stillSelected()) return;
 
-  if (hasTeamPlan(subscription)) {
-    await Promise.all([
+    const [, , subscription] = await Promise.all([
       queryClient.fetchQuery({
-        queryKey: ["tasks", teamId, "mine", "active"],
+        queryKey: ["teams"],
+        queryFn: () => api.get<Team[]>("/api/teams"),
+      }),
+      queryClient.fetchQuery({
+        queryKey: ["team", teamId],
+        queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
+      }),
+      queryClient.fetchQuery({
+        queryKey: ["subscription", teamId],
         queryFn: () =>
-          api.get<{ tasks: Task[]; nextCursor: string | null }>(
-            `/api/teams/${teamId}/tasks?myTasks=true&activeOnly=true&limit=200`,
+          api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
+            `/api/teams/${teamId}/subscription`,
           ),
       }),
-      queryClient.fetchQuery({
-        queryKey: ["calendar-events", teamId],
-        queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${teamId}/events`),
-      }),
     ]);
-  } else {
-    queryClient.removeQueries({ queryKey: ["tasks", teamId] });
-    queryClient.removeQueries({ queryKey: ["calendar-events", teamId] });
-  }
 
-  return true;
+    if (!stillSelected()) return;
+
+    useSubscriptionStore.getState().setPlan(toPersistedPlan(subscription));
+
+    if (hasTeamPlan(subscription)) {
+      await Promise.all([
+        queryClient.fetchQuery({
+          queryKey: ["tasks", teamId, "mine", "active"],
+          queryFn: () =>
+            api.get<{ tasks: Task[]; nextCursor: string | null }>(
+              `/api/teams/${teamId}/tasks?myTasks=true&activeOnly=true&limit=200`,
+            ),
+        }),
+        queryClient.fetchQuery({
+          queryKey: ["calendar-events", teamId],
+          queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${teamId}/events`),
+        }),
+      ]);
+    } else if (stillSelected()) {
+      queryClient.removeQueries({ queryKey: ["tasks", teamId] });
+      queryClient.removeQueries({ queryKey: ["calendar-events", teamId] });
+    }
+  } catch {
+    // The selection already changed. The open screen loads its own data.
+  }
 }

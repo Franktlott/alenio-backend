@@ -303,7 +303,7 @@ export default function CreateGroupScreen() {
             </ScrollView>
             <Text className="mt-2 text-xs text-slate-400">
               {isPersonalGroup
-                ? "A personal group belongs to you, not a workspace. Add your connections and people you already chat with."
+                ? "A personal group belongs to you, not a workspace. Only your connections can be added."
                 : `Only people in ${selectedTeamName ?? "this workspace"} can be added. Members are never auto-added.`}
             </Text>
           </View>
@@ -334,7 +334,7 @@ export default function CreateGroupScreen() {
             placeholder={
               selectedTeamName
                 ? `Search people in ${selectedTeamName}...`
-                : "Search your people..."
+                : "Search connections..."
             }
             placeholderTextColor="#94A3B8"
             value={searchQuery}
@@ -359,7 +359,7 @@ export default function CreateGroupScreen() {
         ListHeaderComponent={
           !searchQuery.trim() ? (
             <Text className="px-4 pb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              {selectedTeamName ? `People in ${selectedTeamName}` : "Your people"}
+              {selectedTeamName ? `People in ${selectedTeamName}` : "Your connections"}
             </Text>
           ) : null
         }
@@ -369,7 +369,7 @@ export default function CreateGroupScreen() {
               {searchQuery.trim().length >= 2
                 ? "No people found"
                 : isPersonalGroup
-                  ? "Connect with people or start a chat, and they will appear here."
+                  ? "Your accepted connections will appear here."
                   : "No teammates available yet"}
             </Text>
           ) : null
@@ -377,45 +377,46 @@ export default function CreateGroupScreen() {
         renderItem={({ item }) => {
           const selected = isSelected(item.id);
           return (
-          <Pressable
-            testID={`user-item-${item.id}`}
-            onPress={() => toggleUser(item)}
-            className="flex-row items-center px-4 py-3"
-          >
-            <UserAvatar
-              user={item}
-              size={40}
-              radius={20}
-              backgroundColor="#6366F1"
-              textColor="#FFFFFF"
-              fontSize={14}
-              style={{ marginRight: 12 }}
-            />
-            <View className="flex-1">
-              <Text className="font-semibold text-slate-900 dark:text-white">
-                {item.name ?? (item.username ? `@${item.username}` : "Member")}
-              </Text>
-              {!isPersonalGroup && item.workspaceLabel ? (
-                <Text className="text-xs text-indigo-600 dark:text-indigo-300" numberOfLines={1}>
-                  {item.workspaceLabel}
-                </Text>
-              ) : null}
-              {item.username ? (
-                <Text className="text-xs text-slate-500" numberOfLines={1}>
-                  @{item.username}
-                </Text>
-              ) : null}
-            </View>
-            <View
-              className="w-6 h-6 rounded-full border-2 items-center justify-center"
-              style={{
-                backgroundColor: selected ? "#4361EE" : "transparent",
-                borderColor: selected ? "#4361EE" : "#CBD5E1",
-              }}
+            <Pressable
+              testID={`user-item-${item.id}`}
+              onPress={() => toggleUser(item)}
+              className="flex-row items-center px-4 py-3"
             >
-              {selected ? <Check size={14} color="white" /> : null}
-            </View>
-          </Pressable>
+              <View style={{ marginRight: 16 }}>
+                <UserAvatar
+                  user={item}
+                  size={40}
+                  radius={20}
+                  backgroundColor="#6366F1"
+                  textColor="#FFFFFF"
+                  fontSize={14}
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="font-semibold text-slate-900 dark:text-white">
+                  {item.name ?? (item.username ? `@${item.username}` : "Member")}
+                </Text>
+                {!isPersonalGroup && item.workspaceLabel ? (
+                  <Text className="text-xs text-indigo-600 dark:text-indigo-300" numberOfLines={1}>
+                    {item.workspaceLabel}
+                  </Text>
+                ) : null}
+                {item.username ? (
+                  <Text className="text-xs text-slate-500" numberOfLines={1}>
+                    @{item.username}
+                  </Text>
+                ) : null}
+              </View>
+              <View
+                className="w-6 h-6 rounded-full border-2 items-center justify-center"
+                style={{
+                  backgroundColor: selected ? "#4361EE" : "transparent",
+                  borderColor: selected ? "#4361EE" : "#CBD5E1",
+                }}
+              >
+                {selected ? <Check size={14} color="white" /> : null}
+              </View>
+            </Pressable>
           );
         }}
       />

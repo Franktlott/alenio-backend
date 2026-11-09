@@ -1,7 +1,6 @@
 import type {
   SnapshotMetric,
   SnapshotPage,
-  SnapshotTone,
 } from "@/components/workspace/snapshot/snapshot-types";
 
 export type SnapshotAction = () => void;
@@ -14,16 +13,26 @@ export type SnapshotPagesInput = {
   completedToday: number | null;
   checkInsToday: number | null;
   needsAttention: number | null;
+  momentumCount: number | null;
+  memberDevelopmentCount: number | null;
+  memberDevelopmentStatus:
+    | "check_in_overdue"
+    | "check_in_due_soon"
+    | "goals_missing"
+    | "on_track"
+    | null;
+  memberMissingGoals: number | null;
   health: number | null;
-  recognitionThisWeek: number | null;
   goalsOnTrackPct: number | null;
+  goalsRequired: boolean;
+  onPressActionTasks?: SnapshotAction;
   onPressDueToday?: SnapshotAction;
   onPressOverdue?: SnapshotAction;
   onPressCompletedToday?: SnapshotAction;
   onPressCheckIns?: SnapshotAction;
   onPressNeedsAttention?: SnapshotAction;
+  onPressMomentum?: SnapshotAction;
   onPressHealth?: SnapshotAction;
-  onPressRecognition?: SnapshotAction;
   onPressGoals?: SnapshotAction;
 };
 
@@ -46,25 +55,11 @@ export function countRecognitionThisWeek(
   }, 0);
 }
 
-function percentTone(value: number | null): SnapshotTone {
-  if (value == null) return "neutral";
-  if (value >= 85) return "good";
-  if (value >= 60) return "warn";
-  return "bad";
-}
-
 export function percentBandLabel(value: number | null): string {
   if (value == null) return "Not enough data";
   if (value >= 85) return "On Track";
   if (value >= 60) return "Watch";
   return "At Risk";
-}
-
-function percentColor(value: number | null): string {
-  if (value == null) return "#7C3AED";
-  if (value >= 85) return "#059669";
-  if (value >= 60) return "#D97706";
-  return "#DC2626";
 }
 
 function countMetric(
@@ -77,36 +72,25 @@ function countMetric(
   return { ...base, value: String(count), numericValue: count };
 }
 
-function comingSoonMetric(
-  key: string,
-  icon: SnapshotMetric["icon"],
-  label: string,
-  accessibilityLabel: string,
-): SnapshotMetric {
-  return {
-    key,
-    label,
-    accessibilityLabel,
-    icon,
-    iconColor: "#CBD5E1",
-    value: UNAVAILABLE,
-    numericValue: null,
-    secondary: { text: "Coming soon", tone: "neutral" },
-    comingSoon: true,
-  };
-}
-
 function tasksMetric(input: SnapshotPagesInput): SnapshotMetric {
+  // Everything needing action now, so nothing overdue hides behind a today
+  // count. Either half being unknown makes the total unknown, rather than
+  // quietly reporting a figure that is short.
+  const actionCount =
+    input.dueToday == null || input.overdue == null
+      ? null
+      : input.dueToday + input.overdue;
+
   const metric = countMetric(
     {
       key: "tasks",
-      label: "Due Today",
-      accessibilityLabel: "Tasks due today",
+      label: "Needs Action",
+      accessibilityLabel: "Tasks overdue or due today",
       icon: "tasks",
       iconColor: "#EA580C",
-      onPress: input.onPressDueToday,
+      onPress: input.onPressActionTasks ?? input.onPressDueToday,
     },
-    input.dueToday,
+    actionCount,
   );
 
   if (input.overdue != null && input.overdue > 0) {
@@ -119,118 +103,132 @@ function tasksMetric(input: SnapshotPagesInput): SnapshotMetric {
       },
     };
   }
-  if (input.dueToday === 0) {
+  if (actionCount === 0) {
     return { ...metric, secondary: { text: "Nothing assigned", tone: "neutral" } };
   }
   return { ...metric, secondary: { text: "No overdue", tone: "good" } };
 }
 
-function checkInsMetric(input: SnapshotPagesInput): SnapshotMetric {
+function personalMomentumMetric(input: SnapshotPagesInput): SnapshotMetric {
   const metric = countMetric(
     {
-      key: "checkins",
-      label: "Scheduled",
-      accessibilityLabel: "Check-ins scheduled today",
-      icon: "checkins",
-      iconColor: "#2563EB",
-      onPress: input.onPressCheckIns,
+      key: "momentum",
+      label: "Momentum",
+      accessibilityLabel: "Your current on-time task streak",
+      icon: "streak",
+      // Gold marks momentum everywhere, matching the milestone card in Updates.
+      iconColor: "#B7791F",
+      onPress: input.onPressMomentum,
     },
-    input.checkInsToday,
+    input.momentumCount,
   );
-  if (input.checkInsToday === 0) {
-    return { ...metric, secondary: { text: "None today", tone: "neutral" } };
+  if (input.momentumCount == null) {
+    return {
+      ...metric,
+      secondary: { text: "Not enough data", tone: "neutral" },
+    };
   }
-  return { ...metric, secondary: { text: "Today", tone: "good" } };
+  if (input.momentumCount === 0) {
+    return {
+      ...metric,
+      secondary: { text: "Ready to build", tone: "neutral" },
+    };
+  }
+  return {
+    ...metric,
+    secondary: { text: "Current task streak", tone: "good" },
+  };
 }
 
-function healthMetric(input: SnapshotPagesInput, label: string): SnapshotMetric {
-  const available = input.health != null;
-  return {
-    key: "health",
-    label,
-    accessibilityLabel: label,
-    icon: "health",
-    iconColor: percentColor(input.health),
-    value: available ? `${input.health}%` : UNAVAILABLE,
-    numericValue: available ? input.health : null,
-    valueSuffix: "%",
-    secondary: {
-      text: percentBandLabel(input.health),
-      tone: percentTone(input.health),
+function personalDevelopmentMetric(input: SnapshotPagesInput): SnapshotMetric {
+  const metric = countMetric(
+    {
+      key: "development",
+      label: "Development",
+      accessibilityLabel: "Your active development goals",
+      icon: "goals",
+      iconColor: "#7C3AED",
+      hidePrimaryIcon: true,
+      onPress: input.onPressGoals,
     },
-    onPress: available ? input.onPressHealth : undefined,
+    input.memberDevelopmentCount,
+  );
+  if (input.memberDevelopmentCount == null) {
+    return {
+      ...metric,
+      statusIndicator: "neutral",
+      secondary: { text: "Status unavailable", tone: "neutral" },
+    };
+  }
+  if (input.memberDevelopmentStatus === "check_in_overdue") {
+    return {
+      ...metric,
+      statusIndicator: "bad",
+      secondary: { text: "Needs attention", tone: "bad" },
+    };
+  }
+  if (input.memberDevelopmentStatus === "check_in_due_soon") {
+    return {
+      ...metric,
+      statusIndicator: "warn",
+      secondary: { text: "Due soon", tone: "warn" },
+    };
+  }
+  if (input.memberDevelopmentStatus === "goals_missing") {
+    return {
+      ...metric,
+      statusIndicator: "bad",
+      secondary: { text: "Needs attention", tone: "bad" },
+    };
+  }
+  return {
+    ...metric,
+    statusIndicator: "good",
+    secondary: { text: "On track", tone: "good" },
   };
 }
 
 function buildManagerPages(input: SnapshotPagesInput): SnapshotPage[] {
-  const team = countMetric(
-    {
-      key: "team",
-      label: "Need Attention",
-      accessibilityLabel: "People needing attention",
-      icon: "team",
-      iconColor: "#DC2626",
-      onPress: input.onPressNeedsAttention,
-    },
-    input.needsAttention,
-  );
-  const teamWithState: SnapshotMetric =
-    input.needsAttention === 0
-      ? { ...team, secondary: { text: "All caught up", tone: "good" } }
-      : { ...team, secondary: { text: "Review now", tone: "warn" } };
-
-  const recognition = countMetric(
-    {
-      key: "recognition",
-      label: "This Week",
-      accessibilityLabel: "Recognition this week",
-      icon: "recognition",
-      iconColor: "#D97706",
-      onPress: input.onPressRecognition,
-    },
-    input.recognitionThisWeek,
-  );
-  const recognitionWithState: SnapshotMetric =
-    input.recognitionThisWeek === 0
-      ? { ...recognition, secondary: { text: "None yet", tone: "neutral" } }
-      : { ...recognition, secondary: { text: "Celebrations", tone: "good" } };
-
-  const goalsAvailable = input.goalsOnTrackPct != null;
-  const goals: SnapshotMetric = {
-    key: "goals",
-    label: "Goals",
-    accessibilityLabel: "Goals on track",
-    icon: "goals",
-    iconColor: percentColor(input.goalsOnTrackPct),
-    value: goalsAvailable ? `${input.goalsOnTrackPct}%` : UNAVAILABLE,
-    numericValue: goalsAvailable ? input.goalsOnTrackPct : null,
-    valueSuffix: "%",
-    secondary: {
-      text: percentBandLabel(input.goalsOnTrackPct),
-      tone: percentTone(input.goalsOnTrackPct),
-    },
-    onPress: goalsAvailable ? input.onPressGoals : undefined,
+  const checkInsAvailable = input.needsAttention != null;
+  const development: SnapshotMetric = {
+    key: "development",
+    label: "Development",
+    accessibilityLabel: checkInsAvailable
+      ? `${input.needsAttention} ${
+          input.needsAttention === 1 ? "member has" : "members have"
+        } a check-in or goal due`
+      : "Development attention unavailable",
+    icon: "team",
+    iconColor: checkInsAvailable && input.needsAttention! > 0 ? "#DC2626" : "#059669",
+    value: checkInsAvailable ? String(input.needsAttention) : UNAVAILABLE,
+    numericValue: checkInsAvailable ? input.needsAttention : null,
+    onPress: checkInsAvailable ? input.onPressNeedsAttention : undefined,
   };
+
+  const momentum = countMetric(
+    {
+      key: "momentum",
+      label: "Momentum",
+      accessibilityLabel: "Members with an active on-time task streak",
+      icon: "streak",
+      // Gold marks momentum everywhere, matching the milestone card in Updates.
+      iconColor: "#B7791F",
+      onPress: input.onPressMomentum,
+    },
+    input.momentumCount,
+  );
 
   return [
     {
       key: "daily-operations",
-      title: "Today's Overview",
+      title: "Workplace Pulse",
       metrics: [
-        tasksMetric(input),
-        teamWithState,
-        checkInsMetric(input),
-        healthMetric(input, "Workspace Health"),
-      ],
-    },
-    {
-      key: "leadership",
-      title: "Leadership & Performance",
-      metrics: [
-        recognitionWithState,
-        goals,
-        comingSoonMetric("briefings", "briefings", "Briefings", "Briefings"),
-        comingSoonMetric("temps", "temps", "Temps", "Temperature checks"),
+        { ...tasksMetric(input), secondary: undefined },
+        development,
+        {
+          ...momentum,
+          secondary: { text: "Active task streaks", tone: "neutral" },
+        },
       ],
     },
   ];
@@ -256,12 +254,12 @@ function buildMemberPages(input: SnapshotPagesInput): SnapshotPage[] {
   return [
     {
       key: "my-day",
-      title: "My Day",
+      title: "Workplace Pulse",
       metrics: [
         tasksMetric(input),
-        checkInsMetric(input),
+        personalDevelopmentMetric(input),
         completedWithState,
-        healthMetric(input, "My Health"),
+        personalMomentumMetric(input),
       ],
     },
   ];
@@ -269,4 +267,30 @@ function buildMemberPages(input: SnapshotPagesInput): SnapshotPage[] {
 
 export function buildSnapshotPages(input: SnapshotPagesInput): SnapshotPage[] {
   return input.isManager ? buildManagerPages(input) : buildMemberPages(input);
+}
+
+/** Badge on the Pulse header chip for the currently selected workspace only. */
+export function workspacePulseBadgeCount(input: {
+  isManager: boolean;
+  overdue: number | null;
+  needsAttention: number | null;
+}): number {
+  if (input.isManager) return Math.max(0, input.needsAttention ?? 0);
+  return Math.max(0, input.overdue ?? 0);
+}
+
+export function bindSnapshotPageActions(
+  pages: SnapshotPage[],
+  bind: (action?: SnapshotAction) => SnapshotAction | undefined,
+): SnapshotPage[] {
+  return pages.map((page) => ({
+    ...page,
+    metrics: page.metrics.map((metric) => ({
+      ...metric,
+      onPress: bind(metric.onPress),
+      secondary: metric.secondary
+        ? { ...metric.secondary, onPress: bind(metric.secondary.onPress) }
+        : undefined,
+    })),
+  }));
 }

@@ -76,6 +76,26 @@ export function normalizeProfileWebsite(value: string): string | null {
   }
 }
 
+/** Accepted connections shared by the viewer and profile owner, excluding both of them. */
+export function mutualConnectionIds(
+  viewerId: string,
+  personId: string,
+  viewerRows: AcceptedConnectionPair[],
+  personRows: AcceptedConnectionPair[],
+): string[] {
+  const viewerConnections = new Set(
+    viewerRows.map((row) => (row.requesterId === viewerId ? row.recipientId : row.requesterId)),
+  );
+  const mutual = new Set<string>();
+  for (const row of personRows) {
+    const otherId = row.requesterId === personId ? row.recipientId : row.requesterId;
+    if (otherId !== viewerId && otherId !== personId && viewerConnections.has(otherId)) {
+      mutual.add(otherId);
+    }
+  }
+  return [...mutual];
+}
+
 /** Count unique accepted connections shared by the viewer and profile owner. */
 export function countMutualConnections(
   viewerId: string,
@@ -83,13 +103,5 @@ export function countMutualConnections(
   viewerRows: AcceptedConnectionPair[],
   personRows: AcceptedConnectionPair[],
 ): number {
-  const viewerConnections = new Set(
-    viewerRows.map((row) => (row.requesterId === viewerId ? row.recipientId : row.requesterId)),
-  );
-  const mutual = new Set<string>();
-  for (const row of personRows) {
-    const otherId = row.requesterId === personId ? row.recipientId : row.requesterId;
-    if (otherId !== viewerId && viewerConnections.has(otherId)) mutual.add(otherId);
-  }
-  return mutual.size;
+  return mutualConnectionIds(viewerId, personId, viewerRows, personRows).length;
 }

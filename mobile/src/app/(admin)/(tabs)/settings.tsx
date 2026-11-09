@@ -6,26 +6,28 @@ import { ArrowLeft, LogOut, Shield } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AdminHeader } from "@/components/admin/AdminUI";
 import { authClient, clearAccessToken } from "@/lib/auth/auth-client";
-import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession } from "@/lib/auth/use-session";
+import {
+  clearAllCachesForSignedOutUser,
+  clearMobileAuthCaches,
+  markSessionSignedOut,
+} from "@/lib/auth/use-session";
 import { tabBarClearance } from "@/lib/tab-bar";
 
 export default function AdminSettingsTab() {
   const insets = useSafeAreaInsets();
   const [signOutModal, setSignOutModal] = useState(false);
-  const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
 
   const handleSignOut = async () => {
     markSessionSignedOut();
     clearAccessToken();
-    queryClient.setQueryData(SESSION_QUERY_KEY, null);
+    await clearMobileAuthCaches(queryClient);
     try {
       await authClient.signOut();
     } catch {
       // continue logout cleanup
     }
-    queryClient.clear();
-    await invalidateSession();
+    clearAllCachesForSignedOutUser(queryClient);
     setSignOutModal(false);
     router.replace("/sign-in");
   };

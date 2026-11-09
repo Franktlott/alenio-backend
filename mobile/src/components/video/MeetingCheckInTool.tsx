@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { ChevronLeft, ChevronRight, ClipboardCheck } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, ClipboardCheck, Sparkles } from "lucide-react-native";
 import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
 import { OneOnOneHistoryTab } from "@/components/OneOnOneHistoryTab";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -16,6 +16,7 @@ import {
   activeMeetingCheckInPairs,
   meetingCheckInWorkspacesForMember,
   uniqueMeetingCheckInMembers,
+  type LiveNotesSession,
   type MeetingCheckInContext,
   type MeetingCheckInEligiblePair,
 } from "@/lib/meeting-check-in-tool";
@@ -33,6 +34,9 @@ type Props = {
   /** The call's live transcript, once there is enough of it to write up. */
   callTranscript?: string | null;
   callTranscriptActive?: boolean;
+  liveNotesAvailable?: boolean;
+  liveNotesSession?: LiveNotesSession | null;
+  onStartLiveNotes?: (session: LiveNotesSession) => void;
   onStopCallTranscript?: () => void;
   onCallTranscriptWrittenUp?: () => void;
 };
@@ -53,6 +57,9 @@ export function MeetingCheckInTool({
   onDraftSaveReady,
   callTranscript,
   callTranscriptActive,
+  liveNotesAvailable,
+  liveNotesSession,
+  onStartLiveNotes,
   onStopCallTranscript,
   onCallTranscriptWrittenUp,
 }: Props) {
@@ -164,7 +171,9 @@ export function MeetingCheckInTool({
         title={title}
         subtitle={
           stage === "tools"
-            ? "Tools stay separate from the video call."
+            ? liveNotesSession
+              ? "Live notes are following the form you picked."
+              : "Tools stay separate from the video call."
             : stage === "member"
               ? "Select who this check-in is for."
               : "Choose where this check-in should be saved."
@@ -204,6 +213,52 @@ export function MeetingCheckInTool({
             {error}
           </Text>
         ) : stage === "tools" ? (
+          <View style={{ gap: 8 }}>
+            {liveNotesSession ? (
+              <Pressable
+                onPress={closeSheet}
+                style={{
+                  minHeight: 58,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 11,
+                  borderWidth: 1,
+                  borderColor: "#DDD6FE",
+                  backgroundColor: "#F5F3FF",
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Back to live notes on the call"
+                testID="live-notes-session-card"
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 11,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#EDE9FE",
+                  }}
+                >
+                  <Sparkles size={18} color="#684BFF" strokeWidth={2.2} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#172033" }}>
+                    {callTranscriptActive ? "Live notes are on" : "Live notes"}
+                  </Text>
+                  <Text
+                    numberOfLines={2}
+                    style={{ marginTop: 2, fontSize: 10.5, color: "#748097" }}
+                  >
+                    {`${liveNotesSession.templateTitle} · ${memberName(liveNotesSession.pair)}`}
+                  </Text>
+                </View>
+                <ChevronRight size={17} color="#94A3B8" />
+              </Pressable>
+            ) : null}
           <Pressable
             onPress={() => setStage("member")}
             disabled={uniqueMembers.length === 0}
@@ -240,12 +295,13 @@ export function MeetingCheckInTool({
               </Text>
               <Text style={{ marginTop: 2, fontSize: 10.5, color: "#748097" }}>
                 {uniqueMembers.length > 0
-                  ? "Start a check-in with a participant."
+                  ? "Pick a person, then a guided or open check-in."
                   : "Waiting for an eligible participant to join."}
               </Text>
             </View>
             <ChevronRight size={17} color="#94A3B8" />
           </Pressable>
+          </View>
         ) : stage === "member" ? (
           <View style={{ gap: 7 }}>
             {uniqueMembers.length === 0 ? (
@@ -359,6 +415,11 @@ export function MeetingCheckInTool({
             onDraftSaveReady={onDraftSaveReady}
             callTranscript={callTranscript ?? null}
             callTranscriptActive={callTranscriptActive ?? false}
+            liveNotesAvailable={liveNotesAvailable ?? false}
+            onStartLiveNotes={(input) => {
+              if (!activePair) return;
+              onStartLiveNotes?.({ pair: activePair, ...input });
+            }}
             onStopCallTranscript={onStopCallTranscript}
             onCallTranscriptWrittenUp={onCallTranscriptWrittenUp}
           />

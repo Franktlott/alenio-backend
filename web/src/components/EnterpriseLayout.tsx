@@ -2,19 +2,20 @@ import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { AlenioGoLogo } from "./AlenioGoLogo";
 import { AlenioWorkspaceLoading } from "./AlenioWorkspaceLoading";
+import type { WebMeUser, WebTeamRow } from "../lib/api";
 import { clearAccessToken, getAuthClient } from "../lib/auth-client";
 import {
   isRecentFooterEnterpriseWorkspaceSelect,
   setPersistedEnterpriseTeamId,
-  switchEnterpriseWorkspace,
 } from "../lib/enterprise-selected-team";
-import type { WebMeUser, WebTeamRow } from "../lib/api";
+import { UserAvatar } from "./UserAvatar";
+import "../v2/alenio-chrome.css";
 
 export type EnterpriseNavId =
   | "activity"
   | "chat"
+  | "network"
   | "execute"
   | "go"
   | "workspaces"
@@ -22,19 +23,35 @@ export type EnterpriseNavId =
   | "team"
   | "plan"
   | "settings"
-  | "admin";
+  | "admin"
+  | "discover"
+  | "content"
+  | "home"
+  | "workspace"
+  | "adminUsers"
+  | "adminWorkspaces"
+  | "adminSeneca"
+  | "adminActivity"
+  | "adminNotifications"
+  | "adminPricing"
+  | "seneca";
 
-type AdminSection = "users" | "workspaces" | "enterprise-customers" | "seneca-studio";
+/** Which Admin tools pages the signed-in staff member can open. */
+export type AdminNavAccess = {
+  users: boolean;
+  workspaces: boolean;
+  content: boolean;
+  seneca: boolean;
+  activity: boolean;
+  notifications: boolean;
+  pricing: boolean;
+};
+
+type AdminSection = "users" | "workspaces" | "seneca-studio";
 
 const ADMIN_SECTIONS: Array<{ id: AdminSection; label: string; to: string; hint: string }> = [
   { id: "users", label: "Users", to: "/admin", hint: "Platform users" },
   { id: "workspaces", label: "Workspaces", to: "/admin?tab=workspaces", hint: "Self-serve & linked" },
-  {
-    id: "enterprise-customers",
-    label: "Enterprise customers",
-    to: "/admin?tab=enterprise-customers",
-    hint: "Contract accounts",
-  },
   {
     id: "seneca-studio",
     label: "Seneca Studio",
@@ -45,7 +62,7 @@ const ADMIN_SECTIONS: Array<{ id: AdminSection; label: string; to: string; hint:
 
 function adminSectionFromSearch(search: string): AdminSection {
   const tab = new URLSearchParams(search).get("tab");
-  if (tab === "workspaces" || tab === "seneca-studio" || tab === "enterprise-customers") return tab;
+  if (tab === "workspaces" || tab === "seneca-studio") return tab;
   return "users";
 }
 
@@ -67,8 +84,8 @@ type Props = {
   workspaceOverlayLoading?: boolean;
   /** When false, the Billing sidebar item is hidden (non-owners in a workspace). */
   showPlanNav: boolean;
-  /** When false, Activity and Workspace are unavailable for this workspace's access tier. */
-  showActivityExecuteNav: boolean;
+  /** Kept for callers; Workspace stays in the rail regardless. */
+  showActivityExecuteNav?: boolean;
   /** When false, Alenio Go is hidden (requires Operations plan). */
   showGoNav?: boolean;
   /** Sidebar label for `/go` — e.g. "Dashboard" for enterprise org admins. */
@@ -79,37 +96,54 @@ type Props = {
   goNavTo?: string;
   /** When true, platform Admin sidebar item is shown. */
   showAdminNav?: boolean;
+  /** When true, the platform-admin Discover section is shown. */
+  showDiscoverNav?: boolean;
+  /** Per-page Admin tools access for staff roles; every page shows when omitted. */
+  adminNav?: AdminNavAccess;
   /** Sidebar + page label for `/team` — "Profile" for regular members. */
   teamNavLabel?: string;
   /**
-   * No workspace yet — Settings, Sign out, plus Admin / enterprise org nav when applicable.
-   * Hides Chat / Workspace / Team / Billing and the workspace switcher.
+   * No workspace yet — Settings, Sign out, My Network, plus Admin / enterprise org nav when applicable.
+   * Hides Workspace / Billing.
    * Alenio Go stays off until an Operations workspace (or enterprise org membership).
    */
   setupNavMode?: boolean;
   /** Enterprise: start SSO-style boot before switching workspace (tabs settle under overlay). */
   onEnterpriseWorkspaceBoot?: (teamId: string) => void;
+  /** Opens the account panel. When set, the Profile item opens it instead of going to /settings. */
+  onOpenAccount?: () => void;
+  /** Column docked to the right of the page (chat on Alenio pages). */
+  rightDock?: ReactNode;
+  /** Header laid over the top of the page and the right dock (Alenio pages). */
+  topHeader?: ReactNode;
 };
 
-const WORKSPACE_OVERLAY_MIN_MS = 220;
-const WORKSPACE_OVERLAY_MAX_MS = 1200;
+const WORKSPACE_OVERLAY_MIN_MS = 700;
+const WORKSPACE_OVERLAY_MAX_MS = 10000;
 
-function IconChat() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
 function IconWorkspace() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
     </svg>
   );
 }
-function IconTeam() {
+function IconAdmin() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
+function IconSeneca() {
+  return <img src="/seneca-icon.png" alt="" width="20" height="20" className="enterprise-nav-icon-img" aria-hidden />;
+}
+
+function IconUsers() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -119,11 +153,105 @@ function IconTeam() {
     </svg>
   );
 }
-function IconPlan() {
+
+function IconSparkles() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+      <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+      <path d="M5 2l.6 1.6L7.2 4.2l-1.6.6L5 6.4l-.6-1.6L2.8 4.2l1.6-.6z" />
+    </svg>
+  );
+}
+
+function IconActivity() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 12h4l3-8 4 16 3-8h4" />
+    </svg>
+  );
+}
+
+function IconTag() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+      <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconBell() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+  );
+}
+
+function IconPen() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  );
+}
+
+function IconHome() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <rect x="2" y="5" width="20" height="14" rx="2" />
-      <path d="M2 10h20" />
+      <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" />
+    </svg>
+  );
+}
+
+function IconTasks() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M8 12.5l2.5 2.5L16 9" />
     </svg>
   );
 }
@@ -134,43 +262,6 @@ function IconSignOut() {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
-function IconAdmin() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  );
-}
-
-function IconSettings() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-
-function IconProfile() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
-function IconUsers() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }
@@ -216,12 +307,11 @@ function NavItem({
   );
 }
 
-function AdminNavItem({ activeNav, icon }: { activeNav: EnterpriseNavId; icon: ReactNode }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const active = activeNav === "admin";
-  const currentSection = active ? adminSectionFromSearch(location.search) : null;
-
+/**
+ * Hover/click flyout anchored to the right of a rail item. Shared by the
+ * Workspace switcher and the Admin sections menu.
+ */
+function useRailFlyout(menuHeight: number) {
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -253,18 +343,9 @@ function AdminNavItem({ activeNav, icon }: { activeNav: EnterpriseNavId; icon: R
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    const menuHeight = 168;
-    const top = Math.min(
-      Math.max(12, rect.top),
-      Math.max(12, window.innerHeight - menuHeight - 12),
-    );
-    setMenuStyle({
-      position: "fixed",
-      left: rect.right + 8,
-      top,
-      zIndex: 300,
-    });
-  }, []);
+    const top = Math.min(Math.max(12, rect.top), Math.max(12, window.innerHeight - menuHeight - 12));
+    setMenuStyle({ position: "fixed", left: rect.right + 8, top, zIndex: 300 });
+  }, [menuHeight]);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -295,6 +376,17 @@ function AdminNavItem({ activeNav, icon }: { activeNav: EnterpriseNavId; icon: R
   }, [menuOpen, updateMenuPosition]);
 
   useEffect(() => () => clearCloseTimer(), [clearCloseTimer]);
+
+  return { menuOpen, setMenuOpen, menuStyle, wrapRef, triggerRef, menuRef, openMenu, scheduleCloseMenu };
+}
+
+function AdminNavItem({ activeNav, icon }: { activeNav: EnterpriseNavId; icon: ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const active = activeNav === "admin";
+  const currentSection = active ? adminSectionFromSearch(location.search) : null;
+  const { menuOpen, setMenuOpen, menuStyle, wrapRef, triggerRef, menuRef, openMenu, scheduleCloseMenu } =
+    useRailFlyout(168);
 
   return (
     <div
@@ -375,72 +467,51 @@ function AdminNavItem({ activeNav, icon }: { activeNav: EnterpriseNavId; icon: R
 
 export function EnterpriseLayout({
   activeNav,
-  teams,
   selectedTeamId,
-  onTeamChange,
   user,
-  onSignOutNavigate,
   topBar,
   children,
   mainClassName = "",
   contentClassName = "",
   workspaceOverlayLoading = false,
-  showPlanNav,
-  showActivityExecuteNav,
   showGoNav = false,
-  goNavLabel = "Alenio Go",
+  goNavLabel,
+  goNavTo,
   showEnterpriseOrgNav = false,
-  goNavTo = "/go",
   showAdminNav = false,
-  teamNavLabel = "Team",
+  showDiscoverNav = false,
+  adminNav,
   setupNavMode = false,
-  onEnterpriseWorkspaceBoot,
+  onOpenAccount,
+  rightDock,
+  topHeader,
 }: Props) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [signingOut, setSigningOut] = useState(false);
+  const signOut = async () => {
+    if (signingOut) return;
+    if (!window.confirm("Sign out of Alenio on this device?")) return;
+    setSigningOut(true);
+    try {
+      try {
+        await getAuthClient().signOut();
+      } catch {
+        /* The local session still needs to end if the server call fails. */
+      }
+      clearAccessToken();
+      setPersistedEnterpriseTeamId("");
+      navigate("/login", { replace: true });
+    } finally {
+      setSigningOut(false);
+    }
+  };
   const [showWorkspaceOverlay, setShowWorkspaceOverlay] = useState(false);
-  /** User changed workspace (sidebar or profile); until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
+  /** User changed workspace; until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
   const [sidebarWorkspaceSwitch, setSidebarWorkspaceSwitch] = useState(false);
   const overlayStartedAtRef = useRef<number | null>(null);
   const hideOverlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSelectedTeamIdRef = useRef(selectedTeamId);
-
-  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const workspaceWrapRef = useRef<HTMLDivElement>(null);
-  const workspaceMenuRef = useRef<HTMLDivElement>(null);
-  const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
-  const [workspaceMenuStyle, setWorkspaceMenuStyle] = useState<CSSProperties | null>(null);
-  const workspaceCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearWorkspaceCloseTimer = useCallback(() => {
-    if (workspaceCloseTimerRef.current) {
-      clearTimeout(workspaceCloseTimerRef.current);
-      workspaceCloseTimerRef.current = null;
-    }
-  }, []);
-
-  const openWorkspaceMenu = useCallback(() => {
-    clearWorkspaceCloseTimer();
-    setWorkspaceMenuOpen(true);
-  }, [clearWorkspaceCloseTimer]);
-
-  const scheduleCloseWorkspaceMenu = useCallback(() => {
-    clearWorkspaceCloseTimer();
-    workspaceCloseTimerRef.current = setTimeout(() => {
-      setWorkspaceMenuOpen(false);
-      workspaceCloseTimerRef.current = null;
-    }, 180);
-  }, [clearWorkspaceCloseTimer]);
-
-  const updateWorkspaceMenuPosition = useCallback(() => {
-    const trigger = workspaceTriggerRef.current;
-    if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    setWorkspaceMenuStyle({
-      position: "fixed",
-      left: rect.right + 8,
-      bottom: Math.max(12, window.innerHeight - rect.bottom),
-      zIndex: 300,
-    });
-  }, []);
 
   const clearPendingHideTimer = useCallback(() => {
     if (hideOverlayTimerRef.current) {
@@ -463,16 +534,9 @@ export function EnterpriseLayout({
     setSidebarWorkspaceSwitch(true);
   }, [clearPendingHideTimer]);
 
-  const handleWorkspaceSelectChange = (teamId: string) => {
-    if (teamId === selectedTeamId) return;
-    if (onEnterpriseWorkspaceBoot) {
-      onEnterpriseWorkspaceBoot(teamId);
-      switchEnterpriseWorkspace(teamId, onTeamChange);
-      return;
-    }
-    beginWorkspaceSwitchOverlay();
-    switchEnterpriseWorkspace(teamId, onTeamChange);
-  };
+  useEffect(() => {
+    if (workspaceOverlayLoading) beginWorkspaceSwitchOverlay();
+  }, [workspaceOverlayLoading, beginWorkspaceSwitchOverlay]);
 
   useEffect(() => {
     const prev = prevSelectedTeamIdRef.current;
@@ -526,287 +590,195 @@ export function EnterpriseLayout({
     };
   }, [workspaceOverlayLoading, sidebarWorkspaceSwitch, clearPendingHideTimer, endSidebarWorkspaceSwitchSession]);
 
-  useEffect(() => {
-    if (!workspaceMenuOpen) {
-      setWorkspaceMenuStyle(null);
-      return;
-    }
-    updateWorkspaceMenuPosition();
-    const onPointerDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (workspaceWrapRef.current?.contains(target)) return;
-      if (workspaceMenuRef.current?.contains(target)) return;
-      setWorkspaceMenuOpen(false);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setWorkspaceMenuOpen(false);
-    };
-    const onLayoutChange = () => updateWorkspaceMenuPosition();
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", onLayoutChange);
-    window.addEventListener("scroll", onLayoutChange, true);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", onLayoutChange);
-      window.removeEventListener("scroll", onLayoutChange, true);
-    };
-  }, [workspaceMenuOpen, updateWorkspaceMenuPosition]);
-
-  useEffect(() => () => clearWorkspaceCloseTimer(), [clearWorkspaceCloseTimer]);
-
-  const signOut = async () => {
-    try {
-      await getAuthClient().signOut();
-    } catch {
-      /* ignore */
-    }
-    clearAccessToken();
-    setPersistedEnterpriseTeamId("");
-    onSignOutNavigate("/login?reason=session");
-  };
-
-  const activeTeam = teams.find((t) => t.id === selectedTeamId) ?? teams[0] ?? null;
-  const workspaceName = activeTeam?.name?.trim() || "Workspace";
-  const canSwitchWorkspace = teams.length > 1;
+  const mainColumn = (
+    <div className="enterprise-main-column">
+      <div
+        className={`enterprise-main-column-body${showWorkspaceOverlay ? " enterprise-main-column-body-loading" : ""}`.trim()}
+      >
+        {topBar}
+        <div className={`enterprise-content ${contentClassName}`.trim()}>{children}</div>
+        {showWorkspaceOverlay ? (
+          <div
+            className="enterprise-workspace-loading-overlay"
+            role="status"
+            aria-live="polite"
+            aria-label="Switching Workspace"
+          >
+            <AlenioWorkspaceLoading />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 
   return (
-    <div className={`enterprise-app ${mainClassName}`.trim()} data-testid="enterprise-layout">
+    <div
+      className={`enterprise-app ${mainClassName}`.trim()}
+      data-testid="enterprise-layout"
+    >
       <aside className="enterprise-sidebar enterprise-sidebar--rail" aria-label="Main navigation">
-        <Link to="/dashboard" className="enterprise-sidebar-brand" aria-label="Alenio home">
+        <Link to="/home" className="enterprise-sidebar-brand" aria-label="Alenio home">
           <img src="/icon.png" alt="" className="enterprise-sidebar-mark" width={60} height={60} />
+          {onOpenAccount ? (
+            <img src="/alenio-logo-white.png" alt="Alenio" className="enterprise-sidebar-logo-wide" />
+          ) : null}
         </Link>
         <nav className="enterprise-nav" aria-label="Product">
-          {setupNavMode ? (
-            <>
-              {showGoNav ? (
-                <NavItem
-                  to={goNavTo}
-                  navId="go"
-                  activeNav={activeNav}
-                  icon={<AlenioGoLogo />}
-                  label={goNavLabel}
-                />
-              ) : null}
-              {showEnterpriseOrgNav ? (
-                <>
-                  <NavItem
-                    to="/go/org/workspaces"
-                    navId="workspaces"
-                    activeNav={activeNav}
-                    icon={<IconCorporateWorkspaces />}
-                    label="Workspaces"
-                  />
-                  <NavItem
-                    to="/go/org/users"
-                    navId="users"
-                    activeNav={activeNav}
-                    icon={<IconUsers />}
-                    label="Users"
-                  />
-                </>
-              ) : null}
-              {showAdminNav ? <AdminNavItem activeNav={activeNav} icon={<IconAdmin />} /> : null}
-            </>
-          ) : (
-            <>
-              <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
-              {showActivityExecuteNav ? (
-                <NavItem
-                  to="/dashboard"
-                  navId="execute"
-                  activeNav={activeNav}
-                  icon={<IconWorkspace />}
-                  label="Workspace"
-                />
-              ) : null}
-              {showGoNav ? (
-                <NavItem
-                  to={goNavTo}
-                  navId="go"
-                  activeNav={activeNav}
-                  icon={<AlenioGoLogo />}
-                  label={goNavLabel}
-                />
-              ) : null}
-              {showEnterpriseOrgNav ? (
-                <>
-                  <NavItem
-                    to="/go/org/workspaces"
-                    navId="workspaces"
-                    activeNav={activeNav}
-                    icon={<IconCorporateWorkspaces />}
-                    label="Workspaces"
-                  />
-                  <NavItem
-                    to="/go/org/users"
-                    navId="users"
-                    activeNav={activeNav}
-                    icon={<IconUsers />}
-                    label="Users"
-                  />
-                </>
-              ) : null}
-              <NavItem
-                to="/team"
-                navId="team"
-                activeNav={activeNav}
-                icon={teamNavLabel === "Profile" ? <IconProfile /> : <IconTeam />}
-                label={teamNavLabel}
-              />
-              {showPlanNav ? (
-                <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
-              ) : null}
-              {showAdminNav ? <AdminNavItem activeNav={activeNav} icon={<IconAdmin />} /> : null}
-            </>
-          )}
-        </nav>
-        <div className="enterprise-rail-footer">
-          {!setupNavMode ? (
-          <div
-            className="enterprise-rail-footer-item-wrap"
-            ref={workspaceWrapRef}
-            onMouseEnter={() => {
-              if (canSwitchWorkspace) openWorkspaceMenu();
-            }}
-            onMouseLeave={() => {
-              if (canSwitchWorkspace) scheduleCloseWorkspaceMenu();
-            }}
-          >
-            <button
-              ref={workspaceTriggerRef}
-              type="button"
-              className={`enterprise-nav-item enterprise-nav-item--button enterprise-nav-item--workspace${
-                workspaceMenuOpen ? " enterprise-nav-item-active" : ""
-              }${canSwitchWorkspace ? " enterprise-nav-item--switchable" : ""}`}
-              onClick={() => {
-                if (!canSwitchWorkspace) return;
-                setWorkspaceMenuOpen((open) => !open);
-              }}
-              aria-expanded={canSwitchWorkspace ? workspaceMenuOpen : undefined}
-              aria-haspopup={canSwitchWorkspace ? "menu" : undefined}
-              aria-label={
-                canSwitchWorkspace
-                  ? `Switch workspace, current: ${workspaceName}`
-                  : `Current workspace: ${workspaceName}`
-              }
-              title={canSwitchWorkspace ? `${workspaceName} — hover or click to switch` : workspaceName}
-              data-testid="enterprise-workspace-menu-trigger"
-              disabled={teams.length === 0}
-            >
-              <span className="enterprise-nav-icon">
-                {activeTeam?.image ? (
-                  <img src={activeTeam.image} alt="" className="enterprise-rail-ws-icon-img" />
-                ) : (
-                  <span className="enterprise-rail-ws-fallback">{workspaceName[0]?.toUpperCase() ?? "W"}</span>
-                )}
-              </span>
-              <span className="enterprise-nav-label enterprise-nav-label--workspace">
-                <span className="enterprise-nav-workspace-kicker">
-                  {canSwitchWorkspace ? "Switch" : "Workspace"}
-                </span>
-                <span className="enterprise-nav-workspace-name">{workspaceName}</span>
-                {activeTeam?.inviteCode ? (
-                  <span className="enterprise-nav-workspace-code">
-                    Code: {activeTeam.inviteCode}
-                  </span>
-                ) : null}
-                {canSwitchWorkspace ? (
-                  <span className="enterprise-nav-chevron" aria-hidden>
-                    {workspaceMenuOpen ? "◂" : "▸"}
-                  </span>
-                ) : null}
-              </span>
-            </button>
-            {workspaceMenuOpen && canSwitchWorkspace && workspaceMenuStyle
-              ? createPortal(
-                  <div
-                    ref={workspaceMenuRef}
-                    className="enterprise-ws-menu enterprise-ws-menu--portal"
-                    style={workspaceMenuStyle}
-                    role="menu"
-                    aria-label="Switch workspace"
-                    onMouseEnter={openWorkspaceMenu}
-                    onMouseLeave={scheduleCloseWorkspaceMenu}
-                  >
-                    <p className="enterprise-ws-menu-title">Your workspaces</p>
-                    {teams.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        role="menuitem"
-                        className={`enterprise-ws-menu-item${t.id === selectedTeamId ? " enterprise-ws-menu-item--active" : ""}`}
-                        onClick={() => {
-                          if (t.id !== selectedTeamId) handleWorkspaceSelectChange(t.id);
-                          setWorkspaceMenuOpen(false);
-                        }}
-                      >
-                        <span className="enterprise-ws-menu-item-icon" aria-hidden>
-                          {t.image ? (
-                            <img src={t.image} alt="" className="enterprise-rail-ws-icon-img" />
-                          ) : (
-                            <span className="enterprise-rail-ws-fallback">{t.name?.[0]?.toUpperCase() ?? "W"}</span>
-                          )}
-                        </span>
-                        <span className="enterprise-ws-menu-item-copy">
-                          <span className="enterprise-ws-menu-item-name">{t.name}</span>
-                          <span className="enterprise-ws-menu-item-code">
-                            {t.inviteCode ? `Workspace code: ${t.inviteCode}` : "Workspace code unavailable"}
-                          </span>
-                        </span>
-                        {t.id === selectedTeamId ? (
-                          <span className="enterprise-ws-menu-item-current">Current</span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>,
-                  document.body,
-                )
-              : null}
-          </div>
+          <NavItem to="/home" navId="home" activeNav={activeNav} icon={<IconHome />} label="Home" />
+          <NavItem to="/workspace" navId="workspace" activeNav={activeNav} icon={<IconTasks />} label="Workspace" />
+          <NavItem to="/network" navId="network" activeNav={activeNav} icon={<IconUsers />} label="Network" />
+          <NavItem to="/seneca" navId="seneca" activeNav={activeNav} icon={<IconSeneca />} label="Seneca" />
+          <NavItem to="/discover" navId="discover" activeNav={activeNav} icon={<IconSparkles />} label="Discover" />
+          {location.pathname.startsWith("/go") && showGoNav && !setupNavMode ? (
+            <NavItem
+              to={goNavTo ?? "/go"}
+              navId="go"
+              activeNav={activeNav}
+              icon={<IconWorkspace />}
+              label={goNavLabel ?? "Alenio Go"}
+            />
           ) : null}
-          <Link
-            to="/settings"
-            className={`enterprise-nav-item${activeNav === "settings" ? " enterprise-nav-item-active" : ""}`}
-            data-testid="nav-settings"
-          >
-            <span className="enterprise-nav-icon">
-              <IconSettings />
-            </span>
-            <span className="enterprise-nav-label">User Settings</span>
-          </Link>
-          <button
-            type="button"
-            className="enterprise-nav-item enterprise-nav-item--button"
-            onClick={() => void signOut()}
-            data-testid="enterprise-sign-out"
-          >
-            <span className="enterprise-nav-icon">
-              <IconSignOut />
-            </span>
-            <span className="enterprise-nav-label">Sign out</span>
-          </button>
-        </div>
-      </aside>
-      <div className="enterprise-main-column">
-        <div
-          className={`enterprise-main-column-body${showWorkspaceOverlay ? " enterprise-main-column-body-loading" : ""}`.trim()}
-        >
-          {topBar}
-          <div className={`enterprise-content ${contentClassName}`.trim()}>{children}</div>
-          {showWorkspaceOverlay ? (
-            <div
-              className="enterprise-workspace-loading-overlay"
-              role="status"
-              aria-live="polite"
-              aria-label="Switching Workspace"
-            >
-              <AlenioWorkspaceLoading />
+          {showEnterpriseOrgNav ? (
+            <>
+              <NavItem
+                to="/go/org/workspaces"
+                navId="workspaces"
+                activeNav={activeNav}
+                icon={<IconCorporateWorkspaces />}
+                label="Workspaces"
+              />
+              <NavItem to="/go/org/users" navId="users" activeNav={activeNav} icon={<IconUsers />} label="Users" />
+            </>
+          ) : null}
+          {showDiscoverNav || showAdminNav ? (
+            <div className="enterprise-nav-section" role="presentation">
+              <span className="enterprise-nav-section-label">Admin tools</span>
             </div>
           ) : null}
+          {showDiscoverNav ? (
+            <>
+              {adminNav?.users ?? true ? (
+                <NavItem to="/admin/users" navId="adminUsers" activeNav={activeNav} icon={<IconUsers />} label="Users" />
+              ) : null}
+              {adminNav?.workspaces ?? true ? (
+                <NavItem
+                  to="/admin/workspaces"
+                  navId="adminWorkspaces"
+                  activeNav={activeNav}
+                  icon={<IconCorporateWorkspaces />}
+                  label="Workspaces"
+                />
+              ) : null}
+              {adminNav?.content ?? true ? (
+                <NavItem to="/admin/discover" navId="content" activeNav={activeNav} icon={<IconPen />} label="Content" />
+              ) : null}
+              {adminNav?.seneca ?? true ? (
+                <NavItem to="/admin/seneca" navId="adminSeneca" activeNav={activeNav} icon={<IconSeneca />} label="Seneca" />
+              ) : null}
+              {adminNav?.notifications ?? true ? (
+                <NavItem
+                  to="/admin/notifications"
+                  navId="adminNotifications"
+                  activeNav={activeNav}
+                  icon={<IconBell />}
+                  label="Notifications"
+                />
+              ) : null}
+              {adminNav?.pricing ? (
+                <NavItem to="/admin/pricing" navId="adminPricing" activeNav={activeNav} icon={<IconTag />} label="Pricing" />
+              ) : null}
+              {adminNav?.activity ?? true ? (
+                <NavItem
+                  to="/admin/activity"
+                  navId="adminActivity"
+                  activeNav={activeNav}
+                  icon={<IconActivity />}
+                  label="Activity"
+                />
+              ) : null}
+            </>
+          ) : null}
+          {showAdminNav ? <AdminNavItem activeNav={activeNav} icon={<IconAdmin />} /> : null}
+        </nav>
+        <div className="enterprise-rail-footer">
+          {onOpenAccount ? (
+            <button
+              type="button"
+              className="enterprise-rail-user"
+              onClick={onOpenAccount}
+              data-testid="nav-settings"
+              aria-label="Open profile"
+            >
+              <UserAvatar
+                user={user ?? { name: null, email: null, image: null }}
+                className="enterprise-rail-user-avatar"
+                imgClassName="enterprise-rail-user-avatar-img"
+                alt=""
+              />
+              <span className="enterprise-rail-user-copy">
+                <span className="enterprise-rail-user-name">{user?.name?.trim() || user?.email || "Profile"}</span>
+                <span className="enterprise-rail-user-sub">Personal Account</span>
+              </span>
+              <svg
+                className="enterprise-rail-user-chevron"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </button>
+          ) : (
+            <Link
+              to="/settings"
+              className={`enterprise-nav-item${activeNav === "settings" ? " enterprise-nav-item-active" : ""}`}
+              data-testid="nav-settings"
+            >
+              <span className="enterprise-nav-icon">
+                <UserAvatar
+                  user={user ?? { name: null, email: null, image: null }}
+                  className="enterprise-nav-avatar"
+                  imgClassName="enterprise-nav-avatar-img"
+                  alt="Profile"
+                />
+              </span>
+              <span className="enterprise-nav-label">Profile</span>
+            </Link>
+          )}
+          {onOpenAccount ? null : (
+            <button
+              type="button"
+              className="enterprise-nav-item enterprise-nav-item--button"
+              onClick={() => void signOut()}
+              disabled={signingOut}
+              data-testid="nav-sign-out"
+            >
+              <span className="enterprise-nav-icon">
+                <IconSignOut />
+              </span>
+              <span className="enterprise-nav-label">Sign out</span>
+            </button>
+          )}
         </div>
-      </div>
+      </aside>
+      {topHeader ? (
+        <div className="enterprise-shell-right">
+          {topHeader}
+          {mainColumn}
+          {rightDock}
+        </div>
+      ) : (
+        <>
+          {mainColumn}
+          {rightDock}
+        </>
+      )}
     </div>
   );
 }

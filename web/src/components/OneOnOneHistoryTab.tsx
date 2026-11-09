@@ -114,6 +114,14 @@ function formatMeetingDate(iso: string): string {
   }
 }
 
+const OPEN_CHECK_IN_TITLE = "Open check-in";
+const OPEN_CHECK_IN_TITLE_MAX = 60;
+
+function openCheckInTitleForSave(title: string): string {
+  const trimmed = title.trim().slice(0, OPEN_CHECK_IN_TITLE_MAX);
+  return trimmed || OPEN_CHECK_IN_TITLE;
+}
+
 function meetingToFillTemplate(meeting: OneOnOneMeeting): OneOnOneTemplate {
   return {
     id: meeting.templateId ?? meeting.id,
@@ -758,6 +766,9 @@ export function OneOnOneHistoryTab({
         followUpTasks,
         requestAssociateFeedback,
         status: "published" as const,
+        ...(editingMeeting && editingMeeting.templateId == null
+          ? { templateTitle: openCheckInTitleForSave(selectedTemplate.title) }
+          : {}),
       };
       if (editingMeeting) {
         await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, payload);
@@ -770,7 +781,10 @@ export function OneOnOneHistoryTab({
       await loadMeetings();
       if (canCreate) {
         setSenecaSummaryPayload({
-          templateTitle: selectedTemplate.title,
+          templateTitle:
+            editingMeeting && editingMeeting.templateId == null
+              ? openCheckInTitleForSave(selectedTemplate.title)
+              : selectedTemplate.title,
           templateFields: selectedTemplate.fields,
           responses: normalized,
           followUpTasks: followUpTasks.map((t) => ({
@@ -802,7 +816,13 @@ export function OneOnOneHistoryTab({
     setErr(null);
     try {
       const normalized = normalizeResponses(selectedTemplate.fields);
-      const payload = { responses: normalized, status: "draft" as const };
+      const payload = {
+        responses: normalized,
+        status: "draft" as const,
+        ...(editingMeeting && editingMeeting.templateId == null
+          ? { templateTitle: openCheckInTitleForSave(selectedTemplate.title) }
+          : {}),
+      };
       if (editingMeeting) {
         await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, payload);
       } else {
@@ -1377,8 +1397,11 @@ export function OneOnOneHistoryTab({
         ? "Resume editing"
         : "Edit check-in"
       : selectedTemplate.title;
+    const openCheckInTitleEditable = !!editingMeeting && editingMeeting.templateId == null;
     const fillSubtitle = editingMeeting
-      ? `${selectedTemplate.title} · ${formatMeetingDate(oneOnOneDisplayDate(editingMeeting))}`
+      ? openCheckInTitleEditable
+        ? formatMeetingDate(oneOnOneDisplayDate(editingMeeting))
+        : `${selectedTemplate.title} · ${formatMeetingDate(oneOnOneDisplayDate(editingMeeting))}`
       : selectedTemplate.description ?? undefined;
     const showSaveDraft = !editingMeeting || editingMeeting.status === "draft";
     const publishLabel = editingMeeting?.status === "draft" ? "Publish check-in" : editingMeeting ? "Save changes" : "Save check-in";
@@ -1424,6 +1447,25 @@ export function OneOnOneHistoryTab({
               onRequestPrep={requestSenecaPrep}
               compact
             />
+          ) : null}
+          {openCheckInTitleEditable ? (
+            <div className="enterprise-oneone-fill-field" style={{ marginBottom: 14 }}>
+              <label className="enterprise-oneone-fill-label" htmlFor="open-check-in-title">
+                Check-in title
+              </label>
+              <input
+                id="open-check-in-title"
+                type="text"
+                className="auth-input"
+                value={selectedTemplate.title}
+                maxLength={OPEN_CHECK_IN_TITLE_MAX}
+                placeholder={OPEN_CHECK_IN_TITLE}
+                onChange={(e) => {
+                  const title = e.target.value.slice(0, OPEN_CHECK_IN_TITLE_MAX);
+                  setSelectedTemplate((current) => (current ? { ...current, title } : current));
+                }}
+              />
+            </div>
           ) : null}
           <ul className="enterprise-oneone-fill-fields">
               {sortedFields.map((field) =>

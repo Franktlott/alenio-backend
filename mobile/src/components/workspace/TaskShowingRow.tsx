@@ -1,117 +1,150 @@
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
-import { ChevronDown, Plus } from "lucide-react-native";
-import { colors } from "@/theme";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { Plus, Search, SlidersHorizontal } from "lucide-react-native";
 import type { WorkspaceFiltersState } from "./workspace-types";
-import { taskFilterSummary } from "./workspace-utils";
 import { WS } from "./workspace-ui";
+import { colors } from "@/theme";
 
 type Props = {
   filters: WorkspaceFiltersState;
-  selectedDay: string | null;
+  searchQuery: string;
+  onChangeSearch: (value: string) => void;
   onOpenFilterView: () => void;
   canCreateTask: boolean;
   onCreateTask: () => void;
+  createLabel?: "Task" | "Reminder";
 };
 
-// Widths are explicit rather than flex-driven so the create action can never be
-// pushed past the right edge on a narrow screen.
-const CONTROL_HEIGHT = 34;
-const CONTROL_PAD_H = 12;
-const CHEVRON = 12;
-const ROW_GAP = 8;
+const CONTROL_HEIGHT = 32;
 
 export function TaskShowingRow({
   filters,
-  selectedDay,
+  searchQuery,
+  onChangeSearch,
   onOpenFilterView,
   canCreateTask,
   onCreateTask,
+  createLabel = "Task",
 }: Props) {
-  const { width } = useWindowDimensions();
-  const contentWidth = Math.max(240, width - WS.pageGutter * 2);
-  const compact = contentWidth < 320;
-  const createWidth = compact ? 92 : 112;
-  const selectorWidth = contentWidth - createWidth - ROW_GAP;
-  const selectorTextWidth = selectorWidth - CONTROL_PAD_H * 2 - CHEVRON - 6;
-  const summary = taskFilterSummary(filters, selectedDay);
+  const filtersActive =
+    filters.dueDate !== "all" ||
+    filters.priority !== "all" ||
+    (filters.statusTab === "completed" || filters.statusTab === "archived"
+      ? filters.sort !== "newest"
+      : filters.sort !== "due");
 
   return (
-    <View
-      style={{
-        width: contentWidth,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}
-      testID="task-showing-row"
-    >
-      <Pressable
-        onPress={onOpenFilterView}
+    <View testID="task-showing-row">
+      <View
         style={{
-          width: selectorWidth,
-          height: CONTROL_HEIGHT,
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: CONTROL_PAD_H,
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: "#DDE3EC",
-          backgroundColor: WS.surface,
+          gap: 6,
         }}
-        accessibilityRole="button"
-        accessibilityLabel={`${summary}. Open Filter and View.`}
-        testID="task-status-selector"
       >
-        <Text
+        <View
           style={{
-            width: selectorTextWidth,
-            fontSize: 12.5,
-            lineHeight: 15,
-            fontWeight: "600",
-            color: WS.ink,
-          }}
-          numberOfLines={1}
-        >
-          {summary}
-        </Text>
-        <ChevronDown size={CHEVRON} color={WS.muted} strokeWidth={2.2} />
-      </Pressable>
-
-      {canCreateTask ? (
-        <Pressable
-          onPress={onCreateTask}
-          style={{
-            width: createWidth,
+            flex: 1,
             height: CONTROL_HEIGHT,
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: CONTROL_PAD_H,
-            borderRadius: 999,
+            paddingHorizontal: 10,
+            borderRadius: 10,
             borderWidth: 1,
-            borderColor: colors.brandSoft,
-            backgroundColor: colors.brandSoft,
+            borderColor: "#EEF2F6",
+            backgroundColor: "#FFFFFF",
+          }}
+          testID="task-search-control"
+        >
+          <Search size={13} color="#8A96A8" strokeWidth={2.1} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={onChangeSearch}
+            placeholder="Search tasks..."
+            placeholderTextColor="#8A96A8"
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+            autoCorrect={false}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              height: "100%",
+              marginLeft: 6,
+              paddingVertical: 0,
+              fontSize: 13,
+              lineHeight: 18,
+              textAlignVertical: "center",
+              color: WS.ink,
+            }}
+            accessibilityLabel="Search tasks"
+            testID="task-search-input"
+          />
+        </View>
+
+        <Pressable
+          onPress={onOpenFilterView}
+          style={{
+            height: CONTROL_HEIGHT,
+            paddingHorizontal: 10,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: filtersActive ? "#D7DEE8" : "#EEF2F6",
+            backgroundColor: filtersActive ? "#F5F7FA" : "#FFFFFF",
           }}
           accessibilityRole="button"
-          accessibilityLabel="New Task"
-          testID="task-new-button"
+          accessibilityLabel="Open task filters"
+          testID="task-filter-button"
         >
-          <Plus size={12} color={colors.brand} strokeWidth={2.8} />
+          <SlidersHorizontal
+            size={13}
+            color={filtersActive ? WS.ink : WS.muted}
+            strokeWidth={2.2}
+          />
           <Text
             style={{
-              marginLeft: 3,
               fontSize: 12,
-              lineHeight: 14,
               fontWeight: "700",
-              color: colors.brand,
+              color: WS.ink,
             }}
-            numberOfLines={1}
           >
-            {compact ? "New" : "New Task"}
+            Filters
           </Text>
         </Pressable>
-      ) : null}
+
+        {canCreateTask ? (
+          <Pressable
+            onPress={onCreateTask}
+            style={{
+              height: CONTROL_HEIGHT,
+              paddingHorizontal: 11,
+              borderRadius: 999,
+              backgroundColor: colors.brand,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`New ${createLabel}`}
+            testID="task-new-button"
+          >
+            <Plus size={13} color="#FFFFFF" strokeWidth={2.8} />
+            <Text
+              style={{
+                marginLeft: 3,
+                fontSize: 12.5,
+                lineHeight: 15,
+                fontWeight: "700",
+                color: "#FFFFFF",
+              }}
+              numberOfLines={1}
+            >
+              New
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }

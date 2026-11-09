@@ -3,10 +3,12 @@ import { Stack, router } from "expo-router";
 import { useMobileAuthReady } from "@/lib/auth/use-session";
 import { useQuery } from "@tanstack/react-query";
 import { ME_QUERY_KEY, fetchMeUser } from "@/lib/auth/me-query";
+import { useScreenOrientation } from "@/lib/use-screen-orientation";
 
 export default function AdminLayout() {
+  const screenOrientation = useScreenOrientation();
   const { data: authReady } = useMobileAuthReady();
-  const { data: me, isFetched } = useQuery({
+  const { isFetched } = useQuery({
     queryKey: ME_QUERY_KEY,
     queryFn: () => fetchMeUser(),
     enabled: !!authReady?.me?.id,
@@ -14,17 +16,14 @@ export default function AdminLayout() {
     refetchOnMount: "always",
   });
 
-  const isAdmin = me?.isAdmin === true || authReady?.me?.isAdmin === true;
-
   useEffect(() => {
     if (!authReady?.me?.id || !isFetched) return;
-    if (!isAdmin) {
-      router.replace("/(app)/profile");
-    }
-  }, [authReady?.me?.id, isFetched, isAdmin]);
+    // Platform admin will be its own account and its own app. Member logins stay here.
+    router.replace("/(app)/profile");
+  }, [authReady?.me?.id, isFetched]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, orientation: screenOrientation }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="user-detail" options={{ animation: "slide_from_right" }} />
     </Stack>

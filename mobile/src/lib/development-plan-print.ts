@@ -47,7 +47,7 @@ function lastUpdatedAt(goal: DevelopmentGoal): string {
 
 function renderStepsHtml(steps: string[]): string {
   if (steps.length === 0) {
-    return `<p class="empty-line">No steps listed.</p>`;
+    return `<p class="empty-line">No actions listed.</p>`;
   }
   return `<ol class="step-list">${steps
     .map((step) => `<li>${escapeHtml(step)}</li>`)
@@ -92,7 +92,7 @@ function renderActiveGoalHtml(goal: DevelopmentGoal, index: number): string {
       </div>
 
       <div class="goal-block">
-        <h3 class="block-label">Steps to develop this skill</h3>
+        <h3 class="block-label">Actions to develop this skill</h3>
         ${renderStepsHtml(goal.steps)}
       </div>
 
@@ -139,7 +139,7 @@ function renderGoalsHtml(goals: DevelopmentGoal[]): string {
   }
 
   if (closed.length > 0) {
-    html += `<h2 class="print-closed-heading">Closed goals</h2>`;
+    html += `<h2 class="print-closed-heading">Completed goals</h2>`;
     html += `<ul class="closed-goal-list">`;
     for (const goal of closed) {
       html += renderClosedGoalRowHtml(goal);
@@ -155,7 +155,7 @@ function buildPrintHtml(options: DevelopmentPlanPrintOptions, logoUrl: string): 
   const printedOn = formatPrintDate(new Date().toISOString());
   const manager = managerName?.trim() || "—";
   const intro =
-    "This development plan tracks skills to build, action steps, and progress notes over time. Use it to support ongoing growth and professional development.";
+    "This development plan tracks skills to build, actions, and progress notes over time. Use it to support ongoing growth and professional development.";
 
   return `<!DOCTYPE html>
 <html lang="en">

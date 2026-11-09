@@ -369,6 +369,24 @@ describe("Momentum service lifecycle", () => {
     });
   });
 
+  test("a completion after the due time on the same day is late", async () => {
+    const dueDate = new Date("2026-08-27T15:00:00.000Z");
+    const completedAt = new Date("2026-08-27T16:30:00.000Z");
+    const store = momentumDb({
+      tasks: [task("timed", dueDate)],
+      members: [member()],
+    });
+
+    await applyMomentumCompletion(store.db, {
+      taskId: "timed",
+      actorUserId: "user-1",
+      completedAt,
+    });
+
+    expect(store.credits[0]).toMatchObject({ onTime: false });
+    expect(store.members[0]?.currentStreak).toBe(0);
+  });
+
   test("re-applying an active completion is idempotent", async () => {
     const completedAt = new Date("2026-08-20T12:00:00.000Z");
     const store = momentumDb({

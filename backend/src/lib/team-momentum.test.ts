@@ -166,6 +166,24 @@ describe("Team Momentum summary", () => {
     expect(dashboard.weeks.length).toBeGreaterThanOrEqual(4);
   });
 
+  test("counts an open task past its due time as overdue", () => {
+    const dashboard = buildMomentumDashboard({
+      now,
+      monthStart: new Date("2026-08-01T00:00:00.000Z"),
+      monthEnd: new Date("2026-09-01T00:00:00.000Z"),
+      previousMonthStart: new Date("2026-07-01T00:00:00.000Z"),
+      previousMonthEnd: new Date("2026-08-01T00:00:00.000Z"),
+      credits: [],
+      openTasks: [
+        { id: "past-time", dueDate: new Date("2026-08-27T15:00:00.000Z") },
+        { id: "later-today", dueDate: new Date("2026-08-27T18:00:00.000Z") },
+        { id: "end-of-day", dueDate: new Date("2026-08-27T23:59:59.000Z") },
+      ],
+    });
+
+    expect(dashboard.taskStatus).toEqual({ onTime: 0, dueSoon: 2, overdue: 1 });
+  });
+
   test("query layer reads canonical credits and assignment projections", async () => {
     const calls: string[] = [];
     const db = {

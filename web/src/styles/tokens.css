@@ -1,0 +1,99 @@
+/*
+ * Alenio web design tokens. Single source of truth for new and migrated UI.
+ * Components opt in with the `.al-ds` scope (Inter + token colors); legacy
+ * token families (--accent, --dm-*, --temps-*, ...) are left as they are.
+ */
+:root {
+  /* Text */
+  --al-text: #111827;
+  --al-text-2: #667085;
+  --al-text-3: #98a2b3;
+  --al-text-inverse: #ffffff;
+
+  /* Accent (Alenio purple, solid only) */
+  --al-accent: #6d5ef8;
+  --al-accent-hover: #5b4ddc;
+  --al-accent-soft: #f1efff;
+  --al-accent-ink: #4b3fd1;
+  --al-focus: 0 0 0 3px rgba(109, 94, 248, 0.28);
+
+  /* Surfaces */
+  --al-bg: #f6f7f9;
+  --al-surface: #ffffff;
+  --al-surface-2: #f9fafb;
+  --al-border: #e5e7eb;
+  --al-border-strong: #d0d5dd;
+  --al-row-hover: #f9fafb;
+  --al-row-selected: #f5f3ff;
+
+  /* Status */
+  --al-success: #067647;
+  --al-success-soft: #ecfdf3;
+  --al-warning: #b54708;
+  --al-warning-soft: #fffaeb;
+  --al-danger: #d92d20;
+  --al-danger-hover: #b42318;
+  --al-danger-soft: #fef3f2;
+  --al-info: #175cd3;
+  --al-info-soft: #eff8ff;
+  --al-neutral-soft: #f2f4f7;
+
+  /* Spacing */
+  --al-space-1: 4px;
+  --al-space-2: 8px;
+  --al-space-3: 12px;
+  --al-space-4: 16px;
+  --al-space-5: 24px;
+  --al-space-6: 32px;
+
+  /* Radius */
+  --al-radius-control: 8px;
+  --al-radius-card: 12px;
+  --al-radius-menu: 10px;
+  --al-radius-dialog: 14px;
+  --al-radius-pill: 999px;
+
+  /* Type */
+  --al-font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --al-fs-xs: 12px;
+  --al-fs-sm: 13px;
+  --al-fs-md: 14px;
+  --al-fs-lg: 16px;
+  --al-fs-xl: 20px;
+  --al-fs-2xl: 24px;
+  --al-fw-regular: 400;
+  --al-fw-medium: 500;
+  --al-fw-semibold: 600;
+
+  /* Controls & tables */
+  --al-control-h: 36px;
+  --al-control-h-sm: 32px;
+  --al-control-h-lg: 40px;
+  /* Text fields in forms and dialogs; toolbars use --al-control-h. */
+  --al-field-h: 40px;
+  --al-table-head-h: 44px;
+  --al-table-row-h: 56px;
+  --al-table-row-h-compact: 44px;
+  --al-row-pad-y: 12px;
+  --al-row-pad-x: 16px;
+  --al-avatar-row: 28px;
+  --al-avatar-stack: 20px;
+
+  --al-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --al-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --al-shadow-menu: 0 8px 24px rgba(16, 24, 40, 0.1), 0 2px 6px rgba(16, 24, 40, 0.05);
+  --al-shadow-dialog: 0 20px 48px rgba(16, 24, 40, 0.18);
+  --al-backdrop: rgba(16, 24, 40, 0.42);
+
+  /* Layers */
+  --al-z-dialog: 3000;
+  --al-z-menu: 3100;
+  --al-z-toast: 3200;
+  --al-z-tooltip: 3300;
+}
+
+.al-ds {
+  font-family: var(--al-font);
+  color: var(--al-text);
+  -webkit-font-smoothing: antialiased;
+}

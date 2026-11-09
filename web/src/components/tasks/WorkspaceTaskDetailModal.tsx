@@ -34,10 +34,12 @@ import {
   assigneeInitials,
   isTaskOverdue,
 } from "../../lib/task-display";
+import { incompleteSubtasks, isSubtaskSharedComplete, completedByOtherMember } from "../../lib/subtask-completion";
 import { isRecurringTask, type RecurrenceScope } from "../../lib/recurring-task";
 import { isTaskPhotoUrl } from "../../lib/task-attachment";
 import { TaskDescriptionContent } from "./TaskDescriptionField";
 import { calendarDayFromInstant, calendarDuePayload, resolveTimeZone } from "../../lib/timezone";
+import { isPrivateReminder, taskNoun } from "./task-presentation";
 
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -95,17 +97,20 @@ export function WorkspaceTaskDetailModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recurringScopeMode, setRecurringScopeMode] = useState<"delete" | "edit" | null>(null);
-  const [prompt, setPrompt] = useState<"complete" | "recall" | "subtasks" | null>(null);
+  const [prompt, setPrompt] = useState<"complete" | "recall" | "subtasks" | "uncheck-other" | null>(null);
+  const [uncheckTarget, setUncheckTarget] = useState<ApiSubtask | null>(null);
   const [headMenuOpen, setHeadMenuOpen] = useState(false);
   const headMenuRef = useRef<HTMLDivElement>(null);
 
   const meId = me?.id;
   const creatorId = task.creatorId ?? task.creator?.id;
   const isCreator = !!meId && creatorId === meId;
-  const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader" || myRole === "admin";
+  const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
   const isCompleted = task.status === "done";
+  const isReminder = isPrivateReminder(task);
+  const noun = taskNoun(task);
   const canEdit = (isCreator || isOwnerOrLeader) && !isCompleted;
-  const canDelete = isCreator || myRole === "owner" || myRole === "admin";
+  const canDelete = isCreator || (!isReminder && isOwnerOrLeader);
   const assignedIds = new Set(task.assignments.map((a) => a.user.id));
   const isAssignee = !!meId && assignedIds.has(meId);
 
@@ -138,6 +143,11 @@ export function WorkspaceTaskDetailModal({
     setEditMode(false);
     setError(null);
   }, [initialTask.id, userTimeZone]);
+
+  useEffect(() => {
+    if (editMode) return;
+    setTask(initialTask);
+  }, [initialTask, editMode]);
 
   const refreshTask = async () => {
     const detail = await fetchWebTaskDetail(task.id, teamId);
@@ -188,8 +198,6 @@ export function WorkspaceTaskDetailModal({
     }
   };
 
-  const incompleteSubtasks = (task.subtasks ?? []).filter((s) => !s.completed).length;
-
   const performStatusUpdate = async (nextStatus: string) => {
     setBusy(true);
     setError(null);
@@ -202,8 +210,44 @@ export function WorkspaceTaskDetailModal({
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not update task.";
       if (message.toLowerCase().includes("subtask")) setPrompt("subtasks");
-      else setError(message);
-      setPrompt(null);
+      else {
+        setPrompt(null);
+        setError(message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const applySubtaskCompleted = async (subtask: ApiSubtask, completed: boolean) => {
+    if (isCompleted || !isAssignee) return;
+    const previous = task;
+    setTask((current) => ({
+      ...current,
+      subtasks: (current.subtasks ?? []).map((item) =>
+        item.id === subtask.id
+          ? {
+              ...item,
+              completed,
+              completions: completed
+                ? [
+                    {
+                      userId: meId ?? "",
+                      user: me ? { id: me.id, name: me.name, image: me.image } : undefined,
+                    },
+                  ]
+                : [],
+            }
+          : item,
+      ),
+    }));
+    setBusy(true);
+    try {
+      await updateTeamTaskSubtask(teamId, task.id, subtask.id, completed);
+      await refreshTask();
+    } catch (e) {
+      setTask(previous);
+      setError(e instanceof Error ? e.message : "Could not update subtask.");
     } finally {
       setBusy(false);
     }
@@ -211,15 +255,18 @@ export function WorkspaceTaskDetailModal({
 
   const toggleSubtask = async (subtask: ApiSubtask) => {
     if (isCompleted || !isAssignee) return;
-    setBusy(true);
-    try {
-      await updateTeamTaskSubtask(teamId, task.id, subtask.id, !subtask.completed);
-      await refreshTask();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update subtask.");
-    } finally {
-      setBusy(false);
+    const done = isSubtaskSharedComplete(subtask);
+    if (!done) {
+      await applySubtaskCompleted(subtask, true);
+      return;
     }
+    const other = completedByOtherMember(subtask, meId);
+    if (other) {
+      setUncheckTarget(subtask);
+      setPrompt("uncheck-other");
+      return;
+    }
+    await applySubtaskCompleted(subtask, false);
   };
 
   const addSubtask = async () => {
@@ -268,7 +315,8 @@ export function WorkspaceTaskDetailModal({
   const badges = taskBadges(task);
   const now = new Date();
   const subtasks = task.subtasks ?? [];
-  const completedSubtasks = subtasks.filter((s) => s.completed).length;
+  const openSubtasks = incompleteSubtasks(subtasks);
+  const completedSubtasks = subtasks.filter((s) => isSubtaskSharedComplete(s)).length;
   const recurrenceLabel = task.recurrenceRule?.type
     ? task.recurrenceRule.type.charAt(0).toUpperCase() + task.recurrenceRule.type.slice(1)
     : isRecurringTask(task)
@@ -293,6 +341,11 @@ export function WorkspaceTaskDetailModal({
     setEditDueDate(task.dueDate ? calendarDayFromInstant(task.dueDate, userTimeZone) : "");
   };
 
+  const requestComplete = () => {
+    if (openSubtasks.length > 0) setPrompt("subtasks");
+    else setPrompt("complete");
+  };
+
   return (
     <>
       <div
@@ -307,7 +360,7 @@ export function WorkspaceTaskDetailModal({
           className={`enterprise-task-modal enterprise-workspace-detail-modal enterprise-workspace-detail-modal--v2${showFocusedFeedbackTask ? " enterprise-task-modal--feedback-focused" : ""}`}
           role="dialog"
           aria-modal="true"
-          aria-label="Task details"
+          aria-label={isReminder ? "Private reminder details" : "Task details"}
           onClick={(e) => e.stopPropagation()}
         >
           <header className="task-detail-v2-head">
@@ -323,6 +376,9 @@ export function WorkspaceTaskDetailModal({
               {!showFocusedFeedbackTask ? (
                 <>
                   <div className="task-detail-v2-badges">
+                    {isReminder ? (
+                      <span className="task-detail-v2-badge task-detail-v2-badge-repeat">Private reminder</span>
+                    ) : null}
                     <span className={`task-detail-v2-badge task-detail-v2-badge-priority task-detail-v2-badge-priority-${task.priority}`}>
                       {priorityLabel(task.priority)}
                     </span>
@@ -378,7 +434,7 @@ export function WorkspaceTaskDetailModal({
                             else void handleDelete("task");
                           }}
                         >
-                          Delete task
+                          Delete {noun}
                         </button>
                       </div>
                     ) : null}
@@ -477,19 +533,21 @@ export function WorkspaceTaskDetailModal({
                   </div>
                   {subtasks.length > 0 ? (
                     <ul className="task-detail-v2-checklist">
-                      {subtasks.map((s) => (
-                        <li key={s.id} className={s.completed ? "task-detail-v2-checklist-item--done" : ""}>
+                      {subtasks.map((s) => {
+                        const done = isSubtaskSharedComplete(s);
+                        return (
+                        <li key={s.id} className={done ? "task-detail-v2-checklist-item--done" : ""}>
                           <span className="task-detail-v2-checklist-drag" aria-hidden>
                             ⋮⋮
                           </span>
                           <button
                             type="button"
-                            className={`task-detail-v2-checklist-check${s.completed ? " task-detail-v2-checklist-check--done" : ""}`}
+                            className={`task-detail-v2-checklist-check${done ? " task-detail-v2-checklist-check--done" : ""}`}
                             disabled={busy || isCompleted || (!isAssignee && !canEdit)}
-                            aria-label={s.completed ? `Mark "${s.title}" incomplete` : `Mark "${s.title}" complete`}
+                            aria-label={done ? `Mark "${s.title}" incomplete` : `Mark "${s.title}" complete`}
                             onClick={() => void toggleSubtask(s)}
                           >
-                            {s.completed ? "✓" : ""}
+                            {done ? "✓" : ""}
                           </button>
                           <span className="task-detail-v2-checklist-label">{s.title}</span>
                           {editMode ? (
@@ -503,7 +561,8 @@ export function WorkspaceTaskDetailModal({
                             </button>
                           ) : null}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="enterprise-muted task-detail-v2-checklist-empty">No subtasks yet.</p>
@@ -693,7 +752,7 @@ export function WorkspaceTaskDetailModal({
                       </button>
                     ) : null
                   ) : isAssignee || canEdit ? (
-                    <button type="button" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={busy} onClick={() => setPrompt("complete")}>
+                    <button type="button" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={busy} onClick={requestComplete}>
                       <span aria-hidden>✓</span> Complete task
                     </button>
                   ) : null}
@@ -705,7 +764,7 @@ export function WorkspaceTaskDetailModal({
               <button type="button" className="task-detail-v2-btn task-detail-v2-btn--ghost" onClick={onClose}>
                 Close
               </button>
-              <button type="button" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={busy} onClick={() => setPrompt("complete")}>
+              <button type="button" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={busy} onClick={requestComplete}>
                 <span aria-hidden>✓</span> Complete task
               </button>
             </footer>
@@ -715,7 +774,7 @@ export function WorkspaceTaskDetailModal({
                 Close
               </button>
               {!isCompleted && (showFeedbackLoadError || showFeedbackAlreadySubmitted) ? (
-                <button type="button" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={busy} onClick={() => setPrompt("complete")}>
+                <button type="button" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={busy} onClick={requestComplete}>
                   <span aria-hidden>✓</span> Complete task
                 </button>
               ) : null}
@@ -738,7 +797,11 @@ export function WorkspaceTaskDetailModal({
       <TaskPromptModal
         open={prompt === "complete"}
         title="Mark as done?"
-        message="This will complete the task and lock it from further edits."
+        message={
+          myRole === "owner" && !isReminder && !isAssignee
+            ? "This task is not assigned to you. Completing it will mark it done and lock it from further edits."
+            : "This will complete the task and lock it from further edits."
+        }
         confirmLabel="Complete"
         confirmTone="success"
         busy={busy}
@@ -762,12 +825,29 @@ export function WorkspaceTaskDetailModal({
       <TaskPromptModal
         open={prompt === "subtasks"}
         title="Subtasks incomplete"
-        message={`Complete all subtasks before marking this task as done.${incompleteSubtasks ? ` ${incompleteSubtasks} remaining.` : ""}`}
+        message="Subtasks are incomplete. Finish them before marking this task as done."
         confirmLabel="Got it"
         confirmTone="primary"
         cancelLabel=""
         onClose={() => setPrompt(null)}
         onConfirm={() => setPrompt(null)}
+      />
+      <TaskPromptModal
+        open={prompt === "uncheck-other"}
+        title="Uncheck this step?"
+        message={`${completedByOtherMember(uncheckTarget ?? {}, meId)?.name ?? "A teammate"} already completed this. Unchecking it marks it incomplete for everyone.`}
+        confirmLabel="Uncheck"
+        confirmTone="warning"
+        onClose={() => {
+          setPrompt(null);
+          setUncheckTarget(null);
+        }}
+        onConfirm={() => {
+          const target = uncheckTarget;
+          setPrompt(null);
+          setUncheckTarget(null);
+          if (target) void applySubtaskCompleted(target, false);
+        }}
       />
     </>
   );

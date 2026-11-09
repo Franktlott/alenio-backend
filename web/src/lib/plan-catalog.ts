@@ -1,6 +1,11 @@
 /** Shared plan copy. Free constants describe grandfathered workspaces only. */
 
-export const FREE_INCLUDED = ["Activity feed", "Team chat", "Team members"] as const;
+export const FREE_INCLUDED = [
+  "Activity feed",
+  "Team chat",
+  "Team members",
+  "Celebrations & shoutouts",
+] as const;
 
 export const FREE_LOCKED = [
   "Tasks & action items",
@@ -21,7 +26,6 @@ export const PRO_FEATURES = [
   "Outlook calendar sync (private, read-only)",
   "Metrics & dashboards",
   "Performance insights",
-  "Celebrations & shoutouts",
   "Priority support",
 ] as const;
 
@@ -61,7 +65,7 @@ export const BILLING_COMPARE_FEATURES = [
   { name: "Outlook calendar sync", free: false, pro: true, operations: true },
   { name: "Metrics & dashboards", free: false, pro: true, operations: true },
   { name: "Performance insights", free: false, pro: true, operations: true },
-  { name: "Celebrations & shoutouts", free: false, pro: true, operations: true },
+  { name: "Celebrations & shoutouts", free: true, pro: true, operations: true },
   { name: "Alenio Go (checklists, walks, briefings)", free: false, pro: false, operations: true },
   { name: "Workflow execution & temperature checks", free: false, pro: false, operations: true },
   { name: "Priority support", free: false, pro: true, operations: true },

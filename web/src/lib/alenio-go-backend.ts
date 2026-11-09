@@ -30,7 +30,6 @@ function tileIcon(moduleKey: string, icon: string | undefined): GoBackendAdminTi
 }
 
 function tileTitle(mod: WorkspaceModule): string {
-  if (mod.moduleKey === "temp-checks") return "Temp checks";
   return mod.moduleName;
 }
 

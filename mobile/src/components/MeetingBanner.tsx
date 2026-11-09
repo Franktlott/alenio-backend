@@ -1,19 +1,43 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet, Image } from "react-native";
 import Animated, {
-  useSharedValue, useAnimatedStyle,
-  withSpring, withTiming, withRepeat, withSequence,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withRepeat,
+  withSequence,
 } from "react-native-reanimated";
-import { Video } from "lucide-react-native";
+import { ChevronRight, Video } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { appTabHeaderHeight } from "@/components/AppTabHeader";
+import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { formatEventTimeRange } from "@/lib/format-event-time";
+import { useMeetingBannerStore } from "@/lib/state/meeting-banner-store";
+import { useTeamStore } from "@/lib/state/team-store";
+import { videoCallHref } from "@/lib/meeting-navigation";
+import {
+  isInVideoMeetingBannerWindow,
+  rankMeetingsForBanner,
+} from "@/lib/video-meeting-join";
+import type { CalendarEvent, Team } from "@/lib/types";
 
 const alenioIcon = require("@/assets/alenio-icon.png");
+
+/**
+ * A notification, not a page: past this the title and the Join button drift to
+ * opposite ends of the screen. iPadOS keeps its own banners about this wide.
+ */
+const BANNER_MAX_WIDTH = 460;
+/** Clearance from the edge of the safe area, or from the rail beside it. */
+const BANNER_EDGE_GAP = 12;
+/** Sits under the header rather than over the workspace controls. */
+const BANNER_HEADER_GAP = 8;
 
 type UpcomingMeeting = {
   event: {
@@ -22,6 +46,9 @@ type UpcomingMeeting = {
     startDate: string;
     endDate?: string | null;
     teamId: string;
+    isOneOnOne?: boolean;
+    oneOnOneMemberUserId?: string | null;
+    oneOnOneTemplateId?: string | null;
   };
   teamName: string;
   userRole: string;
@@ -47,12 +74,20 @@ function LiveDot() {
 
   useEffect(() => {
     scale.value = withRepeat(
-      withSequence(withTiming(1.8, { duration: 700 }), withTiming(1, { duration: 700 })),
-      -1, false
+      withSequence(
+        withTiming(1.8, { duration: 700 }),
+        withTiming(1, { duration: 700 }),
+      ),
+      -1,
+      false,
     );
     opacity.value = withRepeat(
-      withSequence(withTiming(0, { duration: 700 }), withTiming(1, { duration: 700 })),
-      -1, false
+      withSequence(
+        withTiming(0, { duration: 700 }),
+        withTiming(1, { duration: 700 }),
+      ),
+      -1,
+      false,
     );
   }, []);
 
@@ -70,9 +105,17 @@ function LiveDot() {
 }
 
 const dot = StyleSheet.create({
-  wrap: { width: 10, height: 10, alignItems: "center", justifyContent: "center" },
+  wrap: {
+    width: 10,
+    height: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   ring: {
-    position: "absolute", width: 10, height: 10, borderRadius: 5,
+    position: "absolute",
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: "rgba(74,222,128,0.4)",
   },
   core: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#4ADE80" },
@@ -81,8 +124,24 @@ const dot = StyleSheet.create({
 export default function MeetingBanner() {
   const { data: session } = useSession();
   const insets = useSafeAreaInsets();
+  const { showRail, railEdge, railWidth, iconRailEdge, iconRailWidth } =
+    useAdaptiveLayout();
+  const activeTeamId = useTeamStore((state) => state.activeTeamId);
   const [now, setNow] = useState(Date.now());
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [preferredMeetingId, setPreferredMeetingId] = useState<string | null>(
+    null,
+  );
+  const dismissedMeetingIds = useMeetingBannerStore(
+    (state) => state.dismissedMeetingIds,
+  );
+  const meetingSnapshots = useMeetingBannerStore(
+    (state) => state.meetingSnapshots,
+  );
+  const dismissMeeting = useMeetingBannerStore((state) => state.dismissMeeting);
+  const forgetMeeting = useMeetingBannerStore((state) => state.forgetMeeting);
+  const restoreAllDismissed = useMeetingBannerStore(
+    (state) => state.restoreAllDismissed,
+  );
 
   const translateY = useSharedValue(-140);
   const opacity = useSharedValue(0);
@@ -93,21 +152,104 @@ export default function MeetingBanner() {
     return () => clearInterval(interval);
   }, []);
 
-  const { data: meetings = [] } = useQuery<UpcomingMeeting[]>({
+  const { data: meetings = [], isSuccess: meetingsLoaded } = useQuery<
+    UpcomingMeeting[]
+  >({
     queryKey: ["upcoming-video-meetings"],
     queryFn: () => api.get<UpcomingMeeting[]>("/api/video/upcoming"),
     enabled: !!session?.user,
     refetchInterval: 30000,
     staleTime: 20000,
   });
-
-  const activeMeeting = meetings.find(m => {
-    if (dismissed.has(m.event.id)) return false;
-    const startMs = new Date(m.event.startDate).getTime();
-    const endMs = m.event.endDate ? new Date(m.event.endDate).getTime() : startMs + 60 * 60 * 1000;
-    const msUntilStart = startMs - now;
-    return msUntilStart <= 15 * 60 * 1000 && now < endMs;
+  const { data: teams = [] } = useQuery<Team[]>({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60 * 2,
   });
+  const { data: activeTeamEvents = [], isSuccess: activeTeamEventsLoaded } =
+    useQuery<CalendarEvent[]>({
+      queryKey: ["calendar-events", activeTeamId],
+      queryFn: () =>
+        api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events`),
+      enabled: !!session?.user && !!activeTeamId,
+      staleTime: 5000,
+    });
+
+  useEffect(() => {
+    if (!meetingsLoaded) return;
+    const serverMeetingIds = new Set(
+      meetings.map((meeting) => meeting.event.id),
+    );
+    if (activeTeamEventsLoaded) {
+      for (const event of activeTeamEvents) {
+        if (event.isVideoMeeting) serverMeetingIds.add(event.id);
+      }
+    }
+
+    const checkedAt = Date.now();
+    for (const snapshot of Object.values(meetingSnapshots)) {
+      const startMs = new Date(snapshot.event.startDate).getTime();
+      const isInUpcomingApiWindow =
+        startMs >= checkedAt - 30 * 60 * 1000 &&
+        startMs <= checkedAt + 60 * 60 * 1000;
+      const activeWorkspaceWasChecked =
+        activeTeamEventsLoaded && snapshot.event.teamId === activeTeamId;
+      if (
+        (isInUpcomingApiWindow || activeWorkspaceWasChecked) &&
+        !serverMeetingIds.has(snapshot.event.id)
+      ) {
+        forgetMeeting(snapshot.event.id);
+      }
+    }
+  }, [
+    activeTeamEvents,
+    activeTeamEventsLoaded,
+    activeTeamId,
+    forgetMeeting,
+    meetingSnapshots,
+    meetings,
+    meetingsLoaded,
+  ]);
+
+  const meetingsById = new Map<string, UpcomingMeeting>();
+  for (const meeting of Object.values(meetingSnapshots)) {
+    meetingsById.set(meeting.event.id, meeting);
+  }
+  const activeTeam = teams.find((team) => team.id === activeTeamId);
+  for (const event of activeTeamEvents) {
+    if (!event.isVideoMeeting) continue;
+    meetingsById.set(event.id, {
+      event: {
+        id: event.id,
+        title: event.title,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        teamId: event.teamId,
+        isOneOnOne: event.isOneOnOne,
+        oneOnOneMemberUserId: event.oneOnOneMemberUserId,
+        oneOnOneTemplateId: event.oneOnOneTemplateId,
+      },
+      teamName: activeTeam?.name ?? "Workspace",
+      userRole: activeTeam?.role ?? "member",
+    });
+  }
+  for (const meeting of meetings) {
+    meetingsById.set(meeting.event.id, meeting);
+  }
+
+  const rankedMeetings = rankMeetingsForBanner(
+    Array.from(meetingsById.values()),
+    now,
+    dismissedMeetingIds,
+  );
+  const activeIndex = Math.max(
+    0,
+    rankedMeetings.findIndex(
+      (meeting) => meeting.event.id === preferredMeetingId,
+    ),
+  );
+  const activeMeeting = rankedMeetings[activeIndex] ?? rankedMeetings[0];
 
   const visible = !!activeMeeting;
 
@@ -117,8 +259,12 @@ export default function MeetingBanner() {
       opacity.value = withTiming(1, { duration: 300 });
       // Pulse the join button
       joinScale.value = withRepeat(
-        withSequence(withTiming(1.05, { duration: 800 }), withTiming(1, { duration: 800 })),
-        -1, false
+        withSequence(
+          withTiming(1.05, { duration: 800 }),
+          withTiming(1, { duration: 800 }),
+        ),
+        -1,
+        false,
       );
     } else {
       translateY.value = withTiming(-140, { duration: 280 });
@@ -145,82 +291,158 @@ export default function MeetingBanner() {
   const showJoin = isLeader || msUntilStart <= 5 * 60 * 1000;
   const isUrgent = msUntilStart <= 5 * 60 * 1000;
 
-  const handleJoin = () => {
-    router.push({
-      pathname: "/video-call",
-      params: { roomId: event.id, roomName: event.title },
+  const overlapCount = rankedMeetings.length;
+  const lastHiddenMeetingId = [...dismissedMeetingIds]
+    .reverse()
+    .find((meetingId) => {
+      const snapshot = meetingSnapshots[meetingId];
+      return (
+        !!snapshot &&
+        isInVideoMeetingBannerWindow(
+          snapshot.event.startDate,
+          snapshot.event.endDate,
+          now,
+        )
+      );
     });
+  const canRestoreHidden = !!lastHiddenMeetingId;
+
+  const handleJoin = () => {
+    router.push(videoCallHref(event.id, event.title));
   };
 
+  const showNextMeeting = () => {
+    if (overlapCount < 2) return;
+    const next = rankedMeetings[(activeIndex + 1) % overlapCount];
+    setPreferredMeetingId(next.event.id);
+  };
+
+  const restoreHiddenMeetings = () => {
+    if (!lastHiddenMeetingId) return;
+    setPreferredMeetingId(lastHiddenMeetingId);
+    restoreAllDismissed();
+  };
+
+  /** The rail owns one edge, so the card starts past it rather than under it. */
+  const railOnLeft = iconRailEdge === "left" || (showRail && railEdge === "left");
+  const railOnRight = iconRailEdge === "right" || (showRail && railEdge === "right");
+  const railSpaceLeft = iconRailEdge === "left" ? iconRailWidth : railOnLeft ? railWidth : 0;
+  const railSpaceRight = iconRailEdge === "right" ? iconRailWidth : railOnRight ? railWidth : 0;
+
   return (
-    <Animated.View style={[styles.wrapper, { top: insets.top + 10 }, bannerStyle]} testID="meeting-banner">
-      <LinearGradient
-        colors={["#0F172A", "#1E1B4B"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.card}
-      >
-        {/* Left accent bar */}
-        <View style={styles.accentBar} />
+    <Animated.View
+      style={[
+        styles.wrapper,
+        {
+          top: appTabHeaderHeight(insets.top) + BANNER_HEADER_GAP,
+          left: (iconRailEdge === "left" ? 0 : insets.left) + BANNER_EDGE_GAP + railSpaceLeft,
+          right: (iconRailEdge === "right" ? 0 : insets.right) + BANNER_EDGE_GAP + railSpaceRight,
+        },
+        bannerStyle,
+      ]}
+      testID="meeting-banner"
+    >
+      <View style={styles.shell}>
+        <LinearGradient
+          colors={["#0F172A", "#1E1B4B"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.card}
+        >
+          {/* Left accent bar */}
+          <View style={styles.accentBar} />
 
-        {/* Icon */}
-        <View style={styles.iconCol}>
-          <Image source={alenioIcon} style={styles.icon} />
-        </View>
+          {/* Icon — tap to bring dismissed meetings back onto the flipper */}
+          <Pressable
+            onPress={restoreHiddenMeetings}
+            disabled={!canRestoreHidden}
+            style={styles.iconCol}
+            accessibilityRole={canRestoreHidden ? "button" : undefined}
+            accessibilityLabel={
+              canRestoreHidden ? "Show hidden meetings" : undefined
+            }
+            testID="banner-restore-meetings"
+          >
+            <Image source={alenioIcon} style={styles.icon} />
+          </Pressable>
 
-        {/* Content */}
-        <View style={styles.content}>
-          <View style={styles.topRow}>
-            <LiveDot />
-            <Text style={styles.label}>
-              {hasStarted ? "In progress" : "Upcoming meeting"}
+          {/* Content */}
+          <View style={styles.content}>
+            <View style={styles.topRow}>
+              <LiveDot />
+              <Text style={styles.label}>
+                {hasStarted ? "In progress" : "Upcoming meeting"}
+              </Text>
+              {overlapCount > 1 ? (
+                <Pressable
+                  onPress={showNextMeeting}
+                  hitSlop={8}
+                  style={styles.switcher}
+                  testID="banner-next-meeting"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show next meeting, ${activeIndex + 1} of ${overlapCount}`}
+                >
+                  <Text style={styles.switcherText}>
+                    {activeIndex + 1} of {overlapCount}
+                  </Text>
+                  <ChevronRight size={12} color="rgba(255,255,255,0.55)" />
+                </Pressable>
+              ) : null}
+            </View>
+            <Text style={styles.title} numberOfLines={1}>
+              {event.title}
+            </Text>
+            <Text style={styles.meta}>
+              {formatEventTimeRange(event.startDate, event.endDate)}
+              {` · ${teamName}`}
+              {!hasStarted ? ` · ${formatCountdown(msUntilStart)}` : ""}
             </Text>
           </View>
-          <Text style={styles.title} numberOfLines={1}>{event.title}</Text>
-          <Text style={styles.meta}>
-            {formatEventTimeRange(event.startDate, event.endDate)}
-            {` · ${teamName}`}
-            {!hasStarted ? ` · ${formatCountdown(msUntilStart)}` : ""}
-          </Text>
-        </View>
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          {showJoin ? (
-            <Animated.View style={joinBtnStyle}>
-              <Pressable
-                onPress={handleJoin}
-                style={[styles.joinBtn, isUrgent && styles.joinBtnUrgent]}
-                testID="banner-join-button"
-              >
-                <Video size={13} color="#fff" style={{ marginRight: 5 }} />
-                <Text style={styles.joinText}>Join</Text>
-              </Pressable>
-            </Animated.View>
-          ) : (
-            <View style={styles.countdownBox}>
-              <Text style={styles.countdownNum}>{formatCountdown(msUntilStart)}</Text>
-            </View>
-          )}
-          <Pressable
-            onPress={() => setDismissed(prev => new Set([...prev, event.id]))}
-            style={styles.dismissBtn}
-            testID="banner-dismiss-button"
-          >
-            <Text style={styles.dismissX}>✕</Text>
-          </Pressable>
-        </View>
-      </LinearGradient>
+          {/* Actions */}
+          <View style={styles.actions}>
+            {showJoin ? (
+              <Animated.View style={joinBtnStyle}>
+                <Pressable
+                  onPress={handleJoin}
+                  style={[styles.joinBtn, isUrgent && styles.joinBtnUrgent]}
+                  testID="banner-join-button"
+                >
+                  <Video size={13} color="#fff" style={{ marginRight: 5 }} />
+                  <Text style={styles.joinText}>Join</Text>
+                </Pressable>
+              </Animated.View>
+            ) : (
+              <View style={styles.countdownBox}>
+                <Text style={styles.countdownNum}>
+                  {formatCountdown(msUntilStart)}
+                </Text>
+              </View>
+            )}
+            <Pressable
+              onPress={() => dismissMeeting(activeMeeting)}
+              style={styles.dismissBtn}
+              testID="banner-dismiss-button"
+            >
+              <Text style={styles.dismissX}>✕</Text>
+            </Pressable>
+          </View>
+        </LinearGradient>
+      </View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  /** Spans the free width so the card inside it can centre on any screen. */
   wrapper: {
     position: "absolute",
-    left: 12,
-    right: 12,
     zIndex: 9999,
+    alignItems: "center",
+  },
+  shell: {
+    width: "100%",
+    maxWidth: BANNER_MAX_WIDTH,
     borderRadius: 18,
     overflow: "hidden",
     shadowColor: "#4361EE",
@@ -262,6 +484,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+  },
+  switcher: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    gap: 1,
+  },
+  switcherText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.55)",
+    letterSpacing: 0.2,
   },
   label: {
     fontSize: 10,

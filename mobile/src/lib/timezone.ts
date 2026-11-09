@@ -38,7 +38,77 @@ export function calendarDueIso(d: Date, timeZone?: string | null): string {
   return calendarDayFromInstant(d, timeZone);
 }
 
-/** Display a task due instant as its calendar date (due time is always end of day). */
+function zonedClock(instant: string | Date, timeZone?: string | null) {
+  const date = typeof instant === "string" ? new Date(instant) : instant;
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: resolveTimeZone(timeZone),
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const num = (type: string) => {
+    const raw = parts.find((part) => part.type === type)?.value ?? "0";
+    return Number(raw === "24" ? "0" : raw);
+  };
+  return { hour: num("hour"), minute: num("minute"), second: num("second") };
+}
+
+/** End-of-day storage means the task is due that day, not at a chosen clock time. */
+export function taskDueHasClock(
+  instant: string | Date | null | undefined,
+  timeZone?: string | null,
+): boolean {
+  if (!instant) return false;
+  const clock = zonedClock(instant, timeZone);
+  if (!clock) return false;
+  return !(clock.hour === 23 && clock.minute === 59 && clock.second >= 59);
+}
+
+export function formatTaskDueClock(
+  instant: string | Date | null | undefined,
+  timeZone?: string | null,
+): string | null {
+  if (!taskDueHasClock(instant, timeZone)) return null;
+  const date = typeof instant === "string" ? new Date(instant) : instant;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: resolveTimeZone(timeZone),
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+/** `YYYY-MM-DD`, or `YYYY-MM-DDTHH:mm` when the task is due at a time. */
+export function taskDuePayload(d: Date, timed: boolean, timeZone?: string | null): string {
+  const day = calendarDayFromInstant(d, timeZone);
+  if (!timed) return day;
+  const clock = zonedClock(d, timeZone);
+  const hour = String(clock?.hour ?? d.getHours()).padStart(2, "0");
+  const minute = String(clock?.minute ?? d.getMinutes()).padStart(2, "0");
+  return `${day}T${hour}:${minute}`;
+}
+
+export function withDueClock(day: Date, hours: number, minutes: number): Date {
+  const next = new Date(day);
+  next.setHours(hours, minutes, 0, 0);
+  return next;
+}
+
+/** Next half hour on the chosen day, used when a task first gets a time. */
+export function suggestedDueClock(day: Date, now = new Date()): Date {
+  let hour = now.getHours();
+  let minute = 0;
+  if (now.getMinutes() < 30) minute = 30;
+  else hour += 1;
+  if (hour > 23) {
+    hour = 23;
+    minute = 30;
+  }
+  return withDueClock(day, hour, minute);
+}
+
+/** Display a task due instant as its calendar date. A chosen time is separate. */
 export function formatTaskDueDateLabel(
   instant: string | Date | null | undefined,
   timeZone?: string | null,

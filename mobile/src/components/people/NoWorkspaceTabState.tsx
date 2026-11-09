@@ -1,69 +1,25 @@
 import React from "react";
 import {
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { Image } from "expo-image";
 import {
-  CalendarDays,
-  CheckSquare2,
-  Folder,
-  MessageCircle,
+  BarChart3,
+  ChevronRight,
+  Play,
   PlusCircle,
-  ShieldCheck,
-  Sparkles,
+  SquareCheckBig,
   UsersRound,
 } from "lucide-react-native";
-import type { LucideIcon } from "lucide-react-native";
 
-const BRAND = "#4361EE";
-const FEATURES: {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  color: string;
-  backgroundColor: string;
-}[] = [
-  {
-    title: "Shared tasks",
-    description: "Assign, track, and complete work together.",
-    icon: CheckSquare2,
-    color: "#4361EE",
-    backgroundColor: "#EEF2FF",
-  },
-  {
-    title: "Team calendar",
-    description: "See schedules, due dates, and important events.",
-    icon: CalendarDays,
-    color: "#F43F5E",
-    backgroundColor: "#FFF1F2",
-  },
-  {
-    title: "Team chat",
-    description: "Keep workspace conversations organized.",
-    icon: MessageCircle,
-    color: "#10B981",
-    backgroundColor: "#ECFDF5",
-  },
-  {
-    title: "Files & documents",
-    description: "Store and share important files securely.",
-    icon: Folder,
-    color: "#F59E0B",
-    backgroundColor: "#FFFBEB",
-  },
-  {
-    title: "AI workflows",
-    description: "Automate routines and help your team move faster.",
-    icon: Sparkles,
-    color: "#8B5CF6",
-    backgroundColor: "#F5F3FF",
-  },
-];
+const BRAND = "#5B45FF";
+const INK = "#111A2B";
 
 /**
  * Account-first empty state for the Workspace tab. Personal chat, activity, and
@@ -76,125 +32,163 @@ export function NoWorkspaceTabState({
   bottomInset?: number;
   testID?: string;
 }) {
-  const { height } = useWindowDimensions();
-  const compact = height < 900;
+  const { width } = useWindowDimensions();
+  const wide = width >= 600;
 
   return (
-    <View
-      style={[
-        styles.scroll,
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[
         styles.content,
-        compact ? styles.contentCompact : null,
+        wide ? styles.contentWide : null,
         { paddingBottom: bottomInset },
       ]}
+      showsVerticalScrollIndicator={false}
       testID={testID}
     >
-      <View style={[styles.hero, compact ? styles.heroCompact : null]}>
-        <WorkspaceIllustration compact={compact} />
-        <Text style={[styles.title, compact ? styles.titleCompact : null]}>No workspace yet</Text>
-        <Text style={styles.description}>
-          Join your team&apos;s workspace to collaborate on tasks, schedules, and projects—or create
-          one in minutes.
-        </Text>
+      <View style={styles.eyebrowRow}>
+        <View style={styles.eyebrowLine} />
+        <Text style={styles.eyebrow}>INTRODUCING WORKSPACE</Text>
+        <View style={styles.eyebrowLine} />
+      </View>
+      <Text style={styles.title}>Better things happen together.</Text>
+      <Text style={styles.description}>
+        Bring your people, plans, and progress into one shared place.
+      </Text>
+
+      <VideoPlaceholder />
+
+      <View style={styles.actions}>
+        <TouchableOpacity
+          onPress={() =>
+            router.push({
+              pathname: "/onboarding",
+              params: { mode: "create" },
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Create a workspace"
+          activeOpacity={0.85}
+          testID="no-workspace-create-button"
+        >
+          <LinearGradient
+            colors={["#3D6BFF", "#6D5EF8"]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.primaryButton}
+          >
+            <PlusCircle size={17} color="#FFFFFF" strokeWidth={2.2} />
+            <Text style={styles.primaryButtonText}>Create a workspace</Text>
+            <ChevronRight size={15} color="#FFFFFF" strokeWidth={2.4} />
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() =>
+            router.push({ pathname: "/onboarding", params: { mode: "join" } })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Join a workspace"
+          activeOpacity={0.85}
+          style={styles.secondaryButton}
+          testID="no-workspace-join-button"
+        >
+          <UsersRound size={16} color={BRAND} strokeWidth={2.2} />
+          <Text style={styles.secondaryButtonText}>Join a workspace</Text>
+          <ChevronRight size={15} color={BRAND} strokeWidth={2.4} />
+        </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        onPress={() => router.push({ pathname: "/onboarding", params: { mode: "join" } })}
-        accessibilityRole="button"
-        accessibilityLabel="Join a workspace"
-        activeOpacity={0.82}
-        style={styles.primaryButton}
-        testID="no-workspace-join-button"
-      >
-        <UsersRound size={17} color="#FFFFFF" strokeWidth={2.2} />
-        <Text style={styles.primaryButtonText}>Join a workspace</Text>
-      </TouchableOpacity>
-
-      <View style={styles.dividerRow}>
-        <View style={styles.divider} />
-        <Text style={styles.dividerText}>OR</Text>
-        <View style={styles.divider} />
+      <View style={styles.tiles}>
+        <FeatureTile
+          icon={<UsersRound size={19} color={BRAND} strokeWidth={2.1} />}
+          title="Collaborate"
+          subtitle="Bring your team together"
+        />
+        <FeatureTile
+          icon={<SquareCheckBig size={19} color={BRAND} strokeWidth={2.1} />}
+          title="Organize"
+          subtitle="Turn ideas into action"
+        />
+        <FeatureTile
+          icon={<BarChart3 size={19} color={BRAND} strokeWidth={2.1} />}
+          title="Track Progress"
+          subtitle="See development and impact"
+        />
       </View>
+    </ScrollView>
+  );
+}
 
-      <TouchableOpacity
-        onPress={() => router.push({ pathname: "/onboarding", params: { mode: "create" } })}
-        accessibilityRole="button"
-        accessibilityLabel="Create a workspace"
-        activeOpacity={0.82}
-        style={styles.secondaryButton}
-        testID="no-workspace-create-button"
+/**
+ * Reserved spot for the 60-second overview video. The real player will
+ * replace this placeholder; nothing plays yet.
+ */
+function VideoPlaceholder() {
+  return (
+    <View
+      style={styles.videoCard}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel="Workspace overview video coming soon"
+      testID="no-workspace-video-placeholder"
+    >
+      <LinearGradient
+        colors={["#4E7CF5", "#7B61F2", "#5B8DEF"]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.videoGradient}
       >
-        <PlusCircle size={17} color={BRAND} strokeWidth={2.2} />
-        <Text style={styles.secondaryButtonText}>Create a workspace</Text>
-      </TouchableOpacity>
+        <View style={styles.videoCopy}>
+          <Text style={styles.videoTitle}>See how{"\n"}Workspace{"\n"}works</Text>
+          <Text style={styles.videoSubtitle}>A quick 60-second overview</Text>
+        </View>
 
-      <View style={[styles.featuresSection, compact ? styles.featuresSectionCompact : null]}>
-        <Text style={styles.sectionTitle}>Why join a workspace?</Text>
-        <View style={styles.featuresCard}>
-          {FEATURES.map((feature, index) => (
-            <FeatureRow
-              key={feature.title}
-              {...feature}
-              showDivider={index > 0}
-              compact={compact}
-            />
+        <View style={styles.videoPanel}>
+          <View style={styles.panelHeader}>
+            <View style={styles.panelTitleBar} />
+            <View style={styles.panelAvatars}>
+              <View style={[styles.panelAvatar, { backgroundColor: "#B7C6FF" }]} />
+              <View style={[styles.panelAvatar, { backgroundColor: "#D9CBFF" }]} />
+              <View style={[styles.panelAvatar, { backgroundColor: "#FFE1B8" }]} />
+            </View>
+          </View>
+          {[0, 1, 2].map((row) => (
+            <View key={row} style={styles.panelRow}>
+              <View style={styles.panelCheck}>
+                <Text style={styles.panelCheckMark}>✓</Text>
+              </View>
+              <View style={styles.panelLine} />
+            </View>
           ))}
         </View>
-      </View>
 
-      <View style={styles.reassurance}>
-        <ShieldCheck size={18} color={BRAND} strokeWidth={2.2} />
-        <Text style={styles.reassuranceText}>
-          Your personal activity, chats, and connections are always available—even without a
-          workspace.
-        </Text>
-      </View>
+        <View style={styles.playButton}>
+          <Play size={19} color={BRAND} fill={BRAND} strokeWidth={2.2} />
+        </View>
+        <View style={styles.durationChip}>
+          <Text style={styles.durationText}>1:00</Text>
+        </View>
+      </LinearGradient>
     </View>
   );
 }
 
-function WorkspaceIllustration({ compact }: { compact: boolean }) {
-  return (
-    <Image
-      source={require("@/assets/alenio-empty-workspace.png")}
-      style={[styles.illustration, compact ? styles.illustrationCompact : null]}
-      contentFit="cover"
-      accessibilityRole="image"
-      accessibilityLabel="Alenio workspace and team"
-      accessibilityIgnoresInvertColors
-    />
-  );
-}
-
-function FeatureRow({
+function FeatureTile({
+  icon,
   title,
-  description,
-  icon: Icon,
-  color,
-  backgroundColor,
-  showDivider,
-  compact,
+  subtitle,
 }: {
+  icon: React.ReactNode;
   title: string;
-  description: string;
-  icon: LucideIcon;
-  color: string;
-  backgroundColor: string;
-  showDivider: boolean;
-  compact: boolean;
+  subtitle: string;
 }) {
   return (
-    <View style={[styles.featureRow, compact ? styles.featureRowCompact : null]}>
-      {showDivider ? <View style={styles.featureDivider} /> : null}
-      <View style={[styles.featureIcon, { backgroundColor }]}>
-        <Icon size={15} color={color} strokeWidth={2.1} />
-      </View>
-      <View style={styles.featureCopy}>
-        <Text style={styles.featureTitle}>{title}</Text>
-        <Text style={styles.featureDescription} numberOfLines={1}>
-          {description}
-        </Text>
-      </View>
+    <View style={styles.tile}>
+      <View style={styles.tileIcon}>{icon}</View>
+      <Text style={styles.tileTitle}>{title}</Text>
+      <Text style={styles.tileSubtitle}>{subtitle}</Text>
     </View>
   );
 }
@@ -202,96 +196,199 @@ function FeatureRow({
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
-    overflow: "hidden",
   },
   content: {
-    paddingHorizontal: 28,
-    paddingTop: 24,
-  },
-  contentCompact: {
-    paddingTop: 16,
-  },
-  hero: {
-    alignItems: "center",
-  },
-  heroCompact: {
-    marginTop: -2,
-  },
-  illustration: {
-    width: 158,
-    height: 112,
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 22,
+    paddingTop: 18,
+    maxWidth: 560,
+    width: "100%",
     alignSelf: "center",
   },
-  illustrationCompact: {
-    width: 146,
-    height: 96,
-    marginVertical: -3,
+  contentWide: {
+    maxWidth: 640,
   },
-  title: {
-    marginTop: 12,
-    fontSize: 23,
-    lineHeight: 28,
-    fontWeight: "800",
-    color: "#111827",
-    letterSpacing: -0.6,
-    textAlign: "center",
-  },
-  titleCompact: {
-    marginTop: 7,
-    fontSize: 21,
-    lineHeight: 25,
-  },
-  description: {
-    marginTop: 6,
-    maxWidth: 280,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "500",
-    color: "#7A869A",
-    textAlign: "center",
-  },
-  primaryButton: {
-    width: "100%",
-    marginTop: 20,
-    height: 46,
-    borderRadius: 10,
-    backgroundColor: BRAND,
+  eyebrowRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 9,
-    shadowColor: BRAND,
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    gap: 10,
   },
-  primaryButtonText: {
-    fontSize: 14,
+  eyebrowLine: {
+    width: 26,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#B9AEF5",
+  },
+  eyebrow: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    color: "#7567ED",
+  },
+  title: {
+    marginTop: 10,
+    fontSize: 25,
+    lineHeight: 31,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    color: INK,
+    textAlign: "center",
+  },
+  description: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#667085",
+    textAlign: "center",
+    maxWidth: 330,
+    alignSelf: "center",
+  },
+  videoCard: {
+    marginTop: 18,
+    borderRadius: 18,
+    overflow: "hidden",
+    shadowColor: "#3D3590",
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 4,
+  },
+  videoGradient: {
+    height: 148,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  videoCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  videoTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    color: "#FFFFFF",
+  },
+  videoSubtitle: {
+    marginTop: 6,
+    fontSize: 10,
+    lineHeight: 14,
+    color: "rgba(255,255,255,0.82)",
+  },
+  videoPanel: {
+    width: 128,
+    marginLeft: 10,
+    padding: 9,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    transform: [{ rotate: "1.5deg" }],
+  },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 7,
+  },
+  panelTitleBar: {
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#C9CFEA",
+  },
+  panelAvatars: {
+    flexDirection: "row",
+    gap: 2,
+  },
+  panelAvatar: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+  },
+  panelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 5,
+  },
+  panelCheck: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#6D5EF8",
+  },
+  panelCheckMark: {
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  panelLine: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E2E6F2",
+  },
+  playButton: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: 46,
+    height: 46,
+    marginLeft: -23,
+    marginTop: -23,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#1E1B4B",
+    shadowOpacity: 0.3,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  durationChip: {
+    position: "absolute",
+    right: 9,
+    bottom: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: "rgba(10,12,28,0.62)",
+  },
+  durationText: {
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  dividerRow: {
+  actions: {
+    marginTop: 16,
+    gap: 9,
+  },
+  primaryButton: {
+    height: 47,
+    borderRadius: 13,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginVertical: 12,
+    justifyContent: "center",
+    gap: 8,
   },
-  divider: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "#E2E8F0",
-  },
-  dividerText: {
-    fontSize: 9,
+  primaryButtonText: {
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: "700",
-    color: "#94A3B8",
+    color: "#FFFFFF",
   },
   secondaryButton: {
-    width: "100%",
-    height: 44,
-    borderRadius: 10,
-    borderWidth: 1.25,
-    borderColor: "#8EA2FF",
+    height: 47,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#CFC7FF",
     backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
@@ -300,86 +397,48 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 14,
+    lineHeight: 18,
     fontWeight: "700",
     color: BRAND,
   },
-  featuresSection: {
-    marginTop: 20,
-  },
-  featuresSectionCompact: {
-    marginTop: 16,
-  },
-  sectionTitle: {
-    marginBottom: 9,
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: "700",
-    color: "#334155",
-  },
-  featuresCard: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: "#F8FAFF",
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#EEF2F7",
-  },
-  featureRow: {
-    minHeight: 47,
+  tiles: {
+    marginTop: 14,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    position: "relative",
+    gap: 8,
   },
-  featureRowCompact: {
-    minHeight: 43,
-  },
-  featureDivider: {
-    position: "absolute",
-    top: 0,
-    left: 42,
-    right: 2,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "#EEF2F7",
-  },
-  featureIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  featureCopy: {
+  tile: {
     flex: 1,
     minWidth: 0,
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingTop: 13,
+    paddingBottom: 12,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E3DEFF",
+    backgroundColor: "#F8F6FF",
   },
-  featureTitle: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "700",
-    color: "#334155",
-  },
-  featureDescription: {
-    marginTop: 1,
-    fontSize: 9,
-    lineHeight: 12,
-    fontWeight: "500",
-    color: "#8A96A8",
-  },
-  reassurance: {
-    marginTop: 17,
-    paddingHorizontal: 8,
-    flexDirection: "row",
-    alignItems: "flex-start",
+  tileIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
     justifyContent: "center",
-    gap: 9,
+    backgroundColor: "#E9E4FF",
   },
-  reassuranceText: {
-    flexShrink: 1,
-    maxWidth: 260,
-    fontSize: 9,
-    lineHeight: 13,
-    fontWeight: "500",
-    color: "#718096",
+  tileTitle: {
+    marginTop: 8,
+    fontSize: 11.5,
+    lineHeight: 15,
+    fontWeight: "800",
+    color: INK,
+    textAlign: "center",
+  },
+  tileSubtitle: {
+    marginTop: 2,
+    fontSize: 9.5,
+    lineHeight: 12.5,
+    color: "#7C8799",
+    textAlign: "center",
   },
 });

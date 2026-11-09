@@ -1,7 +1,5 @@
 import { Image, type ImageStyle, type StyleProp } from "react-native";
 
-const senecaIcon = require("@/assets/seneca-icon.png");
-
 /**
  * Enterprise Seneca mark is a square disc (1:1).
  * `size` is the rendered width and height.
@@ -16,10 +14,10 @@ type Props = {
 export function SenecaIcon({ size = 20, style }: Props) {
   return (
     <Image
-      source={senecaIcon}
-      style={[{ width: size, height: size }, style]}
+      source={require("@/assets/seneca-button-icon.png")}
+      style={[{ width: size, height: size, borderRadius: size / 2 }, style]}
       resizeMode="contain"
-      accessibilityIgnoresInvertColors
+      accessibilityLabel="Seneca"
     />
   );
 }

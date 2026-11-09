@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { staffAccessFields } from "../lib/staff-roles";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { publishTeamTaskUpdated } from "../lib/realtime-hub";
@@ -7,7 +8,7 @@ import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { cleanupWorkspaceMemberDeparture } from "../lib/workspace-member-departure";
 import { assertNoPendingRecipientRemoval } from "../lib/ownership-transfer";
-import { materializeRecurringTasksForTeam, parseCalendarDueDate } from "../lib/recurrence-series";
+import { materializeRecurringTasksForTeam, parseTaskDueDate } from "../lib/recurrence-series";
 import { archiveOldCompletedTasksForTeam } from "../lib/task-archive";
 import { isValidTimeZone, resolveTimeZone } from "../lib/timezone";
 import { mountWebStripeBilling } from "./web-stripe-billing";
@@ -27,7 +28,7 @@ import {
   canChangeWorkspaceTimeZone,
   validateWorkspaceTimeZone,
 } from "../lib/workspace-timezone";
-import { isPrismaUniqueOnName, isTeamDisplayNameTaken } from "../lib/team-name";
+import { isPrismaUniqueOnName, isTeamNameTakenForUser } from "../lib/team-name";
 import { deleteReplacedStorageObject } from "../lib/firebase-storage";
 import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
 import {
@@ -130,6 +131,8 @@ webRouter.get("/api/me", async (c) => {
       image: true,
       createdAt: true,
       timezone: true,
+      accountType: true,
+      staffRole: true,
       isAdmin: true,
     },
   });
@@ -140,7 +143,15 @@ webRouter.get("/api/me", async (c) => {
     listEnterpriseOrganizationsForUser(userId),
     getWorkspaceTrialEligibility(userId, user.email),
   ]);
-  return c.json({ data: { ...user, ...trial, organizations } });
+  return c.json({
+    data: {
+      ...user,
+      ...trial,
+      organizations,
+      isAdmin: user.accountType === "platform_admin",
+      ...staffAccessFields(user),
+    },
+  });
 });
 
 // ── API: teams list ───────────────────────────────────────────────────────────
@@ -348,9 +359,9 @@ webRouter.patch("/api/teams/:id", async (c) => {
     }
   }
 
-  if (nameTrim && (await isTeamDisplayNameTaken(nameTrim, id))) {
+  if (nameTrim && (await isTeamNameTakenForUser(nameTrim, userId, id))) {
     return c.json(
-      { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+      { error: { message: "You already have a workspace with this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
       409,
     );
   }
@@ -381,7 +392,7 @@ webRouter.patch("/api/teams/:id", async (c) => {
   } catch (err) {
     if (isPrismaUniqueOnName(err)) {
       return c.json(
-        { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+        { error: { message: "You already have a workspace with this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
         409,
       );
     }
@@ -661,7 +672,7 @@ webRouter.post("/api/tasks", async (c) => {
   const userTimeZone = await getWebUserTimeZone(userId, bodyTimeZone);
   const dueDateObj =
     dueDate && (typeof dueDate === "string" || typeof dueDate === "number")
-      ? parseCalendarDueDate(String(dueDate), userTimeZone)
+      ? parseTaskDueDate(String(dueDate), userTimeZone)
       : null;
   const pri = typeof priority === "string" && priority.trim() ? priority.trim() : "medium";
 
@@ -835,7 +846,7 @@ webRouter.patch("/api/tasks/:id", async (c) => {
   if (description !== undefined) updateData.description = description || null;
   if (priority !== undefined) updateData.priority = priority;
   if (dueDate !== undefined) {
-    updateData.dueDate = dueDate ? parseCalendarDueDate(String(dueDate), userTimeZone) : null;
+    updateData.dueDate = dueDate ? parseTaskDueDate(String(dueDate), userTimeZone) : null;
   }
   if (status !== undefined) updateData.status = status;
   const transitionAt = new Date();

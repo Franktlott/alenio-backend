@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { WebsiteChrome } from "../components/WebsiteChrome";
 import {
   LEGAL_APP_NAME,
   LEGAL_COMPANY_NAME,
@@ -20,16 +21,16 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 export function PrivacyPolicyPage() {
   return (
-    <div className="legal-doc-page">
-      <header className="legal-doc-header">
-        <Link to="/" className="legal-doc-back">
-          ← Back
-        </Link>
-        <span className="legal-doc-brand">Alenio</span>
-      </header>
-      <main className="legal-doc-main">
-        <h1 className="legal-doc-title">Privacy Policy</h1>
-        <p className="legal-doc-updated">Last updated: {LEGAL_LAST_UPDATED}</p>
+    <WebsiteChrome
+      hero={
+        <>
+          <p className="lp-badge">Legal</p>
+          <h1>Privacy Policy</h1>
+          <p>Last updated: {LEGAL_LAST_UPDATED}</p>
+        </>
+      }
+    >
+      <main className="legal-doc-main lp-legal">
 
         <p>
           {LEGAL_COMPANY_NAME} (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates the {LEGAL_APP_NAME} mobile application (the
@@ -39,126 +40,77 @@ export function PrivacyPolicyPage() {
         </p>
 
         <Section title="1. Information We Collect">
-          <p>We collect the following types of information:</p>
+          <p>We collect information you provide, information created through your use of the service, and limited technical information needed to operate and secure it:</p>
           <ul>
-            <li>
-              <strong>Account Information:</strong> Name, email address, and credentials when you create an account (including email
-              verification through our authentication provider).
-            </li>
-            <li>
-              <strong>Profile Information:</strong> Profile photo and any optional details you choose to add.
-            </li>
-            <li>
-              <strong>Content You Create:</strong> Messages, tasks, events, comments, and reactions you post within the App or Website.
-            </li>
-            <li>
-              <strong>Team &amp; collaboration data:</strong> Team names, membership information, channels, and associated content.
-            </li>
-            <li>
-              <strong>Video call data:</strong> When you use video meetings, your display name is shared with the video call provider
-              (Daily.co) to identify you during the call. We do not record or store video or audio content from meetings on our servers.
-            </li>
-            <li>
-              <strong>Device information:</strong> Device type, operating system, push notification tokens, and app version (when you use
-              the App).
-            </li>
-            <li>
-              <strong>Usage data:</strong> Features used, actions taken, and timestamps of interactions.
-            </li>
-            <li>
-              <strong>Website &amp; session data:</strong> When you use the Website, our authentication provider uses cookies and similar
-              technologies as needed for sign-in sessions, security, and preferences in your browser.
-            </li>
+            <li><strong>Accounts and authentication:</strong> Name, email address, password authentication records, email one-time-passcode records, sign-in and session information, and identifiers used for Microsoft sign-in. Organizations may configure single sign-on, including Okta, and may provision, update, or deprovision managed accounts through SCIM.</li>
+            <li><strong>Profiles and relationships:</strong> Profile photo, job title, department, location, biography, contact details, skills, interests, working preferences, and other profile fields you provide. Personal connections, connection requests, blocks, discoverability and message-privacy settings are tied to your account across workspaces. If enabled, optional active-status information may show that you are recently or currently active.</li>
+            <li><strong>Communications:</strong> Direct and group messages, workspace channels, mentions, reactions, polls and votes, uploaded images, files and other media, and related delivery and participation records.</li>
+            <li><strong>Workspace and coaching data:</strong> Organization and workspace membership, teams, roles and permissions; tasks, calendars and events; Outlook calendar-sync information; check-ins and one-on-one agendas, notes and history; development goals and notes; workplace standards; team-health responses and snapshots; and related activity records.</li>
+            <li><strong>Seneca and AI data:</strong> Prompts, instructions, responses, feedback, relevant workspace context, and stored briefs or generated artifacts used to provide and improve Seneca features.</li>
+            <li><strong>Video meetings:</strong> Meeting identifiers, room details, participants and display names. Daily.co processes video and audio streams when you join a call. {LEGAL_COMPANY_NAME} does not ordinarily record or store the call&apos;s video or audio on its servers.</li>
+            <li><strong>Notifications:</strong> Push tokens, email delivery details, notification preferences and delivery status. Depending on your settings and device, notifications may include preview content such as a sender, message excerpt, task, reminder or event title.</li>
+            <li><strong>Device, app and security data:</strong> Device and operating-system type, app version, browser and session information, IP address, request timestamps, server and security logs, errors, and feature interactions. We do not describe this as collection by a third-party analytics SDK.</li>
+            <li><strong>Billing data:</strong> Subscription, plan, workspace owner, transaction and billing-status records. Stripe processes payment-card and checkout information for web billing.</li>
+            <li><strong>Workplace operations:</strong> Where an organization uses Alenio workplace operations features, we may process schedules, walks, temperature-check or other checklist responses, manual entries, exceptions, notes, and photos submitted by users.</li>
+            <li><strong>Calendar credentials:</strong> If you connect Outlook, we store the authorization credentials needed to maintain the connection in encrypted form, together with sync settings and calendar identifiers.</li>
           </ul>
         </Section>
 
-        <Section title="2. How We Use Your Information">
-          <p>We use the information we collect to:</p>
+        <Section title="2. How We Use Information">
+          <p>We use this information to authenticate users; provision and administer accounts; provide profiles, relationships, messaging, tasks, calendars, video, coaching, workplace operations and AI features; synchronize connected calendars; deliver push and email notifications; process subscriptions; provide support; maintain continuity when membership changes; enforce permissions and safety settings; diagnose errors; prevent abuse and security incidents; and improve the service.</p>
+        </Section>
+
+        <Section title="3. Visibility and Workplace Boundaries">
           <ul>
-            <li>Provide, operate, and maintain the App, the Website, and their features.</li>
-            <li>Create and manage your account and authenticate your identity.</li>
-            <li>Enable team communication, task management, collaboration, and video meetings.</li>
-            <li>Send push notifications for messages, tasks, and reminders (you may opt out in Settings).</li>
-            <li>
-              Process payments via Stripe when you subscribe or manage billing at {LEGAL_WEBSITE_LABEL}.
-            </li>
-            <li>Respond to your support requests and communicate important updates.</li>
-            <li>Monitor and analyse usage to improve performance and features.</li>
-            <li>Detect, prevent, and address technical issues and security threats.</li>
+            <li><strong>Personal relationships:</strong> Connections, requests and blocks are account-level, not owned by a workspace. Your discoverability, messaging and presence settings affect who can find, contact or see activity information about you.</li>
+            <li><strong>Messages and shared content:</strong> Content is visible to the recipients, channel or group you choose and to others authorized by the service&apos;s permissions. Blocking and privacy controls may limit new interactions but do not necessarily erase previously shared content.</li>
+            <li><strong>Workplace data:</strong> Coaching, check-in, development, standards, team-health and operations data is workspace-specific and visible according to role, relationship and workspace permissions. Workspace owners and team leaders may have management capabilities; a legacy workspace Admin role may be read-only and should not be assumed to manage people.</li>
+            <li><strong>Organization administration:</strong> Authorized organization or workspace administrators may provision or deprovision managed accounts and access, export, manage or remove organization and workspace data according to their permissions and the organization&apos;s agreement with us.</li>
+            <li><strong>Presence:</strong> Active status is optional and can be disabled. When enabled, permitted users may see a status based on recent app activity.</li>
           </ul>
         </Section>
 
-        <Section title="3. How We Share Your Information">
-          <p>We do not sell your personal information. We may share your data in the following circumstances:</p>
+        <Section title="4. AI and Seneca">
+          <p>Seneca may send your prompt and relevant workspace context to OpenAI to generate a response, summary, brief or recommendation. AI output can be incomplete, inaccurate or inappropriate and should be reviewed before use. Do not submit sensitive personal information that is unnecessary for your request. We do not state that OpenAI never trains on or always immediately deletes submitted data; its processing is governed by the arrangements and policies applicable to the service we use.</p>
+        </Section>
+
+        <Section title="5. How We Share Information">
+          <p>We do not sell your personal information. We share information with recipients you select, authorized members and administrators as described above, and providers needed to operate the service:</p>
           <ul>
-            <li>
-              <strong>Within your team:</strong> Content you share is visible to members of your team as part of core functionality.
-            </li>
-            <li>
-              <strong>Service providers:</strong> We use third-party services including Neon (database hosting), Stripe
-              (subscription billing on the Website), Google Firebase (FCM for Android push and storage for uploads), Expo and Apple/Google
-              (distribution and push), Daily.co (video meetings), Resend (email), and other infrastructure providers.
-              They process data under their respective terms and privacy policies.
-            </li>
-            <li>
-              <strong>Legal requirements:</strong> We may disclose your information if required by law or to protect our rights, users,
-              or the public.
-            </li>
-            <li>
-              <strong>Business transfers:</strong> In the event of a merger, acquisition, or sale of assets, your information may be
-              transferred as part of that transaction.
-            </li>
+            <li><strong>AI:</strong> OpenAI for Seneca generation.</li>
+            <li><strong>Identity and enterprise administration:</strong> Microsoft for Microsoft sign-in and Outlook calendar integration, and Okta for organization SSO and SCIM where configured.</li>
+            <li><strong>Infrastructure and storage:</strong> Neon for database services; Railway and other cloud-hosting providers; Firebase Storage for uploaded media where used; and Firebase Hosting for applicable web content.</li>
+            <li><strong>Communications and app delivery:</strong> Firebase Cloud Messaging, Apple Push Notification service, Google push services, Expo, and Resend for push, app and email delivery.</li>
+            <li><strong>Other core providers:</strong> Stripe for web subscription billing and Daily.co for video meetings, plus security, monitoring, support and other providers reasonably necessary to operate the service.</li>
+            <li><strong>Legal and business purposes:</strong> We may disclose information when required by law, to protect rights and safety, investigate abuse, or as part of a merger, financing, acquisition or sale of assets.</li>
           </ul>
         </Section>
 
-        <Section title="4. Data Retention">
-          <p>
-            We retain your personal information for as long as your account is active or as needed to provide services. You may delete
-            your account in the App or on the Website, or follow the steps on our{" "}
-            <Link to="/account-deletion" className="legal-doc-inline-link">
-              account deletion page
-            </Link>
-            . You may also request deletion by emailing {LEGAL_CONTACT_EMAIL}. We will process deletion requests within 30 days, subject
-            to any legal obligations to retain certain data.
-          </p>
+        <Section title="6. Notifications and Integrations">
+          <p>You can manage notification permissions through the App and your device. Disabling notifications does not stop essential service or security emails. Notification previews may be visible on a locked or shared device. Third-party integrations such as Microsoft, Okta and Daily.co process information under their own terms and privacy policies in addition to this Policy.</p>
         </Section>
 
-        <Section title="5. Your Rights">
-          <p>Depending on your location, you may have rights regarding your personal data, including access, correction, deletion, and opt-out.</p>
-          <p>To exercise these rights, contact us at {LEGAL_CONTACT_EMAIL}.</p>
+        <Section title="7. Retention and Deletion">
+          <p>You may delete your account through the App or Website, follow our <Link to="/account-deletion" className="legal-doc-inline-link">account deletion instructions</Link>, or request deletion by emailing {LEGAL_CONTACT_EMAIL}; verified email requests are processed within 30 days. We retain information while your account is active and as needed to provide the service. Deletion removes or de-identifies account data under our control, but workspace content you shared may remain where necessary for other users, record integrity or the organization&apos;s authorized use. Former-member development goals and check-in history may be archived and retained for authorized workplace continuity. Legal, billing, tax, fraud-prevention and security records, and residual backup copies, may remain as needed. Deletion does not require us to erase information another user or organization independently controls.</p>
         </Section>
 
-        <Section title="6. Data Security">
-          <p>
-            We implement industry-standard security measures including encrypted data transmission (TLS/HTTPS), secure authentication, and
-            access controls. No method of transmission over the internet is 100% secure.
-          </p>
+        <Section title="8. Your Choices and Rights">
+          <p>Depending on your location, you may have rights to access, correct, receive, delete or restrict certain personal information, or object to certain processing. You can edit many profile and privacy settings in the service, disable optional presence, manage push permissions on your device, and unsubscribe from eligible emails. Contact {LEGAL_CONTACT_EMAIL} to make a request. We may need to verify your identity and consider the rights of other users and organizations.</p>
         </Section>
 
-        <Section title="7. Children’s Privacy">
-          <p>
-            {LEGAL_APP_NAME} is not directed to children under 13. We do not knowingly collect personal information from children under 13.
-            If you believe we have inadvertently collected such information, contact us at {LEGAL_CONTACT_EMAIL} and we will promptly
-            delete it.
-          </p>
+        <Section title="9. Security and International Processing">
+          <p>We use safeguards such as encrypted transmission, access controls, secure authentication and encrypted storage of Outlook authorization credentials. No system is completely secure, and we cannot guarantee absolute security. Our providers may process information in countries other than your own, subject to safeguards required by applicable law.</p>
         </Section>
 
-        <Section title="8. Third-Party Services">
-          <p>The App and Website integrate with services including Neon, Apple (APNs), Google Firebase, Stripe, Resend, Expo, and Daily.co. Each is governed by its own policies.</p>
+        <Section title="10. Children&apos;s Privacy">
+          <p>{LEGAL_APP_NAME} is not directed to children under 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided information, contact {LEGAL_CONTACT_EMAIL}.</p>
         </Section>
 
-        <Section title="9. International Data Transfers">
-          <p>Your information may be transferred to and processed in countries other than your own, with appropriate safeguards where required.</p>
+        <Section title="11. Changes to This Policy">
+          <p>We may update this Privacy Policy from time to time. We will post the revised policy in the App or on the Website, update the &quot;Last updated&quot; date, and provide additional notice when appropriate.</p>
         </Section>
 
-        <Section title="10. Changes to This Policy">
-          <p>
-            We may update this Privacy Policy from time to time. Material changes will be posted in the App or on the Website with an updated
-            &quot;Last updated&quot; date. Continued use after changes constitutes acceptance.
-          </p>
-        </Section>
-
-        <Section title="11. Contact Us">
+        <Section title="12. Contact Us">
           <p>If you have questions about this Privacy Policy or our data practices:</p>
           <div className="legal-doc-contact">
             <strong>{LEGAL_COMPANY_NAME}</strong>
@@ -167,6 +119,6 @@ export function PrivacyPolicyPage() {
           </div>
         </Section>
       </main>
-    </div>
+    </WebsiteChrome>
   );
 }

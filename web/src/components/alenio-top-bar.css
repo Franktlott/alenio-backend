@@ -1,0 +1,214 @@
+/* Top header on Alenio pages: search, workspace, notifications, help, profile.
+   Sits over the page (translucent) so the Home mountain shows through. */
+
+.enterprise-app--alenio {
+  --alenio-topbar-h: 56px;
+}
+
+.alenio-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  height: var(--alenio-topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px 0 24px;
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+  border-bottom: 1px solid rgba(236, 232, 248, 0.9);
+  color: #111a2b;
+}
+
+.alenio-topbar-search {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: 560px;
+  display: flex;
+  align-items: center;
+}
+
+.alenio-topbar-search-icon {
+  position: absolute;
+  left: 14px;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.alenio-topbar-search input {
+  width: 100%;
+  height: 38px;
+  padding: 0 64px 0 42px;
+  border: 1px solid #e6e2f4;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111a2b;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.alenio-topbar-search input::placeholder {
+  color: #6b7280;
+}
+
+.alenio-topbar-search input:focus {
+  border-color: #b8a6ff;
+  box-shadow: 0 0 0 3px rgba(109, 94, 248, 0.16);
+}
+
+.alenio-topbar-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.alenio-topbar-kbd {
+  position: absolute;
+  right: 10px;
+  padding: 2px 7px;
+  border-radius: 7px;
+  border: 1px solid #e6e2f4;
+  background: #f7f5fc;
+  color: #4b4356;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.alenio-topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Bell (reuses the approvals bell), help, avatar */
+.alenio-topbar .enterprise-topbar-bell,
+.alenio-topbar-icon-button {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #3b3a5c;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.alenio-topbar .enterprise-topbar-bell:hover,
+.alenio-topbar-icon-button:hover {
+  background: rgba(109, 94, 248, 0.1);
+  color: #6d5ef8;
+}
+
+.alenio-topbar .enterprise-topbar-bell svg {
+  width: 20px;
+  height: 20px;
+}
+
+.alenio-topbar .enterprise-topbar-badge {
+  top: 5px;
+  right: 5px;
+  min-width: 10px;
+  height: 10px;
+  padding: 0;
+  font-size: 0;
+  border: 2px solid #fff;
+}
+
+.alenio-topbar-avatar {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.alenio-topbar-avatar-inner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eeeafe;
+  color: #6d5ef8;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
+.alenio-topbar-avatar:hover .alenio-topbar-avatar-inner {
+  box-shadow: 0 0 0 2px #b8a6ff;
+}
+
+.alenio-topbar-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The page and the chat column start below the header. Home pulls its mountain up under it. */
+.enterprise-app--alenio .enterprise-main-column,
+.enterprise-app--alenio .chat-dock:not(.chat-dock--overlay),
+.enterprise-app--alenio .chat-dock-strip {
+  padding-top: var(--alenio-topbar-h);
+}
+
+.enterprise-app--alenio.enterprise-app--hero-under-topbar .enterprise-main-column {
+  padding-top: 0;
+}
+
+.enterprise-app--hero-under-topbar .web-home-hero {
+  height: calc(168px + var(--alenio-topbar-h));
+}
+
+.enterprise-app--hero-under-topbar .web-home-hero-copy {
+  padding-top: calc(50px + var(--alenio-topbar-h));
+}
+
+@media (max-width: 1023px) {
+  .alenio-topbar {
+    gap: 10px;
+    padding: 0 12px 0 16px;
+  }
+
+  .enterprise-app--hero-under-topbar .web-home-hero {
+    height: calc(150px + var(--alenio-topbar-h));
+  }
+}
+
+/* Under 900px the nav row already shows the profile, so the header drops its avatar. */
+@media (max-width: 900px) {
+  .alenio-topbar-avatar {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .alenio-topbar-kbd {
+    display: none;
+  }
+
+  .alenio-topbar-search input {
+    padding-right: 14px;
+  }
+
+  .enterprise-app--hero-under-topbar .web-home-hero {
+    height: calc(132px + var(--alenio-topbar-h));
+  }
+}

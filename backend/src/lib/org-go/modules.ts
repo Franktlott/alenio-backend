@@ -153,7 +153,7 @@ export async function upsertOrgGoModule(input: {
   if (!def && input.moduleKey !== "temp-checks") {
     return { ok: false as const, code: "UNKNOWN_MODULE" as const };
   }
-  const moduleName = input.moduleName?.trim() || def?.moduleName || "Temperature Checks";
+  const moduleName = input.moduleName?.trim() || def?.moduleName || "Food Safety";
   const status = input.status ?? "draft";
 
   const row = await prisma.organizationModule.upsert({

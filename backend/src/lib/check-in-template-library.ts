@@ -58,7 +58,7 @@ const LIBRARY_DEFS: LibraryDef[] = [
   {
     key: "new-hire-30-60-90",
     title: "New Hire 30/60/90",
-    description: "Huge for retail: onboarding pulse for new hires.",
+    description: "Build a consistent onboarding experience for new hires.",
     questions: [
       "How is training going?",
       "What feels unclear?",
@@ -72,6 +72,94 @@ const LIBRARY_DEFS: LibraryDef[] = [
     description: "Structured coaching discussion.",
     sectionLabel: "Coaching conversation",
     questions: ["Situation", "Expectations", "Agreement"],
+  },
+  {
+    key: "feedback-conversation",
+    title: "Feedback Conversation",
+    description: "Share clear feedback and agree on the next step.",
+    questions: [
+      "What happened?",
+      "What was the impact?",
+      "What should change?",
+      "What support do you need?",
+    ],
+  },
+  {
+    key: "performance-check-in",
+    title: "Performance Check-In",
+    description: "Review recent results and what to do next.",
+    questions: [
+      "What's going well?",
+      "Where are results off?",
+      "What's getting in the way?",
+      "What will you do next?",
+    ],
+  },
+  {
+    key: "career-conversation",
+    title: "Career Conversation",
+    description: "Talk about longer-term growth and opportunities.",
+    questions: [
+      "Where do you want to grow?",
+      "What work energizes you?",
+      "What skill should we build?",
+      "What opportunity would help?",
+    ],
+  },
+  {
+    key: "goal-check-in",
+    title: "Goal Check-In",
+    description: "Review progress on a goal and pick the next action.",
+    questions: [
+      "Which goal are we reviewing?",
+      "What progress have you made?",
+      "What's in the way?",
+      "What's the next step?",
+    ],
+  },
+  {
+    key: "first-week-check-in",
+    title: "First Week Check-In",
+    description: "See how the first week is going.",
+    questions: [
+      "How was your first week?",
+      "What still feels unclear?",
+      "Who has helped you?",
+      "What do you need next?",
+    ],
+  },
+  {
+    key: "training-check-in",
+    title: "Training Check-In",
+    description: "Check how training is going and what to practice next.",
+    questions: [
+      "What have you learned so far?",
+      "What still needs practice?",
+      "Do you have what you need?",
+      "What should we cover next?",
+    ],
+  },
+  {
+    key: "monthly-check-in",
+    title: "Monthly Check-In",
+    description: "Look back at the month and set the next focus.",
+    questions: [
+      "What went well this month?",
+      "What should we change?",
+      "How is the workload?",
+      "What should we focus on next?",
+    ],
+  },
+  {
+    key: "return-check-in",
+    title: "Return Check-In",
+    description: "Welcome someone back and reset the week.",
+    questions: [
+      "How are you feeling about being back?",
+      "What do you need to catch up on?",
+      "What should change in your schedule?",
+      "What support would help this week?",
+    ],
   },
 ];
 

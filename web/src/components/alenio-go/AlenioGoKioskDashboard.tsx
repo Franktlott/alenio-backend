@@ -327,7 +327,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
             </div>
             <div className="go-dash-stat-col">
               <span className="go-dash-stat-value go-dash-stat-value--violet">—</span>
-              <span className="go-dash-stat-label">Walks</span>
+              <span className="go-dash-stat-label">Guided Walks</span>
               <span className="go-dash-stat-hint">Coming soon</span>
             </div>
           </div>

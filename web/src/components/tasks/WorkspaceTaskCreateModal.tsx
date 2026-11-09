@@ -13,6 +13,11 @@ import { resolveTimeZone } from "../../lib/timezone";
 import { AssigneeMultiSelect } from "./AssigneeMultiSelect";
 import { TaskDescriptionField } from "./TaskDescriptionField";
 import { TaskRecurrenceSetupModal, type RecurrenceSetupValues } from "./TaskRecurrenceSetupModal";
+import {
+  canCreateWorkspaceTask,
+  resolveCreateTaskKind,
+  type TaskKind,
+} from "./task-presentation";
 
 type ChecklistItem = { id: string; title: string };
 
@@ -58,6 +63,7 @@ export function WorkspaceTaskCreateModal({
   onCreated,
 }: Props) {
   const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<TaskKind>(() => resolveCreateTaskKind(myRole));
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -78,6 +84,8 @@ export function WorkspaceTaskCreateModal({
   const [templatesLoading, setTemplatesLoading] = useState(false);
 
   const isRegularMember = myRole === "member" || !myRole;
+  const canChooseKind = canCreateWorkspaceTask(myRole);
+  const isReminder = kind === "reminder";
   const today = new Date().toISOString().slice(0, 10);
   const members = teamDetail?.members ?? [];
   const membersLoading = open && !teamDetail;
@@ -85,6 +93,7 @@ export function WorkspaceTaskCreateModal({
   useEffect(() => {
     if (!open) return;
     setTitle("");
+    setKind(resolveCreateTaskKind(myRole));
     setDescription("");
     setPriority("medium");
     setDueDate(initialDueDate ?? new Date().toISOString().slice(0, 10));
@@ -99,7 +108,13 @@ export function WorkspaceTaskCreateModal({
     setError(null);
     setSplitConfirmOpen(false);
     setTemplatesOpen(false);
-  }, [open, initialDueDate, me?.id]);
+  }, [open, initialDueDate, me?.id, myRole]);
+
+  useEffect(() => {
+    if (!open || !isReminder || !me?.id) return;
+    setAssigneeIds([me.id]);
+    setIsJoint(false);
+  }, [open, isReminder, me?.id]);
 
   useEffect(() => {
     if (!open || !teamId) return;
@@ -155,7 +170,7 @@ export function WorkspaceTaskCreateModal({
       setError("Please enter a task title.");
       return;
     }
-    if (assigneeIds.length === 0) {
+    if (!isReminder && assigneeIds.length === 0) {
       setError("Assign at least one teammate.");
       return;
     }
@@ -166,13 +181,14 @@ export function WorkspaceTaskCreateModal({
       const created = await createWebTask({
         teamId,
         title: title.trim(),
+        kind,
         description: description.trim() || null,
         priority,
         status: "todo",
         dueDate: dueDate || null,
         timeZone: userTimeZone,
-        assigneeIds,
-        isJoint: forceJoint ?? isJoint,
+        assigneeIds: isReminder && me?.id ? [me.id] : assigneeIds,
+        isJoint: isReminder ? false : (forceJoint ?? isJoint),
         subtasks: collectSubtaskTitles(),
         attachmentUrl,
         recurrence: isRecurring
@@ -196,7 +212,7 @@ export function WorkspaceTaskCreateModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (assigneeIds.length >= 2 && !isJoint) {
+    if (!isReminder && assigneeIds.length >= 2 && !isJoint) {
       setSplitConfirmOpen(true);
       return;
     }
@@ -277,14 +293,20 @@ export function WorkspaceTaskCreateModal({
           <header className="create-v3-head">
             <div className="create-v3-head-main">
               <h2 id="create-task-heading" className="create-v3-heading">
-                New task
+                New {isReminder ? "reminder" : "task"}
               </h2>
-              <p className="create-v3-sub">Capture the work, assign teammates, and set when it is due.</p>
+              <p className="create-v3-sub">
+                {isReminder
+                  ? "A private note to yourself. Only you can see it."
+                  : "Capture the work, assign teammates, and set when it is due."}
+              </p>
             </div>
             <div className="create-v3-head-actions">
-              <button type="button" className="create-v3-link-btn" onClick={() => setTemplatesOpen(true)}>
-                Use template
-              </button>
+              {!isReminder ? (
+                <button type="button" className="create-v3-link-btn" onClick={() => setTemplatesOpen(true)}>
+                  Use template
+                </button>
+              ) : null}
               <button type="button" className="create-v3-icon-btn" onClick={onClose} aria-label="Close">
                 ×
               </button>
@@ -293,19 +315,39 @@ export function WorkspaceTaskCreateModal({
 
           <form className="enterprise-workspace-create-form" onSubmit={handleSubmit}>
             <div className="create-v3-body">
+              {canChooseKind ? (
+                <div className="create-v3-kind-switch" role="group" aria-label="Create type">
+                  <button
+                    type="button"
+                    className={kind === "workspace_task" ? "create-v3-kind-switch-on" : ""}
+                    onClick={() => setKind("workspace_task")}
+                  >
+                    Workspace task
+                  </button>
+                  <button
+                    type="button"
+                    className={kind === "reminder" ? "create-v3-kind-switch-on" : ""}
+                    onClick={() => setKind("reminder")}
+                  >
+                    Private reminder
+                  </button>
+                </div>
+              ) : (
+                <p className="create-v3-private-note">Private reminder · visible only to you</p>
+              )}
               <div className="enterprise-workspace-create-layout">
                 <div className="enterprise-workspace-create-main create-v3-main">
                   <div className="create-v3-title-wrap">
                     <span className="create-v3-title-accent" aria-hidden />
                     <label className="sr-only" htmlFor="create-task-title">
-                      Task title
+                      {isReminder ? "Reminder" : "Task"} title
                     </label>
                     <input
                       id="create-task-title"
                       className="create-v3-title-input"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      placeholder="What needs to get done?"
+                      placeholder={isReminder ? "What do you want to remember?" : "What needs to get done?"}
                       required
                       autoFocus
                     />
@@ -406,7 +448,7 @@ export function WorkspaceTaskCreateModal({
                 </div>
 
                 <aside className="enterprise-workspace-create-sidebar create-v3-sidebar">
-                <section className="create-v3-side-section">
+                {!isReminder ? <section className="create-v3-side-section">
                   <h4 className="create-v3-side-label">Assignees</h4>
                   <AssigneeMultiSelect
                     members={members}
@@ -421,7 +463,12 @@ export function WorkspaceTaskCreateModal({
                       <span>Shared joint task</span>
                     </label>
                   ) : null}
-                </section>
+                </section> : (
+                  <section className="create-v3-side-section">
+                    <h4 className="create-v3-side-label">Privacy</h4>
+                    <p className="create-v3-private-note">Assigned to you and hidden from workspace activity and team reporting.</p>
+                  </section>
+                )}
 
                 <section className="create-v3-side-section">
                   <h4 className="create-v3-side-label">Details</h4>
@@ -474,7 +521,7 @@ export function WorkspaceTaskCreateModal({
                       checked={isRecurring || recurrenceModalOpen}
                       onChange={(e) => handleRecurringToggle(e.target.checked)}
                     />
-                    <span>Repeating task</span>
+                    <span>Repeating {isReminder ? "reminder" : "task"}</span>
                   </label>
                   {isRecurring ? (
                     <div className="create-v3-recurrence-summary">
@@ -500,7 +547,7 @@ export function WorkspaceTaskCreateModal({
                 Cancel
               </button>
               <button type="submit" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={saving}>
-                {saving ? "Creating…" : "Create task"}
+                {saving ? "Creating…" : `Create ${isReminder ? "reminder" : "task"}`}
               </button>
             </footer>
           </form>

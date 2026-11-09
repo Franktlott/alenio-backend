@@ -5,6 +5,9 @@ import {
   calendarDayFromInstant,
   DEFAULT_TIMEZONE,
   dueInstantFromCalendarDay,
+  dueInstantPreservingClock,
+  instantFromCalendarDateAndTime,
+  isEndOfCalendarDay,
   getZonedDayOfWeek,
   resolveTimeZone,
 } from "./timezone";
@@ -81,6 +84,26 @@ export function parseCalendarDueDate(input: string | Date, timeZone: string = DE
   return day ? dueInstantFromCalendarDay(day, tz) : date;
 }
 
+/**
+ * A task due date. `YYYY-MM-DD` is the end of that day.
+ * `YYYY-MM-DDTHH:mm` is that clock time in the user's timezone.
+ */
+export function parseTaskDueDate(input: string | Date, timeZone: string = DEFAULT_TIMEZONE): Date {
+  const tz = resolveTimeZone(timeZone);
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    const timed = trimmed.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/);
+    if (timed) {
+      const hour = Number(timed[2]);
+      const minute = Number(timed[3]);
+      if (hour <= 23 && minute <= 59) {
+        return instantFromCalendarDateAndTime(timed[1]!, hour, minute, tz);
+      }
+    }
+  }
+  return parseCalendarDueDate(input, tz);
+}
+
 /** Snap the series start to the chosen weekday / day-of-month before spawning. */
 export function alignRecurringAnchorDueDate(
   type: string,
@@ -90,7 +113,7 @@ export function alignRecurringAnchorDueDate(
   timeZone: string = DEFAULT_TIMEZONE,
 ): Date {
   const tz = resolveTimeZone(timeZone);
-  const anchor = parseCalendarDueDate(dueDate, tz);
+  const anchor = isEndOfCalendarDay(dueDate, tz) ? parseCalendarDueDate(dueDate, tz) : dueDate;
   if (type === "weekly" && daysOfWeek != null && daysOfWeek !== "") {
     const targetDay = parseInt(daysOfWeek, 10);
     const currentDay = getZonedDayOfWeek(anchor, tz);
@@ -103,8 +126,9 @@ export function alignRecurringAnchorDueDate(
     const [y, mo] = parts;
     const daysInMonth = new Date(Date.UTC(y!, mo!, 0)).getUTCDate();
     const day = Math.min(dayOfMonth, daysInMonth);
-    return dueInstantFromCalendarDay(
+    return dueInstantPreservingClock(
       `${y}-${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      anchor,
       tz,
     );
   }
@@ -134,8 +158,9 @@ export function getNextDueDate(
       const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
       const targetDay =
         dayOfMonth != null ? Math.min(dayOfMonth, daysInTargetMonth) : Math.min(d!, daysInTargetMonth);
-      return dueInstantFromCalendarDay(
+      return dueInstantPreservingClock(
         `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`,
+        fromDate,
         tz,
       );
     }

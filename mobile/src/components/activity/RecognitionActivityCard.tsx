@@ -17,6 +17,7 @@ export function RecognitionActivityCard({
   testID?: string;
 }) {
   const actorName = item.actor?.name ?? "Someone";
+  const targetName = item.metadata.targetName ?? "a teammate";
   return (
     <ActivityCardShell
       type={item.type}
@@ -30,9 +31,11 @@ export function RecognitionActivityCard({
         LabelIcon={Star}
         tint={getActivityTintTokens(item.type)}
         timestamp={item.timestamp}
-        description={item.description ?? `${actorName} recognized a teammate`}
+        description={`${actorName} recognized ${targetName}`}
+        detail={item.metadata.message ?? item.description}
         metadata="Recognition"
         avatarResetKey={item.id}
+        showAvatar={!!item.actor}
       />
     </ActivityCardShell>
   );

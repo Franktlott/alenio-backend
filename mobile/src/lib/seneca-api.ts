@@ -1,4 +1,31 @@
 import { api } from "@/lib/api/api";
+import type { TeamRole } from "@/lib/types";
+
+export type SenecaPersonalContext = {
+  type: "personal";
+};
+
+export type SenecaWorkspaceContext = {
+  type: "workspace";
+  workspaceId: string;
+};
+
+export type SenecaContext = SenecaPersonalContext | SenecaWorkspaceContext;
+
+export type SenecaPersonalContextOption = SenecaPersonalContext & {
+  name: "Personal";
+  available: true;
+};
+
+export type SenecaWorkspaceContextOption = SenecaWorkspaceContext & {
+  name: string;
+  role: TeamRole;
+  available: boolean;
+};
+
+export type SenecaContextOption =
+  | SenecaPersonalContextOption
+  | SenecaWorkspaceContextOption;
 
 export type SenecaAskActionId =
   | "view_overdue_tasks"
@@ -11,6 +38,17 @@ export type SenecaAskActionId =
 export type SenecaChatTurn = {
   role: "user" | "assistant";
   content: string;
+};
+
+export type SenecaAttachment = {
+  url: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+  fileName: string;
+  sizeBytes: number;
+};
+
+export type SenecaImageAttachment = Omit<SenecaAttachment, "mimeType"> & {
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
 };
 
 export type SenecaPlanOneOnOneProposal = {
@@ -42,20 +80,159 @@ export type SenecaCreateTaskProposal = {
   priority: "low" | "medium" | "high";
 };
 
+export type SenecaResolvedContext =
+  | { type: "personal"; name: "Personal" }
+  | { type: "workspace"; workspaceId: string; name: string }
+  | { type: "workspaces"; name: string };
+
+export type SenecaClarifyOption = SenecaResolvedContext;
+
 export type SenecaAskResponse = {
+  conversationId: string;
   available: boolean;
   message: string;
-  insights?: Array<{ label: string; detail?: string }>;
-  suggestedActions?: Array<{
+  insights?: { label: string; detail?: string }[];
+  suggestedActions?: {
     title: string;
     description: string;
     action: SenecaAskActionId;
-  }>;
+  }[];
   planOneOnOne?: SenecaPlanOneOnOneProposal | null;
   cancelOneOnOne?: SenecaCancelOneOnOneProposal | null;
   createTask?: SenecaCreateTaskProposal | null;
+  resolvedContext?: SenecaResolvedContext;
+  clarify?: {
+    prompt: string;
+    options: SenecaClarifyOption[];
+  };
 };
 
+export type SenecaAskRequest = {
+  context?: SenecaContext;
+  question?: string;
+  attachment?: SenecaAttachment;
+  messages?: SenecaChatTurn[];
+  conversationId?: string;
+};
+
+export type SenecaImageSize =
+  | "1024x1024"
+  | "1536x1024"
+  | "1024x1536";
+
+export type SenecaGeneratedImage = {
+  generationId: string;
+  url: string;
+  prompt: string;
+  revisedPrompt: string | null;
+  width: number;
+  height: number;
+  mimeType: string;
+  quota: {
+    limit: number;
+    remaining: number;
+    windowHours: number;
+  };
+};
+
+export type SenecaImageResponse = SenecaGeneratedImage & {
+  conversationId: string;
+};
+
+export type SenecaImageEditRequest = {
+  context?: SenecaContext;
+  prompt: string;
+  attachment: SenecaImageAttachment;
+  conversationId?: string;
+};
+
+export type SenecaConversationSummary = {
+  id: string;
+  contextType: SenecaContext["type"] | "unified";
+  capabilityMode: string | null;
+  teamId: string | null;
+  title: string;
+  preview: string;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+};
+
+export type SenecaConversationMessage = {
+  id: string;
+  order: number;
+  role: "user" | "assistant";
+  text: string;
+  metadata: unknown;
+  createdAt: string;
+};
+
+export type SenecaConversation = SenecaConversationSummary & {
+  messages: SenecaConversationMessage[];
+};
+
+export function fetchSenecaContexts() {
+  return api.get<SenecaContextOption[]>("/api/seneca/contexts");
+}
+
+export function askSeneca({
+  context,
+  question,
+  attachment,
+  messages = [],
+  conversationId,
+}: SenecaAskRequest) {
+  return api.post<SenecaAskResponse>("/api/seneca/ask", {
+    ...(context ? { context } : {}),
+    question,
+    attachment,
+    messages,
+    conversationId,
+  });
+}
+
+export function generateSenecaImage(input: {
+  context?: SenecaContext;
+  prompt: string;
+  size?: SenecaImageSize;
+  conversationId?: string;
+}) {
+  return api.post<SenecaImageResponse>("/api/seneca/images", input);
+}
+
+export function editSenecaImage(input: SenecaImageEditRequest) {
+  return api.post<SenecaImageResponse>("/api/seneca/images/edit", input);
+}
+
+export function fetchSenecaConversations(context?: SenecaContext) {
+  if (!context) {
+    return api.get<SenecaConversationSummary[]>("/api/seneca/conversations");
+  }
+  const query =
+    context.type === "personal"
+      ? "type=personal"
+      : `type=workspace&workspaceId=${encodeURIComponent(context.workspaceId)}`;
+  return api.get<SenecaConversationSummary[]>(
+    `/api/seneca/conversations?${query}`,
+  );
+}
+
+export function fetchSenecaConversation(conversationId: string) {
+  return api.get<SenecaConversation>(
+    `/api/seneca/conversations/${encodeURIComponent(conversationId)}`,
+  );
+}
+
+export function deleteSenecaConversation(conversationId: string) {
+  return api.delete<{ deleted: boolean }>(
+    `/api/seneca/conversations/${encodeURIComponent(conversationId)}`,
+  );
+}
+
+/** Legacy team-scoped request retained for callers not yet using unified contexts. */
 export function fetchSenecaAsk(teamId: string, question: string, messages: SenecaChatTurn[] = []) {
-  return api.post<SenecaAskResponse>(`/api/teams/${teamId}/seneca/ask`, { question, messages });
+  return api.post<Omit<SenecaAskResponse, "conversationId">>(
+    `/api/teams/${teamId}/seneca/ask`,
+    { question, messages },
+  );
 }

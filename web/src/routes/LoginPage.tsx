@@ -11,6 +11,7 @@ import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors
 import { authErrorMessage, messageLooksLikeResumeSignUp } from "../lib/signup-recovery";
 import { finishPostAuthNavigation, setPendingEnterpriseInviteToken, setPendingInviteToken } from "../lib/invite-auth";
 import { isMobileBrowser } from "../lib/mobile-browser";
+import { WEB_APP_HOME } from "../lib/web-app-home";
 import { isSessionTokenExpired, isSessionTokenUsable } from "../lib/token";
 import { goToEmailVerification, needsEmailVerification } from "../lib/verify-redirect";
 import { signInWithMicrosoft } from "../lib/microsoft-auth";
@@ -56,7 +57,7 @@ export function LoginPage() {
 
   const existing = getAccessToken();
   if (isSessionTokenUsable(existing)) {
-    return <Navigate to={isMobileBrowser() ? "/get-app" : "/chat"} replace />;
+    return <Navigate to={isMobileBrowser() ? "/get-app" : WEB_APP_HOME} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -184,24 +185,25 @@ export function LoginPage() {
           <h1 className="auth-v2-hero-title">
             Welcome back.
             <br />
-            <span>Run your team with confidence.</span>
+            <span>Pick up right where you left off.</span>
           </h1>
           <p className="auth-v2-hero-copy">
-            Sign in with the same account you use in the Alenio mobile app to access the enterprise dashboard.
+            Sign in with the same account you use in the Alenio app. Catch up with your network, and jump into your
+            workspace if your team has one.
           </p>
           <ul className="auth-v2-points">
-            <li>Real-time team coordination</li>
-            <li>Task and execution visibility</li>
-            <li>Multi-workspace enterprise control</li>
+            <li>Catch up on your feed, messages, and connections</li>
+            <li>Share wins and learn from frontline leaders</li>
+            <li>Run tasks, schedules, and team growth in your workspace</li>
           </ul>
         </div>
       </section>
       <main className="auth-v2-main">
         <div className="auth-v2-card">
           <div className="auth-v2-card-head">
-            <p className="auth-v2-eyebrow">Team admin</p>
+            <p className="auth-v2-eyebrow">Welcome back</p>
             <h2 className="auth-heading">Sign in</h2>
-            <p className="auth-sub">Use your work credentials to continue.</p>
+            <p className="auth-sub">Use your Alenio account to continue.</p>
           </div>
           <form onSubmit={onSubmit}>
           {sessionExpired ? (

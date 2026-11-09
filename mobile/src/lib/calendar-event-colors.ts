@@ -5,10 +5,10 @@
 export const CALENDAR_EVENT_COLORS = {
   public: "#4361EE",
   private: "#64748B",
-  meeting: "#4F46E5",
+  meeting: "#7C3AED",
   checkIn: "#059669",
   outlook: "#94A3B8",
-  task: "#D97706",
+  task: "#128A52",
   holiday: "#EF4444",
 } as const;
 
@@ -21,6 +21,14 @@ export type CalendarEventColorInput = {
   isVideoMeeting?: boolean | null;
   isHidden?: boolean | null;
 };
+
+/** Soft fill behind month chips and day-view blocks — titles render in black on top. */
+export function calendarEventSoftBackground(input: CalendarEventColorInput): string {
+  if (input.isVideoMeeting) return "#EDE9FE";
+  if (input.isOneOnOne) return "#D1FAE5";
+  if (input.isExternal) return "#F1F5F9";
+  return "#E0E7FF";
+}
 
 /** Accent color for list rows, month bars, and API `color` field. */
 export function resolveCalendarEventColor(input: CalendarEventColorInput): string {

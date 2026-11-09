@@ -9,12 +9,14 @@ import {
   StyleSheet,
   Platform,
   Dimensions,
+  useWindowDimensions,
   type RefreshControlProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
+import { fitsFormSheet } from "@/lib/adaptive-layout";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 type Props = {
@@ -52,6 +54,16 @@ type Props = {
   overlay?: React.ReactNode;
 };
 
+/**
+ * Past this the sheet stops hugging the bottom edge and becomes a centred
+ * dialog, which is what iOS and Material both do once the window is wide.
+ * Height is in the test so a phone on its side stays a bottom sheet.
+ */
+function useIsDialogSize() {
+  const { width, height } = useWindowDimensions();
+  return fitsFormSheet(width, height);
+}
+
 function SheetContent({
   title,
   subtitle,
@@ -72,7 +84,13 @@ function SheetContent({
   avoidKeyboard = true,
 }: Omit<Props, "visible" | "asScreen">) {
   const insets = useSafeAreaInsets();
-  const bottomPad = Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
+  const dialog = useIsDialogSize();
+  /** Centred, so it owes nothing to the home indicator at the bottom edge. */
+  const bottomPad = dialog
+    ? compact
+      ? 14
+      : 18
+    : Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
   const windowH = Dimensions.get("window").height;
   const ratio = bodyHeightRatio ?? (compact ? 0.5 : 0.58);
   const reservedChrome = (compact ? 152 : 188) + bottomPad + Math.min(insets.top, 20);
@@ -84,22 +102,29 @@ function SheetContent({
     );
 
   return (
-    <View style={styles.backdrop} testID={testID}>
+    <View
+      style={[styles.backdrop, dialog ? styles.backdropDialog : null]}
+      testID={testID}
+    >
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
       <SheetKeyboardWrap
         enabled={avoidKeyboard}
-        style={styles.avoider}
+        style={[styles.avoider, dialog ? styles.avoiderDialog : null]}
       >
         {/* View (not Pressable) so ScrollView can receive pan gestures */}
         <View
           style={[
             styles.sheet,
             compact ? styles.sheetCompact : null,
+            dialog ? styles.sheetDialog : null,
             { paddingBottom: bottomPad },
             sheetStyle,
           ]}
         >
-          <View style={[styles.handle, compact ? styles.handleCompact : null]} />
+          {/** A grab handle promises a drag the centred dialog does not do. */}
+          {dialog ? null : (
+            <View style={[styles.handle, compact ? styles.handleCompact : null]} />
+          )}
           <View style={[styles.headerRow, compact ? styles.headerRowCompact : null]}>
             <Image source={require("@/assets/alenio-icon.png")} style={[styles.logo, compact ? styles.logoCompact : null]} />
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -190,6 +215,7 @@ export function AlenioBottomSheet({
   asScreen = false,
   ...props
 }: Props) {
+  const dialog = useIsDialogSize();
   if (asScreen) {
     if (!visible) return null;
     return <SheetContent {...props} />;
@@ -199,7 +225,8 @@ export function AlenioBottomSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      /** Sliding up from an edge the dialog is not attached to reads wrong. */
+      animationType={dialog ? "fade" : "slide"}
       presentationStyle="overFullScreen"
       statusBarTranslucent
       onRequestClose={props.onClose}
@@ -391,10 +418,20 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.5)",
   },
+  backdropDialog: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
   avoider: {
     width: "100%",
     maxHeight: "92%",
     justifyContent: "flex-end",
+  },
+  avoiderDialog: {
+    maxHeight: "88%",
+    alignItems: "center",
+    justifyContent: "center",
   },
   sheet: {
     width: "100%",
@@ -411,6 +448,19 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 18,
     paddingHorizontal: 14,
     paddingTop: 8,
+  },
+  /** Listed after the compact styles so it wins the corner radii. */
+  sheetDialog: {
+    width: "100%",
+    maxWidth: 460,
+    borderRadius: 22,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.22,
+    shadowRadius: 30,
+    elevation: 18,
   },
   handle: {
     width: 36,

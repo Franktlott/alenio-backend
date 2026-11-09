@@ -88,9 +88,9 @@ function ChoiceRow({
         alignItems: "flex-start",
         alignSelf: "stretch",
         width: "100%",
-        minHeight: 52,
-        paddingVertical: 13,
-        paddingHorizontal: 14,
+        minHeight: 44,
+        paddingVertical: 9,
+        paddingHorizontal: 12,
         backgroundColor: selected ? "#EEF2FF" : "#FFFFFF",
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: "#E2E8F0",
@@ -99,24 +99,24 @@ function ChoiceRow({
     >
       <View
         style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
+          width: 19,
+          height: 19,
+          borderRadius: 9.5,
           borderWidth: 2,
           borderColor: selected ? "#4338CA" : "#CBD5E1",
           backgroundColor: selected ? "#4338CA" : "#FFFFFF",
           alignItems: "center",
           justifyContent: "center",
-          marginRight: 12,
+          marginRight: 10,
           marginTop: 1,
         }}
       >
-        {selected ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}
+        {selected ? <Check size={10} color="#FFFFFF" strokeWidth={3} /> : null}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           className="text-slate-900 text-[15px] font-semibold"
-          style={{ color: "#0F172A", fontSize: 15, fontWeight: "600" }}
+          style={{ color: "#0F172A", fontSize: 14, fontWeight: "600" }}
           numberOfLines={2}
         >
           {recommended ? `${title} · Recommended` : title}
@@ -124,7 +124,7 @@ function ChoiceRow({
         {note ? (
           <Text
             className="text-slate-500 text-[12px]"
-            style={{ color: "#64748B", fontSize: 12, lineHeight: 16, marginTop: 3 }}
+            style={{ color: "#64748B", fontSize: 11, lineHeight: 14, marginTop: 1 }}
           >
             {note}
           </Text>
@@ -273,7 +273,7 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
         if (!busy) onClose();
       }}
       showCloseButton
-      footer={footer}
+      footer={<View style={styles.footerBottomPad}>{footer}</View>}
       testID="ownership-transfer-sheet"
       compact
       sheetStyle={{ maxHeight: "92%" }}
@@ -405,9 +405,12 @@ export function OwnershipTransferSheet({ visible, teamId, member, onClose, onSta
 }
 
 const styles = StyleSheet.create({
+  footerBottomPad: {
+    paddingBottom: 26,
+  },
   reviewStack: {
     width: "100%",
-    gap: 12,
+    gap: 8,
   },
   recipientRow: {
     minHeight: 52,
@@ -450,18 +453,18 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E0E7FF",
     backgroundColor: "#F8FAFF",
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 9,
   },
   billingCopy: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     color: "#475569",
   },
   billingStrong: {

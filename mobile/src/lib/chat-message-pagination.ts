@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import {
   dmRealtimeChannel,
@@ -37,9 +41,9 @@ export function normalizeMessagePage<T>(raw: unknown): MessagePage<T> {
   return { messages: [], hasMore: false, nextCursor: null };
 }
 
-export function flattenMessagePages<T extends { id: string; createdAt?: string }>(
-  pages: unknown[] | undefined,
-): T[] {
+export function flattenMessagePages<
+  T extends { id: string; createdAt?: string },
+>(pages: unknown[] | undefined): T[] {
   if (!pages?.length) return [];
   const seen = new Set<string>();
   const result: T[] = [];
@@ -61,7 +65,10 @@ export function flattenMessagePages<T extends { id: string; createdAt?: string }
 }
 
 function teamMessagesUrl(teamId: string, topicKey: string, before?: string) {
-  const params = new URLSearchParams({ topicId: topicKey, limit: String(MESSAGE_PAGE_SIZE) });
+  const params = new URLSearchParams({
+    topicId: topicKey,
+    limit: String(MESSAGE_PAGE_SIZE),
+  });
   if (before) params.set("before", before);
   return `/api/teams/${teamId}/messages?${params.toString()}`;
 }
@@ -93,11 +100,19 @@ function appendMessageToPages<T extends { id: string; createdAt?: string }>(
 
 function useRealtimeConnected() {
   const [connected, setConnected] = useState(realtimeClient.isConnected());
-  useEffect(() => realtimeClient.onStatus(setConnected), []);
+  useEffect(() => {
+    const unsubscribe = realtimeClient.onStatus(setConnected);
+    return () => {
+      unsubscribe();
+    };
+  }, []);
   return connected;
 }
 
-export function usePaginatedTeamMessages<T extends { id: string }>(teamId: string, topicKey: string) {
+export function usePaginatedTeamMessages<T extends { id: string }>(
+  teamId: string,
+  topicKey: string,
+) {
   const queryClient = useQueryClient();
   const queryKey = ["messages", teamId, topicKey] as const;
   const realtimeConnected = useRealtimeConnected();
@@ -108,7 +123,11 @@ export function usePaginatedTeamMessages<T extends { id: string }>(teamId: strin
     enabled: !!teamId,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) =>
-      normalizeMessagePage(await api.get<MessagePage<T>>(teamMessagesUrl(teamId, topicKey, pageParam))),
+      normalizeMessagePage(
+        await api.get<MessagePage<T>>(
+          teamMessagesUrl(teamId, topicKey, pageParam),
+        ),
+      ),
     getNextPageParam: (lastPage) => {
       const page = normalizeMessagePage<T>(lastPage);
       return page.hasMore && page.nextCursor ? page.nextCursor : undefined;
@@ -126,11 +145,14 @@ export function usePaginatedTeamMessages<T extends { id: string }>(teamId: strin
       if (eventTopic !== topicKey) return;
       const message = teamEvent.message as T;
       if (!message?.id) return;
-      queryClient.setQueryData<InfiniteData<MessagePage<T>>>([...queryKey], (old) =>
-        appendMessageToPages(old, message),
+      queryClient.setQueryData<InfiniteData<MessagePage<T>>>(
+        [...queryKey],
+        (old) => appendMessageToPages(old, message),
       );
       void queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
-      void queryClient.invalidateQueries({ queryKey: ["messages", teamId, "general", "preview"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["messages", teamId, "general", "preview"],
+      });
     });
     return () => {
       offMessage();
@@ -140,17 +162,22 @@ export function usePaginatedTeamMessages<T extends { id: string }>(teamId: strin
 
   useEffect(() => {
     if (!teamId) return;
-    const intervalMs = realtimeConnected ? MESSAGE_REALTIME_FALLBACK_POLL_MS : MESSAGE_POLL_MS;
+    const intervalMs = realtimeConnected
+      ? MESSAGE_REALTIME_FALLBACK_POLL_MS
+      : MESSAGE_POLL_MS;
     const timer = setInterval(() => {
       void (async () => {
         try {
-          const latest = normalizeMessagePage(
+          const latest = normalizeMessagePage<T>(
             await api.get<MessagePage<T>>(teamMessagesUrl(teamId, topicKey)),
           );
-          queryClient.setQueryData<InfiniteData<MessagePage<T>>>([...queryKey], (old) => {
-            if (!old?.pages?.length) return old;
-            return { ...old, pages: [latest, ...old.pages.slice(1)] };
-          });
+          queryClient.setQueryData<InfiniteData<MessagePage<T>>>(
+            [...queryKey],
+            (old) => {
+              if (!old?.pages?.length) return old;
+              return { ...old, pages: [latest, ...old.pages.slice(1)] };
+            },
+          );
         } catch {
           // ignore polling errors
         }
@@ -159,12 +186,17 @@ export function usePaginatedTeamMessages<T extends { id: string }>(teamId: strin
     return () => clearInterval(timer);
   }, [teamId, topicKey, queryClient, realtimeConnected]);
 
-  const messages = useMemo(() => flattenMessagePages(query.data?.pages), [query.data?.pages]);
+  const messages = useMemo(
+    () => flattenMessagePages<T>(query.data?.pages),
+    [query.data?.pages],
+  );
 
   return { ...query, messages, realtimeConnected };
 }
 
-export function usePaginatedDmMessages<T extends { id: string }>(conversationId: string) {
+export function usePaginatedDmMessages<T extends { id: string }>(
+  conversationId: string,
+) {
   const queryClient = useQueryClient();
   const queryKey = ["dm-messages", conversationId] as const;
   const realtimeConnected = useRealtimeConnected();
@@ -175,7 +207,9 @@ export function usePaginatedDmMessages<T extends { id: string }>(conversationId:
     enabled: !!conversationId,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) =>
-      normalizeMessagePage(await api.get<MessagePage<T>>(dmMessagesUrl(conversationId, pageParam))),
+      normalizeMessagePage(
+        await api.get<MessagePage<T>>(dmMessagesUrl(conversationId, pageParam)),
+      ),
     getNextPageParam: (lastPage) => {
       const page = normalizeMessagePage<T>(lastPage);
       return page.hasMore && page.nextCursor ? page.nextCursor : undefined;
@@ -191,8 +225,9 @@ export function usePaginatedDmMessages<T extends { id: string }>(conversationId:
       if (dmEvent.conversationId !== conversationId) return;
       const message = dmEvent.message as T;
       if (!message?.id) return;
-      queryClient.setQueryData<InfiniteData<MessagePage<T>>>([...queryKey], (old) =>
-        appendMessageToPages(old, message),
+      queryClient.setQueryData<InfiniteData<MessagePage<T>>>(
+        [...queryKey],
+        (old) => appendMessageToPages(old, message),
       );
       void queryClient.invalidateQueries({ queryKey: ["dms"] });
       void queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
@@ -205,17 +240,22 @@ export function usePaginatedDmMessages<T extends { id: string }>(conversationId:
 
   useEffect(() => {
     if (!conversationId) return;
-    const intervalMs = realtimeConnected ? MESSAGE_REALTIME_FALLBACK_POLL_MS : MESSAGE_POLL_MS;
+    const intervalMs = realtimeConnected
+      ? MESSAGE_REALTIME_FALLBACK_POLL_MS
+      : MESSAGE_POLL_MS;
     const timer = setInterval(() => {
       void (async () => {
         try {
-          const latest = normalizeMessagePage(
+          const latest = normalizeMessagePage<T>(
             await api.get<MessagePage<T>>(dmMessagesUrl(conversationId)),
           );
-          queryClient.setQueryData<InfiniteData<MessagePage<T>>>([...queryKey], (old) => {
-            if (!old?.pages?.length) return old;
-            return { ...old, pages: [latest, ...old.pages.slice(1)] };
-          });
+          queryClient.setQueryData<InfiniteData<MessagePage<T>>>(
+            [...queryKey],
+            (old) => {
+              if (!old?.pages?.length) return old;
+              return { ...old, pages: [latest, ...old.pages.slice(1)] };
+            },
+          );
         } catch {
           // ignore polling errors
         }
@@ -224,7 +264,10 @@ export function usePaginatedDmMessages<T extends { id: string }>(conversationId:
     return () => clearInterval(timer);
   }, [conversationId, queryClient, realtimeConnected]);
 
-  const messages = useMemo(() => flattenMessagePages(query.data?.pages), [query.data?.pages]);
+  const messages = useMemo(
+    () => flattenMessagePages<T>(query.data?.pages),
+    [query.data?.pages],
+  );
 
   return { ...query, messages, realtimeConnected };
 }
@@ -240,7 +283,9 @@ export async function fetchLatestTeamMessagePreview(teamId: string) {
     sender?: { id: string; name: string | null };
   };
   const page = normalizeMessagePage<PreviewMessage>(
-    await api.get<MessagePage<PreviewMessage>>(`/api/teams/${teamId}/messages?${params.toString()}`),
+    await api.get<MessagePage<PreviewMessage>>(
+      `/api/teams/${teamId}/messages?${params.toString()}`,
+    ),
   );
   return page.messages;
 }

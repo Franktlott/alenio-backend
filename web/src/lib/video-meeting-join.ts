@@ -32,3 +32,35 @@ export function isInVideoMeetingBannerWindow(
   const msUntilStart = startMs - nowMs;
   return msUntilStart <= 15 * 60 * 1000 && nowMs < endMs;
 }
+
+type BannerMeetingLike = {
+  event: { id: string; startDate: string; endDate?: string | null };
+};
+
+/** Live first, then soonest start — same ranking as the mobile meeting banner. */
+export function rankMeetingsForBanner<T extends BannerMeetingLike>(
+  meetings: T[],
+  nowMs: number,
+  dismissedIds: readonly string[] = [],
+): T[] {
+  const dismissed = new Set(dismissedIds);
+  return meetings
+    .filter(
+      (meeting) =>
+        !dismissed.has(meeting.event.id) &&
+        isInVideoMeetingBannerWindow(
+          meeting.event.startDate,
+          meeting.event.endDate,
+          nowMs,
+        ),
+    )
+    .sort((a, b) => {
+      const aStart = new Date(a.event.startDate).getTime();
+      const bStart = new Date(b.event.startDate).getTime();
+      const aLive = aStart <= nowMs;
+      const bLive = bStart <= nowMs;
+      if (aLive !== bLive) return aLive ? -1 : 1;
+      if (aStart !== bStart) return aStart - bStart;
+      return a.event.id.localeCompare(b.event.id);
+    });
+}

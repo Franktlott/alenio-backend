@@ -1,18 +1,19 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Heart, MessageCircle } from "lucide-react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ActivityFeedItem } from "@/components/activity/types";
 import {
   CELEBRATION_CARD_THEMES,
   getCelebrationCardTheme,
 } from "@/components/activity/celebration-themes";
 import { FeedActionButton } from "@/components/workspace/FeedActionButton";
+import { FeedEventPill } from "@/components/workspace/FeedEventPill";
+import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
 import { WorkspaceFeedCardShell } from "@/components/workspace/WorkspaceFeedCardShell";
 import {
-  commentActionLabel,
   formatFeedTimestamp,
   myReactionEmoji,
-  reactionActionLabel,
   recognitionCategoryLabel,
   recognitionParticipants,
   totalReactionCount,
@@ -25,15 +26,36 @@ function themeLabel(key: string): string | null {
     : null;
 }
 
+function celebrationHeadline(
+  key: string,
+  name: string,
+): { text: string; emoji: string } {
+  const headlines: Record<string, { text: string; emoji: string }> = {
+    shoutout: { text: `Great work, ${name}!`, emoji: "⭐" },
+    mvp: { text: `MVP moment, ${name}!`, emoji: "🏆" },
+    beyond: { text: `Above and beyond, ${name}!`, emoji: "🏅" },
+    rockstar: { text: `You rock, ${name}!`, emoji: "⚡" },
+    clutch: { text: `Clutch work, ${name}!`, emoji: "🎯" },
+    teamplayer: { text: `Great teamwork, ${name}!`, emoji: "🤝" },
+    bigbrain: { text: `Brilliant work, ${name}!`, emoji: "🧠" },
+    onfire: { text: `On fire, ${name}!`, emoji: "🔥" },
+    milestone: { text: `Milestone achieved, ${name}!`, emoji: "🏁" },
+    grateful: { text: `Thank you, ${name}!`, emoji: "💜" },
+  };
+  return headlines[key] ?? { text: `Great work, ${name}!`, emoji: "⭐" };
+}
+
 type Props = {
   item: ActivityFeedItem;
   currentUserId?: string;
   /** Opens the reaction menu so people can pick an emoji, same as chat. */
-  onPressReact: () => void;
+  onPressReact?: () => void;
   /** Card actions; the overflow button hides when there is nothing to do. */
   onPressMore?: () => void;
   /** Opens the thread, from the comment button or from the card itself. */
   onPressComment?: () => void;
+  /** Opens the sheet listing everyone who reacted. */
+  onPressReactions?: () => void;
   commentCount?: number;
   /** Emoji picker rendered above the action row while it is open. */
   picker?: ReactNode;
@@ -46,7 +68,7 @@ export function RecognitionUpdateCard({
   onPressReact,
   onPressMore,
   onPressComment,
-  commentCount = 0,
+  onPressReactions,
   picker,
   testID,
 }: Props) {
@@ -59,6 +81,8 @@ export function RecognitionUpdateCard({
   // the card carries its own identity instead of a uniform indigo pill.
   const theme = getCelebrationCardTheme(item.metadata.celebrationType);
   const TypeIcon = theme.Icon;
+  const firstName = recipientName.trim().split(/\s+/)[0] || recipientName;
+  const headline = celebrationHeadline(theme.key, firstName);
   const message = item.metadata.message?.trim() || null;
   const reactionCount = totalReactionCount(item.reactions);
   const mine = myReactionEmoji(item.reactions, currentUserId);
@@ -66,6 +90,7 @@ export function RecognitionUpdateCard({
 
   return (
     <WorkspaceFeedCardShell
+      compact
       avatar={item.actor}
       pairedAvatar={
         recipientName
@@ -81,6 +106,37 @@ export function RecognitionUpdateCard({
       onPress={onPressComment}
       onLongPress={onPressReact}
       testID={cardTestID}
+      backgroundDecoration={
+        <View pointerEvents="none" style={styles.decoration}>
+          <View
+            style={[
+              styles.decorCircleTop,
+              { backgroundColor: theme.accent },
+            ]}
+          />
+          <View
+            style={[
+              styles.decorCircleBottom,
+              { backgroundColor: theme.accent },
+            ]}
+          />
+          {theme.key === "bigbrain" ? (
+            <MaterialCommunityIcons
+              name="brain"
+              size={31}
+              color={theme.chip}
+              style={styles.decorIcon}
+            />
+          ) : (
+            <TypeIcon
+              size={29}
+              color={theme.chip}
+              strokeWidth={2}
+              style={styles.decorIcon}
+            />
+          )}
+        </View>
+      }
       identity={
         <Text style={styles.identity} numberOfLines={3}>
           <Text style={styles.name}>{giverName}</Text>
@@ -92,11 +148,13 @@ export function RecognitionUpdateCard({
         <View style={styles.footer}>
           {picker}
           <View style={styles.actions}>
+            {onPressReact ? (
             <FeedActionButton
               Icon={Heart}
               glyph={mine}
               activeColor={feedReaction(mine)?.color}
-              label={reactionActionLabel(reactionCount)}
+              // The facepile carries the count, so the button stays an icon.
+              label=""
               active={!!mine}
               filled
               onPress={onPressReact}
@@ -107,39 +165,41 @@ export function RecognitionUpdateCard({
               }
               testID={`${cardTestID}-react`}
             />
+            ) : null}
             {onPressComment ? (
               <FeedActionButton
                 Icon={MessageCircle}
-                label={commentActionLabel(commentCount)}
+                label=""
                 onPress={onPressComment}
                 accessibilityLabel="Comment on this recognition"
                 testID={`${cardTestID}-comment`}
               />
+            ) : null}
+            {onPressReactions && reactionCount > 0 ? (
+              <View style={styles.summary}>
+                <ReactionFacepile
+                  reactions={item.reactions ?? {}}
+                  onPress={onPressReactions}
+                  testID={`${cardTestID}-reaction-facepile`}
+                />
+              </View>
             ) : null}
           </View>
         </View>
       }
     >
       {category ? (
-        <View
-          style={[
-            styles.pill,
-            {
-              backgroundColor: `${theme.chip}14`,
-              borderColor: `${theme.chip}3D`,
-            },
-          ]}
+        <FeedEventPill
+          Icon={TypeIcon}
+          label={category}
+          color={theme.chip}
           testID={`${cardTestID}-category`}
-        >
-          <TypeIcon size={10} color={theme.chip} strokeWidth={2.6} />
-          <Text
-            style={[styles.pillText, { color: theme.chip }]}
-            numberOfLines={1}
-          >
-            {category}
-          </Text>
-        </View>
+        />
       ) : null}
+
+      <Text style={styles.headline} numberOfLines={2}>
+        {headline.text} {headline.emoji}
+      </Text>
 
       {message ? (
         <Text style={styles.message} testID={`${cardTestID}-message`}>
@@ -164,35 +224,62 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     color: "#64748B",
   },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    alignSelf: "flex-start",
-    marginTop: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  pillText: {
-    fontSize: 9.5,
-    lineHeight: 13,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-  },
-  message: {
-    marginTop: 6,
+  headline: {
+    marginTop: 5,
     fontSize: 15,
     lineHeight: 21,
-    fontWeight: "500",
+    fontWeight: "700",
     color: "#111C33",
   },
+  message: {
+    marginTop: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "400",
+    color: "#64748B",
+  },
   footer: {
-    gap: 4,
+    marginTop: 6,
+    gap: 2,
   },
   actions: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  summary: {
+    marginLeft: "auto",
+  },
+  decoration: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 180,
+    height: 132,
+    overflow: "hidden",
+    borderTopRightRadius: 16,
+  },
+  decorCircleTop: {
+    position: "absolute",
+    width: 142,
+    height: 142,
+    borderRadius: 71,
+    top: -58,
+    right: -24,
+    opacity: 0.13,
+  },
+  decorCircleBottom: {
+    position: "absolute",
+    width: 126,
+    height: 126,
+    borderRadius: 63,
+    top: 61,
+    right: 30,
+    opacity: 0.07,
+  },
+  decorIcon: {
+    position: "absolute",
+    top: 21,
+    // Leave the top-right action lane clear for the overflow menu.
+    right: 52,
   },
 });

@@ -13,7 +13,8 @@ export const DEVELOPMENT_GOAL_ACTIVITY_KEY = {
   summary: `Goals become inactive after ${DEVELOPMENT_GOAL_INACTIVITY_DAYS} days with no progress updates or changes.`,
   activityCountsAs: [
     "Adding or editing progress notes",
-    "Updating the skill or action steps",
+    "Completing or reopening actions",
+    "Updating the skill or actions",
     "Reopening a closed or inactive goal",
   ],
 } as const;

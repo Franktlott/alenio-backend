@@ -24,6 +24,7 @@ type Props = {
   teamId: string;
   taskId: string;
   isJoint: boolean;
+  isReminder?: boolean;
   currentUserId: string | null;
   canWrite: boolean;
   canModerate: boolean;
@@ -49,6 +50,7 @@ export function TaskNotesSection({
   teamId,
   taskId,
   isJoint,
+  isReminder = false,
   currentUserId,
   canWrite,
   canModerate,
@@ -63,6 +65,9 @@ export function TaskNotesSection({
     queryKey: taskNotesQueryKey(teamId, taskId),
     queryFn: () => fetchTaskNotes(teamId, taskId),
     enabled: Boolean(teamId && taskId),
+    refetchInterval: 4000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   const refreshNotes = () =>
@@ -118,8 +123,8 @@ export function TaskNotesSection({
     <View className="mb-4" testID="task-notes-section">
       <View className="mb-2 flex-row items-center justify-between">
         <View className="flex-row items-center" style={{ gap: 6 }}>
-          <MessageSquareText size={16} color="#64748B" />
-          <Text className="text-sm font-semibold text-slate-500">
+          <MessageSquareText size={15} color="#64748B" />
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
             {isJoint ? "Team notes" : "Notes"}
           </Text>
           {notes.length > 0 ? (
@@ -131,7 +136,7 @@ export function TaskNotesSection({
         {canWrite ? (
           <Pressable
             onPress={openAdd}
-            className="flex-row items-center rounded-full bg-indigo-50 px-3 py-1.5"
+            className="flex-row items-center px-1 py-1.5"
             style={{ gap: 4 }}
             accessibilityRole="button"
             testID="add-task-note-button"
@@ -158,13 +163,43 @@ export function TaskNotesSection({
           </Text>
         </Pressable>
       ) : notes.length === 0 ? (
-        <View className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4" testID="task-notes-empty">
-          <Text className="text-center text-xs text-slate-400">
+        <View
+          className="rounded-xl px-3 py-3"
+          style={{
+            minHeight: 144,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#FFFFFF",
+            borderWidth: 1,
+            borderStyle: "dashed",
+            borderColor: "#DFE4EF",
+          }}
+          testID="task-notes-empty"
+        >
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              marginBottom: 10,
+              borderRadius: 22,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#F0EDFF",
+            }}
+          >
+            <MessageSquareText size={21} color="#6958E8" strokeWidth={2} />
+          </View>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E293B" }}>
+            No notes yet
+          </Text>
+          <Text style={{ marginTop: 5, fontSize: 11, color: "#94A3B8", textAlign: "center" }}>
             {canWrite
-              ? isJoint
-                ? "Share an update with everyone assigned to this task."
-                : "Add context, progress, or a handoff note."
-              : "No notes yet."}
+              ? isReminder
+                ? "Add context or anything you want to remember."
+                : isJoint
+                  ? "Share an update with everyone assigned to this task."
+                  : "Add context, progress, or a handoff note."
+              : "No notes have been added."}
           </Text>
         </View>
       ) : (
@@ -178,7 +213,7 @@ export function TaskNotesSection({
                 className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3"
                 testID={`task-note-${note.id}`}
               >
-                <View className="mb-2 flex-row items-center">
+                <View className="mb-2 flex-row items-center" style={{ gap: 10 }}>
                   <UserAvatar
                     user={note.createdBy}
                     size={28}
@@ -186,7 +221,6 @@ export function TaskNotesSection({
                     backgroundColor="#4F46E5"
                     textColor="#FFFFFF"
                     fontSize={11}
-                    style={{ marginRight: 8 }}
                   />
                   <View className="min-w-0 flex-1">
                     <Text className="text-xs font-semibold text-slate-800" numberOfLines={1}>

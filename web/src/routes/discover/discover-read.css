@@ -1,0 +1,460 @@
+/* Reader-side Discover (index + article). Admin editor styles live in discover.css. */
+
+.dread-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #fff;
+  /* The page sits next to the chat column, so layout follows its own width, not the window. */
+  container-type: inline-size;
+}
+
+.dread-page-inner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 20px 32px 48px;
+}
+
+.dread-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111a2b;
+  text-decoration: none;
+}
+
+.dread-back:hover {
+  color: #6d5ef8;
+}
+
+.dread-note {
+  margin: 24px 0 0;
+  font-size: 15px;
+  color: #667085;
+}
+
+/* Loading placeholders shaped like the article, so the page doesn't jump when it arrives. */
+.dread-skel {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f1eff8 0%, #f8f7fc 40%, #f1eff8 80%);
+  background-size: 200% 100%;
+  animation: dread-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes dread-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dread-skel {
+    animation: none;
+  }
+}
+
+.dread-skel.dread-article-cover,
+.dread-skel.dread-explore-thumb {
+  background: linear-gradient(90deg, #f1eff8 0%, #f8f7fc 40%, #f1eff8 80%);
+  background-size: 200% 100%;
+}
+
+.dread-skel-pill {
+  width: 92px;
+  height: 20px;
+}
+
+.dread-skel-title {
+  width: 86%;
+  height: 30px;
+  margin-top: 12px;
+}
+
+.dread-skel-excerpt {
+  margin-top: 14px;
+}
+
+.dread-skel-heading {
+  width: 120px;
+  height: 18px;
+}
+
+.dread-skel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-top: 22px;
+}
+
+.dread-skel-line {
+  height: 13px;
+}
+
+.dread-skel-gap {
+  margin-top: 12px;
+}
+
+.dread-skel-copy {
+  flex: 1;
+  gap: 7px;
+}
+
+.dread-missing {
+  margin-top: 40px;
+  text-align: center;
+}
+
+.dread-missing h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #111a2b;
+}
+
+.dread-missing p {
+  margin: 6px 0 16px;
+  font-size: 15px;
+  color: #667085;
+}
+
+.dread-missing a {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: #6d5ef8;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* ── Index ─────────────────────────────────────────────────────────────── */
+.dread-index-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dread-index-spark {
+  color: #6d5ef8;
+}
+
+.dread-index-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: #111a2b;
+}
+
+.dread-index-subtitle {
+  margin: 4px 0 20px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #667085;
+}
+
+.dread-index-subtitle a {
+  color: #6d5ef8;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dread-index-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.dread-index-grid .home-discover-card {
+  flex: initial;
+  width: auto;
+}
+
+/* ── Reader ────────────────────────────────────────────────────────────── */
+.dread-article-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4.8;
+  object-fit: cover;
+  border-radius: 18px;
+  background: #ede9fe;
+  margin-bottom: 20px;
+}
+
+.dread-article-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 32px;
+}
+
+.dread-article-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.dread-article-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dread-article-pill {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.dread-article-readtime {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: #98a2b3;
+}
+
+.dread-article-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #ece8f8;
+  border-radius: 9px;
+  background: #fff;
+  color: #3d3a5c;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dread-article-save:hover {
+  border-color: #c4b5fd;
+  color: #6d5ef8;
+}
+
+.dread-article-save.is-saved {
+  background: #ede9fe;
+  border-color: #ddd6fe;
+  color: #4c3fd1;
+}
+
+.dread-article-title {
+  margin: 10px 0 0;
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  color: #111a2b;
+}
+
+.dread-article-excerpt {
+  margin: 8px 0 6px;
+  font-size: 17px;
+  line-height: 25px;
+  color: #667085;
+}
+
+.dread-body {
+  font-size: 16px;
+  line-height: 25px;
+  color: #1f2937;
+}
+
+.dread-body p {
+  margin: 10px 0 0;
+}
+
+.dread-body h2 {
+  margin: 18px 0 4px;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  color: #111a2b;
+}
+
+.dread-body h3 {
+  margin: 16px 0 4px;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 800;
+  color: #111a2b;
+}
+
+.dread-body ul,
+.dread-body ol {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+
+.dread-body li {
+  margin: 4px 0;
+}
+
+.dread-body blockquote {
+  position: relative;
+  margin: 14px 0;
+  padding: 26px 16px 14px;
+  border-radius: 16px;
+  background: #f4f0ff;
+  color: #3f3d56;
+  font-weight: 600;
+}
+
+.dread-body blockquote::before {
+  content: "\201C";
+  position: absolute;
+  top: 2px;
+  left: 14px;
+  font-size: 30px;
+  line-height: 30px;
+  font-weight: 700;
+  color: #c4b5fd;
+}
+
+.dread-body blockquote p {
+  margin: 0;
+}
+
+.dread-body blockquote p + p {
+  margin-top: 8px;
+}
+
+.dread-body img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: 12px 0;
+}
+
+.dread-body a {
+  color: #6d5ef8;
+}
+
+.dread-article-side {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dread-explore-heading {
+  margin: 0;
+  font-size: 16px;
+  line-height: 21px;
+  font-weight: 800;
+  color: #111a2b;
+}
+
+.dread-explore-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.dread-explore-row:hover .dread-explore-title {
+  color: #6d5ef8;
+}
+
+.dread-explore-thumb {
+  width: 84px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #ede9fe;
+}
+
+.dread-explore-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dread-explore-kicker {
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.dread-explore-title {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 700;
+  color: #111a2b;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dread-explore-meta {
+  font-size: 12px;
+  line-height: 16px;
+  color: #98a2b3;
+}
+
+@container (max-width: 860px) {
+  .dread-article-columns {
+    flex-direction: column;
+  }
+
+  .dread-article-side {
+    width: 100%;
+    margin-top: 10px;
+  }
+
+  .dread-article-cover {
+    aspect-ratio: 16 / 7;
+  }
+}
+
+@container (max-width: 620px) {
+  .dread-page-inner {
+    padding: 14px 16px 36px;
+  }
+
+  .dread-article-title {
+    font-size: 26px;
+    line-height: 31px;
+  }
+
+  .dread-article-cover {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+.dread-more {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid #eef0f4;
+}
+
+.dread-more-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}

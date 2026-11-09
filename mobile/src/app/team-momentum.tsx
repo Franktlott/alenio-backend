@@ -27,7 +27,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
-import { TeamMomentumDashboard } from "@/components/momentum/TeamMomentumDashboard";
+import {
+  PersonalMomentumLoading,
+  TeamMomentumDashboard,
+  TeamMomentumLoading,
+} from "@/components/momentum/TeamMomentumDashboard";
 import {
   effectiveTeamMomentumBand,
   momentumTaskTitle,
@@ -455,6 +459,31 @@ export default function TeamMomentumScreen() {
   const ownerExcluded = mode === "mine" && mineErrorCode === "MEMBER_NOT_FOUND";
   const coachingVisible = summaryQuery.data?.coachingVisible !== false;
   useEffect(() => {
+    if (!teamId || mode !== "team") return;
+    if (summaryQuery.data || summaryQuery.isError || summaryQuery.isFetching) return;
+    void summaryQuery.refetch();
+  }, [
+    teamId,
+    mode,
+    summaryQuery.data,
+    summaryQuery.isError,
+    summaryQuery.isFetching,
+    summaryQuery.refetch,
+  ]);
+  useEffect(() => {
+    if (!teamId || mode !== "mine" || !detailMemberUserId) return;
+    if (detailQuery.data || detailQuery.isError || detailQuery.isFetching) return;
+    void detailQuery.refetch();
+  }, [
+    teamId,
+    mode,
+    detailMemberUserId,
+    detailQuery.data,
+    detailQuery.isError,
+    detailQuery.isFetching,
+    detailQuery.refetch,
+  ]);
+  useEffect(() => {
     if (openedPersonalFallback.current || mode !== "team") return;
     if (accessState !== "leader_required" || isLeaderRole(myRole)) return;
     openedPersonalFallback.current = true;
@@ -573,7 +602,7 @@ export default function TeamMomentumScreen() {
       {!teamId ? (
         <BrandedState kind="unavailable" onRetry={() => void refresh()} />
       ) : mode === "mine" ? (
-        detailQuery.isPending ? null : ownerExcluded ? (
+        ownerExcluded ? (
           <View style={styles.ownerNote} testID="team-momentum-owner-note">
             <Text style={styles.stateTitle}>No personal run</Text>
             <Text style={styles.stateBody}>
@@ -609,14 +638,20 @@ export default function TeamMomentumScreen() {
               onOpenCompletion={openCompletion}
             />
           </ScrollView>
+        ) : detailMemberUserId && !detailQuery.isError ? (
+          <ScrollView
+            style={styles.loadingScroll}
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <PersonalMomentumLoading />
+          </ScrollView>
         ) : (
           <BrandedState kind="unavailable" onRetry={() => void refresh()} />
         )
-      ) : summaryQuery.isPending ? null : accessState ? (
-        <BrandedState
-          kind={accessState ?? "unavailable"}
-          onRetry={() => void refresh()}
-        />
       ) : summaryQuery.data && presentation ? (
         <ScrollView
           contentContainerStyle={[
@@ -647,7 +682,23 @@ export default function TeamMomentumScreen() {
             }}
           />
         </ScrollView>
-      ) : null}
+      ) : accessState ? (
+        <BrandedState
+          kind={accessState}
+          onRetry={() => void refresh()}
+        />
+      ) : (
+        <ScrollView
+          style={styles.loadingScroll}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <TeamMomentumLoading wide={dashboardWide} />
+        </ScrollView>
+      )}
 
       <AlenioBottomSheet
         visible={showMomentumInfo}
@@ -1012,6 +1063,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     gap: 6,
   },
+  loadingScroll: { flex: 1 },
   content: { paddingHorizontal: space.pagePad, paddingTop: 8, gap: 14 },
   /** Landscape spends the width on a second column instead of a longer scroll. */
   splitRow: { flexDirection: "row", alignItems: "flex-start", gap: 14 },

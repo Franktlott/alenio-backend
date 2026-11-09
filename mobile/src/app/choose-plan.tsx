@@ -9,42 +9,17 @@ import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
 import { postBillingCheckout, type SubscriptionApiRow } from "@/lib/account-hub-api";
+import { isPlayCheckoutCanceled } from "@/lib/play-external-links";
 import { BillingPortalWebViewModal } from "@/components/BillingPortalWebViewModal";
 import { AppPageBackground } from "@/components/AppPageBackground";
+import { shortPeriod, usePlans } from "@/lib/plans";
 
 type PlanId = "pro" | "operations";
 
-const PLANS: Array<{
-  id: PlanId;
-  name: string;
-  summary: string;
-  price: string;
-  icon: typeof Zap;
-  features: string[];
-  comingSoon?: boolean;
-}> = [
-  {
-    id: "pro",
-    name: "Team / Pro",
-    summary: "The people and execution toolkit for one high-performing team.",
-    price: "$39.99",
-    icon: Zap,
-    features: ["Tasks and priorities", "Team calendar", "Coaching and Seneca", "Insights and development"],
-  },
-  {
-    id: "operations",
-    name: "Operations",
-    summary: "Everything in Pro, plus tools for consistent frontline operations.",
-    price: "$69.99",
-    icon: Sparkles,
-    features: [
-      "Everything in Pro",
-      "Alenio Go checklists and walks — Coming soon",
-      "Temperature checks — Coming soon",
-      "Shift operations tools — Coming soon",
-    ],
-    comingSoon: true,
-  },
+/** Names, prices and features come from the server; this is only how each plan looks here. */
+const PLAN_LOOK: Array<{ id: PlanId; icon: typeof Zap; comingSoon?: boolean }> = [
+  { id: "pro", icon: Zap },
+  { id: "operations", icon: Sparkles, comingSoon: true },
 ];
 
 export default function ChoosePlanScreen() {
@@ -54,6 +29,7 @@ export default function ChoosePlanScreen() {
   const teamId = (typeof teamIdParam === "string" && teamIdParam) || activeTeamId || "";
   const [selected, setSelected] = useState<PlanId>("pro");
   const [billingUrl, setBillingUrl] = useState<string | null>(null);
+  const plans = usePlans();
 
   const { data: teams = [] } = useQuery({
     queryKey: ["teams"],
@@ -90,8 +66,10 @@ export default function ChoosePlanScreen() {
       if (result.openedWebFallback) return;
       setBillingUrl(result.url);
     },
-    onError: (error: Error) =>
-      toast({ title: "Couldn’t open checkout", message: error.message, preset: "error" }),
+    onError: (error: Error) => {
+      if (isPlayCheckoutCanceled(error)) return;
+      toast({ title: "Couldn’t open checkout", message: error.message, preset: "error" });
+    },
   });
 
   const closeBilling = useCallback(() => {
@@ -121,7 +99,8 @@ export default function ChoosePlanScreen() {
           Select the plan that fits your team. Billing starts only after secure checkout is complete.
         </Text>
 
-        {PLANS.map((plan) => {
+        {PLAN_LOOK.map((look) => {
+          const plan = { ...look, ...plans[look.id] };
           const active = selected === plan.id;
           const Icon = plan.icon;
           return (
@@ -150,7 +129,7 @@ export default function ChoosePlanScreen() {
                       </View>
                     ) : null}
                   </View>
-                  <Text style={styles.planSummary}>{plan.summary}</Text>
+                  <Text style={styles.planSummary}>{plan.bestFor}</Text>
                 </View>
                 {!plan.comingSoon ? (
                   <View style={[styles.radio, active ? styles.radioActive : null]}>
@@ -159,8 +138,8 @@ export default function ChoosePlanScreen() {
                 ) : null}
               </View>
               <View style={styles.planPriceRow}>
-                <Text style={styles.planPrice}>{plan.price}</Text>
-                <Text style={styles.planPriceSuffix}>per workspace / month</Text>
+                <Text style={styles.planPrice}>{plan.priceLabel}</Text>
+                <Text style={styles.planPriceSuffix}>{shortPeriod(plan)}</Text>
               </View>
               <View style={styles.features}>
                 {plan.features.map((feature) => (
@@ -192,7 +171,7 @@ export default function ChoosePlanScreen() {
           {checkout.isPending ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text style={styles.primaryButtonText}>Continue with {selected === "operations" ? "Operations" : "Pro"}</Text>
+            <Text style={styles.primaryButtonText}>Continue with {plans[selected].name}</Text>
           )}
         </Pressable>
         <Pressable

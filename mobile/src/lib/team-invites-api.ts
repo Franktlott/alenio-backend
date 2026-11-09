@@ -1,9 +1,11 @@
 import { api } from "@/lib/api/api";
+import type { WorkspaceInviteRole } from "@/lib/workspace-members";
 
 export type TeamInvite = {
   id: string;
   teamId: string;
   email: string;
+  role: WorkspaceInviteRole;
   invitedById: string;
   status: string;
   acceptedUserId: string | null;
@@ -16,6 +18,7 @@ export type TeamInvite = {
 
 export type TeamInvitePreview = {
   email: string;
+  role?: WorkspaceInviteRole;
   found: boolean;
   alreadyMember: boolean;
   pendingInvite: boolean;
@@ -33,18 +36,38 @@ export function fetchTeamInvites(teamId: string) {
   return api.get<TeamInvite[]>(`/api/teams/${teamId}/invites`);
 }
 
-export function previewTeamInvite(teamId: string, email: string) {
-  return api.post<TeamInvitePreview>(`/api/teams/${teamId}/invites/preview`, { email });
+export function previewTeamInvite(
+  teamId: string,
+  email: string,
+  role: WorkspaceInviteRole = "member",
+) {
+  return api.post<TeamInvitePreview>(`/api/teams/${teamId}/invites/preview`, { email, role });
 }
 
-export function inviteMemberByEmail(teamId: string, email: string) {
+export function inviteMemberByEmail(
+  teamId: string,
+  email: string,
+  role: WorkspaceInviteRole = "member",
+) {
   return api.post<{
     added: boolean;
     user?: { id: string; name: string; email: string; image: string | null };
     role?: string;
     invite?: TeamInvite;
     emailSent?: boolean;
-  }>(`/api/teams/${teamId}/invites`, { email });
+  }>(`/api/teams/${teamId}/invites`, { email, role });
+}
+
+export function bulkManageTeamMembers(
+  teamId: string,
+  body:
+    | { action: "set_role"; userIds: string[]; role: WorkspaceInviteRole }
+    | { action: "remove"; userIds: string[] },
+) {
+  return api.post<{ updated: number; action: "set_role" | "remove" }>(
+    `/api/teams/${teamId}/members/bulk`,
+    body,
+  );
 }
 
 export function cancelTeamInvite(teamId: string, inviteId: string) {
@@ -61,6 +84,7 @@ export type TeamInviteLinkPreview = {
   teamImage: string | null;
   inviterName: string | null;
   email: string;
+  role: WorkspaceInviteRole;
   expiresAt: string;
 };
 

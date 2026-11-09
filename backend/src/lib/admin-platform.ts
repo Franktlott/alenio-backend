@@ -1,8 +1,11 @@
 import { createEmailPasswordUser } from "../auth";
+import { env } from "../env";
 import { deleteAppUserCompletely } from "./delete-app-user";
-import { isPrismaUniqueOnName, normalizeTeamName } from "./team-name";
+import { isPlatformAdminEligibleEmail, platformAdminEmails } from "./platform-admin-allowlist";
+import { isPrismaUniqueOnName, isTeamNameTakenForUser, normalizeTeamName } from "./team-name";
 import { resolveTimeZone } from "./timezone";
 import { prisma } from "../prisma";
+import { effectiveStaffRole, STAFF_ROLES, type StaffRole } from "./staff-roles";
 
 const VALID_PLANS = new Set(["team", "pro", "operations"]);
 const VALID_STATUSES = new Set(["active", "canceled", "past_due", "trialing", "expired"]);
@@ -26,6 +29,9 @@ export async function createPlatformUser(input: {
   const password = input.password;
   if (!email || !name || password.length < 8) {
     return { ok: false as const, code: "VALIDATION" as const };
+  }
+  if (input.isAdmin) {
+    return { ok: false as const, code: "REGULAR_ACCOUNT" as const };
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -51,7 +57,8 @@ export async function createPlatformUser(input: {
       email,
       name,
       emailVerified: true,
-      isAdmin: input.isAdmin === true,
+      accountType: "member",
+      isAdmin: false,
     },
     select: {
       id: true,
@@ -71,17 +78,125 @@ export async function createPlatformUser(input: {
   return { ok: true as const, user };
 }
 
-export async function setPlatformAdmin(userId: string, isAdmin: boolean) {
-  const existing = await prisma.user.findUnique({ where: { id: userId } });
+export type StaffRoleChangeError =
+  | "DOMAIN_NOT_ALLOWED"
+  | "SELF_CHANGE"
+  | "ALLOWLISTED"
+  | "LAST_SUPER_ADMIN";
+
+/**
+ * The rules for giving out or taking away staff access, kept free of the
+ * database so they can be tested directly.
+ * - Only company-domain emails can hold any staff role.
+ * - Nobody can change their own role, so no one can raise their own access.
+ * - Emails pinned in PLATFORM_ADMIN_EMAILS stay Super Admin (startup would restore them anyway).
+ * - Alenio always keeps at least one Super Admin.
+ */
+export function checkStaffRoleChange(params: {
+  actorId: string;
+  target: { id: string; email: string | null; accountType: string; staffRole: string | null };
+  nextRole: StaffRole | null;
+  superAdminCount: number;
+  pinnedEmails: string[];
+}): StaffRoleChangeError | null {
+  const { actorId, target, nextRole } = params;
+  const currentRole = effectiveStaffRole(target);
+  if (currentRole === nextRole) return null;
+  if (target.id === actorId) return "SELF_CHANGE";
+  if (nextRole === "super_admin" && !isPlatformAdminEligibleEmail(target.email)) return "DOMAIN_NOT_ALLOWED";
+  if (currentRole === "super_admin") {
+    if (params.pinnedEmails.includes(normalizeEmail(target.email ?? ""))) return "ALLOWLISTED";
+    if (params.superAdminCount <= 1) return "LAST_SUPER_ADMIN";
+  }
+  return null;
+}
+
+export type UserEmailChangeError = "EMAIL_CHANGE_COMPANY_ONLY" | "SUPER_ADMIN_EMAIL_DOMAIN";
+
+/**
+ * Changing someone's email lets the new address reset their password, so only company
+ * staff can do it, and a Super Admin's email must stay on the company domain.
+ */
+export function checkUserEmailChange(params: {
+  actorEmail: string | null;
+  target: { email: string | null; accountType: string; staffRole: string | null };
+  nextEmail: string;
+}): UserEmailChangeError | null {
+  if (normalizeEmail(params.nextEmail) === normalizeEmail(params.target.email ?? "")) return null;
+  if (!isPlatformAdminEligibleEmail(params.actorEmail)) return "EMAIL_CHANGE_COMPANY_ONLY";
+  if (effectiveStaffRole(params.target) === "super_admin" && !isPlatformAdminEligibleEmail(params.nextEmail)) {
+    return "SUPER_ADMIN_EMAIL_DOMAIN";
+  }
+  return null;
+}
+
+const STAFF_USER_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  image: true,
+  createdAt: true,
+  accountType: true,
+  staffRole: true,
+} as const;
+
+/** Gives a user a staff role, changes it, or (null) returns them to a regular member account. */
+export async function setStaffRole(actorId: string, userId: string, nextRole: StaffRole | null) {
+  const existing = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, accountType: true, staffRole: true },
+  });
   if (!existing) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  const superAdminCount = await prisma.user.count({
+    where: {
+      accountType: "platform_admin",
+      OR: [{ staffRole: null }, { staffRole: "super_admin" }, { staffRole: { notIn: [...STAFF_ROLES] } }],
+    },
+  });
+  const error = checkStaffRoleChange({
+    actorId,
+    target: existing,
+    nextRole,
+    superAdminCount,
+    pinnedEmails: platformAdminEmails(env.PLATFORM_ADMIN_EMAILS),
+  });
+  if (error) return { ok: false as const, code: error };
 
   const user = await prisma.user.update({
     where: { id: userId },
-    data: { isAdmin },
-    select: { id: true, name: true, email: true, isAdmin: true },
+    data: {
+      accountType: nextRole ? "platform_admin" : "member",
+      staffRole: nextRole,
+      // Legacy flag kept in sync for older readers.
+      isAdmin: nextRole !== null,
+    },
+    select: STAFF_USER_SELECT,
   });
+  return {
+    ok: true as const,
+    user: withIsAdmin(user),
+    previousRole: effectiveStaffRole(existing),
+  };
+}
 
-  return { ok: true as const, user };
+/** Older admin toggle: on keeps any existing staff role (or grants Super Admin), off removes staff access. */
+export async function setPlatformAdmin(actorId: string, userId: string, isAdmin: boolean) {
+  const existing = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { accountType: true, staffRole: true },
+  });
+  if (!existing) return { ok: false as const, code: "NOT_FOUND" as const };
+  const nextRole = isAdmin ? (effectiveStaffRole(existing) ?? "super_admin") : null;
+  return setStaffRole(actorId, userId, nextRole);
+}
+
+/** Admin status follows accountType; expose it as `isAdmin` (and the staff role) for API consumers. */
+export function withIsAdmin<T extends { accountType: string; staffRole?: string | null }>(
+  row: T,
+): Omit<T, "accountType" | "staffRole"> & { isAdmin: boolean; staffRole: StaffRole | null } {
+  const { accountType, staffRole, ...rest } = row;
+  return { ...rest, isAdmin: accountType === "platform_admin", staffRole: effectiveStaffRole({ accountType, staffRole }) };
 }
 
 export async function listPlatformTeams(limit = 200) {
@@ -289,11 +404,9 @@ export async function createEnterpriseAccount(input: {
     if (!owner) return { ok: false as const, code: "AUTH_FAILED" as const };
   }
 
-  const nameTaken = await prisma.team.findFirst({
-    where: { name: { equals: teamName, mode: "insensitive" } },
-    select: { id: true },
-  });
-  if (nameTaken) return { ok: false as const, code: "TEAM_NAME_TAKEN" as const };
+  if (await isTeamNameTakenForUser(teamName, owner.id)) {
+    return { ok: false as const, code: "TEAM_NAME_TAKEN" as const };
+  }
 
   let inviteCode = generateInviteCode();
   while (await prisma.team.findUnique({ where: { inviteCode } })) {
@@ -357,9 +470,12 @@ export async function deletePlatformUser(actorId: string, targetUserId: string) 
     return { ok: false as const, code: "SELF_DELETE" as const };
   }
 
-  const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, accountType: true },
+  });
   if (!targetUser) return { ok: false as const, code: "NOT_FOUND" as const };
-  if (targetUser.isAdmin) return { ok: false as const, code: "ADMIN_DELETE" as const };
+  if (targetUser.accountType === "platform_admin") return { ok: false as const, code: "ADMIN_DELETE" as const };
 
   await deleteAppUserCompletely(targetUserId);
   return { ok: true as const };

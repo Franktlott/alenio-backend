@@ -14,23 +14,29 @@ import {
   Pressable,
   ScrollView,
   Keyboard,
+  StyleSheet,
+  useWindowDimensions,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Bookmark, Plus, Square, Camera, Pencil, Trash2, ImageIcon, Check, ChevronDown } from "lucide-react-native";
+import { X, BookOpen, Bookmark, Plus, Square, Camera, Pencil, Trash2, ImageIcon, Check, CheckSquare, Bell, ChevronDown, ChevronRight, ChevronUp, Lock, Search, Calendar, Clock, Users, SlidersHorizontal, FileText, ArrowLeft, ArrowRight } from "lucide-react-native";
+import { colors } from "@/theme";
 import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
 import { useSession } from "@/lib/auth/use-session";
-import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
+import type { Task, TaskKind, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
 import { clampRecurrenceCount, maxRecurrenceCount, recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { resolveMyTeamRole } from "@/lib/member-identity";
-import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
+import { fitsFormSheet } from "@/lib/adaptive-layout";
+import { resolveTimeZone, suggestedDueClock, taskDuePayload, withDueClock } from "@/lib/timezone";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { UserAvatar } from "@/components/UserAvatar";
+import { toast } from "burnt";
+import { parseTaskKind, resolveTaskCreationPresentation } from "@/lib/task-kind";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
   { label: "Low", value: "low", color: "#94A3B8" },
@@ -45,16 +51,303 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
   { label: "Monthly", value: "monthly" },
 ];
 
+const formStyles = StyleSheet.create({
+  section: {
+    marginTop: 18,
+    marginBottom: 10,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    color: "#94A3B8",
+  },
+  label: {
+    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1E293B",
+  },
+  required: {
+    color: "#EF4444",
+  },
+  field: {
+    borderWidth: 1,
+    borderColor: "#E6E8F0",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  fieldInput: {
+    fontSize: 14,
+    color: "#0F172A",
+    padding: 0,
+  },
+  counter: {
+    alignSelf: "flex-end",
+    marginTop: 4,
+    fontSize: 11,
+    color: "#94A3B8",
+  },
+  choice: {
+    minHeight: 46,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D9D6FE",
+    backgroundColor: "#F8F7FF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  choiceText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#312E81",
+  },
+  moreRow: {
+    marginTop: 18,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E6E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+});
+
+const ACCENT = "#4F46E5";
+const ACCENT_SOFT = "#EEF0FF";
+const ACCENT_INK = "#3730A3";
+
+type BuilderStep = "details" | "when" | "who";
+const STEP_LABEL: Record<BuilderStep, string> = { details: "Details", when: "When", who: "Who" };
+const STEP_ICON: Record<BuilderStep, typeof FileText> = { details: FileText, when: Calendar, who: Users };
+
+const builderStyles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginBottom: 14,
+  },
+  eyebrow: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: ACCENT,
+  },
+  title: {
+    marginTop: 1,
+    fontSize: 21,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  stepPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "#F1F5F9",
+  },
+  stepPillText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  stepper: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    marginBottom: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E6E8F0",
+  },
+  stepNode: {
+    width: 64,
+    alignItems: "center",
+    gap: 5,
+  },
+  stepDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+  stepLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#94A3B8",
+  },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    marginTop: 17,
+    marginHorizontal: -12,
+    borderRadius: 1,
+    backgroundColor: "#E6E8F0",
+  },
+  kindCard: {
+    flex: 1,
+    minHeight: 58,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E6E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  kindCardSelected: {
+    borderColor: ACCENT,
+    backgroundColor: "#F4F2FF",
+  },
+  kindTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
+  kindSub: {
+    marginTop: 1,
+    fontSize: 11.5,
+    color: "#64748B",
+  },
+  priority: {
+    flex: 1,
+    height: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E6E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  prioritySelected: {
+    borderColor: ACCENT,
+    backgroundColor: "#F4F2FF",
+  },
+  rowButton: {
+    minHeight: 46,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E6E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  rowButtonText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1E293B",
+  },
+  card: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E6E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  avatarRemove: {
+    position: "absolute",
+    top: -2,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#64748B",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  avatarName: {
+    marginTop: 5,
+    maxWidth: 56,
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  summary: {
+    marginTop: 4,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#F8F7FF",
+    borderWidth: 1,
+    borderColor: "#E4E1FD",
+  },
+  footer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E6E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  error: {
+    marginBottom: 10,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#DC2626",
+  },
+  backButton: {
+    height: 52,
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  primary: {
+    height: 52,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 16,
+    backgroundColor: ACCENT,
+  },
+});
+
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const CREATE_TASK_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.92);
-const ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.62);
+/**
+ * A centred dialog is read as an object on the page, so it keeps a margin on
+ * every side rather than running to the edges the way a bottom sheet does.
+ */
+const DIALOG_MAX_WIDTH = 520;
+const DIALOG_MAX_HEIGHT = 640;
+const ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.72);
 
 export default function CreateTaskScreen() {
-  const { teamId, prefillTitle, initialDueDate } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string }>();
+  const { teamId, prefillTitle, initialDueDate, initialAssigneeId, kind: routeKind } =
+    useLocalSearchParams<{
+      teamId: string;
+      prefillTitle?: string;
+      initialDueDate?: string;
+      initialAssigneeId?: string;
+      kind?: string;
+    }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [selectedKind, setSelectedKind] = useState<TaskKind>(
+    parseTaskKind(routeKind) ?? "workspace_task",
+  );
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -69,12 +362,17 @@ export default function CreateTaskScreen() {
     };
   }, []);
 
+  /**
+   * Past this the form stops hugging the bottom edge and becomes a centred
+   * dialog, which is what every other sheet in the app already does on a
+   * tablet. Same rule, so they all change over at the same window size.
+   */
+  const dialog = fitsFormSheet(windowWidth, windowHeight);
   /** Keep the sheet inside the visible area above the keyboard so the header stays on-screen. */
   const sheetMaxHeight = Math.min(
-    CREATE_TASK_SHEET_MAX_HEIGHT,
+    dialog ? DIALOG_MAX_HEIGHT : CREATE_TASK_SHEET_MAX_HEIGHT,
     Math.max(320, SCREEN_HEIGHT - keyboardHeight - Math.max(insets.top, 8)),
   );
-  const scrollMaxHeight = Math.max(180, sheetMaxHeight - 78);
 
   const { data: meProfile } = useQuery({
     queryKey: ME_QUERY_KEY,
@@ -86,7 +384,11 @@ export default function CreateTaskScreen() {
   const [title, setTitle] = useState(typeof prefillTitle === "string" ? prefillTitle : "");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>(
+    typeof initialAssigneeId === "string" && initialAssigneeId
+      ? [initialAssigneeId]
+      : [],
+  );
   const [isRecurring, setIsRecurring] = useState(false);
   const [isJoint, setIsJoint] = useState(false);
   const [showSplitConfirm, setShowSplitConfirm] = useState(false);
@@ -104,7 +406,9 @@ export default function CreateTaskScreen() {
     d.setHours(23, 59, 59, 0);
     return d;
   });
+  const [dueHasTime, setDueHasTime] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +418,9 @@ export default function CreateTaskScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [step, setStep] = useState(0);
 
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -135,8 +442,20 @@ export default function CreateTaskScreen() {
     meEmail: meProfile?.email || (typeof session?.user?.email === "string" ? session.user.email : undefined),
     sessionUserId,
   });
+  const presentation = resolveTaskCreationPresentation(myRole, selectedKind);
+  const isReminder = presentation.kind === "reminder";
+  const steps: BuilderStep[] = isReminder ? ["details", "when"] : ["details", "when", "who"];
+  const stepIndex = Math.min(step, steps.length - 1);
+  const currentStep = steps[stepIndex];
+  const isLastStep = stepIndex === steps.length - 1;
   // Member-only due-date limit only when role is explicitly member (never on a failed roster match).
   const memberDueDateLimit = myRole === "member";
+
+  useEffect(() => {
+    if (myRole && !presentation.canChooseKind && selectedKind !== "reminder") {
+      setSelectedKind("reminder");
+    }
+  }, [myRole, presentation.canChooseKind, selectedKind]);
 
   const assigneeOptions = useMemo(
     () =>
@@ -149,14 +468,30 @@ export default function CreateTaskScreen() {
       ),
     [members],
   );
+  const filteredAssigneeOptions = useMemo(() => {
+    const query = assigneeSearch.trim().toLowerCase();
+    if (!query) return assigneeOptions;
+    return assigneeOptions.filter((member) =>
+      [member.user.name, member.user.email]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(query)),
+    );
+  }, [assigneeOptions, assigneeSearch]);
   const allAssigneeIds = useMemo(() => assigneeOptions.map((m) => m.userId), [assigneeOptions]);
+  const selectedMembers = useMemo(
+    () =>
+      selectedAssignees
+        .map((id) => members.find((m) => m.userId === id))
+        .filter((m): m is TeamMember => Boolean(m)),
+    [selectedAssignees, members],
+  );
   const allAssigneesSelected =
     allAssigneeIds.length > 0 && allAssigneeIds.every((id) => selectedAssignees.includes(id));
 
   const { data: templates = [] } = useQuery({
     queryKey: ["templates", teamId],
     queryFn: () => api.get<TaskTemplate[]>(`/api/teams/${teamId}/templates`),
-    enabled: !!teamId,
+    enabled: !!teamId && !isReminder,
   });
 
   const { mutate: deleteTemplate } = useMutation({
@@ -195,6 +530,7 @@ export default function CreateTaskScreen() {
   };
 
   const handleSaveAsTemplate = async () => {
+    if (isReminder) return;
     if (!title.trim()) {
       setError("Please enter a task title before saving as template");
       return;
@@ -243,38 +579,55 @@ export default function CreateTaskScreen() {
   const createMutation = useMutation({
     mutationFn: async (input: Record<string, unknown>) => {
       let attachmentUrl: string | undefined;
-      if (attachmentUri) {
+      if (!isReminder && attachmentUri) {
         const filename = attachmentUri.split("/").pop() ?? "photo.jpg";
         const uploaded = await uploadFile(attachmentUri, filename, "image/jpeg");
         attachmentUrl = uploaded.url;
       }
       const tasks = await api.post<Task[]>(`/api/teams/${teamId}/tasks`, { ...input, attachmentUrl });
       // Attach subtasks to each created task
-      for (const task of tasks) {
-        for (const subtaskTitle of subtaskTitles) {
-          await api.post(`/api/teams/${teamId}/tasks/${task.id}/subtasks`, { title: subtaskTitle });
+      if (!isReminder) {
+        for (const task of tasks) {
+          for (const subtaskTitle of subtaskTitles) {
+            await api.post(`/api/teams/${teamId}/tasks/${task.id}/subtasks`, { title: subtaskTitle });
+          }
         }
       }
       return tasks;
     },
     onSuccess: () => {
       invalidateTaskCaches(queryClient, teamId);
+      toast({
+        title: isReminder ? "Reminder created" : "Task created",
+        message: isReminder
+          ? "Only you can see it. It won’t affect Team Momentum."
+          : "Your workspace task is ready.",
+        preset: "done",
+      });
       router.back();
     },
-    onError: () => setError("Failed to create task. Please try again."),
+    onError: () =>
+      setError(
+        isReminder
+          ? "Failed to create reminder. Please try again."
+          : "Failed to create task. Please try again.",
+      ),
   });
 
-  const confirmCreate = () => {
+  const confirmCreate = (assigneeIds: string[] = selectedAssignees) => {
     setShowSplitConfirm(false);
     createMutation.mutate({
+      kind: presentation.kind,
       title: title.trim(),
       description: description.trim() || undefined,
       status: "todo",
       priority,
-      dueDate: dueDate ? calendarDueIso(dueDate, resolveTimeZone(meProfile?.timezone)) : undefined,
+      dueDate: dueDate
+        ? taskDuePayload(dueDate, dueHasTime, resolveTimeZone(meProfile?.timezone))
+        : undefined,
       timeZone: resolveTimeZone(meProfile?.timezone),
-      assigneeIds: selectedAssignees,
-      isJoint: isJoint || undefined,
+      assigneeIds: isReminder ? (myId ? [myId] : undefined) : assigneeIds,
+      isJoint: isReminder ? undefined : isJoint || undefined,
       recurrence: isRecurring
         ? {
             type: recurrenceType,
@@ -292,19 +645,35 @@ export default function CreateTaskScreen() {
 
   const handleCreate = () => {
     if (!title.trim()) {
-      setError("Please enter a task title");
+      setError(isReminder ? "Please enter a reminder title" : "Please enter a task title");
+      setStep(0);
       return;
     }
-    if (selectedAssignees.length === 0) {
+    if (!myRole) {
+      setError("Please wait while your workspace access loads.");
+      return;
+    }
+    const assigneeIds = selectedAssignees;
+    if (!isReminder && assigneeIds.length === 0) {
       setError("Please assign this task to at least one person");
+      setStep(steps.length - 1);
       return;
     }
     setError(null);
-    if (selectedAssignees.length >= 2 && !isJoint) {
+    if (!isReminder && assigneeIds.length >= 2 && !isJoint) {
       setShowSplitConfirm(true);
       return;
     }
-    confirmCreate();
+    confirmCreate(assigneeIds);
+  };
+
+  const goToStep = (index: number) => {
+    if (index > stepIndex && !title.trim()) {
+      setError(isReminder ? "Please enter a reminder title" : "Please enter a task title");
+      return;
+    }
+    setError(null);
+    setStep(Math.max(0, Math.min(index, steps.length - 1)));
   };
 
   const toggleAssignee = (userId: string) => {
@@ -376,150 +745,316 @@ export default function CreateTaskScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "transparent" }} testID="create-task-screen">
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        justifyContent: dialog ? "center" : "flex-end",
+        alignItems: dialog ? "center" : "stretch",
+        paddingHorizontal: dialog ? 24 : 0,
+      }}
+      testID="create-task-screen"
+    >
       <Pressable
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
+        style={StyleSheet.absoluteFill}
         onPress={() => router.back()}
         testID="create-task-backdrop"
       />
-      <View style={{ justifyContent: "flex-end", marginBottom: keyboardHeight }}>
+      <View
+        style={{
+          width: "100%",
+          maxWidth: dialog ? DIALOG_MAX_WIDTH : undefined,
+          marginBottom: keyboardHeight,
+        }}
+      >
         <View
           style={{
             backgroundColor: "white",
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
+            borderTopLeftRadius: dialog ? 22 : 32,
+            borderTopRightRadius: dialog ? 22 : 32,
+            borderBottomLeftRadius: dialog ? 22 : 0,
+            borderBottomRightRadius: dialog ? 22 : 0,
+            borderCurve: "continuous",
             maxHeight: sheetMaxHeight,
             width: "100%",
             overflow: "hidden",
           }}
         >
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 12 }} />
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 12 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 7 }} />
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>New Task</Text>
+          {/** A grab handle promises a drag the centred dialog does not do. */}
+          {dialog ? null : (
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 12 }} />
+          )}
+          <View style={[builderStyles.header, { marginTop: dialog ? 18 : 0 }]}>
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 32, height: 32, borderRadius: 8 }} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={builderStyles.eyebrow}>{isReminder ? "REMINDER BUILDER" : "TASK BUILDER"}</Text>
+              <Text style={builderStyles.title}>{presentation.newTitle}</Text>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              {templates.length > 0 ? (
-                <TouchableOpacity onPress={() => setShowTemplatePicker(true)} testID="use-template-button">
-                  <BookOpen size={20} color="#64748B" />
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity onPress={handleSaveAsTemplate} disabled={savingTemplate} testID="save-template-button">
-                {savingTemplate ? <ActivityIndicator color="#4361EE" size="small" /> : <Bookmark size={20} color="#64748B" />}
-              </TouchableOpacity>
-              <Pressable
-                onPress={() => router.back()}
-                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
-                testID="close-button"
-              >
-                <X size={16} color="#64748B" />
-              </Pressable>
+            <View style={builderStyles.stepPill} testID="task-builder-step-count">
+              <Text style={builderStyles.stepPillText}>
+                Step {stepIndex + 1} of {steps.length}
+              </Text>
             </View>
+            <Pressable
+              onPress={() => router.back()}
+              style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center", marginLeft: 10 }}
+              testID="close-button"
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <X size={16} color="#64748B" />
+            </Pressable>
+          </View>
+
+          <View style={builderStyles.stepper} testID="task-builder-stepper">
+            {steps.map((id, i) => {
+              const Icon = STEP_ICON[id];
+              const active = i === stepIndex;
+              const done = i < stepIndex;
+              return (
+                <React.Fragment key={id}>
+                  {i > 0 ? (
+                    <View style={[builderStyles.stepLine, i <= stepIndex ? { backgroundColor: ACCENT } : null]} />
+                  ) : null}
+                  <Pressable
+                    onPress={() => goToStep(i)}
+                    style={builderStyles.stepNode}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={STEP_LABEL[id]}
+                    testID={`task-builder-step-${id}`}
+                  >
+                    <View
+                      style={[
+                        builderStyles.stepDot,
+                        active ? { backgroundColor: ACCENT } : done ? { backgroundColor: ACCENT_SOFT } : null,
+                      ]}
+                    >
+                      {done ? (
+                        <Check size={16} color={ACCENT} strokeWidth={2.6} />
+                      ) : (
+                        <Icon size={16} color={active ? "#FFFFFF" : "#94A3B8"} strokeWidth={2.2} />
+                      )}
+                    </View>
+                    <Text style={[builderStyles.stepLabel, active || done ? { color: ACCENT_INK } : null]}>
+                      {STEP_LABEL[id]}
+                    </Text>
+                  </Pressable>
+                </React.Fragment>
+              );
+            })}
           </View>
 
           <ScrollView
-            style={{ maxHeight: scrollMaxHeight }}
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingBottom: (keyboardHeight > 0 ? 16 : insets.bottom + 24),
-            }}
+            style={{ flexGrow: 0, flexShrink: 1 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
             showsVerticalScrollIndicator
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             nestedScrollEnabled
             bounces
           >
-          {/* Title */}
-          <TextInput
-            className="text-xl font-semibold text-slate-900 dark:text-white py-4 border-b border-slate-100 dark:border-slate-800"
-            placeholder="Task title..."
-            placeholderTextColor="#94A3B8"
-            value={title}
-            onChangeText={(t) => {
-              setTitle(t);
-              setError(null);
-            }}
-            multiline
-            returnKeyType="next"
-            testID="title-input"
-          />
-
-          {/* Description */}
-          <TextInput
-            className="text-base text-slate-600 dark:text-slate-400 py-3 border-b border-slate-100 dark:border-slate-800"
-            placeholder="Add description (optional)"
-            placeholderTextColor="#94A3B8"
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={3}
-            testID="description-input"
-          />
-
-          {error ? (
-            <Text className="text-red-500 text-sm mt-2">{error}</Text>
+          {currentStep === "details" ? (
+          <>
+          {presentation.canChooseKind ? (
+            <>
+              <Text style={[formStyles.label, { marginTop: 4 }]}>Type</Text>
+              <View style={{ flexDirection: "row", gap: 10 }} testID="task-kind-selector">
+                {(["workspace_task", "reminder"] as TaskKind[]).map((option) => {
+                  const selected = presentation.kind === option;
+                  const Icon = option === "workspace_task" ? CheckSquare : Bell;
+                  return (
+                    <Pressable
+                      key={option}
+                      onPress={() => setSelectedKind(option)}
+                      style={[builderStyles.kindCard, selected ? builderStyles.kindCardSelected : null]}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Create ${option === "workspace_task" ? "Task" : "Reminder"}`}
+                      testID={`task-kind-${option}`}
+                    >
+                      <Icon size={18} color={selected ? ACCENT : "#64748B"} strokeWidth={2.2} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[builderStyles.kindTitle, selected ? { color: ACCENT_INK } : null]}>
+                          {option === "workspace_task" ? "Task" : "Reminder"}
+                        </Text>
+                        <Text style={builderStyles.kindSub} numberOfLines={1}>
+                          {option === "workspace_task" ? "Assigned, with a due date" : "Private to you"}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
           ) : null}
 
-          {/* Priority */}
-          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-            <Text className="text-sm font-semibold text-slate-500 mb-3">
-              Priority
-            </Text>
-            <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-              {PRIORITIES.map((p) => (
-                <TouchableOpacity
-                  key={p.value}
-                  onPress={() => setPriority(p.value)}
-                  className="px-3 py-1.5 rounded-full border"
-                  style={
-                    priority === p.value
-                      ? {
-                          backgroundColor: p.color + "20",
-                          borderColor: p.color,
-                        }
-                      : { borderColor: "#E2E8F0", backgroundColor: "transparent" }
+          {isReminder ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 11,
+                marginTop: 6,
+                paddingHorizontal: 4,
+                paddingVertical: 10,
+              }}
+              testID="reminder-private-note"
+            >
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#F0EFFF",
+                }}
+              >
+                <Lock size={15} color="#635BDB" strokeWidth={2.2} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B" }}>
+                  Private to you
+                </Text>
+                <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: "#64748B" }}>
+                  Hidden from your team · Excluded from Momentum
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+
+          <View style={{ marginTop: 16 }}>
+          <Text style={formStyles.label}>
+            {isReminder ? "Reminder title" : "Task title"}{" "}
+            <Text style={formStyles.required}>*</Text>
+          </Text>
+          <View style={formStyles.field}>
+            <TextInput
+              style={formStyles.fieldInput}
+              placeholder={isReminder ? "What should you remember?" : "What needs to get done?"}
+              placeholderTextColor="#94A3B8"
+              value={title}
+              onChangeText={(t) => {
+                setTitle(t.slice(0, 120));
+                setError(null);
+              }}
+              maxLength={120}
+              returnKeyType="next"
+              testID="title-input"
+            />
+            <Text style={formStyles.counter}>{title.length}/120</Text>
+          </View>
+
+          <Text style={[formStyles.label, { marginTop: 14 }]}>
+            Notes (optional)
+          </Text>
+          <View style={[formStyles.field, { minHeight: 88 }]}>
+            <TextInput
+              style={[formStyles.fieldInput, { minHeight: 52, textAlignVertical: "top" }]}
+              placeholder="Add context, instructions, or resources..."
+              placeholderTextColor="#94A3B8"
+              value={description}
+              onChangeText={(t) => setDescription(t.slice(0, 500))}
+              maxLength={500}
+              multiline
+              testID="description-input"
+            />
+            <Text style={formStyles.counter}>{description.length}/500</Text>
+          </View>
+
+          </View>
+
+          {!isReminder ? (
+            <View style={{ marginTop: 16 }}>
+              <Text style={formStyles.label}>Priority</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {PRIORITIES.map((p) => {
+                  const selected = priority === p.value;
+                  return (
+                    <TouchableOpacity
+                      key={p.value}
+                      onPress={() => setPriority(p.value)}
+                      style={[builderStyles.priority, selected ? builderStyles.prioritySelected : null]}
+                      testID={`priority-${p.value}`}
+                    >
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.color }} />
+                      <Text style={{ fontSize: 13, fontWeight: selected ? "700" : "600", color: selected ? ACCENT_INK : "#334155" }}>
+                        {p.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
+          {!isReminder && templates.length > 0 ? (
+            <Pressable
+              onPress={() => setShowTemplatePicker(true)}
+              style={[builderStyles.rowButton, { marginTop: 16 }]}
+              testID="use-template-button"
+            >
+              <BookOpen size={17} color="#64748B" strokeWidth={2} />
+              <Text style={builderStyles.rowButtonText}>Use a template</Text>
+              <ChevronRight size={16} color="#C4C9D4" strokeWidth={2.2} />
+            </Pressable>
+          ) : null}
+          </>
+          ) : null}
+
+          {currentStep === "when" ? (
+          <>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={formStyles.label}>
+                Due date <Text style={formStyles.required}>*</Text>
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(true)}
+                style={formStyles.choice}
+                testID="due-date-picker-button"
+              >
+                <Calendar size={16} color="#6366F1" strokeWidth={2} />
+                <Text style={formStyles.choiceText} numberOfLines={1}>
+                  {dueDate
+                    ? dueDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+                    : "Select date"}
+                </Text>
+                <ChevronRight size={15} color="#C4C9D4" strokeWidth={2.2} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={formStyles.label}>Due time</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!dueDate) {
+                    const today = new Date();
+                    today.setHours(23, 59, 59, 0);
+                    setDueDate(today);
                   }
-                  testID={`priority-${p.value}`}
-                >
-                  <Text
-                    className="text-xs font-semibold"
-                    style={{
-                      color: priority === p.value ? p.color : "#94A3B8",
-                    }}
-                  >
-                    {p.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                  if (!dueHasTime) {
+                    setDueHasTime(true);
+                    setDueDate((current) => suggestedDueClock(current ?? new Date()));
+                  }
+                  setShowTimePicker(true);
+                }}
+                style={formStyles.choice}
+                testID="due-time-picker-button"
+              >
+                <Clock size={16} color="#6366F1" strokeWidth={2} />
+                <Text style={formStyles.choiceText} numberOfLines={1}>
+                  {dueHasTime && dueDate
+                    ? dueDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                    : "Anytime"}
+                </Text>
+                <ChevronRight size={15} color="#C4C9D4" strokeWidth={2.2} />
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* Due Date */}
-          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-            <Text className="text-sm font-semibold text-slate-500 mb-3">
-              Due Date <Text className="text-red-500">*</Text>
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowDatePicker(true)}
-              className="flex-row items-center px-4 py-3 rounded-xl border"
-              style={{ borderColor: dueDate ? "#4361EE" : "#E2E8F0", backgroundColor: dueDate ? "#4361EE0D" : "#F8FAFC" }}
-              testID="due-date-picker-button"
-            >
-              <Text className="text-lg mr-3">📅</Text>
-              <Text className="flex-1 text-sm font-medium" style={{ color: dueDate ? "#4361EE" : "#94A3B8" }}>
-                {dueDate
-                  ? dueDate.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" })
-                  : "Select a due date"}
-              </Text>
-              {dueDate ? (
-                <TouchableOpacity onPress={(e) => { e.stopPropagation(); setDueDate(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text className="text-slate-400 text-base">✕</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text className="text-slate-400">›</Text>
-              )}
-            </TouchableOpacity>
+          <View>
 
             {/* iOS inline picker shown in modal */}
             {Platform.OS === "ios" ? (
@@ -540,13 +1075,21 @@ export default function CreateTaskScreen() {
                       mode="date"
                       display="inline"
                       minimumDate={memberDueDateLimit ? new Date() : undefined}
-                      onChange={(_e, date) => { if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
+                      onChange={(_e, date) => {
+                        if (!date) return;
+                        const next = new Date(date);
+                        if (dueHasTime && dueDate) next.setHours(dueDate.getHours(), dueDate.getMinutes(), 0, 0);
+                        else next.setHours(23, 59, 59, 0);
+                        setDueDate(next);
+                        setError(null);
+                      }}
                       testID="date-time-picker"
                       style={{ alignSelf: "center", marginHorizontal: 8 }}
                     />
                     <TouchableOpacity
                       onPress={() => {
                         setDueDate(null);
+                        setDueHasTime(false);
                         setShowDatePicker(false);
                       }}
                       style={{
@@ -575,19 +1118,70 @@ export default function CreateTaskScreen() {
                   mode="date"
                   display="calendar"
                   minimumDate={memberDueDateLimit ? new Date() : undefined}
-                  onChange={(_e, date) => { setShowDatePicker(false); if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
+                  onChange={(_e, date) => {
+                    setShowDatePicker(false);
+                    if (!date) return;
+                    const next = new Date(date);
+                    if (dueHasTime && dueDate) next.setHours(dueDate.getHours(), dueDate.getMinutes(), 0, 0);
+                    else next.setHours(23, 59, 59, 0);
+                    setDueDate(next);
+                    setError(null);
+                  }}
                   testID="date-time-picker"
                 />
               ) : null
             )}
+
+            {Platform.OS === "ios" ? (
+              <Modal visible={showTimePicker} transparent animationType="slide">
+                <View className="flex-1 justify-end">
+                  <View className="bg-white dark:bg-slate-900 rounded-t-3xl" style={{ shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20 }}>
+                    <View className="flex-row items-center justify-between px-5 pt-4 pb-2">
+                      <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                        <Text className="text-slate-500 text-base">Cancel</Text>
+                      </TouchableOpacity>
+                      <Text className="text-base font-semibold text-slate-900 dark:text-white">Due time</Text>
+                      <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                        <Text className="text-indigo-600 font-semibold text-base">Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker
+                      value={dueDate ?? new Date()}
+                      mode="time"
+                      display="spinner"
+                      onChange={(_e, date) => {
+                        if (!date) return;
+                        setDueHasTime(true);
+                        setDueDate((current) => withDueClock(current ?? new Date(), date.getHours(), date.getMinutes()));
+                      }}
+                      testID="due-time-picker"
+                    />
+                    <View style={{ height: 12 }} />
+                  </View>
+                </View>
+              </Modal>
+            ) : showTimePicker ? (
+              <DateTimePicker
+                value={dueDate ?? new Date()}
+                mode="time"
+                display="spinner"
+                onChange={(_e, date) => {
+                  setShowTimePicker(false);
+                  if (!date) return;
+                  setDueHasTime(true);
+                  setDueDate((current) => withDueClock(current ?? new Date(), date.getHours(), date.getMinutes()));
+                }}
+                testID="due-time-picker"
+              />
+            ) : null}
           </View>
 
           {/* Recurring */}
-          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+          <View style={[builderStyles.card, { marginTop: 18 }]}>
             <View className="flex-row items-center justify-between mb-3">
               <View>
                 <Text className="text-sm font-semibold text-slate-500">
-                  Recurring task
+                  {isReminder ? "Recurring reminder" : "Recurring task"}
                 </Text>
                 {isRecurring ? (
                   <Text className="text-xs text-slate-400 mt-0.5">
@@ -708,7 +1302,145 @@ export default function CreateTaskScreen() {
             ) : null}
           </View>
 
+          </>
+          ) : null}
+
+          {currentStep === "who" ? (
+          <>
+          <View style={builderStyles.summary} testID="task-builder-summary">
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }} numberOfLines={2}>
+              {title.trim() || "Untitled task"}
+            </Text>
+            <Text style={{ marginTop: 3, fontSize: 12.5, color: "#64748B" }} numberOfLines={1}>
+              {[
+                dueDate
+                  ? `Due ${dueDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}${
+                      dueHasTime ? `, ${dueDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""
+                    }`
+                  : "No due date",
+                `${PRIORITIES.find((p) => p.value === priority)?.label ?? "Medium"} priority`,
+                isRecurring ? "Repeats" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </Text>
+          </View>
+
+          {!isReminder && members.length > 0 ? (
+            <View style={{ marginTop: 16 }}>
+              <Text style={formStyles.label}>
+                Assign to <Text style={formStyles.required}>*</Text>
+              </Text>
+              <Pressable
+                onPress={() => setShowAssigneePicker(true)}
+                style={formStyles.choice}
+                testID="assignee-picker-button"
+              >
+                <Users size={16} color="#6366F1" strokeWidth={2} />
+                <Text style={[formStyles.choiceText, selectedAssignees.length === 0 ? { color: "#64748B", fontWeight: "500" } : null]} numberOfLines={1}>
+                  {selectedAssignees.length === 0
+                    ? "Select associates"
+                    : allAssigneesSelected
+                      ? "All associates"
+                      : `${selectedAssignees.length} associate${selectedAssignees.length === 1 ? "" : "s"} selected`}
+                </Text>
+                <ChevronRight size={15} color="#C4C9D4" strokeWidth={2.2} />
+              </Pressable>
+              {selectedMembers.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginTop: 12, marginHorizontal: -16 }}
+                  contentContainerStyle={{ paddingHorizontal: 16, gap: 14 }}
+                  testID="assignee-avatars"
+                >
+                  {selectedMembers.map((member) => (
+                    <View key={member.userId} style={{ width: 56, alignItems: "center" }}>
+                      <View style={{ width: 48, height: 48 }}>
+                        <UserAvatar
+                          user={member.user}
+                          size={48}
+                          radius={24}
+                          backgroundColor={ACCENT_SOFT}
+                          textColor={ACCENT}
+                          fontSize={15}
+                        />
+                        <Pressable
+                          onPress={() => toggleAssignee(member.userId)}
+                          hitSlop={8}
+                          style={builderStyles.avatarRemove}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${memberDisplayName(member)}`}
+                          testID={`assignee-avatar-remove-${member.userId}`}
+                        >
+                          <X size={10} color="#FFFFFF" strokeWidth={3} />
+                        </Pressable>
+                      </View>
+                      <Text style={builderStyles.avatarName} numberOfLines={1}>
+                        {myId && member.userId === myId
+                          ? "You"
+                          : (member.user.name?.trim() || member.user.email || "Unknown").split(/\s+/)[0]}
+                      </Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Joint Task — only shown when 2+ assignees selected */}
+          {!isReminder && selectedAssignees.length >= 2 ? (
+            <View style={[builderStyles.card, { marginTop: 14 }]}>
+              <View className="flex-row items-center justify-between">
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text className="text-sm font-semibold text-slate-500">Joint Task</Text>
+                  <Text className="text-xs text-slate-400 mt-0.5">
+                    Everyone works on one shared task
+                  </Text>
+                </View>
+                <Switch
+                  value={isJoint}
+                  onValueChange={(val) => setIsJoint(val)}
+                  trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
+                  thumbColor="white"
+                  testID="joint-task-switch"
+                />
+              </View>
+              {isJoint ? (
+                <View
+                  className="mt-3 px-3 py-2.5 rounded-xl"
+                  style={{ backgroundColor: "#EFF6FF" }}
+                  testID="joint-task-banner"
+                >
+                  <Text className="text-xs text-blue-600">
+                    Subtasks are shared — completing one marks it done for the whole team.
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={() => setMoreOpen((open) => !open)}
+            style={formStyles.moreRow}
+            testID="more-options-toggle"
+          >
+            <SlidersHorizontal size={16} color={ACCENT} strokeWidth={2} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>More options</Text>
+              <Text style={{ marginTop: 1, fontSize: 12, color: "#94A3B8" }}>Photo, subtasks, save as template</Text>
+            </View>
+            {moreOpen ? (
+              <ChevronUp size={16} color="#94A3B8" strokeWidth={2.2} />
+            ) : (
+              <ChevronDown size={16} color="#94A3B8" strokeWidth={2.2} />
+            )}
+          </Pressable>
+
+          {moreOpen ? (
+          <>
           {/* Photo attachment */}
+          {!isReminder ? (
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <Text className="text-sm font-semibold text-slate-500 mb-3">Photo</Text>
             {attachmentUri ? (
@@ -739,8 +1471,10 @@ export default function CreateTaskScreen() {
               </TouchableOpacity>
             )}
           </View>
+          ) : null}
 
           {/* Subtasks */}
+          {!isReminder ? (
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <Text className="text-sm font-semibold text-slate-500 mb-3">
               Subtasks{subtaskTitles.length > 0 ? ` (${subtaskTitles.length})` : ""}
@@ -779,99 +1513,80 @@ export default function CreateTaskScreen() {
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* Assignees */}
-          {members.length > 0 ? (
-            <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 }}>
-                <Text className="text-sm font-semibold text-slate-500">Assign to</Text>
-                <Text style={{ fontSize: 12, color: "#EF4444", fontWeight: "600" }}>*</Text>
-              </View>
-              <Pressable
-                onPress={() => setShowAssigneePicker(true)}
-                style={{
-                  borderWidth: 1.5,
-                  borderColor: selectedAssignees.length > 0 ? "#4361EE" : "#E2E8F0",
-                  borderRadius: 12,
-                  paddingHorizontal: 12,
-                  paddingVertical: 11,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  backgroundColor: selectedAssignees.length > 0 ? "#4361EE0D" : "#FFFFFF",
-                }}
-                testID="assignee-picker-button"
-              >
-                <Text style={{ fontSize: 13, color: "#334155", fontWeight: "500", flex: 1 }} numberOfLines={1}>
-                  {selectedAssignees.length === 0
-                    ? "Select associates"
-                    : allAssigneesSelected
-                      ? "All associates"
-                      : `${selectedAssignees.length} associate${selectedAssignees.length === 1 ? "" : "s"} selected`}
-                </Text>
-                <ChevronDown size={16} color="#64748B" />
-              </Pressable>
-            </View>
           ) : null}
 
-          {/* Joint Task — only shown when 2+ assignees selected */}
-          {selectedAssignees.length >= 2 ? (
-            <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-              <View className="flex-row items-center justify-between">
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text className="text-sm font-semibold text-slate-500">Joint Task</Text>
-                  <Text className="text-xs text-slate-400 mt-0.5">
-                    Everyone works on one shared task
-                  </Text>
-                </View>
-                <Switch
-                  value={isJoint}
-                  onValueChange={(val) => setIsJoint(val)}
-                  trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
-                  thumbColor="white"
-                  testID="joint-task-switch"
-                />
-              </View>
-              {isJoint ? (
-                <View
-                  className="mt-3 px-3 py-2.5 rounded-xl"
-                  style={{ backgroundColor: "#EFF6FF" }}
-                  testID="joint-task-banner"
-                >
-                  <Text className="text-xs text-blue-600">
-                    Subtasks are shared — completing one marks it done for the whole team.
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
-          <TouchableOpacity
-            onPress={handleCreate}
-            disabled={createMutation.isPending}
-            style={{
-              marginTop: 8,
-              backgroundColor: "#4361EE",
-              borderRadius: 14,
-              paddingVertical: 14,
-              alignItems: "center",
-            }}
-            testID="create-button"
+          <Pressable
+            onPress={handleSaveAsTemplate}
+            disabled={savingTemplate}
+            style={[builderStyles.rowButton, { marginTop: 14 }]}
+            testID="save-template-button"
           >
-            {createMutation.isPending ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Create Task</Text>
-            )}
-          </TouchableOpacity>
+            {savingTemplate ? <ActivityIndicator color={ACCENT} size="small" /> : <Bookmark size={17} color="#64748B" strokeWidth={2} />}
+            <Text style={builderStyles.rowButtonText}>Save as template</Text>
+          </Pressable>
+          </>
+          ) : null}
+          </>
+          ) : null}
           </ScrollView>
+
+          <View
+            style={[
+              builderStyles.footer,
+              { paddingBottom: keyboardHeight > 0 || dialog ? 14 : insets.bottom + 12 },
+            ]}
+          >
+            {error ? (
+              <Text style={builderStyles.error} testID="task-builder-error">
+                {error}
+              </Text>
+            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              {stepIndex === 0 ? null : (
+                <Pressable
+                  onPress={() => setStep(stepIndex - 1)}
+                  style={builderStyles.backButton}
+                  accessibilityRole="button"
+                  testID="back-step-button"
+                >
+                  <ArrowLeft size={17} color="#334155" strokeWidth={2.2} />
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#334155" }}>Back</Text>
+                </Pressable>
+              )}
+              <TouchableOpacity
+                onPress={isLastStep ? () => handleCreate() : () => goToStep(stepIndex + 1)}
+                disabled={createMutation.isPending}
+                style={[builderStyles.primary, { flex: 1 }]}
+                testID={isLastStep ? "create-button" : "next-step-button"}
+                accessibilityRole="button"
+                accessibilityLabel={isLastStep ? presentation.createLabel : `Next: ${STEP_LABEL[steps[stepIndex + 1]]}`}
+              >
+                {createMutation.isPending ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <>
+                    <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>
+                      {isLastStep ? presentation.createLabel : `Next: ${STEP_LABEL[steps[stepIndex + 1]]}`}
+                    </Text>
+                    {isLastStep ? null : <ArrowRight size={17} color="white" strokeWidth={2.4} />}
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </View>
 
-      <Modal visible={showAssigneePicker} transparent animationType="slide" onRequestClose={() => setShowAssigneePicker(false)}>
+      <Modal visible={showAssigneePicker} transparent animationType="slide" onRequestClose={() => {
+        setShowAssigneePicker(false);
+        setAssigneeSearch("");
+      }}>
         <Pressable
           style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
-          onPress={() => setShowAssigneePicker(false)}
+          onPress={() => {
+            setShowAssigneePicker(false);
+            setAssigneeSearch("");
+          }}
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View
@@ -888,11 +1603,56 @@ export default function CreateTaskScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 }}>
                 <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Assign to</Text>
                 <Pressable
-                  onPress={() => setShowAssigneePicker(false)}
+                  onPress={() => {
+                    setShowAssigneePicker(false);
+                    setAssigneeSearch("");
+                  }}
                   style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
                 >
                   <X size={16} color="#64748B" />
                 </Pressable>
+              </View>
+              <View
+                style={{
+                  marginHorizontal: 20,
+                  marginBottom: 10,
+                  minHeight: 42,
+                  paddingHorizontal: 12,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 9,
+                  borderRadius: 12,
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                }}
+              >
+                <Search size={17} color="#94A3B8" strokeWidth={2} />
+                <TextInput
+                  value={assigneeSearch}
+                  onChangeText={setAssigneeSearch}
+                  placeholder="Search members"
+                  placeholderTextColor="#94A3B8"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    fontSize: 14,
+                    color: "#0F172A",
+                  }}
+                  testID="assignee-search-input"
+                />
+                {assigneeSearch ? (
+                  <Pressable
+                    onPress={() => setAssigneeSearch("")}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear member search"
+                  >
+                    <X size={16} color="#94A3B8" />
+                  </Pressable>
+                ) : null}
               </View>
               <Pressable
                 onPress={toggleAllAssignees}
@@ -917,12 +1677,12 @@ export default function CreateTaskScreen() {
                 {allAssigneesSelected ? <Check size={16} color="#4361EE" /> : null}
               </Pressable>
               <ScrollView
-                style={{ maxHeight: ASSIGNEE_SHEET_MAX_HEIGHT - 210 }}
+                style={{ maxHeight: ASSIGNEE_SHEET_MAX_HEIGHT - 260 }}
                 contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
                 showsVerticalScrollIndicator
                 keyboardShouldPersistTaps="handled"
               >
-                {assigneeOptions.map((member, idx) => {
+                {filteredAssigneeOptions.map((member, idx) => {
                   const isSelected = selectedAssignees.includes(member.userId);
                   return (
                     <Pressable
@@ -933,20 +1693,22 @@ export default function CreateTaskScreen() {
                         flexDirection: "row",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        borderBottomWidth: idx === assigneeOptions.length - 1 ? 0 : 1,
+                        gap: 12,
+                        borderBottomWidth: idx === filteredAssigneeOptions.length - 1 ? 0 : 1,
                         borderBottomColor: "#F1F5F9",
                       }}
                       testID={`assignee-${member.userId}`}
                     >
-                      <UserAvatar
-                        user={member.user}
-                        size={32}
-                        radius={16}
-                        backgroundColor="#EEF2FF"
-                        textColor="#4361EE"
-                        fontSize={11}
-                        style={{ marginRight: 10 }}
-                      />
+                      <View style={{ width: 32, height: 32, flexShrink: 0 }}>
+                        <UserAvatar
+                          user={member.user}
+                          size={32}
+                          radius={16}
+                          backgroundColor="#EEF2FF"
+                          textColor="#4361EE"
+                          fontSize={11}
+                        />
+                      </View>
                       <Text style={{ fontSize: 15, color: "#334155", fontWeight: isSelected ? "700" : "500", flex: 1 }} numberOfLines={1}>
                         {memberDisplayName(member)}
                       </Text>
@@ -954,9 +1716,19 @@ export default function CreateTaskScreen() {
                     </Pressable>
                   );
                 })}
+                {filteredAssigneeOptions.length === 0 ? (
+                  <View style={{ paddingVertical: 28, alignItems: "center" }}>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B" }}>
+                      No members found
+                    </Text>
+                  </View>
+                ) : null}
               </ScrollView>
               <TouchableOpacity
-                onPress={() => setShowAssigneePicker(false)}
+                onPress={() => {
+                  setShowAssigneePicker(false);
+                  setAssigneeSearch("");
+                }}
                 style={{
                   marginHorizontal: 20,
                   marginTop: 8,
@@ -1022,7 +1794,19 @@ export default function CreateTaskScreen() {
       <Modal visible={showSplitConfirm} transparent animationType="fade" onRequestClose={() => setShowSplitConfirm(false)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
           <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full" style={{ shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 24 }}>
-            <Text className="text-base font-bold text-slate-900 dark:text-white mb-3">Creating separate tasks</Text>
+            <View className="flex-row items-start justify-between mb-3" style={{ gap: 12 }}>
+              <Text className="flex-1 text-base font-bold text-slate-900 dark:text-white">Creating separate tasks</Text>
+              {/* Backing out returns to the form with nothing created. */}
+              <TouchableOpacity
+                onPress={() => setShowSplitConfirm(false)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                testID="split-confirm-close"
+              >
+                <X size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
             <Text className="text-sm text-slate-600 dark:text-slate-300 mb-1">
               {"You've selected "}
               <Text style={{ fontWeight: "bold" }}>{selectedAssignees.length} people</Text>
@@ -1042,7 +1826,7 @@ export default function CreateTaskScreen() {
               <Text className="text-sm font-semibold text-white">Enable Joint Task</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={confirmCreate}
+              onPress={() => confirmCreate()}
               className="py-3 rounded-xl items-center border"
               style={{ borderColor: "#CBD5E1" }}
               testID="split-confirm-create-separate"

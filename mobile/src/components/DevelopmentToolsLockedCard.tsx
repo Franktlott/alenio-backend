@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Image, Pressable, Linking } from "react-native";
+import { View, Text, Image, Pressable, Linking, Platform } from "react-native";
 import {
   Lock,
   Target,
@@ -43,6 +43,10 @@ export function DevelopmentToolsLockedCard({
   const features = isOwner ? OWNER_FEATURES : MEMBER_FEATURES;
 
   const openOwnerManage = async () => {
+    if (Platform.OS === "android") {
+      router.push("/account-hub");
+      return;
+    }
     const url = webBillingUrlForTeam(teamId ?? undefined, { subscribe: true });
     try {
       const can = await Linking.canOpenURL(url);

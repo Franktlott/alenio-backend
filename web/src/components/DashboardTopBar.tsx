@@ -1,44 +1,38 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import type { WebMeUser } from "../lib/api";
 import { JoinRequestBell } from "./JoinRequestBell";
 import { VideoMeetingTopBarJoin } from "./VideoMeetingTopBarJoin";
-import { UserAvatar } from "./UserAvatar";
+import { SenecaTopBarButton } from "./seneca/SenecaTopBarButton";
+
+export type TopBarWorkspaceCallout = {
+  kind: "read_only";
+  canChoosePlan: boolean;
+};
 
 type Props = {
   user: WebMeUser | null;
   pageTitle: string;
   pageSubtitle?: string;
   selectedTeamId?: string;
-  /** Optional extra count shown on the bell badge (join requests are included automatically). */
-  notificationCount?: number;
   /** Optional brand mark shown above the page title (e.g. Alenio Go logo). */
   brandHeader?: ReactNode;
   /** Alenio Go dashboard styling — borderless header on grey background. */
   variant?: "default" | "go";
-  /** Role shown under the user name (Go header uses this instead of email). */
-  roleLabel?: string;
   /** Extra content before bell/profile (e.g. Go workspace status). */
   actionsPrefix?: ReactNode;
+  workspaceCallout?: TopBarWorkspaceCallout | null;
 };
-
-function roleChevron() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
 
 export function DashboardTopBar({
   user,
   pageTitle,
   pageSubtitle,
   selectedTeamId = "",
-  notificationCount = 0,
   brandHeader,
   variant = "default",
-  roleLabel,
   actionsPrefix,
+  workspaceCallout = null,
 }: Props) {
   const isGo = variant === "go";
 
@@ -59,29 +53,23 @@ export function DashboardTopBar({
             {pageSubtitle ? <p className="enterprise-topbar-subtitle">{pageSubtitle}</p> : null}
           </div>
         )}
+        {workspaceCallout?.kind === "read_only" ? (
+          <p className="enterprise-topbar-callout" role="status" data-testid="workspace-access-banner">
+            <span>Read-only</span>
+            {workspaceCallout.canChoosePlan ? (
+              <Link to="/billing">Choose a plan</Link>
+            ) : (
+              <span className="enterprise-topbar-callout-hint">Ask the owner to upgrade</span>
+            )}
+          </p>
+        ) : null}
       </div>
 
       <div className="enterprise-topbar-actions">
         {!isGo ? <VideoMeetingTopBarJoin selectedTeamId={selectedTeamId} user={user} /> : null}
         {actionsPrefix}
-        <JoinRequestBell extraNotificationCount={notificationCount} />
-        <div className="enterprise-topbar-profile" data-testid="topbar-profile">
-          <UserAvatar
-            user={user ?? { name: null, email: null, image: null }}
-            className="enterprise-topbar-avatar"
-            imgClassName="enterprise-topbar-avatar-img"
-            alt={user?.name ?? user?.email ?? "Account"}
-          />
-          <div className="enterprise-topbar-profile-text">
-            <span className="enterprise-topbar-profile-name">{user?.name ?? user?.email ?? "Account"}</span>
-            {roleLabel ? (
-              <span className="enterprise-topbar-profile-role">{roleLabel}</span>
-            ) : user?.email && user.email.trim() !== (user.name ?? "").trim() ? (
-              <span className="enterprise-topbar-profile-role">{user.email}</span>
-            ) : null}
-          </div>
-          {isGo ? <span className="enterprise-topbar-profile-chevron">{roleChevron()}</span> : null}
-        </div>
+        {!isGo ? <SenecaTopBarButton /> : null}
+        <JoinRequestBell />
       </div>
     </header>
   );

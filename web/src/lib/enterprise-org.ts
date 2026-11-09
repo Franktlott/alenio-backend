@@ -40,14 +40,13 @@ export function canManageEnterpriseGoForTeam(
   );
 }
 
-/** True when `teamId` is a personal membership or an enterprise org workspace the user can access. */
+/** True when `teamId` is a workspace the user is a member of. */
 export function isKnownEnterpriseWorkspace(
-  me: WebMeUser | null | undefined,
+  _me: WebMeUser | null | undefined,
   personalTeams: Array<{ id: string }> | null | undefined,
   teamId: string | undefined,
 ): boolean {
   const id = teamId?.trim() ?? "";
   if (!id) return false;
-  if (personalTeams?.some((t) => t.id === id)) return true;
-  return enterpriseOrgTeams(me).some((t) => t.id === id);
+  return personalTeams?.some((t) => t.id === id) ?? false;
 }

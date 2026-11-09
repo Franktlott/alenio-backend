@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Building2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { AlenioNoticeModal } from "../components/AlenioNoticeModal";
@@ -14,24 +15,116 @@ import {
   planLabel,
   billingChannelLabel,
   setAdminUserPlatformAdmin,
+  type AdminTeamRow,
   type AdminUserDetail,
   type AdminUserRow,
 } from "../lib/admin-api";
+import {
+  AlenioDataTable,
+  EmptyState,
+  ErrorState,
+  StatusIndicator,
+  type AlenioColumn,
+  type IndicatorTone,
+} from "../components/ui";
+import { staffCan } from "../lib/staff-access";
 import { SenecaStudioPage } from "./settings/SenecaStudioPage";
-import { AdminEnterpriseCustomersPanel } from "./AdminEnterpriseCustomersPanel";
 
-type AdminSection = "users" | "workspaces" | "enterprise-customers" | "seneca-studio";
+type AdminSection = "users" | "workspaces" | "seneca-studio";
+
+const SUBSCRIPTION_TONE: Record<string, IndicatorTone> = {
+  active: "success",
+  trialing: "info",
+  past_due: "warning",
+  unpaid: "danger",
+  canceled: "neutral",
+  incomplete: "warning",
+};
+
+function subscriptionStatusLabel(status: string): string {
+  const text = status.replace(/_/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const WORKSPACE_COLUMNS: AlenioColumn<AdminTeamRow>[] = [
+  {
+    id: "name",
+    header: "Workspace",
+    primary: true,
+    cell: (team) => <span className="al-cell-title">{team.name}</span>,
+  },
+  {
+    id: "account",
+    header: "Account",
+    width: "164px",
+    cell: (team) =>
+      team.billingChannel === "enterprise" || team.organization ? (
+        <span className="al-cell-copy">
+          <span className="al-cell-inline">
+            <StatusIndicator tone="accent">Enterprise</StatusIndicator>
+          </span>
+          {team.organization?.name ? <span className="al-cell-sub">{team.organization.name}</span> : null}
+        </span>
+      ) : (
+        <span className="al-cell-muted">{billingChannelLabel(team)}</span>
+      ),
+  },
+  {
+    id: "plan",
+    header: "Plan",
+    width: "104px",
+    cell: (team) => planLabel(team.subscription.plan),
+  },
+  {
+    id: "status",
+    header: "Status",
+    width: "112px",
+    cell: (team) => (
+      <StatusIndicator tone={SUBSCRIPTION_TONE[team.subscription.status] ?? "neutral"}>
+        {subscriptionStatusLabel(team.subscription.status)}
+      </StatusIndicator>
+    ),
+  },
+  {
+    id: "members",
+    header: "Members",
+    width: "96px",
+    align: "right",
+    cell: (team) => <span className="al-cell-num">{team.memberCount}</span>,
+  },
+  {
+    id: "owner",
+    header: "Owner",
+    cell: (team) =>
+      team.owner ? (
+        <span className="al-cell-copy">
+          <span className="al-cell-title-text">{team.owner.name}</span>
+          <span className="al-cell-sub">{team.owner.email}</span>
+        </span>
+      ) : (
+        <span className="al-cell-muted">—</span>
+      ),
+  },
+  {
+    id: "created",
+    header: "Created",
+    width: "120px",
+    cell: (team) => <span className="al-cell-muted">{formatAdminDate(team.createdAt)}</span>,
+  },
+];
 
 function parseAdminSection(raw: string | null): AdminSection {
-  if (raw === "workspaces" || raw === "seneca-studio" || raw === "enterprise-customers") return raw;
+  if (raw === "workspaces" || raw === "seneca-studio") return raw;
   return "users";
 }
 
-export function AdminPage() {
+export function AdminPage({ section: forcedSection }: { section?: AdminSection } = {}) {
   const { me } = useEnterpriseShell();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const [section, setSection] = useState<AdminSection>(() => parseAdminSection(searchParams.get("tab")));
+  const [section, setSection] = useState<AdminSection>(
+    () => forcedSection ?? parseAdminSection(searchParams.get("tab")),
+  );
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -41,10 +134,10 @@ export function AdminPage() {
   );
 
   useEffect(() => {
-    const next = parseAdminSection(searchParams.get("tab"));
+    const next = forcedSection ?? parseAdminSection(searchParams.get("tab"));
     setSection((prev) => (prev === next ? prev : next));
     if (next !== "users") setSelectedUserId(null);
-  }, [searchParams]);
+  }, [searchParams, forcedSection]);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 280);
@@ -73,8 +166,9 @@ export function AdminPage() {
     return <EnterprisePageLoading label="Loading administration" />;
   }
 
-  if (me === null || me.isAdmin !== true) {
-    return <Navigate to="/dashboard" replace />;
+  const neededAbility = section === "seneca-studio" ? "seneca.view" : section === "workspaces" ? "teams.view" : "users.view";
+  if (me === null || !staffCan(me, neededAbility)) {
+    return <Navigate to="/settings" replace />;
   }
 
   const currentUserId = me.id;
@@ -176,17 +270,10 @@ export function AdminPage() {
           title: "Seneca Studio",
           subtitle: "Platform-wide coaching tone, rules, knowledge, and templates for every workspace.",
         }
-      : section === "enterprise-customers"
-        ? {
-            title: "Enterprise customers",
-            subtitle:
-              "Contract company accounts (SSO, SCIM, multi-workspace) — not the same as self-serve Pro / Operations plans.",
-          }
       : section === "workspaces"
         ? {
             title: "Workspaces",
-            subtitle:
-              "All workspaces. Self-serve rows are Stripe/paid tiers; Enterprise rows belong to a contract customer.",
+            subtitle: "All workspaces and their plans.",
           }
         : {
             title: "Users",
@@ -202,8 +289,6 @@ export function AdminPage() {
     >
       {section === "seneca-studio" ? (
         <SenecaStudioPage scope="platform" embedded />
-      ) : section === "enterprise-customers" ? (
-        <AdminEnterpriseCustomersPanel />
       ) : (
         <>
           <div className="enterprise-admin-header">
@@ -380,70 +465,28 @@ export function AdminPage() {
             </aside>
           ) : null}
         </div>
-      ) : teamsQuery.isLoading ? (
-        <p className="enterprise-muted">Loading workspaces…</p>
       ) : teamsQuery.isError ? (
-        <p className="enterprise-muted">
+        <ErrorState>
           {teamsQuery.error instanceof Error ? teamsQuery.error.message : "Could not load workspaces."}
-        </p>
+        </ErrorState>
       ) : (
-        <div className="enterprise-table-wrap">
-          <table className="enterprise-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Account</th>
-                <th>Plan</th>
-                <th>Status</th>
-                <th>Members</th>
-                <th>Owner</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teams.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="enterprise-table-empty">
-                    No workspaces found
-                  </td>
-                </tr>
-              ) : (
-                teams.map((team) => (
-                  <tr key={team.id}>
-                    <td>{team.name}</td>
-                    <td>
-                      {team.billingChannel === "enterprise" || team.organization ? (
-                        <span>
-                          <span className="enterprise-admin-badge">Enterprise</span>
-                          {team.organization?.name ? (
-                            <span className="enterprise-muted" style={{ display: "block", fontSize: 12 }}>
-                              {team.organization.name}
-                            </span>
-                          ) : null}
-                        </span>
-                      ) : (
-                        <span className="enterprise-muted">{billingChannelLabel(team)}</span>
-                      )}
-                    </td>
-                    <td>{planLabel(team.subscription.plan)}</td>
-                    <td>{team.subscription.status}</td>
-                    <td>{team.memberCount}</td>
-                    <td>
-                      {team.owner ? (
-                        <span className="enterprise-admin-owner">
-                          <span>{team.owner.name}</span>
-                          <span className="enterprise-muted">{team.owner.email}</span>
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td>{formatAdminDate(team.createdAt)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="al-ds">
+          <AlenioDataTable
+            label="Workspaces"
+            rows={teams}
+            columns={WORKSPACE_COLUMNS}
+            getRowId={(team) => team.id}
+            getRowTestId={(team) => `admin-team-row-${team.id}`}
+            loading={teamsQuery.isLoading}
+            loadingRows={4}
+            emptyState={
+              <EmptyState
+                icon={<Building2 size={20} strokeWidth={2} />}
+                title="No workspaces found"
+                description="Workspaces appear here as soon as someone creates one."
+              />
+            }
+          />
         </div>
       )}
         </>

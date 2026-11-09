@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,11 +16,13 @@ import {
   Camera,
   Check,
   ChevronRight,
+  ClipboardList,
+  Clock3,
   CreditCard,
-  FileText,
-  LogOut,
-  Settings2,
+  Lock,
+  Pencil,
   ShieldCheck,
+  Target,
   Trash2,
   Users,
   X,
@@ -32,8 +33,6 @@ import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
-import { applyTeamRemovedFromAccount } from "@/lib/workspace-switch";
-import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
 import type { Team } from "@/lib/types";
 import {
   WorkspaceTeamAvatar,
@@ -49,12 +48,37 @@ import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { colors } from "@/theme";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
 import { workspaceManagementCapabilities } from "@/lib/workspace-management";
+import { workspaceDevelopmentHref } from "@/lib/workspace-development-navigation";
+import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
+import {
+  COMMON_TIMEZONES,
+  formatTimeZoneLabel,
+  resolveTimeZone,
+} from "@/lib/timezone";
 
 type JoinRequestItem = {
   id: string;
   status: string;
   user: { id: string; name: string; email: string; image: string | null };
 };
+
+function workspacePlanLabel(plan: string) {
+  const normalized = plan.trim().toLowerCase();
+  if (normalized === "operations") return "Operations";
+  if (normalized === "pro" || normalized === "team") return "Pro";
+  return "Free";
+}
+
+function shortDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 function ManagementRow({
   icon,
@@ -63,6 +87,8 @@ function ManagementRow({
   onPress,
   testID,
   disabled = false,
+  locked = false,
+  trailingBadge,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -70,6 +96,8 @@ function ManagementRow({
   onPress: () => void;
   testID: string;
   disabled?: boolean;
+  locked?: boolean;
+  trailingBadge?: string;
 }) {
   return (
     <Pressable
@@ -77,7 +105,7 @@ function ManagementRow({
       disabled={disabled}
       style={[
         styles.menuRow,
-        disabled ? styles.menuRowDisabled : null,
+        disabled || locked ? styles.menuRowDisabled : null,
       ]}
       accessibilityRole="button"
       testID={testID}
@@ -85,11 +113,20 @@ function ManagementRow({
       <View style={styles.menuIcon}>{icon}</View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.menuTitle}>{title}</Text>
-        <Text style={styles.menuSub} numberOfLines={1}>
+        <Text style={styles.menuSub} numberOfLines={2}>
           {subtitle}
         </Text>
       </View>
-      <ChevronRight size={16} color="#B5BECA" />
+      {trailingBadge ? (
+        <View style={styles.menuBadge}>
+          <Text style={styles.menuBadgeText}>{trailingBadge}</Text>
+        </View>
+      ) : null}
+      {locked ? (
+        <Lock size={15} color="#8290A5" strokeWidth={2.2} />
+      ) : (
+        <ChevronRight size={14} color="#C0C7D1" />
+      )}
     </Pressable>
   );
 }
@@ -100,8 +137,6 @@ export default function WorkspaceSettingsScreen() {
   const { data: session } = useSession();
   const params = useLocalSearchParams<{ teamId?: string }>();
   const activeTeamId = useTeamStore((state) => state.activeTeamId);
-  const setActiveTeamId = useTeamStore((state) => state.setActiveTeamId);
-  const { switchWorkspace } = useSwitchWorkspace();
 
   const teamId =
     (typeof params.teamId === "string" && params.teamId) || activeTeamId || "";
@@ -110,10 +145,12 @@ export default function WorkspaceSettingsScreen() {
   const [name, setName] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [editingDetails, setEditingDetails] = useState(false);
+  const [nameEditorOpen, setNameEditorOpen] = useState(false);
+  const [timezonePickerOpen, setTimezonePickerOpen] = useState(false);
   const [standardsOpen, setStandardsOpen] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deletePassword, setDeletePassword] = useState("");
+  const [paidFeatureCallout, setPaidFeatureCallout] = useState<
+    "standards" | "templates" | null
+  >(null);
 
   const { data: teams = [] } = useQuery({
     queryKey: ["teams"],
@@ -136,8 +173,22 @@ export default function WorkspaceSettingsScreen() {
   const isOwner = capabilities.canDelete;
   const isLeader = capabilities.canManageMembers;
   const canManage = isLeader && access.canWrite;
-  const isCurrent = teamId === activeTeamId;
+  const hasPaidWorkspaceFeatures = access.features.team && access.canWrite;
   const memberCount = team?._count?.members ?? team?.members?.length;
+  const planLabel = workspacePlanLabel(access.plan);
+  const planPeriodDate = shortDate(access.currentPeriodEnd);
+  const planInfo =
+    access.status === "trialing"
+      ? access.remainingDays == null
+        ? "Trial active"
+        : `${access.remainingDays} day${access.remainingDays === 1 ? "" : "s"} left in trial`
+      : !access.canWrite
+        ? "Read-only workspace access"
+        : access.cancelAtPeriodEnd && planPeriodDate
+          ? `Plan ends ${planPeriodDate}`
+          : planPeriodDate
+            ? `Renews ${planPeriodDate}`
+            : "Active workspace access";
 
   const { data: teamStandards } = useQuery({
     queryKey: ["team", teamId, "workplaceStandards"],
@@ -161,71 +212,28 @@ export default function WorkspaceSettingsScreen() {
     if (!team) return;
     setName(team.name);
     setImage(team.image ?? null);
-    setEditingDetails(false);
-    setConfirmingDelete(false);
-    setDeletePassword("");
+    setNameEditorOpen(false);
   }, [team]);
 
-  const dirty = useMemo(() => {
-    if (!team) return false;
-    return (
-      name.trim() !== team.name || (image ?? null) !== (team.image ?? null)
-    );
-  }, [team, name, image]);
-
   const updateMutation = useMutation({
-    mutationFn: (data: { name: string; image: string | null }) =>
+    mutationFn: (data: {
+      name: string;
+      image: string | null;
+      location: string | null;
+      timezone?: string;
+    }) =>
       api.patch<Team>(`/api/teams/${teamId}`, data),
     onSuccess: (updated) => {
       void queryClient.invalidateQueries({ queryKey: ["teams"] });
       void queryClient.invalidateQueries({ queryKey: ["team", updated.id] });
-      setEditingDetails(false);
+      setNameEditorOpen(false);
+      setTimezonePickerOpen(false);
       toast({ title: "Workspace updated", preset: "done" });
     },
-    onError: () =>
-      toast({ title: "Failed to update workspace", preset: "error" }),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (body: { password: string }) =>
-      api.delete(`/api/teams/${teamId}`, body),
-    onSuccess: async () => {
-      await applyTeamRemovedFromAccount(
-        teamId,
-        activeTeamId,
-        setActiveTeamId,
-        queryClient,
-      );
-      toast({ title: "Workspace deleted", preset: "done" });
-      if (router.canGoBack()) router.back();
-      else router.replace("/(app)/profile");
+    onError: () => {
+      setImage(team?.image ?? null);
+      toast({ title: "Failed to update workspace", preset: "error" });
     },
-    onError: (error: Error) => {
-      toast({
-        title:
-          error.message === "Incorrect password"
-            ? "Incorrect password. Please try again."
-            : "Failed to delete workspace",
-        preset: "error",
-      });
-    },
-  });
-
-  const leaveMutation = useMutation({
-    mutationFn: () => api.delete(`/api/teams/${teamId}/leave`),
-    onSuccess: async () => {
-      await applyTeamRemovedFromAccount(
-        teamId,
-        activeTeamId,
-        setActiveTeamId,
-        queryClient,
-      );
-      toast({ title: "Left workspace", preset: "done" });
-      if (router.canGoBack()) router.back();
-      else router.replace("/(app)/profile");
-    },
-    onError: () =>
-      toast({ title: "Couldn’t leave workspace", preset: "error" }),
   });
 
   const approveMutation = useMutation({
@@ -262,6 +270,7 @@ export default function WorkspaceSettingsScreen() {
     if (result.canceled || !result.assets[0]) return;
 
     setUploadingImage(true);
+    let uploadedUrl: string | null = null;
     try {
       const uploaded = await uploadFile(
         result.assets[0].uri,
@@ -269,7 +278,8 @@ export default function WorkspaceSettingsScreen() {
         "image/jpeg",
         { purpose: "team", teamId },
       );
-      setImage(uploaded.url);
+      uploadedUrl = uploaded.url;
+      setImage(uploadedUrl);
     } catch (error) {
       toast({
         title: "Failed to upload photo",
@@ -279,11 +289,21 @@ export default function WorkspaceSettingsScreen() {
     } finally {
       setUploadingImage(false);
     }
+    if (!uploadedUrl) return;
+    updateMutation.mutate({
+      name: team?.name ?? name.trim(),
+      image: uploadedUrl,
+      location: team?.location ?? null,
+    });
   };
 
-  const saveDetails = () => {
-    if (!canManage || !name.trim()) return;
-    updateMutation.mutate({ name: name.trim(), image });
+  const saveName = () => {
+    if (!canManage || !name.trim() || name.trim() === team?.name) return;
+    updateMutation.mutate({
+      name: name.trim(),
+      image: team?.image ?? image,
+      location: team?.location ?? null,
+    });
   };
 
   if (!teamId) {
@@ -302,214 +322,116 @@ export default function WorkspaceSettingsScreen() {
   return (
     <SafeAreaView
       style={styles.screen}
-      edges={["top"]}
+      edges={[]}
       testID="workspace-settings-screen"
     >
-      <View style={styles.topBar}>
+      <View
+        style={[styles.topBar, { paddingTop: insets.top }]}
+      >
         <Pressable
           onPress={() =>
             router.canGoBack()
               ? router.back()
-              : router.replace("/manage-workspaces")
+              : router.replace("/(app)/execute")
           }
           hitSlop={10}
-          style={styles.topAction}
+          style={styles.headerAction}
           testID="workspace-settings-back"
         >
-          <ArrowLeft size={20} color="#0F172A" strokeWidth={2.2} />
+          <ArrowLeft size={20} color="#172033" strokeWidth={2.2} />
         </Pressable>
-        <Text style={styles.topTitle} numberOfLines={1}>
-          {team?.name ?? "Workspace"}
-        </Text>
-        {canManage && !confirmingDelete ? (
-          <Pressable
-            onPress={() => setEditingDetails(true)}
-            hitSlop={10}
-            style={styles.editAction}
-            testID="workspace-settings-edit"
-          >
-            <Text style={styles.editActionText}>Edit</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.topAction} />
-        )}
+        <View style={styles.topTitleWrap}>
+          <Text style={styles.topTitle} numberOfLines={1}>
+            Workspace
+          </Text>
+        </View>
+        <View style={styles.topActionPlaceholder} />
       </View>
 
       {isLoading || !team ? (
         <View style={styles.centered}>
           <ActivityIndicator color={colors.brand} />
         </View>
-      ) : confirmingDelete ? (
-        <ScrollView
-          contentContainerStyle={[
-            styles.deleteContent,
-            { paddingBottom: insets.bottom + 24 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text style={styles.deleteTitle}>Delete workspace?</Text>
-          <Text style={styles.deleteBody}>
-            This permanently deletes{" "}
-            <Text style={{ fontWeight: "700" }}>{team.name}</Text>, including
-            its tasks and messages. Members keep their accounts.
-          </Text>
-          <Text style={styles.fieldLabel}>Your account password</Text>
-          <TextInput
-            style={styles.input}
-            value={deletePassword}
-            onChangeText={setDeletePassword}
-            placeholder="Password"
-            placeholderTextColor="#94A3B8"
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            testID="delete-workspace-password-input"
-          />
-          <Pressable
-            onPress={() =>
-              deleteMutation.mutate({ password: deletePassword.trim() })
-            }
-            disabled={
-              deleteMutation.isPending || deletePassword.trim().length === 0
-            }
-            style={[
-              styles.primaryButton,
-              {
-                marginTop: 16,
-                backgroundColor:
-                  deletePassword.trim().length > 0 ? "#EF4444" : "#CBD5E1",
-              },
-            ]}
-            testID="confirm-delete-workspace"
-          >
-            {deleteMutation.isPending ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Delete forever</Text>
-            )}
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              setConfirmingDelete(false);
-              setDeletePassword("");
-            }}
-            style={styles.secondaryButton}
-            testID="cancel-delete-workspace"
-          >
-            <Text style={styles.secondaryButtonText}>Cancel</Text>
-          </Pressable>
-        </ScrollView>
       ) : (
         <SafeKeyboardAvoidingView style={{ flex: 1 }}>
           <ScrollView
+            style={styles.settingsScroll}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={[
-              styles.content,
-              { paddingBottom: insets.bottom + 32 },
-            ]}
+            contentContainerStyle={styles.content}
           >
-            <View style={styles.identityCard}>
-              <WorkspaceTeamAvatar team={team} size={62} radius={15} />
-              <View style={styles.identityText}>
-                <Text style={styles.workspaceName}>{team.name}</Text>
-                <Text style={styles.workspaceMeta}>
-                  {formatTeamRole(team.role)}
-                  {memberCount != null
-                    ? `\n${memberCount} Member${memberCount === 1 ? "" : "s"}`
-                    : ""}
-                </Text>
-              </View>
-              {!isCurrent ? (
-                <Pressable
-                  onPress={() => void switchWorkspace(teamId)}
-                  style={styles.useButton}
-                  testID="workspace-settings-make-current"
-                >
-                  <Text style={styles.useButtonText}>Use</Text>
-                </Pressable>
-              ) : (
-                <View style={styles.currentBadge}>
-                  <Check size={11} color={colors.brand} strokeWidth={2.7} />
-                  <Text style={styles.currentBadgeText}>Current</Text>
-                </View>
-              )}
-            </View>
-
-            {editingDetails ? (
-              <View style={styles.editCard}>
-                <Text style={styles.sectionLabel}>WORKSPACE DETAILS</Text>
-                <View style={styles.editPhotoRow}>
-                  <Pressable
-                    onPress={pickPhoto}
-                    disabled={uploadingImage}
-                    style={styles.photoWrap}
-                    testID="workspace-settings-pick-photo"
-                  >
+            <View style={styles.workspaceHero}>
+              <Pressable
+                onPress={pickPhoto}
+                disabled={!canManage || uploadingImage}
+                style={styles.workspaceHeroPhoto}
+                accessibilityRole={canManage ? "button" : undefined}
+                accessibilityLabel={canManage ? "Change workspace photo" : undefined}
+                testID="workspace-settings-hero-photo"
+              >
+                <WorkspaceTeamAvatar
+                  team={{ name: name || team.name, image }}
+                  size={76}
+                  radius={14}
+                />
+                {canManage ? (
+                  <View style={styles.workspaceHeroCamera}>
                     {uploadingImage ? (
-                      <View style={[styles.editPhoto, styles.photoPlaceholder]}>
-                        <ActivityIndicator color={colors.brand} />
-                      </View>
-                    ) : image ? (
-                      <Image
-                        source={{ uri: image }}
-                        style={styles.editPhoto}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <WorkspaceTeamAvatar
-                        team={{ name: team.name, image }}
-                        size={56}
-                        radius={14}
-                      />
-                    )}
-                    <View style={styles.cameraBadge}>
-                      <Camera size={12} color="#FFFFFF" />
-                    </View>
-                  </Pressable>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>Workspace name</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={name}
-                      onChangeText={setName}
-                      placeholder="Workspace name"
-                      placeholderTextColor="#94A3B8"
-                      testID="workspace-settings-name-input"
-                    />
-                  </View>
-                </View>
-                <View style={styles.editActions}>
-                  <Pressable
-                    onPress={() => {
-                      setName(team.name);
-                      setImage(team.image ?? null);
-                      setEditingDetails(false);
-                    }}
-                    style={styles.compactSecondary}
-                  >
-                    <Text style={styles.compactSecondaryText}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={saveDetails}
-                    disabled={
-                      updateMutation.isPending || !dirty || !name.trim()
-                    }
-                    style={[
-                      styles.compactPrimary,
-                      !dirty || !name.trim() ? styles.buttonDisabled : null,
-                    ]}
-                    testID="save-workspace-button"
-                  >
-                    {updateMutation.isPending ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.compactPrimaryText}>Save</Text>
+                      <Camera size={13} color="#FFFFFF" strokeWidth={2.4} />
                     )}
-                  </Pressable>
+                  </View>
+                ) : null}
+              </Pressable>
+              <View style={styles.workspaceHeroCopy}>
+                <View style={styles.workspaceNameRow}>
+                  <Text
+                    style={styles.workspaceName}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.62}
+                  >
+                    {team.name}
+                  </Text>
+                  {canManage ? (
+                    <Pressable
+                      onPress={() => {
+                        setName(team.name);
+                        setNameEditorOpen(true);
+                      }}
+                      hitSlop={8}
+                      style={styles.workspaceNameEdit}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit workspace name"
+                      testID="workspace-settings-edit-name"
+                    >
+                      <Pencil size={13} color="#5368E8" strokeWidth={2.3} />
+                    </Pressable>
+                  ) : null}
+                </View>
+                {team.location ? (
+                  <Text style={styles.workspaceLocation} numberOfLines={1}>
+                    {team.location}
+                  </Text>
+                ) : null}
+                <View style={styles.workspaceMeta}>
+                  <View style={styles.workspaceMetaItem}>
+                    <Users size={12} color="#64748B" strokeWidth={2.2} />
+                    <Text style={styles.workspaceMetaText}>
+                      {memberCount ?? 0} member{memberCount === 1 ? "" : "s"}
+                    </Text>
+                  </View>
+                  <View style={styles.workspaceMetaDivider} />
+                  <View style={styles.workspaceMetaItem}>
+                    <ShieldCheck size={12} color="#64748B" strokeWidth={2.2} />
+                    <Text style={styles.workspaceMetaText}>
+                      {formatTeamRole(team.role)}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            ) : null}
+            </View>
 
             {canManage && joinRequests.length > 0 ? (
               <View style={styles.requestsCard}>
@@ -554,114 +476,315 @@ export default function WorkspaceSettingsScreen() {
               </View>
             ) : null}
 
-            <Text style={styles.manageLabel}>MANAGE WORKSPACE</Text>
-            <View style={styles.menuCard}>
+            <Text style={styles.settingsHeading}>MANAGE</Text>
+            <View style={styles.settingsList}>
               <ManagementRow
-                icon={<FileText size={16} color="#64748B" />}
-                title="Workspace Details"
-                subtitle="View and edit name, description, and photo"
-                onPress={() => setEditingDetails(true)}
-                disabled={!canManage}
-                testID="workspace-settings-details"
+                icon={<Users size={18} color="#6D4AFF" strokeWidth={2.1} />}
+                title="Members"
+                subtitle="View and manage workspace members"
+                onPress={() =>
+                  router.push(workspaceDevelopmentHref(teamId))
+                }
+                trailingBadge={String(memberCount ?? 0)}
+                testID="workspace-settings-members"
               />
               <View style={styles.divider} />
               <ManagementRow
-                icon={<Users size={16} color="#64748B" />}
-                title="Members"
-                subtitle="Invite, remove, and manage members"
+                icon={<ShieldCheck size={18} color="#169B67" strokeWidth={2.1} />}
+                title="Roles & permissions"
+                subtitle="Control member access and roles"
                 onPress={() =>
                   router.push({
-                    pathname: "/team-directory",
+                    pathname: "/workspace-permissions",
                     params: { teamId },
                   })
                 }
-                testID="workspace-settings-members"
+                disabled={!isLeader}
+                testID="workspace-settings-permissions"
               />
-              {isLeader ? (
-                <>
-                  <View style={styles.divider} />
-                  <ManagementRow
-                    icon={<ShieldCheck size={16} color="#64748B" />}
-                    title="Permissions"
-                    subtitle="Manage roles and access"
-                    onPress={() =>
-                      router.push({
-                        pathname: "/team-directory",
-                        params: { teamId },
-                      })
-                    }
-                    testID="workspace-settings-permissions"
-                  />
-                </>
-              ) : null}
-              {isOwner ? (
-                <>
-                  <View style={styles.divider} />
-                  <ManagementRow
-                    icon={<Settings2 size={16} color="#64748B" />}
-                    title="Workspace Settings"
-                    subtitle={
-                      access.canWrite
-                        ? "Notifications, defaults, and preferences"
-                        : "Choose a plan to restore editing"
-                    }
-                    onPress={() => setStandardsOpen(true)}
-                    disabled={!access.canWrite}
-                    testID="workspace-settings-standards"
-                  />
-                </>
-              ) : null}
               <View style={styles.divider} />
               <ManagementRow
-                icon={<CreditCard size={16} color="#64748B" />}
-                title="Billing & Plan"
-                subtitle="View plan and billing details"
+                icon={
+                  <Target
+                    size={18}
+                    color={hasPaidWorkspaceFeatures ? "#3478F6" : "#8290A5"}
+                    strokeWidth={2.1}
+                  />
+                }
+                title="Development standards"
+                subtitle="Set expectations and track progress"
+                onPress={() => {
+                  if (!hasPaidWorkspaceFeatures) {
+                    setPaidFeatureCallout("standards");
+                    return;
+                  }
+                  setStandardsOpen(true);
+                }}
+                disabled={!isOwner}
+                locked={!hasPaidWorkspaceFeatures}
+                testID="workspace-settings-standards"
+              />
+              <View style={styles.divider} />
+              <ManagementRow
+                icon={
+                  <ClipboardList
+                    size={18}
+                    color={hasPaidWorkspaceFeatures ? "#F47B34" : "#8290A5"}
+                    strokeWidth={2.1}
+                  />
+                }
+                title="Check-in templates"
+                subtitle="Create and manage check-in templates"
+                onPress={() => {
+                  if (!hasPaidWorkspaceFeatures) {
+                    setPaidFeatureCallout("templates");
+                    return;
+                  }
+                  router.push({
+                    pathname: "/check-in-templates",
+                    params: { teamId },
+                  });
+                }}
+                disabled={!isLeader}
+                locked={!hasPaidWorkspaceFeatures}
+                testID="workspace-settings-check-in-templates"
+              />
+              <View style={styles.divider} />
+              <ManagementRow
+                icon={<CreditCard size={18} color="#7C3AED" strokeWidth={2} />}
+                title="Subscription & billing"
+                subtitle="Manage your plan and payment details"
                 onPress={() =>
                   router.push({ pathname: "/choose-plan", params: { teamId } })
                 }
                 testID="workspace-settings-plan"
               />
+              <View style={styles.divider} />
+              <ManagementRow
+                icon={<Trash2 size={18} color="#8290A5" strokeWidth={2} />}
+                title="Ownership & deletion"
+                subtitle="Transfer ownership or delete workspace"
+                onPress={() =>
+                  router.push({
+                    pathname: "/workspace-advanced",
+                    params: { teamId },
+                  })
+                }
+                testID="workspace-settings-advanced"
+              />
+              <View style={styles.divider} />
+              <ManagementRow
+                icon={<Clock3 size={18} color="#3478F6" strokeWidth={2.1} />}
+                title="Workspace timezone"
+                subtitle={formatTimeZoneLabel(resolveTimeZone(team.timezone))}
+                onPress={() => setTimezonePickerOpen(true)}
+                disabled={!isOwner || !access.canWrite}
+                testID="workspace-timezone-setting"
+              />
             </View>
-
-            {isOwner && access.canWrite ? (
-              <Pressable
-                onPress={() => setConfirmingDelete(true)}
-                style={styles.dangerCard}
-                testID="delete-workspace-button"
-              >
-                <Trash2 size={17} color="#EF4444" />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.dangerTitle}>Delete Workspace</Text>
-                  <Text style={styles.dangerSub}>
-                    Permanently remove this workspace
-                  </Text>
-                </View>
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={() => leaveMutation.mutate()}
-                disabled={leaveMutation.isPending}
-                style={styles.dangerCard}
-                testID="leave-workspace-button"
-              >
-                {leaveMutation.isPending ? (
-                  <ActivityIndicator color="#EF4444" />
-                ) : (
-                  <LogOut size={17} color="#EF4444" />
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.dangerTitle}>Leave Workspace</Text>
-                  <Text style={styles.dangerSub}>
-                    Remove yourself from this workspace
-                  </Text>
-                </View>
-              </Pressable>
-            )}
           </ScrollView>
+          <View
+            style={[
+              styles.summaryDock,
+              { paddingBottom: Math.max(insets.bottom, 10) },
+            ]}
+          >
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryHeading}>WORKSPACE SUMMARY</Text>
+              <View style={styles.summaryMetrics}>
+                <View style={styles.summaryMetric}>
+                  <View style={[styles.summaryIcon, styles.summaryIconMembers]}>
+                    <Users size={14} color="#6657E8" strokeWidth={2.2} />
+                  </View>
+                  <Text style={styles.summaryValue}>{memberCount ?? 0}</Text>
+                  <Text style={styles.summaryLabel}>
+                    Member{memberCount === 1 ? "" : "s"}
+                  </Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryMetric}>
+                  <View style={[styles.summaryIcon, styles.summaryIconRole]}>
+                    <ShieldCheck size={14} color="#16A36A" strokeWidth={2.2} />
+                  </View>
+                  <Text style={styles.summaryValue}>
+                    {formatTeamRole(team.role)}
+                  </Text>
+                  <Text style={styles.summaryLabel}>Your role</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryMetric}>
+                  <View style={[styles.summaryIcon, styles.summaryIconPlan]}>
+                    <CreditCard size={14} color="#3478F6" strokeWidth={2.2} />
+                  </View>
+                  <Text style={styles.summaryValue}>{planLabel}</Text>
+                  <Text style={styles.summaryLabel}>Plan</Text>
+                </View>
+              </View>
+              <View style={styles.summaryPlanInfo}>
+                <View
+                  style={[
+                    styles.summaryPlanDot,
+                    !access.canWrite ? styles.summaryPlanDotReadOnly : null,
+                  ]}
+                />
+                <Text style={styles.summaryPlanText} numberOfLines={1}>
+                  {planInfo}
+                </Text>
+              </View>
+            </View>
+          </View>
         </SafeKeyboardAvoidingView>
       )}
 
-      {isOwner && access.canWrite ? (
+      <AlenioBottomSheet
+        visible={timezonePickerOpen}
+        title="Workspace timezone"
+        subtitle="Timed workspace events are scheduled in this timezone."
+        onClose={() => setTimezonePickerOpen(false)}
+        compact
+        showCloseButton
+        testID="workspace-timezone-picker"
+      >
+        <View style={styles.timezoneOptions}>
+          {COMMON_TIMEZONES.map((timezone) => {
+            const selected = resolveTimeZone(team?.timezone) === timezone;
+            return (
+              <Pressable
+                key={timezone}
+                onPress={() => {
+                  if (!team || updateMutation.isPending) return;
+                  updateMutation.mutate({
+                    name: team.name,
+                    image: team.image ?? null,
+                    location: team.location ?? null,
+                    timezone,
+                  });
+                }}
+                disabled={updateMutation.isPending}
+                style={[
+                  styles.timezoneOption,
+                  selected ? styles.timezoneOptionSelected : null,
+                ]}
+                testID={`workspace-timezone-option-${timezone.replaceAll("/", "-")}`}
+              >
+                <Text
+                  style={[
+                    styles.timezoneOptionText,
+                    selected ? styles.timezoneOptionTextSelected : null,
+                  ]}
+                >
+                  {formatTimeZoneLabel(timezone)}
+                </Text>
+                {selected ? (
+                  <Check size={15} color={colors.brand} strokeWidth={2.5} />
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </AlenioBottomSheet>
+
+      <AlenioBottomSheet
+        visible={nameEditorOpen}
+        title="Edit workspace name"
+        subtitle="Choose the name members will see across Alenio."
+        onClose={() => {
+          setName(team?.name ?? "");
+          setNameEditorOpen(false);
+        }}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+        testID="workspace-name-editor"
+        footer={
+          <View style={styles.nameEditorActions}>
+            <Pressable
+              onPress={() => {
+                setName(team?.name ?? "");
+                setNameEditorOpen(false);
+              }}
+              style={styles.nameEditorCancel}
+            >
+              <Text style={styles.nameEditorCancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={saveName}
+              disabled={
+                updateMutation.isPending ||
+                !name.trim() ||
+                name.trim() === team?.name
+              }
+              style={[
+                styles.nameEditorSave,
+                !name.trim() || name.trim() === team?.name
+                  ? styles.nameEditorSaveDisabled
+                  : null,
+              ]}
+              testID="save-workspace-name-button"
+            >
+              {updateMutation.isPending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.nameEditorSaveText}>Save name</Text>
+              )}
+            </Pressable>
+          </View>
+        }
+      >
+        <Text style={styles.nameEditorLabel}>Workspace name</Text>
+        <TextInput
+          style={styles.nameEditorInput}
+          value={name}
+          onChangeText={setName}
+          placeholder="Workspace name"
+          placeholderTextColor="#94A3B8"
+          autoFocus
+          returnKeyType="done"
+          onSubmitEditing={saveName}
+          maxLength={80}
+          testID="workspace-settings-name-input"
+        />
+      </AlenioBottomSheet>
+
+      <AlenioBottomSheet
+        visible={paidFeatureCallout !== null}
+        title="Paid workspace feature"
+        subtitle="Available during your trial and on paid workspace plans."
+        onClose={() => setPaidFeatureCallout(null)}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+        testID="workspace-paid-feature-callout"
+      >
+        <View style={styles.paidFeatureCallout}>
+          <View style={styles.paidFeatureIcon}>
+            <Lock size={24} color="#5B45FF" strokeWidth={2.2} />
+          </View>
+          <Text style={styles.paidFeatureTitle}>
+            {paidFeatureCallout === "standards"
+              ? "Unlock Development Standards"
+              : "Unlock Check-in Templates"}
+          </Text>
+          <Text style={styles.paidFeatureBody}>
+            {paidFeatureCallout === "standards"
+              ? "Set shared development expectations and track progress across your workspace."
+              : "Create reusable templates for consistent, meaningful team check-ins."}
+          </Text>
+          <Pressable
+            onPress={() => setPaidFeatureCallout(null)}
+            style={({ pressed }) => [
+              styles.paidFeatureButton,
+              pressed ? styles.paidFeatureButtonPressed : null,
+            ]}
+            accessibilityRole="button"
+            testID="workspace-paid-feature-dismiss"
+          >
+            <Text style={styles.paidFeatureButtonText}>Got it</Text>
+          </Pressable>
+        </View>
+      </AlenioBottomSheet>
+
+      {isOwner && hasPaidWorkspaceFeatures ? (
         <WorkplaceStandardsSheet
           visible={standardsOpen}
           teamId={teamId}
@@ -687,39 +810,41 @@ export default function WorkspaceSettingsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F7F8FC",
+    backgroundColor: "#FFFFFF",
   },
   topBar: {
-    height: 52,
-    paddingHorizontal: 14,
+    minHeight: 82,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E8EDF3",
+    backgroundColor: "#FFFFFF",
   },
-  topAction: {
-    width: 38,
-    height: 38,
+  headerAction: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+  topActionPlaceholder: {
+    width: 34,
+    height: 34,
+  },
+  topTitleWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   topTitle: {
-    maxWidth: "68%",
     fontSize: 17,
     lineHeight: 21,
     fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.3,
-  },
-  editAction: {
-    minWidth: 38,
-    height: 38,
-    alignItems: "flex-end",
-    justifyContent: "center",
-  },
-  editActionText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.brand,
+    color: "#172033",
+    letterSpacing: -0.25,
   },
   centered: {
     flex: 1,
@@ -735,73 +860,130 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 18,
+    paddingBottom: 16,
   },
-  identityCard: {
-    minHeight: 86,
-    padding: 14,
+  settingsScroll: {
+    flex: 1,
+  },
+  workspaceHero: {
+    width: "100%",
+    alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
-    gap: 13,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#E7EBF1",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.035,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 1,
+    gap: 16,
+    paddingHorizontal: 2,
+    paddingVertical: 12,
+    marginBottom: 22,
   },
-  identityText: {
+  workspaceHeroCopy: {
     flex: 1,
     minWidth: 0,
   },
-  workspaceName: {
-    fontSize: 15,
-    lineHeight: 19,
-    fontWeight: "700",
-    color: "#0F172A",
+  workspaceHeroPhoto: {
+    position: "relative",
   },
-  workspaceMeta: {
-    marginTop: 5,
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "500",
-    color: "#7C8798",
+  workspaceHeroCamera: {
+    position: "absolute",
+    right: -4,
+    bottom: -4,
+    width: 25,
+    height: 25,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2.5,
+    borderColor: "#FFFFFF",
+    backgroundColor: colors.brand,
+    shadowColor: "#293A89",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  currentBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  workspaceNameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    borderRadius: 999,
-    backgroundColor: "#EEF2FF",
+    gap: 7,
   },
-  currentBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: colors.brand,
+  workspaceName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 21,
+    lineHeight: 26,
+    fontWeight: "800",
+    letterSpacing: -0.35,
+    color: "#18213A",
   },
-  useButton: {
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+  workspaceNameEdit: {
+    width: 26,
+    height: 26,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 9,
-    backgroundColor: "#EEF2FF",
-  },
-  useButtonText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.brand,
-  },
-  editCard: {
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 15,
     borderWidth: 1,
-    borderColor: "#E7EBF1",
+    borderColor: "#DDE2FF",
+    backgroundColor: "#F2F4FF",
+  },
+  workspaceLocation: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#64748B",
+  },
+  workspaceMeta: {
+    marginTop: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 9,
+  },
+  workspaceMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  workspaceMetaText: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  workspaceMetaDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: "#D7DDEA",
+  },
+  timezoneOptions: {
+    gap: 5,
+    paddingBottom: 4,
+  },
+  timezoneOption: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#E5EAF1",
     backgroundColor: "#FFFFFF",
+  },
+  timezoneOptionSelected: {
+    borderColor: "#C9D3FF",
+    backgroundColor: "#F1F3FF",
+  },
+  timezoneOptionText: {
+    flex: 1,
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: "#526078",
+  },
+  timezoneOptionTextSelected: {
+    color: "#3448C5",
   },
   sectionLabel: {
     marginBottom: 11,
@@ -811,86 +993,106 @@ const styles = StyleSheet.create({
     letterSpacing: 0.75,
     color: "#8A96A8",
   },
-  editPhotoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  photoWrap: {
-    position: "relative",
-  },
-  editPhoto: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-  },
-  photoPlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EEF2FF",
-  },
-  cameraBadge: {
-    position: "absolute",
-    right: -3,
-    bottom: -3,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
-    backgroundColor: colors.brand,
-  },
-  fieldLabel: {
-    marginBottom: 5,
-    fontSize: 10.5,
-    fontWeight: "600",
+  nameEditorLabel: {
+    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: "700",
     color: "#64748B",
   },
-  input: {
-    height: 42,
-    paddingHorizontal: 12,
-    borderRadius: 11,
+  nameEditorInput: {
+    height: 46,
+    paddingHorizontal: 13,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#DEE4EC",
+    borderColor: "#DCE2EC",
     backgroundColor: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 15,
     color: "#0F172A",
   },
-  editActions: {
-    marginTop: 12,
+  nameEditorActions: {
+    width: "100%",
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "flex-end",
     gap: 8,
   },
-  compactSecondary: {
-    minWidth: 76,
-    height: 36,
+  nameEditorCancel: {
+    minWidth: 82,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
     backgroundColor: "#F1F5F9",
   },
-  compactSecondaryText: {
+  nameEditorCancelText: {
     fontSize: 12,
     fontWeight: "700",
     color: "#64748B",
   },
-  compactPrimary: {
-    minWidth: 76,
-    height: 36,
+  nameEditorSave: {
+    minWidth: 106,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
     backgroundColor: colors.brand,
   },
-  buttonDisabled: {
+  nameEditorSaveDisabled: {
     backgroundColor: "#CBD5E1",
   },
-  compactPrimaryText: {
+  nameEditorSaveText: {
     fontSize: 12,
     fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  paidFeatureCallout: {
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingTop: 4,
+    paddingBottom: 2,
+  },
+  paidFeatureIcon: {
+    width: 52,
+    height: 52,
+    marginBottom: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    backgroundColor: "#F0EEFF",
+    borderWidth: 1,
+    borderColor: "#DDD8FF",
+  },
+  paidFeatureTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "800",
+    color: "#10213B",
+    textAlign: "center",
+  },
+  paidFeatureBody: {
+    maxWidth: 310,
+    marginTop: 7,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#6F7B91",
+    textAlign: "center",
+  },
+  paidFeatureButton: {
+    width: "100%",
+    minHeight: 44,
+    marginTop: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: "#5B45FF",
+  },
+  paidFeatureButtonPressed: {
+    opacity: 0.82,
+  },
+  paidFeatureButtonText: {
+    fontSize: 13.5,
+    fontWeight: "800",
     color: "#FFFFFF",
   },
   requestsCard: {
@@ -933,30 +1135,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#DCFCE7",
   },
-  manageLabel: {
-    marginTop: 22,
+  settingsList: {
+    overflow: "hidden",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E4E8F0",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#24365C",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 1,
+  },
+  settingsHeading: {
     marginBottom: 8,
-    marginLeft: 4,
+    paddingHorizontal: 2,
     fontSize: 9.5,
     lineHeight: 12,
-    fontWeight: "700",
-    letterSpacing: 0.75,
-    color: "#8A96A8",
-  },
-  menuCard: {
-    overflow: "hidden",
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#E7EBF1",
-    backgroundColor: "#FFFFFF",
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    color: "#6F7B91",
   },
   menuRow: {
-    minHeight: 58,
-    paddingHorizontal: 12,
+    minHeight: 54,
+    paddingHorizontal: 11,
     paddingVertical: 9,
     flexDirection: "row",
     alignItems: "center",
-    gap: 11,
+    gap: 10,
   },
   menuRowDisabled: {
     opacity: 0.45,
@@ -965,69 +1171,142 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
   },
   menuIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F5F7FA",
+    backgroundColor: "#F2F3F7",
   },
   menuTitle: {
     fontSize: 12.5,
     lineHeight: 16,
-    fontWeight: "600",
-    color: "#0F172A",
+    fontWeight: "700",
+    color: "#10213B",
   },
   menuSub: {
-    marginTop: 2,
-    fontSize: 10,
+    marginTop: 1,
+    fontSize: 10.25,
     lineHeight: 13,
     fontWeight: "500",
     color: "#8A96A8",
   },
+  menuBadge: {
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#F0EEFF",
+  },
+  menuBadgeText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#6B5CE7",
+  },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: 51,
-    backgroundColor: "#E9EDF3",
+    marginLeft: 48,
+    backgroundColor: "#E5E9F1",
   },
-  dangerCard: {
-    minHeight: 62,
-    marginTop: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#FAD7D7",
+  summaryDock: {
+    paddingTop: 6,
+    paddingHorizontal: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E4E8F0",
     backgroundColor: "#FFFFFF",
   },
-  dangerTitle: {
-    fontSize: 12.5,
+  summaryCard: {
+    paddingHorizontal: 11,
+    paddingTop: 9,
+    paddingBottom: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E9F1",
+    backgroundColor: "#FFFFFF",
+  },
+  summaryHeading: {
+    marginBottom: 7,
+    fontSize: 9,
+    lineHeight: 11,
+    fontWeight: "800",
+    letterSpacing: 0.75,
+    color: "#6F7B91",
+  },
+  summaryMetrics: {
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  summaryMetric: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "center",
+  },
+  summaryIcon: {
+    width: 22,
+    height: 22,
+    marginBottom: 3,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  summaryIconMembers: {
+    backgroundColor: "#F0EEFF",
+  },
+  summaryIconRole: {
+    backgroundColor: "#EAF9F2",
+  },
+  summaryIconPlan: {
+    backgroundColor: "#EDF5FF",
+  },
+  summaryValue: {
+    maxWidth: "100%",
+    fontSize: 10.5,
+    lineHeight: 13,
+    fontWeight: "800",
+    color: "#1B2941",
+    textAlign: "center",
+  },
+  summaryLabel: {
+    marginTop: 1,
+    fontSize: 9,
+    lineHeight: 11,
+    color: "#8A96A8",
+    textAlign: "center",
+  },
+  summaryDivider: {
+    width: StyleSheet.hairlineWidth,
+    marginHorizontal: 7,
+    backgroundColor: "#E5E9F1",
+  },
+  summaryPlanInfo: {
+    minHeight: 21,
+    marginTop: 6,
+    paddingTop: 5,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E8ECF3",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  summaryPlanDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#22A06B",
+  },
+  summaryPlanDotReadOnly: {
+    backgroundColor: "#F59E0B",
+  },
+  summaryPlanText: {
+    flexShrink: 1,
+    fontSize: 9.5,
+    lineHeight: 12,
     fontWeight: "600",
-    color: "#EF4444",
-  },
-  dangerSub: {
-    marginTop: 3,
-    fontSize: 10,
-    color: "#A0A8B5",
-  },
-  deleteContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  deleteTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  deleteBody: {
-    marginTop: 8,
-    marginBottom: 20,
-    fontSize: 13,
-    lineHeight: 19,
     color: "#64748B",
+    textAlign: "center",
   },
   primaryButton: {
     minHeight: 46,
@@ -1041,18 +1320,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#FFFFFF",
-  },
-  secondaryButton: {
-    minHeight: 46,
-    marginTop: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 13,
-    backgroundColor: "#E9EEF5",
-  },
-  secondaryButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#475569",
   },
 });

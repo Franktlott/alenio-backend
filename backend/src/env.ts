@@ -47,6 +47,11 @@ const envSchema = z.object({
   BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-16-walk-item-library"),
   // Admin Dashboard
   ADMIN_PASSWORD: z.string().optional().default("admin123"),
+  /**
+   * Comma-separated emails that should be platform_admin accounts.
+   * Applied at startup to existing users. Does not create accounts or grant admin inside the member app.
+   */
+  PLATFORM_ADMIN_EMAILS: z.string().optional(),
   // Email (Resend)
   RESEND_API_KEY: z.string().optional(),
   FROM_EMAIL: z.string().optional().default("Alenio <noreply@alenio.com>"),
@@ -83,6 +88,14 @@ const envSchema = z.object({
   STRIPE_TEAM_PRICE_ID: z.string().optional(),
   /** Recurring price ID for the Operations plan (includes Alenio Go) */
   STRIPE_OPERATIONS_PRICE_ID: z.string().optional(),
+  /**
+   * Google Play external content links (US): service account JSON with "View financial data"
+   * and "Manage orders and subscriptions" in Play Console. Without it, Android sales are queued, not reported.
+   */
+  GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: z.string().optional(),
+  GOOGLE_PLAY_PACKAGE_NAME: z.string().optional(),
+  /** "true" to also report Stripe test-mode payments (only with Play license-tester accounts). */
+  GOOGLE_PLAY_REPORT_TEST_PAYMENTS: z.string().optional(),
   /**
    * Public origin of the enterprise web app (no trailing slash), e.g. https://your-app.web.app
    * Used for Checkout / Portal return URLs. Local dev: http://127.0.0.1:5173

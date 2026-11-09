@@ -10,7 +10,8 @@ import {
   filterMembersByCoachingFilter,
   type CoachingPriorityFilter,
 } from "@/lib/coaching-priorities";
-import { planOneOnOneHref } from "@/lib/plan-one-on-one";
+import { scheduleCheckInHref } from "@/lib/meeting-navigation";
+import { workspaceDevelopmentHref } from "@/lib/workspace-development-navigation";
 import { isLeaderRole, memberMatchesUserId } from "@/lib/member-identity";
 import { MissedCheckInRow } from "@/components/people/MissedCheckInRow";
 import { GoalsDueRow } from "@/components/people/GoalsDueRow";
@@ -92,9 +93,18 @@ export function CoachingPrioritySheet({
 
   const openProfile = (userId: string) => {
     onClose();
+    if (isCheckIn || isGoals) {
+      router.push(
+        workspaceDevelopmentHref(teamId, {
+          memberUserId: userId,
+          section: isCheckIn ? "check-ins" : "goals",
+        }),
+      );
+      return;
+    }
     router.push({
-      pathname: "/member-profile",
-      params: { teamId, memberUserId: userId },
+      pathname: "/person",
+      params: { teamId, userId },
     });
   };
 
@@ -112,19 +122,8 @@ export function CoachingPrioritySheet({
         isCheckIn && filtered.length > 0 ? (
           <Pressable
             onPress={() => {
-              const firstMemberId =
-                visibleMembers.length === 1
-                  ? visibleMembers[0]?.userId
-                  : filtered.length === 1
-                    ? filtered[0]?.userId
-                    : undefined;
               onClose();
-              router.push(
-                planOneOnOneHref(teamId, {
-                  memberUserId: firstMemberId,
-                  myRole: typeof myRole === "string" ? myRole : undefined,
-                }),
-              );
+              router.push(scheduleCheckInHref(teamId));
             }}
             style={styles.footerBtn}
             testID="coaching-priority-schedule-check-in"

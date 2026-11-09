@@ -4,6 +4,7 @@ import type {
   DueDateFilter,
   PriorityFilter,
   SortFilter,
+  TaskScopeChip,
   TaskStatusTab,
   WorkspaceFiltersState,
 } from "./workspace-types";
@@ -33,8 +34,21 @@ export function assignedToLabel(value: AssignedToFilter): string {
   if (value === "me") return "Me";
   if (value === "direct_reports") return "My Direct Reports";
   if (value === "entire_team") return "Entire Team";
+  if (value === "others") return "Assigned";
   if (value === "unassigned") return "Unassigned";
   return value.memberName;
+}
+
+export function taskAssignedToUser(task: Task, userId: string | null | undefined): boolean {
+  if (!userId) return false;
+  return (task.assignments ?? []).some((assignment) => assignment.userId === userId);
+}
+
+export function taskScopeChip(filters: WorkspaceFiltersState): TaskScopeChip {
+  if (filters.statusTab === "completed" || filters.statusTab === "archived") return "completed";
+  if (filters.assignedTo === "me") return "mine";
+  if (filters.assignedTo === "others") return "assigned";
+  return "all";
 }
 
 export function dueDateLabel(value: DueDateFilter, selectedDayIso: string | null): string {
@@ -49,6 +63,7 @@ export function dueDateLabel(value: DueDateFilter, selectedDayIso: string | null
   if (value === "tomorrow") return "Tomorrow";
   if (value === "this_week") return "This Week";
   if (value === "overdue") return "Overdue";
+  if (value === "due_soon") return "Due Soon";
   return "All";
 }
 
@@ -170,7 +185,7 @@ export function buildWorkspaceTasksPath(
 
 export function assignedToQueryKey(assignedTo: AssignedToFilter): string {
   if (assignedTo === "me") return "me";
-  if (assignedTo === "entire_team") return "entire_team";
+  if (assignedTo === "entire_team" || assignedTo === "others") return "entire_team";
   if (assignedTo === "direct_reports") return "direct_reports";
   if (assignedTo === "unassigned") return "unassigned";
   return `member:${assignedTo.memberId}`;
@@ -215,6 +230,8 @@ export function filterTasksClientSide(
 
   if (filters.assignedTo === "entire_team" || filters.assignedTo === "unassigned" || filters.assignedTo === "direct_reports") {
     // server returns all team tasks for these modes
+  } else if (filters.assignedTo === "others") {
+    result = result.filter((t) => !taskAssignedToUser(t, currentUserId));
   } else if (filters.assignedTo === "me") {
     // server already scopes myTasks
   }
@@ -252,8 +269,19 @@ export function filterTasksClientSide(
         : null;
 
   if (filters.dueDate === "overdue" && filters.statusTab === "active") {
-    const todayStart = startOfDay(new Date());
-    result = result.filter((t) => t.dueDate && startOfDay(new Date(t.dueDate)) < todayStart);
+    const now = Date.now();
+    result = result.filter(
+      (t) => t.dueDate && new Date(t.dueDate).getTime() < now,
+    );
+  } else if (filters.dueDate === "due_soon" && filters.statusTab === "active") {
+    const now = new Date();
+    const dueSoonEnd = new Date(now);
+    dueSoonEnd.setDate(dueSoonEnd.getDate() + 3);
+    result = result.filter((t) => {
+      if (!t.dueDate) return false;
+      const due = new Date(t.dueDate);
+      return due >= now && due <= dueSoonEnd;
+    });
   } else if (filters.dueDate === "this_week") {
     const weekStart = startOfWeekSunday(new Date());
     const weekEnd = new Date(weekStart);
@@ -358,4 +386,72 @@ export function groupTasksByWeek(
   const groups = [...map.values()];
   groups.sort((a, b) => (mode === "completed" ? b.sortKey - a.sortKey : a.sortKey - b.sortKey));
   return groups;
+}
+
+export type TaskDueTone = "overdue" | "today" | "upcoming" | "done" | "none";
+
+export function formatTaskDueCopy(
+  dueDate: string | null | undefined,
+  now = new Date(),
+): { text: string; tone: TaskDueTone } {
+  if (!dueDate) return { text: "No due date", tone: "none" };
+  const due = new Date(dueDate);
+  const todayStart = startOfDay(now);
+  const dueStart = startOfDay(due);
+  const time = due.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const monthDay = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const weekday = due.toLocaleDateString("en-US", { weekday: "short" });
+  const dayMs = 24 * 60 * 60 * 1000;
+  const deltaDays = Math.round((dueStart.getTime() - todayStart.getTime()) / dayMs);
+
+  if (deltaDays === 0) {
+    return due.getTime() < now.getTime()
+      ? { text: `Overdue, ${time}`, tone: "overdue" }
+      : { text: `Today, ${time}`, tone: "today" };
+  }
+  if (deltaDays === -1) return { text: `Yesterday, ${time}`, tone: "overdue" };
+  if (deltaDays < 0) return { text: `${weekday}, ${monthDay}`, tone: "overdue" };
+  if (deltaDays === 1) return { text: `Tomorrow, ${monthDay}`, tone: "upcoming" };
+  return { text: `${weekday}, ${monthDay}`, tone: "upcoming" };
+}
+
+const SCHEDULE_SECTIONS: Array<{ key: "overdue" | "today" | "upcoming"; label: string; sortKey: number }> = [
+  { key: "overdue", label: "Overdue", sortKey: 0 },
+  { key: "today", label: "Today", sortKey: 1 },
+  { key: "upcoming", label: "Upcoming", sortKey: 2 },
+];
+
+/** Red past due, orange for today, green for what is still ahead. */
+export function scheduleSectionColor(key: string): string | undefined {
+  if (key === "overdue") return "#DC2626";
+  if (key === "today") return "#EA580C";
+  if (key === "upcoming") return "#16A34A";
+  return undefined;
+}
+
+/** Group active tasks into Overdue / Today / Upcoming. */
+export function groupTasksBySchedule(tasks: Task[], now = new Date()): TaskWeekGroup[] {
+  const todayStart = startOfDay(now);
+  const buckets: Record<"overdue" | "today" | "upcoming", Task[]> = {
+    overdue: [],
+    today: [],
+    upcoming: [],
+  };
+
+  for (const task of tasks) {
+    if (!task.dueDate) {
+      buckets.upcoming.push(task);
+      continue;
+    }
+    const due = new Date(task.dueDate);
+    if (due.getTime() < now.getTime()) buckets.overdue.push(task);
+    else if (startOfDay(due).getTime() === todayStart.getTime()) buckets.today.push(task);
+    else buckets.upcoming.push(task);
+  }
+
+  return SCHEDULE_SECTIONS.flatMap((section) => {
+    const sectionTasks = buckets[section.key];
+    if (sectionTasks.length === 0) return [];
+    return [{ key: section.key, label: section.label, sortKey: section.sortKey, tasks: sectionTasks }];
+  });
 }

@@ -13,7 +13,7 @@ import {
 } from "../lib/messaging-permission";
 import { isUniqueConstraintError } from "../lib/username";
 import { recordAccountActivity } from "../lib/account-activity";
-import { countMutualConnections } from "../lib/public-profile";
+import { countMutualConnections, mutualConnectionIds } from "../lib/public-profile";
 import {
   buildConnectionSuggestions,
   CONNECTION_SUGGESTION_DEFAULT_LIMIT,
@@ -574,6 +574,42 @@ connectionsRouter.get("/status", async (c) => {
       canMessage: permission.allowed,
     },
   });
+});
+
+// GET /api/connections/person/:userId/mutual — people the viewer and this profile both know.
+connectionsRouter.get("/person/:userId/mutual", async (c) => {
+  const user = c.get("user")!;
+  const { userId } = c.req.param();
+  if (userId === user.id) return c.json({ data: { people: [] } });
+
+  const person = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!person) return c.json({ error: { message: "Person not found", code: "NOT_FOUND" } }, 404);
+
+  const [viewerConnectionRows, personConnectionRows] = await Promise.all([
+    prisma.connection.findMany({
+      where: {
+        status: "accepted",
+        OR: [{ requesterId: user.id }, { recipientId: user.id }],
+      },
+      select: { requesterId: true, recipientId: true },
+    }),
+    prisma.connection.findMany({
+      where: {
+        status: "accepted",
+        OR: [{ requesterId: userId }, { recipientId: userId }],
+      },
+      select: { requesterId: true, recipientId: true },
+    }),
+  ]);
+  const ids = mutualConnectionIds(user.id, userId, viewerConnectionRows, personConnectionRows);
+  if (ids.length === 0) return c.json({ data: { people: [] } });
+
+  const people = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, username: true, image: true },
+    orderBy: { name: "asc" },
+  });
+  return c.json({ data: { people } });
 });
 
 // GET /api/connections/person/:userId — workspace-free public profile for person.tsx

@@ -77,19 +77,19 @@ export function OneOnOneFeedbackPage() {
 
   const workspaceId = teamId;
   const showPlanNav = teams !== null && !!workspaceId && teams.find((t) => t.id === workspaceId)?.role === "owner";
-  const showActivityExecuteNav =
-    teams === null || !workspaceId || teams.find((t) => t.id === workspaceId)?.hasTeamFeatures === true;
+  const showGoNav =
+    teams !== null && !!workspaceId && teams.find((t) => t.id === workspaceId)?.hasGoFeatures === true;
   const teamNavLabel = enterpriseTeamNavTitle(
     teams !== null && workspaceId ? teams.find((t) => t.id === workspaceId)?.role : undefined,
   );
 
   return (
     <EnterpriseLayout
-      activeNav="execute"
+      activeNav="go"
       teams={teams ?? []}
       selectedTeamId={workspaceId}
       onTeamChange={(id) => {
-        if (id !== workspaceId) navigate("/dashboard");
+        if (id !== workspaceId) navigate("/go");
       }}
       user={me ?? null}
       onSignOutNavigate={(path) => navigate(path)}
@@ -97,12 +97,13 @@ export function OneOnOneFeedbackPage() {
         <DashboardTopBar user={me ?? null} pageTitle={ASSOCIATE_FEEDBACK_SECTION_TITLE} />
       }
       showPlanNav={showPlanNav}
-      showActivityExecuteNav={showActivityExecuteNav}
+      showGoNav={showGoNav}
+      goNavTo="/go"
       teamNavLabel={teamNavLabel}
     >
       <div className="enterprise-dashboard-inner oneone-feedback-page">
-        <Link to="/dashboard" className="create-task-back">
-          ← Back to dashboard
+        <Link to="/go" className="create-task-back">
+          ← Back
         </Link>
 
         <article className="enterprise-card enterprise-oneone-feedback-card">

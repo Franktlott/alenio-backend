@@ -57,6 +57,24 @@ function zonedWallTimeToDate(w: WallTime, timeZone: string, ms = 999): Date {
   return new Date(utc);
 }
 
+/** A date-only due date is stored as 11:59:59 PM. A chosen clock time uses :00 seconds. */
+export function isEndOfCalendarDay(date: Date, timeZone: string): boolean {
+  if (Number.isNaN(date.getTime())) return false;
+  const wall = getZonedWallTime(date, resolveTimeZone(timeZone));
+  return wall.h === 23 && wall.mi === 59 && wall.s === 59;
+}
+
+/**
+ * Place `source`'s clock on another calendar day.
+ * End-of-day dues stay end-of-day. A chosen time stays that time.
+ */
+export function dueInstantPreservingClock(day: string, source: Date, timeZone: string): Date {
+  const tz = resolveTimeZone(timeZone);
+  if (isEndOfCalendarDay(source, tz)) return dueInstantFromCalendarDay(day, tz);
+  const wall = getZonedWallTime(source, tz);
+  return instantFromCalendarDateAndTime(day, wall.h, wall.mi, tz);
+}
+
 /** UTC instant for end of a calendar day in the user's timezone. */
 export function dueInstantFromCalendarDay(dateOnly: string, timeZone: string): Date {
   const match = dateOnly.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -123,7 +141,7 @@ export function addCalendarDaysInTimeZone(date: Date, days: number, timeZone: st
   const next = new Date(Date.UTC(y, mo - 1, d));
   next.setUTCDate(next.getUTCDate() + days);
   const nextDay = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
-  return dueInstantFromCalendarDay(nextDay, tz);
+  return dueInstantPreservingClock(nextDay, date, tz);
 }
 
 export function formatTimeZoneLabel(timeZone: string, now = new Date()): string {

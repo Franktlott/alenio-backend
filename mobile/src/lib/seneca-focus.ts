@@ -44,9 +44,9 @@ export type SenecaFocusAction = {
   description: string;
   route:
     | "/team-priority"
-    | "/member-profile"
+    | "/person"
     | "/(app)/execute"
-    | "/(app)/activity"
+    | "/(app)/chat"
     | "/(app)/team";
   params: Record<string, string>;
   estimatedMinutes: number;

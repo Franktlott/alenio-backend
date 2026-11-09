@@ -67,6 +67,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
         bannerSeverity: access.bannerSeverity,
         hasTeamFeatures: access.hasTeamFeatures,
         hasGoFeatures: access.hasGoFeatures,
+        planFeatures: access.features,
       },
     });
   });

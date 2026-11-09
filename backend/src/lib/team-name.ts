@@ -4,18 +4,51 @@ export function normalizeTeamName(name: string): string {
   return name.trim();
 }
 
-/** True if another team already uses this name (case-insensitive). */
-export async function isTeamDisplayNameTaken(name: string, excludeTeamId?: string): Promise<boolean> {
+/**
+ * True if one of the user's own workspaces already uses this name (case-insensitive).
+ * Names only need to be unique per person so they can tell workspaces apart; other
+ * people's workspaces may share a name.
+ */
+export async function isTeamNameTakenForUser(
+  name: string,
+  userId: string,
+  excludeTeamId?: string,
+): Promise<boolean> {
   const n = normalizeTeamName(name);
   if (!n) return false;
   const row = await prisma.team.findFirst({
     where: {
       name: { equals: n, mode: "insensitive" },
+      members: { some: { userId } },
       ...(excludeTeamId ? { NOT: { id: excludeTeamId } } : {}),
     },
     select: { id: true },
   });
   return !!row;
+}
+
+/** True if another workspace in the same enterprise organization uses this name. */
+export async function isTeamNameTakenInOrganization(
+  name: string,
+  organizationId: string,
+  excludeTeamId?: string,
+): Promise<boolean> {
+  const n = normalizeTeamName(name);
+  if (!n) return false;
+  const row = await prisma.team.findFirst({
+    where: {
+      name: { equals: n, mode: "insensitive" },
+      organizationId,
+      ...(excludeTeamId ? { NOT: { id: excludeTeamId } } : {}),
+    },
+    select: { id: true },
+  });
+  return !!row;
+}
+
+/** Reservation key for a workspace name held during paid checkout (per user). */
+export function pendingWorkspaceNameKey(userId: string, name: string): string {
+  return `${userId}:${normalizeTeamName(name).toLocaleLowerCase()}`;
 }
 
 export function isPrismaUniqueOnName(err: unknown): boolean {

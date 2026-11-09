@@ -65,128 +65,96 @@ export default function TermsOfService() {
 
         <View className="h-4" />
 
-        <Section title="1. Acceptance of Terms">
-          <Body>
-            By creating an account or using {APP_NAME}, you confirm that you are at least 13 years of age, have read and understood these Terms, and agree to comply with them. If you do not agree, you may not use the App or the Website.
-          </Body>
+        <Section title="1. Acceptance and Eligibility">
+          <Body>By creating an account or using {APP_NAME}, you confirm that you are at least 13 years old, have authority to accept these Terms for yourself or the organization you represent, and agree to comply with them. If you do not agree, do not use the service.</Body>
         </Section>
 
-        <Section title="2. Description of Service">
-          <Body>
-            {APP_NAME} is a team communication and task management platform that enables teams to collaborate through messaging, task assignments, shared calendars, video meetings, and real-time communication tools, including through our mobile applications and website. Features may evolve over time and we reserve the right to modify, suspend, or discontinue any part of the service.
-          </Body>
+        <Section title="2. Service Features">
+          <Body>{APP_NAME} provides account profiles and personal connections; direct, group and channel messaging; tasks, calendars and Outlook sync; check-ins, one-on-ones, development planning, workplace standards and team health; Seneca AI features; Daily.co video meetings; notifications; subscriptions; and, where enabled, workplace operations such as walks and temperature checks. Features may change, be limited by plan or permissions, or be modified, suspended or discontinued.</Body>
         </Section>
 
-        <Section title="3. Account Registration">
-          <Body>To use {APP_NAME}, you must:</Body>
+        <Section title="3. Accounts and Enterprise Management">
           <View className="mt-2">
-            <Bullet>Create an account with a valid email address and secure password.</Bullet>
-            <Bullet>Provide accurate and complete registration information.</Bullet>
-            <Bullet>Keep your account credentials confidential and not share them with others.</Bullet>
-            <Bullet>Notify us immediately of any unauthorized access to your account.</Bullet>
-            <Bullet>Be responsible for all activity that occurs under your account.</Bullet>
+            <Bullet>You must provide accurate information, protect your password and sign-in methods, and promptly report unauthorized access.</Bullet>
+            <Bullet>You may sign in using supported password, email OTP, Microsoft or organization SSO methods.</Bullet>
+            <Bullet>If an organization provides or manages your account, its authorized administrators may provision, update, suspend or deprovision it through SSO or SCIM and may manage organization or workspace data according to their permissions and agreement with us.</Bullet>
+            <Bullet>Your relationship with your employer or organization is separate from these Terms. Contact that organization about its internal policies, employment decisions and use of workplace data.</Bullet>
           </View>
         </Section>
 
-        <Section title="4. Acceptable Use">
-          <Body>You agree to use {APP_NAME} only for lawful purposes and in accordance with these Terms. You agree not to:</Body>
-          <View className="mt-2">
-            <Bullet>Post, share, or transmit content that is unlawful, harmful, defamatory, obscene, or offensive.</Bullet>
-            <Bullet>Harass, bully, or threaten other users.</Bullet>
-            <Bullet>Impersonate any person or entity or misrepresent your affiliation.</Bullet>
-            <Bullet>Upload malware, viruses, or any code intended to disrupt or damage the service.</Bullet>
-            <Bullet>Attempt to gain unauthorized access to any part of the service or other users' accounts.</Bullet>
-            <Bullet>Use the service for spam, unsolicited advertising, or chain messages.</Bullet>
-            <Bullet>Violate any applicable local, state, national, or international law or regulation.</Bullet>
-            <Bullet>Scrape, crawl, or use automated means to access the App or the Website without our permission.</Bullet>
-          </View>
+        <Section title="4. Roles and Workplace Responsibilities">
+          <Body>Workspace owners and authorized team leaders are responsible for membership, role assignments, permissions, notices and lawful workplace use. A legacy workspace Admin role may be read-only and is not necessarily a manager or team leader. Customers are responsible for configuring access appropriately, obtaining any notices or consents they require, protecting confidential workplace information, and making their own employment, safety and operational decisions.</Body>
         </Section>
 
-        <Section title="5. User Content">
-          <Body>
-            You retain ownership of content you create and share within {APP_NAME}. By posting content, you grant {COMPANY_NAME} a non-exclusive, worldwide, royalty-free license to host, store, and display that content solely for the purpose of operating and providing the service. You are solely responsible for your content and represent that it does not violate any third-party rights.
-          </Body>
+        <Section title="5. Personal Connections and Messaging">
+          <Body>Personal connections, requests and blocks are account-level and may apply across workspaces. Discoverability, messaging privacy and optional presence settings help control interactions, but they do not guarantee that previously shared content is deleted or unseen. You are responsible for selecting the correct recipients, channels and privacy settings and for content you send, upload, mention, react to or include in a poll.</Body>
         </Section>
 
-        <Section title="6. Subscriptions and Payments">
-          <Body>
-            {APP_NAME} may offer premium Team subscription plans for each workspace. Team plans are purchased and managed on our website ({WEBSITE_LABEL}) using Stripe. Payment is charged according to the plan you select. Manage billing, payment methods, and cancellation through your account on {WEBSITE_LABEL} as we make available. Stripe&apos;s terms and privacy policy apply to their processing.
-          </Body>
-          <View className="mt-2">
-            <Body>
-              The mobile app does not process in-app subscription purchases. To upgrade, change plans, or cancel, sign in on {WEBSITE_LABEL} with the workspace owner account.
-            </Body>
-          </View>
+        <Section title="6. Acceptable Use">
+          <Body>You may use {APP_NAME} only lawfully. You may not harass or threaten others; impersonate a person or organization; violate privacy, intellectual-property or other rights; upload unlawful content or malware; bypass access controls; interfere with the service; access another account without authorization; spam users; scrape or automate access without permission; or use the service in a way that creates unreasonable security, legal or operational risk.</Body>
         </Section>
 
-        <Section title="7. Intellectual Property">
-          <Body>
-            All intellectual property rights in {APP_NAME}, including but not limited to the software, design, logos, trademarks, and content created by {COMPANY_NAME}, are owned by or licensed to {COMPANY_NAME}. You may not copy, modify, distribute, sell, or lease any part of the App, the Website, or their content without our prior written consent.
-          </Body>
+        <Section title="7. User and Workplace Content">
+          <Body>You retain ownership of content you provide. You grant {COMPANY_NAME} a non-exclusive, worldwide, royalty-free license to host, store, reproduce, process, transmit and display that content as needed to operate, secure and improve the service and provide requested integrations and AI features. You represent that you have the rights and authority to provide the content. Organization and workspace content may be controlled by the applicable customer and remain available to authorized users after a member leaves.</Body>
         </Section>
 
-        <Section title="8. Privacy">
-          <Body>
-            Your use of {APP_NAME} is also governed by our Privacy Policy, which is incorporated into these Terms by reference. By using the App or the Website, you consent to our data practices as described in the Privacy Policy.
-          </Body>
+        <Section title="8. Seneca and AI">
+          <Body>Seneca uses OpenAI and may process prompts, outputs and relevant workspace context. AI output can be incomplete, inaccurate, biased or inappropriate. It is not professional human-resources, legal, medical, financial or safety advice. Review and verify output before relying on it, do not submit unnecessary sensitive data, and use qualified professionals when appropriate. The customer and its authorized decision-makers remain solely responsible for workplace, personnel, safety and operational decisions.</Body>
         </Section>
 
-        <Section title="9. Video Meetings">
-          <Body>
-            {APP_NAME} includes video meeting functionality powered by Daily.co. By using video meetings, you agree to the following:
-          </Body>
-          <View className="mt-2">
-            <Bullet>Video meeting rooms are created on Daily.co's infrastructure and are subject to Daily.co's Terms of Service and Privacy Policy.</Bullet>
-            <Bullet>Meeting rooms expire automatically — by default, one hour after the scheduled meeting end time, or within 24 hours if no end time is set. Expired rooms can no longer be joined.</Bullet>
-            <Bullet>You may share a meeting link with external participants who can join via a web browser. You are responsible for ensuring that only authorised individuals receive the link.</Bullet>
-            <Bullet>You must not use video meetings to transmit unlawful, harmful, or offensive content, or to record participants without their consent where required by applicable law.</Bullet>
-            <Bullet>{COMPANY_NAME} does not record or store video or audio from meetings.</Bullet>
-          </View>
+        <Section title="9. Third-Party Services and Integrations">
+          <Body>The service may connect to Microsoft, Okta, OpenAI, Daily.co, Stripe, app stores, push providers and other third-party services. Their terms and privacy policies govern their services. We are not responsible for third-party systems, availability or content. You authorize us to exchange the information needed to provide an integration you enable and are responsible for your third-party accounts and permissions.</Body>
         </Section>
 
-        <Section title="10. Team Responsibilities">
-          <Body>
-            Team administrators are responsible for managing team membership and ensuring that team usage complies with these Terms. {COMPANY_NAME} is not responsible for content shared between team members or any disputes that arise within teams.
-          </Body>
+        <Section title="10. Video Meetings">
+          <Body>Video meetings are provided through Daily.co. Meeting streams and room use are subject to Daily.co&apos;s terms. You are responsible for who receives a room link, participant conduct, and obtaining consent before recording where required. {COMPANY_NAME} does not ordinarily record or store meeting video or audio on its servers.</Body>
         </Section>
 
-        <Section title="11. Disclaimers">
-          <Body>
-            {APP_NAME} is provided "as is" and "as available" without warranties of any kind, either express or implied, including warranties of merchantability, fitness for a particular purpose, or non-infringement. We do not warrant that the service will be uninterrupted, error-free, or free of viruses or other harmful components.
-          </Body>
+        <Section title="11. Subscriptions and Payments">
+          <Body>Paid workspace plans may be purchased and managed on {WEBSITE_LABEL}, with web payments processed by Stripe, and renew according to the plan terms shown at purchase until canceled. Legacy subscriptions may instead be managed and billed through the applicable Apple or Google platform or app store; that platform&apos;s billing, cancellation and refund rules apply. Current mobile app purchases may not be available. Workspace owners should cancel or transfer billing before deleting an owner account. Except where required by law or stated in the applicable purchase terms, charges already paid are not automatically refundable.</Body>
         </Section>
 
-        <Section title="12. Limitation of Liability">
+        <Section title="12. Intellectual Property and Feedback">
+          <Body>All rights in {APP_NAME}, including its software, design, logos, trademarks and company-created content, are owned by or licensed to {COMPANY_NAME}. These Terms grant only a limited right to use the service. If you provide feedback, you authorize us to use it without restriction or compensation, without identifying you publicly unless you permit it.</Body>
+        </Section>
+
+        <Section title="13. Privacy">
+          <Body>Our Privacy Policy explains our data practices and is incorporated into these Terms. Workplace customers and users must respect applicable privacy requirements and only access information permitted by their role and legitimate workplace purpose.</Body>
+        </Section>
+
+        <Section title="14. Disclaimers">
+          <Body>{APP_NAME} is provided &quot;as is&quot; and &quot;as available&quot; without warranties of any kind, either express or implied, including warranties of merchantability, fitness for a particular purpose or non-infringement. We do not warrant that the service, integrations, AI output or notifications will be uninterrupted, accurate, secure, error-free or free of harmful components.</Body>
+        </Section>
+
+        <Section title="15. Limitation of Liability">
           <Body>
             To the fullest extent permitted by applicable law, {COMPANY_NAME} and its officers, directors, employees, and agents shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of or inability to use {APP_NAME}, even if advised of the possibility of such damages. Our total liability to you for any claims arising from these Terms or your use of {APP_NAME} shall not exceed the amount you paid us in the 12 months preceding the claim.
           </Body>
         </Section>
 
-        <Section title="13. Indemnification">
+        <Section title="16. Indemnification">
           <Body>
             You agree to indemnify, defend, and hold harmless {COMPANY_NAME} and its affiliates from any claims, damages, losses, and expenses (including reasonable legal fees) arising out of your use of {APP_NAME}, your content, or your violation of these Terms.
           </Body>
         </Section>
 
-        <Section title="14. Termination">
-          <Body>
-            We reserve the right to suspend or terminate your account at our discretion, without notice, if we believe you have violated these Terms or applicable law. You may delete your account at any time through the App or your account settings on the Website. Upon termination, your right to use {APP_NAME} ceases immediately.
-          </Body>
+        <Section title="17. Suspension, Termination and Deletion">
+          <Body>We may suspend or terminate access if we reasonably believe these Terms or law have been violated, the service or others are at risk, payment is overdue, or an organization deprovisions a managed account. You may delete your account through the App or Website or request deletion by email. Deletion and termination are subject to the Privacy Policy: shared workspace content and archived former-member development goals or check-in history may remain for authorized workplace continuity, and required legal, billing, security and backup records may remain as needed. Upon termination, your right to use the service ends.</Body>
         </Section>
 
-        <Section title="15. Changes to Terms">
+        <Section title="18. Changes to Terms">
           <Body>
             We may update these Terms from time to time. We will notify you of material changes within the App or on the Website. Your continued use of {APP_NAME} after the effective date of revised Terms constitutes your acceptance of the changes.
           </Body>
         </Section>
 
-        <Section title="16. Governing Law">
+        <Section title="19. Governing Law">
           <Body>
             These Terms shall be governed by and construed in accordance with the laws of the United States and the laws of the State where {COMPANY_NAME} is organized, without regard to conflict-of-law principles. Any disputes arising from these Terms or your use of {APP_NAME} shall be resolved through good-faith negotiation first; if unresolved, exclusively in the state and federal courts located in that jurisdiction (unless applicable law requires otherwise).
           </Body>
         </Section>
 
-        <Section title="17. Contact Us">
+        <Section title="20. Contact Us">
           <Body>
             If you have questions about these Terms, please contact us at:
           </Body>

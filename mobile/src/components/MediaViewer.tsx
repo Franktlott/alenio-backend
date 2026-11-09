@@ -152,7 +152,7 @@ function VideoPlayer({ mediaUrl, onClose }: { mediaUrl: string; onClose: () => v
       <VideoView
         player={player}
         style={styles.video}
-        allowsFullscreen
+        fullscreenOptions={{ enable: true }}
         allowsPictureInPicture
         contentFit="contain"
         nativeControls

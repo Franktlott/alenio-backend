@@ -547,6 +547,8 @@ export type HomeTodayItem = {
   workspace: { id: string; name: string } | null;
   /** Tasks and reminders only, for the pill on the Home row. */
   priority?: string;
+  /** Finished today. Stays on Today, shown as already done. */
+  done?: boolean;
   /** A task carried in from an earlier day, still unfinished. */
   overdue?: boolean;
 };
@@ -609,3 +611,71 @@ export type VideoCheckInContextResponse = {
     }>;
   };
 };
+
+export type ActivityReactionSummary = Record<
+  string,
+  {
+    count: number;
+    userIds: string[];
+    users: Array<{ id: string; name: string }>;
+  }
+>;
+
+export type NetworkUpdateMetadata = {
+  body: string | null;
+  imageUrl: string | null;
+  imageWidth: number | null;
+  imageHeight: number | null;
+  mediaType?: "image" | "video" | null;
+};
+
+export type NetworkUpdate = {
+  id: string;
+  teamId: null;
+  type: "network_post";
+  createdAt: string;
+  metadata: NetworkUpdateMetadata | null;
+  user: { id: string; name: string; image: string | null } | null;
+  reactions: ActivityReactionSummary;
+  commentCount: number;
+  canDelete: boolean;
+};
+
+export type NetworkUpdateComment = {
+  id: string;
+  body: string;
+  createdAt: string;
+  parentId: string | null;
+  author: { id: string; name: string; image: string | null };
+  canDelete: boolean;
+  reactions: ActivityReactionSummary;
+};
+
+export type CreateNetworkUpdateRequest = {
+  body?: string;
+  imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  mediaType?: "image" | "video";
+};
+
+export type NetworkUpdatesFeedResponse = {
+  data: {
+    items: NetworkUpdate[];
+    nextCursor: string | null;
+  };
+};
+
+export type NetworkUpdateResponse = { data: NetworkUpdate };
+export type NetworkUpdateCommentsResponse = { data: NetworkUpdateComment[] };
+export type CreateNetworkUpdateCommentRequest = {
+  body: string;
+  parentId?: string;
+};
+
+export type {
+  DiscoverArticleDetailJson as DiscoverArticleDetail,
+  DiscoverArticleSummaryJson as DiscoverArticleSummary,
+  DiscoverCategoryJson as DiscoverCategory,
+} from "./lib/discover-serialize";
+export type { DiscoverDoc } from "./lib/discover-document";

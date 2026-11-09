@@ -19,10 +19,6 @@ import {
 } from "react-native";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
-const CALENDAR_DAY_PANE_HEIGHT = Math.max(
-  108,
-  Math.min(136, Math.round(SCREEN_HEIGHT * 0.13)),
-);
 const MEETING_ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.62);
 const MEETING_DURATION_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.55);
 
@@ -45,10 +41,7 @@ function EventScheduleTile({
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      style={[
-        eventFormStyles.tile,
-        open ? eventFormStyles.tileOpen : null,
-      ]}
+      style={[eventFormStyles.tile, open ? eventFormStyles.tileOpen : null]}
     >
       <Icon size={16} color="#4361EE" strokeWidth={2} />
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -72,7 +65,6 @@ import {
   ChevronDown,
   X,
   CalendarDays,
-  MessageSquarePlus,
   CheckSquare,
   Calendar,
   Check,
@@ -122,7 +114,13 @@ import { earlierIncompleteSeriesTasks } from "@/lib/recurring-task";
 import { incompleteSubtasks } from "@/lib/subtask-completion";
 import { formatTaskDueDateLabel } from "@/lib/timezone";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
-import { tabBarClearance, WORKSPACE_CARD_BOTTOM_GAP } from "@/lib/tab-bar";
+import { useTabBarClearanceFn, WORKSPACE_CARD_BOTTOM_GAP } from "@/lib/tab-bar";
+import {
+  PANE_GAP,
+  splitPaneWidths,
+  useAdaptiveLayout,
+} from "@/lib/adaptive-layout";
+
 import { AlenioHeaderBrand } from "@/components/AlenioHeaderBrand";
 import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
@@ -138,8 +136,11 @@ import {
   type CalendarDisplayMode,
 } from "@/components/workspace/CalendarCard";
 import { EventPreviewSheet } from "@/components/workspace/EventPreviewSheet";
+import { TaskPreviewSheet } from "@/components/workspace/TaskPreviewSheet";
+import { WorkspaceCreateGrid } from "@/components/workspace/WorkspaceCreateGrid";
 import { EventStockPhotoSearch } from "@/components/workspace/EventStockPhotoSearch";
 import { EventsSection } from "@/components/workspace/EventsSection";
+import { WorkspaceOpeningState } from "@/components/workspace/WorkspaceOpeningState";
 import { TaskShowingRow } from "@/components/workspace/TaskShowingRow";
 import { TaskListCard } from "@/components/workspace/TaskListCard";
 import { TeamDevelopmentCard } from "@/components/development/TeamDevelopmentCard";
@@ -151,6 +152,7 @@ import type { WorkspaceInviteRole } from "@/lib/workspace-members";
 import { WorkspaceMemberDevelopment } from "@/components/development/WorkspaceMemberDevelopment";
 import { MemberTasksEmptyState } from "@/components/workspace/MemberTasksEmptyState";
 import { WorkspaceUpdatesFeed } from "@/components/workspace/WorkspaceUpdatesFeed";
+import { TaskDetail } from "@/app/task-detail";
 import { UserAvatar } from "@/components/UserAvatar";
 import {
   TeamOverviewTasksSheet,
@@ -160,7 +162,10 @@ import {
   TeamInsightsSheet,
   type TeamInsightsStatusKey,
 } from "@/components/TeamInsightsSheet";
-import { SnapshotScheduledSheet } from "@/components/SnapshotDetailSheets";
+import {
+  SnapshotDevelopmentSheet,
+  SnapshotScheduledSheet,
+} from "@/components/SnapshotDetailSheets";
 import { WorkspaceSnapshotCarousel } from "@/components/workspace/snapshot/WorkspaceSnapshotCarousel";
 import {
   AlenioBottomSheet,
@@ -174,7 +179,7 @@ import {
   type WorkspaceFiltersState,
 } from "@/components/workspace/workspace-types";
 import { WorkspaceFilterPicker } from "@/components/workspace/WorkspaceFilterPicker";
-import { WS } from "@/components/workspace/workspace-ui";
+import { splitPaneCard, WS } from "@/components/workspace/workspace-ui";
 import {
   assignedToQueryKey,
   buildWorkspaceTasksPath,
@@ -187,7 +192,7 @@ import {
 } from "@/components/workspace/workspace-utils";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays } from "@/lib/us-federal-holidays";
-import { workspaceTasksOnly } from "@/lib/task-kind";
+import { mergeViewerReminders, ownerCompletingUnassignedTask, workspaceTasksOnly } from "@/lib/task-kind";
 import {
   datedItemLocalIso,
   dedupeDatedTasksAgainstEvents,
@@ -222,10 +227,16 @@ import {
   type SnapshotDetail,
   type SnapshotTaskDetail,
 } from "@/lib/workspace-snapshot-details";
-import { workspaceDevelopmentHref, type WorkspaceDevelopmentSection } from "@/lib/workspace-development-navigation";
+import {
+  workspaceDevelopmentHref,
+  type WorkspaceDevelopmentSection,
+} from "@/lib/workspace-development-navigation";
 import { planOneOnOneHref } from "@/lib/plan-one-on-one";
 import { scheduleCheckInHref, videoCallHref } from "@/lib/meeting-navigation";
-import { selectUpcomingDevelopmentCheckIns } from "@/lib/development-overview";
+import {
+  selectUpcomingDevelopmentCheckIns,
+  sortDevelopmentMembers,
+} from "@/lib/development-overview";
 import {
   fetchExternalCalendarEvents,
   type ExternalCalendarEventItem,
@@ -247,6 +258,8 @@ const EXTERNAL_BUSY_COLOR = CALENDAR_EVENT_COLORS.outlook;
 
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearanceFn();
+  const adaptive = useAdaptiveLayout();
   const {
     openModal,
     teamId: linkedTeamId,
@@ -282,9 +295,8 @@ export default function TasksScreen() {
   const deferredTaskSearchQuery = React.useDeferredValue(taskSearchQuery);
   const [workspaceMode, setWorkspaceMode] =
     useState<WorkspaceViewMode>("calendar");
-  const lastWorkspaceTabRef = useRef<Exclude<WorkspaceViewMode, "development">>(
-    "calendar",
-  );
+  const lastWorkspaceTabRef =
+    useRef<Exclude<WorkspaceViewMode, "development">>("calendar");
   const openMembers = useCallback(() => {
     setWorkspaceMode((current) => {
       if (current !== "development") lastWorkspaceTabRef.current = current;
@@ -338,9 +350,7 @@ export default function TasksScreen() {
     newUserId: string;
     newUserName: string;
   } | null>(null);
-  const [blockedSubtasks, setBlockedSubtasks] = useState<string[] | null>(
-    null,
-  );
+  const [blockedSubtasks, setBlockedSubtasks] = useState<string[] | null>(null);
   const [confirmDeleteEvent, setConfirmDeleteEvent] = useState(false);
   const [milestoneModal, setMilestoneModal] = useState<{
     count: number;
@@ -350,13 +360,111 @@ export default function TasksScreen() {
     count: number;
     userName: string;
   } | null>(null);
-  const [calendarDisplayMode, setCalendarDisplayMode] =
-    useState<CalendarDisplayMode>("month");
+  /**
+   * Null hands the choice to the layout; a tap on Month or Week pins it until
+   * the amount of room changes.
+   */
+  const [calendarModeChoice, setCalendarModeChoice] =
+    useState<CalendarDisplayMode | null>(null);
+  /** Height of the area the calendar actually got, once it has laid out. */
+  const [calendarAreaHeight, setCalendarAreaHeight] = useState(0);
+  /**
+   * A six-row month card runs about 390pt and an agenda needs roughly 180 more
+   * below it. Under the two together the month keeps the whole area and the day
+   * list steps aside, rather than the list being pushed off the bottom.
+   *
+   * Only stacked layouts can run short. A wide screen puts the day list beside
+   * the grid, where they compete for width and not for height, so a landscape
+   * tablet keeps its month however little vertical room it has.
+   */
+  const calendarHeightTight =
+    !adaptive.isSplit && calendarAreaHeight > 0 && calendarAreaHeight < 570;
+  /** Month is the view a resize lands on; the week strip is always a choice. */
+  const calendarDisplayMode: CalendarDisplayMode =
+    calendarModeChoice ?? "month";
+  /**
+   * An explicit choice was made against the room there was at the time, so any
+   * change in that room releases it: unfolding a Duo, rotating, or entering a
+   * multitasking pane. Without this, a week picked on the closed screen is
+   * still a week once the device opens, which is the one place it fits worst.
+   */
+  useEffect(() => {
+    setCalendarModeChoice(null);
+  }, [calendarHeightTight, adaptive.isSplit]);
+  /**
+   * Two panes side by side. Month view only — the week agenda already uses the
+   * full screen, so splitting it would just halve the agenda.
+   */
+  const splitCalendar = adaptive.isSplit && calendarDisplayMode === "month";
+  /**
+   * The Tasks detail pane. Same rule as the calendar's second pane, so the page
+   * gains and loses its second column at one width rather than two.
+   */
+  const showTaskDetailPane = adaptive.isSplit;
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  /** The shared Workspace divider, so Tasks splits where Calendar does. */
+  const taskDetailPaneWidth = Math.round(adaptive.detailPaneWidth);
+  /** Same divider again: the roster is this tab's primary column. */
+  const rosterPaneWidth = Math.round(adaptive.gridPaneWidth);
+  /**
+   * The stacked month stays compact at its natural height, and the day list
+   * always sits beneath it, even on short screens: the grid no longer
+   * stretches to fill the area just because the area is short.
+   */
+  const showStackedDayPane =
+    !splitCalendar && calendarDisplayMode === "month";
+  /** The week card carries its own agenda, so it still takes the area. */
+  const calendarCardFillsArea = !splitCalendar && !showStackedDayPane;
+  /**
+   * Members keeps the roster beside the open member instead of replacing it,
+   * which is also what fills the width a single stretched list cannot.
+   */
+  const splitMembers = adaptive.isSplit;
+  /**
+   * Measured in window coordinates so the divider can be placed against the
+   * hinge; the hook alone cannot know what padding our ancestors added.
+   */
+  const [calendarRowFrame, setCalendarRowFrame] = useState<{
+    x: number;
+    width: number;
+  } | null>(null);
+  /**
+   * Both measurements describe the window they were taken in, so a resize
+   * throws them out instead of laying out the new window from the old one.
+   * Null and zero mean "not measured yet", which falls back to the hook's
+   * estimate until the next layout pass reports the real numbers.
+   */
+  useEffect(() => {
+    setCalendarRowFrame(null);
+    setCalendarAreaHeight(0);
+  }, [adaptive.width, adaptive.height]);
+  const calendarPanes = calendarRowFrame
+    ? splitPaneWidths(
+        calendarRowFrame.x,
+        calendarRowFrame.width,
+        adaptive.hingeX,
+      )
+    : null;
+  /**
+   * Shares rather than widths, so the two panes always add up to the row: a
+   * pane can end up narrower than intended but never zero, which is what a
+   * pinned width did when it failed to reach the view after a resize.
+   */
+  const gridPaneShare = Math.max(
+    1,
+    Math.round(calendarPanes?.gridPaneWidth ?? adaptive.gridPaneWidth),
+  );
+  const detailPaneShare = Math.max(
+    1,
+    Math.round(calendarPanes?.detailPaneWidth ?? adaptive.detailPaneWidth),
+  );
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [readOnlySheetOpen, setReadOnlySheetOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [previewEvent, setPreviewEvent] = useState<CalendarEvent | null>(null);
+  const [previewTask, setPreviewTask] = useState<Task | null>(null);
   const [eventModalReadOnly, setEventModalReadOnly] = useState(false);
   const [eventModalType, setEventModalType] = useState<
     "event" | "meeting" | "checkin"
@@ -373,7 +481,8 @@ export default function TasksScreen() {
   const [eventImageUrl, setEventImageUrl] = useState<string | null>(null);
   const [eventImageUploading, setEventImageUploading] = useState(false);
   const [showEventPhotoPicker, setShowEventPhotoPicker] = useState(false);
-  const [showEventStockPhotoSearch, setShowEventStockPhotoSearch] = useState(false);
+  const [showEventStockPhotoSearch, setShowEventStockPhotoSearch] =
+    useState(false);
   const [meetingAssigneeIds, setMeetingAssigneeIds] = useState<string[]>([]);
   const [showMeetingAssigneeDropdown, setShowMeetingAssigneeDropdown] =
     useState(false);
@@ -404,12 +513,22 @@ export default function TasksScreen() {
   const workspacePollInterval = isScreenFocused ? 3_000 : false;
   const appliedMemberTaskLinkRef = React.useRef<string | null>(null);
   const appliedDevelopmentLinkRef = React.useRef<string | null>(null);
+  // A deep link names a workspace once. Leaving the id on the route made every
+  // later switch snap back to that workspace.
+  const appliedLinkedTeamRef = React.useRef<string | null>(null);
 
   useEffect(() => {
-    if (linkedTeamId && linkedTeamId !== activeTeamId) {
+    if (!linkedTeamId) {
+      appliedLinkedTeamRef.current = null;
+      return;
+    }
+    if (appliedLinkedTeamRef.current === linkedTeamId) return;
+    appliedLinkedTeamRef.current = linkedTeamId;
+    if (linkedTeamId !== useTeamStore.getState().activeTeamId) {
       setActiveTeamId(linkedTeamId);
     }
-  }, [activeTeamId, linkedTeamId, setActiveTeamId]);
+    router.setParams({ teamId: undefined });
+  }, [linkedTeamId, setActiveTeamId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -584,19 +703,33 @@ export default function TasksScreen() {
   const summaryToday = new Date();
   const summaryYear = summaryToday.getFullYear();
   const summaryMonth = summaryToday.getMonth();
+  const { access } = useWorkspaceAccess(activeTeamId);
+  const readOnlyWorkspace = Boolean(activeTeamId && !access.canWrite);
+  const workspacePageBottom = tabClearance(
+    WORKSPACE_CARD_BOTTOM_GAP + (readOnlyWorkspace ? 56 : 0),
+  );
+  const openWorkspaceCreate = () => {
+    if (!access.canWrite) return;
+    setShowAddModal(true);
+  };
+  useEffect(() => {
+    setReadOnlySheetOpen(false);
+  }, [activeTeamId]);
   const canManageTaskMenu = useCallback(
     (task: Task) => {
+      if (!access.canWrite) return false;
       // Check-in follow-ups are completed via the form, not the edit menu.
       if (isFeedbackTaskDescription(task.description)) return false;
       if (currentRole === "owner" || currentRole === "team_leader") return true;
       const creatorId = task.creator?.id;
       return !!session?.user?.id && creatorId === session.user.id;
     },
-    [currentRole, session?.user?.id],
+    [access.canWrite, currentRole, session?.user?.id],
   );
 
   const canManageEvent = useCallback(
     (ev: CalendarEvent) => {
+      if (!access.canWrite) return false;
       if (ev.isExternal) return false;
       const creatorId = ev.createdById ?? ev.createdBy?.id;
       if (!session?.user?.id) return false;
@@ -605,7 +738,7 @@ export default function TasksScreen() {
       if (ev.isVideoMeeting) return false;
       return creatorId === session.user.id;
     },
-    [isCalendarManager, session?.user?.id],
+    [access.canWrite, isCalendarManager, session?.user?.id],
   );
 
   React.useEffect(() => {
@@ -614,7 +747,11 @@ export default function TasksScreen() {
     }
   }, [teams, activeTeamId, setActiveTeamId]);
 
-  const { data: subscription, isFetched: subscriptionFetched } = useQuery({
+  const {
+    data: subscription,
+    isFetched: subscriptionFetched,
+    isLoading: subscriptionLoading,
+  } = useQuery({
     queryKey: ["subscription", activeTeamId],
     queryFn: () =>
       api.get<{ plan: string; status: string; hasTeamFeatures?: boolean }>(
@@ -624,11 +761,11 @@ export default function TasksScreen() {
   });
   const plan = useSubscriptionStore((s) => s.plan);
   const hasTaskAccess = hasWorkspaceTaskAccess(subscription, plan);
-  const { access } = useWorkspaceAccess(activeTeamId);
 
   const {
     data: activeTasksData,
     isPending: activePending,
+    isLoading: activeTasksLoading,
     isError: activeError,
     error: activeLoadError,
     refetch: refetchActiveTasks,
@@ -748,7 +885,69 @@ export default function TasksScreen() {
     refetchIntervalInBackground: false,
   });
 
-  const rawTasks: Task[] =
+  // Workspace lists omit other people's reminders. This viewer's own reminders
+  // still belong on the Tasks tab, including the counts at the top.
+  const includeOwnReminders =
+    filters.assignedTo === "entire_team" || filters.assignedTo === "me";
+  const ownReminderPath = (statusTab: "active" | "completed" | "archived") =>
+    buildWorkspaceTasksPath(activeTeamId!, {
+      statusTab,
+      calendarYear,
+      calendarMonth,
+      assignedTo: "me",
+      search: statusTab === "archived" ? deferredTaskSearchQuery : undefined,
+    });
+  const { data: ownActiveRemindersData } = useQuery({
+    queryKey: ["tasks", activeTeamId, "own-reminders", "active"],
+    queryFn: async () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(ownReminderPath("active")),
+    enabled: !!activeTeamId && hasTaskAccess,
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
+  });
+  const { data: ownCompletedRemindersData } = useQuery({
+    queryKey: [
+      "tasks",
+      activeTeamId,
+      "own-reminders",
+      calendarYear,
+      calendarMonth,
+      "completed",
+    ],
+    queryFn: async () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        ownReminderPath("completed"),
+      ),
+    enabled:
+      !!activeTeamId &&
+      hasTaskAccess &&
+      includeOwnReminders &&
+      (filters.statusTab === "completed" || filters.statusTab === "all"),
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
+  });
+  const { data: ownArchivedRemindersData } = useQuery({
+    queryKey: [
+      "tasks",
+      activeTeamId,
+      "own-reminders",
+      "archived",
+      deferredTaskSearchQuery.trim(),
+    ],
+    queryFn: async () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        ownReminderPath("archived"),
+      ),
+    enabled:
+      !!activeTeamId &&
+      hasTaskAccess &&
+      includeOwnReminders &&
+      filters.statusTab === "archived",
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
+  });
+
+  const workspaceTasks: Task[] =
     filters.statusTab === "archived"
       ? (archivedTasksData?.tasks ?? [])
       : filters.statusTab === "completed"
@@ -763,6 +962,19 @@ export default function TasksScreen() {
               ).values(),
             ]
           : (activeTasksData?.tasks ?? []);
+  const ownRemindersForTab: Task[] = includeOwnReminders
+    ? filters.statusTab === "archived"
+      ? (ownArchivedRemindersData?.tasks ?? [])
+      : filters.statusTab === "completed"
+        ? (ownCompletedRemindersData?.tasks ?? [])
+        : filters.statusTab === "all"
+          ? [
+              ...(ownActiveRemindersData?.tasks ?? []),
+              ...(ownCompletedRemindersData?.tasks ?? []),
+            ]
+          : (ownActiveRemindersData?.tasks ?? [])
+    : [];
+  const rawTasks: Task[] = mergeViewerReminders(workspaceTasks, ownRemindersForTab);
   const { data: teamData } = useQuery({
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
@@ -809,6 +1021,11 @@ export default function TasksScreen() {
         `/api/teams/${activeTeamId}/tasks/member-stats`,
       ),
     enabled: !!activeTeamId && hasTaskAccess,
+    // The roster polls every few seconds, so a member added while this screen
+    // is open would otherwise sit at an unknown status until the next launch.
+    // This endpoint is heavier than the roster, hence the slower beat.
+    refetchInterval: isScreenFocused ? 15_000 : false,
+    refetchOnWindowFocus: true,
   });
   const { data: teamMomentumSummary } = useQuery({
     queryKey: teamMomentumSummaryQueryKey(activeTeamId ?? ""),
@@ -864,8 +1081,11 @@ export default function TasksScreen() {
     );
   };
 
-  const { data: calendarEvents = [], isPending: calendarEventsPending } =
-    useQuery({
+  const {
+    data: calendarEvents = [],
+    isPending: calendarEventsPending,
+    isLoading: calendarLoading,
+  } = useQuery({
       queryKey: ["calendar-events", activeTeamId],
       queryFn: () =>
         api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events`),
@@ -1006,9 +1226,39 @@ export default function TasksScreen() {
     },
   });
 
+  /**
+   * Folding the screen or leaving Tasks takes the pane away; carry the open task
+   * onto the full screen rather than dropping what someone was reading.
+   */
+  useEffect(() => {
+    if (!openTaskId) return;
+    // Tasks and Calendar keep the open item in the side pane. Anywhere else,
+    // or once the screen folds, carry it onto the full task screen.
+    if (
+      showTaskDetailPane &&
+      (workspaceMode === "tasks" || workspaceMode === "calendar")
+    ) {
+      return;
+    }
+    setOpenTaskId(null);
+    if (showTaskDetailPane || !activeTeamId) return;
+    router.push({
+      pathname: "/task-detail",
+      params: { taskId: openTaskId, teamId: activeTeamId },
+    });
+  }, [activeTeamId, openTaskId, showTaskDetailPane, workspaceMode]);
+
   const openTaskDetails = (task: Task, options?: { startEdit?: boolean }) => {
     if (!activeTeamId) return;
     queryClient.setQueryData(["task", task.id, activeTeamId], task);
+    /**
+     * The pane shows the task beside the list it came from. Editing still takes
+     * the full screen, since the edit form needs the width.
+     */
+    if (showTaskDetailPane && !options?.startEdit) {
+      setOpenTaskId(task.id);
+      return;
+    }
     router.push({
       pathname: "/task-detail",
       params: {
@@ -1019,7 +1269,16 @@ export default function TasksScreen() {
     });
   };
 
+  const openScheduleTask = (task: Task) => {
+    if (showTaskDetailPane) {
+      openTaskDetails(task);
+      return;
+    }
+    setPreviewTask(task);
+  };
+
   const handleToggleTask = (task: Task) => {
+    if (!access.canWrite) return;
     if (isFeedbackTaskDescription(task.description)) {
       // Check-in follow-ups must be completed via the feedback form, not the quick toggle.
       if (task.status === "done") return;
@@ -1030,6 +1289,7 @@ export default function TasksScreen() {
   };
 
   const completeTaskFromList = (task: Task) => {
+    if (!access.canWrite) return;
     if (task.status !== "done") {
       const incomplete = incompleteSubtasks(task.subtasks);
       if (incomplete.length > 0) {
@@ -1226,7 +1486,11 @@ export default function TasksScreen() {
     return new Date(nextStart.getTime() + length);
   };
 
-  const openEventModal = (opts?: { withVideo?: boolean; day?: string | null }) => {
+  const openEventModal = (opts?: {
+    withVideo?: boolean;
+    day?: string | null;
+  }) => {
+    if (!access.canWrite) return;
     setEditingEvent(null);
     setEventModalReadOnly(false);
     setEventModalType("event");
@@ -1254,6 +1518,7 @@ export default function TasksScreen() {
   };
 
   const openPersonalEventModal = () => {
+    if (!access.canWrite) return;
     setEditingEvent(null);
     setEventModalReadOnly(false);
     setEventModalType("event");
@@ -1280,6 +1545,7 @@ export default function TasksScreen() {
   };
 
   const openMeetingModal = (initialDay = selectedDay) => {
+    if (!access.canWrite) return;
     setEditingEvent(null);
     setEventModalReadOnly(false);
     setEventModalType("meeting");
@@ -1320,6 +1586,7 @@ export default function TasksScreen() {
   };
 
   const openCheckInModal = (initialDay = selectedDay) => {
+    if (!access.canWrite) return;
     openMeetingModal(initialDay);
     setEventModalType("checkin");
     setCheckInFormat("virtual");
@@ -1383,7 +1650,7 @@ export default function TasksScreen() {
   };
 
   const handleSaveEvent = () => {
-    if (eventModalReadOnly) return;
+    if (!access.canWrite || eventModalReadOnly) return;
     if (!eventTitle.trim()) {
       setFormError("Please enter a title");
       return;
@@ -1405,7 +1672,7 @@ export default function TasksScreen() {
       return;
     }
     const selectedCheckInMemberId = isCheckIn
-      ? meetingAssigneeIds[0] ?? null
+      ? (meetingAssigneeIds[0] ?? null)
       : null;
     if (isCheckIn && !selectedCheckInMemberId) {
       setFormError("Choose a team member for this check-in.");
@@ -1476,10 +1743,15 @@ export default function TasksScreen() {
       const file = source === "library" ? await pickImage() : await takePhoto();
       if (!file) return;
       setEventImageUploading(true);
-      const uploaded = await uploadFile(file.uri, file.filename, file.mimeType, {
-        purpose: "team",
-        teamId: activeTeamId,
-      });
+      const uploaded = await uploadFile(
+        file.uri,
+        file.filename,
+        file.mimeType,
+        {
+          purpose: "team",
+          teamId: activeTeamId,
+        },
+      );
       setEventImageUrl(uploaded.url);
     } catch (err) {
       Alert.alert(
@@ -1536,6 +1808,8 @@ export default function TasksScreen() {
       !!linkedCheckInId;
     if (!developmentRequested || !activeTeamId) return;
     if (linkedTeamId && linkedTeamId !== activeTeamId) {
+      // Already consumed this link. A manual switch after that must stick.
+      if (appliedLinkedTeamRef.current === linkedTeamId) return;
       // Development is per workspace, so a link naming another one moves the
       // whole app there rather than being quietly dropped. The effect runs
       // again once the switch lands.
@@ -1623,8 +1897,50 @@ export default function TasksScreen() {
     () => mergeWorkplaceStandards(memberStatsPayload?.workplaceStandards),
     [memberStatsPayload?.workplaceStandards],
   );
-  const summaryActiveWorkspaceTasks = workspaceTasksOnly(
-    summaryActiveTasksData?.tasks ?? [],
+  /**
+   * The roster's own order, so whoever sits at the top of the list is who the
+   * detail pane opens with.
+   */
+  const rosterOrder = React.useMemo(
+    () =>
+      sortDevelopmentMembers(
+        teamMembers,
+        memberStatsPayload?.stats,
+        summaryStandards,
+      ),
+    [teamMembers, memberStatsPayload?.stats, summaryStandards],
+  );
+  /**
+   * A split has a pane that would otherwise sit empty, so it opens on the first
+   * member. Stacked layouts still land on the roster and wait for a tap.
+   */
+  const topRosterUserId = rosterOrder[0]?.userId ?? null;
+  useEffect(() => {
+    if (workspaceMode !== "development") return;
+    if (!isOwnerOrLeader) {
+      if (!currentUserId) return;
+      if (developmentFocus?.userId === currentUserId) return;
+      if (splitMembers) {
+        setDevelopmentFocus({ userId: currentUserId, section: "goals" });
+      } else if (developmentFocus) {
+        setDevelopmentFocus(null);
+      }
+      return;
+    }
+    if (!splitMembers) return;
+    if (developmentFocus || !topRosterUserId) return;
+    setDevelopmentFocus({ userId: topRosterUserId, section: "goals" });
+  }, [
+    currentUserId,
+    developmentFocus,
+    isOwnerOrLeader,
+    splitMembers,
+    topRosterUserId,
+    workspaceMode,
+  ]);
+  const summaryActiveWorkspaceTasks = mergeViewerReminders(
+    workspaceTasksOnly(summaryActiveTasksData?.tasks ?? []),
+    ownActiveRemindersData?.tasks ?? [],
   );
   const summaryCompletedWorkspaceTasks = workspaceTasksOnly(
     summaryCompletedTasksData?.tasks ?? [],
@@ -1790,7 +2106,10 @@ export default function TasksScreen() {
     summaryMemberStats?.standardsCompliance?.missingGoals ?? null;
 
   const summaryTaskDetails = React.useMemo(() => {
-    const active = workspaceTasksOnly(summaryActiveTasksData?.tasks ?? []);
+    const active = mergeViewerReminders(
+      workspaceTasksOnly(summaryActiveTasksData?.tasks ?? []),
+      ownActiveRemindersData?.tasks ?? [],
+    );
     const completed = workspaceTasksOnly(
       summaryCompletedTasksData?.tasks ?? [],
     );
@@ -1807,6 +2126,7 @@ export default function TasksScreen() {
     };
   }, [
     summaryActiveTasksData?.tasks,
+    ownActiveRemindersData?.tasks,
     summaryCompletedTasksData?.tasks,
     summaryDayStart,
   ]);
@@ -1881,34 +2201,17 @@ export default function TasksScreen() {
           setSelectedSnapshotDetail("completedToday"),
         onPressCheckIns: () => setSelectedSnapshotDetail("scheduled"),
         onPressNeedsAttention: isCalendarManager
-          ? openMembers
+          ? () => setSelectedSnapshotDetail("development")
           : undefined,
-        onPressMomentum:
-          activeTeamId && (isCalendarManager || summaryMemberUserId)
-            ? () =>
-                router.push({
-                  pathname: "/team-momentum",
-                  params: {
-                    teamId: activeTeamId,
-                    ...(isCalendarManager
-                      ? {}
-                      : { memberUserId: summaryMemberUserId }),
-                  },
-                })
-            : undefined,
+        onPressMomentum: activeTeamId
+          ? () =>
+              router.push({
+                pathname: "/team-momentum",
+                params: { teamId: activeTeamId },
+              })
+          : undefined,
         onPressHealth: () => setSelectedSnapshotDetail("health"),
-        onPressGoals:
-          isCalendarManager
-            ? openMembers
-            : summaryMemberUserId && activeTeamId
-              ? () =>
-                  router.push(
-                    workspaceDevelopmentHref(activeTeamId, {
-                      memberUserId: summaryMemberUserId,
-                      section: "goals",
-                    }),
-                  )
-              : undefined,
+        onPressGoals: () => setSelectedSnapshotDetail("development"),
       }),
     [
       isCalendarManager,
@@ -1952,11 +2255,18 @@ export default function TasksScreen() {
       void queryClient.invalidateQueries({
         queryKey: ["team-invites", activeTeamId],
       });
-      void queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
       void queryClient.invalidateQueries({ queryKey: ["teams"] });
-      void queryClient.invalidateQueries({
-        queryKey: ["member-stats", activeTeamId],
-      });
+      // Force the round trip rather than just marking these stale: the new
+      // member's row and their status have to land together.
+      void queryClient
+        .refetchQueries({ queryKey: ["team", activeTeamId], type: "all" })
+        .catch(() => {});
+      void queryClient
+        .refetchQueries({
+          queryKey: ["member-stats", activeTeamId],
+          type: "all",
+        })
+        .catch(() => {});
       toast({
         title:
           results.length > 1
@@ -2088,7 +2398,10 @@ export default function TasksScreen() {
     () =>
       taskScheduleGroups.map((group) => {
         const expanded = Boolean(expandedTaskSections[group.key]);
-        const preview = expanded
+        // Today stays complete so it matches the Home list. Longer sections
+        // still open with a short preview.
+        const showAll = group.key === "today" || expanded;
+        const preview = showAll
           ? group.tasks
           : group.tasks.slice(0, TASK_SECTION_PREVIEW);
         return {
@@ -2097,7 +2410,7 @@ export default function TasksScreen() {
           tasks: preview,
           totalCount: group.tasks.length,
           onShowAll:
-            !expanded && group.tasks.length > TASK_SECTION_PREVIEW
+            !showAll && group.tasks.length > TASK_SECTION_PREVIEW
               ? () =>
                   setExpandedTaskSections((current) => ({
                     ...current,
@@ -2123,23 +2436,36 @@ export default function TasksScreen() {
     for (const task of [
       ...(activeTasksData?.tasks ?? []),
       ...(completedTasksData?.tasks ?? []),
+      ...(ownActiveRemindersData?.tasks ?? []),
     ]) {
       if (!task.dueDate) continue;
       byId.set(task.id, task);
     }
     return [...byId.values()];
-  }, [activeTasksData?.tasks, completedTasksData?.tasks]);
+  }, [
+    activeTasksData?.tasks,
+    completedTasksData?.tasks,
+    ownActiveRemindersData?.tasks,
+  ]);
   const visibleDatedTasks = React.useMemo(
-    () => dedupeDatedTasksAgainstEvents(calendarDatedTasks, calendarEventsWithOutlook),
+    () =>
+      dedupeDatedTasksAgainstEvents(
+        calendarDatedTasks,
+        calendarEventsWithOutlook,
+      ),
     [calendarDatedTasks, calendarEventsWithOutlook],
   );
   const targetIso = selectedDay;
-  const dayEvents = targetIso ? eventsOnLocalIso(calendarEventsWithOutlook, targetIso) : [];
+  const dayEvents = targetIso
+    ? eventsOnLocalIso(calendarEventsWithOutlook, targetIso)
+    : [];
   const dayHolidays = targetIso ? holidaysOnLocalIso(holidays, targetIso) : [];
   const dayTasks = React.useMemo(() => {
     if (!targetIso) return [];
     return visibleDatedTasks
-      .filter((task) => task.dueDate && datedItemLocalIso(task.dueDate) === targetIso)
+      .filter(
+        (task) => task.dueDate && datedItemLocalIso(task.dueDate) === targetIso,
+      )
       .sort((a, b) => {
         if (a.status === "done" && b.status !== "done") return 1;
         if (a.status !== "done" && b.status === "done") return -1;
@@ -2157,6 +2483,59 @@ export default function TasksScreen() {
     : "Day";
   const daySheetCount = dayEvents.length + dayHolidays.length + dayTasks.length;
   const daySheetSubtitle = `${daySheetCount} item${daySheetCount === 1 ? "" : "s"}`;
+  /**
+   * The wide layout gives the day its own column, which would sit mostly empty
+   * on a quiet day. This fills the space below it with what is coming up.
+   */
+  const upcomingThisWeek = React.useMemo(() => {
+    if (!targetIso) return [];
+    const start = new Date(`${targetIso}T12:00:00`);
+    const rows: {
+      key: string;
+      iso: string;
+      dayLabel: string;
+      timeLabel: string;
+      title: string;
+    }[] = [];
+    for (let offset = 1; offset <= 6 && rows.length < 6; offset++) {
+      const day = new Date(
+        start.getFullYear(),
+        start.getMonth(),
+        start.getDate() + offset,
+      );
+      const iso = toLocalIso(day);
+      const dayLabel = day.toLocaleDateString("en-US", {
+        weekday: "short",
+        day: "numeric",
+      });
+      for (const ev of eventsOnLocalIso(calendarEventsWithOutlook, iso)) {
+        rows.push({
+          /** A multi-day event lands on several days, so the day scopes the key. */
+          key: `upcoming-event-${iso}-${ev.id}`,
+          iso,
+          dayLabel,
+          timeLabel: ev.allDay
+            ? "All day"
+            : new Date(ev.startDate).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+              }),
+          title: ev.title,
+        });
+      }
+      for (const task of visibleDatedTasks) {
+        if (!task.dueDate || datedItemLocalIso(task.dueDate) !== iso) continue;
+        rows.push({
+          key: `upcoming-task-${task.id}`,
+          iso,
+          dayLabel,
+          timeLabel: "Due",
+          title: task.title,
+        });
+      }
+    }
+    return rows.slice(0, 6);
+  }, [targetIso, calendarEventsWithOutlook, visibleDatedTasks]);
   const weekAgendaIsos = React.useMemo(() => {
     const focus = selectedDay
       ? new Date(`${selectedDay}T12:00:00`)
@@ -2164,14 +2543,20 @@ export default function TasksScreen() {
     const start = startOfWeekSunday(focus);
     return Array.from({ length: 7 }, (_, index) =>
       toLocalIso(
-        new Date(start.getFullYear(), start.getMonth(), start.getDate() + index),
+        new Date(
+          start.getFullYear(),
+          start.getMonth(),
+          start.getDate() + index,
+        ),
       ),
     );
   }, [selectedDay]);
   const tasksOnIso = React.useCallback(
     (iso: string) =>
       visibleDatedTasks
-        .filter((task) => task.dueDate && datedItemLocalIso(task.dueDate) === iso)
+        .filter(
+          (task) => task.dueDate && datedItemLocalIso(task.dueDate) === iso,
+        )
         .sort((a, b) => {
           if (a.status === "done" && b.status !== "done") return 1;
           if (a.status !== "done" && b.status === "done") return -1;
@@ -2183,17 +2568,68 @@ export default function TasksScreen() {
   );
 
   if (!activeTeamId) {
+    const heroHour = new Date().getHours();
+    const heroSource =
+      heroHour < 12
+        ? require("@/assets/alenio-home-hero-morning.jpg")
+        : heroHour < 17
+          ? require("@/assets/alenio-home-hero-afternoon.jpg")
+          : require("@/assets/alenio-home-hero-sunset.jpg");
     return (
       <CurvedTabLayout
         topInset={insets.top}
         title="Workspace"
         leftAction={<AlenioHeaderBrand />}
         headerTitlePlacement="leading"
+        backdrop={
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              left: 0,
+              height: insets.top + 118,
+              overflow: "hidden",
+            }}
+          >
+            <Image
+              source={heroSource}
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                width: "150%",
+                height: "150%",
+              }}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
+            <LinearGradient
+              colors={[
+                "rgba(255,255,255,0)",
+                "rgba(255,255,255,0.7)",
+                "#FFFFFF",
+              ]}
+              locations={[0, 0.62, 1]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={{
+                position: "absolute",
+                right: 0,
+                bottom: 0,
+                left: 0,
+                height: "52%",
+              }}
+            />
+          </View>
+        }
+        backdropVisible
         testID="execute-screen"
         headerTestID="execute-header"
       >
         <NoWorkspaceTabState
-          bottomInset={tabBarClearance(insets.bottom, 20)}
+          bottomInset={tabClearance(20)}
           testID="execute-no-workspace"
         />
       </CurvedTabLayout>
@@ -2202,7 +2638,13 @@ export default function TasksScreen() {
 
   // A locked or still-loading workspace keeps the normal header: without it
   // there is no way to switch to a workspace that is not locked.
-  if (!hasTaskAccess && !subscriptionFetched) {
+  // The named pause only stays while this workspace has nothing to show.
+  // A workspace opened a moment ago is already cached, so the screen appears.
+  const openingTeam = teams?.find((team) => team.id === activeTeamId) ?? null;
+  const workspaceOpening =
+    subscriptionLoading ||
+    (hasTaskAccess && calendarLoading && activeTasksLoading);
+  if (workspaceOpening) {
     return (
       <CurvedTabLayout
         topInset={insets.top}
@@ -2215,9 +2657,7 @@ export default function TasksScreen() {
         testID="workspace-access-loading-screen"
         headerTestID="workspace-header"
       >
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color="#4361EE" />
-        </View>
+        <WorkspaceOpeningState team={openingTeam} />
       </CurvedTabLayout>
     );
   }
@@ -2278,6 +2718,311 @@ export default function TasksScreen() {
     );
   }
 
+  /**
+   * Calendar day pieces, shared by the stacked and two-pane layouts so the
+   * wide screen does not fork the day list's behaviour.
+   */
+  const dayPaneHeader = (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginTop: 6,
+        marginBottom: 2,
+        flexShrink: 0,
+        gap: 8,
+        minHeight: 32,
+      }}
+    >
+      <Text
+        style={{
+          flex: 1,
+          minWidth: 0,
+          fontSize: 14,
+          fontWeight: "700",
+          color: "#0F172A",
+          letterSpacing: -0.2,
+        }}
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.3}
+      >
+        {daySheetTitle}
+        <Text style={{ fontWeight: "600", color: "#64748B" }}>
+          {`  ·  ${daySheetSubtitle}`}
+        </Text>
+      </Text>
+      {access.canWrite ? (
+      <Pressable
+        onPress={openWorkspaceCreate}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Add event"
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          minHeight: 32,
+          paddingHorizontal: 4,
+        }}
+        testID="calendar-day-add-event"
+      >
+        <Plus size={13} color="#4361EE" strokeWidth={2.4} />
+        <Text
+          style={{
+            marginLeft: 3,
+            fontSize: 12,
+            fontWeight: "700",
+            color: "#4361EE",
+          }}
+        >
+          Add event
+        </Text>
+      </Pressable>
+      ) : null}
+    </View>
+  );
+
+  const dayPaneList = (
+    <EventsSection
+      dayEvents={dayEvents}
+      dayHolidays={dayHolidays}
+      dayTasks={dayTasks}
+      members={teamMembers}
+      selectedDayIso={targetIso}
+      variant="dayList"
+      embedded
+      fillRemaining
+      canManageEvent={canManageEvent}
+      onEventPress={openEventPreview}
+      onEventLongPress={openEventActions}
+      onTaskPress={openScheduleTask}
+      onToggleTask={handleToggleTask}
+      onTaskLongPress={(task) => {
+        if (!canManageTaskMenu(task)) return;
+        setActionMenuTask(task);
+      }}
+      onAddEvent={access.canWrite ? openWorkspaceCreate : undefined}
+      isOwnerOrLeader={isOwnerOrLeader}
+    />
+  );
+
+  /**
+   * The stacked agenda lives inside the page scroll below the compact month,
+   * so it sizes to its rows instead of filling a pane; a quiet day gets a
+   * compact empty-state card with an add action.
+   */
+  const stackedDayList =
+    daySheetCount === 0 ? (
+      <View
+        style={{
+          marginTop: 10,
+          alignItems: "center",
+          paddingVertical: 22,
+          paddingHorizontal: 16,
+          borderRadius: 16,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: "#E8ECF0",
+          backgroundColor: "#FBFAFF",
+        }}
+        testID="calendar-stacked-day-empty"
+      >
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#F0EDFF",
+          }}
+        >
+          <CalendarDays size={20} color="#7567ED" strokeWidth={2} />
+        </View>
+        <Text
+          style={{
+            marginTop: 10,
+            fontSize: 14,
+            fontWeight: "700",
+            letterSpacing: -0.2,
+            color: "#0F172A",
+          }}
+        >
+          Nothing scheduled
+        </Text>
+        <Text
+          style={{
+            marginTop: 3,
+            fontSize: 12,
+            lineHeight: 16,
+            color: "#8B95A5",
+            textAlign: "center",
+          }}
+        >
+          No events or tasks due this day.
+        </Text>
+        {access.canWrite ? (
+        <Pressable
+          onPress={openWorkspaceCreate}
+          accessibilityRole="button"
+          accessibilityLabel="Add event"
+          testID="calendar-stacked-day-empty-add"
+          style={{
+            marginTop: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            paddingHorizontal: 12,
+            paddingVertical: 7,
+            borderRadius: 999,
+            backgroundColor: "#F0EDFF",
+          }}
+        >
+          <Plus size={13} color="#7567ED" strokeWidth={2.6} />
+          <Text style={{ fontSize: 12, fontWeight: "700", color: "#7567ED" }}>
+            Add event
+          </Text>
+        </Pressable>
+        ) : null}
+      </View>
+    ) : (
+      <EventsSection
+        dayEvents={dayEvents}
+        dayHolidays={dayHolidays}
+        dayTasks={dayTasks}
+        members={teamMembers}
+        selectedDayIso={targetIso}
+        variant="dayList"
+        plainDayRows
+        embedded
+        scrollEnabled={false}
+        canManageEvent={canManageEvent}
+        onEventPress={openEventPreview}
+        onEventLongPress={openEventActions}
+        onTaskPress={openScheduleTask}
+        onToggleTask={handleToggleTask}
+        onTaskLongPress={(task) => {
+          if (!canManageTaskMenu(task)) return;
+          setActionMenuTask(task);
+        }}
+        onAddEvent={access.canWrite ? openWorkspaceCreate : undefined}
+        isOwnerOrLeader={isOwnerOrLeader}
+      />
+    );
+
+  const upcomingPane =
+    upcomingThisWeek.length > 0 ? (
+      <View style={{ flexShrink: 0, paddingTop: 10 }}>
+        <View
+          style={{
+            height: StyleSheet.hairlineWidth,
+            backgroundColor: "#E8ECF0",
+            marginBottom: 8,
+          }}
+        />
+        <Text
+          style={{
+            fontSize: 10,
+            fontWeight: "700",
+            letterSpacing: 0.7,
+            color: "#8B95A5",
+            marginBottom: 6,
+          }}
+        >
+          LATER THIS WEEK
+        </Text>
+        {upcomingThisWeek.map((row) => (
+          <Pressable
+            key={row.key}
+            onPress={() => handleSelectDay(row.iso)}
+            accessibilityRole="button"
+            accessibilityLabel={`${row.dayLabel}, ${row.title}`}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              minHeight: 28,
+            }}
+          >
+            <Text
+              style={{
+                width: 46,
+                fontSize: 11,
+                fontWeight: "700",
+                color: "#64748B",
+              }}
+              numberOfLines={1}
+            >
+              {row.dayLabel}
+            </Text>
+            <Text
+              style={{ width: 52, fontSize: 11, color: "#8B95A5" }}
+              numberOfLines={1}
+            >
+              {row.timeLabel}
+            </Text>
+            <Text
+              style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#0F172A" }}
+              numberOfLines={1}
+            >
+              {row.title}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    ) : null;
+
+  const membersRoster = (
+    <TeamDevelopmentCard
+      members={teamMembers}
+      currentUserId={currentUserId}
+      calendarEvents={developmentUpcomingCheckIns}
+      memberStats={memberStatsPayload?.stats}
+      standards={summaryStandards}
+      selectedUserId={splitMembers ? (developmentFocus?.userId ?? null) : null}
+      lockOtherMembers={!isOwnerOrLeader}
+      onMemberPress={(member) => {
+        if (!isOwnerOrLeader && member.userId !== currentUserId) return;
+        setDevelopmentFocus({ userId: member.userId, section: "goals" });
+      }}
+      onManageMember={canManageRoster ? setManageMember : undefined}
+      onInvite={canManageRoster ? () => setInviteOpen(true) : undefined}
+      flush={splitMembers}
+    />
+  );
+
+  const memberDetail =
+    activeTeamId && developmentMember && developmentFocus ? (
+      <WorkspaceMemberDevelopment
+        teamId={activeTeamId}
+        member={developmentMember}
+        currentUserId={currentUserId}
+        viewerRole={currentRole}
+        leaderName={workspaceLeaderName}
+        leaderUserId={workspaceLeader?.userId ?? null}
+        section={developmentFocus.section}
+        onSectionChange={(section) =>
+          setDevelopmentFocus((current) =>
+            current ? { ...current, section } : current,
+          )
+        }
+        /**
+         * A split keeps the roster on screen, so there is nowhere to go back
+         * to and the header drops its back button.
+         */
+        onBack={splitMembers ? undefined : () => setDevelopmentFocus(null)}
+        autoOpenCreateGoal={developmentFocus.createGoal ?? false}
+        onCreateGoalIntentHandled={() =>
+          setDevelopmentFocus((current) =>
+            current ? { ...current, createGoal: false } : current,
+          )
+        }
+        startCheckInToken={developmentFocus.startCheckInToken ?? 0}
+        preferredTemplateId={developmentFocus.templateId ?? null}
+        plannedEventId={developmentFocus.plannedEventId ?? null}
+        initialCheckInId={developmentFocus.checkInId ?? null}
+      />
+    ) : null;
+
   return (
     <CurvedTabLayout
       topInset={insets.top}
@@ -2290,12 +3035,10 @@ export default function TasksScreen() {
       headerTestID="workspace-header"
       notificationsSize="large"
       rightAction={
-        activeTeamId ? (
-          <View
-            style={{ flexDirection: "row", alignItems: "center" }}
-          >
+        activeTeamId && access.canWrite ? (
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             <HeaderAddButton
-              onPress={() => setShowAddModal(true)}
+              onPress={openWorkspaceCreate}
               accessibilityLabel="Add"
               testID="workspace-header-add-button"
               tone="light"
@@ -2377,6 +3120,130 @@ export default function TasksScreen() {
             }}
           />
 
+          {isCalendarManager ? (
+            <SnapshotDevelopmentSheet
+              visible={selectedSnapshotDetail === "development"}
+              checkInItems={summaryCheckInAttentionItems}
+              goalItems={summaryGoalCoverageItems}
+              loading={summaryMetricsLoading}
+              goalsRequired={summaryStandards.goalsRequired}
+              onClose={() => setSelectedSnapshotDetail(null)}
+              onCheckInMemberPress={(member) => {
+                setSelectedSnapshotDetail(null);
+                setDevelopmentFocus({
+                  userId: member.userId,
+                  section: "check-ins",
+                });
+                openMembers();
+              }}
+              onGoalMemberPress={(member) => {
+                setSelectedSnapshotDetail(null);
+                setDevelopmentFocus({
+                  userId: member.userId,
+                  section: "goals",
+                });
+                openMembers();
+              }}
+            />
+          ) : (
+            <AlenioBottomSheet
+              visible={selectedSnapshotDetail === "development"}
+              title="Development"
+              subtitle="Your growth at a glance"
+              onClose={() => setSelectedSnapshotDetail(null)}
+              compact
+              showCloseButton
+              testID="snapshot-personal-development-sheet"
+            >
+              <AlenioSheetCard tint="purple" compact>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: 14,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#EEEAFE",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        fontWeight: "800",
+                        color: "#684BFF",
+                      }}
+                    >
+                      {summaryMemberDevelopmentCount ?? "—"}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      style={{
+                        fontSize: 13.5,
+                        lineHeight: 18,
+                        fontWeight: "800",
+                        color: "#111827",
+                      }}
+                    >
+                      Active development goals
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 2,
+                        fontSize: 11.5,
+                        lineHeight: 16,
+                        color: "#667085",
+                      }}
+                    >
+                      {summaryMemberDevelopmentStatus === "check_in_overdue"
+                        ? "Your check-in is overdue."
+                        : summaryMemberDevelopmentStatus === "check_in_due_soon"
+                          ? "Your next check-in is due soon."
+                          : summaryMemberDevelopmentStatus === "goals_missing"
+                            ? `${summaryMemberMissingGoals ?? 1} ${
+                                summaryMemberMissingGoals === 1 ? "goal is" : "goals are"
+                              } still needed.`
+                            : summaryMemberDevelopmentStatus
+                              ? "Your development plan is on track."
+                              : "Development status is unavailable."}
+                    </Text>
+                  </View>
+                </View>
+              </AlenioSheetCard>
+            </AlenioBottomSheet>
+          )}
+
+          <TaskPreviewSheet
+            visible={!!previewTask}
+            task={previewTask}
+            onClose={() => setPreviewTask(null)}
+            onEdit={
+              previewTask
+                ? () => {
+                    const task = previewTask;
+                    setPreviewTask(null);
+                    openTaskDetails(task, { startEdit: true });
+                  }
+                : undefined
+            }
+            onComplete={
+              previewTask && previewTask.status !== "done"
+                ? () => {
+                    const task = previewTask;
+                    setPreviewTask(null);
+                    handleToggleTask(task);
+                  }
+                : undefined
+            }
+          />
+
           <EventPreviewSheet
             visible={!!previewEvent}
             event={previewEvent}
@@ -2424,7 +3291,14 @@ export default function TasksScreen() {
             subtitle={
               confirmCompleteTask?.status === "done"
                 ? "This will return it to your active list"
-                : "This will move it to completed"
+                : confirmCompleteTask &&
+                    ownerCompletingUnassignedTask(
+                      currentRole,
+                      session?.user?.id,
+                      confirmCompleteTask,
+                    )
+                  ? "This task is not assigned to you"
+                  : "This will move it to completed"
             }
             onClose={() => {
               if (checkingSeriesOrder || toggleMutation.isPending) return;
@@ -2535,7 +3409,13 @@ export default function TasksScreen() {
                     >
                       {confirmCompleteTask.kind === "reminder"
                         ? "Private reminder"
-                        : "Workspace task"}
+                        : ownerCompletingUnassignedTask(
+                            currentRole,
+                            session?.user?.id,
+                            confirmCompleteTask,
+                          )
+                          ? "Not assigned to you"
+                          : "Workspace task"}
                     </Text>
                   </View>
                 </View>
@@ -2689,7 +3569,8 @@ export default function TasksScreen() {
                     marginBottom: 24,
                   }}
                 >
-                  Subtasks are incomplete. Finish them before marking this task as done.
+                  Subtasks are incomplete. Finish them before marking this task
+                  as done.
                 </Text>
                 <Pressable
                   onPress={() => setBlockedSubtasks(null)}
@@ -2768,9 +3649,9 @@ export default function TasksScreen() {
                 ? "This cannot be undone"
                 : actionMenuEvent?.isOneOnOne
                   ? "Choose a check-in action"
-                : actionMenuEvent?.isVideoMeeting
-                  ? "Virtual meeting options"
-                  : "Calendar event options"
+                  : actionMenuEvent?.isVideoMeeting
+                    ? "Virtual meeting options"
+                    : "Calendar event options"
             }
             onClose={() => {
               setActionMenuEvent(null);
@@ -2818,6 +3699,7 @@ export default function TasksScreen() {
                     const ev = actionMenuEvent;
                     setActionMenuEvent(null);
                     setConfirmDeleteActionEvent(false);
+                    if (!access.canWrite || !ev) return;
                     deleteEventMutation.mutate(ev.id);
                   }}
                   style={[
@@ -3009,107 +3891,150 @@ export default function TasksScreen() {
             </AlenioSheetCard>
           </AlenioBottomSheet>
 
+          <AlenioBottomSheet
+            visible={readOnlySheetOpen && readOnlyWorkspace}
+            title="Read-only workspace"
+            onClose={() => setReadOnlySheetOpen(false)}
+            compact
+            testID="workspace-read-only-sheet"
+          >
+            <Text
+              style={{
+                fontSize: 14,
+                lineHeight: 20,
+                color: "#64748B",
+                textAlign: "center",
+              }}
+            >
+              You can explore your workspace and view existing content.
+              Creating or editing content requires an eligible plan.
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setReadOnlySheetOpen(false);
+                if (!activeTeamId) return;
+                router.push({
+                  pathname: "/choose-plan",
+                  params: { teamId: activeTeamId },
+                });
+              }}
+              style={[alenioSheetStyles.primaryButton, { marginTop: 16 }]}
+              activeOpacity={0.92}
+              testID="workspace-read-only-view-plans"
+            >
+              <Text style={alenioSheetStyles.primaryButtonText}>View plans</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setReadOnlySheetOpen(false)}
+              style={[alenioSheetStyles.cancelButton, { marginTop: 8 }]}
+              activeOpacity={0.7}
+              testID="workspace-read-only-not-now"
+            >
+              <Text style={alenioSheetStyles.cancelButtonText}>Not now</Text>
+            </TouchableOpacity>
+          </AlenioBottomSheet>
+
           {/* Add choice modal */}
           <AlenioBottomSheet
-            visible={showAddModal}
-            title="What would you like to add?"
-            subtitle="Create something for this workspace"
+            visible={showAddModal && access.canWrite}
+            title="Create"
             onClose={() => setShowAddModal(false)}
             compact
+            showCloseButton
             testID="workspace-add-sheet"
-            footer={
-              <TouchableOpacity
-                onPress={() => setShowAddModal(false)}
-                style={alenioSheetStyles.cancelButton}
-                activeOpacity={0.8}
-              >
-                <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            }
           >
-            <AlenioSheetOption
-              icon={<MessageSquarePlus size={16} color="white" />}
-              iconColor="#4361EE"
-              title="Post"
-              subtitle="Share an update with the workspace"
-              onPress={() => {
-                setShowAddModal(false);
-                router.push({
-                  pathname: "/create-post",
-                  params: { teamId: activeTeamId! },
-                });
-              }}
-            />
-            {isOwnerOrLeader ? (
-              <AlenioSheetOption
-                icon={<CalendarDays size={16} color="white" />}
-                iconColor="#7C3AED"
-                title="Calendar Event"
-                subtitle="Add to the team calendar, with an optional video call"
-                onPress={() => {
-                  setShowAddModal(false);
-                  openEventModal();
-                }}
-              />
-            ) : (
-              <AlenioSheetOption
-                icon={<CalendarDays size={16} color="white" />}
-                iconColor="#64748B"
-                title="Calendar event"
-                subtitle="Create a private event or request a team event"
-                onPress={() => {
-                  setShowAddModal(false);
-                  openPersonalEventModal();
-                }}
-              />
-            )}
-            {isOwnerOrLeader ? (
-              <AlenioSheetOption
-                icon={<CheckSquare size={16} color="white" />}
-                title="Task"
-                subtitle="Create a new task for the team"
-                onPress={() => {
-                  setShowAddModal(false);
-                  router.push({
-                    pathname: "/create-task",
-                    params: {
-                      teamId: activeTeamId!,
-                      initialDueDate: selectedDay ?? toLocalIso(new Date()),
-                      kind: "workspace_task",
+            <WorkspaceCreateGrid
+              items={[
+                isOwnerOrLeader
+                  ? {
+                      key: "event",
+                      label: "Event",
+                      hint: "Add to the team calendar, with an optional video call",
+                      background: "#F5F3FF",
+                      icon: (
+                        <CalendarDays size={28} color="#7C3AED" strokeWidth={2} />
+                      ),
+                      testID: "workspace-add-event",
+                      onPress: () => {
+                        setShowAddModal(false);
+                        openEventModal();
+                      },
+                    }
+                  : {
+                      key: "event",
+                      label: "Event",
+                      hint: "Create a private event or request a team event",
+                      background: "#F1F5F9",
+                      icon: (
+                        <CalendarDays size={28} color="#64748B" strokeWidth={2} />
+                      ),
+                      testID: "workspace-add-event",
+                      onPress: () => {
+                        setShowAddModal(false);
+                        openPersonalEventModal();
+                      },
                     },
-                  });
-                }}
-              />
-            ) : null}
-            <AlenioSheetOption
-              icon={<CheckSquare size={16} color="white" />}
-              iconColor="#4F46E5"
-              title="Reminder"
-              subtitle="Private to you and separate from Team Momentum"
-              onPress={() => {
-                setShowAddModal(false);
-                router.push({
-                  pathname: "/create-task",
-                  params: {
-                    teamId: activeTeamId!,
-                    initialDueDate: selectedDay ?? toLocalIso(new Date()),
-                    kind: "reminder",
+                ...(isOwnerOrLeader
+                  ? [
+                      {
+                        key: "task",
+                        label: "Task",
+                        hint: "Create a new task for the team",
+                        background: "#ECFDF3",
+                        icon: (
+                          <CheckSquare size={28} color="#128A52" strokeWidth={2} />
+                        ),
+                        testID: "workspace-add-task",
+                        onPress: () => {
+                          setShowAddModal(false);
+                          router.push({
+                            pathname: "/create-task",
+                            params: {
+                              teamId: activeTeamId!,
+                              initialDueDate:
+                                selectedDay ?? toLocalIso(new Date()),
+                              kind: "workspace_task",
+                            },
+                          });
+                        },
+                      },
+                    ]
+                  : []),
+                {
+                  key: "reminder",
+                  label: "Reminder",
+                  hint: "Private to you and separate from Team Momentum",
+                  background: "#E0E7FF",
+                  icon: <Bell size={28} color="#4F46E5" strokeWidth={2} />,
+                  testID: "workspace-add-reminder",
+                  onPress: () => {
+                    setShowAddModal(false);
+                    router.push({
+                      pathname: "/create-task",
+                      params: {
+                        teamId: activeTeamId!,
+                        initialDueDate: selectedDay ?? toLocalIso(new Date()),
+                        kind: "reminder",
+                      },
+                    });
                   },
-                });
-              }}
-            />
-            <AlenioSheetOption
-              icon={<Award size={16} color="white" />}
-              iconColor="#D97706"
-              title="Celebrate someone"
-              subtitle="Recognize a teammate on Updates"
-              onPress={() => {
-                setShowAddModal(false);
-                router.push({
-                  pathname: "/recognition-hub",
-                  params: { openGive: "1", teamId: activeTeamId! },
-                });
-              }}
+                },
+                {
+                  key: "celebrate",
+                  label: "Celebrate",
+                  hint: "Recognize a teammate on Feed",
+                  background: "#FFF7ED",
+                  icon: <Award size={28} color="#D97706" strokeWidth={2} />,
+                  testID: "workspace-add-celebrate",
+                  onPress: () => {
+                    setShowAddModal(false);
+                    router.push({
+                      pathname: "/recognition-hub",
+                      params: { openGive: "1", teamId: activeTeamId! },
+                    });
+                  },
+                },
+              ]}
             />
           </AlenioBottomSheet>
 
@@ -3130,828 +4055,1266 @@ export default function TasksScreen() {
             }}
           >
             <View style={{ flex: 1 }}>
-            <SafeKeyboardAvoidingView
-              behavior="height"
-              enabled={!showEventStockPhotoSearch}
-              style={{ flex: 1, justifyContent: "flex-end" }}
-            >
-              <Pressable
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: "rgba(0,0,0,0.5)",
-                }}
-                onPress={() => {
-                  setShowEventModal(false);
-                  setEditingEvent(null);
-                  setEventModalReadOnly(false);
-                  setConfirmDeleteEvent(false);
-                  setShowMeetingAssigneeDropdown(false);
-                  setShowDurationPicker(false);
-                  setShowEventPhotoPicker(false);
-                  setShowEventStockPhotoSearch(false);
-                }}
-              />
-              <Pressable
-                style={eventFormStyles.sheet}
-                onPress={(e) => e.stopPropagation()}
+              <SafeKeyboardAvoidingView
+                behavior="height"
+                enabled={!showEventStockPhotoSearch}
+                style={{ flex: 1, justifyContent: "flex-end" }}
               >
-                <View style={eventFormStyles.handle} />
-                <View style={eventFormStyles.header}>
-                  <View style={eventFormStyles.headerBrand}>
-                    <Image
-                      source={require("@/assets/alenio-icon.png")}
-                      style={eventFormStyles.headerLogo}
-                    />
-                    <Text style={eventFormStyles.headerTitle}>
-                      {editingEvent
-                        ? eventModalReadOnly
-                          ? eventModalType === "checkin"
-                            ? "Check-in details"
-                            : "Event details"
-                          : eventModalType === "checkin"
-                            ? "Edit Check-in"
-                            : "Edit Event"
-                        : eventModalType === "checkin"
-                          ? "Schedule Check-in"
-                          : "New Event"}
-                    </Text>
-                  </View>
-                  <View style={eventFormStyles.headerActions}>
-                    {editingEvent && !eventModalReadOnly ? (
-                      <Pressable
-                        onPress={() =>
-                          editingEvent && confirmAndDeleteEvent(editingEvent)
-                        }
-                        style={eventFormStyles.iconBtn}
-                        testID="delete-event-button"
-                        accessibilityRole="button"
-                        accessibilityLabel="Delete event"
-                      >
-                        <Trash2 size={15} color="#94A3B8" strokeWidth={2} />
-                      </Pressable>
-                    ) : null}
-                    <Pressable
-                      onPress={() => {
-                        setShowEventModal(false);
-                        setEditingEvent(null);
-                        setEventModalReadOnly(false);
-                        setConfirmDeleteEvent(false);
-                        setShowMeetingAssigneeDropdown(false);
-                        setShowDurationPicker(false);
-                        setShowEventPhotoPicker(false);
-                        setShowEventStockPhotoSearch(false);
-                      }}
-                      hitSlop={8}
-                    >
-                      <X size={20} color="#94A3B8" strokeWidth={2.2} />
-                    </Pressable>
-                  </View>
-                </View>
-
-                {confirmDeleteEvent ? (
-                  <View
-                    style={{
-                      marginHorizontal: 20,
-                      marginBottom: 16,
-                      backgroundColor: "#F8F9FC",
-                      borderRadius: 16,
-                      borderWidth: 1,
-                      borderColor: "#E4E8F0",
-                      padding: 16,
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 19,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: "#FEECEC",
-                      }}
-                    >
-                      <Trash2 size={17} color="#DC2626" strokeWidth={2.2} />
-                    </View>
-                    <View style={{ alignItems: "center", gap: 4 }}>
-                      <Text
-                        style={{
-                          fontSize: 15,
-                          fontWeight: "700",
-                          color: "#172033",
-                          textAlign: "center",
-                        }}
-                      >
-                        Delete this event?
-                      </Text>
-                      <Text
-                        style={{
-                          maxWidth: 280,
-                          fontSize: 12,
-                          lineHeight: 17,
-                          color: "#6F7B8F",
-                          textAlign: "center",
-                        }}
-                      >
-                        “{editingEvent?.title}” will be permanently removed.
-                        This cannot be undone.
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: "row", gap: 10 }}>
-                      <Pressable
-                        onPress={() => setConfirmDeleteEvent(false)}
-                        style={{
-                          minWidth: 112,
-                          borderRadius: 11,
-                          paddingVertical: 10,
-                          alignItems: "center",
-                          backgroundColor: "#EEF1F5",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "700",
-                            color: "#536075",
-                          }}
-                        >
-                          Keep event
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() =>
-                          editingEvent &&
-                          deleteEventMutation.mutate(editingEvent.id)
-                        }
-                        disabled={deleteEventMutation.isPending}
-                        style={{
-                          minWidth: 112,
-                          borderRadius: 11,
-                          paddingVertical: 10,
-                          alignItems: "center",
-                          backgroundColor: "#DC2626",
-                        }}
-                        testID="confirm-delete-event-button"
-                      >
-                        {deleteEventMutation.isPending ? (
-                          <ActivityIndicator color="white" size="small" />
-                        ) : (
-                          <Text
-                            style={{
-                              fontSize: 13,
-                              fontWeight: "700",
-                              color: "white",
-                            }}
-                          >
-                            Delete event
-                          </Text>
-                        )}
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : null}
-
-                <ScrollView
-                  style={eventFormStyles.scroll}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                  keyboardDismissMode="interactive"
-                  contentContainerStyle={eventFormStyles.scrollContent}
-                >
-                  <View style={eventFormStyles.titleRow}>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={eventFormStyles.fieldLabel}>Title</Text>
-                      <TextInput
-                        style={[
-                          eventFormStyles.input,
-                          { marginBottom: 0 },
-                          eventModalReadOnly
-                            ? eventFormStyles.inputDisabled
-                            : null,
-                        ]}
-                        placeholder="Event title"
-                        placeholderTextColor="#A8B3C7"
-                        value={eventTitle}
-                        onChangeText={(t) => {
-                          setEventTitle(t);
-                          setFormError(null);
-                        }}
-                        editable={!eventModalReadOnly}
-                        testID="event-title-input"
-                      />
-                    </View>
-                    <Pressable
-                      onPress={pickEventPhoto}
-                      disabled={eventModalReadOnly || eventImageUploading}
-                      style={eventFormStyles.photoBtn}
-                      testID="event-photo-button"
-                    >
-                      {eventImageUploading ? (
-                        <ActivityIndicator size="small" color="#4361EE" />
-                      ) : eventImageUrl ? (
-                        <Image
-                          source={{ uri: eventImageUrl }}
-                          style={eventFormStyles.photoImage}
-                        />
-                      ) : (
-                        <>
-                          <ImagePlus size={18} color="#4361EE" strokeWidth={2} />
-                          <Text style={eventFormStyles.photoHint}>Photo</Text>
-                        </>
-                      )}
-                    </Pressable>
-                  </View>
-
-                  <Text style={eventFormStyles.fieldLabel}>
-                    Description (optional)
-                  </Text>
-                  <TextInput
-                    style={[
-                      eventFormStyles.input,
-                      eventFormStyles.textarea,
-                      eventModalReadOnly ? eventFormStyles.inputDisabled : null,
-                    ]}
-                    placeholder="Add a description"
-                    placeholderTextColor="#A8B3C7"
-                    value={eventDescription}
-                    onChangeText={setEventDescription}
-                    multiline
-                    editable={!eventModalReadOnly}
-                  />
-
-                  {eventModalType === "checkin" ? (
-                    <View style={{ marginBottom: 12 }}>
-                      <Text style={eventFormStyles.sectionTitle}>Format</Text>
-                      <View style={eventFormStyles.segment}>
-                        {(
-                          [
-                            ["in_person", "In person"],
-                            ["virtual", "Virtual"],
-                          ] as const
-                        ).map(([value, label]) => {
-                          const selected = checkInFormat === value;
-                          return (
-                            <Pressable
-                              key={value}
-                              onPress={() => {
-                                if (eventModalReadOnly) return;
-                                setCheckInFormat(value);
-                                setFormError(null);
-                              }}
-                              disabled={eventModalReadOnly}
-                              style={[
-                                eventFormStyles.segmentItem,
-                                selected ? eventFormStyles.segmentItemOn : null,
-                              ]}
-                              testID={`check-in-format-${value}`}
-                            >
-                              <Text
-                                style={[
-                                  eventFormStyles.segmentText,
-                                  selected
-                                    ? eventFormStyles.segmentTextOn
-                                    : null,
-                                ]}
-                              >
-                                {label}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  ) : null}
-
-                  {eventModalType === "event" && isOwnerOrLeader ? (
-                    <View style={eventFormStyles.videoRow}>
-                      <Video size={16} color="#4361EE" strokeWidth={2} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={eventFormStyles.settingTitle}>
-                          Video call
-                        </Text>
-                        <Text style={eventFormStyles.settingHint}>
-                          Add a join link
-                        </Text>
-                      </View>
-                      <Switch
-                        value={eventIncludeVideo}
-                        disabled={eventModalReadOnly}
-                        onValueChange={(on) => {
-                          if (eventModalReadOnly) return;
-                          setEventIncludeVideo(on);
-                          setShowEndPicker(false);
-                          setShowEndTimePicker(false);
-                          setShowDurationPicker(false);
-              setShowEventPhotoPicker(false);
-                          setEventEnd(
-                            videoMeetingEndFromDuration(
-                              eventStart,
-                              meetingDurationMinutes,
-                            ),
-                          );
-                        }}
-                        trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
-                        thumbColor="white"
-                        testID="event-video-toggle"
-                      />
-                    </View>
-                  ) : null}
-
-                  <Text style={eventFormStyles.sectionTitle}>Schedule</Text>
-                  {eventUsesRange ? (
-                    <View style={eventFormStyles.tileRow}>
-                      <View style={{ flex: 1 }}>
-                        <EventScheduleTile
-                          icon={Calendar}
-                          label="Start date"
-                          value={eventStart.toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                          open={showStartPicker}
-                          disabled={eventModalReadOnly}
-                          onPress={() => {
-                            if (eventModalReadOnly) return;
-                            setShowEndPicker(false);
-                            setShowEndTimePicker(false);
-                            setShowStartTimePicker(false);
-                            setShowDurationPicker(false);
-              setShowEventPhotoPicker(false);
-                            setShowStartPicker(true);
-                          }}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <EventScheduleTile
-                          icon={Calendar}
-                          label="End date"
-                          value={eventEnd.toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                          open={showEndPicker}
-                          disabled={eventModalReadOnly}
-                          onPress={() => {
-                            if (eventModalReadOnly) return;
-                            setShowStartPicker(false);
-                            setShowStartTimePicker(false);
-                            setShowEndTimePicker(false);
-                            setShowEndPicker(true);
-                          }}
-                        />
-                      </View>
-                    </View>
-                  ) : (
-                    <EventScheduleTile
-                      icon={Calendar}
-                      label="Date"
-                      value={eventStart.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                      open={showStartPicker}
-                      disabled={eventModalReadOnly}
-                      onPress={() => {
-                        if (eventModalReadOnly) return;
-                        setShowEndPicker(false);
-                        setShowEndTimePicker(false);
-                        setShowStartTimePicker(false);
-                        setShowDurationPicker(false);
-              setShowEventPhotoPicker(false);
-                        setShowStartPicker(true);
-                      }}
-                    />
-                  )}
-                  <View style={eventFormStyles.tileRow}>
-                    <View style={{ flex: 1 }}>
-                      <EventScheduleTile
-                        icon={Clock}
-                        label="Starts"
-                        value={eventStart.toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                          hour12: true,
-                        })}
-                        open={showStartTimePicker}
-                        disabled={eventModalReadOnly}
-                        onPress={() => {
-                          if (eventModalReadOnly) return;
-                          setShowStartTimePicker(!showStartTimePicker);
-                          setShowEndTimePicker(false);
-                          setShowDurationPicker(false);
-              setShowEventPhotoPicker(false);
-                          setShowStartPicker(false);
-                          setShowEndPicker(false);
-                        }}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <EventScheduleTile
-                        icon={Clock}
-                        label={eventUsesRange ? "Ends" : "Duration"}
-                        value={
-                          eventUsesRange
-                            ? eventEnd.toLocaleTimeString("en-US", {
-                                hour: "numeric",
-                                minute: "2-digit",
-                                hour12: true,
-                              })
-                            : formatVideoMeetingDuration(meetingDurationMinutes)
-                        }
-                        open={
-                          eventUsesRange
-                            ? showEndTimePicker
-                            : showDurationPicker
-                        }
-                        disabled={eventModalReadOnly}
-                        onPress={() => {
-                          if (eventModalReadOnly) return;
-                          setShowStartTimePicker(false);
-                          setShowStartPicker(false);
-                          setShowEndPicker(false);
-                          if (eventUsesRange) {
-                            setShowDurationPicker(false);
-              setShowEventPhotoPicker(false);
-                            setShowEndTimePicker(!showEndTimePicker);
-                          } else {
-                            setShowEndTimePicker(false);
-                            setShowDurationPicker(true);
-                          }
-                        }}
-                      />
-                    </View>
-                  </View>
-                  {!eventUsesRange ? (
-                    <Text style={eventFormStyles.caption}>
-                      Ends{" "}
-                      {formatVideoMeetingEndPreview(
-                        eventStart,
-                        meetingDurationMinutes,
-                      ).replace(/, ([^,]*)$/, " at $1")}
-                    </Text>
-                  ) : null}
-
-                  {showStartPicker ? (
-                    <View style={eventFormStyles.pickerCard}>
-                      <View style={eventFormStyles.pickerToolbar}>
-                        <Pressable onPress={() => setShowStartPicker(false)}>
-                          <Text style={eventFormStyles.pickerCancel}>Cancel</Text>
-                        </Pressable>
-                        <Text style={eventFormStyles.pickerTitle}>Start date</Text>
-                        <Pressable onPress={() => setShowStartPicker(false)}>
-                          <Text style={eventFormStyles.pickerDone}>Done</Text>
-                        </Pressable>
-                      </View>
-                      <DateTimePicker
-                        value={eventStart}
-                        mode="date"
-                        display={Platform.OS === "ios" ? "inline" : "calendar"}
-                        onChange={(e, d) => {
-                          if (Platform.OS === "android")
-                            setShowStartPicker(false);
-                          if (e.type === "dismissed") return;
-                          if (d) {
-                            setEventStart((prev) => {
-                              const next = applyDatePart(prev, d);
-                              if (!eventUsesRange) {
-                                setEventEnd(
-                                  videoMeetingEndFromDuration(
-                                    next,
-                                    meetingDurationMinutes,
-                                  ),
-                                );
-                                return next;
-                              }
-                              setEventEnd((prevEnd) =>
-                                shiftEndKeepingLength(prev, next, prevEnd),
-                              );
-                              return next;
-                            });
-                          }
-                        }}
-                      />
-                    </View>
-                  ) : null}
-
-                  {showEndPicker && eventUsesRange ? (
-                    <View style={eventFormStyles.pickerCard}>
-                      <View style={eventFormStyles.pickerToolbar}>
-                        <Pressable onPress={() => setShowEndPicker(false)}>
-                          <Text style={eventFormStyles.pickerCancel}>Cancel</Text>
-                        </Pressable>
-                        <Text style={eventFormStyles.pickerTitle}>End date</Text>
-                        <Pressable onPress={() => setShowEndPicker(false)}>
-                          <Text style={eventFormStyles.pickerDone}>Done</Text>
-                        </Pressable>
-                      </View>
-                      <DateTimePicker
-                        value={eventEnd}
-                        mode="date"
-                        display={Platform.OS === "ios" ? "inline" : "calendar"}
-                        minimumDate={eventStart}
-                        onChange={(e, d) => {
-                          if (Platform.OS === "android")
-                            setShowEndPicker(false);
-                          if (e.type === "dismissed") return;
-                          if (d) {
-                            setEventEnd((prev) => {
-                              const next = applyDatePart(prev, d);
-                              return next <= eventStart
-                                ? hourAfter(eventStart)
-                                : next;
-                            });
-                          }
-                        }}
-                      />
-                    </View>
-                  ) : null}
-
-                  {showStartTimePicker ? (
-                    <View style={eventFormStyles.pickerCard}>
-                      <View style={eventFormStyles.pickerToolbar}>
-                        <Text style={eventFormStyles.pickerTitle}>Start time</Text>
-                        <Pressable onPress={() => setShowStartTimePicker(false)}>
-                          <Text style={eventFormStyles.pickerDone}>Done</Text>
-                        </Pressable>
-                      </View>
-                      <DateTimePicker
-                        value={eventStart}
-                        mode="time"
-                        display="spinner"
-                        onChange={(e, d) => {
-                          if (Platform.OS === "android")
-                            setShowStartTimePicker(false);
-                          if (e.type === "dismissed") return;
-                          if (d) {
-                            setEventStart((prev) => {
-                              const n = applyTimePart(prev, d);
-                              if (!eventUsesRange) {
-                                setEventEnd(
-                                  videoMeetingEndFromDuration(
-                                    n,
-                                    meetingDurationMinutes,
-                                  ),
-                                );
-                                return n;
-                              }
-                              setEventEnd((prevEnd) =>
-                                prevEnd <= n
-                                  ? hourAfter(n)
-                                  : shiftEndKeepingLength(prev, n, prevEnd),
-                              );
-                              return n;
-                            });
-                          }
-                        }}
-                        style={{ height: 216 }}
-                      />
-                    </View>
-                  ) : null}
-
-                  {showEndTimePicker && eventUsesRange ? (
-                    <View style={eventFormStyles.pickerCard}>
-                      <View style={eventFormStyles.pickerToolbar}>
-                        <Text style={eventFormStyles.pickerTitle}>End time</Text>
-                        <Pressable onPress={() => setShowEndTimePicker(false)}>
-                          <Text style={eventFormStyles.pickerDone}>Done</Text>
-                        </Pressable>
-                      </View>
-                      <DateTimePicker
-                        value={eventEnd}
-                        mode="time"
-                        display="spinner"
-                        onChange={(e, d) => {
-                          if (Platform.OS === "android")
-                            setShowEndTimePicker(false);
-                          if (e.type === "dismissed") return;
-                          if (d) {
-                            setEventEnd((prev) => {
-                              const n = applyTimePart(prev, d);
-                              return n <= eventStart
-                                ? hourAfter(eventStart)
-                                : n;
-                            });
-                          }
-                        }}
-                        style={{ height: 216 }}
-                      />
-                    </View>
-                  ) : null}
-
-                  {eventIsHidden &&
-                  (eventModalType !== "event" || eventIncludeVideo) ? (
-                    <View style={{ marginBottom: 18 }}>
-                      <Text style={eventFormStyles.fieldLabel}>
-                        {eventModalType === "checkin"
-                          ? "Team member"
-                          : "Attendees"}
-                      </Text>
-                      <Text style={eventFormStyles.settingHint}>
-                        {eventModalType === "checkin"
-                          ? "Select the person this check-in is for."
-                          : "Choose who can see this private meeting. Leave empty to keep it to yourself."}
-                      </Text>
-                      <Pressable
-                        onPress={() => {
-                          setShowStartTimePicker(false);
-                          setShowDurationPicker(false);
-              setShowEventPhotoPicker(false);
-                          setShowMeetingAssigneeDropdown(true);
-                        }}
-                        style={eventFormStyles.selectBtn}
-                      >
-                        <Text
-                          style={eventFormStyles.selectBtnText}
-                          numberOfLines={1}
-                        >
-                          {meetingAssigneeIds.length === 0
-                            ? eventModalType === "checkin"
-                              ? "Select team member"
-                              : "Select attendees"
-                            : eventModalType === "checkin"
-                              ? selectedCheckInAssignee?.user.name?.trim() ||
-                                selectedCheckInAssignee?.user.email ||
-                                "Team member selected"
-                              : allMeetingAssigneesSelected
-                                ? "All team members"
-                                : `${meetingAssigneeIds.length} attendee${meetingAssigneeIds.length === 1 ? "" : "s"} selected`}
-                        </Text>
-                        <ChevronDown size={16} color="#94A3B8" />
-                      </Pressable>
-                    </View>
-                  ) : null}
-
-                  {formError ? (
-                    <Text style={eventFormStyles.errorText}>{formError}</Text>
-                  ) : null}
-
-                  {eventModalType === "event" ? (
-                    <>
-                      <Text style={eventFormStyles.sectionTitle}>
-                        Event settings
-                      </Text>
-                      <Pressable
-                        style={eventFormStyles.videoRow}
-                        disabled={eventModalReadOnly}
-                        onPress={() => {
-                          if (eventModalReadOnly) return;
-                          const nextHidden = !eventIsHidden;
-                          setEventIsHidden(nextHidden);
-                          if (!nextHidden) {
-                            setMeetingAssigneeIds([]);
-                            setShowMeetingAssigneeDropdown(false);
-                          }
-                        }}
-                        testID="hidden-toggle"
-                      >
-                        <Users size={16} color="#4361EE" strokeWidth={2} />
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={eventFormStyles.settingTitle}>
-                            Visibility
-                          </Text>
-                          <Text style={eventFormStyles.settingHint}>
-                            {!eventIsHidden
-                              ? isOwnerOrLeader
-                                ? "Public · Whole team"
-                                : "Public · Needs approval"
-                              : "Private · Only you"}
-                          </Text>
-                        </View>
-                        <ChevronRight
-                          size={14}
-                          color="#C5CAD3"
-                          strokeWidth={2.2}
-                        />
-                      </Pressable>
-                    </>
-                  ) : null}
-                  {!eventModalReadOnly &&
-                  !isOwnerOrLeader &&
-                  eventModalType === "event" &&
-                  !eventIsHidden ? (
-                    <Text style={eventFormStyles.caption}>
-                      Public events are sent to your team leader or owner for
-                      approval.
-                    </Text>
-                  ) : null}
-
-                </ScrollView>
-                <View
-                  style={[
-                    eventFormStyles.footer,
-                    { paddingBottom: Math.max(insets.bottom, 16) },
-                  ]}
-                >
-                  {eventModalReadOnly ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setShowEventModal(false);
-                        setEditingEvent(null);
-                        setEventModalReadOnly(false);
-                        setConfirmDeleteEvent(false);
-                      }}
-                      style={eventFormStyles.secondaryBtn}
-                      testID="close-event-details-button"
-                    >
-                      <Text style={eventFormStyles.secondaryBtnText}>Close</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      onPress={handleSaveEvent}
-                      disabled={
-                        createEventMutation.isPending ||
-                        updateEventMutation.isPending
-                      }
-                      style={eventFormStyles.primaryBtn}
-                      testID="save-event-button"
-                    >
-                      {createEventMutation.isPending ||
-                      updateEventMutation.isPending ? (
-                        <ActivityIndicator color="white" />
-                      ) : (
-                        <Text style={eventFormStyles.primaryBtnText}>
-                          {!isOwnerOrLeader && !eventIsHidden
-                            ? "Submit for approval"
-                            : editingEvent
-                              ? eventModalType === "checkin"
-                                ? "Update check-in"
-                                : "Save event"
-                              : eventModalType === "checkin"
-                                ? "Schedule check-in"
-                                : "Create event"}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </Pressable>
-
-              {/* Attendee / duration pickers as overlays inside the event modal (nested Modals break taps on iOS). */}
-              {showMeetingAssigneeDropdown ? (
-                <View
+                <Pressable
                   style={{
                     position: "absolute",
                     top: 0,
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    justifyContent: "flex-end",
-                    zIndex: 30,
+                    backgroundColor: "rgba(0,0,0,0.5)",
                   }}
+                  onPress={() => {
+                    setShowEventModal(false);
+                    setEditingEvent(null);
+                    setEventModalReadOnly(false);
+                    setConfirmDeleteEvent(false);
+                    setShowMeetingAssigneeDropdown(false);
+                    setShowDurationPicker(false);
+                    setShowEventPhotoPicker(false);
+                    setShowEventStockPhotoSearch(false);
+                  }}
+                />
+                <Pressable
+                  style={eventFormStyles.sheet}
+                  onPress={(e) => e.stopPropagation()}
                 >
-                  <Pressable
+                  <View style={eventFormStyles.handle} />
+                  <View style={eventFormStyles.header}>
+                    <View style={eventFormStyles.headerBrand}>
+                      <Image
+                        source={require("@/assets/alenio-icon.png")}
+                        style={eventFormStyles.headerLogo}
+                      />
+                      <Text style={eventFormStyles.headerTitle}>
+                        {editingEvent
+                          ? eventModalReadOnly
+                            ? eventModalType === "checkin"
+                              ? "Check-in details"
+                              : "Event details"
+                            : eventModalType === "checkin"
+                              ? "Edit Check-in"
+                              : "Edit Event"
+                          : eventModalType === "checkin"
+                            ? "Schedule Check-in"
+                            : "New Event"}
+                      </Text>
+                    </View>
+                    <View style={eventFormStyles.headerActions}>
+                      {editingEvent && !eventModalReadOnly ? (
+                        <Pressable
+                          onPress={() =>
+                            editingEvent && confirmAndDeleteEvent(editingEvent)
+                          }
+                          style={eventFormStyles.iconBtn}
+                          testID="delete-event-button"
+                          accessibilityRole="button"
+                          accessibilityLabel="Delete event"
+                        >
+                          <Trash2 size={15} color="#94A3B8" strokeWidth={2} />
+                        </Pressable>
+                      ) : null}
+                      <Pressable
+                        onPress={() => {
+                          setShowEventModal(false);
+                          setEditingEvent(null);
+                          setEventModalReadOnly(false);
+                          setConfirmDeleteEvent(false);
+                          setShowMeetingAssigneeDropdown(false);
+                          setShowDurationPicker(false);
+                          setShowEventPhotoPicker(false);
+                          setShowEventStockPhotoSearch(false);
+                        }}
+                        hitSlop={8}
+                      >
+                        <X size={20} color="#94A3B8" strokeWidth={2.2} />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {confirmDeleteEvent ? (
+                    <View
+                      style={{
+                        marginHorizontal: 20,
+                        marginBottom: 16,
+                        backgroundColor: "#F8F9FC",
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: "#E4E8F0",
+                        padding: 16,
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: 19,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "#FEECEC",
+                        }}
+                      >
+                        <Trash2 size={17} color="#DC2626" strokeWidth={2.2} />
+                      </View>
+                      <View style={{ alignItems: "center", gap: 4 }}>
+                        <Text
+                          style={{
+                            fontSize: 15,
+                            fontWeight: "700",
+                            color: "#172033",
+                            textAlign: "center",
+                          }}
+                        >
+                          Delete this event?
+                        </Text>
+                        <Text
+                          style={{
+                            maxWidth: 280,
+                            fontSize: 12,
+                            lineHeight: 17,
+                            color: "#6F7B8F",
+                            textAlign: "center",
+                          }}
+                        >
+                          “{editingEvent?.title}” will be permanently removed.
+                          This cannot be undone.
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 10 }}>
+                        <Pressable
+                          onPress={() => setConfirmDeleteEvent(false)}
+                          style={{
+                            minWidth: 112,
+                            borderRadius: 11,
+                            paddingVertical: 10,
+                            alignItems: "center",
+                            backgroundColor: "#EEF1F5",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              fontWeight: "700",
+                              color: "#536075",
+                            }}
+                          >
+                            Keep event
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            if (!access.canWrite || !editingEvent) return;
+                            deleteEventMutation.mutate(editingEvent.id);
+                          }}
+                          disabled={deleteEventMutation.isPending}
+                          style={{
+                            minWidth: 112,
+                            borderRadius: 11,
+                            paddingVertical: 10,
+                            alignItems: "center",
+                            backgroundColor: "#DC2626",
+                          }}
+                          testID="confirm-delete-event-button"
+                        >
+                          {deleteEventMutation.isPending ? (
+                            <ActivityIndicator color="white" size="small" />
+                          ) : (
+                            <Text
+                              style={{
+                                fontSize: 13,
+                                fontWeight: "700",
+                                color: "white",
+                              }}
+                            >
+                              Delete event
+                            </Text>
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  <ScrollView
+                    style={eventFormStyles.scroll}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="interactive"
+                    contentContainerStyle={eventFormStyles.scrollContent}
+                  >
+                    <View style={eventFormStyles.titleRow}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={eventFormStyles.fieldLabel}>Title</Text>
+                        <TextInput
+                          style={[
+                            eventFormStyles.input,
+                            { marginBottom: 0 },
+                            eventModalReadOnly
+                              ? eventFormStyles.inputDisabled
+                              : null,
+                          ]}
+                          placeholder="Event title"
+                          placeholderTextColor="#A8B3C7"
+                          value={eventTitle}
+                          onChangeText={(t) => {
+                            setEventTitle(t);
+                            setFormError(null);
+                          }}
+                          editable={!eventModalReadOnly}
+                          testID="event-title-input"
+                        />
+                      </View>
+                      <Pressable
+                        onPress={pickEventPhoto}
+                        disabled={eventModalReadOnly || eventImageUploading}
+                        style={eventFormStyles.photoBtn}
+                        testID="event-photo-button"
+                      >
+                        {eventImageUploading ? (
+                          <ActivityIndicator size="small" color="#4361EE" />
+                        ) : eventImageUrl ? (
+                          <Image
+                            source={{ uri: eventImageUrl }}
+                            style={eventFormStyles.photoImage}
+                          />
+                        ) : (
+                          <>
+                            <ImagePlus
+                              size={18}
+                              color="#4361EE"
+                              strokeWidth={2}
+                            />
+                            <Text style={eventFormStyles.photoHint}>Photo</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    </View>
+
+                    <Text style={eventFormStyles.fieldLabel}>
+                      Description (optional)
+                    </Text>
+                    <TextInput
+                      style={[
+                        eventFormStyles.input,
+                        eventFormStyles.textarea,
+                        eventModalReadOnly
+                          ? eventFormStyles.inputDisabled
+                          : null,
+                      ]}
+                      placeholder="Add a description"
+                      placeholderTextColor="#A8B3C7"
+                      value={eventDescription}
+                      onChangeText={setEventDescription}
+                      multiline
+                      editable={!eventModalReadOnly}
+                    />
+
+                    {eventModalType === "checkin" ? (
+                      <View style={{ marginBottom: 12 }}>
+                        <Text style={eventFormStyles.sectionTitle}>Format</Text>
+                        <View style={eventFormStyles.segment}>
+                          {(
+                            [
+                              ["in_person", "In person"],
+                              ["virtual", "Virtual"],
+                            ] as const
+                          ).map(([value, label]) => {
+                            const selected = checkInFormat === value;
+                            return (
+                              <Pressable
+                                key={value}
+                                onPress={() => {
+                                  if (eventModalReadOnly) return;
+                                  setCheckInFormat(value);
+                                  setFormError(null);
+                                }}
+                                disabled={eventModalReadOnly}
+                                style={[
+                                  eventFormStyles.segmentItem,
+                                  selected
+                                    ? eventFormStyles.segmentItemOn
+                                    : null,
+                                ]}
+                                testID={`check-in-format-${value}`}
+                              >
+                                <Text
+                                  style={[
+                                    eventFormStyles.segmentText,
+                                    selected
+                                      ? eventFormStyles.segmentTextOn
+                                      : null,
+                                  ]}
+                                >
+                                  {label}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {eventModalType === "event" && isOwnerOrLeader ? (
+                      <View style={eventFormStyles.videoRow}>
+                        <Video size={16} color="#4361EE" strokeWidth={2} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={eventFormStyles.settingTitle}>
+                            Video call
+                          </Text>
+                          <Text style={eventFormStyles.settingHint}>
+                            Add a join link
+                          </Text>
+                        </View>
+                        <Switch
+                          value={eventIncludeVideo}
+                          disabled={eventModalReadOnly}
+                          onValueChange={(on) => {
+                            if (eventModalReadOnly) return;
+                            setEventIncludeVideo(on);
+                            setShowEndPicker(false);
+                            setShowEndTimePicker(false);
+                            setShowDurationPicker(false);
+                            setShowEventPhotoPicker(false);
+                            setEventEnd(
+                              videoMeetingEndFromDuration(
+                                eventStart,
+                                meetingDurationMinutes,
+                              ),
+                            );
+                          }}
+                          trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
+                          thumbColor="white"
+                          testID="event-video-toggle"
+                        />
+                      </View>
+                    ) : null}
+
+                    <Text style={eventFormStyles.sectionTitle}>Schedule</Text>
+                    {eventUsesRange ? (
+                      <View style={eventFormStyles.tileRow}>
+                        <View style={{ flex: 1 }}>
+                          <EventScheduleTile
+                            icon={Calendar}
+                            label="Start date"
+                            value={eventStart.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                            open={showStartPicker}
+                            disabled={eventModalReadOnly}
+                            onPress={() => {
+                              if (eventModalReadOnly) return;
+                              setShowEndPicker(false);
+                              setShowEndTimePicker(false);
+                              setShowStartTimePicker(false);
+                              setShowDurationPicker(false);
+                              setShowEventPhotoPicker(false);
+                              setShowStartPicker(true);
+                            }}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <EventScheduleTile
+                            icon={Calendar}
+                            label="End date"
+                            value={eventEnd.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                            open={showEndPicker}
+                            disabled={eventModalReadOnly}
+                            onPress={() => {
+                              if (eventModalReadOnly) return;
+                              setShowStartPicker(false);
+                              setShowStartTimePicker(false);
+                              setShowEndTimePicker(false);
+                              setShowEndPicker(true);
+                            }}
+                          />
+                        </View>
+                      </View>
+                    ) : (
+                      <EventScheduleTile
+                        icon={Calendar}
+                        label="Date"
+                        value={eventStart.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                        open={showStartPicker}
+                        disabled={eventModalReadOnly}
+                        onPress={() => {
+                          if (eventModalReadOnly) return;
+                          setShowEndPicker(false);
+                          setShowEndTimePicker(false);
+                          setShowStartTimePicker(false);
+                          setShowDurationPicker(false);
+                          setShowEventPhotoPicker(false);
+                          setShowStartPicker(true);
+                        }}
+                      />
+                    )}
+                    <View style={eventFormStyles.tileRow}>
+                      <View style={{ flex: 1 }}>
+                        <EventScheduleTile
+                          icon={Clock}
+                          label="Starts"
+                          value={eventStart.toLocaleTimeString("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          })}
+                          open={showStartTimePicker}
+                          disabled={eventModalReadOnly}
+                          onPress={() => {
+                            if (eventModalReadOnly) return;
+                            setShowStartTimePicker(!showStartTimePicker);
+                            setShowEndTimePicker(false);
+                            setShowDurationPicker(false);
+                            setShowEventPhotoPicker(false);
+                            setShowStartPicker(false);
+                            setShowEndPicker(false);
+                          }}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <EventScheduleTile
+                          icon={Clock}
+                          label={eventUsesRange ? "Ends" : "Duration"}
+                          value={
+                            eventUsesRange
+                              ? eventEnd.toLocaleTimeString("en-US", {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                })
+                              : formatVideoMeetingDuration(
+                                  meetingDurationMinutes,
+                                )
+                          }
+                          open={
+                            eventUsesRange
+                              ? showEndTimePicker
+                              : showDurationPicker
+                          }
+                          disabled={eventModalReadOnly}
+                          onPress={() => {
+                            if (eventModalReadOnly) return;
+                            setShowStartTimePicker(false);
+                            setShowStartPicker(false);
+                            setShowEndPicker(false);
+                            if (eventUsesRange) {
+                              setShowDurationPicker(false);
+                              setShowEventPhotoPicker(false);
+                              setShowEndTimePicker(!showEndTimePicker);
+                            } else {
+                              setShowEndTimePicker(false);
+                              setShowDurationPicker(true);
+                            }
+                          }}
+                        />
+                      </View>
+                    </View>
+                    {!eventUsesRange ? (
+                      <Text style={eventFormStyles.caption}>
+                        Ends{" "}
+                        {formatVideoMeetingEndPreview(
+                          eventStart,
+                          meetingDurationMinutes,
+                        ).replace(/, ([^,]*)$/, " at $1")}
+                      </Text>
+                    ) : null}
+
+                    {showStartPicker ? (
+                      <View style={eventFormStyles.pickerCard}>
+                        <View style={eventFormStyles.pickerToolbar}>
+                          <Pressable onPress={() => setShowStartPicker(false)}>
+                            <Text style={eventFormStyles.pickerCancel}>
+                              Cancel
+                            </Text>
+                          </Pressable>
+                          <Text style={eventFormStyles.pickerTitle}>
+                            Start date
+                          </Text>
+                          <Pressable onPress={() => setShowStartPicker(false)}>
+                            <Text style={eventFormStyles.pickerDone}>Done</Text>
+                          </Pressable>
+                        </View>
+                        <DateTimePicker
+                          value={eventStart}
+                          mode="date"
+                          display={
+                            Platform.OS === "ios" ? "inline" : "calendar"
+                          }
+                          onChange={(e, d) => {
+                            if (Platform.OS === "android")
+                              setShowStartPicker(false);
+                            if (e.type === "dismissed") return;
+                            if (d) {
+                              setEventStart((prev) => {
+                                const next = applyDatePart(prev, d);
+                                if (!eventUsesRange) {
+                                  setEventEnd(
+                                    videoMeetingEndFromDuration(
+                                      next,
+                                      meetingDurationMinutes,
+                                    ),
+                                  );
+                                  return next;
+                                }
+                                setEventEnd((prevEnd) =>
+                                  shiftEndKeepingLength(prev, next, prevEnd),
+                                );
+                                return next;
+                              });
+                            }
+                          }}
+                        />
+                      </View>
+                    ) : null}
+
+                    {showEndPicker && eventUsesRange ? (
+                      <View style={eventFormStyles.pickerCard}>
+                        <View style={eventFormStyles.pickerToolbar}>
+                          <Pressable onPress={() => setShowEndPicker(false)}>
+                            <Text style={eventFormStyles.pickerCancel}>
+                              Cancel
+                            </Text>
+                          </Pressable>
+                          <Text style={eventFormStyles.pickerTitle}>
+                            End date
+                          </Text>
+                          <Pressable onPress={() => setShowEndPicker(false)}>
+                            <Text style={eventFormStyles.pickerDone}>Done</Text>
+                          </Pressable>
+                        </View>
+                        <DateTimePicker
+                          value={eventEnd}
+                          mode="date"
+                          display={
+                            Platform.OS === "ios" ? "inline" : "calendar"
+                          }
+                          minimumDate={eventStart}
+                          onChange={(e, d) => {
+                            if (Platform.OS === "android")
+                              setShowEndPicker(false);
+                            if (e.type === "dismissed") return;
+                            if (d) {
+                              setEventEnd((prev) => {
+                                const next = applyDatePart(prev, d);
+                                return next <= eventStart
+                                  ? hourAfter(eventStart)
+                                  : next;
+                              });
+                            }
+                          }}
+                        />
+                      </View>
+                    ) : null}
+
+                    {showStartTimePicker ? (
+                      <View style={eventFormStyles.pickerCard}>
+                        <View style={eventFormStyles.pickerToolbar}>
+                          <Text style={eventFormStyles.pickerTitle}>
+                            Start time
+                          </Text>
+                          <Pressable
+                            onPress={() => setShowStartTimePicker(false)}
+                          >
+                            <Text style={eventFormStyles.pickerDone}>Done</Text>
+                          </Pressable>
+                        </View>
+                        <DateTimePicker
+                          value={eventStart}
+                          mode="time"
+                          display="spinner"
+                          onChange={(e, d) => {
+                            if (Platform.OS === "android")
+                              setShowStartTimePicker(false);
+                            if (e.type === "dismissed") return;
+                            if (d) {
+                              setEventStart((prev) => {
+                                const n = applyTimePart(prev, d);
+                                if (!eventUsesRange) {
+                                  setEventEnd(
+                                    videoMeetingEndFromDuration(
+                                      n,
+                                      meetingDurationMinutes,
+                                    ),
+                                  );
+                                  return n;
+                                }
+                                setEventEnd((prevEnd) =>
+                                  prevEnd <= n
+                                    ? hourAfter(n)
+                                    : shiftEndKeepingLength(prev, n, prevEnd),
+                                );
+                                return n;
+                              });
+                            }
+                          }}
+                          style={{ height: 216 }}
+                        />
+                      </View>
+                    ) : null}
+
+                    {showEndTimePicker && eventUsesRange ? (
+                      <View style={eventFormStyles.pickerCard}>
+                        <View style={eventFormStyles.pickerToolbar}>
+                          <Text style={eventFormStyles.pickerTitle}>
+                            End time
+                          </Text>
+                          <Pressable
+                            onPress={() => setShowEndTimePicker(false)}
+                          >
+                            <Text style={eventFormStyles.pickerDone}>Done</Text>
+                          </Pressable>
+                        </View>
+                        <DateTimePicker
+                          value={eventEnd}
+                          mode="time"
+                          display="spinner"
+                          onChange={(e, d) => {
+                            if (Platform.OS === "android")
+                              setShowEndTimePicker(false);
+                            if (e.type === "dismissed") return;
+                            if (d) {
+                              setEventEnd((prev) => {
+                                const n = applyTimePart(prev, d);
+                                return n <= eventStart
+                                  ? hourAfter(eventStart)
+                                  : n;
+                              });
+                            }
+                          }}
+                          style={{ height: 216 }}
+                        />
+                      </View>
+                    ) : null}
+
+                    {eventIsHidden &&
+                    (eventModalType !== "event" || eventIncludeVideo) ? (
+                      <View style={{ marginBottom: 18 }}>
+                        <Text style={eventFormStyles.fieldLabel}>
+                          {eventModalType === "checkin"
+                            ? "Team member"
+                            : "Attendees"}
+                        </Text>
+                        <Text style={eventFormStyles.settingHint}>
+                          {eventModalType === "checkin"
+                            ? "Select the person this check-in is for."
+                            : "Choose who can see this private meeting. Leave empty to keep it to yourself."}
+                        </Text>
+                        <Pressable
+                          onPress={() => {
+                            setShowStartTimePicker(false);
+                            setShowDurationPicker(false);
+                            setShowEventPhotoPicker(false);
+                            setShowMeetingAssigneeDropdown(true);
+                          }}
+                          style={eventFormStyles.selectBtn}
+                        >
+                          <Text
+                            style={eventFormStyles.selectBtnText}
+                            numberOfLines={1}
+                          >
+                            {meetingAssigneeIds.length === 0
+                              ? eventModalType === "checkin"
+                                ? "Select team member"
+                                : "Select attendees"
+                              : eventModalType === "checkin"
+                                ? selectedCheckInAssignee?.user.name?.trim() ||
+                                  selectedCheckInAssignee?.user.email ||
+                                  "Team member selected"
+                                : allMeetingAssigneesSelected
+                                  ? "All team members"
+                                  : `${meetingAssigneeIds.length} attendee${meetingAssigneeIds.length === 1 ? "" : "s"} selected`}
+                          </Text>
+                          <ChevronDown size={16} color="#94A3B8" />
+                        </Pressable>
+                      </View>
+                    ) : null}
+
+                    {formError ? (
+                      <Text style={eventFormStyles.errorText}>{formError}</Text>
+                    ) : null}
+
+                    {eventModalType === "event" ? (
+                      <>
+                        <Text style={eventFormStyles.sectionTitle}>
+                          Event settings
+                        </Text>
+                        <Pressable
+                          style={eventFormStyles.videoRow}
+                          disabled={eventModalReadOnly}
+                          onPress={() => {
+                            if (eventModalReadOnly) return;
+                            const nextHidden = !eventIsHidden;
+                            setEventIsHidden(nextHidden);
+                            if (!nextHidden) {
+                              setMeetingAssigneeIds([]);
+                              setShowMeetingAssigneeDropdown(false);
+                            }
+                          }}
+                          testID="hidden-toggle"
+                        >
+                          <Users size={16} color="#4361EE" strokeWidth={2} />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={eventFormStyles.settingTitle}>
+                              Visibility
+                            </Text>
+                            <Text style={eventFormStyles.settingHint}>
+                              {!eventIsHidden
+                                ? isOwnerOrLeader
+                                  ? "Public · Whole team"
+                                  : "Public · Needs approval"
+                                : "Private · Only you"}
+                            </Text>
+                          </View>
+                          <ChevronRight
+                            size={14}
+                            color="#C5CAD3"
+                            strokeWidth={2.2}
+                          />
+                        </Pressable>
+                      </>
+                    ) : null}
+                    {!eventModalReadOnly &&
+                    !isOwnerOrLeader &&
+                    eventModalType === "event" &&
+                    !eventIsHidden ? (
+                      <Text style={eventFormStyles.caption}>
+                        Public events are sent to your team leader or owner for
+                        approval.
+                      </Text>
+                    ) : null}
+                  </ScrollView>
+                  <View
+                    style={[
+                      eventFormStyles.footer,
+                      { paddingBottom: Math.max(insets.bottom, 16) },
+                    ]}
+                  >
+                    {eventModalReadOnly ? (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setShowEventModal(false);
+                          setEditingEvent(null);
+                          setEventModalReadOnly(false);
+                          setConfirmDeleteEvent(false);
+                        }}
+                        style={eventFormStyles.secondaryBtn}
+                        testID="close-event-details-button"
+                      >
+                        <Text style={eventFormStyles.secondaryBtnText}>
+                          Close
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={handleSaveEvent}
+                        disabled={
+                          createEventMutation.isPending ||
+                          updateEventMutation.isPending
+                        }
+                        style={eventFormStyles.primaryBtn}
+                        testID="save-event-button"
+                      >
+                        {createEventMutation.isPending ||
+                        updateEventMutation.isPending ? (
+                          <ActivityIndicator color="white" />
+                        ) : (
+                          <Text style={eventFormStyles.primaryBtnText}>
+                            {!isOwnerOrLeader && !eventIsHidden
+                              ? "Submit for approval"
+                              : editingEvent
+                                ? eventModalType === "checkin"
+                                  ? "Update check-in"
+                                  : "Save event"
+                                : eventModalType === "checkin"
+                                  ? "Schedule check-in"
+                                  : "Create event"}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </Pressable>
+
+                {/* Attendee / duration pickers as overlays inside the event modal (nested Modals break taps on iOS). */}
+                {showMeetingAssigneeDropdown ? (
+                  <View
                     style={{
                       position: "absolute",
                       top: 0,
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      backgroundColor: "rgba(0,0,0,0.35)",
-                    }}
-                    onPress={() => setShowMeetingAssigneeDropdown(false)}
-                  />
-                  <View
-                    style={{
-                      backgroundColor: "white",
-                      borderTopLeftRadius: 20,
-                      borderTopRightRadius: 20,
-                      height: MEETING_ASSIGNEE_SHEET_MAX_HEIGHT,
-                      paddingBottom: insets.bottom + 12,
+                      justifyContent: "flex-end",
+                      zIndex: 30,
                     }}
                   >
-                    <View
+                    <Pressable
                       style={{
-                        width: 36,
-                        height: 4,
-                        borderRadius: 2,
-                        backgroundColor: "#E2E8F0",
-                        alignSelf: "center",
-                        marginTop: 10,
-                        marginBottom: 14,
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: "rgba(0,0,0,0.35)",
                       }}
+                      onPress={() => setShowMeetingAssigneeDropdown(false)}
                     />
                     <View
                       style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        paddingHorizontal: 20,
-                        marginBottom: 14,
-                        gap: 10,
+                        backgroundColor: "white",
+                        borderTopLeftRadius: 20,
+                        borderTopRightRadius: 20,
+                        height: MEETING_ASSIGNEE_SHEET_MAX_HEIGHT,
+                        paddingBottom: insets.bottom + 12,
                       }}
                     >
-                      <Image
-                        source={require("@/assets/alenio-icon.png")}
-                        style={{ width: 30, height: 30, borderRadius: 8 }}
-                        resizeMode="contain"
+                      <View
+                        style={{
+                          width: 36,
+                          height: 4,
+                          borderRadius: 2,
+                          backgroundColor: "#E2E8F0",
+                          alignSelf: "center",
+                          marginTop: 10,
+                          marginBottom: 14,
+                        }}
                       />
-                      <View style={{ flex: 1, minWidth: 0 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          paddingHorizontal: 20,
+                          marginBottom: 14,
+                          gap: 10,
+                        }}
+                      >
+                        <Image
+                          source={require("@/assets/alenio-icon.png")}
+                          style={{ width: 30, height: 30, borderRadius: 8 }}
+                          resizeMode="contain"
+                        />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            style={{
+                              fontSize: 17,
+                              fontWeight: "700",
+                              color: "#0F172A",
+                            }}
+                          >
+                            {eventModalType === "checkin"
+                              ? "Select team member"
+                              : "Assign members"}
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: "#94A3B8",
+                              marginTop: 3,
+                              lineHeight: 17,
+                            }}
+                            numberOfLines={2}
+                          >
+                            {eventModalType === "checkin"
+                              ? "Choose the person this check-in will be saved for."
+                              : "Choose who can see this private meeting. You are included automatically."}
+                          </Text>
+                        </View>
+                        <Pressable
+                          onPress={() => setShowMeetingAssigneeDropdown(false)}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: "#F1F5F9",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <X size={16} color="#64748B" />
+                        </Pressable>
+                      </View>
+                      {eventModalType !== "checkin" ? (
+                        <TouchableOpacity
+                          onPress={toggleAllMeetingAssignees}
+                          activeOpacity={0.7}
+                          style={{
+                            marginHorizontal: 20,
+                            marginBottom: 8,
+                            paddingHorizontal: 12,
+                            paddingVertical: 11,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            borderRadius: 12,
+                            backgroundColor: "#F8FAFC",
+                            borderWidth: 1,
+                            borderColor: "#E2E8F0",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              color: "#4361EE",
+                              fontWeight: "700",
+                            }}
+                          >
+                            {allMeetingAssigneesSelected
+                              ? "Deselect all"
+                              : "Select all"}
+                          </Text>
+                          {allMeetingAssigneesSelected ? (
+                            <Check size={16} color="#4361EE" />
+                          ) : null}
+                        </TouchableOpacity>
+                      ) : null}
+                      <ScrollView
+                        style={{ flex: 1, minHeight: 0 }}
+                        contentContainerStyle={{
+                          paddingHorizontal: 20,
+                          paddingBottom: 8,
+                        }}
+                        showsVerticalScrollIndicator
+                        keyboardShouldPersistTaps="handled"
+                        nestedScrollEnabled
+                        bounces
+                      >
+                        {assigneePickerOptions.length === 0 ? (
+                          <View
+                            style={{
+                              paddingVertical: 24,
+                              alignItems: "center",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 14,
+                                color: "#94A3B8",
+                                textAlign: "center",
+                              }}
+                            >
+                              No team members found.
+                            </Text>
+                          </View>
+                        ) : (
+                          assigneePickerOptions.map((member, idx) => {
+                            const selected = meetingAssigneeIds.includes(
+                              member.userId,
+                            );
+                            const label =
+                              member.user.name?.trim() ||
+                              member.user.email ||
+                              "Team member";
+                            return (
+                              <TouchableOpacity
+                                key={member.userId}
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                  setMeetingAssigneeIds((prev) =>
+                                    eventModalType === "checkin"
+                                      ? prev.includes(member.userId)
+                                        ? []
+                                        : [member.userId]
+                                      : prev.includes(member.userId)
+                                        ? prev.filter(
+                                            (id) => id !== member.userId,
+                                          )
+                                        : [...prev, member.userId],
+                                  );
+                                  if (
+                                    eventModalType === "checkin" &&
+                                    (!eventTitle.trim() ||
+                                      eventTitle.trim() === "Check-in")
+                                  ) {
+                                    setEventTitle(`Check-in — ${label}`);
+                                  }
+                                  setFormError(null);
+                                }}
+                                style={{
+                                  paddingVertical: 12,
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  borderBottomWidth:
+                                    idx === assigneePickerOptions.length - 1
+                                      ? 0
+                                      : 1,
+                                  borderBottomColor: "#F1F5F9",
+                                }}
+                              >
+                                <View
+                                  style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    gap: 10,
+                                  }}
+                                >
+                                  <UserAvatar
+                                    user={member.user}
+                                    size={32}
+                                    radius={16}
+                                    backgroundColor="#EEF2FF"
+                                    textColor="#4361EE"
+                                    fontSize={12}
+                                  />
+                                  <Text
+                                    style={{
+                                      fontSize: 15,
+                                      color: "#334155",
+                                      fontWeight: selected ? "700" : "500",
+                                      flex: 1,
+                                    }}
+                                    numberOfLines={1}
+                                  >
+                                    {label}
+                                  </Text>
+                                </View>
+                                {selected ? (
+                                  <Check size={16} color="#4361EE" />
+                                ) : (
+                                  <View style={{ width: 16, height: 16 }} />
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })
+                        )}
+                      </ScrollView>
+                      <TouchableOpacity
+                        onPress={() => setShowMeetingAssigneeDropdown(false)}
+                        activeOpacity={0.85}
+                        testID="meeting-assignees-done"
+                        style={{
+                          marginHorizontal: 20,
+                          marginTop: 8,
+                          backgroundColor: "#4361EE",
+                          borderRadius: 14,
+                          paddingVertical: 14,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "white",
+                            fontSize: 15,
+                            fontWeight: "700",
+                          }}
+                        >
+                          Done
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
+
+                {showEventPhotoPicker ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      justifyContent: "flex-end",
+                      zIndex: 32,
+                    }}
+                  >
+                    <Pressable
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: "rgba(0,0,0,0.35)",
+                      }}
+                      onPress={() => setShowEventPhotoPicker(false)}
+                    />
+                    <View
+                      style={{
+                        backgroundColor: "white",
+                        borderTopLeftRadius: 20,
+                        borderTopRightRadius: 20,
+                        paddingBottom: insets.bottom + 12,
+                        paddingHorizontal: 16,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 36,
+                          height: 4,
+                          borderRadius: 2,
+                          backgroundColor: "#E2E8F0",
+                          alignSelf: "center",
+                          marginTop: 10,
+                          marginBottom: 12,
+                        }}
+                      />
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 10,
+                          marginBottom: 12,
+                        }}
+                      >
+                        <Image
+                          source={require("@/assets/alenio-icon.png")}
+                          style={{ width: 28, height: 28, borderRadius: 7 }}
+                        />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            style={{
+                              fontSize: 16,
+                              fontWeight: "700",
+                              color: "#0F172A",
+                            }}
+                          >
+                            Event photo
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: "#94A3B8",
+                              marginTop: 1,
+                            }}
+                          >
+                            Add a photo for this event
+                          </Text>
+                        </View>
+                        <Pressable
+                          onPress={() => setShowEventPhotoPicker(false)}
+                          hitSlop={8}
+                        >
+                          <X size={18} color="#94A3B8" strokeWidth={2.2} />
+                        </Pressable>
+                      </View>
+                      <View style={{ gap: 8 }}>
+                        <AlenioSheetOption
+                          icon={<ImagePlus size={16} color="white" />}
+                          title="Photo library"
+                          subtitle="Choose an existing photo"
+                          onPress={() => {
+                            setShowEventPhotoPicker(false);
+                            void uploadEventPhoto("library");
+                          }}
+                        />
+                        <AlenioSheetOption
+                          icon={<Camera size={16} color="white" />}
+                          iconColor="#7C3AED"
+                          tint="purple"
+                          title="Camera"
+                          subtitle="Take a new photo"
+                          onPress={() => {
+                            setShowEventPhotoPicker(false);
+                            void uploadEventPhoto("camera");
+                          }}
+                        />
+                        <AlenioSheetOption
+                          icon={<Globe2 size={16} color="white" />}
+                          iconColor="#0F766E"
+                          tint="slate"
+                          title="Search free photos"
+                          subtitle="Public photos that are free to use"
+                          onPress={() => {
+                            setShowEventPhotoPicker(false);
+                            setShowEventStockPhotoSearch(true);
+                          }}
+                        />
+                        {eventImageUrl ? (
+                          <AlenioSheetOption
+                            icon={<Trash2 size={16} color="white" />}
+                            destructive
+                            title="Remove photo"
+                            subtitle="This event will have no photo"
+                            onPress={() => {
+                              setEventImageUrl(null);
+                              setShowEventPhotoPicker(false);
+                            }}
+                          />
+                        ) : null}
+                      </View>
+                      <Pressable
+                        onPress={() => setShowEventPhotoPicker(false)}
+                        style={[
+                          alenioSheetStyles.cancelButton,
+                          { marginTop: 8 },
+                        ]}
+                      >
+                        <Text style={alenioSheetStyles.cancelButtonText}>
+                          Cancel
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
+
+                {showDurationPicker ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      justifyContent: "flex-end",
+                      zIndex: 30,
+                    }}
+                  >
+                    <Pressable
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: "rgba(0,0,0,0.35)",
+                      }}
+                      onPress={() => setShowDurationPicker(false)}
+                    />
+                    <View
+                      style={{
+                        backgroundColor: "white",
+                        borderTopLeftRadius: 20,
+                        borderTopRightRadius: 20,
+                        maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT,
+                        paddingBottom: insets.bottom + 12,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 36,
+                          height: 4,
+                          borderRadius: 2,
+                          backgroundColor: "#E2E8F0",
+                          alignSelf: "center",
+                          marginTop: 10,
+                          marginBottom: 14,
+                        }}
+                      />
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          paddingHorizontal: 20,
+                          marginBottom: 8,
+                        }}
+                      >
                         <Text
                           style={{
                             fontSize: 17,
@@ -3959,499 +5322,99 @@ export default function TasksScreen() {
                             color: "#0F172A",
                           }}
                         >
-                          {eventModalType === "checkin"
-                            ? "Select team member"
-                            : "Assign members"}
+                          Duration
                         </Text>
-                        <Text
+                        <Pressable
+                          onPress={() => setShowDurationPicker(false)}
                           style={{
-                            fontSize: 12,
-                            color: "#94A3B8",
-                            marginTop: 3,
-                            lineHeight: 17,
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: "#F1F5F9",
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
-                          numberOfLines={2}
                         >
-                          {eventModalType === "checkin"
-                            ? "Choose the person this check-in will be saved for."
-                            : "Choose who can see this private meeting. You are included automatically."}
-                        </Text>
+                          <X size={16} color="#64748B" />
+                        </Pressable>
                       </View>
-                      <Pressable
-                        onPress={() => setShowMeetingAssigneeDropdown(false)}
+                      <ScrollView
                         style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: "#F1F5F9",
-                          alignItems: "center",
-                          justifyContent: "center",
+                          maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT - 120,
                         }}
-                      >
-                        <X size={16} color="#64748B" />
-                      </Pressable>
-                    </View>
-                    {eventModalType !== "checkin" ? (
-                      <TouchableOpacity
-                        onPress={toggleAllMeetingAssignees}
-                        activeOpacity={0.7}
-                        style={{
-                          marginHorizontal: 20,
-                          marginBottom: 8,
-                          paddingHorizontal: 12,
-                          paddingVertical: 11,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          borderRadius: 12,
-                          backgroundColor: "#F8FAFC",
-                          borderWidth: 1,
-                          borderColor: "#E2E8F0",
+                        contentContainerStyle={{
+                          paddingHorizontal: 20,
+                          paddingBottom: 8,
                         }}
+                        showsVerticalScrollIndicator
+                        keyboardShouldPersistTaps="handled"
+                        nestedScrollEnabled
                       >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: "#4361EE",
-                            fontWeight: "700",
-                          }}
-                        >
-                          {allMeetingAssigneesSelected
-                            ? "Deselect all"
-                            : "Select all"}
-                        </Text>
-                        {allMeetingAssigneesSelected ? (
-                          <Check size={16} color="#4361EE" />
-                        ) : null}
-                      </TouchableOpacity>
-                    ) : null}
-                    <ScrollView
-                      style={{ flex: 1, minHeight: 0 }}
-                      contentContainerStyle={{
-                        paddingHorizontal: 20,
-                        paddingBottom: 8,
-                      }}
-                      showsVerticalScrollIndicator
-                      keyboardShouldPersistTaps="handled"
-                      nestedScrollEnabled
-                      bounces
-                    >
-                      {assigneePickerOptions.length === 0 ? (
-                        <View
-                          style={{ paddingVertical: 24, alignItems: "center" }}
-                        >
-                          <Text
+                        {VIDEO_MEETING_DURATION_OPTIONS.map((minutes, idx) => (
+                          <TouchableOpacity
+                            key={minutes}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              setMeetingDurationMinutes(minutes);
+                              setShowDurationPicker(false);
+                              setShowEventPhotoPicker(false);
+                            }}
                             style={{
-                              fontSize: 14,
-                              color: "#94A3B8",
-                              textAlign: "center",
+                              paddingVertical: 14,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              borderBottomWidth:
+                                idx ===
+                                VIDEO_MEETING_DURATION_OPTIONS.length - 1
+                                  ? 0
+                                  : 1,
+                              borderBottomColor: "#F1F5F9",
+                              backgroundColor:
+                                meetingDurationMinutes === minutes
+                                  ? "#EEF2FF"
+                                  : "transparent",
+                              borderRadius:
+                                meetingDurationMinutes === minutes ? 10 : 0,
+                              paddingHorizontal:
+                                meetingDurationMinutes === minutes ? 12 : 0,
                             }}
                           >
-                            No team members found.
-                          </Text>
-                        </View>
-                      ) : (
-                        assigneePickerOptions.map((member, idx) => {
-                          const selected = meetingAssigneeIds.includes(
-                            member.userId,
-                          );
-                          const label =
-                            member.user.name?.trim() ||
-                            member.user.email ||
-                            "Team member";
-                          return (
-                            <TouchableOpacity
-                              key={member.userId}
-                              activeOpacity={0.7}
-                              onPress={() => {
-                                setMeetingAssigneeIds((prev) =>
-                                  eventModalType === "checkin"
-                                    ? prev.includes(member.userId)
-                                      ? []
-                                      : [member.userId]
-                                    : prev.includes(member.userId)
-                                      ? prev.filter(
-                                          (id) => id !== member.userId,
-                                        )
-                                      : [...prev, member.userId],
-                                );
-                                if (
-                                  eventModalType === "checkin" &&
-                                  (!eventTitle.trim() ||
-                                    eventTitle.trim() === "Check-in")
-                                ) {
-                                  setEventTitle(`Check-in — ${label}`);
-                                }
-                                setFormError(null);
-                              }}
+                            <Text
                               style={{
-                                paddingVertical: 12,
-                                flexDirection: "row",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                borderBottomWidth:
-                                  idx === assigneePickerOptions.length - 1
-                                    ? 0
-                                    : 1,
-                                borderBottomColor: "#F1F5F9",
+                                fontSize: 15,
+                                fontWeight:
+                                  meetingDurationMinutes === minutes
+                                    ? "700"
+                                    : "500",
+                                color:
+                                  meetingDurationMinutes === minutes
+                                    ? "#4361EE"
+                                    : "#0F172A",
                               }}
                             >
-                              <View
-                                style={{
-                                  flex: 1,
-                                  minWidth: 0,
-                                  flexDirection: "row",
-                                  alignItems: "center",
-                                  gap: 10,
-                                }}
-                              >
-                                <UserAvatar
-                                  user={member.user}
-                                  size={32}
-                                  radius={16}
-                                  backgroundColor="#EEF2FF"
-                                  textColor="#4361EE"
-                                  fontSize={12}
-                                />
-                                <Text
-                                  style={{
-                                    fontSize: 15,
-                                    color: "#334155",
-                                    fontWeight: selected ? "700" : "500",
-                                    flex: 1,
-                                  }}
-                                  numberOfLines={1}
-                                >
-                                  {label}
-                                </Text>
-                              </View>
-                              {selected ? (
-                                <Check size={16} color="#4361EE" />
-                              ) : (
-                                <View style={{ width: 16, height: 16 }} />
-                              )}
-                            </TouchableOpacity>
-                          );
-                        })
-                      )}
-                    </ScrollView>
-                    <TouchableOpacity
-                      onPress={() => setShowMeetingAssigneeDropdown(false)}
-                      activeOpacity={0.85}
-                      testID="meeting-assignees-done"
-                      style={{
-                        marginHorizontal: 20,
-                        marginTop: 8,
-                        backgroundColor: "#4361EE",
-                        borderRadius: 14,
-                        paddingVertical: 14,
-                        alignItems: "center",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "white",
-                          fontSize: 15,
-                          fontWeight: "700",
-                        }}
-                      >
-                        Done
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : null}
-
-              {showEventPhotoPicker ? (
-                <View
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    justifyContent: "flex-end",
-                    zIndex: 32,
-                  }}
-                >
-                  <Pressable
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: "rgba(0,0,0,0.35)",
-                    }}
-                    onPress={() => setShowEventPhotoPicker(false)}
-                  />
-                  <View
-                    style={{
-                      backgroundColor: "white",
-                      borderTopLeftRadius: 20,
-                      borderTopRightRadius: 20,
-                      paddingBottom: insets.bottom + 12,
-                      paddingHorizontal: 16,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 36,
-                        height: 4,
-                        borderRadius: 2,
-                        backgroundColor: "#E2E8F0",
-                        alignSelf: "center",
-                        marginTop: 10,
-                        marginBottom: 12,
-                      }}
-                    />
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 10,
-                        marginBottom: 12,
-                      }}
-                    >
-                      <Image
-                        source={require("@/assets/alenio-icon.png")}
-                        style={{ width: 28, height: 28, borderRadius: 7 }}
-                      />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text
-                          style={{
-                            fontSize: 16,
-                            fontWeight: "700",
-                            color: "#0F172A",
-                          }}
-                        >
-                          Event photo
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            color: "#94A3B8",
-                            marginTop: 1,
-                          }}
-                        >
-                          Add a photo for this event
-                        </Text>
-                      </View>
-                      <Pressable
-                        onPress={() => setShowEventPhotoPicker(false)}
-                        hitSlop={8}
-                      >
-                        <X size={18} color="#94A3B8" strokeWidth={2.2} />
-                      </Pressable>
+                              {formatVideoMeetingDuration(minutes)}
+                            </Text>
+                            {meetingDurationMinutes === minutes ? (
+                              <Check size={16} color="#4361EE" />
+                            ) : null}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
                     </View>
-                    <View style={{ gap: 8 }}>
-                    <AlenioSheetOption
-                      icon={<ImagePlus size={16} color="white" />}
-                      title="Photo library"
-                      subtitle="Choose an existing photo"
-                      onPress={() => {
-                        setShowEventPhotoPicker(false);
-                        void uploadEventPhoto("library");
-                      }}
-                    />
-                    <AlenioSheetOption
-                      icon={<Camera size={16} color="white" />}
-                      iconColor="#7C3AED"
-                      tint="purple"
-                      title="Camera"
-                      subtitle="Take a new photo"
-                      onPress={() => {
-                        setShowEventPhotoPicker(false);
-                        void uploadEventPhoto("camera");
-                      }}
-                    />
-                    <AlenioSheetOption
-                      icon={<Globe2 size={16} color="white" />}
-                      iconColor="#0F766E"
-                      tint="slate"
-                      title="Search free photos"
-                      subtitle="Public photos that are free to use"
-                      onPress={() => {
-                        setShowEventPhotoPicker(false);
-                        setShowEventStockPhotoSearch(true);
-                      }}
-                    />
-                    {eventImageUrl ? (
-                      <AlenioSheetOption
-                        icon={<Trash2 size={16} color="white" />}
-                        destructive
-                        title="Remove photo"
-                        subtitle="This event will have no photo"
-                        onPress={() => {
-                          setEventImageUrl(null);
-                          setShowEventPhotoPicker(false);
-                        }}
-                      />
-                    ) : null}
-                    </View>
-                    <Pressable
-                      onPress={() => setShowEventPhotoPicker(false)}
-                      style={[alenioSheetStyles.cancelButton, { marginTop: 8 }]}
-                    >
-                      <Text style={alenioSheetStyles.cancelButtonText}>
-                        Cancel
-                      </Text>
-                    </Pressable>
                   </View>
-                </View>
-              ) : null}
-
-              {showDurationPicker ? (
-                <View
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    justifyContent: "flex-end",
-                    zIndex: 30,
-                  }}
-                >
-                  <Pressable
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: "rgba(0,0,0,0.35)",
-                    }}
-                    onPress={() => setShowDurationPicker(false)}
-                  />
-                  <View
-                    style={{
-                      backgroundColor: "white",
-                      borderTopLeftRadius: 20,
-                      borderTopRightRadius: 20,
-                      maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT,
-                      paddingBottom: insets.bottom + 12,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 36,
-                        height: 4,
-                        borderRadius: 2,
-                        backgroundColor: "#E2E8F0",
-                        alignSelf: "center",
-                        marginTop: 10,
-                        marginBottom: 14,
-                      }}
-                    />
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        paddingHorizontal: 20,
-                        marginBottom: 8,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 17,
-                          fontWeight: "700",
-                          color: "#0F172A",
-                        }}
-                      >
-                        Duration
-                      </Text>
-                      <Pressable
-                        onPress={() => setShowDurationPicker(false)}
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: "#F1F5F9",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <X size={16} color="#64748B" />
-                      </Pressable>
-                    </View>
-                    <ScrollView
-                      style={{
-                        maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT - 120,
-                      }}
-                      contentContainerStyle={{
-                        paddingHorizontal: 20,
-                        paddingBottom: 8,
-                      }}
-                      showsVerticalScrollIndicator
-                      keyboardShouldPersistTaps="handled"
-                      nestedScrollEnabled
-                    >
-                      {VIDEO_MEETING_DURATION_OPTIONS.map((minutes, idx) => (
-                        <TouchableOpacity
-                          key={minutes}
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            setMeetingDurationMinutes(minutes);
-                            setShowDurationPicker(false);
-              setShowEventPhotoPicker(false);
-                          }}
-                          style={{
-                            paddingVertical: 14,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            borderBottomWidth:
-                              idx === VIDEO_MEETING_DURATION_OPTIONS.length - 1
-                                ? 0
-                                : 1,
-                            borderBottomColor: "#F1F5F9",
-                            backgroundColor:
-                              meetingDurationMinutes === minutes
-                                ? "#EEF2FF"
-                                : "transparent",
-                            borderRadius:
-                              meetingDurationMinutes === minutes ? 10 : 0,
-                            paddingHorizontal:
-                              meetingDurationMinutes === minutes ? 12 : 0,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 15,
-                              fontWeight:
-                                meetingDurationMinutes === minutes
-                                  ? "700"
-                                  : "500",
-                              color:
-                                meetingDurationMinutes === minutes
-                                  ? "#4361EE"
-                                  : "#0F172A",
-                            }}
-                          >
-                            {formatVideoMeetingDuration(minutes)}
-                          </Text>
-                          {meetingDurationMinutes === minutes ? (
-                            <Check size={16} color="#4361EE" />
-                          ) : null}
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                </View>
-              ) : null}
-            </SafeKeyboardAvoidingView>
-            <EventStockPhotoSearch
-              visible={showEventStockPhotoSearch}
-              initialQuery={eventTitle}
-              bottomInset={insets.bottom}
-              onClose={() => setShowEventStockPhotoSearch(false)}
-              onSelect={(photo) => {
-                setEventImageUrl(photo.url);
-                setShowEventStockPhotoSearch(false);
-              }}
-            />
+                ) : null}
+              </SafeKeyboardAvoidingView>
+              <EventStockPhotoSearch
+                visible={showEventStockPhotoSearch}
+                initialQuery={eventTitle}
+                bottomInset={insets.bottom}
+                onClose={() => setShowEventStockPhotoSearch(false)}
+                onSelect={(photo) => {
+                  setEventImageUrl(photo.url);
+                  setShowEventStockPhotoSearch(false);
+                }}
+              />
             </View>
           </Modal>
 
@@ -4477,109 +5440,20 @@ export default function TasksScreen() {
           mode={workspaceMode}
           onChange={(next) => {
             if (next !== "development") lastWorkspaceTabRef.current = next;
+            // The tab always lands on the roster; a member left open from a
+            // previous visit would otherwise reappear instead.
+            else setDevelopmentFocus(null);
             setWorkspaceMode(next);
           }}
           calendarBadge={calendarBadge}
           tasksBadge={tasksBadge}
         />
 
+        <View style={{ flex: 1, minHeight: 0 }}>
         <WorkspaceSnapshotCarousel
           pages={snapshotPages}
           loading={summaryMetricsLoading}
-          members={teamMembers}
-          memberCount={teamData?._count?.members ?? teamMembers.length}
-          onPressMembers={openMembers}
         />
-
-        {activeTeamId && !access.canWrite ? (
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/choose-plan",
-                params: { teamId: activeTeamId },
-              })
-            }
-            disabled={!isWorkspaceOwner}
-            accessibilityRole={isWorkspaceOwner ? "button" : "text"}
-            accessibilityLabel={
-              isWorkspaceOwner
-                ? "Read-only workspace. Upgrade to create and manage workspace content. View plan."
-                : "Read-only workspace. Your workspace owner can restore access."
-            }
-            testID="workspace-read-only-status"
-            style={{
-              minHeight: 54,
-              marginHorizontal: 12,
-              marginTop: 8,
-              paddingHorizontal: 11,
-              paddingVertical: 8,
-              borderRadius: 13,
-              borderWidth: 1,
-              borderColor: "#E8E7FC",
-              backgroundColor: "#F7F6FF",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              flexShrink: 0,
-            }}
-          >
-            <View
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#EBE9FF",
-              }}
-            >
-              <Lock size={13} color="#635BEE" strokeWidth={2.1} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                style={{
-                  fontSize: 11,
-                  lineHeight: 14,
-                  fontWeight: "700",
-                  color: "#29324A",
-                }}
-              >
-                Read-only workspace
-              </Text>
-              <Text
-                style={{
-                  marginTop: 1,
-                  fontSize: 9,
-                  lineHeight: 12,
-                  fontWeight: "500",
-                  color: "#778198",
-                }}
-                numberOfLines={2}
-              >
-                {isWorkspaceOwner
-                  ? "Upgrade to create and manage workspace content."
-                  : "Your workspace owner can restore access."}
-              </Text>
-            </View>
-            {isWorkspaceOwner ? (
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
-              >
-                <Text
-                  style={{
-                    fontSize: 10,
-                    lineHeight: 14,
-                    fontWeight: "700",
-                    color: "#635BEE",
-                  }}
-                >
-                  View plan
-                </Text>
-                <ChevronRight size={12} color="#635BEE" strokeWidth={2.2} />
-              </View>
-            ) : null}
-          </Pressable>
-        ) : null}
 
         <View style={{ flex: 1 }}>
           {workspaceMode === "development" ? (
@@ -4587,65 +5461,48 @@ export default function TasksScreen() {
               style={{
                 flex: 1,
                 minHeight: 0,
-                paddingBottom: tabBarClearance(
-                  insets.bottom,
-                  WORKSPACE_CARD_BOTTOM_GAP,
-                ),
+                paddingBottom: workspacePageBottom,
               }}
               testID="workspace-development-page"
             >
               {activeTeamId ? (
-                <View style={{ flex: 1, minHeight: 0, paddingBottom: 10 }}>
-                  {developmentMember && developmentFocus ? (
-                    <WorkspaceMemberDevelopment
-                      teamId={activeTeamId}
-                      member={developmentMember}
-                      currentUserId={currentUserId}
-                      viewerRole={currentRole}
-                      leaderName={workspaceLeaderName}
-                      leaderUserId={workspaceLeader?.userId ?? null}
-                      section={developmentFocus.section}
-                      onSectionChange={(section) =>
-                        setDevelopmentFocus((current) =>
-                          current ? { ...current, section } : current,
-                        )
+                <View
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    flexDirection: "row",
+                    paddingBottom: 10,
+                    paddingLeft: splitMembers ? adaptive.contentPadLeft : 0,
+                    paddingRight: splitMembers ? adaptive.contentPadRight : 0,
+                  }}
+                >
+                  {splitMembers ? (
+                    <View
+                      key="members-roster-pane"
+                      style={{ width: rosterPaneWidth, minHeight: 0 }}
+                      testID="members-roster-pane"
+                    >
+                      <View style={splitPaneCard}>{membersRoster}</View>
+                    </View>
+                  ) : null}
+                  <View
+                    key="members-detail-pane"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      minHeight: 0,
+                      paddingLeft: splitMembers ? PANE_GAP : 0,
+                    }}
+                    testID="members-detail-pane"
+                  >
+                    <View
+                      style={
+                        splitMembers ? splitPaneCard : { flex: 1, minHeight: 0 }
                       }
-                      onBack={() => setDevelopmentFocus(null)}
-                      autoOpenCreateGoal={developmentFocus.createGoal ?? false}
-                      onCreateGoalIntentHandled={() =>
-                        setDevelopmentFocus((current) =>
-                          current ? { ...current, createGoal: false } : current,
-                        )
-                      }
-                      startCheckInToken={developmentFocus.startCheckInToken ?? 0}
-                      preferredTemplateId={developmentFocus.templateId ?? null}
-                      plannedEventId={developmentFocus.plannedEventId ?? null}
-                      initialCheckInId={developmentFocus.checkInId ?? null}
-                    />
-                  ) : (
-                    <TeamDevelopmentCard
-                      members={teamMembers}
-                      currentUserId={currentUserId}
-                      calendarEvents={developmentUpcomingCheckIns}
-                      memberStats={memberStatsPayload?.stats}
-                      standards={summaryStandards}
-                      onMemberPress={(member) =>
-                        setDevelopmentFocus({
-                          userId: member.userId,
-                          section: "goals",
-                        })
-                      }
-                      onManageMember={
-                        canManageRoster ? setManageMember : undefined
-                      }
-                      onInvite={
-                        canManageRoster ? () => setInviteOpen(true) : undefined
-                      }
-                      onBack={() =>
-                        setWorkspaceMode(lastWorkspaceTabRef.current)
-                      }
-                    />
-                  )}
+                    >
+                      {memberDetail ?? (splitMembers ? null : membersRoster)}
+                    </View>
+                  </View>
                 </View>
               ) : (
                 <ActivityIndicator color="#4361EE" style={{ marginTop: 32 }} />
@@ -4653,25 +5510,84 @@ export default function TasksScreen() {
             </View>
           ) : workspaceMode === "calendar" ? (
             <View
+              /**
+               * Each tab's page sits in the same slot of this chain, so without
+               * a key React reuses one mode's views for the next and a pane can
+               * inherit a width that belonged to another layout.
+               */
+              key="workspace-calendar-page"
               style={{
                 flex: 1,
                 minHeight: 0,
-                paddingBottom: tabBarClearance(
-                  insets.bottom,
-                  WORKSPACE_CARD_BOTTOM_GAP,
-                ),
+                paddingBottom: workspacePageBottom,
+                /**
+                 * Only the split layout positions its own panes, and it uses
+                 * per-edge padding because the Duo's system bar makes the
+                 * horizontal insets asymmetric. The stacked layout keeps each
+                 * card's own gutter so phones are untouched.
+                 */
+                paddingLeft: splitCalendar ? adaptive.contentPadLeft : 0,
+                paddingRight: splitCalendar ? adaptive.contentPadRight : 0,
               }}
             >
-              <View style={{ flex: 1, minHeight: 0 }} collapsable={false}>
+              <View
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  flexDirection: splitCalendar ? "row" : "column",
+                  gap: splitCalendar ? PANE_GAP : 0,
+                }}
+                collapsable={false}
+                onLayout={(event) => {
+                  const { width: rowWidth, height: rowHeight } =
+                    event.nativeEvent.layout;
+                  /**
+                   * What the calendar really has to work with, which the window
+                   * height cannot say: the header, the tab row and At a Glance
+                   * have already taken their share by this point.
+                   */
+                  const measuredHeight = Math.round(rowHeight);
+                  setCalendarAreaHeight((current) =>
+                    current === measuredHeight ? current : measuredHeight,
+                  );
+                  if (!splitCalendar) return;
+                  event.currentTarget.measureInWindow((windowX) => {
+                    setCalendarRowFrame((current) =>
+                      current?.x === windowX && current?.width === rowWidth
+                        ? current
+                        : { x: windowX, width: rowWidth },
+                    );
+                  });
+                }}
+              >
                 <View
+                  key="calendar-grid-pane"
                   style={{
-                    flex: calendarDisplayMode === "week" ? 1 : 0,
-                    flexGrow: calendarDisplayMode === "week" ? 1 : 0,
-                    flexShrink: calendarDisplayMode === "week" ? 1 : 0,
-                    minHeight: calendarDisplayMode === "week" ? 0 : undefined,
+                    /**
+                     * The split divides the row by share rather than pinning a
+                     * width. The ratio puts the divider in the same place a
+                     * fixed width would, and an out-of-date measurement moves
+                     * it slightly instead of collapsing the pane to nothing.
+                     */
+                    flexGrow: splitCalendar
+                      ? gridPaneShare
+                      : calendarCardFillsArea
+                        ? 1
+                        : 0,
+                    flexShrink: splitCalendar
+                      ? 1
+                      : calendarCardFillsArea
+                        ? 1
+                        : 0,
+                    flexBasis: splitCalendar ? 0 : undefined,
+                    minWidth: splitCalendar ? 0 : undefined,
+                    minHeight:
+                      splitCalendar || calendarCardFillsArea ? 0 : undefined,
                   }}
                 >
                   <CalendarCard
+                    expanded={splitCalendar}
+                    insetHorizontal={splitCalendar ? 0 : undefined}
                     tasks={visibleDatedTasks}
                     events={calendarEventsWithOutlook}
                     members={teamMembers}
@@ -4681,7 +5597,8 @@ export default function TasksScreen() {
                     viewYear={calendarYear}
                     viewMonth={calendarMonth}
                     onViewMonthChange={handleViewMonthChange}
-                    onDisplayModeChange={setCalendarDisplayMode}
+                    displayMode={calendarDisplayMode}
+                    onDisplayModeChange={setCalendarModeChoice}
                   >
                     {calendarDisplayMode === "week" ? (
                       <ScrollView
@@ -4697,7 +5614,10 @@ export default function TasksScreen() {
                             calendarEventsWithOutlook,
                             iso,
                           );
-                          const dayHolidayList = holidaysOnLocalIso(holidays, iso);
+                          const dayHolidayList = holidaysOnLocalIso(
+                            holidays,
+                            iso,
+                          );
                           const tasks = tasksOnIso(iso);
                           const count =
                             events.length +
@@ -4749,13 +5669,17 @@ export default function TasksScreen() {
                                   canManageEvent={canManageEvent}
                                   onEventPress={openEventPreview}
                                   onEventLongPress={openEventActions}
-                                  onTaskPress={openTaskDetails}
+                                  onTaskPress={openScheduleTask}
                                   onToggleTask={handleToggleTask}
                                   onTaskLongPress={(task) => {
                                     if (!canManageTaskMenu(task)) return;
                                     setActionMenuTask(task);
                                   }}
-                                  onAddEvent={() => setShowAddModal(true)}
+                                  onAddEvent={
+                                    access.canWrite
+                                      ? openWorkspaceCreate
+                                      : undefined
+                                  }
                                   isOwnerOrLeader={isOwnerOrLeader}
                                 />
                               )}
@@ -4766,97 +5690,57 @@ export default function TasksScreen() {
                     ) : null}
                   </CalendarCard>
                 </View>
-                {calendarDisplayMode === "week" ? null : (
-                  <>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginHorizontal: WS.pageGutter,
-                    marginTop: 6,
-                    marginBottom: 2,
-                    flexShrink: 0,
-                    gap: 8,
-                    minHeight: 32,
-                  }}
-                >
-                  <Text
+                {splitCalendar ? (
+                  <View
+                    key="calendar-day-pane"
+                    testID="calendar-day-pane"
                     style={{
-                      flex: 1,
+                      flexGrow: detailPaneShare,
+                      flexShrink: 1,
+                      flexBasis: 0,
                       minWidth: 0,
-                      fontSize: 14,
-                      fontWeight: "700",
-                      color: "#0F172A",
-                      letterSpacing: -0.2,
+                      minHeight: 0,
+                      marginTop: 2,
                     }}
-                    numberOfLines={1}
-                    maxFontSizeMultiplier={1.3}
                   >
-                    {daySheetTitle}
-                    <Text style={{ fontWeight: "600", color: "#64748B" }}>
-                      {`  ·  ${daySheetSubtitle}`}
-                    </Text>
-                  </Text>
-                  <Pressable
-                    onPress={() => setShowAddModal(true)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Add event"
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      minHeight: 32,
-                      paddingHorizontal: 4,
-                    }}
-                    testID="calendar-day-add-event"
-                  >
-                    <Plus size={13} color="#4361EE" strokeWidth={2.4} />
-                    <Text
-                      style={{
-                        marginLeft: 3,
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: "#4361EE",
-                      }}
-                    >
-                      Add event
-                    </Text>
-                  </Pressable>
-                </View>
-                <View
-                  testID="calendar-day-pane"
-                  style={{
-                    flex: 1,
-                    minHeight: CALENDAR_DAY_PANE_HEIGHT,
-                    marginHorizontal: WS.pageGutter,
-                  }}
-                >
-                  <View style={{ flex: 1, minHeight: 0 }}>
-                    <EventsSection
-                      dayEvents={dayEvents}
-                      dayHolidays={dayHolidays}
-                      dayTasks={dayTasks}
-                      members={teamMembers}
-                      selectedDayIso={targetIso}
-                      variant="dayList"
-                      embedded
-                      fillRemaining
-                      canManageEvent={canManageEvent}
-                      onEventPress={openEventPreview}
-                      onEventLongPress={openEventActions}
-                      onTaskPress={openTaskDetails}
-                      onToggleTask={handleToggleTask}
-                      onTaskLongPress={(task) => {
-                        if (!canManageTaskMenu(task)) return;
-                        setActionMenuTask(task);
-                      }}
-                      onAddEvent={() => setShowAddModal(true)}
-                      isOwnerOrLeader={isOwnerOrLeader}
-                    />
+                    <View style={splitPaneCard}>
+                      {openTaskId && activeTeamId ? (
+                        <TaskDetail
+                          key={openTaskId}
+                          taskId={openTaskId}
+                          teamId={activeTeamId}
+                          onClose={() => setOpenTaskId(null)}
+                          onSelectTask={setOpenTaskId}
+                        />
+                      ) : (
+                        <View
+                          style={{
+                            flex: 1,
+                            minHeight: 0,
+                            paddingHorizontal: 12,
+                            paddingTop: 4,
+                          }}
+                        >
+                          {dayPaneHeader}
+                          <View style={{ flex: 1, minHeight: 0 }}>{dayPaneList}</View>
+                          {upcomingPane}
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-                  </>
+                ) : !showStackedDayPane ? null : (
+                  <ScrollView
+                    testID="calendar-day-pane"
+                    style={{ flex: 1, minHeight: 0 }}
+                    contentContainerStyle={{
+                      marginHorizontal: WS.pageGutter,
+                      paddingBottom: 16,
+                    }}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {dayPaneHeader}
+                    {stackedDayList}
+                  </ScrollView>
                 )}
               </View>
             </View>
@@ -4865,16 +5749,16 @@ export default function TasksScreen() {
               style={{
                 flex: 1,
                 minHeight: 0,
-                paddingBottom: tabBarClearance(
-                  insets.bottom,
-                  WORKSPACE_CARD_BOTTOM_GAP,
-                ),
+                paddingBottom: workspacePageBottom,
               }}
               testID="workspace-updates-page"
             >
               <WorkspaceUpdatesFeed
                 teamId={activeTeamId}
                 canManageWorkspace={isOwnerOrLeader}
+                onInvite={
+                  canManageRoster ? () => setInviteOpen(true) : undefined
+                }
               />
             </View>
           ) : showMemberTasksEmpty ? (
@@ -4882,10 +5766,7 @@ export default function TasksScreen() {
               style={{
                 flex: 1,
                 minHeight: 0,
-                paddingBottom: tabBarClearance(
-                  insets.bottom,
-                  WORKSPACE_CARD_BOTTOM_GAP,
-                ),
+                paddingBottom: workspacePageBottom,
               }}
             >
               <ScrollView
@@ -4912,166 +5793,305 @@ export default function TasksScreen() {
               </ScrollView>
             </View>
           ) : (
-            <>
-              <View
-                style={{
-                  flexShrink: 0,
-                  paddingHorizontal: WS.pageGutter,
-                  paddingTop: 8,
-                  paddingBottom: 6,
-                  backgroundColor: WS.pageBg,
-                }}
-              >
-                <TaskShowingRow
-                  filters={filters}
-                  searchQuery={taskSearchQuery}
-                  onChangeSearch={setTaskSearchQuery}
-                  onOpenFilterView={() => setFilterPicker("filterView")}
-                  canCreateTask={access.canWrite}
-                  createLabel={isOwnerOrLeader ? "Task" : "Reminder"}
-                  onCreateTask={() =>
-                    router.push({
-                      pathname: "/create-task",
-                      params: {
-                        teamId: activeTeamId!,
-                        initialDueDate: selectedDay ?? toLocalIso(new Date()),
-                        kind: isOwnerOrLeader ? "workspace_task" : "reminder",
-                      },
-                    })
-                  }
-                />
-              </View>
-
+            <View
+              style={{
+                flex: 1,
+                minHeight: 0,
+                flexDirection: showTaskDetailPane ? "row" : "column",
+              }}
+            >
               <View
                 style={{
                   flex: 1,
-                  minHeight: 140,
-                  paddingHorizontal: WS.pageGutter,
-                  paddingBottom: tabBarClearance(
-                    insets.bottom,
-                    WORKSPACE_CARD_BOTTOM_GAP,
-                  ),
+                  minWidth: 0,
+                  minHeight: 0,
+                  ...(showTaskDetailPane
+                    ? {
+                        paddingTop: 8,
+                        paddingLeft: WS.pageGutter,
+                        paddingBottom: workspacePageBottom,
+                      }
+                    : null),
                 }}
               >
-                <ScrollView
-                  style={{ flex: 1 }}
-                  showsVerticalScrollIndicator={false}
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={refreshing}
-                      onRefresh={onRefresh}
-                      tintColor="#4361EE"
-                      colors={["#4361EE"]}
-                    />
-                  }
-                  contentContainerStyle={{
-                    paddingTop: 0,
-                    flexGrow: 1,
+                <View style={showTaskDetailPane ? splitPaneCard : { flex: 1, minHeight: 0 }}>
+                <View
+                  style={{
+                    flexShrink: 0,
+                    paddingHorizontal: showTaskDetailPane ? 12 : WS.pageGutter,
+                    paddingTop: 8,
+                    paddingBottom: 6,
+                    backgroundColor: WS.pageBg,
                   }}
                 >
-                  <TaskListCard
-                    sections={taskListSections}
-                    loading={showTasksLoading}
-                    loadError={tasksLoadError}
-                    onRetry={() => void refetchActiveTasks()}
-                    currentUserId={currentUserId}
-                    onToggle={handleToggleTask}
-                    onPress={openTaskDetails}
-                    onLongPress={(task) => {
-                      if (!canManageTaskMenu(task)) return;
-                      setActionMenuTask(task);
+                  <TaskShowingRow
+                    filters={filters}
+                    searchQuery={taskSearchQuery}
+                    onChangeSearch={setTaskSearchQuery}
+                    onOpenFilterView={() => setFilterPicker("filterView")}
+                    canCreateTask={access.canWrite}
+                    createLabel={isOwnerOrLeader ? "Task" : "Reminder"}
+                    onCreateTask={() => {
+                      if (!access.canWrite || !activeTeamId) return;
+                      router.push({
+                        pathname: "/create-task",
+                        params: {
+                          teamId: activeTeamId,
+                          initialDueDate: selectedDay ?? toLocalIso(new Date()),
+                          kind: isOwnerOrLeader ? "workspace_task" : "reminder",
+                        },
+                      });
                     }}
-                    emptyTitle={
-                      taskSearchQuery.trim()
-                        ? "No tasks"
-                        : filters.statusTab === "archived"
-                          ? "No archived tasks"
-                          : filters.statusTab === "completed"
-                            ? "Nothing completed"
-                            : filters.dueDate === "calendar_day"
-                              ? "No active tasks"
-                              : "You're all"
-                    }
-                    emptyAccentTitle={
-                      taskSearchQuery.trim()
-                        ? "found."
-                        : filters.statusTab === "archived"
-                          ? "yet."
-                          : filters.statusTab === "completed"
-                            ? filters.dueDate === "calendar_day"
-                              ? "for this day."
-                              : "yet."
-                            : filters.dueDate === "calendar_day"
-                              ? "for this day."
-                              : "caught up."
-                    }
-                    emptySubtitle={
-                      taskSearchQuery.trim()
-                        ? "Try a different task name or adjust your filters."
-                        : filters.statusTab === "archived"
-                          ? "Completed tasks move here after 30 days."
-                          : filters.dueDate === "calendar_day" && selectedDay
-                            ? "Try viewing upcoming tasks or adjust your filters."
-                            : filters.statusTab === "completed"
-                              ? "Completed work from the last 30 days shows here."
-                              : "No active tasks for the current filters."
-                    }
-                    emptyActionLabel={
-                      !taskSearchQuery.trim() &&
-                      filters.dueDate === "calendar_day"
-                        ? "View upcoming tasks"
-                        : undefined
-                    }
-                    onEmptyAction={
-                      !taskSearchQuery.trim() &&
-                      filters.dueDate === "calendar_day"
-                        ? () => setFilters((f) => ({ ...f, dueDate: "all" }))
-                        : undefined
-                    }
-                    footer={
-                      <>
-                        {nextCursor !== null ? (
-                          <Pressable
-                            onPress={handleLoadMore}
-                            style={{
-                              margin: 12,
-                              marginTop: 0,
-                              paddingVertical: 12,
-                              borderRadius: 10,
-                              alignItems: "center",
-                              backgroundColor: "#EEF2FF",
-                              flexDirection: "row",
-                              justifyContent: "center",
-                              gap: 8,
-                            }}
-                            testID="load-more-button"
-                            disabled={loadingMore}
-                          >
-                            {loadingMore ? (
-                              <ActivityIndicator
-                                size="small"
-                                color="#4361EE"
-                                testID="load-more-indicator"
-                              />
-                            ) : null}
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                fontWeight: "600",
-                                color: "#4361EE",
-                              }}
-                            >
-                              {loadingMore ? "Loading..." : "Load more tasks"}
-                            </Text>
-                          </Pressable>
-                        ) : null}
-                      </>
-                    }
                   />
-                </ScrollView>
+                </View>
+
+                <View
+                  style={{
+                    flex: 1,
+                    minHeight: 140,
+                    paddingHorizontal: showTaskDetailPane ? 12 : WS.pageGutter,
+                    paddingBottom: showTaskDetailPane
+                      ? 8
+                      : workspacePageBottom,
+                  }}
+                >
+                  <ScrollView
+                    style={{ flex: 1 }}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor="#4361EE"
+                        colors={["#4361EE"]}
+                      />
+                    }
+                    contentContainerStyle={{
+                      paddingTop: 0,
+                      flexGrow: 1,
+                    }}
+                  >
+                    <TaskListCard
+                      sections={taskListSections}
+                      loading={showTasksLoading}
+                      loadError={tasksLoadError}
+                      onRetry={() => void refetchActiveTasks()}
+                      currentUserId={currentUserId}
+                      selectedTaskId={showTaskDetailPane ? openTaskId : null}
+                      onToggle={handleToggleTask}
+                      onPress={openTaskDetails}
+                      onLongPress={(task) => {
+                        if (!canManageTaskMenu(task)) return;
+                        setActionMenuTask(task);
+                      }}
+                      emptyTitle={
+                        taskSearchQuery.trim()
+                          ? "No tasks"
+                          : filters.statusTab === "archived"
+                            ? "No archived tasks"
+                            : filters.statusTab === "completed"
+                              ? "Nothing completed"
+                              : filters.dueDate === "calendar_day"
+                                ? "No active tasks"
+                                : "You're all"
+                      }
+                      emptyAccentTitle={
+                        taskSearchQuery.trim()
+                          ? "found."
+                          : filters.statusTab === "archived"
+                            ? "yet."
+                            : filters.statusTab === "completed"
+                              ? filters.dueDate === "calendar_day"
+                                ? "for this day."
+                                : "yet."
+                              : filters.dueDate === "calendar_day"
+                                ? "for this day."
+                                : "caught up."
+                      }
+                      emptySubtitle={
+                        taskSearchQuery.trim()
+                          ? "Try a different task name or adjust your filters."
+                          : filters.statusTab === "archived"
+                            ? "Completed tasks move here after 30 days."
+                            : filters.dueDate === "calendar_day" && selectedDay
+                              ? "Try viewing upcoming tasks or adjust your filters."
+                              : filters.statusTab === "completed"
+                                ? "Completed work from the last 30 days shows here."
+                                : "No active tasks for the current filters."
+                      }
+                      emptyActionLabel={
+                        !taskSearchQuery.trim() &&
+                        filters.dueDate === "calendar_day"
+                          ? "View upcoming tasks"
+                          : undefined
+                      }
+                      onEmptyAction={
+                        !taskSearchQuery.trim() &&
+                        filters.dueDate === "calendar_day"
+                          ? () => setFilters((f) => ({ ...f, dueDate: "all" }))
+                          : undefined
+                      }
+                      footer={
+                        <>
+                          {nextCursor !== null ? (
+                            <Pressable
+                              onPress={handleLoadMore}
+                              style={{
+                                margin: 12,
+                                marginTop: 0,
+                                paddingVertical: 12,
+                                borderRadius: 10,
+                                alignItems: "center",
+                                backgroundColor: "#EEF2FF",
+                                flexDirection: "row",
+                                justifyContent: "center",
+                                gap: 8,
+                              }}
+                              testID="load-more-button"
+                              disabled={loadingMore}
+                            >
+                              {loadingMore ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#4361EE"
+                                  testID="load-more-indicator"
+                                />
+                              ) : null}
+                              <Text
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: "600",
+                                  color: "#4361EE",
+                                }}
+                              >
+                                {loadingMore ? "Loading..." : "Load more tasks"}
+                              </Text>
+                            </Pressable>
+                          ) : null}
+                        </>
+                      }
+                    />
+                  </ScrollView>
+                </View>
+                </View>
               </View>
-            </>
+              {showTaskDetailPane ? (
+                <View
+                  style={{
+                    /**
+                     * The shared width is the pane's card, so the gap and the
+                     * page gutter are added on top of it rather than eaten out
+                     * of it — otherwise this divider sits a gutter off the ones
+                     * on the other tabs.
+                     */
+                    width: taskDetailPaneWidth + PANE_GAP + WS.pageGutter,
+                    alignSelf: "stretch",
+                    flexShrink: 0,
+                    minHeight: 0,
+                    paddingTop: 8,
+                    paddingRight: WS.pageGutter,
+                    paddingLeft: PANE_GAP,
+                    paddingBottom: workspacePageBottom,
+                  }}
+                  testID="task-detail-pane"
+                >
+                  <View style={splitPaneCard}>
+                    {openTaskId && activeTeamId ? (
+                      <TaskDetail
+                        key={openTaskId}
+                        taskId={openTaskId}
+                        teamId={activeTeamId}
+                        onClose={() => setOpenTaskId(null)}
+                        onSelectTask={setOpenTaskId}
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          flex: 1,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          paddingHorizontal: 24,
+                          gap: 8,
+                        }}
+                        testID="task-detail-pane-empty"
+                      >
+                        <CheckSquare
+                          size={26}
+                          color="#C3CBD8"
+                          strokeWidth={2}
+                        />
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: "700",
+                            letterSpacing: -0.2,
+                            color: "#475467",
+                          }}
+                        >
+                          No task selected
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            lineHeight: 16,
+                            fontWeight: "500",
+                            color: "#98A2B3",
+                            textAlign: "center",
+                          }}
+                        >
+                          Pick a task from the list to see its details here.
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ) : null}
+            </View>
           )}
+        </View>
+        {readOnlyWorkspace ? (
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: tabClearance(10),
+              alignItems: "center",
+            }}
+          >
+            <Pressable
+              onPress={() => setReadOnlySheetOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Read-only workspace. View plan."
+              testID="workspace-read-only-status"
+              style={{
+                minHeight: 36,
+                paddingLeft: 12,
+                paddingRight: 14,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: "#E4DFF8",
+                backgroundColor: "#FFFFFF",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Lock size={13} color="#635BEE" strokeWidth={2.2} />
+              <Text
+                style={{
+                  fontSize: 12,
+                  lineHeight: 16,
+                  fontWeight: "700",
+                  color: "#29324A",
+                }}
+              >
+                Read-only · View plan
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
         </View>
       </View>
     </CurvedTabLayout>

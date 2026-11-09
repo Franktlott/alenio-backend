@@ -1,6 +1,7 @@
 import type { WorkspaceModule } from "@prisma/client";
 import { prisma } from "../prisma";
 import { findTeamByGoHubToken } from "./go-hub";
+import { billingKeyOfDbPlan, featureKeyOfModule, featuresOfDbPlan } from "./plan-features";
 
 export type ModuleStatus = "inactive" | "active";
 export type OperatingMode = "testing" | "live";
@@ -36,7 +37,7 @@ export type ModuleDefinition = {
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   {
     moduleKey: "temp-checks",
-    moduleName: "Temperature Checks",
+    moduleName: "Food Safety",
     description: "Configure in Go; associates take checks in the Alenio Temps app.",
     icon: "temp",
     tone: "emerald",
@@ -77,7 +78,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   },
   {
     moduleKey: "walks",
-    moduleName: "Walks",
+    moduleName: "Guided Walks",
     description: "Structured manager observations with saved walk history.",
     icon: "walks",
     tone: "violet",
@@ -459,14 +460,19 @@ export async function listKioskModulesForDevice(
   const team = await findTeamByGoHubToken(hubToken);
   if (!team) return { ok: false };
 
-  const rows = await prisma.workspaceModule.findMany({
-    where: { teamId: team.id, status: "active" },
-  });
+  const [rows, subscription] = await Promise.all([
+    prisma.workspaceModule.findMany({ where: { teamId: team.id, status: "active" } }),
+    prisma.teamSubscription.findUnique({ where: { teamId: team.id }, select: { plan: true } }),
+  ]);
+  const soldPlan = billingKeyOfDbPlan(subscription?.plan);
+  const planFeatures = soldPlan ? featuresOfDbPlan(soldPlan) : null;
 
   const modules: KioskModule[] = [];
   for (const row of rows) {
     const def = getModuleDefinition(row.moduleKey);
     if (!def) continue;
+    const featureKey = featureKeyOfModule(def.moduleKey);
+    if (planFeatures && featureKey && !planFeatures.includes(featureKey)) continue;
     const mode = (row.operatingMode as OperatingMode | null) ?? "testing";
     modules.push({
       moduleKey: def.moduleKey,

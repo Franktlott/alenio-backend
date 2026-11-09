@@ -128,7 +128,7 @@ export function WalkDetailsPage() {
   const { templateId = "" } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { canManage, teamId } = useAlenioGoShell();
+  const { canManage, teamId, workspaceTimeZone } = useAlenioGoShell();
 
   const [template, setTemplate] = useState<WalkTemplate | null>(null);
   const [schedules, setSchedules] = useState<WalkSchedule[]>([]);
@@ -158,9 +158,14 @@ export function WalkDetailsPage() {
   }
   const [scheduleModal, setScheduleModal] = useState<ScheduleModalMode>(null);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
-  const [scheduleForm, setScheduleForm] = useState<WalkScheduleFormValue>(defaultScheduleFormValue());
+  const [scheduleForm, setScheduleForm] = useState<WalkScheduleFormValue>(() =>
+    defaultScheduleFormValue(workspaceTimeZone),
+  );
   const [assignmentScheduleId, setAssignmentScheduleId] = useState<string | null>(null);
-  const [assignmentForm, setAssignmentForm] = useState<WalkScheduleFormValue>(defaultScheduleFormValue());
+  const [assignmentForm, setAssignmentForm] =
+    useState<WalkScheduleFormValue>(() =>
+      defaultScheduleFormValue(workspaceTimeZone),
+    );
   const [confirmDeleteWalk, setConfirmDeleteWalk] = useState(false);
   const [confirmArchiveWalk, setConfirmArchiveWalk] = useState(false);
   const [confirmDeleteScheduleId, setConfirmDeleteScheduleId] = useState<string | null>(null);
@@ -254,7 +259,7 @@ export function WalkDetailsPage() {
 
   function openCreateSchedule() {
     setEditingScheduleId(null);
-    setScheduleForm(defaultScheduleFormValue());
+    setScheduleForm(defaultScheduleFormValue(workspaceTimeZone));
     setScheduleModal("create");
   }
 
@@ -441,7 +446,7 @@ export function WalkDetailsPage() {
           <div className="temps-stack" style={{ gap: "0.75rem" }}>
             <p className="temps-error">{error || "Walk not found."}</p>
             <TempsButton variant="secondary" onClick={() => navigate("/go/temp-checks/walks")}>
-              ← Back to Walks
+              ← Back to Guided Walks
             </TempsButton>
           </div>
         ) : (
@@ -449,7 +454,7 @@ export function WalkDetailsPage() {
             <TempsPageHeader
               breadcrumb={
                 <>
-                  <Link to="/go/temp-checks/walks">Walks</Link>
+                  <Link to="/go/temp-checks/walks">Guided Walks</Link>
                   <span aria-hidden>/</span>
                   <span>{template.name}</span>
                 </>

@@ -6,7 +6,7 @@ import { auth, verifyEmailPassword } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
-import { isPrismaUniqueOnName, isTeamDisplayNameTaken } from "../lib/team-name";
+import { isPrismaUniqueOnName, isTeamNameTakenForUser } from "../lib/team-name";
 import {
   parseWorkplaceStandards,
   parseWorkplaceStandardsPatch,
@@ -458,9 +458,9 @@ teamsRouter.patch("/:teamId", async (c) => {
     }
   }
 
-  if (nameTrim && (await isTeamDisplayNameTaken(nameTrim, teamId))) {
+  if (nameTrim && (await isTeamNameTakenForUser(nameTrim, user.id, teamId))) {
     return c.json(
-      { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+      { error: { message: "You already have a workspace with this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
       409,
     );
   }
@@ -493,7 +493,7 @@ teamsRouter.patch("/:teamId", async (c) => {
   } catch (err) {
     if (isPrismaUniqueOnName(err)) {
       return c.json(
-        { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+        { error: { message: "You already have a workspace with this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
         409,
       );
     }

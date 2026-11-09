@@ -131,22 +131,25 @@ export async function sendPushNotificationsStrict(messages: PushPayload[]): Prom
   }
 }
 
-// Non-strict sender (logs failures but does not throw).
-export async function sendPushNotifications(messages: PushPayload[]): Promise<void> {
-  if (messages.length === 0) return;
+// Non-strict sender (logs failures but does not throw). Returns how many Expo accepted.
+export async function sendPushNotifications(messages: PushPayload[]): Promise<number> {
+  if (messages.length === 0) return 0;
 
   const chunks = chunkArray(messages, CHUNK_SIZE);
 
-  await Promise.all(
+  const accepted = await Promise.all(
     chunks.map(async (chunk) => {
       try {
         await sendPushChunkStrict(chunk);
         console.log(`[push] ✅ Sent ${chunk.length} notification(s) to Expo successfully`);
+        return chunk.length;
       } catch (err) {
         console.error("[push] ❌ Failed to send push notifications:", err);
+        return 0;
       }
     })
   );
+  return accepted.reduce((sum, count) => sum + count, 0);
 }
 
 // Kept for backwards compatibility with other routes
@@ -166,7 +169,8 @@ type NotifPrefKey =
   | "notifMeetings"
   | "notifAdminUsers"
   | "notifAdminWorkspaces"
-  | "notifAdminBilling";
+  | "notifAdminBilling"
+  | "notifProductUpdates";
 
 export type { NotifPrefKey };
 
@@ -178,11 +182,11 @@ export async function sendPushToUsers(
   prefKey?: NotifPrefKey,
   teamId?: string,
   imageOverride?: string
-): Promise<void> {
+): Promise<number> {
   console.log(`[push] sendPushToUsers — userIds: ${userIds.length}, prefKey: ${prefKey ?? "none"}, title: "${title}"`);
   if (userIds.length === 0) {
     console.log("[push] No userIds provided, skipping");
-    return;
+    return 0;
   }
 
   const where: Record<string, unknown> = {
@@ -229,5 +233,5 @@ export async function sendPushToUsers(
     });
   console.log(`[push] Sending ${messages.length} message(s) after token format filter`);
 
-  await sendPushNotifications(messages);
+  return sendPushNotifications(messages);
 }

@@ -1,5 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import Svg, { Circle, Path, Polyline } from "react-native-svg";
 import {
   Activity,
@@ -8,6 +16,7 @@ import {
   Clock3,
   Flame,
   Info,
+  Lock,
   TrendingUp,
   Users,
 } from "lucide-react-native";
@@ -335,6 +344,133 @@ function StatCard({
   );
 }
 
+function Bone({ style }: { style?: StyleProp<ViewStyle> }) {
+  return <View style={[styles.bone, style]} />;
+}
+
+export function TeamMomentumLoading({ wide }: { wide: boolean }) {
+  return (
+    <View
+      style={styles.stack}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading Team Momentum"
+      testID="team-momentum-loading"
+    >
+      <View style={styles.loadingLabel}>
+        <ActivityIndicator color={PURPLE} />
+        <Text style={styles.loadingLabelText}>Loading Team Momentum</Text>
+      </View>
+      <View style={wide ? styles.heroRow : styles.stack}>
+        <View style={[styles.card, styles.hero, wide ? styles.heroSlot : undefined]}>
+          <View style={styles.heroCopy}>
+            <Bone style={styles.boneFlame} />
+            <Bone style={styles.bonePercent} />
+            <Bone style={styles.boneLineWide} />
+            <Bone style={styles.boneLineShort} />
+          </View>
+          <Bone style={styles.boneMountain} />
+        </View>
+        <View style={styles.statRow}>
+          {[0, 1, 2].map((item) => (
+            <View key={item} style={[styles.card, styles.statCard, styles.boneStat]}>
+              <Bone style={styles.boneIcon} />
+              <Bone style={styles.boneStatValue} />
+              <Bone style={styles.boneLineShort} />
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={wide ? styles.chartRow : styles.stack}>
+        <View style={[styles.card, styles.chartCard, styles.boneChart, wide ? styles.flex : undefined]}>
+          <Bone style={styles.boneTitle} />
+          <Bone style={styles.boneLineWide} />
+          <Bone style={styles.boneChartArea} />
+        </View>
+        <View style={[styles.card, styles.chartCard, styles.boneChart, wide ? styles.flex : undefined]}>
+          <Bone style={styles.boneTitle} />
+          <Bone style={styles.boneLineWide} />
+          <View style={styles.donutRow}>
+            <Bone style={styles.boneDonut} />
+            <View style={styles.legend}>
+              <Bone style={styles.boneLineWide} />
+              <Bone style={styles.boneLineShort} />
+              <Bone style={styles.boneLineWide} />
+            </View>
+          </View>
+        </View>
+        <View style={[styles.card, styles.chartCard, wide ? styles.flex : undefined]}>
+          <Bone style={styles.boneTitle} />
+          {[0, 1, 2, 3].map((item) => (
+            <View key={item} style={styles.memberRow}>
+              <Bone style={styles.boneAvatar} />
+              <View style={styles.memberCopy}>
+                <Bone style={styles.boneName} />
+                <Bone style={styles.boneLineShort} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Bone style={styles.boneTitle} />
+        <Bone style={[styles.boneLineWide, { marginTop: 8 }]} />
+        <View style={[wide ? styles.happeningRow : styles.stack, { marginTop: 12 }]}>
+          {[0, 1, 2].map((item) => (
+            <View key={item} style={[styles.happeningCard, wide ? styles.flex : undefined]}>
+              <Bone style={styles.boneHappeningIcon} />
+              <View style={styles.flex}>
+                <Bone style={styles.boneName} />
+                <Bone style={[styles.boneLineWide, { marginTop: 8 }]} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.infoBar}>
+        <Bone style={styles.boneIcon} />
+        <View style={styles.flex}>
+          <Bone style={styles.boneName} />
+          <Bone style={[styles.boneLineWide, { marginTop: 8 }]} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+export function PersonalMomentumLoading() {
+  return (
+    <View
+      style={styles.stack}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading your momentum"
+      testID="my-momentum-loading"
+    >
+      <View style={styles.loadingLabel}>
+        <ActivityIndicator color={PURPLE} />
+        <Text style={styles.loadingLabelText}>Loading your momentum</Text>
+      </View>
+      <View style={[styles.card, styles.bonePersonal]}>
+        <Bone style={styles.bonePersonalIcon} />
+        <View style={styles.flex}>
+          <Bone style={styles.boneLineShort} />
+          <Bone style={[styles.bonePercent, { marginTop: 10 }]} />
+          <Bone style={[styles.boneLineWide, { marginTop: 10 }]} />
+        </View>
+      </View>
+      {[0, 1, 2].map((item) => (
+        <View key={item} style={styles.card}>
+          <Bone style={styles.boneTitle} />
+          <Bone style={[styles.boneLineWide, { marginTop: 14 }]} />
+          <Bone style={[styles.boneLineShort, { marginTop: 8 }]} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function TeamMomentumDashboard({
   summary,
   rows,
@@ -464,51 +600,74 @@ export function TeamMomentumDashboard({
               const filled = Math.min(streak, MOMENTUM_STRONG_STREAK);
               const dot = streak > 0 ? GREEN : "#CBD5E1";
               const openable = canOpenMember?.(row.member.userId) !== false;
-              return (
+              const name = row.member.name || row.member.email || "Member";
+              const streakLabel = streak > 0 ? `Current streak ${streak}` : "No current streak";
+              const rowLabel = openable
+                ? `${name}. ${streakLabel}. ${row.member.completedThisMonth} this month.`
+                : `${name}. ${streakLabel}. Locked.`;
+              const body = (
+                <>
+                  <View style={[styles.memberMain, !openable && styles.memberLocked]}>
+                    <UserAvatar
+                      user={{
+                        name: row.member.name,
+                        email: row.member.email,
+                        image: row.member.image,
+                      }}
+                      size={36}
+                      radius={18}
+                      backgroundColor="#EEF2FF"
+                    />
+                    <View style={styles.memberCopy}>
+                      <View style={styles.memberNameRow}>
+                        <Text style={styles.memberName} numberOfLines={1}>
+                          {name}
+                        </Text>
+                        <View style={[styles.presence, { backgroundColor: dot }]} />
+                      </View>
+                      <Text style={styles.memberMeta}>
+                        {streak > 0 ? `Current streak: ${streak}` : "No current streak"}
+                      </Text>
+                      <View style={styles.pips}>
+                        {Array.from({ length: MOMENTUM_STRONG_STREAK }, (_, index) => (
+                          <View
+                            key={index}
+                            style={[
+                              styles.pip,
+                              index < filled ? styles.pipFilled : styles.pipEmpty,
+                            ]}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                    <Text style={styles.monthCount}>
+                      {row.member.completedThisMonth}{"\n"}this month
+                    </Text>
+                  </View>
+                  {openable ? null : (
+                    <Lock size={16} color="#98A2B3" strokeWidth={2.4} />
+                  )}
+                </>
+              );
+              return openable ? (
                 <Pressable
                   key={row.member.userId}
-                  disabled={!openable}
                   onPress={() => onOpenMember(row.member.userId)}
                   style={styles.memberRow}
-                  accessibilityRole={openable ? "button" : "text"}
-                  accessibilityLabel={`${row.member.name}. ${streak > 0 ? `Current streak ${streak}` : "No current streak"}. ${row.member.completedThisMonth} this month.`}
+                  accessibilityRole="button"
+                  accessibilityLabel={rowLabel}
                 >
-                  <UserAvatar
-                    user={{
-                      name: row.member.name,
-                      email: row.member.email,
-                      image: row.member.image,
-                    }}
-                    size={36}
-                    radius={18}
-                    backgroundColor="#EEF2FF"
-                  />
-                  <View style={styles.memberCopy}>
-                    <View style={styles.memberNameRow}>
-                      <Text style={styles.memberName} numberOfLines={1}>
-                        {row.member.name || row.member.email || "Member"}
-                      </Text>
-                      <View style={[styles.presence, { backgroundColor: dot }]} />
-                    </View>
-                    <Text style={styles.memberMeta}>
-                      {streak > 0 ? `Current streak: ${streak}` : "No current streak"}
-                    </Text>
-                    <View style={styles.pips}>
-                      {Array.from({ length: MOMENTUM_STRONG_STREAK }, (_, index) => (
-                        <View
-                          key={index}
-                          style={[
-                            styles.pip,
-                            index < filled ? styles.pipFilled : styles.pipEmpty,
-                          ]}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                  <Text style={styles.monthCount}>
-                    {row.member.completedThisMonth}{"\n"}this month
-                  </Text>
+                  {body}
                 </Pressable>
+              ) : (
+                <View
+                  key={row.member.userId}
+                  style={styles.memberRow}
+                  accessibilityRole="text"
+                  accessibilityLabel={rowLabel}
+                >
+                  {body}
+                </View>
               );
             })
           )}
@@ -641,6 +800,8 @@ const styles = StyleSheet.create({
   legendLabel: { flex: 1, fontSize: 12, color: "#344054" },
   legendPercent: { fontSize: 12, color: MUTED },
   memberRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
+  memberMain: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 10 },
+  memberLocked: { opacity: 0.4 },
   memberCopy: { flex: 1, minWidth: 0 },
   memberNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   memberName: { flexShrink: 1, fontSize: 14, fontWeight: "700", color: INK },
@@ -683,4 +844,29 @@ const styles = StyleSheet.create({
   },
   infoTitle: { fontSize: 13, fontWeight: "800", color: INK },
   infoBody: { marginTop: 2, fontSize: 12, lineHeight: 16, color: MUTED },
+  loadingLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 4,
+  },
+  loadingLabelText: { fontSize: 13, fontWeight: "700", color: MUTED },
+  bone: { backgroundColor: "#E4E7EC", borderRadius: 8 },
+  boneFlame: { width: 28, height: 28, borderRadius: 14 },
+  bonePercent: { width: 72, height: 28, marginTop: 8 },
+  boneLineWide: { width: "78%", height: 12, marginTop: 8 },
+  boneLineShort: { width: "46%", height: 10, marginTop: 8 },
+  boneMountain: { width: 108, height: 84, borderRadius: 16, backgroundColor: "#DDD6FE" },
+  boneStat: { minHeight: 108 },
+  boneIcon: { width: 16, height: 16, borderRadius: 8 },
+  boneStatValue: { width: 36, height: 22, marginTop: 10 },
+  boneTitle: { width: 148, height: 16 },
+  boneChart: { minHeight: 176 },
+  boneChartArea: { height: 112, marginTop: 16, borderRadius: 12 },
+  boneDonut: { width: 92, height: 92, borderRadius: 46 },
+  boneAvatar: { width: 36, height: 36, borderRadius: 18 },
+  boneName: { width: "58%", height: 14 },
+  boneHappeningIcon: { width: 32, height: 32, borderRadius: 16 },
+  bonePersonal: { flexDirection: "row", alignItems: "center", gap: 13, minHeight: 108 },
+  bonePersonalIcon: { width: 44, height: 44, borderRadius: 22 },
 });

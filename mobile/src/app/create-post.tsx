@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,17 +21,24 @@ import { uploadFile } from "@/lib/upload";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { UserAvatar } from "@/components/UserAvatar";
+import { useStatusClusterInset } from "@/lib/adaptive-layout";
 
 const BODY_MAX = 2000;
 
 export default function CreatePostScreen() {
-  const { teamId } = useLocalSearchParams<{ teamId?: string }>();
+  const { teamId, attach, draft } = useLocalSearchParams<{
+    teamId?: string;
+    /** Set when the caller was "Add a photo" rather than "Write a post". */
+    attach?: string;
+    /** Opening line from a starter prompt, so the box is never blank. */
+    draft?: string;
+  }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const { data: authReady } = useMobileAuthReady();
   const me = authReady?.me ?? session?.user;
 
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(draft ?? "");
   const [photo, setPhoto] = useState<PickedFile | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(
     null,
@@ -100,10 +107,25 @@ export default function CreatePostScreen() {
     }
   };
 
+  /** Opens the picker once, so returning from it does not reopen it. */
+  const photoRequested = useRef(false);
+  useEffect(() => {
+    if (attach !== "1" || photoRequested.current) return;
+    photoRequested.current = true;
+    void onAttach();
+  }, [attach]);
+
   const canPost = (!!body.trim() || !!photo) && !postMutation.isPending;
+  const cluster = useStatusClusterInset({ fullScreen: true });
 
   return (
-    <SafeAreaView style={styles.page} edges={["top"]}>
+    <SafeAreaView
+      style={[
+        styles.page,
+        { paddingLeft: cluster.left, paddingRight: cluster.right },
+      ]}
+      edges={["top"]}
+    >
       <View style={styles.navBar}>
         <Pressable
           onPress={() => router.back()}
@@ -227,6 +249,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#EEF1F6",

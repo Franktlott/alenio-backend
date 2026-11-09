@@ -1,19 +1,61 @@
 export type TaskStatus = "todo" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskKind = "workspace_task" | "reminder";
 export type RecurrenceType = "daily" | "weekly" | "monthly" | "custom";
 export type TeamRole = "owner" | "admin" | "member" | "team_leader";
+
+export type MemberNextActionId =
+  | "first_check_in"
+  | "overdue_check_in"
+  | "schedule_next_check_in"
+  | "no_active_development_goals"
+  | "development_goal_review_due"
+  | "overdue_tasks"
+  | "tasks_due_soon"
+  | "everything_up_to_date";
+
+export type MemberNextActionRoute =
+  | "/(app)/execute"
+  | "/plan-one-on-one"
+  | "/person"
+  | "/team-priority"
+  | "/(app)/chat";
+
+export type MemberNextAction = {
+  id: MemberNextActionId;
+  priority: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  title: string;
+  copy: string;
+  ctaLabel: string;
+  affectedEntityIds: string[];
+  generatedAt: string;
+  cta: {
+    route: MemberNextActionRoute;
+    params: Record<string, string>;
+  } | null;
+};
+
+export type MemberNextActionResponse = {
+  data: MemberNextAction;
+};
 
 export interface User {
   id: string;
   name: string;
   email: string;
   image?: string | null;
+  username?: string | null;
+  profileTitle?: string | null;
+  isWorkplaceConnected?: boolean;
+  activeNow?: boolean;
 }
 
 export interface Team {
   id: string;
   name: string;
   image?: string | null;
+  location?: string | null;
+  timezone?: string | null;
   inviteCode: string;
   role: TeamRole;
   createdAt: string;
@@ -59,6 +101,8 @@ export interface Subtask {
 
 export interface Task {
   id: string;
+  /** Older cached task payloads may omit kind; treat those as workspace tasks. */
+  kind?: TaskKind;
   title: string;
   description?: string | null;
   status: TaskStatus;
@@ -102,9 +146,15 @@ export interface Message {
   id: string;
   content?: string | null;
   mediaUrl?: string | null;
-  mediaType?: 'image' | 'video' | null;
+  mediaType?: "image" | "video" | null;
   replyToId?: string | null;
-  replyTo?: { id: string; content?: string | null; mediaUrl?: string | null; mediaType?: string | null; sender: { id: string; name: string } } | null;
+  replyTo?: {
+    id: string;
+    content?: string | null;
+    mediaUrl?: string | null;
+    mediaType?: string | null;
+    sender: { id: string; name: string };
+  } | null;
   reactions: MessageReaction[];
   createdAt: string;
   editedAt?: string | null;
@@ -117,14 +167,22 @@ export interface DirectMessage {
   id: string;
   content?: string | null;
   mediaUrl?: string | null;
-  mediaType?: 'image' | 'video' | null;
+  mediaType?: "image" | "video" | null;
   replyToId?: string | null;
-  replyTo?: { id: string; content?: string | null; mediaUrl?: string | null; mediaType?: string | null; sender: { id: string; name: string } } | null;
+  replyTo?: {
+    id: string;
+    content?: string | null;
+    mediaUrl?: string | null;
+    mediaType?: string | null;
+    sender: { id: string; name: string };
+  } | null;
   reactions: MessageReaction[];
   createdAt: string;
   conversationId: string;
   senderId: string;
   sender: User;
+  /** Client-only state for an outgoing message that has not reached the server. */
+  deliveryStatus?: "sending" | "queued" | "failed";
 }
 
 /** One pinned message per Team Chat, Space, or DM conversation. */
@@ -158,8 +216,21 @@ export type PersonSearchResult = {
   name: string | null;
   username: string | null;
   image: string | null;
+  isWorkplaceConnected?: boolean;
   sharedWorkspaceName: string | null;
   connectionStatus: ConnectionStatus;
+  canMessage: boolean;
+  messagePermissionReason:
+    | "self"
+    | "blocked"
+    | "connected"
+    | "shared_workspace"
+    | "shared_group"
+    | "open_inbox"
+    | "not_connected";
+  isBlockedByMe?: boolean;
+  isBlockedByThem?: boolean;
+  blockStatus?: "blocked_by_me" | "blocked_by_them" | "blocked_both" | null;
 };
 
 export type ConnectionPerson = {
@@ -167,6 +238,8 @@ export type ConnectionPerson = {
   name: string | null;
   username: string | null;
   image: string | null;
+  profileTitle?: string | null;
+  isWorkplaceConnected?: boolean;
 };
 
 export type ConnectionEntry = {
@@ -177,8 +250,14 @@ export type ConnectionEntry = {
   updatedAt: string;
 };
 
+export type AcceptedConnectionEntry = ConnectionEntry & {
+  activeNow: boolean;
+  sharesWorkspace: boolean;
+  sharedWorkspaceNames?: string[];
+};
+
 export type ConnectionsResponse = {
-  accepted: ConnectionEntry[];
+  accepted: AcceptedConnectionEntry[];
   incoming: ConnectionEntry[];
   outgoing: ConnectionEntry[];
 };
@@ -204,14 +283,33 @@ export type ConnectionSuggestion = {
   currentWorkspace?: ConnectionSuggestionWorkspace;
   sharedWorkspaces: ConnectionSuggestionWorkspace[];
   mutualConnections: number;
+  mutualPreview?: ConnectionSuggestionMutual[];
   reasons: { key: ConnectionSuggestionReasonKey; label: string }[];
+};
+
+export type ConnectionSuggestionMutual = {
+  id: string;
+  name: string;
+  image: string | null;
+};
+
+export type ConnectionSuggestionDismissalResponse = {
+  userId: string;
+  dismissedAt: string;
+  dismissedUntil: string;
+  cooldownDays: number;
 };
 
 export type ConnectionPairStatus = {
   status: ConnectionStatus;
   isBlockedByMe: boolean;
+  isBlockedByThem: boolean;
+  blockStatus: "blocked_by_me" | "blocked_by_them" | "blocked_both" | null;
   canMessage: boolean;
 };
+
+/** Authoritative result of POST /api/connections/request. */
+export type ConnectionRequestResponse = Pick<ConnectionPairStatus, "status">;
 
 export type PublicProfileWorkspace = {
   id: string;
@@ -221,16 +319,26 @@ export type PublicProfileWorkspace = {
   joinedAt: string;
 };
 
+export type PublicProfilePhoto = {
+  id: string;
+  url: string;
+  width: number | null;
+  height: number | null;
+};
+
 export type PublicPersonProfile = {
   id: string;
   name: string | null;
   username: string | null;
   image: string | null;
+  isWorkplaceConnected: boolean;
   emailVerified: boolean;
   memberSince: string;
+  profileTitle: string | null;
   profileWebsite: string | null;
   profileLocation: string | null;
   profileBio: string | null;
+  photos?: PublicProfilePhoto[];
   stats: {
     connections: number;
     workspaces: number;
@@ -239,6 +347,8 @@ export type PublicPersonProfile = {
   sharedWorkspaces: PublicProfileWorkspace[];
   connectionStatus: ConnectionStatus;
   isBlockedByMe: boolean;
+  isBlockedByThem: boolean;
+  blockStatus: "blocked_by_me" | "blocked_by_them" | "blocked_both" | null;
   canMessage: boolean;
   isSelf: boolean;
 };
@@ -250,6 +360,7 @@ export type GroupMemberCandidate = {
   email: string | null;
   username: string | null;
   image: string | null;
+  isWorkplaceConnected?: boolean;
   workspaces: Array<{ id: string; name: string }>;
   workspaceLabel: string;
 };
@@ -261,6 +372,8 @@ export type ConversationParticipant = {
   name: string | null;
   email: string | null;
   image: string | null;
+  isWorkplaceConnected?: boolean;
+  activeNow?: boolean;
   role: GroupParticipantRole;
 };
 
@@ -275,6 +388,11 @@ export interface Conversation {
   participants?: ConversationParticipant[];
   myRole?: GroupParticipantRole | null;
   workspaceContext?: GroupWorkspaceContext | null;
+  messagingStatus?:
+    | "available"
+    | "blocked_by_me"
+    | "connection_required"
+    | "unavailable";
   createdAt: string;
   updatedAt: string;
   recipient: User | null;
@@ -313,6 +431,7 @@ export interface CalendarEvent {
   endDate?: string | null;
   allDay: boolean;
   color: string;
+  image?: string | null;
   teamId: string;
   createdAt: string;
   createdById?: string;
@@ -320,12 +439,13 @@ export interface CalendarEvent {
   isHidden?: boolean;
   isVideoMeeting?: boolean;
   isOneOnOne?: boolean;
+  oneOnOneMemberUserId?: string | null;
+  oneOnOneTemplateId?: string | null;
   /** Outlook / external busy block — read-only */
   isExternal?: boolean;
   approvalStatus?: "pending" | "approved" | "rejected";
   assigneeIds?: string[];
 }
-
 
 export interface CreateTaskInput {
   title: string;
@@ -340,3 +460,86 @@ export interface CreateTaskInput {
     dayOfMonth?: number;
   };
 }
+
+export type PersonalRecognition = {
+  id: string;
+  createdAt: string;
+  canDelete?: boolean;
+  deleteUntil?: string | null;
+  celebrationType: string;
+  message: string | null;
+  workspace: { id: string; name: string } | null;
+  giver: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
+  recipient?: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
+  reactions?: Record<
+    string,
+    { count: number; userIds: string[]; users: { id: string; name: string }[] }
+  > | null;
+  commentCount?: number;
+};
+
+export type PersonalRecognitionsResponse = {
+  total: number;
+  items: PersonalRecognition[];
+  givenTotal: number;
+  givenItems: PersonalRecognition[];
+};
+
+export type HomeTodayItemType =
+  | "task"
+  | "reminder"
+  | "event"
+  | "meeting"
+  | "check_in"
+  | "holiday"
+  | "external";
+
+export type HomeTodayItem = {
+  id: string;
+  type: HomeTodayItemType;
+  title: string;
+  startAt: string;
+  endAt: string | null;
+  allDay: boolean;
+  workspace: { id: string; name: string } | null;
+  /** Tasks and reminders only, for the pill on the Home row. */
+  priority?: TaskPriority;
+  /** Finished today. Stays on Today, shown as already done. */
+  done?: boolean;
+  /** A task carried in from an earlier day, still unfinished. */
+  overdue?: boolean;
+};
+
+export type HomeUpcomingResponse = {
+  timeZone: string;
+  days: number;
+  rangeStart: string;
+  rangeEnd: string;
+  items: HomeTodayItem[];
+};
+
+export type HomeTodayResponse = {
+  date: string;
+  timeZone: string;
+  dateStart: string;
+  dateEnd: string;
+  items: HomeTodayItem[];
+};
+
+export type CreatePersonalRecognitionRequest = {
+  targetUserId: string;
+  celebrationType: string;
+  message: string;
+};
+
+export type CreatePersonalRecognitionResponse = {
+  id: string;
+};

@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { teamSubscriptionRowHasGoFeatures } from "../routes/subscription";
-import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "./team-name";
+import { isPrismaUniqueOnName, isTeamNameTakenInOrganization, normalizeTeamName } from "./team-name";
 import { resolveTimeZone } from "./timezone";
 
 const ORG_GO_ADMIN_ROLES = new Set(["org_owner", "org_admin"]);
@@ -204,7 +204,7 @@ export async function createOrganizationWorkspace(input: {
 
   const teamName = normalizeTeamName(input.name);
   if (!teamName) return { ok: false as const, code: "VALIDATION" as const };
-  if (await isTeamDisplayNameTaken(teamName)) {
+  if (await isTeamNameTakenInOrganization(teamName, input.organizationId)) {
     return { ok: false as const, code: "TEAM_NAME_TAKEN" as const };
   }
 
@@ -314,7 +314,7 @@ export async function renameOrganizationWorkspace(input: {
   if (!teamName) return { ok: false as const, code: "VALIDATION" as const };
 
   if (teamName.toLowerCase() !== team.name.trim().toLowerCase()) {
-    if (await isTeamDisplayNameTaken(teamName)) {
+    if (await isTeamNameTakenInOrganization(teamName, input.organizationId, team.id)) {
       return { ok: false as const, code: "TEAM_NAME_TAKEN" as const };
     }
   }

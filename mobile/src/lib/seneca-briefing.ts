@@ -93,7 +93,7 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
       category: "Development Opportunity",
       tone: "follow_up",
       title: `${nearingInactive.memberName}'s goal goes inactive in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`,
-      detail: `"${nearingInactive.skill}" has had no updates in ${nearingInactive.daysSinceActivity} days. Add a progress note or update steps to keep it active.`,
+      detail: `"${nearingInactive.skill}" has had no updates in ${nearingInactive.daysSinceActivity} days. Add a progress note or update actions to keep it active.`,
       memberUserId: nearingInactive.memberUserId,
       actions: [
         { id: "create_dev_note", label: "Review development plan" },
@@ -183,7 +183,7 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
       );
     }
     if (topPerformer.streak >= 3) {
-      detailParts.push(`${topPerformer.streak}-day completion streak`);
+      detailParts.push(`${topPerformer.streak}-completion task streak`);
     }
 
     cards.push({

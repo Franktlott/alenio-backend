@@ -208,13 +208,18 @@ export function parseIntervalWindow(
   ];
 }
 
-export function defaultScheduleFormValue(): WalkScheduleFormValue {
+export function defaultScheduleFormValue(
+  workspaceTimeZone?: string | null,
+): WalkScheduleFormValue {
   return {
     name: "",
     recurrence: "DAILY",
     daysOfWeek: [1, 2, 3, 4, 5],
     intervalMinutes: 240,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York",
+    timezone:
+      workspaceTimeZone ||
+      Intl.DateTimeFormat().resolvedOptions().timeZone ||
+      "America/New_York",
     intervalDayStart: "06:00",
     windows: [
       { due: "08:00", beforeMinutes: 120, afterMinutes: 30 },

@@ -100,6 +100,14 @@ Notifications.setNotificationHandler({
         shouldShowList: true,
       };
     }
+    if (data?.type === "campaign") {
+      return {
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    }
     return {
       shouldPlaySound: false,
       shouldSetBadge: true,

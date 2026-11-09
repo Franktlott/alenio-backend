@@ -5,8 +5,8 @@ import { formatMeetingCountdown } from "../lib/format-meeting-countdown";
 import { queryKeys } from "../lib/query-keys";
 import {
   canShowVideoJoin,
-  isInVideoMeetingBannerWindow,
   isVideoMeetingLeaderRole,
+  rankMeetingsForBanner,
 } from "../lib/video-meeting-join";
 
 type Props = {
@@ -37,9 +37,10 @@ export function VideoMeetingTopBarJoin({ selectedTeamId, user }: Props) {
   const activeMeeting = useMemo(() => {
     if (!selectedTeamId) return null;
     return (
-      (meetingsQuery.data ?? [])
-        .filter((m) => m.event.teamId === selectedTeamId)
-        .find((m) => isInVideoMeetingBannerWindow(m.event.startDate, m.event.endDate, now)) ?? null
+      rankMeetingsForBanner(
+        (meetingsQuery.data ?? []).filter((m) => m.event.teamId === selectedTeamId),
+        now,
+      )[0] ?? null
     );
   }, [meetingsQuery.data, selectedTeamId, now]);
 

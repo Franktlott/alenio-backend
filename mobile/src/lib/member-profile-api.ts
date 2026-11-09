@@ -16,9 +16,21 @@ export type DevelopmentGoal = {
   teamId: string;
   memberUserId: string;
   skill: string;
+  description: string | null;
+  dueDate: string | null;
+  priority: "low" | "normal" | "high";
   steps: string[];
+  completedStepIndexes: number[];
+  completedStepDates: Record<number, string>;
+  completedStepCount: number;
+  totalStepCount: number;
+  progressPercent: number;
   status: DevelopmentGoalStatus;
   closedAt: string | null;
+  archivedAt: string | null;
+  archiveReason: string | null;
+  isArchived: boolean;
+  readOnly: boolean;
   lastActivityAt?: string;
   daysSinceActivity?: number;
   daysUntilInactive?: number | null;
@@ -83,16 +95,25 @@ export type OneOnOneMeeting = {
   id: string;
   teamId: string;
   memberUserId: string;
+  sourceVideoRoomId?: string | null;
+  calendarEventId?: string | null;
   templateId: string | null;
   templateTitle: string;
   templateFields: OneOnOneTemplateField[];
   responses: Record<string, string | number>;
   status?: "draft" | "published";
   publishedAt?: string | null;
+  /** "recorded" when the draft was written up from a recorded conversation. */
+  captureMode?: "manual" | "recorded";
   createdById: string;
   createdAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };
   followUpTasks?: OneOnOneFollowUpTask[];
+  /**
+   * Follow-ups jotted down while the check-in is still a draft, before they
+   * become real tasks on publish.
+   */
+  followUpDrafts?: OneOnOneFollowUpTaskInput[];
   associateFeedbackPending?: boolean;
 };
 
@@ -111,7 +132,13 @@ export function fetchDevelopmentGoals(teamId: string, memberUserId: string) {
 export function createDevelopmentGoal(
   teamId: string,
   memberUserId: string,
-  input: { skill: string; steps: string[] },
+  input: {
+    skill: string;
+    description?: string | null;
+    dueDate?: string | null;
+    priority?: "low" | "normal" | "high";
+    steps: string[];
+  },
 ) {
   return api.post<DevelopmentGoal>(`${enc(teamId, memberUserId)}/development-goals`, input);
 }
@@ -120,10 +147,22 @@ export function updateDevelopmentGoal(
   teamId: string,
   memberUserId: string,
   goalId: string,
-  input: { skill: string; steps: string[] },
+  input: { skill: string; description?: string | null; steps: string[] },
 ) {
   return api.patch<DevelopmentGoal>(
     `${enc(teamId, memberUserId)}/development-goals/${encodeURIComponent(goalId)}`,
+    input,
+  );
+}
+
+export function updateDevelopmentGoalStepCompletion(
+  teamId: string,
+  memberUserId: string,
+  goalId: string,
+  input: { stepIndex: number; completed: boolean },
+) {
+  return api.patch<DevelopmentGoal>(
+    `${enc(teamId, memberUserId)}/development-goals/${encodeURIComponent(goalId)}/steps/completion`,
     input,
   );
 }
@@ -200,6 +239,8 @@ export function createOneOnOneMeeting(
     requestAssociateFeedback?: boolean;
     status?: "draft" | "published";
     plannedCalendarEventId?: string;
+    sourceVideoRoomId?: string | null;
+    calendarEventId?: string | null;
   },
 ) {
   return api.post<OneOnOneMeeting>(`${enc(teamId, memberUserId)}/one-on-ones`, input);
@@ -215,6 +256,9 @@ export function updateOneOnOneMeeting(
     requestAssociateFeedback?: boolean;
     status?: "draft" | "published";
     plannedCalendarEventId?: string;
+    sourceVideoRoomId?: string | null;
+    calendarEventId?: string | null;
+    templateTitle?: string;
   },
 ) {
   return api.patch<OneOnOneMeeting>(

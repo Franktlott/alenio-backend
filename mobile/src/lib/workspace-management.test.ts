@@ -25,14 +25,14 @@ describe("canOpenWorkspaceTitleMenu", () => {
     ).toBe(true);
   });
 
-  test("does not expose a single-workspace member menu", () => {
+  test("keeps the workspace switcher visible for a member with one workspace", () => {
     expect(
       canOpenWorkspaceTitleMenu({
         enabled: true,
         teamCount: 1,
         activeRole: "member",
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
@@ -61,6 +61,17 @@ describe("workspaceManagementCapabilities", () => {
 
   test("keeps members read-only and allows leaving", () => {
     expect(workspaceManagementCapabilities("member")).toEqual({
+      canEditDetails: false,
+      canManageMembers: false,
+      canManagePermissions: false,
+      canManageStandards: false,
+      canDelete: false,
+      canLeave: true,
+    });
+  });
+
+  test("keeps legacy admins read-only while allowing them to leave", () => {
+    expect(workspaceManagementCapabilities("admin")).toEqual({
       canEditDetails: false,
       canManageMembers: false,
       canManagePermissions: false,

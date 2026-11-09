@@ -10,6 +10,9 @@ export type ApiErrorBody = {
     message?: string;
     code?: string;
     refreshAvailableAt?: string;
+    retryAt?: string;
+    remainingSeconds?: number;
+    cooldownDays?: number;
   };
 };
 

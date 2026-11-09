@@ -10,7 +10,6 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
@@ -21,7 +20,7 @@ import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
 import { getBackendUrl } from "@/lib/backend-url";
 import { toast } from "burnt";
-import { HEADER_GRADIENT } from "@/lib/header-gradient";
+import { HEADER_BRAND_COLOR } from "@/lib/header-brand";
 
 const BASE_URL = getBackendUrl();
 
@@ -215,11 +214,7 @@ export default function UserDetail() {
       <StatusBar style="light" />
 
       {/* Header */}
-      <LinearGradient
-        colors={HEADER_GRADIENT}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
+      <View style={{ backgroundColor: HEADER_BRAND_COLOR }}>
         <SafeAreaView edges={["top"]}>
           <View className="px-5 pt-2 pb-5">
             <Pressable
@@ -235,7 +230,7 @@ export default function UserDetail() {
             <Text className="text-white/70 text-sm mt-0.5">Edit account or grant platform admin</Text>
           </View>
         </SafeAreaView>
-      </LinearGradient>
+      </View>
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">

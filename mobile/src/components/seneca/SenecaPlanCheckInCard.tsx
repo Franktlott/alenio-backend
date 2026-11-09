@@ -9,7 +9,7 @@ import {
   StyleSheet,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Calendar, Clock, Video } from "lucide-react-native";
+import { Calendar, Clock, MapPin, Video } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SenecaPlanOneOnOneProposal } from "@/lib/seneca-api";
@@ -20,6 +20,7 @@ import {
   oneOnOneEndFromDuration,
 } from "@/lib/plan-one-on-one";
 import { formatEventDateAndTime } from "@/lib/format-event-time";
+import { invalidateDevelopmentCaches } from "@/lib/invalidate-development-caches";
 
 type Props = {
   teamId: string;
@@ -35,6 +36,7 @@ export function SenecaPlanCheckInCard({ teamId, proposal, onSaved, onDismiss }: 
   const [durationMinutes, setDurationMinutes] = useState(
     proposal.durationMinutes || ONE_ON_ONE_DEFAULT_DURATION_MINUTES,
   );
+  const [format, setFormat] = useState<"virtual" | "in_person">("virtual");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export function SenecaPlanCheckInCard({ teamId, proposal, onSaved, onDismiss }: 
         memberName: proposal.memberName,
         startDate: eventStart,
         durationMinutes,
-        isVideoMeeting: true,
+        isVideoMeeting: format === "virtual",
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
@@ -60,10 +62,15 @@ export function SenecaPlanCheckInCard({ teamId, proposal, onSaved, onDismiss }: 
       void queryClient.invalidateQueries({
         queryKey: ["planned-one-on-ones", teamId, proposal.memberUserId],
       });
+      void invalidateDevelopmentCaches(
+        queryClient,
+        teamId,
+        proposal.memberUserId,
+      );
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const summary = formatEventDateAndTime(eventStart.toISOString(), eventEnd.toISOString());
       onSaved(
-        `Done — your virtual check-in with ${proposal.memberName} is on the calendar for ${summary}.`,
+        `Done — your virtual meeting with ${proposal.memberName} is on the calendar for ${summary}.`,
       );
     },
     onError: (err) => {
@@ -78,11 +85,39 @@ export function SenecaPlanCheckInCard({ teamId, proposal, onSaved, onDismiss }: 
 
   return (
     <View style={styles.card} testID="seneca-plan-one-on-one-confirm">
-      <Text style={styles.title}>{editing ? "Edit check-in" : "Check-in details"}</Text>
+      <Text style={styles.title}>{editing ? "Edit meeting" : "Meeting details"}</Text>
 
       <View style={styles.row}>
         <Text style={styles.label}>With</Text>
         <Text style={styles.value}>{proposal.memberName}</Text>
+      </View>
+
+      <View style={styles.durationRow}>
+        {(
+          [
+            ["in_person", "In person"],
+            ["virtual", "Virtual"],
+          ] as const
+        ).map(([value, label]) => {
+          const active = format === value;
+          return (
+            <Pressable
+              key={value}
+              onPress={() => setFormat(value)}
+              style={[styles.durationChip, active && styles.durationChipActive]}
+              testID={`seneca-check-in-format-${value}`}
+            >
+              <Text
+                style={[
+                  styles.durationChipText,
+                  active && styles.durationChipTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {editing ? (
@@ -141,8 +176,16 @@ export function SenecaPlanCheckInCard({ teamId, proposal, onSaved, onDismiss }: 
             <Text style={styles.value}>{durationMinutes} min</Text>
           </View>
           <View style={styles.videoRow}>
-            <Video size={14} color="#4361EE" />
-            <Text style={styles.videoText}>Virtual meeting with join link</Text>
+            {format === "virtual" ? (
+              <Video size={14} color="#4361EE" />
+            ) : (
+              <MapPin size={14} color="#4361EE" />
+            )}
+            <Text style={styles.videoText}>
+              {format === "virtual"
+                ? "Virtual check-in with join link and banner"
+                : "In-person check-in on the calendar"}
+            </Text>
           </View>
         </>
       )}

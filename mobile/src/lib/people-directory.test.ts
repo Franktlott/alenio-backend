@@ -116,6 +116,17 @@ describe("independent people relationships", () => {
     ]);
   });
 
+  test("does not present a legacy admin as a workspace manager", () => {
+    const [person] = buildPeopleDirectory({
+      members: [{ ...member, role: "admin" }],
+      connections: [],
+      suggestions: [],
+    });
+    expect(selectDirectoryBadges(person)).toEqual([
+      { key: "shared_workspace", label: "Shared Workspace" },
+    ]);
+  });
+
   test("polishes backend evidence copy", () => {
     expect(polishedSuggestionReason(suggestion.reasons[0], 3)).toBe("Shared Workspace");
     expect(suggestionExplanation(suggestion)).toBe(

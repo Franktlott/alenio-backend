@@ -132,6 +132,7 @@ export function safeFetch(
     try {
       const xhr = new XMLHttpRequest();
       xhr.open(method, url, true);
+      xhr.timeout = 15_000;
 
       if (init?.credentials === "include") {
         xhr.withCredentials = true;

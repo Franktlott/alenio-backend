@@ -24,6 +24,42 @@ export function isSupportedCheckInAudio(mimeType: string): boolean {
   return CHECK_IN_AUDIO_MIME_TYPES.has(mimeType.split(";")[0]!.trim().toLowerCase());
 }
 
+const EXTENSION_BY_MIME: Record<string, string> = {
+  "audio/m4a": "m4a",
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "aac",
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+  "audio/webm": "webm",
+  "audio/ogg": "ogg",
+};
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  m4a: "audio/m4a",
+  aac: "audio/aac",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  webm: "audio/webm",
+  ogg: "audio/ogg",
+};
+
+/**
+ * The transcription API detects the container from the file name, so a
+ * browser's webm labelled ".m4a" is rejected as corrupt. Keep the real one.
+ */
+export function checkInAudioExtension(mimeType: string): string {
+  return EXTENSION_BY_MIME[mimeType.split(";")[0]!.trim().toLowerCase()] ?? "m4a";
+}
+
+/** Reads the format back off a stored segment's path; older segments are all m4a. */
+export function checkInAudioFormatForPath(path: string | null | undefined): { extension: string; mimeType: string } {
+  const match = /\.([a-z0-9]+)$/i.exec(path ?? "");
+  const extension = match?.[1]?.toLowerCase() ?? "";
+  const mimeType = MIME_BY_EXTENSION[extension];
+  return mimeType ? { extension, mimeType } : { extension: "m4a", mimeType: "audio/m4a" };
+}
+
 export function transcriptionAvailable(): boolean {
   return senecaAvailable();
 }

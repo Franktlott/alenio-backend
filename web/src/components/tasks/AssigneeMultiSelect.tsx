@@ -54,8 +54,15 @@ export function AssigneeMultiSelect({
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   const toggleMember = (userId: string) => {
@@ -183,7 +190,7 @@ export function AssigneeMultiSelect({
               <div className="assignee-multi-select-search-wrap">
                 <input
                   type="search"
-                  className="auth-input assignee-multi-select-search"
+                  className="al-input assignee-multi-select-search"
                   placeholder="Search teammates…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -200,7 +207,7 @@ export function AssigneeMultiSelect({
                   return (
                     <li key={member.userId}>
                       <label className="assignee-multi-select-option">
-                        <input type="checkbox" checked={checked} onChange={() => toggleMember(member.userId)} />
+                        <input type="checkbox" className="al-check" checked={checked} onChange={() => toggleMember(member.userId)} />
                         <span className="assignee-multi-select-option-avatar" aria-hidden>
                           {assigneeInitials(member.user.name, member.user.email)}
                         </span>
@@ -252,7 +259,7 @@ export function AssigneeMultiSelect({
             <div className="assignee-multi-select-search-wrap">
               <input
                 type="search"
-                className="auth-input assignee-multi-select-search"
+                className="al-input assignee-multi-select-search"
                 placeholder="Search teammates…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -269,7 +276,7 @@ export function AssigneeMultiSelect({
                 return (
                   <li key={member.userId}>
                     <label className="assignee-multi-select-option">
-                      <input type="checkbox" checked={checked} onChange={() => toggleMember(member.userId)} />
+                      <input type="checkbox" className="al-check" checked={checked} onChange={() => toggleMember(member.userId)} />
                       <span className="assignee-multi-select-option-avatar" aria-hidden>
                         {assigneeInitials(member.user.name, member.user.email)}
                       </span>

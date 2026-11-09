@@ -1,5 +1,11 @@
 import { api } from "@/lib/api/api";
 import { webBillingUrlForTeam } from "@/lib/plan-access-copy";
+import {
+  PlayCheckoutUnavailableError,
+  confirmPlayCheckout,
+  needsPlayCheckoutGate,
+  preparePlayCheckout,
+} from "@/lib/play-external-links";
 import { Linking } from "react-native";
 
 export type BillingProvider = "stripe" | "mobile_store" | "none";
@@ -234,16 +240,24 @@ async function postBillingSession(
   const legacyPaths =
     kind === "checkout" ? ["/api/billing/checkout-session"] : ["/api/billing/portal-session"];
 
+  const playToken = kind === "checkout" && needsPlayCheckoutGate() ? await preparePlayCheckout() : null;
+  const play = playToken ? { playToken } : {};
+
   let lastError: Error | null = null;
   for (const path of [...teamPaths, ...legacyPaths]) {
+    let session: { url: string } | null = null;
     try {
-      const body = path.startsWith("/api/billing/") ? { teamId, plan } : { plan };
-      return await api.post<{ url: string }>(path, body);
+      const body = path.startsWith("/api/billing/") ? { teamId, plan, ...play } : { plan, ...play };
+      session = await api.post<{ url: string }>(path, body);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
+      continue;
     }
+    if (playToken && session?.url) await confirmPlayCheckout(session.url, playToken);
+    return session;
   }
 
+  if (playToken) throw lastError ?? new PlayCheckoutUnavailableError();
   if (lastError && isBillingApiUnavailable(lastError.message)) {
     const url = webBillingUrlForTeam(teamId, { subscribe: kind === "checkout" });
     await Linking.openURL(url);

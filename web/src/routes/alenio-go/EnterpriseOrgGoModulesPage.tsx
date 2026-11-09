@@ -62,7 +62,7 @@ export function EnterpriseOrgGoModulesPage() {
     try {
       const mod = await upsertOrgGoModule(ctx.organizationId, {
         moduleKey: "temp-checks",
-        moduleName: "Temperature Checks",
+        moduleName: "Food Safety",
         status: "published",
       });
       await load(ctx.organizationId);
@@ -120,7 +120,7 @@ export function EnterpriseOrgGoModulesPage() {
         <div className="enterprise-card" style={{ padding: "1rem" }}>
           <h2 className="enterprise-card-title">Org modules</h2>
           {modules.length === 0 ? (
-            <p className="enterprise-muted">No modules yet. Add Temperature Checks to get started.</p>
+            <p className="enterprise-muted">No modules yet. Add Food Safety to get started.</p>
           ) : (
             <ul className="enterprise-org-go-module-list">
               {modules.map((m) => (

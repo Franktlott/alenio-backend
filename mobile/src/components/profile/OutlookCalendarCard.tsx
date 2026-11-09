@@ -12,9 +12,15 @@ import {
 import { formatOutlookUserError } from "@/lib/outlook-calendar-errors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "burnt";
-import { ActivityIndicator, Alert, AppState, Linking, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Linking, Pressable, Text, View } from "react-native";
 import { ProfileCard, ProfileDivider, ProfileMenuRow } from "./ProfileEnterpriseUI";
-import { Calendar, Check, X } from "lucide-react-native";
+import { Calendar, CalendarDays, Check, RefreshCw, Unlink } from "lucide-react-native";
+import {
+  AlenioBottomSheet,
+  AlenioSheetCard,
+  AlenioSheetOption,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
 
 export const CALENDAR_CONNECTIONS_QUERY_KEY = ["calendar-connections"] as const;
 
@@ -41,6 +47,8 @@ function OutlookInlineNotice({ message }: { message: string }) {
 export function OutlookCalendarCard() {
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [calendars, setCalendars] = useState<MicrosoftOutlookCalendarOption[]>([]);
   const [calendarsLoading, setCalendarsLoading] = useState(false);
@@ -128,65 +136,42 @@ export function OutlookCalendarCard() {
     }
   };
 
+  const syncNow = async () => {
+    setBusy(true);
+    try {
+      const updated = await syncMicrosoftCalendar();
+      setConnectionOptimistic(updated);
+      await queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
+      toast({ title: "Outlook synced", preset: "done" });
+    } catch (e) {
+      Alert.alert("Outlook calendar", formatOutlookUserError(e instanceof Error ? e.message : undefined));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setBusy(true);
+    try {
+      await disconnectMicrosoftCalendar();
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
+      setDisconnectConfirmOpen(false);
+      toast({ title: "Outlook disconnected", preset: "done" });
+    } catch (e) {
+      Alert.alert("Outlook calendar", formatOutlookUserError(e instanceof Error ? e.message : undefined));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onPress = () => {
     if (!configured) return;
     if (!connection?.connected) {
       void connect();
       return;
     }
-    Alert.alert("Outlook calendar", connection.accountEmail ?? "Connected", [
-      {
-        text: "Choose calendar",
-        onPress: () => setCalendarModalOpen(true),
-      },
-      {
-        text: "Sync now",
-        onPress: () => {
-          void (async () => {
-            setBusy(true);
-            try {
-              const updated = await syncMicrosoftCalendar();
-              setConnectionOptimistic(updated);
-              await queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
-              toast({ title: "Outlook synced", preset: "done" });
-            } catch (e) {
-              Alert.alert("Outlook calendar", formatOutlookUserError(e instanceof Error ? e.message : undefined));
-            } finally {
-              setBusy(false);
-            }
-          })();
-        },
-      },
-      {
-        text: "Disconnect",
-        style: "destructive",
-        onPress: () => {
-          Alert.alert("Disconnect Outlook?", "Your synced Outlook events will be removed from Alenio.", [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Disconnect",
-              style: "destructive",
-              onPress: () => {
-                void (async () => {
-                  setBusy(true);
-                  try {
-                    await disconnectMicrosoftCalendar();
-                    await refetch();
-                    await queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
-                    toast({ title: "Outlook disconnected", preset: "done" });
-                  } catch (e) {
-                    Alert.alert("Outlook calendar", formatOutlookUserError(e instanceof Error ? e.message : undefined));
-                  } finally {
-                    setBusy(false);
-                  }
-                })();
-              },
-            },
-          ]);
-        },
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setActionsOpen(true);
   };
 
   if (loading) {
@@ -263,69 +248,169 @@ export function OutlookCalendarCard() {
         ) : null}
       </ProfileCard>
 
-      <Modal visible={calendarModalOpen} transparent animationType="slide" onRequestClose={() => setCalendarModalOpen(false)}>
-        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15, 23, 42, 0.45)" }}>
-          <View style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "70%" }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                borderBottomWidth: 1,
-                borderBottomColor: "#F1F5F9",
-              }}
-            >
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Choose calendar</Text>
-              <Pressable onPress={() => setCalendarModalOpen(false)} hitSlop={8} accessibilityLabel="Close">
-                <X size={20} color="#64748B" />
-              </Pressable>
-            </View>
-            {calendarsLoading ? (
-              <View style={{ alignItems: "center", paddingVertical: 32 }}>
-                <ActivityIndicator color="#4361EE" />
-              </View>
-            ) : calendars.length === 0 ? (
-              <Text style={{ padding: 20, color: "#64748B", fontSize: 14, textAlign: "center" }}>
-                No Outlook calendars found on this account.
-              </Text>
-            ) : (
-              <ScrollView>
-                {calendars.map((calendar) => {
-                  const selected = connection?.externalCalendarId === calendar.id;
-                  return (
-                    <Pressable
-                      key={calendar.id}
-                      onPress={() => void chooseCalendar(calendar)}
-                      disabled={busy}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        paddingHorizontal: 16,
-                        paddingVertical: 14,
-                        borderBottomWidth: 1,
-                        borderBottomColor: "#F8FAFC",
-                      }}
-                    >
-                      <View style={{ flex: 1, paddingRight: 12 }}>
-                        <Text style={{ fontSize: 15, fontWeight: selected ? "700" : "600", color: "#0F172A" }}>
-                          {calendar.name}
-                        </Text>
-                        {calendar.isDefaultCalendar ? (
-                          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Default calendar</Text>
-                        ) : null}
-                      </View>
-                      {selected ? <Check size={18} color="#4361EE" /> : null}
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
+      <AlenioBottomSheet
+        visible={actionsOpen}
+        title="Outlook calendar"
+        subtitle={connection?.accountEmail ?? "Connected account"}
+        onClose={() => setActionsOpen(false)}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+        testID="outlook-calendar-actions-sheet"
+      >
+        <View style={{ gap: 8, paddingBottom: 10 }}>
+          <AlenioSheetOption
+            compact
+            tint="slate"
+            icon={<CalendarDays size={16} color="#FFFFFF" />}
+            title="Choose calendar"
+            subtitle={calendarLabel}
+            onPress={() => {
+              setActionsOpen(false);
+              setTimeout(() => setCalendarModalOpen(true), 220);
+            }}
+            testID="outlook-choose-calendar-option"
+          />
+          <AlenioSheetOption
+            compact
+            tint="slate"
+            icon={<RefreshCw size={16} color="#FFFFFF" />}
+            title="Sync now"
+            subtitle="Refresh your Outlook events"
+            onPress={() => {
+              setActionsOpen(false);
+              setTimeout(() => void syncNow(), 220);
+            }}
+            testID="outlook-sync-now-option"
+          />
+          <AlenioSheetOption
+            compact
+            destructive
+            icon={<Unlink size={16} color="#FFFFFF" />}
+            title="Disconnect Outlook"
+            subtitle="Stop syncing this account"
+            onPress={() => {
+              setActionsOpen(false);
+              setTimeout(() => setDisconnectConfirmOpen(true), 220);
+            }}
+            testID="outlook-disconnect-option"
+          />
         </View>
-      </Modal>
+      </AlenioBottomSheet>
+
+      <AlenioBottomSheet
+        visible={calendarModalOpen}
+        title="Choose calendar"
+        subtitle="Select the Outlook calendar to sync with Alenio"
+        onClose={() => setCalendarModalOpen(false)}
+        compact
+        showCloseButton
+        showScrollIndicator={calendars.length > 5}
+        bodyHeightRatio={0.56}
+        sheetStyle={{ maxHeight: "78%" }}
+        testID="outlook-calendar-picker-sheet"
+      >
+        {calendarsLoading ? (
+          <View style={{ alignItems: "center", paddingVertical: 32 }}>
+            <ActivityIndicator color="#4361EE" />
+          </View>
+        ) : calendars.length === 0 ? (
+          <AlenioSheetCard tint="slate" compact>
+            <Text style={{ paddingVertical: 8, color: "#64748B", fontSize: 13, textAlign: "center" }}>
+              No Outlook calendars found on this account.
+            </Text>
+          </AlenioSheetCard>
+        ) : (
+          <AlenioSheetCard tint="slate" compact style={{ paddingVertical: 0, overflow: "hidden" }}>
+            {calendars.map((calendar, index) => {
+              const selected = connection?.externalCalendarId === calendar.id;
+              return (
+                <Pressable
+                  key={calendar.id}
+                  onPress={() => void chooseCalendar(calendar)}
+                  disabled={busy}
+                  style={{
+                    minHeight: 54,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopColor: "#E8EDF4",
+                  }}
+                >
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text style={{ fontSize: 14, fontWeight: selected ? "700" : "600", color: "#0F172A" }}>
+                      {calendar.name}
+                    </Text>
+                    {calendar.isDefaultCalendar ? (
+                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Default calendar</Text>
+                    ) : null}
+                  </View>
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: selected ? "#4361EE" : "#FFFFFF",
+                      borderWidth: 1,
+                      borderColor: selected ? "#4361EE" : "#D8DEE9",
+                    }}
+                  >
+                    {selected ? <Check size={14} color="#FFFFFF" strokeWidth={2.5} /> : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </AlenioSheetCard>
+        )}
+        <View style={{ height: 14 }} />
+      </AlenioBottomSheet>
+
+      <AlenioBottomSheet
+        visible={disconnectConfirmOpen}
+        title="Disconnect Outlook?"
+        subtitle="Your synced Outlook events will be removed from Alenio."
+        onClose={() => {
+          if (!busy) setDisconnectConfirmOpen(false);
+        }}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+        testID="outlook-disconnect-confirmation"
+        footer={
+          <View style={{ gap: 8 }}>
+            <Pressable
+              onPress={() => void disconnect()}
+              disabled={busy}
+              style={[alenioSheetStyles.primaryButton, { backgroundColor: "#EF4444" }]}
+              testID="confirm-outlook-disconnect"
+            >
+              {busy ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={alenioSheetStyles.primaryButtonText}>Disconnect Outlook</Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => setDisconnectConfirmOpen(false)}
+              disabled={busy}
+              style={alenioSheetStyles.cancelButton}
+            >
+              <Text style={alenioSheetStyles.cancelButtonText}>Keep connected</Text>
+            </Pressable>
+          </View>
+        }
+      >
+        <AlenioSheetCard tint="danger" compact>
+          <Text style={{ fontSize: 13, lineHeight: 19, color: "#9F3535" }}>
+            You can reconnect this Outlook account at any time.
+          </Text>
+        </AlenioSheetCard>
+      </AlenioBottomSheet>
     </>
   );
 }

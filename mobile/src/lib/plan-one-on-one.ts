@@ -1,5 +1,6 @@
 import type { Href } from "expo-router";
 import { ONE_ON_ONE_EVENT_COLOR } from "@/lib/calendar-event-colors";
+import { workspaceDevelopmentHref } from "@/lib/workspace-development-navigation";
 
 export { ONE_ON_ONE_EVENT_COLOR };
 export const ONE_ON_ONE_DURATION_OPTIONS = [30, 45, 60] as const;
@@ -58,17 +59,14 @@ export function oneOnOneCheckInHref(
   templateId?: string | null,
   plannedEventId?: string | null,
 ): Href {
-  return {
-    pathname: "/member-profile",
-    params: {
-      teamId,
-      memberUserId,
-      tab: "check-in",
-      startCheckIn: "1",
-      ...(templateId ? { templateId } : {}),
-      ...(plannedEventId ? { plannedEventId } : {}),
-    },
-  };
+  return workspaceDevelopmentHref(teamId, {
+    memberUserId,
+    section: "check-ins",
+    startCheckIn: true,
+    templateId,
+    plannedEventId,
+    checkInLaunchId: `${Date.now()}`,
+  });
 }
 
 export function planOneOnOneHref(
@@ -93,3 +91,4 @@ export function planOneOnOneHref(
     },
   };
 }
+

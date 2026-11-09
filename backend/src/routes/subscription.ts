@@ -133,6 +133,7 @@ subscriptionRouter.get("/", async (c) => {
       hasStripeSubscription: !!subscription.stripeSubscriptionId?.trim(),
       hasTeamFeatures: access.hasTeamFeatures,
       hasGoFeatures: access.hasGoFeatures,
+      planFeatures: access.features,
     },
   });
 });
@@ -183,13 +184,14 @@ subscriptionRouter.get("/health", async (c) => {
 subscriptionRouter.post("/checkout-session", async (c) => {
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
-  const body = (await c.req.json().catch(() => ({}))) as { plan?: string };
+  const body = (await c.req.json().catch(() => ({}))) as { plan?: string; playToken?: string };
   const plan = body.plan === "operations" ? "operations" : "pro";
   const result = await createTeamCheckoutSession({
     teamId,
     userId: user.id,
     userEmail: user.email,
     plan,
+    playToken: typeof body.playToken === "string" ? body.playToken : null,
   });
   if ("error" in result) {
     return c.json({ error: result.error }, result.status);

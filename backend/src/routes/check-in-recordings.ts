@@ -15,6 +15,7 @@ import {
   audioAccessDecision,
 } from "../lib/check-in-audio-access";
 import {
+  checkInAudioExtension,
   isSupportedCheckInAudio,
   transcriptionAvailable,
   transcriptionUnavailableMessage,
@@ -364,7 +365,7 @@ checkInRecordingsRouter.post(
         userId: user.id,
         teamId,
         slot: "check_in_audio",
-        file: new File([bytes], `segment-${body.index}.m4a`, {
+        file: new File([bytes], `segment-${body.index}.${checkInAudioExtension(contentType)}`, {
           type: contentType,
         }),
       });

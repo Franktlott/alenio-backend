@@ -105,7 +105,7 @@ export function buildMobilePriorityInsights(snapshot: WorkspaceSnapshot): Mobile
       topPerformer.completedTasksThisMonth > 0
         ? `Completed ${topPerformer.completedTasksThisMonth} task${topPerformer.completedTasksThisMonth !== 1 ? "s" : ""} this month.`
         : topPerformer.streak >= 3
-          ? `${topPerformer.streak}-day streak on active goals.`
+          ? `${topPerformer.streak}-completion task streak.`
           : "Strong momentum this month.";
     insights.push({
       id: `mobile-win-${topPerformer.userId}`,

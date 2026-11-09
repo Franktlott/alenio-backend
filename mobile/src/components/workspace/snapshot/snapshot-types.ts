@@ -1,16 +1,20 @@
-export type SnapshotTone = "neutral" | "good" | "warn" | "bad";
+export type SnapshotTone = "neutral" | "good" | "warn" | "bad" | "action";
 
 /** Icon identity stays a string so page builders remain pure and testable. */
 export type SnapshotIconKey =
   | "tasks"
   | "completed"
   | "team"
+  | "members"
+  | "streak"
   | "checkins"
   | "health"
   | "recognition"
   | "goals"
   | "briefings"
-  | "temps";
+  | "temps"
+  | "checklists"
+  | "walks";
 
 export type SnapshotSecondary = {
   text: string;
@@ -32,10 +36,23 @@ export type SnapshotMetric = {
   numericValue?: number | null;
   /** Appended to the animating number, e.g. "%". */
   valueSuffix?: string;
+  /** Replaces the numeric value with a status symbol. */
+  statusIndicator?: SnapshotTone;
+  /** Hides the metric's leading category icon. */
+  hidePrimaryIcon?: boolean;
   secondary?: SnapshotSecondary;
   onPress?: () => void;
   comingSoon?: boolean;
+  /** Module tiles emphasize the product icon instead of a numeric value. */
+  module?: boolean;
 };
+
+/**
+ * Fallback for a lone page, which has no sibling to distinguish itself from.
+ * With more than one page each group wears its own title instead: counts and
+ * app launchers are different kinds of thing and one heading flattened them.
+ */
+export const SNAPSHOT_CARD_TITLE = "At a Glance";
 
 export type SnapshotPage = {
   key: string;
@@ -48,4 +65,5 @@ export const SNAPSHOT_TONE_COLORS: Record<SnapshotTone, string> = {
   good: "#059669",
   warn: "#D97706",
   bad: "#DC2626",
+  action: "#5B45FF",
 };

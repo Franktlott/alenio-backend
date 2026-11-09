@@ -23,8 +23,104 @@ if (sharedFolderExists) {
   config.watchFolders = [sharedFolder];
 }
 
-// Disable Watchman for file watching.
+// Disable Watchman. macOS recursive watches on this repo drop nested src/
+// events, so Metro never invalidates its in-memory graph (simulator reload
+// still shows old code). Poll src/ and feed Metro the same change events
+// Fast Refresh expects.
 config.resolver.useWatchman = false;
+
+// Expo CLI watches via @expo/metro-file-map, not metro-file-map.
+const expoFileMapDir = path.dirname(
+  require.resolve("@expo/metro-file-map/package.json"),
+);
+const { Watcher } = require(path.join(expoFileMapDir, "build/Watcher.js"));
+
+function listFiles(dir, out = []) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    if (entry.name === "node_modules" || entry.name === ".git") continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) listFiles(full, out);
+    else out.push(full);
+  }
+  return out;
+}
+
+function startSrcPoller(projectRoot, onChange) {
+  const watchedDirs = ["src", "assets"]
+    .map((folder) => path.join(projectRoot, folder))
+    .filter((dir) => fs.existsSync(dir));
+  const mtimes = new Map();
+  let hydrated = false;
+
+  const tick = () => {
+    for (const dir of watchedDirs) {
+      for (const full of listFiles(dir)) {
+        let stat;
+        try {
+          stat = fs.statSync(full);
+        } catch {
+          continue;
+        }
+        const relativePath = path.relative(projectRoot, full);
+        const prev = mtimes.get(relativePath);
+        mtimes.set(relativePath, stat.mtimeMs);
+        // First tick records existing files. After that, a new path is a create
+        // and must be emitted so Metro can resolve newly added modules.
+        if (prev == null) {
+          if (hydrated) {
+            console.log("[Metro Config] src add", relativePath);
+            onChange({
+              event: "touch",
+              relativePath,
+              root: projectRoot,
+              metadata: {
+                type: "f",
+                modifiedTime: stat.mtimeMs,
+                size: stat.size,
+              },
+            });
+          }
+          continue;
+        }
+        if (prev === stat.mtimeMs) continue;
+        console.log("[Metro Config] src change", relativePath);
+        onChange({
+          event: "touch",
+          relativePath,
+          root: projectRoot,
+          metadata: {
+            type: "f",
+            modifiedTime: stat.mtimeMs,
+            size: stat.size,
+          },
+        });
+      }
+    }
+    hydrated = true;
+  };
+
+  tick();
+  const timer = setInterval(tick, 400);
+  timer.unref?.();
+  return timer;
+}
+
+const originalWatch = Watcher.prototype.watch;
+Watcher.prototype.watch = async function watchWithSrcPoller(onChange) {
+  if (!this.__alenioPoller) {
+    this.__alenioPoller = startSrcPoller(__dirname, onChange);
+    console.log("[Metro Config] Fast Refresh poller watching src/ and assets/");
+  }
+  return originalWatch.call(this, onChange);
+};
+
+console.log("[Metro Config] Fast Refresh poller installed from", expoFileMapDir);
 
 // Configure asset and source extensions.
 const { assetExts, sourceExts } = config.resolver;
@@ -113,4 +209,11 @@ config.resolver = {
 };
 
 // Integrate NativeWind with the Metro configuration.
-module.exports = withNativeWind(withVibecodeMetro(config), { input: "./global.css" });
+const exportedConfig = withNativeWind(withVibecodeMetro(config), {
+  input: "./global.css",
+});
+exportedConfig.resolver = {
+  ...exportedConfig.resolver,
+  useWatchman: false,
+};
+module.exports = exportedConfig;

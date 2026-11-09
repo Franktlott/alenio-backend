@@ -7,7 +7,6 @@ import {
   TurboModuleRegistry,
   View,
 } from "react-native";
-import type { ScrollViewProps } from "react-native";
 import type {
   KeyboardAvoidingViewProps as LibKeyboardAvoidingViewProps,
   KeyboardAwareScrollViewProps,

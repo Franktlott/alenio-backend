@@ -1,10 +1,16 @@
 import React from "react";
-import { View, Text, Modal, Pressable, ScrollView } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AlertCircle, Calendar, ChevronRight, ClipboardList, X } from "lucide-react-native";
+import { ActivityIndicator, View, Text, Pressable } from "react-native";
+import { AlertCircle, Calendar, CheckCircle2, ChevronRight, ClipboardList } from "lucide-react-native";
+import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
 import type { Task } from "@/lib/types";
+import { workspaceTasksOnly } from "@/lib/task-kind";
 
-export type TeamOverviewTaskFilter = "open" | "dueToday" | "overdue";
+export type TeamOverviewTaskFilter =
+  | "open"
+  | "actionTasks"
+  | "dueToday"
+  | "overdue"
+  | "completedToday";
 
 type Props = {
   visible: boolean;
@@ -12,22 +18,19 @@ type Props = {
   tasks: Task[];
   onClose: () => void;
   onTaskPress: (task: Task) => void;
+  loading?: boolean;
 };
 
-const MAX_VISIBLE_ROWS = 5;
-const ROW_HEIGHT = 52;
+type FilterConfig = {
+  title: string;
+  subtitle: (count: number) => string;
+  empty: string;
+  iconBg: string;
+  iconColor: string;
+  Icon: typeof AlertCircle;
+};
 
-const FILTER_CONFIG: Record<
-  TeamOverviewTaskFilter,
-  {
-    title: string;
-    subtitle: (count: number) => string;
-    empty: string;
-    iconBg: string;
-    iconColor: string;
-    Icon: typeof AlertCircle;
-  }
-> = {
+const FILTER_CONFIG: Record<TeamOverviewTaskFilter, FilterConfig> = {
   open: {
     title: "Open tasks",
     subtitle: (count) => `${count} incomplete ${count === 1 ? "task" : "tasks"}`,
@@ -35,6 +38,15 @@ const FILTER_CONFIG: Record<
     iconBg: "#D1FAE5",
     iconColor: "#10B981",
     Icon: ClipboardList,
+  },
+  actionTasks: {
+    title: "Needs action",
+    subtitle: (count) =>
+      `${count} ${count === 1 ? "task is" : "tasks are"} overdue or due today`,
+    empty: "Nothing overdue or due today",
+    iconBg: "#FFEDD5",
+    iconColor: "#EA580C",
+    Icon: AlertCircle,
   },
   dueToday: {
     title: "Due today",
@@ -52,6 +64,14 @@ const FILTER_CONFIG: Record<
     iconColor: "#EF4444",
     Icon: AlertCircle,
   },
+  completedToday: {
+    title: "Completed today",
+    subtitle: (count) => `${count} ${count === 1 ? "task was" : "tasks were"} completed today`,
+    empty: "Nothing completed today",
+    iconBg: "#DCFCE7",
+    iconColor: "#16A34A",
+    Icon: CheckCircle2,
+  },
 };
 
 function formatDueDate(iso: string): string {
@@ -66,121 +86,138 @@ function assigneeLabel(task: Task): string {
   return `${names[0]} +${names.length - 1}`;
 }
 
-function taskMeta(task: Task, filter: TeamOverviewTaskFilter): string {
-  const assignee = assigneeLabel(task);
-  if (filter === "open" && !task.dueDate) return assignee;
-  if (task.dueDate) return `${assignee} · Due ${formatDueDate(task.dueDate)}`;
-  return assignee;
+function isOverdue(task: Task, now = new Date()): boolean {
+  if (!task.dueDate) return false;
+  const due = new Date(task.dueDate).getTime();
+  return Number.isFinite(due) && due < now.getTime();
 }
 
-export function TeamOverviewTasksSheet({ visible, filter, tasks, onClose, onTaskPress }: Props) {
-  const insets = useSafeAreaInsets();
+/**
+ * Overdue and due-today tasks share the Action list, so each row carries its
+ * own colour and icon rather than being split under headings. Every other
+ * list is one kind of task, so those rows keep the sheet's own styling.
+ */
+function rowStyling(
+  task: Task,
+  filter: TeamOverviewTaskFilter,
+  config: FilterConfig,
+): Pick<FilterConfig, "iconBg" | "iconColor" | "Icon"> {
+  if (filter !== "actionTasks") return config;
+  return isOverdue(task)
+    ? { iconBg: "#FEE2E2", iconColor: "#EF4444", Icon: AlertCircle }
+    : { iconBg: "#FEF3C7", iconColor: "#F59E0B", Icon: Calendar };
+}
+
+function taskMeta(task: Task, filter: TeamOverviewTaskFilter): string {
+  const assignee = assigneeLabel(task);
+  const priority = `${task.priority.charAt(0).toUpperCase()}${task.priority.slice(1)} priority`;
+  if (filter === "actionTasks" && task.dueDate) {
+    // Says which of the two kinds this is in words, not colour alone.
+    const when = isOverdue(task)
+      ? `Overdue ${formatDueDate(task.dueDate)}`
+      : "Due today";
+    return `${assignee} · ${when} · ${priority}`;
+  }
+  if (filter === "completedToday" && task.completedAt) {
+    return `${assignee} · ${priority} · Completed ${new Date(task.completedAt).toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+  if (filter === "open" && !task.dueDate) return `${assignee} · ${priority}`;
+  if (task.dueDate) return `${assignee} · Due ${formatDueDate(task.dueDate)} · ${priority}`;
+  return `${assignee} · ${priority}`;
+}
+
+export function TeamOverviewTasksSheet({ visible, filter, tasks, onClose, onTaskPress, loading = false }: Props) {
   const config = FILTER_CONFIG[filter];
-  const { Icon } = config;
-  const listMaxHeight = Math.min(tasks.length, MAX_VISIBLE_ROWS) * ROW_HEIGHT;
-  const hasMore = tasks.length > MAX_VISIBLE_ROWS;
+  const workspaceTasks = workspaceTasksOnly(tasks);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
-        onPress={onClose}
-      >
-        <Pressable onPress={(e) => e.stopPropagation?.()} style={{ maxHeight: "78%" }}>
-          <View
-            style={{
-              backgroundColor: "white",
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16,
-              paddingTop: 8,
-              paddingBottom: Math.max(insets.bottom, 12),
-            }}
-          >
-            <View style={{ width: 32, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center" }} />
-            <View
+    <AlenioBottomSheet
+      visible={visible}
+      title={config.title}
+      subtitle={loading ? "Loading tasks…" : config.subtitle(workspaceTasks.length)}
+      onClose={onClose}
+      compact
+      showCloseButton
+      showScrollIndicator={workspaceTasks.length > 5}
+      testID={`snapshot-${filter}-tasks-sheet`}
+    >
+      {loading ? (
+        <View style={{ paddingVertical: 24, alignItems: "center" }} testID="snapshot-tasks-loading">
+          <ActivityIndicator color="#4361EE" />
+        </View>
+      ) : workspaceTasks.length === 0 ? (
+        <View style={{ paddingVertical: 20, alignItems: "center" }} testID="snapshot-tasks-empty">
+          <Text style={{ fontSize: 12, color: "#667085" }}>{config.empty}</Text>
+        </View>
+      ) : (
+        <View testID="snapshot-tasks-list">
+          {workspaceTasks.map((task) => {
+            const row = rowStyling(task, filter, config);
+            const RowIcon = row.Icon;
+            return (
+            <Pressable
+              key={task.id}
+              onPress={() => onTaskPress(task)}
+              accessibilityRole="button"
+              accessibilityLabel={`${task.title}, ${taskMeta(task, filter)}`}
+              testID={`snapshot-task-${task.id}`}
               style={{
+                position: "relative",
                 flexDirection: "row",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                paddingHorizontal: 16,
-                paddingTop: 10,
-                paddingBottom: 8,
+                alignItems: "center",
+                minHeight: 43,
+                marginBottom: 4,
+                paddingVertical: 5,
+                paddingLeft: 10,
+                paddingRight: 8,
+                overflow: "hidden",
+                borderWidth: 1,
+                borderColor: "#E4EAF1",
+                borderRadius: 12,
+                backgroundColor: "#F1F5F9",
+                gap: 7,
               }}
             >
-              <View style={{ flex: 1, paddingRight: 10 }}>
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}>{config.title}</Text>
-                <Text style={{ fontSize: 11, color: "#667085", marginTop: 2 }}>{config.subtitle(tasks.length)}</Text>
-              </View>
-              <Pressable
-                onPress={onClose}
-                hitSlop={8}
+              <View
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: "#F1F5F9",
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: 0,
+                  width: 3,
+                  backgroundColor: row.iconColor,
+                }}
+              />
+              <View
+                style={{
+                  width: 25,
+                  height: 25,
+                  borderRadius: 8,
+                  backgroundColor: row.iconBg,
                   alignItems: "center",
                   justifyContent: "center",
+                  flexShrink: 0,
                 }}
               >
-                <X size={15} color="#64748B" />
-              </Pressable>
-            </View>
-
-            {tasks.length === 0 ? (
-              <View style={{ paddingHorizontal: 16, paddingVertical: 16, alignItems: "center" }}>
-                <Text style={{ fontSize: 12, color: "#667085" }}>{config.empty}</Text>
+                <RowIcon size={13} color={row.iconColor} />
               </View>
-            ) : (
-              <ScrollView
-                style={{ maxHeight: listMaxHeight }}
-                contentContainerStyle={{ paddingHorizontal: 12 }}
-                showsVerticalScrollIndicator={hasMore}
-                nestedScrollEnabled
-              >
-                {tasks.map((task, index) => (
-                  <Pressable
-                    key={task.id}
-                    onPress={() => onTaskPress(task)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      paddingVertical: 8,
-                      paddingHorizontal: 4,
-                      borderTopWidth: index === 0 ? 0 : 1,
-                      borderTopColor: "#EEF2F6",
-                      gap: 8,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 14,
-                        backgroundColor: config.iconBg,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Icon size={14} color={config.iconColor} />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "700", color: "#111827", lineHeight: 16 }}>
-                        {task.title}
-                      </Text>
-                      <Text numberOfLines={1} style={{ fontSize: 10, color: "#667085", marginTop: 1, lineHeight: 13 }}>
-                        {taskMeta(task, filter)}
-                      </Text>
-                    </View>
-                    <ChevronRight size={14} color="#CBD5E1" />
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} style={{ fontSize: 11.5, fontWeight: "700", color: "#111827", lineHeight: 15 }}>
+                  {task.title}
+                </Text>
+                <Text numberOfLines={1} style={{ fontSize: 9, color: "#667085", lineHeight: 12 }}>
+                  {taskMeta(task, filter)}
+                </Text>
+              </View>
+              <ChevronRight size={14} color="#CBD5E1" />
+            </Pressable>
+            );
+          })}
+        </View>
+      )}
+    </AlenioBottomSheet>
   );
 }

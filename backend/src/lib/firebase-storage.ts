@@ -474,7 +474,9 @@ export async function uploadFileToFirebaseStorage(params: {
   if (slot === "profile") {
     storagePath = `users/${userId}/profile/avatar`;
   } else if (slot === "team") {
-    storagePath = `teams/${teamId!.trim()}/photo`;
+    // A fresh object per upload: overwriting one path rotates its download
+    // token, which breaks the URL already saved on the workspace.
+    storagePath = `teams/${teamId!.trim()}/photo-${Date.now()}-${objectId}`;
   } else if (slot === "go_alert_sound") {
     storagePath = `teams/${teamId!.trim()}/alert-sounds/${Date.now()}-${objectId}-${safeName}`;
   } else if (slot === "go_walk_photo") {

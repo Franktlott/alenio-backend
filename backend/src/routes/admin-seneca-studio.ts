@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { auth } from "../auth";
-import { adminGuard } from "../middleware/admin-guard";
+import { adminGuard, auditStaffChanges, requireAbilityByMethod } from "../middleware/admin-guard";
 import { prisma } from "../prisma";
 import { env } from "../env";
 import {
@@ -28,6 +28,20 @@ type Variables = {
 
 export const adminSenecaStudioRouter = new Hono<{ Variables: Variables }>();
 adminSenecaStudioRouter.use("*", adminGuard);
+adminSenecaStudioRouter.use("*", requireAbilityByMethod("seneca.view", "seneca.edit"));
+adminSenecaStudioRouter.use(
+  "*",
+  auditStaffChanges("seneca", (method, path) => {
+    const tail = path.replace(/^.*\/api\/admin\/seneca-studio/, "");
+    if (tail === "/studio/publish") return { action: "seneca.publish", summary: "Published Seneca settings" };
+    if (tail.startsWith("/knowledge")) {
+      return method === "DELETE"
+        ? { action: "seneca.knowledge_delete", summary: "Removed a Seneca knowledge item" }
+        : { action: "seneca.knowledge_edit", summary: "Changed Seneca knowledge" };
+    }
+    return { action: "seneca.edit", summary: "Saved a Seneca settings draft" };
+  }),
+);
 
 const owner = globalOwner();
 

@@ -1,6 +1,20 @@
 import { useState, type ReactNode } from "react";
-import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { ClipboardList, Gift, Info, Video, UserRound, X } from "lucide-react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import {
+  ClipboardList,
+  Gift,
+  Info,
+  Video,
+  UserRound,
+  X,
+} from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CALENDAR_EVENT_COLORS } from "@/lib/calendar-event-colors";
 
@@ -8,7 +22,15 @@ type KeyItem = {
   id: string;
   title: string;
   description: string;
-  preview: "publicBar" | "privateBar" | "video" | "task" | "holiday" | "multi" | "checkIn" | "outlookBar";
+  preview:
+    | "publicBar"
+    | "privateBar"
+    | "video"
+    | "task"
+    | "holiday"
+    | "multi"
+    | "checkIn"
+    | "outlookBar";
 };
 
 const CALENDAR_ICON_KEY: KeyItem[] = [
@@ -101,34 +123,53 @@ function IconBadge({
 }
 
 function KeyPreview({ kind }: { kind: KeyItem["preview"] }) {
-  if (kind === "publicBar") return <ColorBar color={CALENDAR_EVENT_COLORS.public} />;
-  if (kind === "privateBar") return <ColorBar color={CALENDAR_EVENT_COLORS.private} />;
-  if (kind === "outlookBar") return <ColorBar color={CALENDAR_EVENT_COLORS.outlook} />;
+  if (kind === "publicBar")
+    return <ColorBar color={CALENDAR_EVENT_COLORS.public} />;
+  if (kind === "privateBar")
+    return <ColorBar color={CALENDAR_EVENT_COLORS.private} />;
+  if (kind === "outlookBar")
+    return <ColorBar color={CALENDAR_EVENT_COLORS.outlook} />;
   if (kind === "video") {
     return (
       <IconBadge backgroundColor="#EEF2FF">
-        <Video size={12} color={CALENDAR_EVENT_COLORS.meeting} strokeWidth={2.25} />
+        <Video
+          size={12}
+          color={CALENDAR_EVENT_COLORS.meeting}
+          strokeWidth={2.25}
+        />
       </IconBadge>
     );
   }
   if (kind === "checkIn") {
     return (
       <IconBadge backgroundColor="#ECFDF5">
-        <UserRound size={12} color={CALENDAR_EVENT_COLORS.checkIn} strokeWidth={2.25} />
+        <UserRound
+          size={12}
+          color={CALENDAR_EVENT_COLORS.checkIn}
+          strokeWidth={2.25}
+        />
       </IconBadge>
     );
   }
   if (kind === "task") {
     return (
       <IconBadge backgroundColor="#FFF7ED">
-        <ClipboardList size={12} color={CALENDAR_EVENT_COLORS.task} strokeWidth={2.25} />
+        <ClipboardList
+          size={12}
+          color={CALENDAR_EVENT_COLORS.task}
+          strokeWidth={2.25}
+        />
       </IconBadge>
     );
   }
   if (kind === "holiday") {
     return (
       <IconBadge backgroundColor="#FEF2F2">
-        <Gift size={12} color={CALENDAR_EVENT_COLORS.holiday} strokeWidth={2.25} />
+        <Gift
+          size={12}
+          color={CALENDAR_EVENT_COLORS.holiday}
+          strokeWidth={2.25}
+        />
       </IconBadge>
     );
   }
@@ -143,7 +184,15 @@ function KeyPreview({ kind }: { kind: KeyItem["preview"] }) {
         justifyContent: "center",
       }}
     >
-      <Text style={{ color: CALENDAR_EVENT_COLORS.public, fontSize: 9, fontWeight: "700" }}>3</Text>
+      <Text
+        style={{
+          color: CALENDAR_EVENT_COLORS.public,
+          fontSize: 9,
+          fontWeight: "700",
+        }}
+      >
+        3
+      </Text>
     </View>
   );
 }
@@ -176,10 +225,22 @@ export function CalendarIconKey({ iconSize = 13 }: { iconSize?: number }) {
         <Info size={iconSize} color="#64748B" />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+      <Modal
+        visible={open}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setOpen(false)}
+      >
         <View style={{ flex: 1, justifyContent: "flex-end" }}>
           <Pressable
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15, 23, 42, 0.45)" }}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.45)",
+            }}
             onPress={() => setOpen(false)}
           />
           <View
@@ -192,7 +253,15 @@ export function CalendarIconKey({ iconSize = 13 }: { iconSize?: number }) {
               paddingBottom: Math.max(insets.bottom, 10),
             }}
           >
-            <View style={{ width: 32, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center" }} />
+            <View
+              style={{
+                width: 32,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: "#E2E8F0",
+                alignSelf: "center",
+              }}
+            />
 
             <View
               style={{
@@ -216,7 +285,16 @@ export function CalendarIconKey({ iconSize = 13 }: { iconSize?: number }) {
                 >
                   Calendar
                 </Text>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#111827", marginTop: 1 }}>Icon key</Text>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: "700",
+                    color: "#111827",
+                    marginTop: 1,
+                  }}
+                >
+                  Icon key
+                </Text>
               </View>
               <Pressable
                 onPress={() => setOpen(false)}
@@ -236,7 +314,10 @@ export function CalendarIconKey({ iconSize = 13 }: { iconSize?: number }) {
 
             <ScrollView
               style={{ flex: 1, minHeight: 0 }}
-              contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 4 }}
+              contentContainerStyle={{
+                paddingHorizontal: 10,
+                paddingBottom: 4,
+              }}
               showsVerticalScrollIndicator
               bounces
               nestedScrollEnabled
@@ -268,8 +349,23 @@ export function CalendarIconKey({ iconSize = 13 }: { iconSize?: number }) {
                     <KeyPreview kind={item.preview} />
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{item.title}</Text>
-                    <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 14, marginTop: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: "#0F172A",
+                      }}
+                    >
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: "#64748B",
+                        lineHeight: 14,
+                        marginTop: 1,
+                      }}
+                    >
                       {item.description}
                     </Text>
                   </View>
@@ -289,7 +385,11 @@ export function CalendarIconKey({ iconSize = 13 }: { iconSize?: number }) {
                   backgroundColor: "#FFFFFF",
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>Close</Text>
+                <Text
+                  style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}
+                >
+                  Close
+                </Text>
               </Pressable>
             </View>
           </View>

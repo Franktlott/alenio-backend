@@ -1,0 +1,315 @@
+/* Print / "Save as PDF" for a Discover article: a designed document, full-bleed cover, branded footer. */
+@media print {
+  @page {
+    size: letter;
+    margin: 0.55in 0 0.7in;
+
+    @bottom-left {
+      content: "Alenio  ·  Discover";
+      padding-left: 0.6in;
+      font: 600 8pt "IBM Plex Sans", system-ui, sans-serif;
+      letter-spacing: 0.04em;
+      color: #6d5ef8;
+    }
+
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      padding-right: 0.6in;
+      font: 500 8pt "IBM Plex Sans", system-ui, sans-serif;
+      color: #98a2b3;
+    }
+  }
+
+  @page :first {
+    margin-top: 0;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* Unwrap every container around the article so nothing clips it to one screen. */
+  *:has(.dread-article) {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    container-type: normal !important;
+  }
+
+  /* Hide the app around it: menus, top bar, chat dock. */
+  *:has(> .dread-article) > :not(.dread-article),
+  *:has(.dread-article) > :not(:has(.dread-article)):not(.dread-article) {
+    display: none !important;
+  }
+
+  .dread-article,
+  .dread-article * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+  }
+
+  .dread-article {
+    --pdoc-pad: 0.6in;
+    container-type: normal !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #1f2937;
+  }
+
+  .ddoc-hero-actions,
+  .dread-more {
+    display: none !important;
+  }
+
+  /* ── Cover: edge to edge, title over the photo ─────────────────────── */
+  .ddoc-hero {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    min-height: 3.15in !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    break-inside: avoid;
+  }
+
+  .ddoc-hero-img {
+    position: absolute !important;
+    inset: 0 0 0 auto !important;
+    width: 74% !important;
+    height: 100% !important;
+    aspect-ratio: auto !important;
+  }
+
+  .ddoc-hero::before {
+    display: block !important;
+    background: linear-gradient(90deg, #fff 30%, rgba(255, 255, 255, 0.82) 46%, rgba(255, 255, 255, 0) 70%) !important;
+  }
+
+  .ddoc-hero::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #6d5ef8, #a78bfa 55%, #f59e0b);
+  }
+
+  .ddoc-hero--plain {
+    min-height: 2.6in !important;
+    background: linear-gradient(120deg, #f3efff 0%, #fbfaff 55%, #fff 100%) !important;
+  }
+
+  .ddoc-hero-copy {
+    width: 58% !important;
+    min-width: 0 !important;
+    padding: 0.4in var(--pdoc-pad) 0.36in !important;
+  }
+
+  .ddoc-crumbs {
+    margin-bottom: 16px;
+    font-size: 9.5pt;
+  }
+
+  .ddoc-crumbs a {
+    color: #475467 !important;
+  }
+
+  .ddoc-hero-title {
+    font-size: 30pt !important;
+    line-height: 1.06 !important;
+    letter-spacing: -0.02em !important;
+  }
+
+  .ddoc-hero-excerpt {
+    margin-top: 10px;
+    max-width: 3.9in;
+    font-size: 12pt;
+    line-height: 1.45;
+    color: #344054;
+  }
+
+  .ddoc-hero .discover-byline {
+    margin-top: 16px;
+    font-size: 9pt;
+  }
+
+  /* ── Body ───────────────────────────────────────────────────────────── */
+  .ddoc-body {
+    --ddoc-gap: 0.28in;
+    margin-top: 0.3in !important;
+    padding: 0 var(--pdoc-pad) !important;
+    font-size: 10pt;
+    line-height: 1.55;
+  }
+
+  .ddoc-body > [data-width],
+  .ddoc-body > .ddoc-cell {
+    container-type: normal !important;
+  }
+
+  .ddoc-body p,
+  .ddoc-body li {
+    font-size: 10pt;
+    line-height: 1.55;
+    color: #344054;
+    orphans: 3;
+    widows: 3;
+  }
+
+  .ddoc-body h2 {
+    margin: 0.22in 0 4px;
+    font-size: 16pt;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: #0f172a;
+    break-after: avoid;
+  }
+
+  .ddoc-body h3 {
+    margin: 0.22in 0 4px;
+    font-size: 13pt;
+    color: #0f172a;
+    break-after: avoid;
+  }
+
+  .ddoc-body blockquote {
+    margin: 0.2in 0;
+    padding: 4px 0 4px 16px;
+    border-left: 3px solid #6d5ef8;
+    font-size: 12pt;
+    font-style: italic;
+    color: #1f2937;
+  }
+
+  .ddoc-body img {
+    border-radius: 12px;
+  }
+
+  .ddoc-split {
+    gap: 0.3in;
+    margin: 0 0 0.12in;
+    align-items: center;
+  }
+
+  /* Callout */
+  .ddoc-callout {
+    align-items: center;
+    margin: 0.1in 0;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--ddoc-bg), #fff 140%) !important;
+  }
+
+  .ddoc-callout-title {
+    font-size: 11pt;
+    line-height: 1.35;
+    color: #0f172a;
+  }
+
+  .ddoc-callout-copy p {
+    font-size: 10.5pt !important;
+    line-height: 1.5 !important;
+  }
+
+  .ddoc-icon-tile {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  /* Cards: left aligned like a printed framework sheet */
+  .ddoc-cards {
+    gap: 0.13in;
+    margin: 0.18in 0;
+  }
+
+  .ddoc-card {
+    align-items: flex-start;
+    padding: 14px 14px 15px;
+    border: 1px solid #e6e2f0;
+    border-radius: 14px;
+    text-align: left;
+    break-inside: avoid;
+  }
+
+  .ddoc-icon-tile--lg {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+  }
+
+  .ddoc-card-kicker {
+    margin-top: 10px;
+    font-size: 21pt;
+    line-height: 1;
+  }
+
+  .ddoc-card-title {
+    margin-top: 4px !important;
+    font-size: 12pt;
+    line-height: 1.25;
+  }
+
+  .ddoc-card-text {
+    margin-top: 6px;
+    font-size: 9pt !important;
+    line-height: 1.45 !important;
+    color: #475467;
+  }
+
+  /* Checklist */
+  .ddoc-checklist {
+    position: relative;
+    margin: 0.12in 0;
+    padding: 16px 18px 18px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: linear-gradient(140deg, var(--ddoc-bg) 0%, #fff 130%) !important;
+  }
+
+  .ddoc-checklist .ddoc-icon-tile {
+    background: var(--ddoc-fg);
+    color: #fff;
+  }
+
+  .ddoc-checklist-title {
+    font-size: 12.5pt;
+  }
+
+  .ddoc-body .ddoc-checklist li {
+    margin-top: 7px;
+    font-size: 9.5pt;
+    line-height: 1.4;
+  }
+
+  .ddoc-check {
+    width: 17px;
+    height: 17px;
+    border-radius: 5px;
+  }
+
+  .ddoc-callout,
+  .ddoc-checklist,
+  .ddoc-card,
+  .ddoc-cards,
+  .ddoc-cell,
+  .ddoc-split,
+  .ddoc-body img,
+  .ddoc-body blockquote {
+    break-inside: avoid;
+  }
+}

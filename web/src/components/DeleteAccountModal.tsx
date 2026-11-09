@@ -135,8 +135,8 @@ export function DeleteAccountModal({ open, onClose, onDeleted }: Props) {
                         </Link>
                       ) : null}
                       {issue.code === "multi_member_owner" ? (
-                        <Link to="/team" className="enterprise-profile-delete-action-link" onClick={close}>
-                          Go to Team
+                        <Link to="/settings" className="enterprise-profile-delete-action-link" onClick={close}>
+                          Go to workspace settings
                         </Link>
                       ) : null}
                     </li>

@@ -1,0 +1,129 @@
+/* Weekly Insight card: copy on the left, photo fading in from the right. */
+
+.home-insight {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 148px;
+  border-radius: 18px;
+  background: #f8f6ff;
+  overflow: hidden;
+  color: #111a2b;
+}
+
+.home-insight-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: right center;
+}
+
+.home-insight-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    #f8f6ff 0%,
+    rgba(248, 246, 255, 0.97) 42%,
+    rgba(248, 246, 255, 0.72) 58%,
+    rgba(248, 246, 255, 0) 78%
+  );
+  pointer-events: none;
+}
+
+.home-insight-copy {
+  position: relative;
+  max-width: min(58%, 340px);
+  padding: 16px 16px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.home-insight-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 800;
+  color: #6d5ef8;
+}
+
+.home-insight-title {
+  margin: 6px 0 0;
+  font-size: 18px;
+  line-height: 23px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.home-insight-body {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: #667085;
+}
+
+.home-insight-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  margin-top: 12px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
+  color: #6d5ef8;
+  font: inherit;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(17, 26, 43, 0.06);
+  transition: background 0.15s;
+}
+
+.home-insight-action:hover {
+  background: #ede9fe;
+}
+
+.home-insight-action[aria-disabled="true"] {
+  cursor: default;
+}
+
+.home-insight-action:focus-visible {
+  outline: 2px solid #6d5ef8;
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .home-insight {
+    min-height: 116px;
+  }
+
+  .home-insight-copy {
+    max-width: 66%;
+    padding: 10px 10px 10px 14px;
+  }
+
+  .home-insight-title {
+    margin-top: 3px;
+    font-size: 14px;
+    line-height: 17px;
+    letter-spacing: -0.15px;
+  }
+
+  .home-insight-body {
+    display: none;
+  }
+
+  .home-insight-action {
+    height: 27px;
+    margin-top: 7px;
+    padding: 0 9px;
+  }
+}

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { stitchTranscript } from "./check-in-recording-service";
+import {
+  MIN_TRANSCRIPT_WORDS,
+  spokenWordCount,
+  stitchTranscript,
+} from "./check-in-recording-service";
+import { checkInAudioExtension, checkInAudioFormatForPath } from "./seneca-transcribe";
 
 describe("stitchTranscript", () => {
   test("joins segments in recorded order regardless of row order", () => {
@@ -42,5 +47,43 @@ describe("stitchTranscript", () => {
   test("returns an empty string when nothing was captured", () => {
     expect(stitchTranscript([])).toBe("");
     expect(stitchTranscript([{ index: 0, status: "done", text: null }])).toBe("");
+  });
+});
+
+describe("spokenWordCount", () => {
+  test("gap notes alone count as nothing heard", () => {
+    const transcript = stitchTranscript([
+      { index: 0, status: "failed", text: null },
+      { index: 1, status: "failed", text: null },
+    ]);
+    expect(spokenWordCount(transcript)).toBe(0);
+  });
+
+  test("a stray phrase from silence is below the write-up threshold", () => {
+    expect(spokenWordCount("Thank you for watching.")).toBeLessThan(MIN_TRANSCRIPT_WORDS);
+  });
+
+  test("counts real words around a gap", () => {
+    const transcript = stitchTranscript([
+      { index: 0, status: "done", text: "We went over the new route and the Friday staffing plan." },
+      { index: 1, status: "failed", text: null },
+    ]);
+    expect(spokenWordCount(transcript)).toBe(11);
+  });
+});
+
+describe("check-in audio format", () => {
+  test("keeps a browser recording's real container", () => {
+    expect(checkInAudioExtension("audio/webm;codecs=opus")).toBe("webm");
+    expect(checkInAudioFormatForPath("check-in-audio/t/1-abc-segment-0.webm")).toEqual({
+      extension: "webm",
+      mimeType: "audio/webm",
+    });
+  });
+
+  test("older segments without a known extension stay m4a", () => {
+    expect(checkInAudioExtension("audio/x-m4a")).toBe("m4a");
+    expect(checkInAudioFormatForPath("check-in-audio/t/1-abc-segment-0.m4a").mimeType).toBe("audio/m4a");
+    expect(checkInAudioFormatForPath(null).extension).toBe("m4a");
   });
 });

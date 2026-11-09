@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { prisma } from "../prisma";
 import { env } from "../env";
 import { getTeamSubscription } from "../routes/subscription";
+import { activeStripePriceId, planKeyOfStripePriceId } from "./billing-plans";
 
 let stripeClient: Stripe | null = null;
 
@@ -26,15 +27,15 @@ export function isStripeCheckoutConfigured(): boolean {
   return !!(
     getStripeClient() &&
     billingReturnBaseUrl() &&
-    (env.STRIPE_TEAM_PRICE_ID?.trim() || env.STRIPE_OPERATIONS_PRICE_ID?.trim())
+    (activeStripePriceId("pro") || activeStripePriceId("operations"))
   );
 }
 
 export type StripeCheckoutPlan = "pro" | "operations";
 
+/** The plan's current price, as set in Admin tools (Railway's ids are only the starting point). */
 export function stripePriceIdForCheckoutPlan(plan: StripeCheckoutPlan): string | null {
-  if (plan === "operations") return env.STRIPE_OPERATIONS_PRICE_ID?.trim() || null;
-  return env.STRIPE_TEAM_PRICE_ID?.trim() || null;
+  return activeStripePriceId(plan === "operations" ? "operations" : "pro");
 }
 
 export function isStripeCheckoutPlanConfigured(plan: StripeCheckoutPlan): boolean {
@@ -47,10 +48,7 @@ export function dbPlanForCheckoutPlan(plan: StripeCheckoutPlan): "team" | "opera
 }
 
 export function planFromStripePriceId(priceId: string | null | undefined): "team" | "operations" {
-  const id = priceId?.trim() ?? "";
-  const ops = env.STRIPE_OPERATIONS_PRICE_ID?.trim();
-  if (ops && id && id === ops) return "operations";
-  return "team";
+  return planKeyOfStripePriceId(priceId) === "operations" ? "operations" : "team";
 }
 
 export function planFromStripeSubscription(subscription: Stripe.Subscription): "team" | "operations" {

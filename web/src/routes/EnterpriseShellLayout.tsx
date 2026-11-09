@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import {
-  AuthLoadingScreen,
-  ENTERPRISE_WORKSPACE_LOADING_STEPS,
-} from "../components/AuthLoadingScreen";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
-import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
+import { EnterpriseLayout, type AdminNavAccess, type EnterpriseNavId } from "../components/EnterpriseLayout";
+import { abilityForAdminPath, firstAdminPath, isStaff, staffCan } from "../lib/staff-access";
 import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
 import {
@@ -19,18 +16,22 @@ import {
 } from "../lib/api";
 import { getBrowserTimeZone } from "../lib/timezone";
 import { hasMobileWebPreferred } from "../lib/app-links";
-import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
+import {
+  getPersistedEnterpriseTeamId,
+  pickEnterpriseTeamId,
+  setPersistedEnterpriseTeamId,
+  teamsWorkspaceSelectionKey,
+} from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseTeamNavTitle } from "../lib/enterprise-nav";
-import { isEnterpriseOrgAdmin, isEnterpriseOrgMember, isKnownEnterpriseWorkspace } from "../lib/enterprise-org";
-import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
+import { isKnownEnterpriseWorkspace } from "../lib/enterprise-org";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
+import { AccountPanel } from "../components/AccountPanel";
+import { AlenioTopBar } from "../components/AlenioTopBar";
+import { ChatDock } from "../components/chat/ChatDock";
 import { greetingForHour } from "../lib/alenio-go-dashboard";
 
-const WORKSPACE_BOOT_STEP_MS = 700;
-const WORKSPACE_BOOT_MIN_MS = 2000;
-const WORKSPACE_BOOT_MAX_MS = 6500;
-const WORKSPACE_BOOT_EXIT_MS = 320;
+
 export type EnterpriseRouteHandle = {
   enterpriseContentClassName?: string;
   enterpriseMainClassName?: string;
@@ -44,22 +45,56 @@ function routeLayoutHandleFromPath(pathname: string): EnterpriseRouteHandle {
       enterpriseMainClassName: "enterprise-app--go",
     };
   }
+  if (isAlenioPersonalPath(pathname)) {
+    return {
+      enterpriseContentClassName: "enterprise-content-flush enterprise-content-alenio",
+      enterpriseMainClassName: "enterprise-app--alenio",
+    };
+  }
   return {
     enterpriseContentClassName: "enterprise-content-flush",
   };
 }
 
+/** The Alenio (non-Go) web app: white pages, light side bar, no dashboard top bar. */
+function isAlenioPersonalPath(pathname: string): boolean {
+  return (
+    pathname === "/home" ||
+    pathname === "/workspace" ||
+    pathname.startsWith("/workspace/") ||
+    pathname.startsWith("/tasks/") ||
+    pathname === "/network" ||
+    pathname.startsWith("/people/") ||
+    pathname === "/discover" ||
+    pathname.startsWith("/discover/") ||
+    pathname === "/seneca" ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/settings") ||
+    pathname.startsWith("/profile")
+  );
+}
+
 function activeNavFromPath(pathname: string): EnterpriseNavId {
-  if (pathname.startsWith("/chat")) return "chat";
+  if (pathname.startsWith("/home")) return "home";
+  if (pathname === "/discover" || pathname.startsWith("/discover/")) return "discover";
+  if (pathname === "/workspace" || pathname.startsWith("/workspace/")) return "workspace";
+  if (pathname === "/network" || pathname.startsWith("/people/")) return "network";
   if (pathname.startsWith("/go/org/workspaces")) return "workspaces";
   if (pathname.startsWith("/go/org/users")) return "users";
   if (pathname.startsWith("/go")) return "go";
   if (pathname.startsWith("/billing")) return "plan";
-  if (pathname.startsWith("/team")) return "team";
+  if (pathname.startsWith("/admin/discover")) return "content";
+  if (pathname.startsWith("/admin/users")) return "adminUsers";
+  if (pathname.startsWith("/admin/workspaces")) return "adminWorkspaces";
+  if (pathname.startsWith("/admin/seneca")) return "adminSeneca";
+  if (pathname.startsWith("/admin/activity")) return "adminActivity";
+  if (pathname.startsWith("/admin/notifications")) return "adminNotifications";
+  if (pathname.startsWith("/admin/pricing")) return "adminPricing";
+  if (pathname === "/seneca" || pathname.startsWith("/seneca/")) return "seneca";
   if (pathname.startsWith("/admin")) return "admin";
   if (pathname.startsWith("/settings") || pathname.startsWith("/profile")) return "settings";
-  if (pathname.startsWith("/tasks")) return "execute";
-  return "execute";
+  if (pathname.startsWith("/tasks/")) return "workspace";
+  return "go";
 }
 
 export function EnterpriseShellLayout() {
@@ -75,12 +110,6 @@ export function EnterpriseShellLayout() {
   const [workspaceMainLoading, setWorkspaceMainLoading] = useState(false);
   const [shellMainSuffix, setShellMainSuffix] = useState("");
   const [shellContentSuffix, setShellContentSuffix] = useState("");
-  const [workspaceBoot, setWorkspaceBoot] = useState<{ teamId: string; startedAt: number } | null>(null);
-  const [bootActiveIndex, setBootActiveIndex] = useState(0);
-  const [bootAllDone, setBootAllDone] = useState(false);
-  const [bootExiting, setBootExiting] = useState(false);
-  const [bootTabsReady, setBootTabsReady] = useState(false);
-  const [bootRefreshDone, setBootRefreshDone] = useState(false);
   useEffect(() => {
     setWorkspaceMainLoading(false);
     setShellMainSuffix("");
@@ -235,49 +264,9 @@ export function EnterpriseShellLayout() {
     setWorkspaceMainLoading(v);
   }, []);
 
-  const beginEnterpriseWorkspaceBoot = useCallback((teamId: string) => {
-    const id = teamId.trim();
-    if (!id) return;
-    setBootRefreshDone(false);
-    setBootActiveIndex(0);
-    setBootAllDone(false);
-    setBootExiting(false);
-    setBootTabsReady(false);
-    setWorkspaceBoot({ teamId: id, startedAt: Date.now() });
+  const beginEnterpriseWorkspaceBoot = useCallback((_teamId: string) => {
+    /* Full-screen workspace boot was removed. */
   }, []);
-
-  /** Animate SSO-style checklist while an enterprise workspace boots. */
-  useEffect(() => {
-    if (!workspaceBoot) return;
-    const timers: number[] = [];
-    ENTERPRISE_WORKSPACE_LOADING_STEPS.forEach((_, index) => {
-      if (index === 0) return;
-      timers.push(
-        window.setTimeout(() => {
-          setBootActiveIndex(index);
-        }, WORKSPACE_BOOT_STEP_MS * index),
-      );
-    });
-    return () => {
-      timers.forEach((t) => window.clearTimeout(t));
-    };
-  }, [workspaceBoot]);
-
-  /** Refresh membership/feature flags so sidebar tabs match the opened workspace. */
-  useEffect(() => {
-    if (!workspaceBoot) return;
-    let cancelled = false;
-    void refreshMeAndTeams()
-      .catch(() => {
-        /* keep current shell state */
-      })
-      .finally(() => {
-        if (!cancelled) setBootRefreshDone(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceBoot, refreshMeAndTeams]);
 
   const setShellMainClassSuffix = useCallback((v: string) => {
     setShellMainSuffix(v);
@@ -289,16 +278,29 @@ export function EnterpriseShellLayout() {
 
   const handle = routeLayoutHandleFromPath(location.pathname);
 
-  const mainClassName = [handle.enterpriseMainClassName ?? "", shellMainSuffix].filter(Boolean).join(" ").trim();
+  const mainClassName = [
+    handle.enterpriseMainClassName ?? "",
+    location.pathname === "/home" ||
+    location.pathname === "/workspace" ||
+    location.pathname.startsWith("/workspace/") ||
+    location.pathname === "/network" ||
+    location.pathname.startsWith("/people/") ||
+    location.pathname === "/discover" ||
+    location.pathname === "/admin/discover" ||
+    location.pathname === "/admin/users"
+      ? "enterprise-app--hero-under-topbar"
+      : "",
+    shellMainSuffix,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
   const contentClassName = [handle.enterpriseContentClassName ?? "", shellContentSuffix].filter(Boolean).join(" ").trim();
 
   const activeNav = activeNavFromPath(location.pathname);
 
   useEffect(() => {
     if (teams === null || me === undefined) return;
-    // Chat's teamId identifies the conversation being viewed, not the user's
-    // globally selected workspace.
-    if (location.pathname.startsWith("/chat")) return;
     const teamIdFromUrl = new URLSearchParams(location.search).get("teamId")?.trim() ?? "";
     if (!teamIdFromUrl) return;
     if (!isKnownEnterpriseWorkspace(me, teams, teamIdFromUrl)) return;
@@ -323,38 +325,41 @@ export function EnterpriseShellLayout() {
     teams !== null && effectiveTeamId ? teams.find((t) => t.id === effectiveTeamId)?.role : undefined;
   const teamNavLabel = enterpriseTeamNavTitle(workspaceRole);
   const viewerName = (me?.name ?? me?.email ?? "there").trim().split(/\s+/)[0] || "there";
-  const enterpriseMember = isEnterpriseOrgMember(me);
-  const enterpriseOrgAdmin = isEnterpriseOrgAdmin(me);
-  const goNavLabel = enterpriseOrgAdmin ? "Dashboard" : "Alenio Go";
+  const goNavLabel = "Alenio Go";
   const topBarPageTitle = `${greetingForHour(new Date().getHours())}, ${viewerName} 👋`;
   const hasNoTeams = teams !== null && teams.length === 0;
   const isSettingsRoute =
     location.pathname.startsWith("/settings") || location.pathname.startsWith("/profile");
   const isAdminRoute = location.pathname.startsWith("/admin");
-  const isGoRoute = location.pathname.startsWith("/go");
-  const showAdminNav = me?.isAdmin === true;
-  /** Self-serve users without a workspace see setup. Enterprise customers skip it — they use org Go. */
-  const showNoTeamsEmptyState =
-    hasNoTeams && !enterpriseMember && !isSettingsRoute && !isAdminRoute;
-  /** Treat missing `hasTeamFeatures` as allowed so refetches / first paint never redirect to Chat. */
-  const showActivityExecuteNav =
-    teams === null ||
-    !effectiveTeamId ||
-    (workspaceAccess?.teamId === effectiveTeamId
-      ? workspaceAccess.hasTeamFeatures
-      : teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures !== false);
+  const showAdminNav = false;
+  const showDiscoverNav = isStaff(me);
+  const adminNav: AdminNavAccess = {
+    users: staffCan(me, "users.view"),
+    workspaces: staffCan(me, "teams.view"),
+    content: staffCan(me, "content.view"),
+    seneca: staffCan(me, "seneca.view"),
+    activity: staffCan(me, "activity.view"),
+    notifications: staffCan(me, "notifications.view"),
+    pricing: staffCan(me, "pricing.manage"),
+  };
+  const personalHome = isAlenioPersonalPath(location.pathname);
+  const showNoTeamsEmptyState = hasNoTeams && !isSettingsRoute && !isAdminRoute && !personalHome;
   /**
-   * Alenio Go: enterprise org members always; otherwise Operations workspaces only
-   * (never during self-serve no-workspace setup).
+   * Alenio Go: Operations workspaces only (never during self-serve no-workspace setup).
    */
   const showGoNav =
-    enterpriseMember ||
-    (teams !== null &&
-      !!effectiveTeamId &&
-      (workspaceAccess?.teamId === effectiveTeamId
-        ? workspaceAccess.hasGoFeatures
-        : teams.find((t) => t.id === effectiveTeamId)?.hasGoFeatures === true));
+    teams !== null &&
+    !!effectiveTeamId &&
+    (workspaceAccess?.teamId === effectiveTeamId
+      ? workspaceAccess.hasGoFeatures
+      : teams.find((t) => t.id === effectiveTeamId)?.hasGoFeatures === true);
   const showPlanNav = workspaceOwner && !hasNoTeams;
+
+  /** Account panel (photo, name, time zone, calendar, sign out). Outlook returns here with ?outlook=. */
+  const [accountOpen, setAccountOpen] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has("outlook")) setAccountOpen(true);
+  }, [location.search]);
 
   /** Phone browsers should use the native app unless the user chose web explicitly. */
   useLayoutEffect(() => {
@@ -362,113 +367,40 @@ export function EnterpriseShellLayout() {
     navigate("/get-app", { replace: true });
   }, [navigate]);
 
-  /** Enterprise customers land in Alenio Go instead of workspace create/join. */
+  /** Plan / billing is owner-only; Go requires Operations; Admin is platform-admin-only. */
   useLayoutEffect(() => {
     if (teams === null || me === undefined) return;
-    if (!enterpriseMember || !hasNoTeams) return;
-    if (isSettingsRoute || isAdminRoute || isGoRoute) return;
-    navigate("/go", { replace: true });
-  }, [
-    teams,
-    me,
-    enterpriseMember,
-    hasNoTeams,
-    isSettingsRoute,
-    isAdminRoute,
-    isGoRoute,
-    navigate,
-  ]);
-
-  /** Plan / billing is owner-only; Workspace requires Pro+; Go requires Operations; Admin is platform-admin-only. */
-  useLayoutEffect(() => {
-    if (teams === null) return;
     const path = location.pathname;
     if (path.startsWith("/admin")) {
-      if (me !== undefined && me?.isAdmin !== true) {
-        navigate(enterpriseMember ? "/go" : "/dashboard", { replace: true });
+      if (!isStaff(me)) {
+        navigate("/settings", { replace: true });
+        return;
       }
+      // A staff role that can't open this page lands on the first one it can.
+      const needed = abilityForAdminPath(path);
+      if (needed && !staffCan(me, needed)) navigate(firstAdminPath(me) ?? "/settings", { replace: true });
       return;
     }
     if (path.startsWith("/billing")) {
       if (!workspaceOwner && effectiveTeamId) {
-        navigate(enterpriseMember ? "/go" : "/dashboard", { replace: true });
+        navigate("/settings", { replace: true });
       }
       return;
     }
-    if (path.startsWith("/go") && !showGoNav && path !== "/chat") {
-      navigate(showActivityExecuteNav ? "/dashboard" : "/chat", { replace: true });
+    if (path.startsWith("/go") && !hasNoTeams && !showGoNav) {
+      navigate("/settings", { replace: true });
       return;
-    }
-    const isTeamGatedShellRoute = path.startsWith("/dashboard") || path.startsWith("/tasks/new");
-    if (isTeamGatedShellRoute && !showActivityExecuteNav && path !== "/chat") {
-      navigate(enterpriseMember ? "/go" : "/chat", { replace: true });
     }
   }, [
     teams,
     location.pathname,
     workspaceOwner,
-    showActivityExecuteNav,
     showGoNav,
     effectiveTeamId,
     navigate,
+    hasNoTeams,
     me,
-    enterpriseMember,
   ]);
-
-  /** Hold SSO boot until workspace selection + allowed nav tabs have settled. */
-  useEffect(() => {
-    if (!workspaceBoot) return;
-    if (me === undefined || teams === null) return;
-    if (selectedTeamId !== workspaceBoot.teamId) return;
-    if (!bootRefreshDone) return;
-    if (!isKnownEnterpriseWorkspace(me, teams, workspaceBoot.teamId)) return;
-
-    const id = window.setTimeout(() => setBootTabsReady(true), 40);
-    return () => window.clearTimeout(id);
-  }, [
-    workspaceBoot,
-    me,
-    teams,
-    selectedTeamId,
-    bootRefreshDone,
-    showGoNav,
-    showActivityExecuteNav,
-    showPlanNav,
-    teamNavLabel,
-    goNavLabel,
-  ]);
-
-  useEffect(() => {
-    if (!workspaceBoot || !bootTabsReady || bootExiting) return;
-    const elapsed = Date.now() - workspaceBoot.startedAt;
-    const remaining = Math.max(WORKSPACE_BOOT_MIN_MS - elapsed, 0);
-    const id = window.setTimeout(() => {
-      setBootAllDone(true);
-      setBootExiting(true);
-    }, remaining);
-    return () => window.clearTimeout(id);
-  }, [workspaceBoot, bootTabsReady, bootExiting]);
-
-  useEffect(() => {
-    if (!workspaceBoot || !bootExiting) return;
-    const id = window.setTimeout(() => {
-      setWorkspaceBoot(null);
-      setBootAllDone(false);
-      setBootExiting(false);
-      setBootTabsReady(false);
-      setBootActiveIndex(0);
-    }, WORKSPACE_BOOT_EXIT_MS);
-    return () => window.clearTimeout(id);
-  }, [workspaceBoot, bootExiting]);
-
-  useEffect(() => {
-    if (!workspaceBoot) return;
-    const id = window.setTimeout(() => {
-      setBootAllDone(true);
-      setBootExiting(true);
-    }, WORKSPACE_BOOT_MAX_MS);
-    return () => window.clearTimeout(id);
-  }, [workspaceBoot]);
 
   const contextValue = useMemo<EnterpriseShellContextValue>(
     () => ({
@@ -512,44 +444,14 @@ export function EnterpriseShellLayout() {
     );
   }
 
-  const showEnterpriseSsoBoot =
-    Boolean(workspaceBoot) || me === undefined || (enterpriseMember && teams === null);
-
   const shellSelectedTeamId = isKnownEnterpriseWorkspace(me, teams, selectedTeamId)
     ? selectedTeamId
     : effectiveTeamId;
-  const trialDays = workspaceAccess?.remainingDays;
-  const isTrialing = workspaceAccess?.status === "trialing";
   const isReadOnly = workspaceAccess?.accessMode === "read_only";
-  const bannerTone =
-    isReadOnly
-      ? "critical"
-      : (trialDays ?? 99) <= 1
-        ? "urgent"
-        : (trialDays ?? 99) <= 3
-          ? "warning"
-          : (trialDays ?? 99) <= 7
-            ? "attention"
-            : "info";
 
   return (
     <EnterpriseShellContext.Provider value={contextValue}>
-      {showEnterpriseSsoBoot ? (
-        <AuthLoadingScreen
-          overlay
-          title={workspaceBoot ? "Opening workspace" : "Connecting your workspace"}
-          subtitle={
-            workspaceBoot
-              ? "Updating navigation for this workspace"
-              : "Preparing your enterprise dashboard"
-          }
-          steps={ENTERPRISE_WORKSPACE_LOADING_STEPS}
-          activeIndex={bootActiveIndex}
-          allDone={bootAllDone || (!workspaceBoot && teams !== null && me !== undefined)}
-          exiting={bootExiting}
-          testId="enterprise-workspace-boot-screen"
-        />
-      ) : null}
+      <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
       <EnterpriseLayout
         activeNav={activeNav}
         teams={teams ?? []}
@@ -558,58 +460,53 @@ export function EnterpriseShellLayout() {
         user={me ?? null}
         onSignOutNavigate={(path) => navigate(path)}
         topBar={
+          personalHome ? null : (
           <DashboardTopBar
             user={me ?? null}
             pageTitle={topBarPageTitle}
             selectedTeamId={shellSelectedTeamId}
+            workspaceCallout={
+              isReadOnly && workspaceAccess?.teamId === shellSelectedTeamId
+                ? { kind: "read_only", canChoosePlan: workspaceOwner }
+                : null
+            }
           />
+          )
         }
         mainClassName={mainClassName}
         contentClassName={contentClassName}
         workspaceOverlayLoading={workspaceMainLoading}
         showPlanNav={showPlanNav}
-        showActivityExecuteNav={showActivityExecuteNav && !hasNoTeams}
         showGoNav={showGoNav}
         goNavLabel={goNavLabel}
-        goNavTo={enterpriseOrgAdmin ? "/go/org/overview" : "/go"}
-        showEnterpriseOrgNav={enterpriseOrgAdmin}
+        goNavTo="/go"
+        showEnterpriseOrgNav={false}
         showAdminNav={showAdminNav}
+        showDiscoverNav={showDiscoverNav}
+        adminNav={adminNav}
         teamNavLabel={teamNavLabel}
         setupNavMode={hasNoTeams}
-        onEnterpriseWorkspaceBoot={enterpriseMember ? beginEnterpriseWorkspaceBoot : undefined}
+        onEnterpriseWorkspaceBoot={undefined}
+        onOpenAccount={personalHome ? () => setAccountOpen(true) : undefined}
+        rightDock={personalHome && me ? <ChatDock /> : null}
+        topHeader={
+          personalHome && me ? (
+            <AlenioTopBar
+              user={me}
+              onOpenAccount={() => setAccountOpen(true)}
+            />
+          ) : null
+        }
       >
         {teams === null ? (
-          enterpriseMember || me === undefined ? null : (
-            <EnterprisePageLoading label="Loading your workspace" />
-          )
+          <EnterprisePageLoading label="Loading your workspace" />
         ) : showNoTeamsEmptyState ? (
           <div className="chat-app-body chat-app-body-enterprise chat-app-body-no-teams enterprise-tab-shell">
             <NoTeamsEmptyState onRefreshWorkspaces={refreshMeAndTeams} />
           </div>
         ) : (
-          <>
-            {(isTrialing || isReadOnly) && workspaceAccess?.teamId === shellSelectedTeamId ? (
-              <div
-                className={`workspace-access-banner workspace-access-banner--${bannerTone}`}
-                role={isReadOnly ? "alert" : "status"}
-                data-testid="workspace-access-banner"
-              >
-                <span>
-                  {isReadOnly
-                    ? "This workspace is read-only. Choose a plan to restore changes; all existing content remains available."
-                    : `${trialDays === 1 ? "1 day" : `${trialDays ?? 0} days`} left in your Operations trial.`}
-                </span>
-                {workspaceOwner ? <Link to="/billing">Choose a Plan</Link> : isReadOnly ? <span>Ask the workspace owner to choose a plan.</span> : null}
-              </div>
-            ) : null}
-            <Outlet />
-          </>
+          <Outlet />
         )}
-        {teams !== null &&
-        (teams.find((t) => t.id === effectiveTeamId)?.role === "owner" ||
-          teams.find((t) => t.id === effectiveTeamId)?.role === "team_leader") ? (
-          <SenecaFloatingLauncher />
-        ) : null}
       </EnterpriseLayout>
     </EnterpriseShellContext.Provider>
   );

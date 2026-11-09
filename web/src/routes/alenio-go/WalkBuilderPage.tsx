@@ -282,7 +282,7 @@ export function WalkBuilderPage() {
     <div className="wb-shell" data-testid="walk-builder-page">
       <header className="wb-topbar">
         <div className="wb-topbar-brand">
-          <Link to="/go/temp-checks/walks" className="wb-topbar-back" aria-label="Back to Walks">
+          <Link to="/go/temp-checks/walks" className="wb-topbar-back" aria-label="Back to Guided Walks">
             ←
           </Link>
           <div>

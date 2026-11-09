@@ -32,6 +32,7 @@ function subscriptionSummary(sub: Awaited<ReturnType<typeof getTeamSubscription>
     bannerSeverity: access.bannerSeverity,
     hasTeamFeatures: access.hasTeamFeatures,
     hasGoFeatures: access.hasGoFeatures,
+    planFeatures: access.features,
     currentPeriodEnd: sub.currentPeriodEnd,
     cancelAtPeriodEnd: sub.cancelAtPeriodEnd === true,
     billingProvider,
@@ -75,7 +76,7 @@ mobileBillingRouter.get("/workspaces", async (c) => {
 /** POST /api/billing/checkout-session — owner: Stripe Checkout for Pro or Operations */
 mobileBillingRouter.post("/checkout-session", async (c) => {
   const user = c.get("user")!;
-  const body = (await c.req.json().catch(() => ({}))) as { teamId?: string; plan?: string };
+  const body = (await c.req.json().catch(() => ({}))) as { teamId?: string; plan?: string; playToken?: string };
   const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
   if (!teamId) {
     return c.json({ error: { message: "teamId is required", code: "VALIDATION_ERROR" } }, 400);
@@ -99,6 +100,7 @@ mobileBillingRouter.post("/checkout-session", async (c) => {
     userId: user.id,
     userEmail: user.email,
     plan,
+    playToken: typeof body.playToken === "string" ? body.playToken : null,
   });
   if ("error" in result) {
     return c.json({ error: result.error }, result.status);

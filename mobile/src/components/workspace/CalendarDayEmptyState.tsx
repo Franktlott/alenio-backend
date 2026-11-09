@@ -1,5 +1,5 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
-import { colors, radii } from "@/theme";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { colors } from "@/theme";
 import { WS } from "./workspace-ui";
 
 type Props = {
@@ -7,91 +7,73 @@ type Props = {
   onAdd?: () => void;
 };
 
-/** Centered actionable empty state for the selected calendar day. */
+/** Calm empty state for the selected calendar day. */
 export function CalendarDayEmptyState({ onAdd }: Props) {
   return (
-    <View style={styles.card} testID="calendar-day-empty-state">
-      <View style={styles.content}>
-        <View style={styles.message}>
-          <Text style={styles.title}>Nothing planned</Text>
-          <Text style={styles.subtitle}>This day is open.</Text>
-        </View>
-
-        <View style={styles.ctaSlot}>
-          <Pressable
-            onPress={onAdd}
-            testID="calendar-day-empty-add"
-            hitSlop={8}
-            style={styles.cta}
-            accessibilityRole="button"
-            accessibilityLabel="Schedule something"
-          >
-            <Text style={styles.ctaText} numberOfLines={1}>
-              + Schedule something
-            </Text>
-          </Pressable>
-        </View>
-      </View>
+    <View style={styles.wrap} testID="calendar-day-empty-state">
+      <Text style={styles.title}>Nothing scheduled</Text>
+      <Text style={styles.subtitle}>
+        No events, tasks, or holidays for this day.
+      </Text>
+      {onAdd ? (
+        <Pressable
+          onPress={onAdd}
+          testID="calendar-day-empty-add"
+          style={({ pressed }) => [
+            styles.cta,
+            pressed ? styles.ctaPressed : null,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Add event"
+        >
+          <Text style={styles.ctaText}>+ Add event</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  wrap: {
     flex: 1,
     alignSelf: "stretch",
     width: "100%",
-    minHeight: 0,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.borderCard,
-    overflow: "hidden",
-  },
-  content: {
-    flex: 1,
+    minHeight: 72,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-  },
-  message: {
-    alignItems: "center",
   },
   title: {
     fontSize: 14,
-    lineHeight: 17,
+    lineHeight: 18,
     fontWeight: "700",
     color: WS.ink,
     textAlign: "center",
     letterSpacing: -0.2,
   },
   subtitle: {
-    marginTop: 2,
-    fontSize: 11,
-    lineHeight: 14,
+    marginTop: 4,
+    marginBottom: 8,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: "500",
     color: WS.muted,
     textAlign: "center",
-  },
-  ctaSlot: {
-    alignItems: "center",
-    marginTop: 6,
+    maxWidth: 260,
   },
   cta: {
-    flexShrink: 0,
-    minWidth: 134,
     minHeight: 32,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 9,
-    backgroundColor: colors.brand,
+    paddingHorizontal: 10,
     alignItems: "center",
     justifyContent: "center",
   },
+  ctaPressed: {
+    opacity: 0.7,
+  },
   ctaText: {
-    color: "#FFFFFF",
-    fontSize: 11.5,
+    color: colors.brand,
+    fontSize: 14,
     fontWeight: "700",
   },
 });

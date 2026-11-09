@@ -1,17 +1,49 @@
-import React from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Building2, Users } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Building2,
+  ChevronRight,
+  MoreHorizontal,
+  ShieldCheck,
+  Users,
+} from "lucide-react-native";
 import { api } from "@/lib/api/api";
-import type { Team } from "@/lib/types";
+import type { Team, TeamMember } from "@/lib/types";
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { UserAvatar } from "@/components/UserAvatar";
+import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
+
+const BRAND = "#5346E8";
+const PAGE = "#FFFFFF";
+const PREVIEW_COUNT = 5;
+
+function shortName(name?: string | null): string {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "Member";
+  if (parts.length === 1) return parts[0]!;
+  return `${parts[0]} ${parts[parts.length - 1]![0]}.`;
+}
 
 export default function PublicWorkspaceScreen() {
   const insets = useSafeAreaInsets();
   const { teamId, teamName } = useLocalSearchParams<{ teamId?: string; teamName?: string }>();
+  const { switchWorkspace } = useSwitchWorkspace();
+  const [opening, setOpening] = useState(false);
+  const [showAllPeople, setShowAllPeople] = useState(false);
   const { data: team, isLoading } = useQuery({
     queryKey: ["team", teamId],
     queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
@@ -20,136 +52,315 @@ export default function PublicWorkspaceScreen() {
 
   const name = team?.name ?? teamName ?? "Workspace";
   const members = team?.members ?? [];
+  const preview = showAllPeople ? members : members.slice(0, PREVIEW_COUNT);
+  const about = team?.location?.trim()
+    ? team.location.trim()
+    : "A place for your team to connect, collaborate, and grow together.";
+
+  const openWorkspace = async () => {
+    if (!teamId || opening) return;
+    setOpening(true);
+    try {
+      await switchWorkspace(teamId);
+      router.replace("/(app)/execute");
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const openSettings = () => {
+    if (!teamId) return;
+    router.push({ pathname: "/workspace-settings", params: { teamId } });
+  };
+
+  const openPerson = (member: TeamMember) => {
+    router.push({ pathname: "/person", params: { userId: member.userId } });
+  };
 
   return (
     <View style={styles.screen} testID="public-workspace-screen">
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <Pressable
           onPress={() => router.back()}
-          style={styles.backButton}
+          style={styles.headerButton}
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <ArrowLeft size={20} color="#0F172A" />
+          <ArrowLeft size={20} color="#111A2B" strokeWidth={2.25} />
         </Pressable>
         <Text style={styles.headerTitle}>Workspace</Text>
-        <View style={styles.backButton} />
+        <Pressable
+          onPress={openSettings}
+          style={styles.headerButton}
+          accessibilityRole="button"
+          accessibilityLabel="Workspace options"
+          testID="public-workspace-menu"
+        >
+          <MoreHorizontal size={20} color="#111A2B" strokeWidth={2.25} />
+        </Pressable>
       </View>
 
       {isLoading ? (
-        <View style={styles.centered}><ActivityIndicator color="#4361EE" /></View>
+        <View style={styles.centered}>
+          <ActivityIndicator color={BRAND} />
+        </View>
       ) : !team ? (
         <View style={styles.centered}>
           <Text style={styles.emptyTitle}>Workspace unavailable</Text>
           <Text style={styles.emptyBody}>Only shared workspace information is visible.</Text>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.identity}>
-            <WorkspaceTeamAvatar
-              team={{ name, image: team.image }}
-              size={82}
-              radius={22}
-              backgroundColor="#EEF2FF"
-              textColor="#4361EE"
-              borderColor="#DDE4FF"
-            />
+        <>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.banner}>
+              <Image
+                source={require("@/assets/alenio-welcome-mountain-ridge-v2.jpg")}
+                style={styles.bannerImage}
+                resizeMode="cover"
+              />
+              <LinearGradient
+                colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.55)", PAGE]}
+                locations={[0, 0.62, 1]}
+                style={styles.bannerFade}
+                pointerEvents="none"
+              />
+              <View style={styles.mark}>
+                <WorkspaceTeamAvatar
+                  team={{ name, image: team.image }}
+                  size={64}
+                  radius={18}
+                  backgroundColor="#EEF2FF"
+                  textColor={BRAND}
+                  borderColor="#E4E0FF"
+                />
+              </View>
+            </View>
+
             <Text style={styles.name}>{name}</Text>
             <View style={styles.memberCount}>
-              <Users size={13} color="#64748B" />
+              <Users size={14} color="#667085" strokeWidth={2.2} />
               <Text style={styles.memberCountText}>
                 {members.length} member{members.length === 1 ? "" : "s"}
               </Text>
             </View>
-          </View>
 
-          <View style={styles.card}>
-            <View style={styles.cardHeading}>
-              <View style={styles.iconCircle}>
-                <Building2 size={17} color="#4361EE" />
+            <Pressable
+              onPress={openSettings}
+              style={styles.aboutCard}
+              accessibilityRole="button"
+              accessibilityLabel="About this workspace"
+            >
+              <View style={styles.aboutIcon}>
+                <Building2 size={16} color={BRAND} strokeWidth={2.2} />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Workspace information</Text>
-                <Text style={styles.cardSubtitle}>A workspace you both belong to</Text>
+              <View style={styles.aboutCopy}>
+                <Text style={styles.aboutTitle}>About this workspace</Text>
+                <Text style={styles.aboutBody}>{about}</Text>
+              </View>
+              <ChevronRight size={18} color="#C4B5FD" strokeWidth={2.2} />
+            </Pressable>
+
+            <View style={styles.stats}>
+              <View style={styles.stat}>
+                <Users size={15} color={BRAND} strokeWidth={2.2} />
+                <Text style={styles.statText}>
+                  {members.length} member{members.length === 1 ? "" : "s"}
+                </Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.stat}>
+                <ShieldCheck size={15} color={BRAND} strokeWidth={2.2} />
+                <Text style={styles.statText}>Shared workspace</Text>
               </View>
             </View>
-          </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Members</Text>
-            <View style={styles.card}>
-              <View style={styles.avatarRow}>
-                {members.slice(0, 8).map((member) => (
+            <View style={styles.peopleHeader}>
+              <Users size={16} color="#111A2B" strokeWidth={2.2} />
+              <Text style={styles.peopleTitle}>People</Text>
+              <View style={styles.headerSpacer} />
+              {members.length > PREVIEW_COUNT ? (
+                <Pressable
+                  onPress={() => setShowAllPeople((open) => !open)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View all ${members.length} people`}
+                  testID="public-workspace-people-all"
+                >
+                  <Text style={styles.viewAll}>
+                    {showAllPeople ? "Show less" : `View all ${members.length}`}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <View style={styles.peopleRow}>
+              {preview.map((member) => (
+                <Pressable
+                  key={member.userId}
+                  onPress={() => openPerson(member)}
+                  style={styles.person}
+                  accessibilityRole="button"
+                  accessibilityLabel={member.user.name ?? "Member"}
+                >
                   <UserAvatar
-                    key={member.userId}
                     user={member.user}
-                    size={38}
-                    radius={19}
-                    backgroundColor="#EEF2FF"
-                    textColor="#4361EE"
-                    fontSize={14}
-                    style={styles.memberAvatar}
+                    size={56}
+                    radius={28}
+                    backgroundColor="#F3F0FF"
+                    textColor={BRAND}
+                    fontSize={16}
                   />
-                ))}
-                {members.length > 8 ? (
-                  <View style={styles.overflowAvatar}>
-                    <Text style={styles.overflowText}>+{members.length - 8}</Text>
-                  </View>
-                ) : null}
-              </View>
+                  <Text style={styles.personName} numberOfLines={1}>
+                    {shortName(member.user.name)}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
+          </ScrollView>
+
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <Pressable
+              onPress={() => void openWorkspace()}
+              disabled={opening}
+              style={styles.openButton}
+              accessibilityRole="button"
+              accessibilityLabel="Open workspace"
+              testID="public-workspace-open"
+            >
+              {opening ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <ArrowUpRight size={18} color="#FFFFFF" strokeWidth={2.3} />
+                  <Text style={styles.openButtonText}>Open workspace</Text>
+                </>
+              )}
+            </Pressable>
           </View>
-        </ScrollView>
+        </>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F6F7FB" },
+  screen: { flex: 1, backgroundColor: PAGE },
   header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E2E8F0",
+    paddingHorizontal: 12,
+    paddingBottom: 8,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
   },
-  backButton: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 17, fontWeight: "700", color: "#0F172A" },
+  headerButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "800",
+    color: "#111A2B",
+    letterSpacing: -0.3,
+  },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 15, fontWeight: "700", color: "#334155" },
-  emptyBody: { marginTop: 5, fontSize: 12, color: "#94A3B8", textAlign: "center" },
-  content: { paddingHorizontal: 16, paddingTop: 28 },
-  identity: { alignItems: "center" },
-  name: { marginTop: 12, fontSize: 22, lineHeight: 27, fontWeight: "800", color: "#172033", textAlign: "center" },
-  memberCount: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 5 },
-  memberCountText: { fontSize: 12, fontWeight: "600", color: "#64748B" },
-  card: {
-    marginTop: 24,
-    padding: 16,
-    borderRadius: 18,
-    backgroundColor: "#FFFFFF",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#E2E8F0",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.035,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: "#334155" },
+  emptyBody: { marginTop: 6, fontSize: 13, lineHeight: 18, color: "#94A3B8", textAlign: "center" },
+  content: { paddingHorizontal: 16, paddingBottom: 16 },
+  banner: {
+    height: 148,
+    borderRadius: 22,
+    overflow: "hidden",
+    backgroundColor: "#E7E4F8",
   },
-  cardHeading: { flexDirection: "row", alignItems: "center", gap: 11 },
-  iconCircle: { width: 38, height: 38, borderRadius: 12, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" },
-  cardTitle: { fontSize: 14, fontWeight: "700", color: "#172033" },
-  cardSubtitle: { marginTop: 2, fontSize: 11, color: "#7A869A" },
-  section: { marginTop: 24 },
-  sectionTitle: { paddingHorizontal: 3, fontSize: 11, fontWeight: "800", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.55 },
-  avatarRow: { flexDirection: "row", alignItems: "center", paddingLeft: 8 },
-  memberAvatar: { marginLeft: -8, borderWidth: 2, borderColor: "#FFFFFF" },
-  overflowAvatar: { width: 38, height: 38, borderRadius: 19, marginLeft: -8, backgroundColor: "#F1F5F9", borderWidth: 2, borderColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  overflowText: { fontSize: 11, fontWeight: "700", color: "#64748B" },
+  bannerImage: {
+    position: "absolute",
+    width: "160%",
+    aspectRatio: 16 / 9,
+    right: -20,
+    bottom: -36,
+  },
+  bannerFade: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 72,
+  },
+  mark: { position: "absolute", left: 16, bottom: 16 },
+  name: {
+    marginTop: 16,
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    color: "#111A2B",
+  },
+  memberCount: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 6 },
+  memberCountText: { fontSize: 14, lineHeight: 18, color: "#667085" },
+  aboutCard: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "#F7F5FF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  aboutIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EFEAFF",
+  },
+  aboutCopy: { flex: 1, minWidth: 0 },
+  aboutTitle: { fontSize: 15, lineHeight: 19, fontWeight: "800", color: "#111A2B" },
+  aboutBody: { marginTop: 2, fontSize: 13, lineHeight: 18, color: "#667085" },
+  stats: {
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    backgroundColor: "#F7F5FF",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  stat: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  statDivider: { width: StyleSheet.hairlineWidth, alignSelf: "stretch", backgroundColor: "#E4DFF8" },
+  statText: { fontSize: 13, lineHeight: 17, fontWeight: "600", color: "#344054" },
+  peopleHeader: {
+    marginTop: 20,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  peopleTitle: { fontSize: 16, lineHeight: 20, fontWeight: "800", color: "#111A2B" },
+  headerSpacer: { flex: 1 },
+  viewAll: { fontSize: 14, lineHeight: 18, fontWeight: "700", color: BRAND },
+  peopleRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  person: { width: 64, alignItems: "center", gap: 6 },
+  personName: { fontSize: 12, lineHeight: 15, color: "#667085", textAlign: "center" },
+  footer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    backgroundColor: PAGE,
+  },
+  openButton: {
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: BRAND,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  openButtonText: { fontSize: 16, lineHeight: 20, fontWeight: "700", color: "#FFFFFF" },
 });

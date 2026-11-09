@@ -15,15 +15,14 @@ export type ActivityTintTokens = {
 
 export const ACTIVITY_LAYOUT = {
   cardRadius: 0,
-  cardPadding: 7,
+  cardPadding: 12,
   cardGap: 1,
   cardMarginHorizontal: 0,
   cardMarginVertical: 0,
   sectionGap: 4,
-  /** Match Chat DM avatar */
-  avatarSize: 26,
-  avatarColumn: 26,
-  badgeSize: 20,
+  avatarSize: 34,
+  avatarColumn: 34,
+  badgeSize: 34,
 } as const;
 
 export const ACTIVITY_COLORS = {

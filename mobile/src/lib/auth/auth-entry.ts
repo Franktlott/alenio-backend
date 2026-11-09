@@ -7,7 +7,7 @@ import { resolveAuthenticatedDestination } from "@/lib/no-workspace-routing";
 /** Authenticated home route after session + `/api/me` are ready. */
 export function mobileHomeHref(_isAdmin: boolean) {
   // Platform admins use the regular app; open Admin from Profile when needed.
-  return "/(app)/chat";
+  return "/(app)/home";
 }
 
 /** Navigate after Stack.Protected mounts the authenticated stack (never call from render). */
@@ -19,7 +19,7 @@ export function navigateToMobileHomeWithRetry(isAdmin: boolean, queryClient?: Qu
     if (cancelled) return;
     try {
       const destination = await resolveAuthenticatedDestination(isAdmin, queryClient);
-      router.replace(destination);
+      router.replace(destination as never);
       agentDebugLog("nav attempt", {
         runId: "auth-simplify-v4",
         hypothesisId: "H4",

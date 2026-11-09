@@ -6,7 +6,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { SecurityFooter } from "./SecurityFooter";
 import { welcomeActionStyles as styles } from "./WelcomeBottomSection";
 import { authClient, clearAccessToken } from "@/lib/auth/auth-client";
-import { clearMobileAuthCaches, markSessionSignedOut } from "@/lib/auth/use-session";
+import {
+  clearAllCachesForSignedOutUser,
+  clearMobileAuthCaches,
+  markSessionSignedOut,
+} from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { api } from "@/lib/api/api";
 import { WELCOME_UI } from "./welcome-ui";
@@ -44,7 +48,7 @@ export function WelcomeBottomSection({ pendingRequest }: Props) {
       // continue cleanup even if remote sign-out call fails
     }
     clearAccessToken();
-    queryClient.clear();
+    clearAllCachesForSignedOutUser(queryClient);
     setActiveTeamId(null);
     router.replace("/welcome");
   };

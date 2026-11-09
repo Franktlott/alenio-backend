@@ -13,7 +13,7 @@ export function useSwitchWorkspace() {
     async (teamId: string, options?: SwitchWorkspaceOptions) => {
       const changed = await performWorkspaceSwitch(
         teamId,
-        activeTeamId,
+        useTeamStore.getState().activeTeamId,
         setActiveTeamId,
         queryClient,
       );
@@ -23,7 +23,7 @@ export function useSwitchWorkspace() {
       }
       return true;
     },
-    [activeTeamId, setActiveTeamId, queryClient],
+    [setActiveTeamId, queryClient],
   );
 
   return { switchWorkspace, activeTeamId };

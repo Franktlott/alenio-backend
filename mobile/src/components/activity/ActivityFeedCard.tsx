@@ -4,7 +4,7 @@ import { TaskActivityCard } from "./TaskActivityCard";
 import { EventActivityCard } from "./EventActivityCard";
 import { TeamActivityCard } from "./TeamActivityCard";
 import { MilestoneActivityCard } from "./MilestoneActivityCard";
-import { RecognitionActivityCard } from "./RecognitionActivityCard";
+import { CelebrationActivityCard } from "./CelebrationActivityCard";
 
 type Props = {
   item: ActivityFeedItem;
@@ -34,7 +34,7 @@ export function ActivityFeedCard({ item, footer, onLongPress, testID }: Props) {
     case "personal_best":
       return <MilestoneActivityCard {...shared} />;
     case "celebration":
-      return <RecognitionActivityCard {...shared} />;
+      return <CelebrationActivityCard {...shared} />;
     default:
       return <TaskActivityCard {...shared} />;
   }

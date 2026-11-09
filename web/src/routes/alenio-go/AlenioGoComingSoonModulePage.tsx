@@ -16,14 +16,14 @@ const MODULE_COPY: Record<string, { title: string; subtitle: string; tone: GoBac
     blurb: "Publish briefings from here and deliver them to linked tablets alongside workplace alerts.",
   },
   walks: {
-    title: "Walks",
+    title: "Guided Walks",
     subtitle: "Structured store walks and coaching observations.",
     tone: "violet",
     blurb: "Leader walks and follow-ups will connect to your team coaching workflow.",
   },
   "temp-checks": {
-    title: "Temp checks",
-    subtitle: "Food safety temperature logs — managed here, taken in Alenio Temps.",
+    title: "Food Safety",
+    subtitle: "Food safety checks — managed here, taken in Alenio Temps.",
     tone: "emerald",
     blurb:
       "Associates take cooler, freezer, and hot-holding checks in the Alenio Temps app. Use Alenio Go to configure the Item Library, enter temps manually when needed, and review the day’s results.",

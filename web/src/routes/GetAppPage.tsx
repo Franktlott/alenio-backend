@@ -10,6 +10,7 @@ import {
 import { getAccessToken } from "../lib/auth-client";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { isSessionTokenUsable } from "../lib/token";
+import { WEB_APP_HOME } from "../lib/web-app-home";
 
 export function GetAppPage() {
   const [params] = useSearchParams();
@@ -28,7 +29,7 @@ export function GetAppPage() {
   }
 
   if (!isMobileBrowser()) {
-    return <Navigate to="/chat" replace />;
+    return <Navigate to={WEB_APP_HOME} replace />;
   }
 
   const appUrl = getSignInAppUrl(email);
@@ -56,7 +57,7 @@ export function GetAppPage() {
             primaryLabel="Open Alenio app"
             onContinueInBrowser={() => {
               setMobileWebPreferred();
-              window.location.href = "/chat";
+              window.location.href = WEB_APP_HOME;
             }}
             continueInBrowserLabel="Continue on web anyway"
           />

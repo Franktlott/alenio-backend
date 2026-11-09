@@ -65,12 +65,8 @@ describe("Seneca focus presentation", () => {
     expect(
       senecaFocusDestination("create_recognition", "team-1", ["user-1"]),
     ).toEqual({
-      pathname: "/(app)/activity",
-      params: {
-        openCelebrate: "1",
-        teamId: "team-1",
-        targetUserId: "user-1",
-      },
+      pathname: "/recognition-hub",
+      params: { openGive: "1" },
     });
     expect(senecaFocusDestination("view_workload", "team-1").pathname).toBe(
       "/(app)/execute",

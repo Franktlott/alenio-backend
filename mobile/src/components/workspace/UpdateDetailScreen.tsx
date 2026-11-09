@@ -48,6 +48,8 @@ import {
   type ActivityFeedItem,
 } from "@/components/activity";
 import { ActivityReactionRow } from "@/components/activity/ActivityReactionRow";
+import { ReactionListSheet } from "@/components/workspace/ReactionListSheet";
+import { MemberJoinedUpdateCard } from "@/components/workspace/MemberJoinedUpdateCard";
 import { MilestoneUpdateCard } from "@/components/workspace/MilestoneUpdateCard";
 import { PostUpdateCard } from "@/components/workspace/PostUpdateCard";
 import { RecognitionUpdateCard } from "@/components/workspace/RecognitionUpdateCard";
@@ -57,9 +59,16 @@ import { WorkspaceUpdateCard } from "@/components/workspace/WorkspaceUpdateCard"
 type Props = {
   teamId: string;
   activityId: string;
+  /**
+   * Present only when the thread lives in a pane. It stands in for the back
+   * navigation the pushed route gets for free, and its presence is what tells
+   * the screen it is embedded.
+   */
+  onClose?: () => void;
 };
 
-export function UpdateDetailScreen({ teamId, activityId }: Props) {
+export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
+  const embedded = onClose != null;
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const keyboardVisible = useSafeKeyboardVisible();
@@ -73,6 +82,9 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
   const [showPicker, setShowPicker] = useState(false);
   const [replyTo, setReplyTo] = useState<ActivityComment | null>(null);
   const [pickerCommentId, setPickerCommentId] = useState<string | null>(null);
+  const [reactionsFor, setReactionsFor] = useState<
+    { kind: "activity" } | { kind: "comment"; commentId: string } | null
+  >(null);
 
   // Seed from the feed's cache so the post paints before the fetch lands.
   const cachedItem = useMemo(() => {
@@ -98,6 +110,9 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
         `/api/teams/${teamId}/activity/${activityId}/comments`,
       ),
     refetchOnMount: "always",
+    // An open thread is a live conversation: poll it and catch up on return.
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   const item: ActivityFeedItem | null = useMemo(
@@ -119,6 +134,14 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
       ]),
     [comments],
   );
+
+  /** Whose reactions the sheet is showing: the post's, or one comment's. */
+  const sheetReactions = useMemo(() => {
+    if (!reactionsFor) return {};
+    if (reactionsFor.kind === "activity") return item?.reactions ?? {};
+    const comment = comments.find((row) => row.id === reactionsFor.commentId);
+    return comment?.reactions ?? {};
+  }, [comments, item?.reactions, reactionsFor]);
 
   const refreshFeeds = useCallback(async () => {
     await Promise.all([
@@ -289,6 +312,15 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
             item={item}
             currentUserId={currentUserId}
             onPressReact={() => setShowPicker((open) => !open)}
+            onPressReactions={() => setReactionsFor({ kind: "activity" })}
+            picker={picker}
+          />
+        ) : item.type === "member_joined" ? (
+          <MemberJoinedUpdateCard
+            item={item}
+            currentUserId={currentUserId}
+            onPressReact={() => setShowPicker((open) => !open)}
+            onPressReactions={() => setReactionsFor({ kind: "activity" })}
             picker={picker}
           />
         ) : item.type === "task_milestone" ? (
@@ -296,6 +328,7 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
             item={item}
             currentUserId={currentUserId}
             onPressReact={() => setShowPicker((open) => !open)}
+            onPressReactions={() => setReactionsFor({ kind: "activity" })}
             picker={picker}
           />
         ) : item.type === "post" ? (
@@ -303,6 +336,7 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
             item={item}
             currentUserId={currentUserId}
             onPressReact={() => setShowPicker((open) => !open)}
+            onPressReactions={() => setReactionsFor({ kind: "activity" })}
             picker={picker}
           />
         ) : (
@@ -313,6 +347,8 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
             body={workspaceUpdateBody(item)}
             reactionCount={totalReactionCount(item.reactions)}
             myReaction={myReactionEmoji(item.reactions, currentUserId)}
+            reactions={item.reactions ?? {}}
+            onPressReactions={() => setReactionsFor({ kind: "activity" })}
             onPressLike={() => setShowPicker((open) => !open)}
             onLongPress={() => setShowPicker((open) => !open)}
             picker={picker}
@@ -321,7 +357,12 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
       </View>
 
       <View style={styles.summary}>
-        <Text style={styles.summaryText}>
+        <Text
+          style={[
+            styles.summaryText,
+            embedded ? styles.summaryTextCompact : null,
+          ]}
+        >
           {reactionCountLabel(totalReactionCount(item.reactions))}
           {"  ·  "}
           {commentCountLabel(comments.length)}
@@ -329,7 +370,10 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
       </View>
 
       {comments.length === 0 && !commentsQuery.isLoading ? (
-        <Text style={styles.empty} testID="update-comments-empty">
+        <Text
+          style={[styles.empty, embedded ? styles.emptyCompact : null]}
+          testID="update-comments-empty"
+        >
           No comments yet. Start the conversation.
         </Text>
       ) : null}
@@ -337,18 +381,26 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
   ) : null;
 
   return (
-    <SafeAreaView style={styles.page} edges={["top"]}>
+    <SafeAreaView style={styles.page} edges={embedded ? [] : ["top"]}>
       <View style={styles.navBar}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => (onClose ? onClose() : router.back())}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={embedded ? "Close update" : "Back"}
           testID="update-detail-back"
         >
-          <ChevronLeft size={26} color="#0F172A" strokeWidth={2.2} />
+          {/* A pane is dismissed, not navigated back from. */}
+          {embedded ? (
+            <X size={22} color="#0F172A" strokeWidth={2.4} />
+          ) : (
+            <ChevronLeft size={26} color="#0F172A" strokeWidth={2.2} />
+          )}
         </Pressable>
-        <Text style={styles.navTitle} numberOfLines={1}>
+        <Text
+          style={[styles.navTitle, embedded ? styles.navTitleCompact : null]}
+          numberOfLines={1}
+        >
           {item?.actor?.name ?? "Update"}
         </Text>
       </View>
@@ -384,6 +436,7 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
                 comment={row.comment}
                 currentUserId={currentUserId}
                 inset={row.inset}
+                compact={embedded}
                 onDelete={confirmDelete}
                 onPressReact={(comment) =>
                   setPickerCommentId((open) =>
@@ -391,6 +444,9 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
                   )
                 }
                 onPressReply={(comment) => setReplyTo(comment)}
+                onPressReactions={(comment) =>
+                  setReactionsFor({ kind: "comment", commentId: comment.id })
+                }
                 picker={
                   pickerCommentId === row.comment.id ? (
                     <ActivityReactionRow
@@ -456,7 +512,7 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
             onChangeText={setDraft}
             multiline
             maxLength={COMMENT_MAX_LENGTH}
-            style={styles.input}
+            style={[styles.input, embedded ? styles.inputCompact : null]}
             testID="update-comment-input"
           />
           <TouchableOpacity
@@ -477,6 +533,13 @@ export function UpdateDetailScreen({ teamId, activityId }: Props) {
           </TouchableOpacity>
         </View>
       </SafeKeyboardAvoidingView>
+
+      <ReactionListSheet
+        visible={!!reactionsFor}
+        reactions={sheetReactions}
+        currentUserId={currentUserId}
+        onClose={() => setReactionsFor(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -499,6 +562,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#EEF1F6",
+  },
+  /**
+   * A pane sits beside the feed, inside a page whose type runs a step smaller
+   * than a full screen's. These keep the thread from shouting next to it.
+   */
+  navTitleCompact: {
+    fontSize: 14.5,
+    lineHeight: 19,
+  },
+  summaryTextCompact: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  emptyCompact: {
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+  inputCompact: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   navTitle: {
     flex: 1,

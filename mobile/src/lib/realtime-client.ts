@@ -24,6 +24,22 @@ export type RealtimeInboxUpdatedEvent = {
   teamId?: string;
   topicId?: string | null;
   conversationId?: string;
+  resource?: "calendar" | "check_ins" | "goals";
+};
+
+export type RealtimeTaskUpdatedEvent = {
+  type: "task.updated";
+  channel: "tasks";
+  teamId: string;
+  taskId: string;
+  reason:
+    | "created"
+    | "details"
+    | "deleted"
+    | "assignment"
+    | "subtask"
+    | "notes";
+  actorUserId?: string;
 };
 
 export type RealtimeTeamPinEvent = {
@@ -50,11 +66,13 @@ export type RealtimeServerEvent =
   | RealtimeDmMessageEvent
   | RealtimeInboxUpdatedEvent
   | RealtimeTeamPinEvent
-  | RealtimeDmPinEvent;
+  | RealtimeDmPinEvent
+  | RealtimeTaskUpdatedEvent;
 
 type MessageHandler = (event: RealtimeTeamMessageEvent | RealtimeDmMessageEvent) => void;
 type InboxHandler = (event: RealtimeInboxUpdatedEvent) => void;
 type PinHandler = (event: RealtimeTeamPinEvent | RealtimeDmPinEvent) => void;
+type TaskHandler = (event: RealtimeTaskUpdatedEvent) => void;
 type StatusHandler = (connected: boolean) => void;
 
 function toWsUrl(token: string): string {
@@ -75,9 +93,13 @@ export function userRealtimeChannel(userId: string): string {
   return `user:${userId}`;
 }
 
+export function teamTasksRealtimeChannel(teamId: string): string {
+  return `team:${teamId}:tasks`;
+}
+
 class RealtimeClient {
   private ws: WebSocket | null = null;
-  private desiredChannels = new Set<string>();
+  private desiredChannels = new Map<string, number>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectAttempt = 0;
@@ -88,6 +110,7 @@ class RealtimeClient {
   private messageHandlers = new Set<MessageHandler>();
   private inboxHandlers = new Set<InboxHandler>();
   private pinHandlers = new Set<PinHandler>();
+  private taskHandlers = new Set<TaskHandler>();
   private statusHandlers = new Set<StatusHandler>();
 
   isConnected() {
@@ -109,6 +132,11 @@ class RealtimeClient {
     return () => this.pinHandlers.delete(handler);
   }
 
+  onTaskUpdated(handler: TaskHandler) {
+    this.taskHandlers.add(handler);
+    return () => this.taskHandlers.delete(handler);
+  }
+
   onStatus(handler: StatusHandler) {
     this.statusHandlers.add(handler);
     handler(this.connected);
@@ -117,7 +145,8 @@ class RealtimeClient {
 
   subscribe(channels: string[]) {
     for (const channel of channels) {
-      if (channel) this.desiredChannels.add(channel);
+      if (!channel) continue;
+      this.desiredChannels.set(channel, (this.desiredChannels.get(channel) ?? 0) + 1);
     }
     this.ensureStarted();
     this.flushSubscriptions();
@@ -127,7 +156,13 @@ class RealtimeClient {
     const removing: string[] = [];
     for (const channel of channels) {
       if (!channel) continue;
-      if (this.desiredChannels.delete(channel)) removing.push(channel);
+      const count = this.desiredChannels.get(channel) ?? 0;
+      if (count <= 1) {
+        this.desiredChannels.delete(channel);
+        if (count === 1) removing.push(channel);
+      } else {
+        this.desiredChannels.set(channel, count - 1);
+      }
     }
     if (removing.length && this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "unsubscribe", channels: removing }));
@@ -189,6 +224,8 @@ class RealtimeClient {
             for (const handler of this.inboxHandlers) handler(data);
           } else if (data.type === "pin.updated") {
             for (const handler of this.pinHandlers) handler(data);
+          } else if (data.type === "task.updated") {
+            for (const handler of this.taskHandlers) handler(data);
           }
         } catch {
           // ignore malformed frames
@@ -218,7 +255,7 @@ class RealtimeClient {
 
   private flushSubscriptions() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    const channels = [...this.desiredChannels];
+    const channels = [...this.desiredChannels.keys()];
     if (channels.length === 0) return;
     this.ws.send(JSON.stringify({ type: "subscribe", channels }));
   }

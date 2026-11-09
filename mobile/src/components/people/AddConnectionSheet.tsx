@@ -9,71 +9,157 @@ import {
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Check, Clock, Search, UserPlus, X } from "lucide-react-native";
+import {
+  Building2,
+  Check,
+  Clock,
+  Globe2,
+  Search,
+  UserPlus,
+  X,
+} from "lucide-react-native";
 import { toast } from "burnt";
 import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
 import { UserAvatar } from "@/components/UserAvatar";
 import { api } from "@/lib/api/api";
-import type { PersonSearchResult } from "@/lib/types";
+import { connectionRequestOutcome } from "@/lib/connection-request-outcome";
+import { connectionRequestErrorMessage } from "@/lib/connection-request-error";
+import type {
+  ConnectionRequestResponse,
+  PersonSearchResult,
+} from "@/lib/types";
 import { colors } from "@/theme";
+
+export type AddConnectionEntryMode = "all" | "username" | "name";
 
 type Props = {
   visible: boolean;
   onClose: () => void;
+  entryMode?: AddConnectionEntryMode;
+  hasWorkspaces?: boolean;
 };
 
-export function AddConnectionSheet({ visible, onClose }: Props) {
+type ConnectionSearchScope = "all" | "workspaces";
+
+const ENTRY_COPY: Record<
+  AddConnectionEntryMode,
+  { title: string; subtitle: string; placeholder: string; accessibilityLabel: string }
+> = {
+  all: {
+    title: "Find People",
+    subtitle: "Search Alenio by name, username, or email.",
+    placeholder: "Search name, username, or email",
+    accessibilityLabel: "Search Alenio people",
+  },
+  username: {
+    title: "Search by Username",
+    subtitle: "Enter the Alenio username of the person you want to find.",
+    placeholder: "Enter @username",
+    accessibilityLabel: "Search by Alenio username",
+  },
+  name: {
+    title: "Search by Name",
+    subtitle: "Enter someone’s full name to find them on Alenio.",
+    placeholder: "Enter full name",
+    accessibilityLabel: "Search Alenio people by name",
+  },
+};
+
+export function AddConnectionSheet({
+  visible,
+  onClose,
+  entryMode = "all",
+  hasWorkspaces = false,
+}: Props) {
   const queryClient = useQueryClient();
   const inputRef = useRef<TextInput>(null);
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<ConnectionSearchScope>("all");
   const trimmed = query.trim();
+  const entryCopy = ENTRY_COPY[entryMode];
+  const isWorkspaceScope = hasWorkspaces && scope === "workspaces";
+  const canSearch = isWorkspaceScope || trimmed.length >= 2;
 
   useEffect(() => {
     if (!visible) {
       setQuery("");
+      setScope("all");
       return;
     }
     requestAnimationFrame(() =>
       requestAnimationFrame(() => inputRef.current?.focus()),
     );
-  }, [visible]);
+  }, [visible, entryMode, hasWorkspaces]);
+
+  useEffect(() => {
+    setQuery("");
+    setScope("all");
+  }, [hasWorkspaces]);
 
   const {
     data: results = [],
     isFetching,
     isError,
   } = useQuery({
-    queryKey: ["user-search", trimmed],
-    queryFn: () =>
-      api.get<PersonSearchResult[]>(
-        `/api/users/search?q=${encodeURIComponent(trimmed)}`,
-      ),
-    enabled: visible && trimmed.length >= 2,
+    queryKey: [
+      "user-search",
+      scope,
+      hasWorkspaces,
+      isWorkspaceScope,
+      trimmed,
+    ],
+    queryFn: () => {
+      const workspaceParams = isWorkspaceScope
+        ? "&scope=workspaces"
+        : "";
+      return api.get<PersonSearchResult[]>(
+        `/api/users/search?q=${encodeURIComponent(trimmed)}${workspaceParams}`,
+      );
+    },
+    enabled: visible && canSearch,
   });
 
   const connectionMutation = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       userId,
       action,
     }: {
       userId: string;
       action: "request" | "accept";
-    }) => api.post(`/api/connections/${action}`, { userId }),
-    onSuccess: (_data, variables) => {
+    }) => {
+      const response = await api.post<ConnectionRequestResponse>(
+        `/api/connections/${action}`,
+        { userId },
+      );
+      return { response, action };
+    },
+    onSuccess: ({ response, action }, variables) => {
+      if (action === "request") {
+        const outcome = connectionRequestOutcome(response);
+        queryClient.setQueriesData<PersonSearchResult[]>(
+          { queryKey: ["user-search"] },
+          (current) =>
+            current?.map((person) =>
+              person.id === variables.userId
+                ? { ...person, connectionStatus: outcome.status }
+                : person,
+            ),
+        );
+      }
       void queryClient.invalidateQueries({ queryKey: ["connections"] });
       void queryClient.invalidateQueries({ queryKey: ["connection-suggestions"] });
       void queryClient.invalidateQueries({ queryKey: ["user-search"] });
       toast({
         title:
-          variables.action === "accept"
+          action === "accept"
             ? "Connection accepted"
-            : "Connection request sent",
+            : connectionRequestOutcome(response).toastTitle,
         preset: "done",
       });
     },
-    onError: (error: Error) =>
+    onError: (error: unknown) =>
       toast({
-        title: error.message || "Could not update connection",
+        title: connectionRequestErrorMessage(error),
         preset: "error",
       }),
   });
@@ -86,27 +172,87 @@ export function AddConnectionSheet({ visible, onClose }: Props) {
   return (
     <AlenioBottomSheet
       visible={visible}
-      title="Add Connection"
-      subtitle="Find people across Alenio by name or username."
+      title={entryCopy.title}
+      subtitle={entryCopy.subtitle}
       onClose={onClose}
       showCloseButton
       bodyHeightRatio={0.68}
       showScrollIndicator={results.length > 5}
       testID="add-connection-sheet"
     >
+      {hasWorkspaces ? (
+        <View style={styles.scopeSection}>
+          <View style={styles.scopeControl}>
+            <Pressable
+              onPress={() => setScope("all")}
+              style={[
+                styles.scopeOption,
+                scope === "all" ? styles.scopeOptionActive : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Search all Alenio"
+              accessibilityState={{ selected: scope === "all" }}
+              testID="connection-scope-all"
+            >
+              <Globe2
+                size={14}
+                color={scope === "all" ? colors.brand : "#7D899C"}
+              />
+              <Text
+                style={[
+                  styles.scopeOptionText,
+                  scope === "all" ? styles.scopeOptionTextActive : null,
+                ]}
+              >
+                All Alenio
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setScope("workspaces")}
+              style={[
+                styles.scopeOption,
+                scope === "workspaces" ? styles.scopeOptionActive : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Browse members of my workspaces"
+              accessibilityState={{ selected: scope === "workspaces" }}
+              testID="connection-scope-workspace"
+            >
+              <Building2
+                size={14}
+                color={scope === "workspaces" ? colors.brand : "#7D899C"}
+              />
+              <Text
+                style={[
+                  styles.scopeOptionText,
+                  scope === "workspaces" ? styles.scopeOptionTextActive : null,
+                ]}
+              >
+                My Workspaces
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={styles.scopeHelp} numberOfLines={1}>
+            {isWorkspaceScope
+              ? "Browsing members across all your workspaces"
+              : "Search across all of Alenio"}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.searchWrap}>
         <Search size={17} color="#8290A6" strokeWidth={2.2} />
         <TextInput
           ref={inputRef}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search name or @username"
+          placeholder={entryCopy.placeholder}
           placeholderTextColor="#98A3B5"
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
           style={styles.searchInput}
-          accessibilityLabel="Search Alenio people"
+          accessibilityLabel={entryCopy.accessibilityLabel}
           testID="add-connection-search"
         />
         {trimmed.length > 0 ? (
@@ -115,13 +261,14 @@ export function AddConnectionSheet({ visible, onClose }: Props) {
             hitSlop={10}
             accessibilityRole="button"
             accessibilityLabel="Clear search"
+            testID="add-connection-clear-search"
           >
             <X size={16} color="#98A3B5" />
           </Pressable>
         ) : null}
       </View>
 
-      {trimmed.length < 2 ? (
+      {!isWorkspaceScope && trimmed.length < 2 ? (
         <View style={styles.intro}>
           <View style={styles.introIcon}>
             <UserPlus size={25} color={colors.brand} strokeWidth={2} />
@@ -135,7 +282,9 @@ export function AddConnectionSheet({ visible, onClose }: Props) {
       ) : isFetching ? (
         <View style={styles.loadingState}>
           <ActivityIndicator color={colors.brand} />
-          <Text style={styles.loadingText}>Searching Alenio…</Text>
+          <Text style={styles.loadingText}>
+            {isWorkspaceScope ? "Loading workspace members…" : "Searching Alenio…"}
+          </Text>
         </View>
       ) : isError ? (
         <View style={styles.emptyState}>
@@ -146,7 +295,11 @@ export function AddConnectionSheet({ visible, onClose }: Props) {
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>No people found</Text>
           <Text style={styles.emptyCopy}>
-            Check the spelling or try a different username.
+            {isWorkspaceScope
+              ? trimmed
+                ? "No workspace members match this search."
+                : "Your workspaces have no other members to show."
+              : "Check the spelling or try a different username."}
           </Text>
         </View>
       ) : (
@@ -157,9 +310,14 @@ export function AddConnectionSheet({ visible, onClose }: Props) {
           <View style={styles.resultsCard}>
             {results.map((person, index) => {
               const canRequest =
-                person.connectionStatus === "none" ||
-                person.connectionStatus === "declined";
-              const canAccept = person.connectionStatus === "pending_incoming";
+                !person.isBlockedByMe &&
+                !person.isBlockedByThem &&
+                (person.connectionStatus === "none" ||
+                  person.connectionStatus === "declined");
+              const canAccept =
+                !person.isBlockedByMe &&
+                !person.isBlockedByThem &&
+                person.connectionStatus === "pending_incoming";
               const busy = Boolean(
                 connectionMutation.isPending &&
                   connectionMutation.variables?.userId === person.id,
@@ -186,11 +344,24 @@ export function AddConnectionSheet({ visible, onClose }: Props) {
                         <Text style={styles.personName} numberOfLines={1}>
                           {person.name?.trim() || "Alenio member"}
                         </Text>
-                        <Text style={styles.personMeta} numberOfLines={1}>
-                          {person.username
-                            ? `@${person.username}`
-                            : person.sharedWorkspaceName ?? "Alenio"}
-                        </Text>
+                        {person.username ? (
+                          <Text style={styles.personMeta} numberOfLines={1}>
+                            @{person.username}
+                          </Text>
+                        ) : null}
+                        {person.sharedWorkspaceName ? (
+                          <View style={styles.relationshipBadge}>
+                            <Building2 size={10} color="#4E63D8" strokeWidth={2.4} />
+                            <Text
+                              style={styles.relationshipBadgeText}
+                              numberOfLines={1}
+                            >
+                              Shared Workspace · {person.sharedWorkspaceName}
+                            </Text>
+                          </View>
+                        ) : !person.username ? (
+                          <Text style={styles.personMeta}>Alenio</Text>
+                        ) : null}
                       </View>
                     </Pressable>
 
@@ -248,9 +419,13 @@ export function AddConnectionSheet({ visible, onClose }: Props) {
                               : null,
                           ]}
                         >
-                          {person.connectionStatus === "connected"
-                            ? "Connected"
-                            : "Requested"}
+                          {person.isBlockedByMe
+                            ? "Blocked"
+                            : person.isBlockedByThem
+                              ? "Unavailable"
+                              : person.connectionStatus === "connected"
+                                ? "Connected"
+                                : "Requested"}
                         </Text>
                       </View>
                     )}
@@ -266,6 +441,50 @@ export function AddConnectionSheet({ visible, onClose }: Props) {
 }
 
 const styles = StyleSheet.create({
+  scopeSection: {
+    marginBottom: 12,
+  },
+  scopeControl: {
+    height: 38,
+    padding: 3,
+    flexDirection: "row",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E3E8F0",
+    backgroundColor: "#F2F5F9",
+  },
+  scopeOption: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 9,
+  },
+  scopeOptionActive: {
+    borderWidth: 1,
+    borderColor: "#D7DEFA",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#526078",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  scopeOptionText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#7D899C",
+  },
+  scopeOptionTextActive: {
+    color: colors.brand,
+  },
+  scopeHelp: {
+    marginTop: 6,
+    marginHorizontal: 4,
+    fontSize: 10.5,
+    color: "#8995A7",
+  },
   searchWrap: {
     height: 46,
     flexDirection: "row",
@@ -379,6 +598,7 @@ const styles = StyleSheet.create({
   personCopy: {
     flex: 1,
     minWidth: 0,
+    alignItems: "flex-start",
   },
   personName: {
     fontSize: 13,
@@ -391,6 +611,26 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
     color: "#8390A3",
+  },
+  relationshipBadge: {
+    maxWidth: "100%",
+    marginTop: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "#DDE3FF",
+    backgroundColor: "#F3F5FF",
+  },
+  relationshipBadgeText: {
+    flexShrink: 1,
+    fontSize: 8.5,
+    lineHeight: 11,
+    fontWeight: "700",
+    color: "#4E63D8",
   },
   divider: {
     height: StyleSheet.hairlineWidth,

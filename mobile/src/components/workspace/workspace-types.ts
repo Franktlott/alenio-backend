@@ -6,8 +6,11 @@ export type AssignedToFilter =
   | "me"
   | "direct_reports"
   | "entire_team"
+  | "others"
   | "unassigned"
   | { memberId: string; memberName: string };
+
+export type TaskScopeChip = "all" | "mine" | "assigned" | "completed";
 
 export type DueDateFilter =
   | "calendar_day"
@@ -15,7 +18,8 @@ export type DueDateFilter =
   | "tomorrow"
   | "this_week"
   | "all"
-  | "overdue";
+  | "overdue"
+  | "due_soon";
 
 export type PriorityFilter = "all" | TaskPriority;
 

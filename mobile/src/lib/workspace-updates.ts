@@ -6,12 +6,15 @@ import type {
 } from "@/components/activity/types";
 import type { PersonalRecognition } from "@/lib/types";
 
-/** Posts, recognition, milestones and completed work on the Updates tab. */
+/**
+ * Posts, recognition, milestones, and new members on the Feed tab.
+ * Individual task completions stay out of the feed. Momentum still records them.
+ */
 export const WORKSPACE_UPDATE_TYPES = [
   "post",
   "celebration",
   "task_milestone",
-  "task_completed",
+  "member_joined",
 ] as const satisfies readonly ActivityFeedType[];
 
 export type WorkspaceUpdateType = (typeof WORKSPACE_UPDATE_TYPES)[number];
@@ -23,8 +26,20 @@ export function isWorkspaceUpdateActivity(
     type === "post" ||
     type === "celebration" ||
     type === "task_milestone" ||
-    type === "task_completed"
+    type === "member_joined"
   );
+}
+
+/**
+ * The joiner's name. Every join path writes it to metadata.userName, but the
+ * actor is the same person, so fall back to that before giving up.
+ */
+export function joinedMemberName(item: ActivityFeedItem): string {
+  const fromMetadata =
+    typeof item.metadata.userName === "string"
+      ? item.metadata.userName.trim()
+      : "";
+  return fromMetadata || item.actor?.name?.trim() || "A new teammate";
 }
 
 /** Momentum celebrates 5, 10 and 15, then every tenth on-time completion. */
@@ -220,6 +235,30 @@ export function recognitionParticipants(item: ActivityFeedItem): {
  * Category pill copy. `resolveThemeLabel` supplies display names for the
  * picker's keys; unknown keys fall back to their own words.
  */
+export type ReactionGroup = {
+  emoji: string;
+  count: number;
+  users: { id: string; name: string }[];
+};
+
+/** Reactions with people, most popular first, so the facepile is stable. */
+export function orderedReactionGroups(
+  reactions: ActivityReactions | undefined,
+): ReactionGroup[] {
+  return Object.entries(reactions ?? {})
+    .filter(([, group]) => group.count > 0)
+    .map(([emoji, group]) => ({
+      emoji,
+      count: group.count,
+      users: group.users ?? [],
+    }))
+    .sort((left, right) =>
+      right.count === left.count
+        ? left.emoji.localeCompare(right.emoji)
+        : right.count - left.count,
+    );
+}
+
 export function recognitionCategoryLabel(
   celebrationType: string | null | undefined,
   resolveThemeLabel: (key: string) => string | null = () => null,

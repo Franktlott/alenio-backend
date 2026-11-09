@@ -201,8 +201,11 @@ export async function apiPutJson<T>(path: string, body: unknown): Promise<T> {
   return apiRequest<T>(path, { method: "PUT", body: JSON.stringify(body) });
 }
 
-export async function apiDeleteJson<T>(path: string): Promise<T> {
-  return apiRequest<T>(path, { method: "DELETE" });
+export async function apiDeleteJson<T>(path: string, body?: unknown): Promise<T> {
+  return apiRequest<T>(path, {
+    method: "DELETE",
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
 }
 
 export type WebMeUser = {
@@ -317,16 +320,36 @@ export type GroupMemberCandidate = {
   workspaceLabel: string;
 };
 
+export type DmMessagingStatus =
+  | "available"
+  | "blocked_by_me"
+  | "connection_required"
+  | "unavailable";
+
+export type GroupParticipantRole = "owner" | "admin" | "member";
+
+export type DmParticipant = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  activeNow?: boolean;
+  role?: GroupParticipantRole;
+};
+
 export type DmConversation = {
   id: string;
   type?: "DIRECT" | "GROUP";
   isGroup: boolean;
   name: string | null;
+  image?: string | null;
   teamId?: string | null;
   workspaceId?: string | null;
-  participants: Array<{ id: string; name: string | null; email: string | null; image: string | null }>;
-  recipient: { id: string; name: string | null; email: string | null; image: string | null } | null;
+  participants: DmParticipant[];
+  myRole?: GroupParticipantRole | null;
+  recipient: DmParticipant | null;
   workspaceContext?: GroupWorkspaceContext | null;
+  messagingStatus?: DmMessagingStatus;
   lastMessage: {
     id: string;
     content: string | null;
@@ -335,6 +358,14 @@ export type DmConversation = {
   } | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type DirectChatReplyPreview = {
+  id: string;
+  content?: string | null;
+  mediaUrl?: string | null;
+  mediaType?: string | null;
+  sender: { id: string; name: string | null; image?: string | null };
 };
 
 export type DirectChatMessage = {
@@ -346,8 +377,84 @@ export type DirectChatMessage = {
   editedAt?: string | null;
   senderId: string;
   conversationId: string;
+  replyToId?: string | null;
+  replyTo?: DirectChatReplyPreview | null;
   reactions?: ChatMessageReaction[];
   sender: { id: string; name: string | null; email: string | null; image: string | null };
+};
+
+export type PinnedMessageSummary = {
+  messageId: string;
+  content: string | null;
+  mediaUrl: string | null;
+  mediaType: "image" | "video" | null;
+  sender: { id: string; name: string | null; image: string | null };
+  pinnedAt: string;
+  pinnedBy: { id: string; name: string | null; image: string | null };
+};
+
+export type ConnectionsPerson = {
+  id: string;
+  name: string | null;
+  username?: string | null;
+  email?: string | null;
+  image: string | null;
+  profileTitle?: string | null;
+};
+
+export type ConnectionEntry = {
+  id: string;
+  person: ConnectionsPerson;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AcceptedConnectionEntry = ConnectionEntry & {
+  activeNow?: boolean;
+  sharesWorkspace?: boolean;
+  sharedWorkspaceNames?: string[];
+};
+
+export type ConnectionsResponse = {
+  accepted: AcceptedConnectionEntry[];
+  incoming: ConnectionEntry[];
+  outgoing: ConnectionEntry[];
+};
+
+export type ConnectionSuggestionReasonKey =
+  | "current_workspace"
+  | "mutual_connections"
+  | "same_organization"
+  | "shared_workspace"
+  | "recently_joined_workspace";
+
+export type ConnectionSuggestionRow = {
+  person: ConnectionsPerson;
+  connectionStatus?: string;
+  sharedCurrentWorkspace?: boolean;
+  sharedWorkspaces?: Array<{ id: string; name: string }>;
+  mutualConnections?: number;
+  reasons?: Array<{ key: ConnectionSuggestionReasonKey; label: string }>;
+};
+
+export type ConnectionRequestResult = {
+  status: "connected" | "pending_outgoing" | "declined" | "none" | string;
+};
+
+export type PublicPersonProfile = {
+  id: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+  profileTitle?: string | null;
+  profileBio?: string | null;
+  profileLocation?: string | null;
+  connectionStatus?: string;
+  canMessage?: boolean;
+  isSelf?: boolean;
+  stats?: { connections: number; workspaces: number; mutualConnections: number };
+  sharedWorkspaces?: Array<{ id: string; name: string; role?: string }>;
 };
 
 export function fetchWebMe() {
@@ -1087,14 +1194,22 @@ export function deleteTeamTopic(teamId: string, topicId: string) {
 export type UserSearchRow = {
   id: string;
   name: string | null;
+  username?: string | null;
   email: string | null;
   image: string | null;
+  connectionStatus?: string | null;
+  canMessage?: boolean;
+  sharedWorkspaceName?: string | null;
 };
 
-export function searchUsers(query: string) {
+export function searchUsers(query: string, opts?: { scope?: "workspaces"; teamId?: string }) {
   const q = query.trim();
-  if (!q) return Promise.resolve([] as UserSearchRow[]);
-  return apiGetJson<{ data: UserSearchRow[] }>(`/api/users/search?q=${encodeURIComponent(q)}`).then((r) => r.data);
+  if (!q && opts?.scope !== "workspaces") return Promise.resolve([] as UserSearchRow[]);
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (opts?.scope) params.set("scope", opts.scope);
+  if (opts?.teamId?.trim()) params.set("teamId", opts.teamId.trim());
+  return apiGetJson<{ data: UserSearchRow[] }>(`/api/users/search?${params.toString()}`).then((r) => r.data);
 }
 
 export function findOrCreateDm(recipientId: string) {
@@ -1121,20 +1236,115 @@ export function fetchDmConversations() {
   return apiGetJson<{ data: DmConversation[] }>("/api/dms").then((r) => r.data);
 }
 
-export function fetchDmMessages(conversationId: string) {
+export function fetchDmMessagePage(conversationId: string, before?: string | null) {
+  const params = new URLSearchParams({ limit: "50" });
+  if (before) params.set("before", before);
   return apiGetJson<{ data: { messages: DirectChatMessage[]; hasMore: boolean; nextCursor: string | null } }>(
-    `/api/dms/${encodeURIComponent(conversationId)}/messages?limit=50`,
-  ).then((r) => extractMessagePage<DirectChatMessage>(r.data).messages);
+    `/api/dms/${encodeURIComponent(conversationId)}/messages?${params.toString()}`,
+  ).then((r) => extractMessagePage<DirectChatMessage>(r.data));
+}
+
+export function fetchDmMessages(conversationId: string) {
+  return fetchDmMessagePage(conversationId).then((page) => page.messages);
+}
+
+export function fetchDmUnreadCounts(lastReadIds: Record<string, string>) {
+  return apiPostJson<{ data: Record<string, number> }>("/api/dms/unread-counts", { lastReadIds }).then(
+    (r) => r.data,
+  );
+}
+
+export function fetchDmPinnedMessages(conversationId: string) {
+  return apiGetJson<{ data: PinnedMessageSummary[] }>(
+    `/api/dms/${encodeURIComponent(conversationId)}/messages/pin`,
+  ).then((r) => r.data);
+}
+
+export function pinDmMessage(conversationId: string, messageId: string) {
+  return apiPutJson<{ data: PinnedMessageSummary[] }>(
+    `/api/dms/${encodeURIComponent(conversationId)}/messages/pin`,
+    { messageId },
+  ).then((r) => r.data);
+}
+
+export function unpinDmMessage(conversationId: string, messageId: string) {
+  return apiDeleteJson<{ data: PinnedMessageSummary[] }>(
+    `/api/dms/${encodeURIComponent(conversationId)}/messages/pin?messageId=${encodeURIComponent(messageId)}`,
+  );
+}
+
+export function postPresenceHeartbeat() {
+  return apiPostJson<{ data: { ok: true } }>("/api/presence/heartbeat", {});
+}
+
+export function fetchConnections() {
+  return apiGetJson<{ data: ConnectionsResponse }>("/api/connections").then((r) => r.data);
+}
+
+export function fetchConnectionSuggestions(limit = 20) {
+  return apiGetJson<{ data: ConnectionSuggestionRow[] }>(
+    `/api/connections/suggestions?limit=${encodeURIComponent(String(limit))}`,
+  ).then((r) => r.data);
+}
+
+export function requestConnection(userId: string) {
+  return apiPostJson<{ data: ConnectionRequestResult }>("/api/connections/request", { userId }).then((r) => r.data);
+}
+
+export function acceptConnection(userId: string) {
+  return apiPostJson<{ data: ConnectionRequestResult }>("/api/connections/accept", { userId }).then((r) => r.data);
+}
+
+export function declineConnection(userId: string) {
+  return apiPostJson<{ data: ConnectionRequestResult }>("/api/connections/decline", { userId }).then((r) => r.data);
+}
+
+export function removeConnection(userId: string) {
+  return apiDeleteJson<{ data: ConnectionRequestResult }>("/api/connections", { userId }).then((r) => r.data);
+}
+
+export function dismissConnectionSuggestion(userId: string) {
+  return apiPostJson<{ data: unknown }>("/api/connections/suggestions/dismiss", { userId }).then((r) => r.data);
+}
+
+export function fetchPublicPersonProfile(userId: string) {
+  return apiGetJson<{ data: PublicPersonProfile }>(
+    `/api/connections/person/${encodeURIComponent(userId)}`,
+  ).then((r) => r.data);
+}
+
+export function patchDmConversation(
+  conversationId: string,
+  body: { name?: string; image?: string | null },
+) {
+  return apiPatchJson<{ data: DmConversation }>(`/api/dms/${encodeURIComponent(conversationId)}`, body).then(
+    (r) => r.data,
+  );
+}
+
+export function addDmMembers(conversationId: string, participantIds: string[]) {
+  return apiPostJson<{ data: DmConversation }>(`/api/dms/${encodeURIComponent(conversationId)}/members`, {
+    participantIds,
+  }).then((r) => r.data);
+}
+
+export function removeDmMember(conversationId: string, userId: string) {
+  return apiDeleteJson<void>(
+    `/api/dms/${encodeURIComponent(conversationId)}/members/${encodeURIComponent(userId)}`,
+  );
 }
 
 export function postDmMessage(
   conversationId: string,
   content: string,
   media?: { mediaUrl: string; mediaType: string },
+  extras?: { replyToId?: string; mentionedUserIds?: string[] },
 ) {
   return apiPostJson<{ data: DirectChatMessage }>(`/api/dms/${encodeURIComponent(conversationId)}/messages`, {
     content: content.trim() || null,
     ...(media ? { mediaUrl: media.mediaUrl, mediaType: media.mediaType } : {}),
+    ...(extras?.replyToId ? { replyToId: extras.replyToId } : {}),
+    ...(extras?.mentionedUserIds?.length ? { mentionedUserIds: extras.mentionedUserIds } : {}),
   }).then((r) => r.data);
 }
 
@@ -1269,6 +1479,8 @@ export type ApiTask = {
   dueDate: string | null;
   priority: string;
   status: string;
+  /** Creation-time classification from the API: `workspace_task` | `reminder`. */
+  kind?: string | null;
   completedAt: string | null;
   archivedAt?: string | null;
   teamId?: string;
@@ -1514,6 +1726,63 @@ export async function deleteWebTask(taskId: string, teamId?: string, scope?: "ta
     await apiRequest<unknown>(`/api/teams/${encodeURIComponent(teamId)}/tasks/${tid}${qs}`, { method: "DELETE" });
     return { ok: true as const };
   }
+}
+
+/** Leader sends an assignee a push reminder; `delivered` is false when their notifications are off. */
+export function nudgeTeamTaskMember(teamId: string, taskId: string, userId: string) {
+  return apiPostJson<{ data: { ok: true; delivered: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}/nudge`,
+    { userId },
+  ).then((r) => r.data);
+}
+
+export type TeamMomentumBand = "strong" | "building" | "ready_to_rebuild";
+
+export type TeamMomentumMember = {
+  teamMemberId: string;
+  userId: string;
+  name: string;
+  email: string;
+  image: string | null;
+  role: string;
+  currentStreak: number;
+  personalBestStreak: number;
+  momentumRunStartedAt: string | null;
+  momentumLastQualifiedAt: string | null;
+  completedThisMonth: number;
+  overdueTaskCount: number;
+  latestLateTaskTitle?: string | null;
+  latestLateTaskIncognito?: boolean;
+};
+
+export type TeamMomentumSummary = {
+  teamId: string;
+  generatedAt: string;
+  activeWindowDays: number;
+  activeCount: number;
+  eligibleCount: number;
+  groups: {
+    strong: (TeamMomentumMember & { band: TeamMomentumBand })[];
+    building: (TeamMomentumMember & { band: TeamMomentumBand })[];
+    readyToRebuild: (TeamMomentumMember & { band: TeamMomentumBand })[];
+  };
+  notEnoughActivity: {
+    count: number;
+    members: (TeamMomentumMember & { reason: "no_qualifying_completions" })[];
+  };
+  dashboard?: {
+    onTimeCompletions: number;
+    previousOnTimeCompletions: number;
+    /** Null when last month had no on-time completions. */
+    onTimeChangePercent: number | null;
+    weeks: { start: string; onTime: number; total: number }[];
+    taskStatus: { onTime: number; dueSoon: number; overdue: number };
+  };
+  coachingVisible: boolean;
+};
+
+export function fetchTeamMomentum(teamId: string) {
+  return apiRequest<{ data: TeamMomentumSummary }>(`/api/teams/${encodeURIComponent(teamId)}/momentum`).then((r) => r.data);
 }
 
 export function updateWebTeamEvent(
@@ -1816,6 +2085,39 @@ export function createWebTeam(input: { name: string; industry: string; startTria
     industry: input.industry.trim(),
     startTrial: true,
   }).then((r) => r.data);
+}
+
+export type WebPaidWorkspaceCheckout = {
+  checkoutId: string;
+  url: string;
+  expiresAt: string;
+};
+
+export type WebPaidWorkspaceCheckoutStatus = {
+  checkoutId: string;
+  status: "pending" | "completed" | "expired" | "failed" | string;
+  teamId: string | null;
+  team: WebTeamRow | null;
+};
+
+export function createWebPaidWorkspaceCheckout(input: {
+  name: string;
+  industry?: string;
+  location?: string;
+  plan: "pro" | "operations";
+}) {
+  return apiPostJson<{ data: WebPaidWorkspaceCheckout }>("/api/workspace-checkouts", {
+    name: input.name.trim(),
+    industry: input.industry?.trim(),
+    location: input.location?.trim(),
+    plan: input.plan,
+  }).then((r) => r.data);
+}
+
+export function fetchWebPaidWorkspaceCheckout(checkoutId: string) {
+  return apiGetJson<{ data: WebPaidWorkspaceCheckoutStatus }>(
+    `/api/workspace-checkouts/${encodeURIComponent(checkoutId)}`,
+  ).then((r) => r.data);
 }
 
 export function patchApiTeam(teamId: string, body: { name?: string; image?: string | null }) {
@@ -2543,6 +2845,7 @@ export function updateOneOnOneMeeting(
     followUpTasks?: OneOnOneFollowUpTaskInput[];
     requestAssociateFeedback?: boolean;
     status?: "draft" | "published";
+    templateTitle?: string;
   },
 ) {
   const paths = oneOnOneMeetingPaths(teamId, memberUserId, meetingId);

@@ -276,7 +276,7 @@ organizationsRouter.post(
         );
       }
       if (result.code === "TEAM_NAME_TAKEN") {
-        return c.json({ error: { message: "A workspace with this name already exists.", code: result.code } }, 409);
+        return c.json({ error: { message: "A workspace with this name already exists in this organization.", code: result.code } }, 409);
       }
       return c.json({ error: { message: "Could not create workspace.", code: result.code } }, 400);
     }
@@ -314,7 +314,7 @@ organizationsRouter.patch(
         return c.json({ error: { message: "Workspace not found.", code: result.code } }, 404);
       }
       if (result.code === "TEAM_NAME_TAKEN") {
-        return c.json({ error: { message: "A workspace with this name already exists.", code: result.code } }, 409);
+        return c.json({ error: { message: "A workspace with this name already exists in this organization.", code: result.code } }, 409);
       }
       return c.json({ error: { message: "Could not update workspace.", code: result.code } }, 400);
     }

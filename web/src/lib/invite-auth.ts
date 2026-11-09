@@ -3,6 +3,7 @@ import { syncBackendUser } from "./auth-client";
 import { setMobileHandoffEmail } from "./app-links";
 import { setPersistedEnterpriseTeamId } from "./enterprise-selected-team";
 import { isMobileBrowser } from "./mobile-browser";
+import { WEB_APP_HOME } from "./web-app-home";
 
 const INVITE_TOKEN_KEY = "alenio_pending_invite_token";
 const ENTERPRISE_INVITE_TOKEN_KEY = "alenio_pending_enterprise_invite_token";
@@ -31,7 +32,7 @@ export function clearPendingEnterpriseInviteToken() {
   sessionStorage.removeItem(ENTERPRISE_INVITE_TOKEN_KEY);
 }
 
-/** Sync user, redeem email invite token if present, then go to chat (join/create UI if no teams). */
+/** Sync user, redeem email invite token if present, then go to the signed-in web home. */
 export async function finishPostAuthNavigation(): Promise<string> {
   await syncBackendUser();
 
@@ -63,8 +64,7 @@ export async function finishPostAuthNavigation(): Promise<string> {
       }
       return "/get-app";
     }
-    // Enterprise invite owners manage the org — not a store workspace.
-    return "/go";
+    return "/home";
   }
 
   if (isMobileBrowser()) {
@@ -77,5 +77,5 @@ export async function finishPostAuthNavigation(): Promise<string> {
     return "/get-app";
   }
 
-  return "/chat";
+  return WEB_APP_HOME;
 }

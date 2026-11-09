@@ -195,6 +195,8 @@ function notFound(c: { json: (body: unknown, status: 404) => Response }, resourc
 const feedQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional(),
   cursor: z.string().min(1).max(200).optional(),
+  /** Only this person's posts (profile activity). Same visibility rules as the feed. */
+  authorId: z.string().min(1).max(100).optional(),
 });
 
 type FeedCursor = { createdAt: string; id: string };
@@ -220,7 +222,7 @@ networkUpdatesRouter.get(
   zValidator("query", feedQuerySchema),
   async (c) => {
     const user = c.get("user")!;
-    const { limit = DEFAULT_PAGE_SIZE, cursor: rawCursor } = c.req.valid("query");
+    const { limit = DEFAULT_PAGE_SIZE, cursor: rawCursor, authorId } = c.req.valid("query");
     const cursor = decodeCursor(rawCursor);
     if (cursor === undefined) {
       return c.json(
@@ -229,7 +231,12 @@ networkUpdatesRouter.get(
       );
     }
 
-    const authorCutoffs = await currentVisibleAuthorCutoffs(user.id);
+    const allCutoffs = await currentVisibleAuthorCutoffs(user.id);
+    const authorCutoffs = authorId ? allCutoffs.filter((row) => row.authorId === authorId) : allCutoffs;
+    if (authorId && authorId !== user.id && authorCutoffs.length === 0) {
+      // Not connected (or blocked): nothing of theirs is visible.
+      return c.json({ data: { items: [], nextCursor: null } });
+    }
     const cursorDate = cursor ? new Date(cursor.createdAt) : null;
     const activities = await prisma.teamActivity.findMany({
       where: {
@@ -238,7 +245,7 @@ networkUpdatesRouter.get(
         AND: [
           {
             OR: [
-              { userId: user.id },
+              ...(authorId && authorId !== user.id ? [] : [{ userId: user.id }]),
               ...authorCutoffs.map(({ authorId, visibleFrom }) => ({
                 AND: [
                   { userId: authorId },

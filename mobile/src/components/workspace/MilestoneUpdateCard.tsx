@@ -3,26 +3,29 @@ import { StyleSheet, Text, View } from "react-native";
 import { Flame, Heart, MessageCircle } from "lucide-react-native";
 import type { ActivityFeedItem } from "@/components/activity/types";
 import { FeedActionButton } from "@/components/workspace/FeedActionButton";
+import { FeedEventPill } from "@/components/workspace/FeedEventPill";
+import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
 import { WorkspaceFeedCardShell } from "@/components/workspace/WorkspaceFeedCardShell";
 import {
-  commentActionLabel,
   formatFeedTimestamp,
   milestoneStreakCount,
   milestoneSubtitle,
   myReactionEmoji,
   nextMilestoneTarget,
-  reactionActionLabel,
   totalReactionCount,
 } from "@/lib/workspace-updates";
 import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
 
-const ACCENT = "#4361EE";
+/** Milestones are the one warm note in an otherwise indigo feed. */
+const GOLD = "#B7791F";
 
 type Props = {
   item: ActivityFeedItem;
   currentUserId?: string;
-  onPressReact: () => void;
+  onPressReact?: () => void;
   onPressComment?: () => void;
+  /** Opens the sheet listing everyone who reacted. */
+  onPressReactions?: () => void;
   commentCount?: number;
   picker?: ReactNode;
   testID?: string;
@@ -34,7 +37,7 @@ export function MilestoneUpdateCard({
   currentUserId,
   onPressReact,
   onPressComment,
-  commentCount = 0,
+  onPressReactions,
   picker,
   testID,
 }: Props) {
@@ -47,6 +50,7 @@ export function MilestoneUpdateCard({
 
   return (
     <WorkspaceFeedCardShell
+      compact
       avatar={item.actor}
       avatarResetKey={item.id}
       meta={formatFeedTimestamp(item.timestamp)}
@@ -63,11 +67,13 @@ export function MilestoneUpdateCard({
         <View style={styles.footer}>
           {picker}
           <View style={styles.actions}>
+            {onPressReact ? (
             <FeedActionButton
               Icon={Heart}
               glyph={mine}
               activeColor={feedReaction(mine)?.color}
-              label={reactionActionLabel(reactionCount)}
+              // The facepile carries the count, so the button stays an icon.
+              label=""
               active={!!mine}
               filled
               onPress={onPressReact}
@@ -78,36 +84,45 @@ export function MilestoneUpdateCard({
               }
               testID={`${cardTestID}-react`}
             />
+            ) : null}
             {onPressComment ? (
               <FeedActionButton
                 Icon={MessageCircle}
-                label={commentActionLabel(commentCount)}
+                label=""
                 onPress={onPressComment}
                 accessibilityLabel="Comment on this milestone"
                 testID={`${cardTestID}-comment`}
               />
             ) : null}
+            {onPressReactions && reactionCount > 0 ? (
+              <View style={styles.summary}>
+                <ReactionFacepile
+                  reactions={item.reactions ?? {}}
+                  onPress={onPressReactions}
+                  testID={`${cardTestID}-reaction-facepile`}
+                />
+              </View>
+            ) : null}
           </View>
         </View>
       }
     >
-      <View style={styles.body}>
-        <View style={styles.iconSlot}>
-          <Flame size={19} color={ACCENT} strokeWidth={2.2} />
-        </View>
-        <View style={styles.bodyCopy}>
-          <Text style={styles.title} numberOfLines={1}>
-            {streak > 0 ? `${streak} tasks completed` : "On-time streak"}
-          </Text>
-          <Text
-            style={styles.subtitle}
-            numberOfLines={2}
-            testID={`${cardTestID}-message`}
-          >
-            {milestoneSubtitle(item.metadata.count)}
-          </Text>
-        </View>
-      </View>
+      <FeedEventPill
+        Icon={Flame}
+        label="MOMENTUM"
+        color={GOLD}
+        testID={`${cardTestID}-pill`}
+      />
+      <Text style={styles.title} numberOfLines={1}>
+        {streak > 0 ? `${streak} tasks completed` : "On-time streak"}
+      </Text>
+      <Text
+        style={styles.subtitle}
+        numberOfLines={2}
+        testID={`${cardTestID}-message`}
+      >
+        {milestoneSubtitle(item.metadata.count)}
+      </Text>
 
       {/* No progress bar: the card is a record of a moment, and a bar would
           imply live state that a broken streak silently invalidates. */}
@@ -132,49 +147,36 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     color: "#64748B",
   },
-  body: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 10,
-  },
-  iconSlot: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EEF2FF",
-  },
-  bodyCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
   title: {
+    marginTop: 3,
     fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "700",
-    color: "#0F172A",
+    lineHeight: 21,
+    fontWeight: "600",
+    color: "#111C33",
   },
   subtitle: {
-    marginTop: 1,
+    marginTop: 0,
     fontSize: 13,
     lineHeight: 17,
     color: "#64748B",
   },
   next: {
-    marginTop: 8,
+    marginTop: 3,
     textAlign: "right",
     fontSize: 12,
     lineHeight: 16,
-    color: "#94A3B8",
+    fontWeight: "600",
+    color: GOLD,
   },
   footer: {
-    marginTop: 6,
-    gap: 4,
+    marginTop: 1,
+    gap: 1,
   },
   actions: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  summary: {
+    marginLeft: "auto",
   },
 });

@@ -66,136 +66,77 @@ export default function PrivacyPolicy() {
         <View className="h-4" />
 
         <Section title="1. Information We Collect">
-          <Body>We collect the following types of information:</Body>
+          <Body>We collect information you provide, information created through your use of the service, and limited technical information needed to operate and secure it:</Body>
           <View className="mt-2">
-            <Bullet>
-              <Text className="font-semibold">Account Information:</Text> Name, email address, and credentials when you create an account (including email verification through our authentication provider).
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Profile Information:</Text> Profile photo and any optional details you choose to add.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Content You Create:</Text> Messages, tasks, events, comments, and reactions you post within the App.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Team &amp; Collaboration Data:</Text> Team names, membership information, channels, and associated content.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Video Call Data:</Text> When you use video meetings, your display name is shared with the video call provider (Daily.co) to identify you during the call. We do not record or store video or audio content from meetings on our servers.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Device Information:</Text> Device type, operating system, push notification tokens, and app version.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Usage Data:</Text> Features used, actions taken, and timestamps of interactions.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Website &amp; session data:</Text> When you use the Website, our authentication provider uses cookies and similar technologies as needed for sign-in sessions, security, and preferences in your browser.
-            </Bullet>
+            <Bullet><Text className="font-semibold">Accounts and authentication:</Text> Name, email address, password authentication records, email one-time-passcode records, sign-in and session information, and identifiers used for Microsoft sign-in. Organizations may configure single sign-on, including Okta, and may provision, update, or deprovision managed accounts through SCIM.</Bullet>
+            <Bullet><Text className="font-semibold">Profiles and relationships:</Text> Profile photo, job title, department, location, biography, contact details, skills, interests, working preferences, and other profile fields you provide. Personal connections, connection requests, blocks, discoverability and message-privacy settings are tied to your account across workspaces. If enabled, optional active-status information may show that you are recently or currently active.</Bullet>
+            <Bullet><Text className="font-semibold">Communications:</Text> Direct and group messages, workspace channels, mentions, reactions, polls and votes, uploaded images, files and other media, and related delivery and participation records.</Bullet>
+            <Bullet><Text className="font-semibold">Workspace and coaching data:</Text> Organization and workspace membership, teams, roles and permissions; tasks, calendars and events; Outlook calendar-sync information; check-ins and one-on-one agendas, notes and history; development goals and notes; workplace standards; team-health responses and snapshots; and related activity records.</Bullet>
+            <Bullet><Text className="font-semibold">Seneca and AI data:</Text> Prompts, instructions, responses, feedback, relevant workspace context, and stored briefs or generated artifacts used to provide and improve Seneca features.</Bullet>
+            <Bullet><Text className="font-semibold">Video meetings:</Text> Meeting identifiers, room details, participants and display names. Daily.co processes video and audio streams when you join a call. {COMPANY_NAME} does not ordinarily record or store the call&apos;s video or audio on its servers.</Bullet>
+            <Bullet><Text className="font-semibold">Notifications:</Text> Push tokens, email delivery details, notification preferences and delivery status. Depending on your settings and device, notifications may include preview content such as a sender, message excerpt, task, reminder or event title.</Bullet>
+            <Bullet><Text className="font-semibold">Device, app and security data:</Text> Device and operating-system type, app version, browser and session information, IP address, request timestamps, server and security logs, errors, and feature interactions. We do not describe this as collection by a third-party analytics SDK.</Bullet>
+            <Bullet><Text className="font-semibold">Billing data:</Text> Subscription, plan, workspace owner, transaction and billing-status records. Stripe processes payment-card and checkout information for web billing.</Bullet>
+            <Bullet><Text className="font-semibold">Workplace operations:</Text> Where an organization uses Alenio workplace operations features, we may process schedules, walks, temperature-check or other checklist responses, manual entries, exceptions, notes, and photos submitted by users.</Bullet>
+            <Bullet><Text className="font-semibold">Calendar credentials:</Text> If you connect Outlook, we store the authorization credentials needed to maintain the connection in encrypted form, together with sync settings and calendar identifiers.</Bullet>
           </View>
         </Section>
 
-        <Section title="2. How We Use Your Information">
-          <Body>We use the information we collect to:</Body>
+        <Section title="2. How We Use Information">
+          <Body>We use this information to authenticate users; provision and administer accounts; provide profiles, relationships, messaging, tasks, calendars, video, coaching, workplace operations and AI features; synchronize connected calendars; deliver push and email notifications; process subscriptions; provide support; maintain continuity when membership changes; enforce permissions and safety settings; diagnose errors; prevent abuse and security incidents; and improve the service.</Body>
+        </Section>
+
+        <Section title="3. Visibility and Workplace Boundaries">
           <View className="mt-2">
-            <Bullet>Provide, operate, and maintain the App and its features.</Bullet>
-            <Bullet>Create and manage your account and authenticate your identity.</Bullet>
-            <Bullet>Enable team communication, task management, collaboration, and video meetings.</Bullet>
-            <Bullet>Send push notifications for messages, tasks, and reminders (you may opt out in Settings).</Bullet>
-            <Bullet>Process subscription payments on the web via Stripe when you subscribe or manage billing at {WEBSITE_LABEL}. The mobile app does not process purchases or link to external checkout.</Bullet>
-            <Bullet>Respond to your support requests and communicate important updates.</Bullet>
-            <Bullet>Monitor and analyse usage to improve the App's performance and features.</Bullet>
-            <Bullet>Detect, prevent, and address technical issues and security threats.</Bullet>
+            <Bullet><Text className="font-semibold">Personal relationships:</Text> Connections, requests and blocks are account-level, not owned by a workspace. Your discoverability, messaging and presence settings affect who can find, contact or see activity information about you.</Bullet>
+            <Bullet><Text className="font-semibold">Messages and shared content:</Text> Content is visible to the recipients, channel or group you choose and to others authorized by the service&apos;s permissions. Blocking and privacy controls may limit new interactions but do not necessarily erase previously shared content.</Bullet>
+            <Bullet><Text className="font-semibold">Workplace data:</Text> Coaching, check-in, development, standards, team-health and operations data is workspace-specific and visible according to role, relationship and workspace permissions. Workspace owners and team leaders may have management capabilities; a legacy workspace Admin role may be read-only and should not be assumed to manage people.</Bullet>
+            <Bullet><Text className="font-semibold">Organization administration:</Text> Authorized organization or workspace administrators may provision or deprovision managed accounts and access, export, manage or remove organization and workspace data according to their permissions and the organization&apos;s agreement with us.</Bullet>
+            <Bullet><Text className="font-semibold">Presence:</Text> Active status is optional and can be disabled. When enabled, permitted users may see a status based on recent app activity.</Bullet>
           </View>
         </Section>
 
-        <Section title="3. How We Share Your Information">
-          <Body>We do not sell your personal information. We may share your data in the following circumstances:</Body>
+        <Section title="4. AI and Seneca">
+          <Body>Seneca may send your prompt and relevant workspace context to OpenAI to generate a response, summary, brief or recommendation. AI output can be incomplete, inaccurate or inappropriate and should be reviewed before use. Do not submit sensitive personal information that is unnecessary for your request. We do not state that OpenAI never trains on or always immediately deletes submitted data; its processing is governed by the arrangements and policies applicable to the service we use.</Body>
+        </Section>
+
+        <Section title="5. How We Share Information">
+          <Body>We do not sell your personal information. We share information with recipients you select, authorized members and administrators as described above, and providers needed to operate the service:</Body>
           <View className="mt-2">
-            <Bullet>
-              <Text className="font-semibold">Within Your Team:</Text> Content you share (messages, tasks, reactions) is visible to members of your team as part of the App's core functionality.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Service Providers:</Text> We use third-party services including Neon (database hosting for accounts and app data), Stripe (subscription billing on the web at alenio.com), Google Firebase (Android push notifications via FCM and cloud storage for uploaded media such as attachments and profile images), Expo and Apple Push Notification service (push delivery), Daily.co (video meetings), Resend (email delivery for certain product or support messages), and other cloud infrastructure providers. These providers process data under their respective terms and privacy policies and are engaged to protect your information.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Legal Requirements:</Text> We may disclose your information if required by law or to protect our rights, users, or the public.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Business Transfers:</Text> In the event of a merger, acquisition, or sale of assets, your information may be transferred as part of that transaction.
-            </Bullet>
+            <Bullet><Text className="font-semibold">AI:</Text> OpenAI for Seneca generation.</Bullet>
+            <Bullet><Text className="font-semibold">Identity and enterprise administration:</Text> Microsoft for Microsoft sign-in and Outlook calendar integration, and Okta for organization SSO and SCIM where configured.</Bullet>
+            <Bullet><Text className="font-semibold">Infrastructure and storage:</Text> Neon for database services; Railway and other cloud-hosting providers; Firebase Storage for uploaded media where used; and Firebase Hosting for applicable web content.</Bullet>
+            <Bullet><Text className="font-semibold">Communications and app delivery:</Text> Firebase Cloud Messaging, Apple Push Notification service, Google push services, Expo, and Resend for push, app and email delivery.</Bullet>
+            <Bullet><Text className="font-semibold">Other core providers:</Text> Stripe for web subscription billing and Daily.co for video meetings, plus security, monitoring, support and other providers reasonably necessary to operate the service.</Bullet>
+            <Bullet><Text className="font-semibold">Legal and business purposes:</Text> We may disclose information when required by law, to protect rights and safety, investigate abuse, or as part of a merger, financing, acquisition or sale of assets.</Bullet>
           </View>
         </Section>
 
-        <Section title="4. Data Retention">
-          <Body>
-            We retain your personal information for as long as your account is active or as needed to provide services. You may request deletion of your account and associated data at any time by emailing {CONTACT_EMAIL}. We will process deletion requests within 30 days, subject to any legal obligations to retain certain data.
-          </Body>
+        <Section title="6. Notifications and Integrations">
+          <Body>You can manage notification permissions through the App and your device. Disabling notifications does not stop essential service or security emails. Notification previews may be visible on a locked or shared device. Third-party integrations such as Microsoft, Okta and Daily.co process information under their own terms and privacy policies in addition to this Policy.</Body>
         </Section>
 
-        <Section title="5. Your Rights">
-          <Body>Depending on your location, you may have the following rights regarding your personal data:</Body>
-          <View className="mt-2">
-            <Bullet>
-              <Text className="font-semibold">Access &amp; Portability:</Text> Request a copy of the personal data we hold about you.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Correction:</Text> Request correction of inaccurate or incomplete data.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Deletion:</Text> Request deletion of your personal data ("right to be forgotten").
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Opt-Out:</Text> Opt out of marketing communications and push notifications at any time.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Restriction:</Text> Request that we restrict processing of your data in certain circumstances.
-            </Bullet>
-          </View>
-          <View className="mt-2">
-            <Body>To exercise these rights, contact us at {CONTACT_EMAIL}.</Body>
-          </View>
+        <Section title="7. Retention and Deletion">
+          <Body>You may delete your account through the App or Website, or request deletion by emailing {CONTACT_EMAIL}; verified email requests are processed within 30 days. We retain information while your account is active and as needed to provide the service. Deletion removes or de-identifies account data under our control, but workspace content you shared may remain where necessary for other users, record integrity or the organization&apos;s authorized use. Former-member development goals and check-in history may be archived and retained for authorized workplace continuity. Legal, billing, tax, fraud-prevention and security records, and residual backup copies, may remain as needed. Deletion does not require us to erase information another user or organization independently controls.</Body>
         </Section>
 
-        <Section title="6. Data Security">
-          <Body>
-            We implement industry-standard security measures including encrypted data transmission (TLS/HTTPS), secure authentication, and access controls to protect your information. However, no method of transmission over the internet is 100% secure, and we cannot guarantee absolute security.
-          </Body>
+        <Section title="8. Your Choices and Rights">
+          <Body>Depending on your location, you may have rights to access, correct, receive, delete or restrict certain personal information, or object to certain processing. You can edit many profile and privacy settings in the service, disable optional presence, manage push permissions on your device, and unsubscribe from eligible emails. Contact {CONTACT_EMAIL} to make a request. We may need to verify your identity and consider the rights of other users and organizations.</Body>
         </Section>
 
-        <Section title="7. Children's Privacy">
-          <Body>
-            {APP_NAME} is not directed to children under the age of 13. We do not knowingly collect personal information from children under 13. If you believe we have inadvertently collected such information, please contact us at {CONTACT_EMAIL} and we will promptly delete it.
-          </Body>
+        <Section title="9. Security and International Processing">
+          <Body>We use safeguards such as encrypted transmission, access controls, secure authentication and encrypted storage of Outlook authorization credentials. No system is completely secure, and we cannot guarantee absolute security. Our providers may process information in countries other than your own, subject to safeguards required by applicable law.</Body>
         </Section>
 
-        <Section title="8. Third-Party Services">
-          <Body>The App and Website integrate with the following third-party services, each governed by their own privacy policies:</Body>
-          <View className="mt-2">
-            <Bullet>Neon — Database hosting (application data storage).</Bullet>
-            <Bullet>Apple Push Notification Service (APNs) — iOS push notifications.</Bullet>
-            <Bullet>Google Firebase — Firebase Cloud Messaging (FCM) for Android push notifications; Firebase Storage for user-uploaded files and media where the App stores attachments.</Bullet>
-            <Bullet>Stripe — Web subscription checkout and billing (alenio.com).</Bullet>
-            <Bullet>Stripe — Payment processing when you subscribe or manage a team plan on the Website ({WEBSITE_LABEL}); subject to Stripe&apos;s terms and privacy policy.</Bullet>
-            <Bullet>Resend — Transactional email (for example when you submit feedback or when we send operational emails).</Bullet>
-            <Bullet>Expo — App infrastructure and updates.</Bullet>
-            <Bullet>Daily.co — Video call infrastructure. Your display name is passed to Daily.co to identify you during video meetings. Video and audio streams are processed by Daily.co and are not stored by {COMPANY_NAME}. Daily.co's terms and privacy policy apply to their processing.</Bullet>
-          </View>
+        <Section title="10. Children&apos;s Privacy">
+          <Body>{APP_NAME} is not directed to children under 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided information, contact {CONTACT_EMAIL}.</Body>
         </Section>
 
-        <Section title="9. International Data Transfers">
-          <Body>
-            Your information may be transferred to and processed in countries other than your own. We ensure appropriate safeguards are in place for such transfers in compliance with applicable data protection laws.
-          </Body>
+        <Section title="11. Changes to This Policy">
+          <Body>We may update this Privacy Policy from time to time. We will post the revised policy in the App or on the Website, update the &quot;Last updated&quot; date, and provide additional notice when appropriate.</Body>
         </Section>
 
-        <Section title="10. Changes to This Policy">
-          <Body>
-            We may update this Privacy Policy from time to time. We will notify you of material changes by posting the new policy in the App or on the Website and updating the "Last updated" date above. Your continued use of the App or Website after changes constitutes acceptance of the updated policy.
-          </Body>
-        </Section>
-
-        <Section title="11. Contact Us">
+        <Section title="12. Contact Us">
           <Body>
             If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us at:
           </Body>

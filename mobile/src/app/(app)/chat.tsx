@@ -2,7 +2,7 @@ import React, { useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Image,
@@ -28,6 +28,9 @@ import { dmOtherParticipant, resolveUserImageUrl } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
+import { DmThread } from "@/app/dm-chat";
+import { PANE_GAP, useAdaptiveLayout } from "@/lib/adaptive-layout";
+import { AlenioHeaderBrand } from "@/components/AlenioHeaderBrand";
 import { HeaderAddButton } from "@/components/HeaderAddButton";
 import {
   AlenioBottomSheet,
@@ -35,13 +38,24 @@ import {
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { typography } from "@/theme";
-import { tabBarClearance } from "@/lib/tab-bar";
+import { useTabBarClearanceFn } from "@/lib/tab-bar";
 
 const PINNED_DMS_KEY = "pinned_dms";
 const MAX_DM_PINS = 5;
 
-const AVATAR = 34;
-const PINNED_CIRCLE = 44;
+const AVATAR = 50;
+const PINNED_CIRCLE = 54;
+/**
+ * The inbox pane in a split layout. Matches the members roster in Workspace so
+ * the two master/detail screens line up on the same device.
+ */
+const INBOX_PANE_WIDTH = 340;
+/** The search dock CurvedTabLayout draws, which the split layout draws itself. */
+const SEARCH_DOCK_HEIGHT = 40;
+const SEARCH_DOCK_TOP = 12;
+const SEARCH_DOCK_BOTTOM = 6;
+/** Height of the conversation header the thread pane opens with. */
+const THREAD_HEADER_HEIGHT = 54;
 /** Equal slots so at most 5 circles fit across the row. */
 const PINNED_SLOT_PCT = 100 / MAX_DM_PINS;
 
@@ -57,9 +71,9 @@ function SectionHeader({
   return (
     <View
       style={{
-        marginHorizontal: 14,
-        marginTop: 1,
-        marginBottom: 2,
+        marginHorizontal: 16,
+        marginTop: 6,
+        marginBottom: 5,
         flexDirection: "row",
         alignItems: "flex-end",
         justifyContent: "space-between",
@@ -67,11 +81,28 @@ function SectionHeader({
       }}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[typography.sectionLabel, { marginBottom: 0, fontSize: 10, lineHeight: 12 }]}>
+        <Text
+          style={[
+            typography.sectionLabel,
+            {
+              marginBottom: 0,
+              fontSize: 11,
+              lineHeight: 14,
+              letterSpacing: 0.8,
+              color: "#7E899A",
+            },
+          ]}
+        >
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[typography.sectionSubtitle, { fontSize: 10, lineHeight: 12 }]} numberOfLines={1}>
+          <Text
+            style={[
+              typography.sectionSubtitle,
+              { marginTop: 2, fontSize: 12, lineHeight: 16, color: "#98A2B3" },
+            ]}
+            numberOfLines={1}
+          >
             {subtitle}
           </Text>
         ) : null}
@@ -89,6 +120,7 @@ function ChatEmptyState({
   secondaryLabel,
   onSecondary,
   testID,
+  discovery = false,
 }: {
   title: string;
   body: string;
@@ -97,7 +129,20 @@ function ChatEmptyState({
   secondaryLabel?: string;
   onSecondary?: () => void;
   testID?: string;
+  discovery?: boolean;
 }) {
+  if (discovery) {
+    return (
+      <View testID={testID} style={styles.discoveryEmpty}>
+        <ConversationArtwork />
+
+        <Text style={styles.discoveryTitle}>{title}</Text>
+        <Text style={styles.discoveryBody}>{body}</Text>
+        <View style={styles.discoveryTitleAccent} />
+      </View>
+    );
+  }
+
   return (
     <View
       testID={testID}
@@ -108,30 +153,47 @@ function ChatEmptyState({
         marginBottom: 4,
         alignItems: "center",
         justifyContent: "center",
-        paddingHorizontal: 16,
-        paddingVertical: 14,
+        paddingHorizontal: discovery ? 28 : 16,
+        paddingVertical: discovery ? 20 : 14,
       }}
     >
-      <Image
-        source={require("@/assets/alenio-empty-chat-v2.png")}
-        style={{
-          width: 168,
-          height: 168,
-          marginBottom: 0,
-          alignSelf: "center",
-        }}
-        resizeMode="contain"
-        accessibilityIgnoresInvertColors
-      />
+      <View
+        style={[
+          styles.emptyIllustration,
+          discovery ? styles.emptyDiscoveryIllustration : null,
+        ]}
+        accessibilityElementsHidden
+        testID="chat-empty-illustration"
+      >
+        <View style={styles.emptyAccentOne} />
+        <View style={styles.emptyAccentTwo} />
+        <View style={styles.emptyBackBubble}>
+          <View style={styles.emptyBackTail} />
+          <View style={styles.emptyDots}>
+            <View style={[styles.emptyDot, styles.emptyBackDot]} />
+            <View style={[styles.emptyDot, styles.emptyBackDot]} />
+            <View style={[styles.emptyDot, styles.emptyBackDot]} />
+          </View>
+        </View>
+        <View style={styles.emptyFrontBubble}>
+          <View style={styles.emptyFrontTail} />
+          <View style={styles.emptyDots}>
+            <View style={[styles.emptyDot, styles.emptyFrontDot]} />
+            <View style={[styles.emptyDot, styles.emptyFrontDot]} />
+            <View style={[styles.emptyDot, styles.emptyFrontDot]} />
+          </View>
+        </View>
+      </View>
       <Text
         style={{
-          fontSize: 14,
+          fontSize: discovery ? 21 : 14,
+          lineHeight: discovery ? 25 : 18,
           fontWeight: "700",
           color: "#0F172A",
           textAlign: "center",
           alignSelf: "center",
-          letterSpacing: -0.2,
-          marginBottom: 4,
+          letterSpacing: discovery ? -0.5 : -0.2,
+          marginBottom: discovery ? 6 : 4,
           width: "100%",
         }}
       >
@@ -139,13 +201,13 @@ function ChatEmptyState({
       </Text>
       <Text
         style={{
-          fontSize: 12,
+          fontSize: discovery ? 12 : 12,
           color: "#64748B",
           textAlign: "center",
           alignSelf: "center",
-          lineHeight: 16,
-          maxWidth: 260,
-          marginBottom: onPrimary ? 10 : 0,
+          lineHeight: discovery ? 17 : 16,
+          maxWidth: discovery ? 280 : 260,
+          marginBottom: onPrimary ? (discovery ? 20 : 10) : 0,
           width: "100%",
         }}
       >
@@ -159,19 +221,34 @@ function ChatEmptyState({
             alignItems: "center",
             justifyContent: "center",
             alignSelf: "center",
-            gap: 4,
+            gap: discovery ? 9 : 4,
             backgroundColor: "#4361EE",
-            borderRadius: 9,
-            paddingHorizontal: 14,
-            paddingVertical: 8,
-            minWidth: 120,
+            borderRadius: discovery ? 10 : 9,
+            paddingHorizontal: discovery ? 18 : 14,
+            paddingVertical: discovery ? 0 : 8,
+            width: discovery ? "100%" : undefined,
+            maxWidth: discovery ? 320 : undefined,
+            height: discovery ? 46 : undefined,
+            minWidth: discovery ? undefined : 120,
           }}
           accessibilityRole="button"
           accessibilityLabel={primaryLabel}
           testID="messages-empty-add"
         >
-          <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
-          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>{primaryLabel}</Text>
+          {discovery ? (
+            <Search size={17} color="#FFFFFF" strokeWidth={2.2} />
+          ) : (
+            <Plus size={13} color="#FFFFFF" strokeWidth={2.5} />
+          )}
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: discovery ? 14 : 13,
+              fontWeight: "700",
+            }}
+          >
+            {primaryLabel}
+          </Text>
         </Pressable>
       ) : null}
       {secondaryLabel && onSecondary ? (
@@ -188,8 +265,103 @@ function ChatEmptyState({
   );
 }
 
+function ConversationArtwork() {
+  return (
+    <View style={styles.discoveryConversationArtSlot}>
+      <View
+        style={styles.discoveryConversationArt}
+        accessibilityElementsHidden
+        testID="chat-empty-illustration"
+      >
+        <View style={styles.chatArtGlow} />
+        <View style={styles.chatArtPath} />
+        <View style={[styles.chatArtSpark, styles.chatArtSparkTop]} />
+        <View style={[styles.chatArtSpark, styles.chatArtSparkBottom]} />
+
+        <View style={[styles.chatArtBubble, styles.chatArtBubbleTop]}>
+          <View style={styles.chatArtBubbleDots}>
+            <View style={styles.chatArtBubbleDot} />
+            <View style={styles.chatArtBubbleDot} />
+            <View style={styles.chatArtBubbleDot} />
+          </View>
+        </View>
+        <View style={[styles.chatArtBubble, styles.chatArtBubbleBottom]}>
+          <View style={styles.chatArtBubbleDots}>
+            <View style={[styles.chatArtBubbleDot, styles.chatArtBubbleDotPurple]} />
+            <View style={[styles.chatArtBubbleDot, styles.chatArtBubbleDotPurple]} />
+            <View style={[styles.chatArtBubbleDot, styles.chatArtBubbleDotPurple]} />
+          </View>
+        </View>
+
+        <View style={[styles.chatArtPhotoFrame, styles.chatArtPhotoTop]}>
+          <Image
+            source={require("../../assets/connection-person-woman-teal.png")}
+            style={styles.chatArtPhoto}
+          />
+        </View>
+        <View style={[styles.chatArtPhotoFrame, styles.chatArtPhotoBottom]}>
+          <Image
+            source={require("../../assets/connection-person-man.png")}
+            style={styles.chatArtPhoto}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function InboxEmptyState() {
+  return (
+    <View style={styles.inboxEmpty} testID="conversations-empty-state">
+      <View style={styles.inboxEmptyIcon}>
+        <MessageCircle size={17} color="#25314D" strokeWidth={2} />
+      </View>
+      <Text style={styles.inboxEmptyTitle}>No conversations yet</Text>
+      <Text style={styles.inboxEmptyBody}>New messages will appear here.</Text>
+    </View>
+  );
+}
+
+function ChatWelcomeState({
+  onFindPeople,
+  testID = "chat-welcome-empty-state",
+}: {
+  onFindPeople: () => void;
+  testID?: string;
+}) {
+  return (
+    <View style={styles.chatWelcome} testID={testID}>
+      <ConversationArtwork />
+      <Text style={styles.discoveryTitle}>Start a conversation</Text>
+      <Text style={styles.discoveryBody}>
+        Find someone you know on Alenio and say hello.
+      </Text>
+      <Pressable
+        onPress={onFindPeople}
+        style={styles.chatWelcomeButton}
+        accessibilityRole="button"
+        accessibilityLabel="Find people"
+        testID="chat-welcome-find-people"
+      >
+        <Search size={16} color="#FFFFFF" strokeWidth={2.2} />
+        <Text style={styles.chatWelcomeButtonText}>Find people</Text>
+      </Pressable>
+      <Text style={styles.chatWelcomePrivacy}>
+        You choose who to start a conversation with.
+      </Text>
+    </View>
+  );
+}
+
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearanceFn();
+  const adaptive = useAdaptiveLayout();
+  /** Wide and landscape-shaped: room for the inbox and a conversation at once. */
+  const splitChat = adaptive.isSplit;
+  const [openConversationId, setOpenConversationId] = useState<string | null>(
+    null,
+  );
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
@@ -268,7 +440,6 @@ export default function ChatScreen() {
     queryFn: () => api.get<Conversation[]>("/api/dms"),
     refetchInterval: 5000,
   });
-
   const dmLastReadIds = buildDmLastReadMap(conversations, lastReadIds);
   const { data: dmUnreadCounts = {} } = useQuery({
     queryKey: ["dm-unread-counts", dmLastReadIds],
@@ -331,13 +502,13 @@ export default function ChatScreen() {
   const activityTime = (conv: Conversation) =>
     new Date(conv.lastMessage?.createdAt ?? conv.updatedAt).getTime();
 
+  /**
+   * Newest activity first, the way every other messaging app orders an inbox.
+   * Unread threads stay where they happened rather than jumping the queue; the
+   * badge and bold styling are what draw the eye to them.
+   */
   const sortInbox = (list: Conversation[]) =>
-    [...list].sort((a, b) => {
-      const aUnread = getDmUnreadCount(dmUnreadCounts, a.id) > 0 ? 1 : 0;
-      const bUnread = getDmUnreadCount(dmUnreadCounts, b.id) > 0 ? 1 : 0;
-      if (aUnread !== bUnread) return bUnread - aUnread;
-      return activityTime(b) - activityTime(a);
-    });
+    [...list].sort((a, b) => activityTime(b) - activityTime(a));
 
   const filteredConversations = sortInbox(
     conversations.filter(matchesSearch).filter(matchesConversationFilter),
@@ -356,6 +527,10 @@ export default function ChatScreen() {
     const isGroup = conv.isGroup;
     const otherUser = !isGroup ? avatarUser(dmOtherParticipant(conv, session?.user?.id ?? "")) : null;
     const displayName = conversationDisplayName(conv);
+    if (splitChat) {
+      setOpenConversationId(conv.id);
+      return;
+    }
     router.push({
       pathname: "/dm-chat",
       params: {
@@ -368,6 +543,24 @@ export default function ChatScreen() {
       },
     });
   };
+
+  const openConversation = openConversationId
+    ? (conversations.find((conv) => conv.id === openConversationId) ?? null)
+    : null;
+
+  /**
+   * Narrowing to one column hands the open thread to the pushed route, so
+   * rotating an iPad to portrait keeps the reader where they were. A thread that
+   * has since been left or deleted just closes.
+   */
+  useEffect(() => {
+    if (!openConversationId) return;
+    /** An empty list means loading or a failed refetch, not a vanished thread. */
+    if (splitChat && (openConversation || conversations.length === 0)) return;
+    setOpenConversationId(null);
+    if (!splitChat && openConversation) openDm(openConversation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splitChat, openConversationId, openConversation]);
 
   const renderPinnedCircle = (conv: Conversation) => {
     const unreadCount = getDmUnreadCount(dmUnreadCounts, conv.id);
@@ -421,7 +614,7 @@ export default function ChatScreen() {
                   justifyContent: "center",
                 }}
               >
-                <Users size={15} color="#7C3AED" />
+                <Users size={18} color="#7C3AED" />
               </View>
             )
           ) : otherUser ? (
@@ -439,7 +632,7 @@ export default function ChatScreen() {
                 radius={(PINNED_CIRCLE - 3) / 2}
                 backgroundColor="#EEF2FF"
                 textColor="#4361EE"
-                fontSize={11}
+                fontSize={13}
               />
             </View>
           ) : (
@@ -455,7 +648,7 @@ export default function ChatScreen() {
                 justifyContent: "center",
               }}
             >
-              <MessageCircle size={15} color="#4361EE" />
+              <MessageCircle size={18} color="#4361EE" />
             </View>
           )}
           {unreadCount > 0 ? (
@@ -475,7 +668,7 @@ export default function ChatScreen() {
                 borderColor: "#FFFFFF",
               }}
             >
-              <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>
+              <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>
                 {unreadCount > 9 ? "9+" : unreadCount}
               </Text>
             </View>
@@ -499,29 +692,31 @@ export default function ChatScreen() {
             </View>
           )}
         </View>
+        {/* Two lines so a full name wraps instead of truncating in a 20% slot.
+            Height stays automatic so a one-line name keeps its label close. */}
         <Text
           style={{
-            fontSize: 10,
+            fontSize: 11.5,
             fontWeight: "700",
             color: "#0F172A",
             textAlign: "center",
             width: "100%",
-            lineHeight: 12,
-            marginTop: 1,
+            lineHeight: 14,
+            marginTop: 2,
           }}
-          numberOfLines={1}
+          numberOfLines={2}
           ellipsizeMode="tail"
         >
           {displayName}
         </Text>
         <Text
           style={{
-            fontSize: 8,
+            fontSize: 10,
             fontWeight: "500",
             color: isGroup ? "#6366F1" : "#94A3B8",
             textAlign: "center",
             width: "100%",
-            lineHeight: 10,
+            lineHeight: 13,
             marginTop: 0,
           }}
           numberOfLines={1}
@@ -544,23 +739,62 @@ export default function ChatScreen() {
       : conv.updatedAt
         ? formatConversationTime(conv.updatedAt)
         : "";
+    const messagePreview = lastMsg
+      ? `${lastMsg.sender.id === session?.user?.id ? "You" : (lastMsg.sender.name?.trim().split(/\s+/)[0] || "Someone")}: ${
+          lastMsg.content?.trim() || "Attachment"
+        }`
+      : "No messages yet";
+    const rowPreview =
+      isGroup && groupWorkspace
+        ? `${groupWorkspace} · ${messagePreview}`
+        : messagePreview;
+
+    const isOpen = conv.id === openConversationId;
 
     return (
-      <Pressable
+      <View
         key={conv.id}
-        testID={`dm-card-${conv.id}`}
-        onPress={() => openDm(conv)}
-        onLongPress={() => togglePin(conv.id)}
-        delayLongPress={350}
         style={{
-          paddingHorizontal: 14,
-          paddingVertical: 8,
-          backgroundColor: "#FFFFFF",
+          height: 76,
           borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-          borderBottomColor: "#EEF2F7",
+          borderBottomColor: "#E9EDF3",
+          backgroundColor: "#FFFFFF",
+          flexDirection: "row",
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        {/**
+         * The accent bar keeps its width when unselected so rows never shift
+         * sideways as the open conversation changes.
+         */}
+        <View
+          style={{
+            width: 3,
+            borderTopRightRadius: 3,
+            borderBottomRightRadius: 3,
+            backgroundColor: isOpen ? "#4361EE" : "transparent",
+          }}
+        />
+        <Pressable
+          testID={`dm-card-${conv.id}`}
+          onPress={() => openDm(conv)}
+          onLongPress={() => togglePin(conv.id)}
+          delayLongPress={350}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            paddingHorizontal: 13,
+            paddingVertical: 9,
+            backgroundColor: isOpen ? "#F5F7FF" : "#FFFFFF",
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 13,
+            }}
+          >
           {isGroup ? (
             resolveUserImageUrl(conv.image) ? (
               <Image
@@ -580,18 +814,29 @@ export default function ChatScreen() {
                   flexShrink: 0,
                 }}
               >
-                <Users size={16} color="#7C3AED" />
+                <Users size={19} color="#7C3AED" />
               </View>
             )
           ) : otherUser ? (
-            <UserAvatar
-              user={otherUser}
-              size={AVATAR}
-              radius={AVATAR / 2}
-              backgroundColor="#EEF2FF"
-              textColor="#4361EE"
-              fontSize={14}
-            />
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                router.push({ pathname: "/person", params: { userId: otherUser.id } });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${displayName}'s profile`}
+              hitSlop={6}
+              testID={`dm-avatar-profile-${otherUser.id}`}
+            >
+              <UserAvatar
+                user={otherUser}
+                size={AVATAR}
+                radius={AVATAR / 2}
+                backgroundColor="#EEF2FF"
+                textColor="#4361EE"
+                fontSize={16}
+              />
+            </Pressable>
           ) : (
             <View
               style={{
@@ -604,7 +849,7 @@ export default function ChatScreen() {
                 flexShrink: 0,
               }}
             >
-              <MessageCircle size={16} color="#4361EE" />
+              <MessageCircle size={19} color="#4361EE" />
             </View>
           )}
 
@@ -612,7 +857,8 @@ export default function ChatScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
               <Text
                 style={{
-                  fontSize: 14,
+                  fontSize: 15,
+                  lineHeight: 20,
                   fontWeight: unreadCount > 0 ? "700" : "600",
                   color: "#0F172A",
                   flex: 1,
@@ -622,32 +868,38 @@ export default function ChatScreen() {
               >
                 {displayName}
               </Text>
-              <Text style={{ fontSize: 10, color: "#94A3B8", marginLeft: 8, flexShrink: 0 }}>{timeStr}</Text>
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: unreadCount > 0 ? "700" : "500",
+                  color: unreadCount > 0 ? "#5B45FF" : "#98A2B3",
+                  marginLeft: 8,
+                  flexShrink: 0,
+                }}
+              >
+                {timeStr}
+              </Text>
             </View>
-            {isGroup && groupWorkspace ? (
-              <Text style={{ fontSize: 11, fontWeight: "600", color: "#4361EE", marginBottom: 1 }} numberOfLines={1}>
-                {groupWorkspace}
-              </Text>
-            ) : !isGroup ? (
-              <Text style={{ fontSize: 11, fontWeight: "500", color: "#94A3B8", marginBottom: 1 }} numberOfLines={1}>
-                Direct message
-              </Text>
-            ) : null}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: 12, color: "#64748B", flex: 1 }} numberOfLines={1}>
-                {lastMsg
-                  ? `${lastMsg.sender.id === session?.user?.id ? "You" : (lastMsg.sender.name?.trim().split(/\s+/)[0] || "Someone")}: ${
-                      lastMsg.content?.trim() || "Attachment"
-                    }`
-                  : "No messages yet"}
+              <Text
+                style={{
+                  fontSize: 12,
+                  lineHeight: 16,
+                  fontWeight: unreadCount > 0 ? "600" : "400",
+                  color: unreadCount > 0 ? "#475467" : "#7E899A",
+                  flex: 1,
+                }}
+                numberOfLines={1}
+              >
+                {rowPreview}
               </Text>
               {unreadCount > 0 ? (
                 <View
                   style={{
                     backgroundColor: "#4361EE",
-                    borderRadius: 10,
-                    minWidth: 20,
-                    height: 20,
+                    borderRadius: 9,
+                    minWidth: 18,
+                    height: 18,
                     alignItems: "center",
                     justifyContent: "center",
                     paddingHorizontal: 6,
@@ -655,51 +907,113 @@ export default function ChatScreen() {
                     flexShrink: 0,
                   }}
                 >
-                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCount}</Text>
+                  <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>{unreadCount}</Text>
                 </View>
               ) : null}
             </View>
           </View>
-        </View>
-      </Pressable>
+          </View>
+        </Pressable>
+      </View>
     );
   };
 
   const hasActiveSearch = searchQuery.trim().length > 0;
   const hasActiveInboxFilter = hasActiveSearch || unreadOnly;
 
+  const searchField =
+    conversations.length === 0 ? (
+      <Pressable
+        onPress={() => router.push("/new-dm")}
+        style={styles.searchBar}
+        accessibilityRole="button"
+        accessibilityLabel="Search people on Alenio"
+        testID="chat-search-people"
+      >
+        <Search size={15} color="#94A3B8" />
+        <Text style={[styles.searchInput, styles.searchPlaceholder]}>Search Alenio</Text>
+      </Pressable>
+    ) : (
+      <View style={styles.searchBar}>
+        <Search size={15} color="#94A3B8" />
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search conversations"
+          placeholderTextColor="#94A3B8"
+          style={styles.searchInput}
+          testID="chat-search-input"
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {searchQuery.length > 0 ? (
+          <Pressable
+            onPress={() => setSearchQuery("")}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Clear conversation search"
+            testID="chat-search-clear"
+          >
+            <X size={15} color="#8A95A7" strokeWidth={2.2} />
+          </Pressable>
+        ) : null}
+      </View>
+    );
+
+  const threadPane = openConversation ? (
+    <DmThread
+      /** A fresh thread per conversation: no draft or scroll position carries over. */
+      key={openConversation.id}
+      conversationId={openConversation.id}
+      recipientName={conversationDisplayName(openConversation)}
+      recipientImage={
+        (openConversation.isGroup
+          ? resolveUserImageUrl(openConversation.image)
+          : resolveUserImageUrl(
+              avatarUser(dmOtherParticipant(openConversation, session?.user?.id ?? ""))?.image,
+            )) ?? ""
+      }
+      isGroup={openConversation.isGroup}
+      onClose={() => setOpenConversationId(null)}
+    />
+  ) : !conversationsLoading && !conversationsError && conversations.length === 0 ? (
+    <ChatWelcomeState onFindPeople={() => router.push("/new-dm")} />
+  ) : (
+    <View style={styles.threadPlaceholder} testID="chat-thread-placeholder">
+      <View style={styles.threadPlaceholderIcon}>
+        <MessageCircle size={22} color="#4361EE" strokeWidth={2.1} />
+      </View>
+      <Text style={styles.threadPlaceholderTitle}>Pick a conversation</Text>
+      <Text style={styles.threadPlaceholderBody}>
+        Choose someone on the left to read and reply here.
+      </Text>
+    </View>
+  );
+
   return (
     <CurvedTabLayout
       topInset={insets.top}
       title="Chat"
+      leftAction={<AlenioHeaderBrand />}
       testID="chat-screen"
       headerTestID="chat-header"
-      searchSlot={
-        <View style={styles.searchBar}>
-          <Search size={15} color="#94A3B8" />
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search conversations"
-            placeholderTextColor="#94A3B8"
-            style={styles.searchInput}
-            testID="chat-search-input"
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-        </View>
-      }
+      /**
+       * The split layout docks the field inside the inbox pane instead, so the
+       * conversation header lines up with it rather than starting below it.
+       */
+      searchSlot={splitChat ? undefined : searchField}
       rightAction={
         <HeaderAddButton
           onPress={() => setShowAddModal(true)}
-          accessibilityLabel="Add conversation"
+          accessibilityLabel="Start a conversation"
           testID="chat-header-add-button"
+          tone="light"
         />
       }
       overlays={
         <AlenioBottomSheet
         visible={showAddModal}
-        title="New Conversation"
+        title="Start a conversation"
         onClose={() => setShowAddModal(false)}
         compact
         testID="chat-new-conversation-sheet"
@@ -734,7 +1048,39 @@ export default function ChatScreen() {
       </AlenioBottomSheet>
       }
     >
-      <View style={styles.chatColumns}>
+      <View
+        style={[
+          styles.chatBody,
+          splitChat
+            ? {
+                flexDirection: "row",
+                /**
+                 * Only the split layout places its own panes, and it pads each
+                 * edge separately because the Duo's system bar makes the
+                 * horizontal insets asymmetric.
+                 */
+                paddingLeft: adaptive.contentPadLeft,
+                paddingRight: adaptive.contentPadRight,
+              }
+            : null,
+        ]}
+      >
+      <View
+        style={[styles.chatColumns, splitChat ? styles.inboxPane : null]}
+        testID={splitChat ? "chat-inbox-pane" : undefined}
+      >
+          {splitChat ? (
+            <View style={styles.inboxSearchDock}>
+              {searchField}
+              <HeaderAddButton
+                onPress={() => setShowAddModal(true)}
+                accessibilityLabel="Start a conversation"
+                testID="chat-inbox-add-button"
+                tone="light"
+                size="default"
+              />
+            </View>
+          ) : null}
           {pinnedConversations.length > 0 ? (
             <View style={{ flexShrink: 0, paddingTop: 2, paddingBottom: 2 }} testID="pinned-conversations-section">
               <SectionHeader title="Pinned" subtitle="Hold a circle to unpin" />
@@ -754,7 +1100,8 @@ export default function ChatScreen() {
           ) : null}
 
           <View style={{ flex: 1, minHeight: 0, paddingTop: 2 }}>
-            <SectionHeader
+            {conversations.length > 0 ? (
+              <SectionHeader
               title="Messages"
               subtitle={
                 conversationsLoading
@@ -765,201 +1112,738 @@ export default function ChatScreen() {
                       ? "All conversations are pinned above"
                       : conversations.length === 0
                         ? "Direct messages & groups"
-                        : `${listConversations.length} conversation${listConversations.length === 1 ? "" : "s"}`
+                    : `${listConversations.length} conversation${listConversations.length === 1 ? "" : "s"}`
               }
-              right={
-                unreadConversationCount > 0 || unreadOnly ? (
-                  <Pressable
-                    onPress={() => setUnreadOnly((current) => !current)}
-                    style={({ pressed }) => [
-                      styles.unreadChip,
-                      unreadOnly ? styles.unreadChipActive : null,
-                      pressed ? { opacity: 0.75 } : null,
-                    ]}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: unreadOnly }}
-                    accessibilityLabel={
-                      unreadOnly
-                        ? "Showing unread only. Tap to show all conversations."
-                        : `Show only unread conversations. ${unreadConversationCount} unread.`
-                    }
-                    testID="chat-unread-filter"
-                  >
-                    {unreadOnly ? (
-                      <X size={11} color="#4361EE" strokeWidth={2.75} />
-                    ) : (
-                      <View style={styles.unreadChipDot} />
-                    )}
-                    <Text
-                      style={[
-                        styles.unreadChipLabel,
-                        unreadOnly ? styles.unreadChipLabelActive : null,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {unreadOnly ? "Unread only" : `${unreadConversationCount} unread`}
-                    </Text>
-                  </Pressable>
-                ) : null
-              }
-            />
-            <ScrollView
+              />
+            ) : null}
+            <FlatList
               style={{ flex: 1, minHeight: 0 }}
+              data={
+                conversationsLoading || conversationsError
+                  ? []
+                  : listConversations
+              }
+              keyExtractor={(conversation) => conversation.id}
+              renderItem={({ item, index }) =>
+                renderDmCard(
+                  item,
+                  index === listConversations.length - 1,
+                )
+              }
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
-                paddingTop: 12,
-                // An empty state fills the sheet, so it needs to stop above the tab bar to
-                // stay optically centered rather than centering on the screen edge.
+                paddingTop: 8,
                 paddingBottom:
-                  conversations.length === 0 || listConversations.length === 0
-                    ? tabBarClearance(insets.bottom, 8)
-                    : 24,
-                flexGrow: conversations.length === 0 || listConversations.length === 0 ? 1 : undefined,
+                  conversations.length === 0
+                    ? tabClearance(8)
+                    : tabClearance(44),
+                flexGrow: 1,
               }}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#5B45FF"
+                />
+              }
               keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
-            >
-              {conversationsLoading ? (
-                <View style={{ paddingVertical: 16, alignItems: "center" }}>
-                  <ActivityIndicator color="#4361EE" />
-                </View>
-              ) : conversationsError ? (
-                <View
-                  style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingVertical: 20 }}
-                  testID="conversations-error-state"
-                >
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#64748B", textAlign: "center" }}>
-                    Couldn&apos;t load conversations
-                  </Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 6, textAlign: "center" }}>
-                    {conversationsLoadError instanceof Error
-                      ? conversationsLoadError.message
-                      : "Please try again."}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => void refetchConversations()}
-                    testID="conversations-error-retry"
+              keyboardDismissMode="on-drag"
+              ListEmptyComponent={
+                conversationsLoading ? (
+                  <View
                     style={{
-                      marginTop: 12,
-                      backgroundColor: "#4361EE",
-                      borderRadius: 10,
-                      paddingHorizontal: 14,
-                      paddingVertical: 8,
+                      flex: 1,
+                      paddingVertical: 20,
+                      alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>Retry</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : conversations.length === 0 ? (
-                <ChatEmptyState
-                  testID="conversations-empty-state"
-                  title="Start a conversation"
-                  body="Message a teammate or create a group when your team needs one."
-                  primaryLabel="New conversation"
-                  onPrimary={() => setShowAddModal(true)}
-                />
-              ) : listConversations.length === 0 ? (
-                <ChatEmptyState
-                  testID={hasActiveInboxFilter ? "conversations-filter-empty" : "conversations-all-pinned-empty"}
-                  title={hasActiveInboxFilter ? "No matches" : "All pinned above"}
-                  body={
-                    hasActiveInboxFilter
-                      ? "Try a different search or filter."
-                      : "Your conversations are in Pinned. Tap “+” to start a new one."
-                  }
-                  primaryLabel={hasActiveInboxFilter ? "Clear filters" : "New conversation"}
-                  onPrimary={() => {
-                    if (hasActiveInboxFilter) {
-                      setSearchQuery("");
-                      setUnreadOnly(false);
-                      return;
+                    <ActivityIndicator color="#5B45FF" />
+                  </View>
+                ) : conversationsError ? (
+                  <View
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: 32,
+                      paddingVertical: 20,
+                    }}
+                    testID="conversations-error-state"
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "700",
+                        color: "#64748B",
+                        textAlign: "center",
+                      }}
+                    >
+                      Couldn&apos;t load conversations
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#94A3B8",
+                        marginTop: 6,
+                        textAlign: "center",
+                      }}
+                    >
+                      {conversationsLoadError instanceof Error
+                        ? conversationsLoadError.message
+                        : "Please try again."}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => void refetchConversations()}
+                      testID="conversations-error-retry"
+                      style={{
+                        marginTop: 12,
+                        backgroundColor: "#5B45FF",
+                        borderRadius: 10,
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "white",
+                          fontWeight: "700",
+                          fontSize: 13,
+                        }}
+                      >
+                        Retry
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : conversations.length === 0 ? (
+                  splitChat ? (
+                    <InboxEmptyState />
+                  ) : (
+                    <ChatWelcomeState
+                      testID="conversations-empty-state"
+                      onFindPeople={() => router.push("/new-dm")}
+                    />
+                  )
+                ) : (
+                  <ChatEmptyState
+                    testID={
+                      hasActiveInboxFilter
+                        ? "conversations-filter-empty"
+                        : "conversations-all-pinned-empty"
                     }
-                    setShowAddModal(true);
-                  }}
-                />
-              ) : (
-                <View style={{ backgroundColor: "#FFFFFF" }}>
-                  {listConversations.map((conv, index) =>
-                    renderDmCard(conv, index === listConversations.length - 1),
-                  )}
-                </View>
-              )}
-            </ScrollView>
-            {conversations.length > 0 ? (
-              <Text
-                testID="pin-hint-footer"
-                style={{
-                  flexShrink: 0,
-                  textAlign: "center",
-                  fontSize: 10,
-                  lineHeight: 13,
-                  color: "#94A3B8",
-                  paddingHorizontal: 20,
-                  paddingTop: 2,
-                  paddingBottom: 8,
-                }}
+                    title={hasActiveInboxFilter ? "No matches" : "All pinned above"}
+                    body={
+                      hasActiveInboxFilter
+                        ? "Try a different search or filter."
+                        : "Your conversations are in Pinned. Tap “+” to start a new one."
+                    }
+                    primaryLabel={
+                      hasActiveInboxFilter
+                        ? "Clear filters"
+                        : "Start a conversation"
+                    }
+                    onPrimary={() => {
+                      if (hasActiveInboxFilter) {
+                        setSearchQuery("");
+                        setUnreadOnly(false);
+                        return;
+                      }
+                      setShowAddModal(true);
+                    }}
+                  />
+                )
+              }
+              testID="chat-conversation-list"
+            />
+            {!conversationsLoading &&
+            !conversationsError &&
+            conversations.length > 0 ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.pinHint,
+                  { bottom: tabClearance(10) },
+                ]}
               >
-                Long press a chat or group to pin it to the top
-              </Text>
+                <Pin size={12} color="#94A3B8" strokeWidth={2} />
+                <Text style={styles.pinHintText}>
+                  Press and hold a conversation to pin it. Pin up to 5.
+                </Text>
+              </View>
             ) : null}
           </View>
         </View>
+        {splitChat ? (
+          <View style={styles.threadPane} testID="chat-thread-pane">
+            {threadPane}
+          </View>
+        ) : null}
+      </View>
     </CurvedTabLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  chatBody: {
+    flex: 1,
+    minHeight: 0,
+  },
   chatColumns: {
     flex: 1,
     minHeight: 0,
     flexDirection: "column",
     backgroundColor: "#FFFFFF",
   },
+  inboxPane: {
+    flex: 0,
+    width: INBOX_PANE_WIDTH,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: "#E9EDF3",
+  },
+  /** The dock CurvedTabLayout would have drawn, moved inside the pane. */
+  inboxSearchDock: {
+    height: SEARCH_DOCK_HEIGHT,
+    flexShrink: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: SEARCH_DOCK_TOP,
+    marginHorizontal: 20,
+    marginBottom: SEARCH_DOCK_BOTTOM,
+  },
+  threadPane: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    paddingLeft: PANE_GAP,
+    /**
+     * Drops the conversation header so its underline lands level with the
+     * bottom of the search dock, where the inbox list starts.
+     */
+    paddingTop:
+      SEARCH_DOCK_TOP +
+      SEARCH_DOCK_HEIGHT +
+      SEARCH_DOCK_BOTTOM -
+      THREAD_HEADER_HEIGHT,
+  },
+  threadPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    gap: 6,
+  },
+  threadPlaceholderIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF2FF",
+    marginBottom: 4,
+  },
+  threadPlaceholderTitle: {
+    ...typography.sectionSubtitle,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "700",
+    color: "#101828",
+  },
+  threadPlaceholderBody: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: "#8290A4",
+    textAlign: "center",
+  },
+  inboxEmpty: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+  },
+  inboxEmptyIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+    backgroundColor: "#F5F7FA",
+    borderWidth: 1,
+    borderColor: "#E7EAF0",
+  },
+  inboxEmptyTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "800",
+    color: "#172033",
+    textAlign: "center",
+  },
+  inboxEmptyBody: {
+    maxWidth: 220,
+    marginTop: 6,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: "#7D899D",
+    textAlign: "center",
+  },
+  chatWelcome: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    paddingBottom: 44,
+  },
+  chatWelcomeButton: {
+    minWidth: 196,
+    height: 44,
+    marginTop: 20,
+    paddingHorizontal: 24,
+    borderRadius: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#4B63EE",
+    shadowColor: "#4B63EE",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  chatWelcomeButtonText: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  chatWelcomePrivacy: {
+    marginTop: 12,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: "#8995A8",
+    textAlign: "center",
+  },
+  pinHint: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    paddingHorizontal: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  pinHintText: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: "#94A3B8",
+    textAlign: "center",
+  },
   searchBar: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#F1F5F9",
-    borderRadius: 14,
+    minHeight: 40,
+    backgroundColor: "#F3F5F9",
+    borderRadius: 13,
     paddingHorizontal: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "400",
+    letterSpacing: 0,
     color: "#0F172A",
     padding: 0,
   },
-  unreadChip: {
+  searchPlaceholder: {
+    color: "#94A3B8",
+  },
+  discoveryEmpty: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 18,
+    paddingHorizontal: 8,
+    paddingBottom: 12,
+  },
+  discoveryConversationArtSlot: {
+    width: 220,
+    height: 160,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  discoveryHero: {
+    width: "100%",
+    minHeight: 220,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    height: 24,
+  },
+  discoveryCopy: {
+    width: "49%",
+    zIndex: 2,
+  },
+  discoveryConversationArt: {
+    position: "relative",
+    width: 260,
+    height: 210,
+    alignItems: "center",
+    justifyContent: "center",
+    transform: [{ scale: 0.76 }],
+  },
+  chatArtGlow: {
+    position: "absolute",
+    top: 22,
+    width: 172,
+    height: 172,
+    borderRadius: 86,
+    backgroundColor: "#F1EFFF",
+  },
+  chatArtPath: {
+    position: "absolute",
+    left: 35,
+    top: 56,
+    width: 174,
+    height: 100,
+    borderWidth: 1.2,
+    borderColor: "#A9A7F7",
+    borderStyle: "dashed",
+    borderRadius: 50,
+    backgroundColor: "transparent",
+    transform: [{ rotate: "-8deg" }],
+  },
+  chatArtSpark: {
+    position: "absolute",
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#735DFF",
+  },
+  chatArtSparkTop: { top: 16, right: 28 },
+  chatArtSparkBottom: { bottom: 30, left: 35, backgroundColor: "#27C6B4" },
+  chatArtBubble: {
+    position: "absolute",
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chatArtBubbleTop: {
+    top: 49,
+    left: 93,
+    width: 108,
+    backgroundColor: "#FFFFFF",
+  },
+  chatArtBubbleBottom: {
+    left: 59,
+    bottom: 37,
+    width: 112,
+    backgroundColor: "#E8E2FF",
+  },
+  chatArtBubbleDots: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  chatArtBubbleDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: "#CBD2E3",
+  },
+  chatArtBubbleDotPurple: {
+    backgroundColor: "#B8A7FF",
+  },
+  chatArtPhotoFrame: {
+    position: "absolute",
+    width: 55,
+    height: 55,
+    borderRadius: 28,
+    overflow: "hidden",
+    borderWidth: 2.5,
+    borderColor: "#FFFFFF",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#475569",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  chatArtPhotoTop: {
+    top: 24,
+    left: 50,
+  },
+  chatArtPhotoBottom: {
+    right: 39,
+    bottom: 20,
+  },
+  chatArtPhoto: {
+    width: "100%",
+    height: "100%",
+  },
+  chatArtMessage: {
+    position: "absolute",
+    width: 119,
+    minHeight: 52,
     paddingHorizontal: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E1E4F2",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#52618B",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.09,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  chatArtMessageLeft: {
+    top: 38,
+    right: 4,
+    borderRadius: 14,
+    borderBottomRightRadius: 5,
+    transform: [{ rotate: "2deg" }],
+  },
+  chatArtMessageRight: {
+    left: 15,
+    bottom: 40,
+    borderRadius: 14,
+    borderBottomLeftRadius: 5,
+    transform: [{ rotate: "-2deg" }],
+  },
+  chatArtAvatar: {
+    width: 28,
+    height: 28,
+    marginRight: 7,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chatArtAvatarIndigo: { backgroundColor: "#665EF2" },
+  chatArtAvatarPurple: { backgroundColor: "#42C6B5" },
+  chatArtAvatarText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  chatArtMessageCopy: {
+    flex: 1,
+    gap: 5,
+  },
+  chatArtLine: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#DDE3F5",
+  },
+  chatArtLineLong: { width: "92%" },
+  chatArtLineMedium: { width: "78%" },
+  chatArtLineShort: { width: "62%", backgroundColor: "#EDF0F8" },
+  chatArtLineTiny: { width: "45%", backgroundColor: "#EDF0F8" },
+  chatArtTyping: {
+    position: "absolute",
+    right: -1,
+    top: 93,
+    width: 35,
+    height: 24,
     borderRadius: 12,
-    backgroundColor: "#F1F5F9",
-    flexShrink: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    backgroundColor: "#635BEB",
+    shadowColor: "#635BEB",
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
   },
-  unreadChipActive: {
-    backgroundColor: "#E0E7FF",
+  chatArtTypingDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "#FFFFFF",
   },
-  unreadChipDot: {
+  chatArtSend: {
+    position: "absolute",
+    top: 20,
+    left: 5,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#665EF2",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  discoveryTitle: {
+    maxWidth: 260,
+    marginTop: 7,
+    fontSize: 23,
+    lineHeight: 27,
+    fontWeight: "800",
+    color: "#172033",
+    textAlign: "center",
+    letterSpacing: -0.65,
+  },
+  discoveryBody: {
+    maxWidth: 255,
+    marginTop: 10,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "400",
+    color: "#71809A",
+    textAlign: "center",
+  },
+  discoveryTitleAccent: {
+    width: 24,
+    height: 2,
+    marginTop: 15,
+    borderRadius: 1,
+    backgroundColor: "#C5B9FF",
+  },
+  discoveryPrimary: {
+    width: "100%",
+    height: 36,
+    marginTop: 17,
+    paddingHorizontal: 11,
+    borderRadius: 18,
+    backgroundColor: "#ECEBFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  discoveryPrimaryText: {
+    flexShrink: 1,
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#5965D8",
+  },
+  emptyIllustration: {
+    width: 142,
+    height: 126,
+    marginBottom: 10,
+    alignSelf: "center",
+  },
+  emptyDiscoveryIllustration: {
+    transform: [{ scale: 0.9 }],
+    marginTop: -7,
+    marginBottom: -1,
+  },
+  emptyFlightPath: {
+    position: "absolute",
+    top: 12,
+    right: 19,
+    width: 52,
+    height: 34,
+    borderTopWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderColor: "#7B8FFF",
+    borderStyle: "dashed",
+    borderRadius: 22,
+    transform: [{ rotate: "-12deg" }],
+  },
+  emptySendIcon: {
+    position: "absolute",
+    top: 1,
+    right: 2,
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    transform: [{ rotate: "-8deg" }],
+  },
+  emptyAccentOne: {
+    position: "absolute",
+    top: 14,
+    left: 23,
+    width: 4,
+    height: 13,
+    borderRadius: 2,
+    backgroundColor: "#7892FF",
+    transform: [{ rotate: "-38deg" }],
+  },
+  emptyAccentTwo: {
+    position: "absolute",
+    top: 5,
+    left: 38,
+    width: 4,
+    height: 15,
+    borderRadius: 2,
+    backgroundColor: "#7892FF",
+    transform: [{ rotate: "6deg" }],
+  },
+  emptyBackBubble: {
+    position: "absolute",
+    right: 9,
+    bottom: 14,
+    width: 75,
+    height: 55,
+    borderRadius: 28,
+    backgroundColor: "#E1E6EE",
+    borderWidth: 1,
+    borderColor: "#D7DDE8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyBackTail: {
+    position: "absolute",
+    right: 12,
+    bottom: 0,
+    width: 18,
+    height: 18,
+    borderRadius: 3,
+    backgroundColor: "#E1E6EE",
+    transform: [{ rotate: "35deg" }],
+  },
+  emptyFrontBubble: {
+    position: "absolute",
+    left: 13,
+    top: 28,
+    width: 88,
+    height: 67,
+    borderRadius: 34,
+    backgroundColor: "#C5CEFF",
+    borderWidth: 1,
+    borderColor: "#AFBCFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#6378E9",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  emptyFrontTail: {
+    position: "absolute",
+    left: 14,
+    bottom: -2,
+    width: 21,
+    height: 21,
+    borderRadius: 4,
+    backgroundColor: "#C5CEFF",
+    transform: [{ rotate: "40deg" }],
+  },
+  emptyDots: {
+    flexDirection: "row",
+    gap: 6,
+    zIndex: 1,
+  },
+  emptyDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#4361EE",
   },
-  unreadChipLabel: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: "700",
-    color: "#475569",
-    letterSpacing: -0.1,
-    includeFontPadding: false,
+  emptyFrontDot: {
+    backgroundColor: "#4059C7",
   },
-  unreadChipLabelActive: {
-    color: "#4361EE",
+  emptyBackDot: {
+    backgroundColor: "#8D99A9",
   },
 });

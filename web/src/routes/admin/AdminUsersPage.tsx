@@ -1,0 +1,474 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Building2,
+  CalendarPlus,
+  ChevronRight,
+  Eye,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import {
+  AlenioDataTable,
+  EmptyState,
+  Pagination,
+  RowActions,
+  SearchField,
+  Select,
+  StatusIndicator,
+  type AlenioColumn,
+  type RowAction,
+} from "../../components/ui";
+import { UserAvatar } from "../../components/UserAvatar";
+import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
+import {
+  fetchAdminUsers,
+  formatAdminDate,
+  type AdminUserRow,
+} from "../../lib/admin-api";
+import { staffCan, staffRoleLabel } from "../../lib/staff-access";
+import "../discover/discover-manage.css";
+import "./admin-users.css";
+import { AdminUserDrawer } from "./AdminUserDrawer";
+
+type Tab = "all" | "in-workspace" | "no-workspace" | "admins";
+type Sort = "newest" | "name" | "workspaces";
+
+const PAGE_SIZE = 10;
+const DAY = 864e5;
+
+const TABS: Array<[Tab, string]> = [
+  ["all", "All users"],
+  ["in-workspace", "In a workspace"],
+  ["no-workspace", "No workspace"],
+  ["admins", "Staff"],
+];
+
+function matchesTab(user: AdminUserRow, tab: Tab): boolean {
+  if (tab === "in-workspace") return user._count.teamMembers > 0;
+  if (tab === "no-workspace") return user._count.teamMembers === 0;
+  if (tab === "admins") return user.isAdmin;
+  return true;
+}
+
+export function AdminUsersPage() {
+  const { me } = useEnterpriseShell();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>("all");
+  const [sort, setSort] = useState<Sort>("newest");
+  const [q, setQ] = useState("");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const drawerUserId = searchParams.get("user");
+  const drawerMode = searchParams.get("new") === "1" ? "new" : drawerUserId ? "view" : null;
+  const openUser = (id: string, edit = false) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("user", id);
+    if (edit) next.set("edit", "1");
+    else next.delete("edit");
+    next.delete("new");
+    setSearchParams(next, { replace: true });
+  };
+  const openNew = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("user");
+    next.delete("edit");
+    next.set("new", "1");
+    setSearchParams(next, { replace: true });
+  };
+  const closeDrawer = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("user");
+    next.delete("edit");
+    next.delete("new");
+    setSearchParams(next, { replace: true });
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setQuery(q.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [q]);
+
+  const usersQuery = useQuery({
+    queryKey: ["admin", "users", query],
+    queryFn: () => fetchAdminUsers(query || undefined),
+    enabled: staffCan(me, "users.view"),
+    staleTime: 30_000,
+  });
+  // Unfiltered list for the stat cards and side panel, so a search doesn't change them.
+  const allQuery = useQuery({
+    queryKey: ["admin", "users", ""],
+    queryFn: () => fetchAdminUsers(),
+    enabled: staffCan(me, "users.view"),
+    staleTime: 30_000,
+  });
+
+  const all = allQuery.data ?? [];
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const week = all.filter((u) => now - Date.parse(u.createdAt) < 7 * DAY).length;
+    const month = all.filter((u) => now - Date.parse(u.createdAt) < 30 * DAY).length;
+    const prevMonth = all.filter((u) => {
+      const age = now - Date.parse(u.createdAt);
+      return age >= 30 * DAY && age < 60 * DAY;
+    }).length;
+    return {
+      total: all.length,
+      week,
+      month,
+      prevMonth,
+      inWorkspace: all.filter((u) => u._count.teamMembers > 0).length,
+      admins: all.filter((u) => u.isAdmin).length,
+    };
+  }, [all]);
+
+  const recent = useMemo(
+    () => [...all].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 5),
+    [all],
+  );
+
+  const visible = useMemo(() => {
+    const list = (usersQuery.data ?? []).filter((u) => matchesTab(u, tab));
+    list.sort((a, b) => {
+      if (sort === "name") return a.name.localeCompare(b.name);
+      if (sort === "workspaces") return b._count.teamMembers - a._count.teamMembers;
+      return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+    });
+    return list;
+  }, [usersQuery.data, tab, sort]);
+
+  const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const safePage = Math.min(page, pages);
+  const rows = visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+  const mayEdit = staffCan(me, "users.edit");
+  const mayCreate = staffCan(me, "users.create");
+  const mayDelete = staffCan(me, "users.delete");
+  const mayManageStaff = staffCan(me, "staff.manage");
+
+  if (me === undefined) return <EnterprisePageLoading label="Loading users" />;
+  if (me === null || !staffCan(me, "users.view")) return <Navigate to="/settings" replace />;
+
+  const userActions = (user: AdminUserRow): RowAction[] => {
+    const actions: RowAction[] = [
+      { id: "view", label: "View", icon: <Eye size={15} strokeWidth={2} />, onSelect: () => openUser(user.id) },
+    ];
+    if (mayEdit && (!user.isAdmin || mayManageStaff)) {
+      actions.push({ id: "edit", label: "Edit", icon: <Pencil size={15} strokeWidth={2} />, onSelect: () => openUser(user.id, true) });
+    }
+    if (mayManageStaff) {
+      actions.push({
+        id: "staff",
+        label: "Staff role…",
+        icon: <ShieldCheck size={15} strokeWidth={2} />,
+        disabled: user.id === me.id,
+        hint: user.id === me.id ? "You can't change your own staff role" : undefined,
+        onSelect: () => openUser(user.id),
+      });
+    }
+    if (mayDelete) {
+      actions.push({
+        id: "delete",
+        label: "Delete",
+        icon: <Trash2 size={15} strokeWidth={2} />,
+        tone: "danger",
+        disabled: user.id === me.id || user.isAdmin,
+        hint:
+          user.id === me.id
+            ? "You can't delete your own account"
+            : user.isAdmin
+              ? "Staff accounts can't be deleted here"
+              : undefined,
+        onSelect: () => {
+          // The drawer owns the typed confirmation.
+          const next = new URLSearchParams(searchParams);
+          next.set("user", user.id);
+          next.delete("edit");
+          next.delete("new");
+          next.set("delete", "1");
+          setSearchParams(next, { replace: true });
+        },
+      });
+    }
+    return actions;
+  };
+
+  const columns: AlenioColumn<AdminUserRow>[] = [
+    {
+      id: "user",
+      header: "User",
+      primary: true,
+      cell: (user) => (
+        <span className="al-cell-entity">
+          <UserAvatar user={user} className="al-row-avatar" imgClassName="au-avatar-img" alt="" />
+          <span className="al-cell-copy">
+            <span className="al-cell-title">
+              <span className="al-cell-title-text">{user.name || "Unnamed"}</span>
+              {user.id === me.id ? <span className="al-tag">You</span> : null}
+            </span>
+            <span className="al-cell-sub">{user.email}</span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "workspaces",
+      header: "Workspaces",
+      width: "112px",
+      cell: (user) =>
+        user._count.teamMembers === 0 ? (
+          <span className="al-cell-muted">None</span>
+        ) : (
+          <span className="al-cell-inline al-cell-num">
+            <Building2 size={14} strokeWidth={2} aria-hidden />
+            {user._count.teamMembers}
+          </span>
+        ),
+    },
+    {
+      id: "role",
+      header: "Role",
+      width: "124px",
+      cell: (user) =>
+        user.isAdmin ? (
+          <StatusIndicator tone="accent">{staffRoleLabel(user.staffRole ?? "super_admin")}</StatusIndicator>
+        ) : (
+          <StatusIndicator>Member</StatusIndicator>
+        ),
+    },
+    {
+      id: "joined",
+      header: "Joined",
+      width: "120px",
+      cell: (user) => <span className="al-cell-muted">{formatAdminDate(user.createdAt)}</span>,
+    },
+  ];
+
+  const loading = usersQuery.isLoading;
+  const error = usersQuery.error instanceof Error ? usersQuery.error.message : usersQuery.isError ? "Could not load users." : null;
+
+  return (
+    <div className="dm-page au-page" data-testid="admin-users">
+      <header className="dm-hero">
+        <img src="/alenio-home-hero-morning.jpg" alt="" className="dm-hero-photo" />
+        <div className="dm-hero-fade" aria-hidden />
+        <div className="dm-hero-copy">
+          <nav className="dm-crumbs" aria-label="Breadcrumb">
+            <span>Admin</span>
+            <span aria-hidden>›</span>
+            <span>Users</span>
+          </nav>
+          <h1>User Management</h1>
+          <p>Everyone with an Alenio account, across every workspace.</p>
+        </div>
+      </header>
+
+      <nav className="dm-tabs" aria-label="User lists">
+        {TABS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={`dm-tab${tab === id ? " dm-tab--active" : ""}`}
+            aria-current={tab === id ? "page" : undefined}
+            onClick={() => {
+              setTab(id);
+              setPage(1);
+            }}
+            data-testid={`au-tab-${id}`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {error ? <p className="discover-error">{error}</p> : null}
+
+      <div className="dm-grid">
+        <div className="dm-main">
+          <section className="dm-stats" aria-label="User summary">
+            <div className="dm-stat">
+              <span className="dm-stat-icon">
+                <Users size={18} strokeWidth={2} />
+              </span>
+              <div>
+                <strong>{allQuery.data ? stats.total.toLocaleString() : "—"}</strong>
+                <span>Total users</span>
+              </div>
+            </div>
+            <div className="dm-stat">
+              <span className="dm-stat-icon">
+                <CalendarPlus size={18} strokeWidth={2} />
+              </span>
+              <div>
+                <strong>{allQuery.data ? stats.week.toLocaleString() : "—"}</strong>
+                <span>New this week</span>
+              </div>
+            </div>
+            <div className="dm-stat">
+              <span className="dm-stat-icon">
+                <Building2 size={18} strokeWidth={2} />
+              </span>
+              <div>
+                <strong>{allQuery.data ? stats.inWorkspace.toLocaleString() : "—"}</strong>
+                <span>In a workspace</span>
+              </div>
+            </div>
+            <div className="dm-stat">
+              <span className="dm-stat-icon">
+                <ShieldCheck size={18} strokeWidth={2} />
+              </span>
+              <div>
+                <strong>{allQuery.data ? stats.admins.toLocaleString() : "—"}</strong>
+                <span>Staff</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="dm-card dm-articles al-ds" aria-label="Users">
+            <header className="al-table-head">
+              <h2 className="al-panel-title">
+                Users <span className="al-seg-count">{visible.length.toLocaleString()}</span>
+              </h2>
+              <div className="al-toolbar">
+                <SearchField
+                  value={q}
+                  onChange={(value) => {
+                    setPage(1);
+                    setQ(value);
+                  }}
+                  placeholder="Search name or email"
+                  label="Search users"
+                  data-testid="au-search"
+                />
+                <Select
+                  value={sort}
+                  aria-label="Sort users"
+                  onChange={(event) => {
+                    setPage(1);
+                    setSort(event.target.value as Sort);
+                  }}
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="name">Name A–Z</option>
+                  <option value="workspaces">Most workspaces</option>
+                </Select>
+              </div>
+            </header>
+
+            <AlenioDataTable
+              flush
+              label="Users"
+              rows={rows}
+              columns={columns}
+              getRowId={(user) => user.id}
+              getRowLabel={(user) => `Open ${user.name || user.email}`}
+              getRowTestId={(user) => `au-row-${user.id}`}
+              onRowClick={(user) => openUser(user.id)}
+              rowActions={(user) => (
+                <RowActions actions={userActions(user)} label={`Actions for ${user.name}`} testId={`au-menu-${user.id}`} />
+              )}
+              loading={loading}
+              busy={loading && rows.length > 0}
+              loadingRows={6}
+              emptyState={
+                <EmptyState
+                  icon={<Users size={20} strokeWidth={2} />}
+                  title={query || tab !== "all" ? "No one matches" : "No users yet"}
+                  description={query || tab !== "all" ? "Try a different search or list." : "New accounts will show up here."}
+                />
+              }
+            />
+            <Pagination
+              page={safePage - 1}
+              pageSize={PAGE_SIZE}
+              total={visible.length}
+              onPageChange={(next) => setPage(next + 1)}
+              itemLabel="users"
+            />
+          </section>
+        </div>
+
+        <aside className="dm-side">
+          {mayCreate ? (
+            <button type="button" className="dm-new" onClick={openNew} data-testid="au-new-user">
+              <Plus size={18} strokeWidth={2.4} />
+              New user
+            </button>
+          ) : null}
+
+          <section className="dm-card dm-panel" aria-label="Recent signups">
+            <div className="dm-panel-head">
+              <UserPlus size={15} strokeWidth={2.2} />
+              <h3>Recent signups</h3>
+            </div>
+            {recent.length === 0 ? (
+              <p className="dm-panel-empty">New accounts appear here as people join.</p>
+            ) : (
+              <ul className="au-recent">
+                {recent.map((user) => (
+                  <li key={user.id}>
+                    <button type="button" onClick={() => openUser(user.id)}>
+                      <UserAvatar user={user} className="au-avatar au-avatar--sm" imgClassName="au-avatar-img" alt="" />
+                      <span className="dm-ranked-copy">
+                        <span className="dm-ranked-title">{user.name || user.email}</span>
+                        <span className="dm-ranked-sub">{formatAdminDate(user.createdAt)}</span>
+                      </span>
+                      <ChevronRight size={15} strokeWidth={2.2} className="au-recent-chevron" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="dm-card dm-panel" aria-label="Growth">
+            <div className="dm-panel-head">
+              <CalendarPlus size={15} strokeWidth={2.2} />
+              <h3>Growth</h3>
+            </div>
+            <dl className="au-growth">
+              <div>
+                <dt>Last 30 days</dt>
+                <dd>{allQuery.data ? stats.month.toLocaleString() : "—"}</dd>
+              </div>
+              <div>
+                <dt>Previous 30 days</dt>
+                <dd>{allQuery.data ? stats.prevMonth.toLocaleString() : "—"}</dd>
+              </div>
+              <div>
+                <dt>Without a workspace</dt>
+                <dd>{allQuery.data ? (stats.total - stats.inWorkspace).toLocaleString() : "—"}</dd>
+              </div>
+            </dl>
+            <Link to="/admin/workspaces" className="dm-panel-link au-growth-link">
+              See workspaces
+            </Link>
+          </section>
+        </aside>
+      </div>
+
+      <AdminUserDrawer
+        mode={drawerMode}
+        userId={drawerUserId}
+        startEditing={searchParams.get("edit") === "1"}
+        startDeleting={searchParams.get("delete") === "1"}
+        currentUserId={me.id}
+        onClose={closeDrawer}
+        onChanged={() => void refresh()}
+        onDeleted={() => {
+          closeDrawer();
+          void refresh();
+        }}
+        onCreated={(id) => openUser(id)}
+      />
+    </div>
+  );
+}

@@ -19,6 +19,7 @@ workspaceCheckoutsRouter.post("/", async (c) => {
     industry?: string;
     location?: string;
     plan?: string;
+    playToken?: string;
   };
   const result = await createPendingWorkspaceCheckout({
     userId: user.id,
@@ -27,6 +28,7 @@ workspaceCheckoutsRouter.post("/", async (c) => {
     industry: body.industry,
     location: body.location,
     plan: body.plan === "operations" ? "operations" : "pro",
+    playToken: typeof body.playToken === "string" ? body.playToken : null,
   });
   if (!result.ok) {
     return c.json({ error: { code: result.code, message: result.message } }, result.status);

@@ -472,7 +472,7 @@ export default function TodayScreen() {
                 <Text style={styles.testingBannerTitle}>Testing mode</Text>
                 <Text style={styles.testingBannerBody}>
                   This workspace’s Temps module is in Testing — results may not count as live
-                  compliance. Managers switch to Live in Alenio Go → Admin modules → Temp checks.
+                  compliance. Managers switch to Live in Alenio Go → Admin modules → Food Safety.
                 </Text>
               </View>
             ) : null}

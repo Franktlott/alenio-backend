@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,36 +9,30 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
-  Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { UserAvatar } from "@/components/UserAvatar";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   X,
-  Search,
-  Plus,
   Trash2,
   GripVertical,
   Calendar,
-  Target,
-  Mountain,
   HelpCircle,
-  Check,
 } from "lucide-react-native";
 import {
   DEVELOPMENT_PLAN_TIPS,
-  SKILL_PRESETS,
-  buildManagerNotesPayload,
   defaultGoalDueDate,
   formatGoalDueDate,
   type DevelopmentGoalPriority,
-  type SkillPreset,
 } from "@/lib/development-goal-presets";
 
 export type CreateDevelopmentGoalPayload = {
   skill: string;
+  description?: string;
   steps: string[];
+  dueDate: string;
+  priority: DevelopmentGoalPriority;
   managerNotes?: string;
 };
 
@@ -48,6 +42,12 @@ type Props = {
   memberImage?: string | null;
   saving?: boolean;
   error?: string | null;
+  /** Starting point chosen before the sheet opened, e.g. a goal type shortcut. */
+  prefill?: {
+    skill?: string;
+    description?: string;
+    steps?: string[];
+  } | null;
   onClose: () => void;
   onCreate: (payload: CreateDevelopmentGoalPayload) => void;
 };
@@ -71,95 +71,52 @@ function StepBadge({ n }: { n: number }) {
   );
 }
 
-function SkillIcon({ preset }: { preset: SkillPreset }) {
-  return (
-    <View
-      style={{
-        width: 16,
-        height: 16,
-        borderRadius: 5,
-        backgroundColor: preset.color,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Target size={9} color="#FFFFFF" strokeWidth={2.5} />
-    </View>
-  );
-}
-
 export function CreateDevelopmentGoalModal({
   visible,
   memberName,
-  memberImage,
   saving = false,
   error,
+  prefill = null,
   onClose,
   onCreate,
 }: Props) {
   const insets = useSafeAreaInsets();
   const firstName = memberName.trim().split(/\s+/)[0] || memberName || "this teammate";
 
-  const [skillQuery, setSkillQuery] = useState("");
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>("leadership");
-  const [customMode, setCustomMode] = useState(false);
   const [customSkill, setCustomSkill] = useState("");
-  const [steps, setSteps] = useState<string[]>(SKILL_PRESETS[0]?.steps ?? [""]);
+  const [skillDescription, setSkillDescription] = useState("");
+  const [steps, setSteps] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date>(() => defaultGoalDueDate());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [priority, setPriority] = useState<DevelopmentGoalPriority>("normal");
   const [managerNotes, setManagerNotes] = useState("");
+  const [tipsOpen, setTipsOpen] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
-    setSkillQuery("");
-    setSelectedPresetId("leadership");
-    setCustomMode(false);
-    setCustomSkill("");
-    setSteps(SKILL_PRESETS[0]?.steps ?? [""]);
+    setCustomSkill(prefill?.skill ?? "");
+    setSkillDescription(prefill?.description ?? "");
+    setSteps(prefill?.steps ?? []);
     setDueDate(defaultGoalDueDate());
     setShowDatePicker(false);
     setPriority("normal");
     setManagerNotes("");
+    setTipsOpen(false);
   }, [visible]);
 
-  const filteredPresets = useMemo(() => {
-    const q = skillQuery.trim().toLowerCase();
-    if (!q) return SKILL_PRESETS;
-    return SKILL_PRESETS.filter((p) => p.label.toLowerCase().includes(q));
-  }, [skillQuery]);
-
-  const resolvedSkill = customMode
-    ? customSkill.trim()
-    : SKILL_PRESETS.find((p) => p.id === selectedPresetId)?.label ?? "";
-
-  const selectPreset = (preset: SkillPreset) => {
-    setCustomMode(false);
-    setSelectedPresetId(preset.id);
-    setCustomSkill("");
-    setSteps([...preset.steps]);
-  };
-
-  const enableCustom = () => {
-    setCustomMode(true);
-    setSelectedPresetId(null);
-    setSteps([""]);
-  };
-
   const showTips = () => {
-    Alert.alert("Development plan tips", DEVELOPMENT_PLAN_TIPS.map((t) => `• ${t}`).join("\n"));
+    setTipsOpen(true);
   };
 
   const handleCreate = () => {
     const trimmedSteps = steps.map((s) => s.trim()).filter(Boolean);
     onCreate({
-      skill: resolvedSkill,
+      skill: customSkill.trim(),
+      description: skillDescription.trim() || undefined,
       steps: trimmedSteps,
-      managerNotes: buildManagerNotesPayload({
-        dueDate,
-        priority,
-        notes: managerNotes,
-      }),
+      dueDate: dueDate.toISOString(),
+      priority,
+      managerNotes: managerNotes.trim() || undefined,
     });
   };
 
@@ -177,10 +134,22 @@ export function CreateDevelopmentGoalModal({
         <View
           style={{
             flex: 1,
-            paddingTop: Platform.OS === "ios" ? 10 : insets.top,
+            paddingTop: Platform.OS === "ios" ? 8 : insets.top,
             paddingBottom: insets.bottom,
           }}
         >
+          <View
+            style={{
+              width: 38,
+              height: 5,
+              borderRadius: 3,
+              backgroundColor: "#D8DEE8",
+              alignSelf: "center",
+              marginBottom: 8,
+            }}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
           <View
             style={{
               flexDirection: "row",
@@ -190,28 +159,33 @@ export function CreateDevelopmentGoalModal({
               gap: 10,
             }}
           >
-            <UserAvatar
-              user={{ name: memberName, image: memberImage }}
-              size={34}
-              radius={17}
-              backgroundColor="#EEF2FF"
-              textColor="#4F46E5"
-              fontSize={14}
+            <Image
+              source={require("@/assets/alenio-icon.png")}
+              style={{ width: 34, height: 34, borderRadius: 10 }}
             />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 style={{
-                  fontSize: 9,
-                  fontWeight: "700",
-                  color: "#818CF8",
-                  letterSpacing: 0.6,
-                  textTransform: "uppercase",
+                  fontSize: 15,
+                  lineHeight: 19,
+                  fontWeight: "800",
+                  color: "#172033",
+                  letterSpacing: -0.2,
                 }}
               >
-                Creating goal for
+                Create a development goal
               </Text>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
-                {memberName}
+              <Text
+                style={{
+                  marginTop: 1,
+                  fontSize: 10.5,
+                  lineHeight: 14,
+                  fontWeight: "600",
+                  color: "#8A96A8",
+                }}
+                numberOfLines={1}
+              >
+                For {memberName}
               </Text>
             </View>
             <Pressable
@@ -235,20 +209,9 @@ export function CreateDevelopmentGoalModal({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 2 }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A", letterSpacing: -0.3 }}>
-                  Create Development Goal
-                </Text>
-                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 3, lineHeight: 16 }}>
-                  Help {firstName} build a skill through clear actions and consistent growth.
-                </Text>
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, paddingTop: 2 }}>
-                <Target size={22} color="#A5B4FC" strokeWidth={1.8} />
-                <Mountain size={20} color="#C4B5FD" strokeWidth={1.8} />
-              </View>
-            </View>
+            <Text style={{ fontSize: 11.5, color: "#64748B", lineHeight: 16, marginBottom: 2 }}>
+              Help {firstName} build a skill through clear actions and consistent growth.
+            </Text>
 
             {error ? (
               <Text style={{ fontSize: 12, color: "#DC2626", fontWeight: "600" }}>{error}</Text>
@@ -269,106 +232,47 @@ export function CreateDevelopmentGoalModal({
                 <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Development skill</Text>
               </View>
               <Text style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>
-                Choose a skill or competency to focus on.
+                Enter one skill or competency to focus on.
               </Text>
 
-              <View
+              <TextInput
+                value={customSkill}
+                onChangeText={setCustomSkill}
+                placeholder="Enter one development skill"
+                placeholderTextColor="#94A3B8"
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
                   backgroundColor: "#FFFFFF",
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
                   borderRadius: 9,
-                  paddingHorizontal: 9,
-                  paddingVertical: Platform.OS === "ios" ? 8 : 4,
+                  paddingHorizontal: 10,
+                  paddingVertical: 9,
+                  fontSize: 13,
+                  color: "#0F172A",
                 }}
-              >
-                <Search size={13} color="#94A3B8" />
-                <TextInput
-                  value={skillQuery}
-                  onChangeText={setSkillQuery}
-                  placeholder="Search skills or choose below"
-                  placeholderTextColor="#94A3B8"
-                  style={{ flex: 1, fontSize: 13, color: "#0F172A", paddingVertical: 2 }}
-                />
-              </View>
-
-              {!customMode ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                  {filteredPresets.map((preset) => {
-                    const selected = selectedPresetId === preset.id;
-                    return (
-                      <Pressable
-                        key={preset.id}
-                        onPress={() => selectPreset(preset)}
-                        style={{
-                          width: "48%",
-                          flexGrow: 1,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 6,
-                          backgroundColor: selected ? preset.bg : "#FFFFFF",
-                          borderWidth: 1,
-                          borderColor: selected ? preset.border : "#E2E8F0",
-                          borderRadius: 9,
-                          paddingHorizontal: 8,
-                          paddingVertical: 7,
-                        }}
-                      >
-                        <SkillIcon preset={preset} />
-                        <Text
-                          style={{
-                            flex: 1,
-                            fontSize: 11,
-                            fontWeight: selected ? "700" : "600",
-                            color: selected ? preset.color : "#334155",
-                          }}
-                          numberOfLines={1}
-                        >
-                          {preset.label}
-                        </Text>
-                        {selected ? <Check size={12} color={preset.color} strokeWidth={2.5} /> : null}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : (
-                <TextInput
-                  value={customSkill}
-                  onChangeText={setCustomSkill}
-                  placeholder="Enter a custom skill"
-                  placeholderTextColor="#94A3B8"
-                  autoFocus
-                  style={{
-                    borderWidth: 1,
-                    borderColor: "#C7D2FE",
-                    backgroundColor: "#FFFFFF",
-                    borderRadius: 9,
-                    paddingHorizontal: 10,
-                    paddingVertical: 8,
-                    fontSize: 13,
-                    color: "#0F172A",
-                  }}
-                />
-              )}
-
-              <Pressable
-                onPress={customMode ? () => selectPreset(SKILL_PRESETS[0]!) : enableCustom}
+                maxLength={200}
+              />
+              <TextInput
+                value={skillDescription}
+                onChangeText={setSkillDescription}
+                placeholder="Skill description (optional)"
+                placeholderTextColor="#94A3B8"
+                multiline
+                textAlignVertical="top"
                 style={{
+                  minHeight: 68,
                   borderWidth: 1,
                   borderColor: "#E2E8F0",
+                  backgroundColor: "#FFFFFF",
                   borderRadius: 9,
-                  paddingVertical: 8,
-                  alignItems: "center",
-                  backgroundColor: "#FAFBFF",
+                  paddingHorizontal: 10,
+                  paddingVertical: 9,
+                  fontSize: 12,
+                  lineHeight: 17,
+                  color: "#0F172A",
                 }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>
-                  {customMode ? "Choose from skills" : "+ Custom skill"}
-                </Text>
-              </Pressable>
+                maxLength={1000}
+              />
             </View>
 
             <View
@@ -384,7 +288,7 @@ export function CreateDevelopmentGoalModal({
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <StepBadge n={2} />
                 <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A", flex: 1 }}>
-                  Development plan
+                  Development Plan Actions
                 </Text>
                 <Pressable
                   onPress={showTips}
@@ -429,7 +333,7 @@ export function CreateDevelopmentGoalModal({
                     <TextInput
                       value={step}
                       onChangeText={(v) => setSteps(steps.map((s, i) => (i === index ? v : s)))}
-                      placeholder={`Action step ${index + 1}`}
+                      placeholder={`Action ${index + 1}`}
                       placeholderTextColor="#94A3B8"
                       style={{ flex: 1, fontSize: 12, color: "#0F172A", paddingVertical: 0 }}
                     />
@@ -454,7 +358,9 @@ export function CreateDevelopmentGoalModal({
                     backgroundColor: "#FAFBFF",
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>+ Add another step</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>
+                    {steps.length === 0 ? "+ Add action" : "+ Add another action"}
+                  </Text>
                 </Pressable>
               ) : null}
             </View>
@@ -557,7 +463,9 @@ export function CreateDevelopmentGoalModal({
               <DateTimePicker
                 value={dueDate}
                 mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
+                display={Platform.OS === "ios" ? "inline" : "default"}
+                accentColor="#5B42F3"
+                themeVariant="light"
                 onChange={(_, date) => {
                   if (Platform.OS !== "ios") setShowDatePicker(false);
                   if (date) setDueDate(date);
@@ -654,6 +562,123 @@ export function CreateDevelopmentGoalModal({
               <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFFFFF" }}>Create goal</Text>
             </Pressable>
           </View>
+
+          {tipsOpen ? (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                zIndex: 50,
+                paddingHorizontal: 24,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(15, 23, 42, 0.46)",
+              }}
+            >
+              <Pressable
+                onPress={() => setTipsOpen(false)}
+                style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
+                accessibilityLabel="Close development plan tips"
+              />
+              <View
+                style={{
+                  width: "100%",
+                  maxWidth: 360,
+                  padding: 20,
+                  borderRadius: 24,
+                  backgroundColor: "#FFFFFF",
+                  shadowColor: "#312E81",
+                  shadowOpacity: 0.2,
+                  shadowRadius: 24,
+                  shadowOffset: { width: 0, height: 12 },
+                  elevation: 12,
+                }}
+              >
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#F0ECFF",
+                    marginBottom: 15,
+                  }}
+                >
+                  <HelpCircle size={22} color="#684BFF" strokeWidth={2.2} />
+                </View>
+                <Text
+                  style={{
+                    fontSize: 20,
+                    lineHeight: 25,
+                    fontWeight: "800",
+                    color: "#111827",
+                  }}
+                >
+                  Development plan tips
+                </Text>
+                <View style={{ marginTop: 12, gap: 10 }}>
+                  {DEVELOPMENT_PLAN_TIPS.map((tip, index) => (
+                    <View
+                      key={tip}
+                      style={{ flexDirection: "row", alignItems: "flex-start", gap: 9 }}
+                    >
+                      <View
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "#F0ECFF",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 9,
+                            fontWeight: "800",
+                            color: "#684BFF",
+                          }}
+                        >
+                          {index + 1}
+                        </Text>
+                      </View>
+                      <Text
+                        style={{
+                          flex: 1,
+                          fontSize: 13,
+                          lineHeight: 18,
+                          color: "#53627A",
+                        }}
+                      >
+                        {tip}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <Pressable
+                  onPress={() => setTipsOpen(false)}
+                  style={{
+                    minHeight: 46,
+                    marginTop: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 14,
+                    backgroundColor: "#5B42F3",
+                  }}
+                >
+                  <Text
+                    style={{ fontSize: 13, fontWeight: "800", color: "#FFFFFF" }}
+                  >
+                    Got it
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </Modal>

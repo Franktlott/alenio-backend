@@ -1,0 +1,26 @@
+.discover-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 18px;
+  font-size: 13px;
+  line-height: 18px;
+  color: #667085;
+}
+
+.discover-byline strong {
+  font-weight: 700;
+  color: #111a2b;
+}
+
+.discover-byline-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.discover-byline-dot {
+  color: #c4c9d4;
+}

@@ -83,6 +83,9 @@ const OPEN_INSTRUCTION = `You are turning the transcript of a real check-in conv
 
 Rules:
 - Work only from what was said. Never infer, embellish, or add plausible-sounding content.
+- Every answer must be something a person actually said in the transcript. Never write generic check-in questions or answers that could apply to anyone.
+- Lines like "[part of this conversation could not be transcribed]" are gaps, not content. Never guess what was said in them.
+- If the transcript has no real conversation (silence, noise, a few stray words, only gap notes), return "items": [] and "summary": "". An empty result is correct; a made-up one is never acceptable.
 - Break the conversation into the topics that were actually covered, in the order they came up.
 - Write each topic as the question it answers, phrased the way a check-in template would ask it, for example "How is the new route going?" rather than "New route".
 - Write each answer as concise notes in the leader's voice, not as a transcript quote.

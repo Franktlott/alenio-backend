@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { getTeamSubscription } from "../routes/subscription";
+import { createPlayLinkOut, playLinkMetadata } from "./play-external-links";
 import {
   applySubscriptionFromStripeSubscription,
   billingReturnBaseUrl,
@@ -87,6 +88,8 @@ export async function createTeamCheckoutSession(opts: {
   userEmail?: string | null;
   /** Defaults to Pro (`team` in DB). */
   plan?: StripeCheckoutPlan;
+  /** Google Play external content links token when the Android app started this checkout. */
+  playToken?: string | null;
 }): Promise<BillingCheckoutResult> {
   const checkoutPlan: StripeCheckoutPlan = opts.plan === "operations" ? "operations" : "pro";
   if (!isStripeCheckoutPlanConfigured(checkoutPlan)) {
@@ -143,6 +146,9 @@ export async function createTeamCheckoutSession(opts: {
 
   const stripe = getStripeClient()!;
   const base = billingReturnBaseUrl()!;
+  const playLink = playLinkMetadata(
+    await createPlayLinkOut({ token: opts.playToken, userId: opts.userId, teamId: opts.teamId }),
+  );
 
   const checkout = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -156,12 +162,14 @@ export async function createTeamCheckoutSession(opts: {
       team_id: opts.teamId,
       user_id: opts.userId,
       plan: targetDbPlan,
+      ...playLink,
     },
     subscription_data: {
       metadata: {
         team_id: opts.teamId,
         user_id: opts.userId,
         plan: targetDbPlan,
+        ...playLink,
       },
     },
   });
@@ -179,6 +187,7 @@ export async function createPendingWorkspaceCheckoutSession(opts: {
   userEmail?: string | null;
   plan: StripeCheckoutPlan;
   expiresAt: Date;
+  playToken?: string | null;
 }): Promise<PendingWorkspaceCheckoutSessionResult> {
   if (!isStripeCheckoutPlanConfigured(opts.plan)) {
     return {
@@ -193,6 +202,9 @@ export async function createPendingWorkspaceCheckoutSession(opts: {
   const stripe = getStripeClient()!;
   const base = billingReturnBaseUrl()!;
   const dbPlan = dbPlanForCheckoutPlan(opts.plan);
+  const playLink = playLinkMetadata(
+    await createPlayLinkOut({ token: opts.playToken, userId: opts.userId, pendingCheckoutId: opts.checkoutId }),
+  );
   const checkout = await stripe.checkout.sessions.create({
     mode: "subscription",
     allow_promotion_codes: true,
@@ -206,12 +218,14 @@ export async function createPendingWorkspaceCheckoutSession(opts: {
       pending_workspace_checkout_id: opts.checkoutId,
       user_id: opts.userId,
       plan: dbPlan,
+      ...playLink,
     },
     subscription_data: {
       metadata: {
         pending_workspace_checkout_id: opts.checkoutId,
         user_id: opts.userId,
         plan: dbPlan,
+        ...playLink,
       },
     },
   });

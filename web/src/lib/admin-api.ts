@@ -1,4 +1,5 @@
 import { apiDeleteJson, apiGetJson, apiPatchJson, apiPostJson } from "./api";
+import type { StaffRole } from "./staff-access";
 
 export type AdminUserRow = {
   id: string;
@@ -7,6 +8,7 @@ export type AdminUserRow = {
   image: string | null;
   createdAt: string;
   isAdmin: boolean;
+  staffRole?: StaffRole | null;
   _count: { teamMembers: number };
 };
 
@@ -115,10 +117,60 @@ export async function fetchAdminUser(id: string): Promise<AdminUserDetail> {
   return normalizeCreatedAt(res.data);
 }
 
+/** Mirrors the backend rule: only staff on this domain can be promoted to admin. */
+export const PLATFORM_ADMIN_EMAIL_DOMAIN = "lotttechnologies.com";
+
+export function isPlatformAdminEligibleEmail(email: string | null | undefined): boolean {
+  const normalized = (email ?? "").trim().toLowerCase();
+  const at = normalized.lastIndexOf("@");
+  return at > 0 && normalized.slice(at + 1) === PLATFORM_ADMIN_EMAIL_DOMAIN;
+}
+
 export async function setAdminUserPlatformAdmin(id: string, isAdmin: boolean): Promise<AdminUserRow> {
   const res = await apiPatchJson<{ data: AdminUserRow }>(`/api/admin/users/${encodeURIComponent(id)}/admin`, {
     isAdmin,
   });
+  return normalizeCreatedAt(res.data);
+}
+
+/** Gives, changes or (null) removes a staff role. Super Admin only. */
+export async function setAdminUserStaffRole(id: string, role: StaffRole | null): Promise<AdminUserRow> {
+  const res = await apiPatchJson<{ data: AdminUserRow }>(`/api/admin/users/${encodeURIComponent(id)}/staff-role`, {
+    role,
+  });
+  return normalizeCreatedAt(res.data);
+}
+
+export type StaffActivityRow = {
+  id: string;
+  actorId: string;
+  actorEmail: string | null;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  summary: string;
+  createdAt: string;
+};
+
+export async function fetchStaffActivity(params: { before?: string | null; limit?: number } = {}): Promise<StaffActivityRow[]> {
+  const qs = new URLSearchParams();
+  if (params.before) qs.set("before", params.before);
+  if (params.limit) qs.set("limit", String(params.limit));
+  const query = qs.toString();
+  const res = await apiGetJson<{ data: StaffActivityRow[] }>(`/api/admin/activity${query ? `?${query}` : ""}`);
+  return res.data ?? [];
+}
+
+export async function updateAdminUser(
+  id: string,
+  body: { name?: string; email?: string },
+): Promise<AdminUserRow> {
+  const res = await apiPatchJson<{ data: AdminUserRow }>(`/api/admin/users/${encodeURIComponent(id)}`, body);
+  return normalizeCreatedAt(res.data);
+}
+
+export async function createAdminUser(body: { email: string; name: string; password: string }): Promise<AdminUserRow> {
+  const res = await apiPostJson<{ data: AdminUserRow }>("/api/admin/users", body);
   return normalizeCreatedAt(res.data);
 }
 

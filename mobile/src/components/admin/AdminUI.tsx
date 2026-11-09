@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Text, Pressable, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import {
@@ -22,7 +21,7 @@ import {
   isPaidPlan,
   type AdminAlert,
 } from "@/lib/admin/admin-api";
-import { HEADER_GRADIENT } from "@/lib/header-gradient";
+import { HEADER_BRAND_COLOR } from "@/lib/header-brand";
 
 export function AdminHeader({
   title,
@@ -36,7 +35,7 @@ export function AdminHeader({
   return (
     <>
       <StatusBar style="light" />
-      <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <View style={{ backgroundColor: HEADER_BRAND_COLOR }}>
         <SafeAreaView edges={["top"]}>
           <View className="px-5 pt-2 pb-5">
             <View className="flex-row items-center justify-between">
@@ -63,7 +62,7 @@ export function AdminHeader({
             {subtitle ? <Text className="text-white/70 text-sm mt-0.5">{subtitle}</Text> : null}
           </View>
         </SafeAreaView>
-      </LinearGradient>
+      </View>
     </>
   );
 }

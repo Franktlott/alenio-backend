@@ -8,8 +8,12 @@ import {
   getPlatformTeam,
   listPlatformTeams,
   setPlatformAdmin,
+  checkUserEmailChange,
+  setStaffRole,
   updateTeamSubscription,
+  withIsAdmin,
 } from "../lib/admin-platform";
+import { PLATFORM_ADMIN_EMAIL_DOMAIN } from "../lib/platform-admin-allowlist";
 import {
   attachTeamToOrganization,
   createAdminOrganization,
@@ -18,7 +22,10 @@ import {
   listAdminOrganizations,
   updateAdminOrganizationWorkspaceLimit,
 } from "../lib/admin-organizations";
-import { adminGuard } from "../middleware/admin-guard";
+import { adminGuard, requireAbility, resolveStaffActor } from "../middleware/admin-guard";
+import { listStaffActions, recordStaffAction, type StaffAuditEntry } from "../lib/staff-audit";
+import { STAFF_ROLE_LABELS, STAFF_ROLES, roleHasAbility, type StaffRole } from "../lib/staff-roles";
+import type { Context } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { getAdminWeeklyUsage } from "../lib/admin-usage-weeks";
@@ -32,7 +39,43 @@ const adminApiRouter = new Hono<{ Variables: Variables }>();
 
 adminApiRouter.use("*", adminGuard);
 
-adminApiRouter.get("/stats", async (c) => {
+async function audit(c: Context, entry: Omit<StaffAuditEntry, "actorId" | "actorEmail">) {
+  const actor = await resolveStaffActor(c as never);
+  if (!actor) return;
+  await recordStaffAction({ ...entry, actorId: actor.id, actorEmail: actor.email });
+}
+
+function roleLabel(role: StaffRole | null): string {
+  return role ? STAFF_ROLE_LABELS[role] : "no staff access";
+}
+
+function staffRoleError(c: Context, code: string) {
+  const messages: Record<string, [string, number]> = {
+    DOMAIN_NOT_ALLOWED: [`Super Admin is limited to @${PLATFORM_ADMIN_EMAIL_DOMAIN} accounts.`, 400],
+    SELF_CHANGE: ["You can't change your own staff role.", 400],
+    SELF_DEMOTE: ["You can't remove your own admin access.", 400],
+    LAST_SUPER_ADMIN: ["Alenio needs at least one Super Admin.", 400],
+    ALLOWLISTED: [
+      "This email is pinned as a Super Admin in the server configuration (PLATFORM_ADMIN_EMAILS).",
+      400,
+    ],
+  };
+  const [message, status] = messages[code] ?? ["User not found", 404];
+  return c.json({ error: { message, code } }, status as 400 | 404);
+}
+
+adminApiRouter.get("/activity", requireAbility("activity.view"), async (c) => {
+  const beforeRaw = c.req.query("before");
+  const before = beforeRaw ? new Date(beforeRaw) : null;
+  const rows = await listStaffActions({
+    limit: Number(c.req.query("limit")) || 50,
+    before: before && !Number.isNaN(before.getTime()) ? before : null,
+    actorId: c.req.query("actorId") || null,
+  });
+  return c.json({ data: rows });
+});
+
+adminApiRouter.get("/stats", requireAbility("overview.view"), async (c) => {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -248,7 +291,7 @@ adminApiRouter.get("/stats", async (c) => {
   });
 });
 
-adminApiRouter.get("/users", async (c) => {
+adminApiRouter.get("/users", requireAbility("users.view"), async (c) => {
   const q = c.req.query("q")?.trim().toLowerCase() ?? "";
   const users = await prisma.user.findMany({
     where: q
@@ -265,17 +308,19 @@ adminApiRouter.get("/users", async (c) => {
       email: true,
       image: true,
       createdAt: true,
-      isAdmin: true,
+      accountType: true,
+      staffRole: true,
       _count: { select: { teamMembers: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 500,
   });
-  return c.json({ data: users });
+  return c.json({ data: users.map(withIsAdmin) });
 });
 
 adminApiRouter.post(
   "/users",
+  requireAbility("users.create"),
   zValidator(
     "json",
     z.object({
@@ -295,13 +340,30 @@ adminApiRouter.post(
       if (result.code === "AUTH_FAILED") {
         return c.json({ error: { message: "Could not create login for this user.", code: result.code } }, 500);
       }
+      if (result.code === "REGULAR_ACCOUNT") {
+        return c.json(
+          {
+            error: {
+              message: "Admin access is a separate account. It cannot be added to a regular account.",
+              code: result.code,
+            },
+          },
+          400,
+        );
+      }
       return c.json({ error: { message: "Invalid user details.", code: result.code } }, 400);
     }
+    await audit(c, {
+      action: "user.create",
+      targetType: "user",
+      targetId: result.user.id,
+      summary: `Created account ${result.user.email}`,
+    });
     return c.json({ data: result.user }, 201);
   },
 );
 
-adminApiRouter.get("/users/:id", async (c) => {
+adminApiRouter.get("/users/:id", requireAbility("users.view"), async (c) => {
   const { id } = c.req.param();
   const user = await prisma.user.findUnique({
     where: { id },
@@ -311,7 +373,8 @@ adminApiRouter.get("/users/:id", async (c) => {
       email: true,
       image: true,
       createdAt: true,
-      isAdmin: true,
+      accountType: true,
+      staffRole: true,
       emailVerified: true,
       _count: {
         select: {
@@ -330,11 +393,12 @@ adminApiRouter.get("/users/:id", async (c) => {
     },
   });
   if (!user) return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
-  return c.json({ data: user });
+  return c.json({ data: withIsAdmin(user) });
 });
 
 adminApiRouter.patch(
   "/users/:id",
+  requireAbility("users.edit"),
   zValidator(
     "json",
     z.object({
@@ -347,6 +411,34 @@ adminApiRouter.patch(
     const body = c.req.valid("json");
     const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+    // Changing a staff login's email would hand over that login, so it takes staff.manage.
+    const actor = await resolveStaffActor(c as never);
+    if (existing.accountType === "platform_admin" && !roleHasAbility(actor?.role ?? null, "staff.manage")) {
+      return c.json(
+        { error: { message: "Only a Super Admin can edit staff accounts.", code: "STAFF_FORBIDDEN" } },
+        403,
+      );
+    }
+    if (body.email !== undefined) {
+      const emailError = checkUserEmailChange({ actorEmail: actor?.email ?? null, target: existing, nextEmail: body.email });
+      if (emailError === "EMAIL_CHANGE_COMPANY_ONLY") {
+        return c.json(
+          {
+            error: {
+              message: `Only @${PLATFORM_ADMIN_EMAIL_DOMAIN} staff can change a user's email.`,
+              code: emailError,
+            },
+          },
+          403,
+        );
+      }
+      if (emailError === "SUPER_ADMIN_EMAIL_DOMAIN") {
+        return c.json(
+          { error: { message: `A Super Admin's email must stay on @${PLATFORM_ADMIN_EMAIL_DOMAIN}.`, code: emailError } },
+          400,
+        );
+      }
+    }
 
     const updated = await prisma.user.update({
       where: { id },
@@ -354,31 +446,78 @@ adminApiRouter.patch(
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.email !== undefined ? { email: body.email.trim().toLowerCase() } : {}),
       },
-      select: { id: true, name: true, email: true, image: true, createdAt: true, isAdmin: true },
+      select: { id: true, name: true, email: true, image: true, createdAt: true, accountType: true, staffRole: true },
     });
 
-    return c.json({ data: updated });
+    const changes: string[] = [];
+    if (body.name !== undefined && body.name !== existing.name) changes.push(`name "${existing.name ?? ""}" to "${body.name}"`);
+    const nextEmail = body.email?.trim().toLowerCase();
+    if (nextEmail !== undefined && nextEmail !== existing.email) changes.push(`email ${existing.email} to ${nextEmail}`);
+    if (changes.length > 0) {
+      await audit(c, {
+        action: "user.edit",
+        targetType: "user",
+        targetId: id,
+        summary: `Changed ${changes.join(" and ")}`,
+      });
+    }
+
+    return c.json({ data: withIsAdmin(updated) });
   },
 );
 
 adminApiRouter.patch(
-  "/users/:id/admin",
-  zValidator("json", z.object({ isAdmin: z.boolean() })),
+  "/users/:id/staff-role",
+  requireAbility("staff.manage"),
+  zValidator("json", z.object({ role: z.enum(STAFF_ROLES).nullable() })),
   async (c) => {
+    const actor = c.get("user");
     const { id } = c.req.param();
-    const { isAdmin } = c.req.valid("json");
-    const result = await setPlatformAdmin(id, isAdmin);
-    if (!result.ok) {
-      return c.json({ error: { message: "User not found", code: result.code } }, 404);
+    const { role } = c.req.valid("json");
+    const result = await setStaffRole(actor!.id, id, role);
+    if (!result.ok) return staffRoleError(c, result.code);
+    if (result.previousRole !== role) {
+      await audit(c, {
+        action: "staff.role",
+        targetType: "user",
+        targetId: id,
+        summary: `Changed ${result.user.email}'s staff role from ${roleLabel(result.previousRole)} to ${roleLabel(role)}`,
+      });
     }
     return c.json({ data: result.user });
   },
 );
 
-adminApiRouter.delete("/users/:id", async (c) => {
+/** Older clients: on/off staff access. New clients use /staff-role. */
+adminApiRouter.patch(
+  "/users/:id/admin",
+  requireAbility("staff.manage"),
+  zValidator("json", z.object({ isAdmin: z.boolean() })),
+  async (c) => {
+    const actor = c.get("user");
+    const { id } = c.req.param();
+    const { isAdmin } = c.req.valid("json");
+    if (!isAdmin && id === actor!.id) return staffRoleError(c, "SELF_DEMOTE");
+    const result = await setPlatformAdmin(actor!.id, id, isAdmin);
+    if (!result.ok) return staffRoleError(c, result.code);
+    const nextRole = result.user.staffRole;
+    if (result.previousRole !== nextRole) {
+      await audit(c, {
+        action: "staff.role",
+        targetType: "user",
+        targetId: id,
+        summary: `Changed ${result.user.email}'s staff role from ${roleLabel(result.previousRole)} to ${roleLabel(nextRole)}`,
+      });
+    }
+    return c.json({ data: result.user });
+  },
+);
+
+adminApiRouter.delete("/users/:id", requireAbility("users.delete"), async (c) => {
   const actor = c.get("user");
   const { id } = c.req.param();
   try {
+    const target = await prisma.user.findUnique({ where: { id }, select: { email: true } });
     const result = await deletePlatformUser(actor!.id, id);
     if (!result.ok) {
       if (result.code === "SELF_DELETE") {
@@ -389,6 +528,12 @@ adminApiRouter.delete("/users/:id", async (c) => {
       }
       return c.json({ error: { message: "User not found", code: result.code } }, 404);
     }
+    await audit(c, {
+      action: "user.delete",
+      targetType: "user",
+      targetId: id,
+      summary: `Deleted account ${target?.email ?? id}`,
+    });
     return c.json({ data: { deleted: true } });
   } catch (err) {
     console.error("[admin-delete-user] failed for user", id, err);
@@ -396,12 +541,12 @@ adminApiRouter.delete("/users/:id", async (c) => {
   }
 });
 
-adminApiRouter.get("/teams", async (c) => {
+adminApiRouter.get("/teams", requireAbility("teams.view"), async (c) => {
   const teams = await listPlatformTeams();
   return c.json({ data: teams });
 });
 
-adminApiRouter.get("/teams/:teamId", async (c) => {
+adminApiRouter.get("/teams/:teamId", requireAbility("teams.view"), async (c) => {
   const { teamId } = c.req.param();
   const result = await getPlatformTeam(teamId);
   if (!result.ok) {
@@ -412,6 +557,7 @@ adminApiRouter.get("/teams/:teamId", async (c) => {
 
 adminApiRouter.post(
   "/teams",
+  requireAbility("teams.edit"),
   zValidator(
     "json",
     z.object({
@@ -427,7 +573,7 @@ adminApiRouter.post(
     const result = await createEnterpriseAccount(body);
     if (!result.ok) {
       if (result.code === "TEAM_NAME_TAKEN") {
-        return c.json({ error: { message: "A workspace with this name already exists.", code: result.code } }, 409);
+        return c.json({ error: { message: "This owner already has a workspace with this name.", code: result.code } }, 409);
       }
       if (result.code === "PASSWORD_REQUIRED") {
         return c.json(
@@ -440,12 +586,19 @@ adminApiRouter.post(
       }
       return c.json({ error: { message: "Invalid enterprise account details.", code: result.code } }, 400);
     }
+    await audit(c, {
+      action: "team.create",
+      targetType: "team",
+      targetId: (result as { team?: { id?: string } }).team?.id ?? null,
+      summary: `Created workspace "${body.teamName}" for ${body.ownerEmail}`,
+    });
     return c.json({ data: result }, 201);
   },
 );
 
 adminApiRouter.patch(
   "/teams/:teamId/subscription",
+  requireAbility("teams.edit"),
   zValidator(
     "json",
     z.object({
@@ -463,11 +616,18 @@ adminApiRouter.patch(
       }
       return c.json({ error: { message: "Invalid subscription values.", code: result.code } }, 400);
     }
+    const parts = [body.plan ? `plan to ${body.plan}` : null, body.status ? `status to ${body.status}` : null].filter(Boolean);
+    await audit(c, {
+      action: "team.subscription",
+      targetType: "team",
+      targetId: teamId,
+      summary: `Changed subscription ${parts.join(" and ") || "settings"}`,
+    });
     return c.json({ data: result.subscription });
   },
 );
 
-adminApiRouter.get("/organizations", async (c) => {
+adminApiRouter.get("/organizations", requireAbility("orgs.view"), async (c) => {
   try {
     const organizations = await listAdminOrganizations();
     return c.json({ data: organizations });
@@ -477,7 +637,7 @@ adminApiRouter.get("/organizations", async (c) => {
   }
 });
 
-adminApiRouter.get("/organizations/:organizationId", async (c) => {
+adminApiRouter.get("/organizations/:organizationId", requireAbility("orgs.view"), async (c) => {
   const { organizationId } = c.req.param();
   try {
     const organization = await getAdminOrganization(organizationId);
@@ -493,6 +653,7 @@ adminApiRouter.get("/organizations/:organizationId", async (c) => {
 
 adminApiRouter.post(
   "/organizations",
+  requireAbility("orgs.edit"),
   zValidator(
     "json",
     z.object({
@@ -516,7 +677,7 @@ adminApiRouter.post(
           return c.json({ error: { message: "That email domain is already linked to another customer.", code: result.code } }, 409);
         }
         if (result.code === "TEAM_NAME_TAKEN") {
-          return c.json({ error: { message: "A workspace with this name already exists.", code: result.code } }, 409);
+          return c.json({ error: { message: "This owner already has a workspace with this name.", code: result.code } }, 409);
         }
         if (result.code === "OWNER_REQUIRED_FOR_WORKSPACE") {
           return c.json(
@@ -554,6 +715,12 @@ adminApiRouter.post(
           400,
         );
       }
+      await audit(c, {
+        action: "org.create",
+        targetType: "organization",
+        targetId: (result.organization as { id?: string } | null)?.id ?? null,
+        summary: `Created enterprise customer "${body.name}"`,
+      });
       return c.json(
         {
           data: result.organization,
@@ -570,6 +737,7 @@ adminApiRouter.post(
 
 adminApiRouter.post(
   "/organizations/:organizationId/attach-team",
+  requireAbility("orgs.edit"),
   zValidator(
     "json",
     z.object({
@@ -607,6 +775,12 @@ adminApiRouter.post(
         }
         return c.json({ error: { message: "Could not attach workspace", code: "ATTACH_FAILED" } }, 400);
       }
+      await audit(c, {
+        action: "org.attach_team",
+        targetType: "organization",
+        targetId: organizationId,
+        summary: `Attached workspace ${teamId} to the enterprise customer`,
+      });
       return c.json({ data: result.organization });
     } catch (err) {
       console.error("[admin] attach team failed:", err);
@@ -617,6 +791,7 @@ adminApiRouter.post(
 
 adminApiRouter.patch(
   "/organizations/:organizationId/workspace-limit",
+  requireAbility("orgs.edit"),
   zValidator(
     "json",
     z.object({
@@ -645,6 +820,12 @@ adminApiRouter.patch(
         }
         return c.json({ error: { message: "Could not update workspace limit", code: "UPDATE_FAILED" } }, 400);
       }
+      await audit(c, {
+        action: "org.workspace_limit",
+        targetType: "organization",
+        targetId: organizationId,
+        summary: `Set the workspace limit to ${workspaceLimit}`,
+      });
       return c.json({ data: result.organization });
     } catch (err) {
       console.error("[admin] update workspace limit failed:", err);
@@ -653,13 +834,19 @@ adminApiRouter.patch(
   },
 );
 
-adminApiRouter.delete("/organizations/:organizationId", async (c) => {
+adminApiRouter.delete("/organizations/:organizationId", requireAbility("orgs.edit"), async (c) => {
   const { organizationId } = c.req.param();
   try {
     const result = await deleteAdminOrganization(organizationId);
     if (!result.ok) {
       return c.json({ error: { message: "Enterprise customer not found", code: result.code } }, 404);
     }
+    await audit(c, {
+      action: "org.delete",
+      targetType: "organization",
+      targetId: organizationId,
+      summary: "Removed the enterprise customer",
+    });
     return c.json({ data: result });
   } catch (err) {
     console.error("[admin] delete organization failed:", err);

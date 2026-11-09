@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
   StyleSheet,
   useColorScheme,
 } from "react-native";
@@ -63,34 +64,43 @@ export function BillingPortalWebViewModal({
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={[styles.safe, { backgroundColor: isDark ? "#0f172a" : "#fff" }]} edges={["top"]}>
         <View style={[styles.header, { borderBottomColor: isDark ? "#334155" : "#e2e8f0" }]}>
-          <View style={styles.headerText}>
-            <Text style={[styles.title, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Manage subscription</Text>
-            {workplaceLabel ? (
-              <Text
-                style={[styles.subtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
-                numberOfLines={2}
-                testID="billing-portal-workspace-name"
-              >
-                {workplaceLabel}
+          <View style={[styles.handle, { backgroundColor: isDark ? "#475569" : "#CBD5E1" }]} />
+          <View style={styles.headerRow}>
+            <Image
+              source={require("@/assets/alenio-icon.png")}
+              style={styles.logo}
+            />
+            <View style={styles.headerText}>
+              <Text style={[styles.title, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                Manage subscription
               </Text>
-            ) : null}
+              {workplaceLabel ? (
+                <Text
+                  style={[styles.subtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
+                  numberOfLines={2}
+                  testID="billing-portal-workspace-name"
+                >
+                  {workplaceLabel}
+                </Text>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Close billing portal"
+              testID="billing-portal-close"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <X size={20} color={isDark ? "#e2e8f0" : "#64748b"} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            onPress={onClose}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Close billing portal"
-            testID="billing-portal-close"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <X size={20} color={isDark ? "#e2e8f0" : "#64748b"} />
-          </TouchableOpacity>
         </View>
         <View style={styles.webHost}>
           {loading ? (
@@ -123,17 +133,27 @@ export function BillingPortalWebViewModal({
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: {
+    paddingTop: 7,
+    paddingBottom: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  handle: {
+    alignSelf: "center",
+    width: 38,
+    height: 4,
+    borderRadius: 999,
+    marginBottom: 10,
+  },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 12,
   },
+  logo: { width: 34, height: 34, borderRadius: 9 },
   headerText: { flex: 1, minWidth: 0 },
-  title: { fontSize: 17, fontWeight: "700" },
-  subtitle: { fontSize: 13, fontWeight: "600", marginTop: 2 },
+  title: { fontSize: 18, fontWeight: "800", letterSpacing: -0.25 },
+  subtitle: { fontSize: 12, fontWeight: "600", marginTop: 2 },
   webHost: { flex: 1, position: "relative" },
   web: { flex: 1 },
   loader: {

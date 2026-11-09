@@ -143,8 +143,8 @@ export function TeamMembersDrawer({
   const openProfile = (userId: string) => {
     onClose();
     router.push({
-      pathname: "/member-profile",
-      params: { teamId, memberUserId: userId },
+      pathname: "/person",
+      params: { teamId, userId },
     });
   };
 

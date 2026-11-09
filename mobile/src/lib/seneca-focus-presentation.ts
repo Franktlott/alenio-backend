@@ -71,14 +71,8 @@ export function senecaFocusDestination(
       return { pathname: "/(app)/execute" as const, params: {} };
     case "create_recognition":
       return {
-        pathname: "/(app)/activity" as const,
-        params: {
-          openCelebrate: "1",
-          teamId,
-          ...(affectedMemberIds.length === 1
-            ? { targetUserId: affectedMemberIds[0] }
-            : {}),
-        },
+        pathname: "/recognition-hub" as const,
+        params: { openGive: "1" },
       };
     case "open_team":
       return { pathname: "/(app)/team" as const, params: {} };

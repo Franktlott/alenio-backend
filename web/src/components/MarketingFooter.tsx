@@ -8,28 +8,41 @@ import {
 /** Shared footer for marketing pages (home, pricing, etc.). */
 export function MarketingFooter() {
   return (
-    <div className="site-v2-footer-wrap">
-      <footer id="contact" className="site-v2-footer">
-        <div className="site-v2-footer-top">
-          <img src="/alenio-logo.png" alt="Alenio" className="site-v2-footer-logo" width={140} height={34} />
+    <footer id="contact" className="lp-footer">
+      <div className="lp-footer-inner">
+        <div className="lp-footer-brand">
+          <img src="/alenio-logo.png" alt="Alenio" width={140} height={34} />
+          <p>Your Network. Your Operations. One Platform.</p>
           <a href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a>
         </div>
-        <p className="site-v2-footer-legal">
-          <Link to="/privacy">Privacy Policy</Link>
-          {" · "}
-          <Link to="/terms">Terms of Service</Link>
-          {" · "}
-          <Link to="/account-deletion">Account deletion</Link>
-          {" · "}
-          <Link to="/pricing">Pricing</Link>
-          {" · "}
-          <Link to="/enterprise">Enterprise</Link>
-          {" · "}
-          <Link to="/security">Security</Link>
-        </p>
-        <p className="site-v2-footer-company">{LEGAL_COMPANY_NAME}</p>
-        <p className="site-v2-footer-parent">Parent company: {LEGAL_PARENT_COMPANY_NAME}</p>
-      </footer>
-    </div>
+        <nav className="lp-footer-cols" aria-label="Footer">
+          <div>
+            <strong>Product</strong>
+            <a href="/#network">Network</a>
+            <a href="/#workspace">Workspace</a>
+            <a href="/#features">Seneca AI</a>
+            <Link to="/pricing">Pricing</Link>
+          </div>
+          <div>
+            <strong>Company</strong>
+            <Link to="/enterprise">Enterprise</Link>
+            <Link to="/security">Security</Link>
+            <Link to="/login">Log In</Link>
+          </div>
+          <div>
+            <strong>Legal</strong>
+            <Link to="/privacy">Privacy Policy</Link>
+            <Link to="/terms">Terms of Service</Link>
+            <Link to="/account-deletion">Account deletion</Link>
+          </div>
+        </nav>
+      </div>
+      <div className="lp-footer-bottom">
+        <span>
+          © {new Date().getFullYear()} {LEGAL_COMPANY_NAME}
+        </span>
+        <span>Parent company: {LEGAL_PARENT_COMPANY_NAME}</span>
+      </div>
+    </footer>
   );
 }

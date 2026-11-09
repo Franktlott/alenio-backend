@@ -20,6 +20,7 @@ import {
   Users,
 } from "lucide-react-native";
 import { router } from "expo-router";
+import { workspaceDevelopmentHref } from "@/lib/workspace-development-navigation";
 import type { Team, TeamMember } from "@/lib/types";
 import type { TeamHealthHistoryPoint } from "@/lib/team-health-history";
 import type { MemberStatsPayload } from "@/lib/workplace-standards";
@@ -286,10 +287,7 @@ export function ManagerCoachingHome({
 
   const openDirectory = () => {
     if (!teamId) return;
-    router.push({
-      pathname: "/team-directory",
-      params: { teamId },
-    });
+    router.push(workspaceDevelopmentHref(teamId));
   };
 
   const refreshControl = (
@@ -468,11 +466,16 @@ export function ManagerCoachingHome({
                 <View style={styles.emptyAttention}>
                   <Text style={styles.emptyAttentionText}>Everyone is on track today.</Text>
                   <Pressable
-                    onPress={() => router.push("/(app)/activity")}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/recognition-hub",
+                        params: { openGive: "1" },
+                      })
+                    }
                     hitSlop={6}
                     testID="attention-recognition-nudge"
                   >
-                    <Text style={styles.emptyAttentionLink}>Recognize someone on Activity</Text>
+                    <Text style={styles.emptyAttentionLink}>Recognize someone</Text>
                   </Pressable>
                 </View>
               ) : (
@@ -543,7 +546,7 @@ export function ManagerCoachingHome({
 
         <View style={styles.browseFooter}>
           <SectionHeader
-            title="Team directory"
+            title="Team"
             actionLabel="See all"
             onAction={openDirectory}
             actionTestID="browse-team-directory"

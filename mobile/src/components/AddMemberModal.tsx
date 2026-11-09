@@ -1,28 +1,37 @@
 import React, { useEffect, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
   Text,
   TextInput,
-  ActivityIndicator,
-  Image,
   TouchableOpacity,
+  View,
 } from "react-native";
-import { AlertCircle, UserPlus } from "lucide-react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Check, Search, UserPlus } from "lucide-react-native";
+import { toast } from "burnt";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
   AlenioSheetIcon,
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
-import {
-  previewTeamInvite,
-  type TeamInvitePreview,
-} from "@/lib/team-invites-api";
-import {
-  isValidInviteEmail,
-  teamInviteErrorMessage,
-} from "@/lib/team-invite-errors";
+import { isValidInviteEmail } from "@/lib/team-invite-errors";
+import type { WorkspaceInviteRole } from "@/lib/workspace-members";
+import { api } from "@/lib/api/api";
 import { UserAvatar } from "@/components/UserAvatar";
+
+type InviteCandidate = {
+  id: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+};
+
+type PendingInvite =
+  | { kind: "existing"; candidate: InviteCandidate }
+  | { kind: "email"; email: string };
 
 type Props = {
   visible: boolean;
@@ -31,59 +40,11 @@ type Props = {
   confirming: boolean;
   error?: string | null;
   onClose: () => void;
-  onConfirm: (email: string) => void;
+  /** Existing single-email callers remain supported. */
+  onConfirm?: (email: string, role?: WorkspaceInviteRole) => void;
+  onConfirmMany?: (emails: string[], role: WorkspaceInviteRole) => void;
   onClearError?: () => void;
 };
-
-function MemberPreviewCard({ preview, displayName }: { preview: TeamInvitePreview; displayName: string }) {
-  return (
-    <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
-      <AlenioSheetIcon color={preview.found ? "#4361EE" : "#7C3AED"} compact>
-        <UserAvatar
-          user={{
-            name: preview.user?.name ?? displayName,
-            email: preview.user?.email ?? preview.email,
-            image: preview.user?.image ?? null,
-          }}
-          size={30}
-          radius={15}
-          backgroundColor={preview.found ? "#4361EE" : "#7C3AED"}
-          textColor="#FFFFFF"
-          fontSize={13}
-        />
-      </AlenioSheetIcon>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-          <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]} numberOfLines={2}>
-            {displayName}
-          </Text>
-          <View
-            style={{
-              paddingHorizontal: 7,
-              paddingVertical: 2,
-              borderRadius: 999,
-              backgroundColor: preview.found ? "#ECFDF5" : "#EFF6FF",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 9,
-                fontWeight: "700",
-                letterSpacing: 0.4,
-                color: preview.found ? "#047857" : "#1D4ED8",
-              }}
-            >
-              {preview.found ? "ON ALENIO" : "NEW INVITE"}
-            </Text>
-          </View>
-        </View>
-        <Text style={alenioSheetStyles.optionSubtitle} numberOfLines={1}>
-          {preview.email}
-        </Text>
-      </View>
-    </View>
-  );
-}
 
 export function AddMemberModal({
   visible,
@@ -93,241 +54,511 @@ export function AddMemberModal({
   error,
   onClose,
   onConfirm,
+  onConfirmMany,
   onClearError,
 }: Props) {
-  const [email, setEmail] = useState("");
-  const [step, setStep] = useState<"email" | "confirm">("email");
-  const [preview, setPreview] = useState<TeamInvitePreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [value, setValue] = useState<string>("");
+  const [debouncedValue, setDebouncedValue] = useState("");
+  const [selectedCandidate, setSelectedCandidate] =
+    useState<InviteCandidate | null>(null);
+  const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(
+    null,
+  );
+  const [localError, setLocalError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const email = value.trim().toLowerCase();
 
-  const reset = () => {
-    setEmail("");
-    setStep("email");
-    setPreview(null);
-    setPreviewLoading(false);
-    setPreviewError(null);
-  };
-
-  useEffect(() => {
-    if (!visible) reset();
-  }, [visible]);
-
-  const handleClose = () => {
-    reset();
+  const close = () => {
+    setValue("");
+    setDebouncedValue("");
+    setSelectedCandidate(null);
+    setPendingInvite(null);
+    setLocalError(null);
+    onClearError?.();
     onClose();
   };
 
-  const goBackToEmail = () => {
-    setStep("email");
-    setPreview(null);
-    setPreviewError(null);
-  };
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [value]);
 
-  const handleContinue = async () => {
-    const trimmed = email.trim();
-    if (!trimmed || !teamId) return;
-    if (!isValidInviteEmail(trimmed)) {
-      setPreviewError("Enter a valid email address, like name@company.com.");
+  const { data: candidates = [], isFetching: searching } = useQuery({
+    queryKey: ["workspace-invite-candidates", teamId, debouncedValue],
+    queryFn: () =>
+      api.get<InviteCandidate[]>(
+        `/api/teams/${teamId}/invite-candidates?q=${encodeURIComponent(debouncedValue)}`,
+      ),
+    enabled:
+      visible &&
+      Boolean(teamId) &&
+      debouncedValue.length >= 2 &&
+      !selectedCandidate &&
+      !pendingInvite,
+    staleTime: 15_000,
+  });
+
+  const addExistingMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.post(`/api/teams/${teamId}/invites/user`, { userId }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["team", teamId] });
+      void queryClient.invalidateQueries({ queryKey: ["teams"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["workspace-invite-candidates", teamId],
+      });
+      toast({ title: "Member added", preset: "done" });
+      close();
+    },
+    onError: (err: unknown) => {
+      setLocalError(
+        err instanceof Error
+          ? err.message
+          : "This person could not be added right now.",
+      );
+    },
+  });
+  const busy = confirming || addExistingMutation.isPending;
+  const canSubmit = Boolean(selectedCandidate || isValidInviteEmail(email));
+
+  useEffect(() => {
+    if (!visible) {
+      setValue("");
+      setDebouncedValue("");
+      setSelectedCandidate(null);
+      setPendingInvite(null);
+      setLocalError(null);
+    }
+  }, [visible]);
+
+  const requestConfirmation = () => {
+    if (!teamId) return;
+    if (selectedCandidate) {
+      setLocalError(null);
+      setPendingInvite({ kind: "existing", candidate: selectedCandidate });
       return;
     }
-    setPreviewLoading(true);
-    setPreviewError(null);
-    onClearError?.();
-    try {
-      const result = await previewTeamInvite(teamId, trimmed);
-      setPreview(result);
-      setStep("confirm");
-    } catch (err) {
-      setPreviewError(
-        teamInviteErrorMessage(
-          err,
-          "We couldn't look up this email. Please try again.",
-        ),
-      );
-    } finally {
-      setPreviewLoading(false);
+    if (!email) return;
+    if (!isValidInviteEmail(email)) {
+      setLocalError("Enter a valid email address.");
+      return;
     }
+    setLocalError(null);
+    setPendingInvite({ kind: "email", email });
   };
 
-  const handleConfirm = () => {
-    const trimmed = email.trim();
-    if (!trimmed || preview?.alreadyMember) return;
-    onConfirm(trimmed);
+  const confirmInvitation = () => {
+    if (!pendingInvite || !teamId) return;
+    setLocalError(null);
+    if (pendingInvite.kind === "existing") {
+      addExistingMutation.mutate(pendingInvite.candidate.id);
+      return;
+    }
+    if (onConfirmMany) onConfirmMany([pendingInvite.email], "member");
+    else onConfirm?.(pendingInvite.email, "member");
   };
-
-  const displayName = preview?.user?.name ?? preview?.email ?? email;
-  const otherWorkspaces = (preview?.workspaces ?? []).filter((ws) => !ws.isCurrentTeam);
-  const confirmLabel = preview?.found ? "Add member" : "Send invite";
-  const title = step === "confirm" ? "Confirm add" : "Add member";
-  const subtitle =
-    step === "confirm"
-      ? `Review before adding to ${teamName}`
-      : `Invite someone to ${teamName}`;
-
-  const footerAction = step === "email" ? () => void handleContinue() : handleConfirm;
-  const footerDisabled =
-    step === "email" ? previewLoading || !email.trim() : confirming || preview?.alreadyMember;
-  const footerLoading = step === "email" ? previewLoading : confirming;
-  const footerLabel = step === "email" ? "Continue" : confirming ? "Adding…" : confirmLabel;
-  const footerTestId = step === "email" ? "add-member-continue" : "add-member-confirm";
-  const secondaryLabel = step === "confirm" ? "Back" : "Cancel";
-  const secondaryAction = step === "confirm" ? goBackToEmail : handleClose;
 
   return (
     <AlenioBottomSheet
       visible={visible}
-      title={title}
-      subtitle={subtitle}
-      onClose={handleClose}
+      title={pendingInvite ? "Confirm invitation" : "Invite member"}
+      subtitle={
+        pendingInvite
+          ? "Review the details before continuing"
+          : `Add someone to ${teamName}`
+      }
+      onClose={close}
       compact
       testID="add-member-modal"
       footer={
         <>
-          <TouchableOpacity
-            onPress={footerAction}
-            disabled={footerDisabled}
-            style={[alenioSheetStyles.primaryButton, footerDisabled ? alenioSheetStyles.primaryButtonDisabled : null]}
-            testID={footerTestId}
-            activeOpacity={0.92}
+          <Pressable
+            onPress={pendingInvite ? confirmInvitation : requestConfirmation}
+            disabled={busy || (!pendingInvite && !canSubmit)}
+            style={[
+              alenioSheetStyles.primaryButton,
+              busy || (!pendingInvite && !canSubmit)
+                ? alenioSheetStyles.primaryButtonDisabled
+                : null,
+            ]}
+            testID="add-member-confirm"
           >
-            {footerLoading ? (
-              <ActivityIndicator color="white" />
+            {busy ? (
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={alenioSheetStyles.primaryButtonText}>{footerLabel}</Text>
+              <Text style={alenioSheetStyles.primaryButtonText}>
+                {pendingInvite
+                  ? pendingInvite.kind === "existing"
+                    ? "Confirm and add"
+                    : "Confirm and send"
+                  : "Continue"}
+              </Text>
             )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={secondaryAction}
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              if (pendingInvite) {
+                setPendingInvite(null);
+                setLocalError(null);
+                onClearError?.();
+              } else {
+                close();
+              }
+            }}
+            disabled={busy}
             style={alenioSheetStyles.cancelButton}
-            testID={step === "confirm" ? "add-member-back" : "add-member-cancel"}
-            activeOpacity={0.8}
+            testID="add-member-cancel"
           >
-            <Text style={alenioSheetStyles.cancelButtonText}>{secondaryLabel}</Text>
-          </TouchableOpacity>
+            <Text style={alenioSheetStyles.cancelButtonText}>
+              {pendingInvite ? "Go back" : "Cancel"}
+            </Text>
+          </Pressable>
         </>
       }
     >
-      {step === "email" ? (
+      {pendingInvite ? (
+        <AlenioSheetCard compact>
+          <View style={styles.confirmationHeader}>
+            <AlenioSheetIcon compact>
+              <UserPlus size={16} color="#FFFFFF" />
+            </AlenioSheetIcon>
+            <View style={styles.confirmationCopy}>
+              <Text style={styles.confirmationTitle}>
+                {pendingInvite.kind === "existing"
+                  ? "Add this member?"
+                  : "Send this invitation?"}
+              </Text>
+              <Text style={styles.confirmationSubtitle}>
+                They’ll join {teamName} with the Member role.
+              </Text>
+            </View>
+          </View>
+
+          {pendingInvite.kind === "existing" ? (
+            <View style={styles.confirmationPerson}>
+              <UserAvatar
+                user={{
+                  image: pendingInvite.candidate.image,
+                  name:
+                    pendingInvite.candidate.name ??
+                    pendingInvite.candidate.username ??
+                    "Member",
+                }}
+                size={42}
+              />
+              <View style={styles.candidateCopy}>
+                <Text style={styles.confirmationValue} numberOfLines={1}>
+                  {pendingInvite.candidate.name ?? "Alenio member"}
+                </Text>
+                {pendingInvite.candidate.username ? (
+                  <Text style={styles.candidateUsername} numberOfLines={1}>
+                    @{pendingInvite.candidate.username}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.confirmationEmail}>
+              <Text style={styles.confirmationLabel}>INVITATION EMAIL</Text>
+              <Text style={styles.confirmationValue} numberOfLines={2}>
+                {pendingInvite.email}
+              </Text>
+            </View>
+          )}
+
+          {error || localError ? (
+            <View
+              style={styles.fieldError}
+              accessibilityRole="alert"
+              testID="add-member-error"
+            >
+              <AlertCircle size={13} color="#C2413A" strokeWidth={2.2} />
+              <Text style={styles.fieldErrorText}>{error ?? localError}</Text>
+            </View>
+          ) : null}
+        </AlenioSheetCard>
+      ) : (
         <>
           <AlenioSheetCard compact>
-            <View style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
+            <View
+              style={[
+                alenioSheetStyles.optionRow,
+                alenioSheetStyles.optionRowCompact,
+              ]}
+            >
               <AlenioSheetIcon compact>
-                <UserPlus size={16} color="white" />
+                <Search size={16} color="#FFFFFF" />
               </AlenioSheetIcon>
               <View style={{ flex: 1 }}>
-                <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]}>Invite by email</Text>
-                <Text style={[alenioSheetStyles.optionSubtitle, alenioSheetStyles.optionSubtitleCompact]}>
-                  We&apos;ll look them up before adding them to this workspace.
+                <Text
+                  style={[
+                    alenioSheetStyles.optionTitle,
+                    alenioSheetStyles.optionTitleCompact,
+                  ]}
+                >
+                  Find someone
+                </Text>
+                <Text
+                  style={[
+                    alenioSheetStyles.optionSubtitle,
+                    alenioSheetStyles.optionSubtitleCompact,
+                  ]}
+                >
+                  Search Alenio or enter an email address.
                 </Text>
               </View>
             </View>
-
-            {(error || previewError) ? (
+            <TextInput
+              value={value}
+              onChangeText={(text) => {
+                setValue(text);
+                setSelectedCandidate(null);
+                setLocalError(null);
+                onClearError?.();
+              }}
+              placeholder="Name, @username, or email"
+              placeholderTextColor="#94A3B8"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="default"
+              returnKeyType="send"
+              onSubmitEditing={requestConfirmation}
+              style={[alenioSheetStyles.fieldInput, { minHeight: 48 }]}
+              testID="add-member-email"
+            />
+            {error || localError ? (
               <View
-                style={[
-                  alenioSheetStyles.errorBox,
-                  { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-                ]}
+                style={styles.fieldError}
                 accessibilityRole="alert"
                 testID="add-member-error"
               >
-                <AlertCircle size={15} color="#DC2626" style={{ marginTop: 1 }} />
-                <Text style={[alenioSheetStyles.errorText, { flex: 1 }]}>
-                  {error ?? previewError}
-                </Text>
+                <AlertCircle size={13} color="#C2413A" strokeWidth={2.2} />
+                <Text style={styles.fieldErrorText}>{error ?? localError}</Text>
               </View>
             ) : null}
+          </AlenioSheetCard>
 
-            <View>
-              <Text style={alenioSheetStyles.fieldLabel}>Email address</Text>
-              <TextInput
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  onClearError?.();
-                  setPreviewError(null);
+          {selectedCandidate ? (
+            <View style={styles.selectedCard}>
+              <UserAvatar
+                user={{
+                  image: selectedCandidate.image,
+                  name:
+                    selectedCandidate.name ??
+                    selectedCandidate.username ??
+                    "Member",
                 }}
-                placeholder="name@company.com"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                returnKeyType="next"
-                onSubmitEditing={() => void handleContinue()}
-                style={alenioSheetStyles.fieldInput}
-                testID="add-member-email"
+                size={38}
               />
+              <View style={styles.candidateCopy}>
+                <Text style={styles.candidateName} numberOfLines={1}>
+                  {selectedCandidate.name ?? "Alenio member"}
+                </Text>
+                {selectedCandidate.username ? (
+                  <Text style={styles.candidateUsername} numberOfLines={1}>
+                    @{selectedCandidate.username}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.selectedCheck}>
+                <Check size={15} color="#FFFFFF" strokeWidth={2.5} />
+              </View>
             </View>
-          </AlenioSheetCard>
-        </>
-      ) : preview ? (
-        <>
-          <AlenioSheetCard compact>
-            <MemberPreviewCard preview={preview} displayName={displayName} />
-          </AlenioSheetCard>
-
-          {preview.alreadyMember ? (
-            <View style={alenioSheetStyles.errorBox}>
-              <Text style={alenioSheetStyles.errorText}>This person is already in {teamName}.</Text>
-            </View>
-          ) : preview.found ? (
-            <Text style={alenioSheetStyles.optionSubtitle}>
-              Add <Text style={{ fontWeight: "700", color: "#0F172A" }}>{preview.user?.name ?? "this person"}</Text> to{" "}
-              <Text style={{ fontWeight: "700", color: "#0F172A" }}>{teamName}</Text>? They&apos;ll join right away.
-            </Text>
-          ) : (
-            <Text style={alenioSheetStyles.optionSubtitle}>
-              This email isn&apos;t on Alenio yet. We&apos;ll send an invite to join{" "}
-              <Text style={{ fontWeight: "700", color: "#0F172A" }}>{teamName}</Text>.
-            </Text>
-          )}
-
-          {preview.pendingInvite && !preview.alreadyMember ? (
-            <AlenioSheetCard tint="slate" compact>
-              <Text style={{ fontSize: 12, color: "#92400E", lineHeight: 16 }}>
-                Already invited — confirming will refresh their invite.
-              </Text>
-            </AlenioSheetCard>
-          ) : null}
-
-          {preview.found && otherWorkspaces.length > 0 ? (
-            <AlenioSheetCard tint="purple" compact>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>
-                Other workspaces ({otherWorkspaces.length})
-              </Text>
-              {otherWorkspaces.map((ws) => (
-                <View key={ws.id} style={[alenioSheetStyles.optionRow, alenioSheetStyles.optionRowCompact]}>
-                  <AlenioSheetIcon color="#7C3AED" compact>
-                    {ws.image ? (
-                      <Image source={{ uri: ws.image }} style={{ width: 30, height: 30 }} resizeMode="cover" />
-                    ) : (
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>
-                        {ws.name[0]?.toUpperCase() ?? "?"}
-                      </Text>
-                    )}
-                  </AlenioSheetIcon>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[alenioSheetStyles.optionTitle, alenioSheetStyles.optionTitleCompact]} numberOfLines={1}>
-                      {ws.name}
-                    </Text>
-                    <Text style={alenioSheetStyles.optionSubtitle}>
-                      {ws.role === "owner" ? "Owner" : ws.role === "team_leader" ? "Team Leader" : "Member"}
-                    </Text>
-                  </View>
+          ) : debouncedValue.length >= 2 ? (
+            <View style={styles.resultsCard}>
+              {searching ? (
+                <View style={styles.searchingRow}>
+                  <ActivityIndicator size="small" color="#4361EE" />
+                  <Text style={styles.searchingText}>Searching Alenio…</Text>
                 </View>
-              ))}
-            </AlenioSheetCard>
-          ) : null}
-
-          {error ? (
-            <View style={alenioSheetStyles.errorBox}>
-              <Text style={alenioSheetStyles.errorText}>{error}</Text>
+              ) : candidates.length > 0 ? (
+                candidates.map((candidate, index) => (
+                  <View key={candidate.id}>
+                    {index > 0 ? <View style={styles.resultDivider} /> : null}
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedCandidate(candidate);
+                        setLocalError(null);
+                      }}
+                      style={styles.candidateRow}
+                      activeOpacity={0.72}
+                      accessibilityRole="button"
+                      testID={`invite-candidate-${candidate.id}`}
+                    >
+                      <UserAvatar
+                        user={{
+                          image: candidate.image,
+                          name:
+                            candidate.name ?? candidate.username ?? "Member",
+                        }}
+                        size={36}
+                      />
+                      <View style={styles.candidateCopy}>
+                        <Text style={styles.candidateName} numberOfLines={1}>
+                          {candidate.name ?? "Alenio member"}
+                        </Text>
+                        {candidate.username ? (
+                          <Text
+                            style={styles.candidateUsername}
+                            numberOfLines={1}
+                          >
+                            @{candidate.username}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <UserPlus size={16} color="#5368E8" strokeWidth={2.2} />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : !isValidInviteEmail(email) ? (
+                <Text style={styles.noResultsText}>No Alenio users found.</Text>
+              ) : null}
             </View>
           ) : null}
         </>
-      ) : null}
+      )}
     </AlenioBottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  confirmationHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+  },
+  confirmationCopy: {
+    flex: 1,
+  },
+  confirmationTitle: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: "#172033",
+  },
+  confirmationSubtitle: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 15,
+    color: "#7A8598",
+  },
+  confirmationPerson: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    marginTop: 13,
+    padding: 11,
+    borderRadius: 12,
+    backgroundColor: "#F7F8FC",
+  },
+  confirmationEmail: {
+    marginTop: 13,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: "#F7F8FC",
+  },
+  confirmationLabel: {
+    marginBottom: 3,
+    fontSize: 9.5,
+    lineHeight: 12,
+    fontWeight: "700",
+    letterSpacing: 0.7,
+    color: "#8A94A6",
+  },
+  confirmationValue: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: "#172033",
+  },
+  fieldError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 8,
+    paddingHorizontal: 2,
+  },
+  fieldErrorText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "600",
+    color: "#A33D38",
+  },
+  resultsCard: {
+    overflow: "hidden",
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#E7ECF3",
+    backgroundColor: "#FFFFFF",
+  },
+  candidateRow: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  candidateCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  candidateName: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: "700",
+    color: "#172033",
+  },
+  candidateUsername: {
+    marginTop: 2,
+    fontSize: 10.5,
+    lineHeight: 13,
+    color: "#8A94A6",
+  },
+  resultDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 57,
+    backgroundColor: "#E8EDF3",
+  },
+  searchingRow: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+  },
+  searchingText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  noResultsText: {
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    textAlign: "center",
+    fontSize: 11.5,
+    color: "#8A94A6",
+  },
+  selectedCard: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#D8DEFF",
+    backgroundColor: "#F7F8FF",
+  },
+  selectedCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#4361EE",
+  },
+});

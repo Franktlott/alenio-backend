@@ -30,7 +30,8 @@ import {
   type MemberStatsPayload,
 } from "@/lib/workplace-standards";
 import { formatDaysSinceCheckIn } from "@/lib/member-stats-display";
-import { planOneOnOneHref } from "@/lib/plan-one-on-one";
+import { scheduleCheckInHref } from "@/lib/meeting-navigation";
+import { workspaceDevelopmentHref } from "@/lib/workspace-development-navigation";
 import {
   coachingFilterShortLabel,
   coachingFilterSubtitle,
@@ -141,6 +142,21 @@ export default function TeamPriorityScreen() {
     if (targetRole === "owner") return false;
     return isLeaderRole(myRole);
   };
+  const openMemberDestination = (memberUserId: string) => {
+    if (filter === "checkInDue" || filter === "goalsMissing") {
+      router.push(
+        workspaceDevelopmentHref(teamId, {
+          memberUserId,
+          section: filter === "checkInDue" ? "check-ins" : "goals",
+        }),
+      );
+      return;
+    }
+    router.push({
+      pathname: "/person",
+      params: { teamId, userId: memberUserId },
+    });
+  };
 
   const title = coachingFilterTitle(filter, filtered.length);
   const subtitle = coachingFilterSubtitle(filter);
@@ -237,11 +253,7 @@ export default function TeamPriorityScreen() {
                     showDivider={index < filtered.length - 1}
                     onPress={
                       hasProfilePermission
-                        ? () =>
-                            router.push({
-                              pathname: "/member-profile",
-                              params: { teamId, memberUserId: item.userId },
-                            })
+                        ? () => openMemberDestination(item.userId)
                         : undefined
                     }
                     testID={`priority-member-${item.userId}`}
@@ -278,11 +290,7 @@ export default function TeamPriorityScreen() {
                       showDivider={index < filtered.length - 1}
                       onPress={
                         hasProfilePermission
-                          ? () =>
-                              router.push({
-                                pathname: "/member-profile",
-                                params: { teamId, memberUserId: item.userId },
-                              })
+                          ? () => openMemberDestination(item.userId)
                           : undefined
                       }
                       testID={`priority-member-${item.userId}`}
@@ -302,14 +310,7 @@ export default function TeamPriorityScreen() {
           </Text>
           <Pressable
             onPress={() => {
-              const firstMemberId =
-                filtered.length === 1 ? filtered[0]?.userId : undefined;
-              router.push(
-                planOneOnOneHref(teamId, {
-                  memberUserId: firstMemberId,
-                  myRole: typeof myRole === "string" ? myRole : undefined,
-                }),
-              );
+              router.push(scheduleCheckInHref(teamId));
             }}
             style={styles.footerBtn}
             testID="schedule-check-in"

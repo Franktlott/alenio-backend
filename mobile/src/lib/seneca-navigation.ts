@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { planOneOnOneHref } from "./plan-one-on-one";
+import { scheduleCheckInHref } from "./meeting-navigation";
 import type { SenecaActionId } from "./seneca-assistant";
 import type { SenecaAskActionId } from "./seneca-api";
 import type { SenecaQuickAction } from "./seneca-briefing";
@@ -7,6 +7,7 @@ import {
   isSenecaFocusActionId,
 } from "./seneca-focus";
 import { senecaFocusDestination } from "./seneca-focus-presentation";
+import { workspaceDevelopmentHref } from "./workspace-development-navigation";
 
 export function senecaFocusActionNavigate(
   actionId: string,
@@ -29,18 +30,10 @@ export function senecaActionNavigate(
       router.push({ pathname: "/create-task", params: { teamId } });
       break;
     case "schedule_check_in":
-      if (memberUserId) {
-        router.push(
-          planOneOnOneHref(teamId, {
-            memberUserId,
-          }),
-        );
-      } else {
-        router.push(planOneOnOneHref(teamId));
-      }
+      router.push(scheduleCheckInHref(teamId));
       break;
     case "create_recognition":
-      router.push("/(app)/activity");
+      router.push({ pathname: "/recognition-hub", params: { openGive: "1" } });
       break;
     case "build_checklist":
       router.push("/(app)/execute");
@@ -72,24 +65,18 @@ export function briefingActionNavigate(
       break;
     case "coach_owner":
     case "prepare_1on1":
-      if (memberUserId) {
-        router.push(
-          planOneOnOneHref(teamId, {
-            memberUserId,
-          }),
-        );
-      } else {
-        router.push(planOneOnOneHref(teamId));
-      }
+      router.push(scheduleCheckInHref(teamId));
       break;
     case "create_dev_note":
       if (memberUserId) {
-        router.push({
-          pathname: "/member-profile",
-          params: { teamId, memberUserId, tab: "growth" },
-        });
+        router.push(
+          workspaceDevelopmentHref(teamId, {
+            memberUserId,
+            section: "goals",
+          }),
+        );
       } else {
-        router.push("/(app)/team");
+        router.push(workspaceDevelopmentHref(teamId));
       }
       break;
     case "view_tasks":
@@ -98,7 +85,7 @@ export function briefingActionNavigate(
     case "send_reminder":
     case "create_shoutout":
     case "add_recognition_note":
-      router.push("/(app)/activity");
+      router.push({ pathname: "/recognition-hub", params: { openGive: "1" } });
       break;
     default:
       router.push("/(app)/execute");
@@ -114,10 +101,10 @@ export function quickActionNavigate(actionId: SenecaQuickAction["id"], teamId: s
       router.push({ pathname: "/create-task", params: { teamId } });
       break;
     case "check_in":
-      router.push(planOneOnOneHref(teamId));
+      router.push(scheduleCheckInHref(teamId));
       break;
     case "recognize":
-      router.push("/(app)/activity");
+      router.push({ pathname: "/recognition-hub", params: { openGive: "1" } });
       break;
   }
 }

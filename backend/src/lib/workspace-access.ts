@@ -1,5 +1,6 @@
 import type { PrismaClient, TeamSubscription } from "@prisma/client";
 import { prisma } from "../prisma";
+import { featuresOfDbPlan, hasGoFeature } from "./plan-features";
 
 export const WORKSPACE_TRIAL_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -30,6 +31,8 @@ export type WorkspaceAccessState = {
   bannerSeverity: WorkspaceBannerSeverity;
   hasTeamFeatures: boolean;
   hasGoFeatures: boolean;
+  /** Feature keys the workspace's plan includes (see plan-features). */
+  features: string[];
   isLegacyGrandfathered: boolean;
 };
 
@@ -74,8 +77,9 @@ export function resolveWorkspaceAccess(
     isMissingLegacy || (plan === "free" && status === "active" && !trialStartedAt && !trialEndsAt);
   const canWrite = isLegacyGrandfathered || status === "active" || status === "trialing";
   const paidPlan = plan === "team" || plan === "pro" || plan === "operations";
+  const features = paidPlan ? featuresOfDbPlan(plan) : [];
   const hasTeamFeatures = paidPlan;
-  const hasGoFeatures = plan === "operations";
+  const hasGoFeatures = hasGoFeature(features);
 
   let bannerSeverity: WorkspaceBannerSeverity = "none";
   if (status === "trialing") {
@@ -96,6 +100,7 @@ export function resolveWorkspaceAccess(
     bannerSeverity,
     hasTeamFeatures,
     hasGoFeatures,
+    features,
     isLegacyGrandfathered,
   };
 }

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { shortPeriod, usePlans } from "@/lib/plans";
 import {
   View,
   Text,
@@ -11,7 +12,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft,
   Calendar,
@@ -59,7 +59,9 @@ import { useTeamStore } from "@/lib/state/team-store";
 import {
   ACCOUNT_HUB_TITLE,
 } from "@/lib/plan-access-copy";
-import { HEADER_GRADIENT } from "@/lib/header-gradient";
+import { HEADER_BRAND_COLOR } from "@/lib/header-brand";
+import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { isPlayCheckoutCanceled } from "@/lib/play-external-links";
 
 function canEditWorkspace(role: string | undefined | null) {
   return ["owner", "team_leader"].includes((role ?? "").trim().toLowerCase());
@@ -85,7 +87,12 @@ const PANEL_ACTION_CARD_STYLE = {
   gap: 8,
 };
 
-const FREE_INCLUDED = ["Activity feed", "Team chat", "Team members"] as const;
+const FREE_INCLUDED = [
+  "Activity feed",
+  "Team chat",
+  "Team members",
+  "Celebrations & shoutouts",
+] as const;
 
 const PRO_FEATURES = [
   "Tasks & action items",
@@ -94,7 +101,6 @@ const PRO_FEATURES = [
   "Team calendar & Outlook sync",
   "Metrics & dashboards",
   "Performance insights",
-  "Celebrations & shoutouts",
   "Priority support",
 ] as const;
 
@@ -882,7 +888,13 @@ function ComparePlansModal({
 
 export default function AccountHubScreen() {
   const insets = useSafeAreaInsets();
+  const plans = usePlans();
   const queryClient = useQueryClient();
+  const { data: me } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () => fetchMeUser(),
+  });
+  const canStartWorkspaceTrial = me?.canStartWorkspaceTrial !== false;
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { teamId: teamIdParam, billing: billingFlash } = useLocalSearchParams<{
     teamId?: string;
@@ -993,6 +1005,7 @@ export default function AccountHubScreen() {
       setBillingModalOpen(true);
     },
     onError: (err: Error) => {
+      if (isPlayCheckoutCanceled(err)) return;
       toast({ title: err.message || "Could not open billing", preset: "error" });
     },
   });
@@ -1022,7 +1035,7 @@ export default function AccountHubScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]} testID="account-hub-screen">
-      <LinearGradient colors={HEADER_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <View style={{ backgroundColor: HEADER_BRAND_COLOR }}>
         <View
           style={{
             paddingHorizontal: 16,
@@ -1042,7 +1055,7 @@ export default function AccountHubScreen() {
           </View>
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
         </View>
-      </LinearGradient>
+      </View>
 
       <View
         style={{
@@ -1124,7 +1137,9 @@ export default function AccountHubScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Plans for every team</Text>
                 <Text style={{ fontSize: 12, color: "#64748B", lineHeight: 17, marginTop: 2 }}>
-                  Start with a card-free 14-day Operations trial.
+                  {canStartWorkspaceTrial
+                    ? "Start with a card-free 14-day Operations trial."
+                    : "Choose a paid plan when you create your next workspace."}
                 </Text>
               </View>
             </View>
@@ -1153,16 +1168,16 @@ export default function AccountHubScreen() {
                   <Users size={17} color={TEAM_ACCENT} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#172033" }}>Pro</Text>
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#172033" }}>{plans.pro.name}</Text>
                   <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>Lead, coach, and execute as one team</Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={{ fontSize: 16, fontWeight: "800", color: "#172033" }}>$39.99</Text>
-                  <Text style={{ fontSize: 9, color: "#64748B", marginTop: 1 }}>workspace / month</Text>
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: "#172033" }}>{plans.pro.priceLabel}</Text>
+                  <Text style={{ fontSize: 9, color: "#64748B", marginTop: 1 }}>{shortPeriod(plans.pro)}</Text>
                 </View>
               </View>
               <Text style={{ fontSize: 12, lineHeight: 17, color: "#475569", marginTop: 9 }}>
-                Tasks and priorities · Team calendar · Coaching and Seneca · Insights and development
+                {plans.pro.features.slice(0, 4).join(" · ")}
               </Text>
               </View>
 
@@ -1191,7 +1206,7 @@ export default function AccountHubScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-                    <Text style={{ fontSize: 15, fontWeight: "800", color: "#172033" }}>Operations</Text>
+                    <Text style={{ fontSize: 15, fontWeight: "800", color: "#172033" }}>{plans.operations.name}</Text>
                     <View style={{ borderRadius: 999, backgroundColor: "#EDE9FE", paddingHorizontal: 7, paddingVertical: 2 }}>
                       <Text style={{ fontSize: 8, fontWeight: "800", color: "#6D28D9", letterSpacing: 0.4 }}>
                         COMING SOON
@@ -1201,8 +1216,8 @@ export default function AccountHubScreen() {
                   <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>Everything in Pro, built for frontline teams</Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={{ fontSize: 16, fontWeight: "800", color: "#172033" }}>$69.99</Text>
-                  <Text style={{ fontSize: 9, color: "#64748B", marginTop: 1 }}>workspace / month</Text>
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: "#172033" }}>{plans.operations.priceLabel}</Text>
+                  <Text style={{ fontSize: 9, color: "#64748B", marginTop: 1 }}>{shortPeriod(plans.operations)}</Text>
                 </View>
               </View>
               <Text style={{ fontSize: 12, lineHeight: 17, color: "#475569", marginTop: 9 }}>
@@ -1222,9 +1237,11 @@ export default function AccountHubScreen() {
                 justifyContent: "center",
                 paddingHorizontal: 18,
               }}
-              testID="account-hub-start-trial"
+              testID={canStartWorkspaceTrial ? "account-hub-start-trial" : "account-hub-create-paid-workspace"}
             >
-              <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>Start 14-day trial</Text>
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>
+                {canStartWorkspaceTrial ? "Start 14-day trial" : "Create paid workspace"}
+              </Text>
             </TouchableOpacity>
             <Pressable
               onPress={() => router.push({ pathname: "/onboarding", params: { intent: "add", mode: "join" } })}

@@ -18,12 +18,12 @@ const ONBOARDING_STEPS = [
   },
   {
     title: "Bring your team in",
-    detail: "From Team, send invites so leaders and associates share one workspace.",
+    detail: "From Profile, send invites so leaders and associates share one workspace.",
     done: false,
   },
   {
-    title: "Operate from Chat",
-    detail: "Chat becomes home base for updates, tasks, and day-to-day execution.",
+    title: "Operate in Alenio Go",
+    detail: "Floor tools unlock after you join or create a workspace.",
     done: false,
   },
 ] as const;
@@ -53,7 +53,7 @@ export function NoTeamsEmptyState({ onRefreshWorkspaces }: Props) {
     });
     setPersistedEnterpriseTeamId(row.id);
     setSelectedTeamId(row.id);
-    navigate(`/chat?teamId=${encodeURIComponent(row.id)}`, { replace: true });
+    navigate(`/go?teamId=${encodeURIComponent(row.id)}`, { replace: true });
   };
 
   return (
@@ -65,7 +65,7 @@ export function NoTeamsEmptyState({ onRefreshWorkspaces }: Props) {
             Set up your organization workspace
           </h2>
           <p className="enterprise-no-teams-lead">
-            Chat, Activity, and execution tools unlock after you join or create a workspace. Most teams join with a
+            Floor tools unlock after you join or create a workspace. Most teams join with a
             manager code; owners create the workspace first.
           </p>
         </header>

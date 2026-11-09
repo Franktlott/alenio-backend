@@ -18,6 +18,7 @@ import {
 import { isSessionTokenExpired, isSessionTokenUsable } from "../lib/token";
 import { finishPostAuthNavigation, setPendingEnterpriseInviteToken, setPendingInviteToken } from "../lib/invite-auth";
 import { isMobileBrowser } from "../lib/mobile-browser";
+import { WEB_APP_HOME } from "../lib/web-app-home";
 import { goToEmailVerification } from "../lib/verify-redirect";
 import { setPendingSignUp } from "../lib/pending-signup";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
@@ -61,7 +62,7 @@ export function SignUpPage() {
 
   const existing = getAccessToken();
   if (isSessionTokenUsable(existing)) {
-    return <Navigate to={isMobileBrowser() ? "/get-app" : "/chat"} replace />;
+    return <Navigate to={isMobileBrowser() ? "/get-app" : WEB_APP_HOME} replace />;
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -212,21 +213,30 @@ export function SignUpPage() {
             ← Back to website
           </Link>
           <h1 className="auth-v2-hero-title">
-            Create your account.
+            Your Network.
             <br />
-            <span>Same plan on web and mobile.</span>
+            Your Operations.
+            <br />
+            <span>One Platform.</span>
           </h1>
           <p className="auth-v2-hero-copy">
             {inviteToken
               ? "After you verify your email, you'll join the workspace from your invite automatically."
-              : "Start in Chat right away. You can create or join a workspace anytime from Team."}
+              : "Join the Alenio network for free on web and in the app. Add a workspace for your team whenever you are ready."}
           </p>
+          {inviteToken ? null : (
+            <ul className="auth-v2-points">
+              <li>Free to join the network</li>
+              <li>Connect, share wins, and grow with frontline leaders</li>
+              <li>Add a workspace anytime — 14-day free trial</li>
+            </ul>
+          )}
         </div>
       </section>
       <main className="auth-v2-main">
         <div className="auth-v2-card">
           <div className="auth-v2-card-head">
-            <p className="auth-v2-eyebrow">Web sign-up</p>
+            <p className="auth-v2-eyebrow">Get started</p>
             <h2 className="auth-heading">Your account</h2>
             <p className="auth-sub">Use a strong password. You&apos;ll confirm your email next if required.</p>
             <p className="auth-sub" style={{ marginTop: "0.5rem" }}>

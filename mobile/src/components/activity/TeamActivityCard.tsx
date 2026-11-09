@@ -18,7 +18,9 @@ export function TeamActivityCard({ item, footer, onLongPress, testID }: Props) {
   const LabelIcon = isJoined ? UserPlus : UserMinus;
   const actorName = item.actor?.name ?? item.metadata.userName ?? "Someone";
 
-  const description = isJoined ? `${actorName} joined the team` : `${actorName} left the team`;
+  const description = isJoined
+    ? `${actorName} joined the workspace`
+    : `${actorName} left the workspace`;
 
   return (
     <ActivityCardShell
@@ -26,6 +28,7 @@ export function TeamActivityCard({ item, footer, onLongPress, testID }: Props) {
       onLongPress={onLongPress}
       footer={footer}
       testID={testID ?? `team-activity-card-${item.id}`}
+      contained
     >
       <ActivityCardBody
         actor={item.actor ?? { name: actorName }}
@@ -35,7 +38,9 @@ export function TeamActivityCard({ item, footer, onLongPress, testID }: Props) {
         timestamp={item.timestamp}
         memberName={actorName}
         description={description}
+        detail={isJoined ? "Welcome to the team!" : undefined}
         avatarResetKey={item.id}
+        showAvatar={!!item.actor}
       />
     </ActivityCardShell>
   );

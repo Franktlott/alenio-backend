@@ -1,10 +1,30 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_WORKSPACE_FILTERS, type WorkspaceFiltersState } from "./workspace-types";
+import type { Task } from "@/lib/types";
 import {
   countActiveTaskFilters,
+  formatTaskDueCopy,
+  groupTasksBySchedule,
   taskFilterSummary,
+  taskScopeChip,
   taskStatusLabel,
 } from "./workspace-utils";
+
+function task(partial: Partial<Task> & Pick<Task, "id" | "title">): Task {
+  return {
+    status: "todo",
+    priority: "medium",
+    kind: "workspace_task",
+    createdAt: "2026-09-01T12:00:00.000Z",
+    updatedAt: "2026-09-01T12:00:00.000Z",
+    teamId: "team-1",
+    creatorId: "user-1",
+    creator: { id: "user-1", name: "Pat", email: "pat@example.com" },
+    assignments: [],
+    subtasks: [],
+    ...partial,
+  };
+}
 
 describe("taskStatusLabel", () => {
   test("names each task state for the Showing selector", () => {
@@ -94,5 +114,52 @@ describe("countActiveTaskFilters", () => {
       sort: "priority",
     };
     expect(countActiveTaskFilters(filters, null)).toBe(0);
+  });
+});
+
+describe("taskScopeChip", () => {
+  test("maps filter state onto the Tasks tab chips", () => {
+    expect(taskScopeChip(DEFAULT_WORKSPACE_FILTERS)).toBe("mine");
+    expect(
+      taskScopeChip({ ...DEFAULT_WORKSPACE_FILTERS, assignedTo: "entire_team" }),
+    ).toBe("all");
+    expect(
+      taskScopeChip({ ...DEFAULT_WORKSPACE_FILTERS, assignedTo: "others" }),
+    ).toBe("assigned");
+    expect(
+      taskScopeChip({ ...DEFAULT_WORKSPACE_FILTERS, statusTab: "completed" }),
+    ).toBe("completed");
+  });
+});
+
+describe("formatTaskDueCopy", () => {
+  const now = new Date("2026-09-04T15:00:00");
+
+  test("labels today, tomorrow, and overdue due dates", () => {
+    expect(formatTaskDueCopy("2026-09-04T16:00:00", now).tone).toBe("today");
+    expect(formatTaskDueCopy("2026-09-04T16:00:00", now).text.startsWith("Today")).toBe(true);
+    expect(formatTaskDueCopy("2026-09-05T09:00:00", now).tone).toBe("upcoming");
+    expect(formatTaskDueCopy("2026-09-03T17:00:00", now).tone).toBe("overdue");
+    expect(formatTaskDueCopy("2026-09-04T14:00:00", now).tone).toBe("overdue");
+  });
+});
+
+describe("groupTasksBySchedule", () => {
+  test("buckets tasks into overdue, today, and upcoming", () => {
+    const now = new Date("2026-09-04T12:00:00");
+    const groups = groupTasksBySchedule(
+      [
+        task({ id: "1", title: "Overdue", dueDate: "2026-09-03T17:00:00" }),
+        task({ id: "2", title: "Today", dueDate: "2026-09-04T16:00:00" }),
+        task({ id: "4", title: "Past time", dueDate: "2026-09-04T10:00:00" }),
+        task({ id: "3", title: "Later", dueDate: "2026-09-09T10:00:00" }),
+      ],
+      now,
+    );
+    expect(groups.map((group) => [group.key, group.tasks.length])).toEqual([
+      ["overdue", 2],
+      ["today", 1],
+      ["upcoming", 1],
+    ]);
   });
 });

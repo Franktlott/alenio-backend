@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   AtSign,
+  BriefcaseBusiness,
   Camera,
   ChevronRight,
   FileText,
@@ -30,6 +31,7 @@ import { refreshMeInAuthCaches } from "@/lib/auth/use-session";
 import { uploadFile } from "@/lib/upload";
 import { pickImage, takePhoto } from "@/lib/file-picker";
 import { UserAvatar } from "@/components/UserAvatar";
+import { ProfilePhotosEditor } from "@/components/profile/ProfilePhotosEditor";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 type EditableProfile = {
@@ -38,6 +40,7 @@ type EditableProfile = {
   email: string;
   image: string | null;
   username: string | null;
+  profileTitle: string | null;
   profileWebsite: string | null;
   profileLocation: string | null;
   profileBio: string | null;
@@ -45,6 +48,7 @@ type EditableProfile = {
 
 type ProfileDraft = {
   name: string;
+  profileTitle: string;
   profileWebsite: string;
   profileLocation: string;
   profileBio: string;
@@ -52,6 +56,7 @@ type ProfileDraft = {
 
 const EMPTY_DRAFT: ProfileDraft = {
   name: "",
+  profileTitle: "",
   profileWebsite: "",
   profileLocation: "",
   profileBio: "",
@@ -72,6 +77,7 @@ export default function EditProfileScreen() {
     if (!profile) return;
     setDraft({
       name: profile.name ?? "",
+      profileTitle: profile.profileTitle ?? "",
       profileWebsite: profile.profileWebsite ?? "",
       profileLocation: profile.profileLocation ?? "",
       profileBio: profile.profileBio ?? "",
@@ -97,6 +103,7 @@ export default function EditProfileScreen() {
     mutationFn: () =>
       api.patch<EditableProfile>("/api/profile", {
         name: draft.name,
+        profileTitle: draft.profileTitle,
         profileWebsite: draft.profileWebsite,
         profileLocation: draft.profileLocation,
         profileBio: draft.profileBio,
@@ -141,6 +148,7 @@ export default function EditProfileScreen() {
   const changed =
     !!profile &&
     (draft.name.trim() !== profile.name ||
+      draft.profileTitle.trim() !== (profile.profileTitle ?? "") ||
       draft.profileWebsite.trim() !== (profile.profileWebsite ?? "") ||
       draft.profileLocation.trim() !== (profile.profileLocation ?? "") ||
       draft.profileBio.trim() !== (profile.profileBio ?? ""));
@@ -262,6 +270,18 @@ export default function EditProfileScreen() {
             </Pressable>
             <Divider />
             <Field
+              icon={<BriefcaseBusiness size={16} color="#718097" />}
+              label="Title"
+              value={draft.profileTitle}
+              placeholder="e.g. Operations Manager"
+              maxLength={80}
+              onChangeText={(profileTitle) =>
+                setDraft((current) => ({ ...current, profileTitle }))
+              }
+              testID="edit-profile-title"
+            />
+            <Divider />
+            <Field
               icon={<Link2 size={16} color="#718097" />}
               label="Website"
               value={draft.profileWebsite}
@@ -285,6 +305,8 @@ export default function EditProfileScreen() {
               }
             />
           </View>
+
+          <ProfilePhotosEditor />
 
           <View style={styles.aboutHeader}>
             <Text style={styles.sectionTitle}>About you</Text>

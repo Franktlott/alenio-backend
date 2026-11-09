@@ -13,7 +13,11 @@ import {
 } from "../lib/api";
 import { loadWebCheckoutConfig, peekWebCheckoutConfig, type WebCheckoutConfig } from "../lib/checkout-config-cache";
 import { LEGAL_CONTACT_EMAIL } from "../lib/legal-constants";
-const FREE_FEATURES = ["Activity feed", "Team chat", "Team members"] as const;
+const FREE_FEATURES = [
+  "Team chat",
+  "Team members",
+  "Celebrations & shoutouts",
+] as const;
 const PRO_CARD_FEATURES = [
   "Tasks & action items",
   "Seneca AI coaching",
@@ -21,7 +25,6 @@ const PRO_CARD_FEATURES = [
   "Team calendar & Outlook sync",
   "Metrics & dashboards",
   "Performance insights",
-  "Celebrations & shoutouts",
   "Priority support",
 ] as const;
 const OPS_CARD_FEATURES = [

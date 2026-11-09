@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
-import { Pressable, StyleSheet, Text, View, Image } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import Svg, { Path } from "react-native-svg";
@@ -24,8 +24,6 @@ import {
   type CelebrationTheme,
 } from "./celebration-themes";
 import { UserAvatar } from "@/components/UserAvatar";
-
-const alenioIcon = require("@/assets/alenio-icon.png");
 
 export { CELEBRATION_CARD_THEMES, getCelebrationCardTheme } from "./celebration-themes";
 
@@ -206,11 +204,11 @@ function AvatarFocal({
       <View style={styles.avatarWhiteRing}>
         <UserAvatar
           user={{ name, image }}
-          size={40}
-          radius={20}
+          size={36}
+          radius={18}
           backgroundColor={theme.gradient[1]}
           textColor="#FFFFFF"
-          fontSize={15}
+          fontSize={14}
         />
       </View>
       <View style={styles.avatarBadge}>
@@ -222,7 +220,6 @@ function AvatarFocal({
 
 export function CelebrationActivityCard({ item, footer, onLongPress, testID }: Props) {
   const theme = getCelebrationCardTheme(item.metadata.celebrationType);
-  const Icon = theme.Icon;
   const fromName = item.actor?.name ?? "Someone";
   const toName = item.metadata.targetName ?? item.title ?? "a teammate";
   const toImage = item.metadata.targetUserImage ?? null;
@@ -274,13 +271,6 @@ export function CelebrationActivityCard({ item, footer, onLongPress, testID }: P
             {/* Top: identity left, time + icon right */}
             <View style={styles.topRow}>
               <View style={styles.topLeft}>
-                <View style={styles.headerRow}>
-                  <View style={styles.typePill}>
-                    <Icon size={10} color={theme.accent} strokeWidth={2.5} />
-                    <Text style={styles.typePillText}>{theme.label}</Text>
-                  </View>
-                </View>
-
                 <View style={styles.identityRow}>
                   <AvatarFocal image={toImage} name={toName} theme={theme} />
                   <View style={styles.identityCopy}>
@@ -313,11 +303,7 @@ export function CelebrationActivityCard({ item, footer, onLongPress, testID }: P
               </View>
             </View>
 
-            {/* Reactions */}
-            <View style={styles.footerRow}>
-              <Image source={alenioIcon} style={styles.alenioMark} accessibilityLabel="Alenio" />
-              <View style={styles.footerReactions}>{footer}</View>
-            </View>
+            {footer ? <View style={styles.footerRow}>{footer}</View> : null}
           </View>
         </View>
       </Pressable>
@@ -369,11 +355,11 @@ const styles = StyleSheet.create({
     height: 54,
   },
   content: {
-    paddingTop: 10,
-    paddingBottom: 10,
-    paddingLeft: 12,
-    paddingRight: 10,
-    gap: 7,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingLeft: 10,
+    paddingRight: 9,
+    gap: 5,
   },
   topRow: {
     flexDirection: "row",
@@ -383,35 +369,13 @@ const styles = StyleSheet.create({
   topLeft: {
     flex: 1,
     minWidth: 0,
-    gap: 7,
+    gap: 0,
   },
   topRight: {
     alignItems: "center",
     gap: 4,
     paddingTop: 1,
     flexShrink: 0,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  typePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(0,0,0,0.28)",
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-  },
-  typePillText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
   },
   timeText: {
     fontSize: 10,
@@ -449,22 +413,22 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.78)",
   },
   avatarWrap: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
   avatarGlow: {
     position: "absolute",
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   avatarWhiteRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     padding: 2,
     backgroundColor: "rgba(255,255,255,0.95)",
     alignItems: "center",
@@ -507,23 +471,23 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   trophyWrap: {
-    minWidth: 58,
+    minWidth: 52,
     alignItems: "center",
     justifyContent: "center",
   },
   trophyGlow: {
     position: "absolute",
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   medalStack: {
     alignItems: "center",
   },
   medalFace: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
@@ -622,8 +586,8 @@ const styles = StyleSheet.create({
   quoteTextWrap: {
     justifyContent: "center",
     // Keep message clear of decorative quote marks (corners only)
-    paddingTop: 14,
-    paddingBottom: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
     paddingLeft: 34,
     paddingRight: 30,
   },
@@ -636,18 +600,8 @@ const styles = StyleSheet.create({
   footerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    justifyContent: "flex-end",
     paddingRight: 2,
-  },
-  alenioMark: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    flexShrink: 0,
-  },
-  footerReactions: {
-    flex: 1,
-    minWidth: 0,
   },
   celebrateBtn: {
     flexDirection: "row",

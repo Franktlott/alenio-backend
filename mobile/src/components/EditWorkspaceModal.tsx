@@ -9,8 +9,8 @@ import {
   Modal,
   Pressable,
 } from "react-native";
-import { Camera, Settings2, Trash2, X } from "lucide-react-native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Camera, Trash2, X } from "lucide-react-native";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
@@ -20,8 +20,6 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { applyTeamRemovedFromAccount } from "@/lib/workspace-switch";
 import type { Team } from "@/lib/types";
 import { WorkspacePhotoPlaceholder } from "@/components/WorkspacePhotoPlaceholder";
-import { WorkplaceStandardsSheet } from "@/components/WorkplaceStandardsSheet";
-import { mergeWorkplaceStandards, type WorkplaceStandards } from "@/lib/workplace-standards";
 
 type EditableWorkspace = Pick<Team, "id" | "name" | "image" | "role">;
 
@@ -40,20 +38,6 @@ export function EditWorkspaceModal({ workspace, visible, onClose }: EditWorkspac
   const [uploadingImage, setUploadingImage] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
-  const [standardsOpen, setStandardsOpen] = useState(false);
-
-  const isOwner = (workspace?.role ?? "").trim().toLowerCase() === "owner";
-
-  const { data: teamStandards } = useQuery({
-    queryKey: ["team", workspace?.id, "workplaceStandards"],
-    queryFn: async () => {
-      const team = await api.get<Team & { workplaceStandards?: WorkplaceStandards }>(
-        `/api/teams/${workspace!.id}`,
-      );
-      return mergeWorkplaceStandards(team.workplaceStandards);
-    },
-    enabled: !!workspace?.id && isOwner && (visible || standardsOpen),
-  });
 
   useEffect(() => {
     if (!workspace || !visible) return;
@@ -61,7 +45,6 @@ export function EditWorkspaceModal({ workspace, visible, onClose }: EditWorkspac
     setImage(workspace.image ?? null);
     setConfirmingDelete(false);
     setDeletePassword("");
-    setStandardsOpen(false);
   }, [workspace, visible]);
 
   const updateMutation = useMutation({
@@ -135,7 +118,7 @@ export function EditWorkspaceModal({ workspace, visible, onClose }: EditWorkspac
 
   return (
     <>
-      <Modal visible={visible && !!workspace && !standardsOpen} transparent animationType="slide" onRequestClose={handleClose}>
+      <Modal visible={visible && !!workspace} transparent animationType="slide" onRequestClose={handleClose}>
         <Pressable className="flex-1 bg-black/40 justify-end" onPress={handleClose}>
           <SafeKeyboardAvoidingView>
             <Pressable onPress={(e) => e.stopPropagation()}>
@@ -201,30 +184,6 @@ export function EditWorkspaceModal({ workspace, visible, onClose }: EditWorkspac
                         returnKeyType="done"
                       />
                     </View>
-
-                    {isOwner ? (
-                      <TouchableOpacity
-                        onPress={() => setStandardsOpen(true)}
-                        activeOpacity={0.7}
-                        className="mb-4 rounded-2xl py-3.5 px-4 flex-row items-center justify-between border border-indigo-100"
-                        style={{ backgroundColor: "#EEF2FF" }}
-                        testID="edit-workspace-workplace-settings"
-                        accessibilityRole="button"
-                        accessibilityLabel="Workplace Settings"
-                      >
-                        <View className="flex-row items-center" style={{ gap: 10 }}>
-                          <Settings2 size={18} color="#4361EE" />
-                          <View>
-                            <Text className="text-slate-900 dark:text-white font-semibold text-base">
-                              Workplace Settings
-                            </Text>
-                            <Text className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                              Check-ins, goals, and standards
-                            </Text>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    ) : null}
 
                     <TouchableOpacity
                       onPress={handleSave}
@@ -307,19 +266,6 @@ export function EditWorkspaceModal({ workspace, visible, onClose }: EditWorkspac
         </Pressable>
       </Modal>
 
-      {isOwner && workspace ? (
-        <WorkplaceStandardsSheet
-          visible={standardsOpen}
-          teamId={workspace.id}
-          initialStandards={teamStandards ?? mergeWorkplaceStandards(undefined)}
-          onClose={() => setStandardsOpen(false)}
-          onSaved={() => {
-            queryClient.invalidateQueries({ queryKey: ["team", workspace.id] });
-            queryClient.invalidateQueries({ queryKey: ["team", workspace.id, "workplaceStandards"] });
-            queryClient.invalidateQueries({ queryKey: ["member-stats", workspace.id] });
-          }}
-        />
-      ) : null}
     </>
   );
 }

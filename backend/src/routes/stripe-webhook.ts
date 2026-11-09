@@ -7,6 +7,7 @@ import {
   stripeCustomerIdOfSubscription,
 } from "../lib/stripe-billing";
 import { completeOwnershipTransferFromSetupSession } from "../lib/ownership-transfer";
+import { recordPaidInvoiceForPlay, recordRefundForPlay } from "../lib/play-external-links";
 import {
   finalizePendingWorkspaceCheckout,
   markPendingWorkspaceCheckoutAwaitingPayment,
@@ -107,6 +108,14 @@ export async function handleStripeWebhook(c: Context): Promise<Response> {
         const subscription = await stripe.subscriptions.retrieve(raw.id, { expand: ["items.data"] });
         const customerId = stripeCustomerIdOfSubscription(subscription);
         await applySubscriptionFromStripeSubscription(teamId, customerId, subscription);
+        break;
+      }
+      case "invoice.paid": {
+        await recordPaidInvoiceForPlay(stripe, event.data.object as Stripe.Invoice);
+        break;
+      }
+      case "charge.refunded": {
+        await recordRefundForPlay(stripe, event.data.object as Stripe.Charge);
         break;
       }
       default:

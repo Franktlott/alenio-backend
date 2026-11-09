@@ -16,6 +16,7 @@ import Animated, {
 import { MediaViewer } from "@/components/MediaViewer";
 import { Play } from "lucide-react-native";
 import * as VideoThumbnails from "expo-video-thumbnails";
+import * as FileSystem from "expo-file-system/legacy";
 import type { MessageReaction } from "@/lib/types";
 import { renderMentionText } from "@/lib/renderMentions";
 import { useQuery } from "@tanstack/react-query";
@@ -27,6 +28,53 @@ import { UserAvatar } from "@/components/UserAvatar";
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const MEDIA_PRESS_SPRING = { damping: 18, stiffness: 280, mass: 0.6 };
+const videoThumbnailPromises = new Map<string, Promise<string | null>>();
+
+function stableMediaHash(value: string): string {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+async function createVideoThumbnail(mediaUrl: string): Promise<string | null> {
+  const cached = videoThumbnailPromises.get(mediaUrl);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    let thumbnailSource = mediaUrl;
+    if (/^https?:\/\//i.test(mediaUrl) && FileSystem.cacheDirectory) {
+      const extension =
+        decodeURIComponent(mediaUrl.split("?")[0] ?? "")
+          .match(/\.(mp4|mov|m4v|webm)$/i)?.[1]
+          ?.toLowerCase() ?? "mp4";
+      const localUri = `${FileSystem.cacheDirectory}alenio-video-thumb-${stableMediaHash(mediaUrl)}.${extension}`;
+      const localFile = await FileSystem.getInfoAsync(localUri);
+      if (!localFile.exists) {
+        await FileSystem.downloadAsync(mediaUrl, localUri);
+      }
+      thumbnailSource = localUri;
+    }
+
+    try {
+      const result = await VideoThumbnails.getThumbnailAsync(thumbnailSource, {
+        time: 1000,
+        quality: 0.75,
+      });
+      return result.uri;
+    } catch {
+      const fallback = await VideoThumbnails.getThumbnailAsync(thumbnailSource, {
+        time: 0,
+        quality: 0.75,
+      });
+      return fallback.uri;
+    }
+  })().catch(() => null);
+
+  videoThumbnailPromises.set(mediaUrl, promise);
+  return promise;
+}
 
 /** Messenger-style slight enlarge while pressing a chat photo/video thumb. */
 function MediaThumbPressable({
@@ -82,7 +130,11 @@ function parseYouTubeVideoId(raw: string): string | null {
       const id = url.pathname.split("/").filter(Boolean)[0] ?? "";
       return /^[\w-]{6,}$/.test(id) ? id : null;
     }
-    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+    if (
+      host === "youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "music.youtube.com"
+    ) {
       const v = url.searchParams.get("v");
       if (v && /^[\w-]{6,}$/.test(v)) return v;
       const m = url.pathname.match(/\/(?:embed|shorts|live)\/([\w-]{6,})/);
@@ -173,7 +225,9 @@ function LinkPreview({
         ? "YouTube video"
         : data?.title || fallbackDomain;
   const description =
-    !isYouTube && data?.description && data.description !== title ? data.description : null;
+    !isYouTube && data?.description && data.description !== title
+      ? data.description
+      : null;
 
   const cardWidth = isYouTube || image ? 260 : 240;
   const imageHeight = isYouTube ? 146 : 120;
@@ -194,11 +248,23 @@ function LinkPreview({
         width: cardWidth,
       }}
       accessibilityRole="link"
-      accessibilityLabel={isYouTube ? `Open YouTube video: ${title}` : `Open link: ${title}`}
+      accessibilityLabel={
+        isYouTube ? `Open YouTube video: ${title}` : `Open link: ${title}`
+      }
     >
       {image ? (
-        <View style={{ width: cardWidth, height: imageHeight, backgroundColor: "#0F172A" }}>
-          <Image source={{ uri: image }} style={{ width: cardWidth, height: imageHeight }} resizeMode="cover" />
+        <View
+          style={{
+            width: cardWidth,
+            height: imageHeight,
+            backgroundColor: "#0F172A",
+          }}
+        >
+          <Image
+            source={{ uri: image }}
+            style={{ width: cardWidth, height: imageHeight }}
+            resizeMode="cover"
+          />
           {isYouTube ? (
             <View
               pointerEvents="none"
@@ -259,7 +325,9 @@ function LinkPreview({
                 onError={() => setLogoFailed(true)}
               />
             ) : (
-              <Text style={{ fontSize: 16, fontWeight: "800", color: "#4361EE" }}>
+              <Text
+                style={{ fontSize: 16, fontWeight: "800", color: "#4361EE" }}
+              >
                 {(domain?.[0] ?? "L").toUpperCase()}
               </Text>
             )}
@@ -267,27 +335,43 @@ function LinkPreview({
         ) : null}
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           {image && !isYouTube && favicon && !logoFailed ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                marginBottom: 2,
+              }}
+            >
               <Image
                 source={{ uri: favicon }}
                 style={{ width: 14, height: 14, borderRadius: 3 }}
                 resizeMode="contain"
                 onError={() => setLogoFailed(true)}
               />
-              <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "600" }} numberOfLines={1}>
+              <Text
+                style={{ fontSize: 11, color: "#64748B", fontWeight: "600" }}
+                numberOfLines={1}
+              >
                 {domain}
               </Text>
             </View>
           ) : null}
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }} numberOfLines={2}>
+          <Text
+            style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}
+            numberOfLines={2}
+          >
             {title}
           </Text>
           {description ? (
-            <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 15 }} numberOfLines={2}>
+            <Text
+              style={{ fontSize: 13, color: "#64748B", lineHeight: 18 }}
+              numberOfLines={2}
+            >
               {description}
             </Text>
           ) : null}
-          <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "500" }}>
+          <Text style={{ fontSize: 13, color: "#64748B", fontWeight: "500" }}>
             {isYouTube ? "Tap to watch on YouTube" : `Tap to open · ${domain}`}
           </Text>
         </View>
@@ -312,8 +396,11 @@ interface ChatMessageProps {
   senderName: string;
   senderInitial: string;
   senderImage?: string | null;
+  onSenderPress?: () => void;
   createdAt: string;
   editedAt?: string | null;
+  deliveryStatus?: "sending" | "queued" | "failed";
+  onDeliveryStatusPress?: () => void;
   isOwn: boolean;
   currentUserId: string;
   onLongPress?: () => void;
@@ -328,7 +415,10 @@ interface ChatMessageProps {
 }
 
 function groupReactions(reactions: MessageReaction[]) {
-  const map: Record<string, { count: number; userIds: string[]; users: { id: string; name: string }[] }> = {};
+  const map: Record<
+    string,
+    { count: number; userIds: string[]; users: { id: string; name: string }[] }
+  > = {};
   for (const r of reactions) {
     if (!map[r.emoji]) map[r.emoji] = { count: 0, userIds: [], users: [] };
     map[r.emoji].count++;
@@ -339,7 +429,11 @@ function groupReactions(reactions: MessageReaction[]) {
 }
 
 export function formatTime(dateStr: string) {
-  return new Date(dateStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return new Date(dateStr).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 export function ChatMessage({
@@ -351,8 +445,11 @@ export function ChatMessage({
   senderName,
   senderInitial,
   senderImage,
+  onSenderPress,
   createdAt,
   editedAt,
+  deliveryStatus,
+  onDeliveryStatusPress,
   isOwn,
   currentUserId,
   onReactionTap,
@@ -370,25 +467,34 @@ export function ChatMessage({
   const [videoThumb, setVideoThumb] = useState<string | null>(null);
   const { width: screenWidth } = useWindowDimensions();
   /** Stable bubble media width — avoid subpixel churn when layout settles. */
-  const IMG_WIDTH = Math.min(Math.round(screenWidth * 0.62), 280);
+  const IMG_WIDTH = Math.min(Math.round(screenWidth * 0.7), 310);
   const MAX_IMG_HEIGHT = 320;
   /** Fixed 16:9 frame so videos don’t jump when the thumb loads or the menu opens. */
   const VIDEO_HEIGHT = Math.round((IMG_WIDTH * 9) / 16);
   /** Fixed 4:3 cover frame so photos don’t jump after measuring. */
   const PHOTO_HEIGHT = Math.round((IMG_WIDTH * 3) / 4);
   const firstUrl = content ? extractFirstUrl(content) : null;
-  const displayContent = firstUrl && content ? stripPreviewUrl(content, firstUrl) : content;
+  const displayContent =
+    firstUrl && content ? stripPreviewUrl(content, firstUrl) : content;
   const showText = Boolean(displayContent?.trim());
-  const linkPreviewCompact = Boolean(firstUrl) && !showText && !mediaUrl && !replyTo;
-  const overlayTextBlockHeight = (showText ? 36 : 0) + (replyTo ? 52 : 0);
+  const linkPreviewCompact =
+    Boolean(firstUrl) && !showText && !mediaUrl && !replyTo;
+  const overlayTextBlockHeight = (showText ? 48 : 0) + (replyTo ? 56 : 0);
   const anchoredMediaHeight =
     anchorHeight && mediaUrl
-      ? Math.min(MAX_IMG_HEIGHT, Math.max(PHOTO_HEIGHT, anchorHeight - overlayTextBlockHeight))
+      ? Math.min(
+          MAX_IMG_HEIGHT,
+          Math.max(PHOTO_HEIGHT, anchorHeight - overlayTextBlockHeight),
+        )
       : null;
   const imageFrameHeight =
-    mediaType === "image" && anchoredMediaHeight ? anchoredMediaHeight : PHOTO_HEIGHT;
+    mediaType === "image" && anchoredMediaHeight
+      ? anchoredMediaHeight
+      : PHOTO_HEIGHT;
   const videoFrameHeight =
-    mediaType === "video" && anchoredMediaHeight ? anchoredMediaHeight : VIDEO_HEIGHT;
+    mediaType === "video" && anchoredMediaHeight
+      ? anchoredMediaHeight
+      : VIDEO_HEIGHT;
 
   useEffect(() => {
     if (mediaType !== "video" || !mediaUrl) {
@@ -396,13 +502,9 @@ export function ChatMessage({
       return;
     }
     let cancelled = false;
-    VideoThumbnails.getThumbnailAsync(mediaUrl, { time: 0 })
-      .then((r) => {
-        if (!cancelled) setVideoThumb(r.uri);
-      })
-      .catch(() => {
-        if (!cancelled) setVideoThumb(null);
-      });
+    createVideoThumbnail(mediaUrl).then((uri) => {
+      if (!cancelled) setVideoThumb(uri);
+    });
     return () => {
       cancelled = true;
     };
@@ -431,11 +533,17 @@ export function ChatMessage({
           style={{ minWidth: 160 }}
         >
           <View style={{ flex: 1 }}>
-            <Text className={`text-xs font-semibold mb-0.5 ${isOwn ? "text-indigo-600" : "text-blue-600"}`}>
+            <Text
+              className={`text-[13px] font-semibold mb-0.5 ${isOwn ? "text-indigo-600" : "text-blue-600"}`}
+            >
               {replyTo.sender.name}
             </Text>
-            <Text className="text-xs text-slate-500" numberOfLines={1}>
-              {replyTo.content ? replyTo.content : replyTo.mediaType === "video" ? "🎥 Video" : "📷 Photo"}
+            <Text className="text-[13px] text-slate-500" numberOfLines={1}>
+              {replyTo.content
+                ? replyTo.content
+                : replyTo.mediaType === "video"
+                  ? "🎥 Video"
+                  : "📷 Photo"}
             </Text>
           </View>
           {replyTo.mediaUrl && replyTo.mediaType === "image" ? (
@@ -467,7 +575,11 @@ export function ChatMessage({
             onPress={() => setViewerVisible(true)}
             onLongPress={onLongPress}
             delayLongPress={400}
-            style={{ maxWidth: IMG_WIDTH, overflow: "hidden", borderRadius: 12 }}
+            style={{
+              maxWidth: IMG_WIDTH,
+              overflow: "hidden",
+              borderRadius: 12,
+            }}
             testID="media-thumbnail"
           >
             {mediaType === "video" ? (
@@ -512,7 +624,10 @@ export function ChatMessage({
             )}
           </MediaThumbPressable>
         ) : (
-          <View className="overflow-hidden" style={{ maxWidth: IMG_WIDTH, borderRadius: 12 }}>
+          <View
+            className="overflow-hidden"
+            style={{ maxWidth: IMG_WIDTH, borderRadius: 12 }}
+          >
             {mediaType === "video" ? (
               <View
                 style={{
@@ -559,19 +674,24 @@ export function ChatMessage({
 
       {showText ? (
         <Text
-          className={`text-sm leading-5 px-4 ${replyTo || mediaUrl || firstUrl ? "pt-1.5 pb-2.5" : "py-2.5"} text-slate-900`}
+          className={`px-[18px] ${replyTo || mediaUrl || firstUrl ? "pt-2 pb-3" : "py-3"} text-slate-900`}
         >
           {renderMentionText(
             displayContent!,
             currentUserId,
-            { color: "#0F172A", fontSize: 14, lineHeight: 20 },
-            isOwn
+            { color: "#0F172A", fontSize: 17, lineHeight: 23 },
+            isOwn,
           )}
         </Text>
       ) : null}
 
       {firstUrl ? (
-        <LinkPreview url={firstUrl} isOwn={isOwn} compact={linkPreviewCompact} onLongPress={onLongPress} />
+        <LinkPreview
+          url={firstUrl}
+          isOwn={isOwn}
+          compact={linkPreviewCompact}
+          onLongPress={onLongPress}
+        />
       ) : null}
     </>
   );
@@ -595,122 +715,181 @@ export function ChatMessage({
 
   return (
     <View>
-      <View className={`flex-row mb-1 ${isOwn ? "justify-end" : "justify-start"}`}>
-      {!isOwn && (
-        <View className="mr-2 mt-1 flex-shrink-0">
-          <UserAvatar
-            user={{ name: senderName, image: senderImage }}
-            size={32}
-            radius={16}
-            fontSize={12}
-          />
-        </View>
-      )}
-
-      <View className={`max-w-[75%] ${isOwn ? "items-end" : "items-start"}`}>
-        <View
-          className={`flex-row items-center mb-1 mx-1 gap-2 ${isOwn ? "justify-end" : "justify-start"}`}
-          style={{ maxWidth: "100%" }}
-        >
-          {!isOwn ? (
-            <Text className="text-xs text-slate-500 dark:text-slate-400 flex-shrink" numberOfLines={1}>
-              {senderName}
-            </Text>
-          ) : null}
-          <Text className="text-xs text-slate-400 flex-shrink-0">{formatTime(createdAt)}</Text>
-          {editedAt ? <Text className="text-xs text-slate-400 flex-shrink-0">· edited</Text> : null}
-        </View>
-
-        <View
-          style={{
-            position: "relative",
-            marginBottom: hasReactions ? 8 : 0,
-            alignSelf: isOwn ? "flex-end" : "flex-start",
-            maxWidth: "100%",
-          }}
-        >
-          <View
-            ref={bubbleRef}
-            collapsable={false}
-            style={hideBubble ? { opacity: 0 } : undefined}
+      <View
+        className={`flex-row mb-1 ${isOwn ? "justify-end" : "justify-start"}`}
+      >
+        {!isOwn && (
+          <Pressable
+            disabled={!onSenderPress}
+            onPress={onSenderPress}
+            accessibilityRole={onSenderPress ? "button" : undefined}
+            accessibilityLabel={
+              onSenderPress ? `Open ${senderName}'s profile` : undefined
+            }
+            className="mr-2 mt-1 flex-shrink-0"
+            hitSlop={6}
           >
-            {onLongPress ? (
-              <Pressable
-                onLongPress={onLongPress}
-                delayLongPress={400}
-                className={`rounded-2xl overflow-hidden ${isOwn ? "rounded-tr-sm" : "rounded-tl-sm"}`}
-                style={bubbleStyle}
+            <UserAvatar
+              user={{ name: senderName, image: senderImage }}
+              size={36}
+              radius={18}
+              fontSize={13}
+            />
+          </Pressable>
+        )}
+
+        <View className={`max-w-[82%] ${isOwn ? "items-end" : "items-start"}`}>
+          <View
+            className={`flex-row items-center mb-1 mx-1 gap-2 ${isOwn ? "justify-end" : "justify-start"}`}
+            style={{ maxWidth: "100%" }}
+          >
+            {!isOwn ? (
+              <Text
+                className="text-[13px] text-slate-500 dark:text-slate-400 flex-shrink"
+                numberOfLines={1}
               >
-                {bubbleBody}
-              </Pressable>
-            ) : (
-              <View
-                className={`rounded-2xl overflow-hidden ${isOwn ? "rounded-tr-sm" : "rounded-tl-sm"}`}
-                style={bubbleStyle}
-              >
-                {bubbleBody}
-              </View>
-            )}
+                {senderName}
+              </Text>
+            ) : null}
+            <Text className="text-[13px] text-slate-400 flex-shrink-0">
+              {formatTime(createdAt)}
+            </Text>
+            {editedAt ? (
+              <Text className="text-[13px] text-slate-400 flex-shrink-0">
+                · edited
+              </Text>
+            ) : null}
           </View>
 
-          {hasReactions ? (
+          <View
+            style={{
+              position: "relative",
+              marginBottom: hasReactions ? 8 : 0,
+              alignSelf: isOwn ? "flex-end" : "flex-start",
+              maxWidth: "100%",
+            }}
+          >
             <View
-              style={{
-                position: "absolute",
-                bottom: -9,
-                right: isOwn ? 2 : 0,
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 3,
-                zIndex: 2,
-              }}
+              ref={bubbleRef}
+              collapsable={false}
+              style={hideBubble ? { opacity: 0 } : undefined}
             >
-              {grouped.map(({ emoji, count, userIds }) => (
-                <TouchableOpacity
-                  key={emoji}
-                  onPress={() => onReactionTap(reactions)}
-                  className={`flex-row items-center justify-center rounded-full border ${
-                    userIds.includes(currentUserId)
-                      ? "bg-indigo-100 border-indigo-300"
-                      : "bg-white border-slate-200"
-                  }`}
-                  style={{
-                    minWidth: count > 1 ? 24 : 20,
-                    height: 20,
-                    paddingHorizontal: count > 1 ? 4 : 0,
-                    shadowColor: "#000",
-                    shadowOpacity: 0.1,
-                    shadowRadius: 2,
-                    shadowOffset: { width: 0, height: 1 },
-                    elevation: 2,
-                  }}
+              {onLongPress ? (
+                <Pressable
+                  onLongPress={onLongPress}
+                  delayLongPress={400}
+                  className={`rounded-2xl overflow-hidden ${isOwn ? "rounded-tr-sm" : "rounded-tl-sm"}`}
+                  style={bubbleStyle}
                 >
-                  <Text style={{ fontSize: 11, lineHeight: 13 }}>{emoji}</Text>
-                  {count > 1 ? (
-                    <Text
-                      className={`text-[10px] ml-0.5 font-semibold ${userIds.includes(currentUserId) ? "text-indigo-600" : "text-slate-600"}`}
-                    >
-                      {count}
-                    </Text>
-                  ) : null}
-                </TouchableOpacity>
-              ))}
+                  {bubbleBody}
+                </Pressable>
+              ) : (
+                <View
+                  className={`rounded-2xl overflow-hidden ${isOwn ? "rounded-tr-sm" : "rounded-tl-sm"}`}
+                  style={bubbleStyle}
+                >
+                  {bubbleBody}
+                </View>
+              )}
             </View>
+
+            {hasReactions ? (
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: -9,
+                  right: isOwn ? 2 : 0,
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 3,
+                  zIndex: 2,
+                }}
+              >
+                {grouped.map(({ emoji, count, userIds }) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    onPress={() => onReactionTap(reactions)}
+                    className={`flex-row items-center justify-center rounded-full border ${
+                      userIds.includes(currentUserId)
+                        ? "bg-indigo-100 border-indigo-300"
+                        : "bg-white border-slate-200"
+                    }`}
+                    style={{
+                      minWidth: count > 1 ? 26 : 22,
+                      height: 22,
+                      paddingHorizontal: count > 1 ? 5 : 0,
+                      shadowColor: "#000",
+                      shadowOpacity: 0.1,
+                      shadowRadius: 2,
+                      shadowOffset: { width: 0, height: 1 },
+                      elevation: 2,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, lineHeight: 16 }}>
+                      {emoji}
+                    </Text>
+                    {count > 1 ? (
+                      <Text
+                        className={`text-[10px] ml-0.5 font-semibold ${userIds.includes(currentUserId) ? "text-indigo-600" : "text-slate-600"}`}
+                      >
+                        {count}
+                      </Text>
+                    ) : null}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+          </View>
+
+          {isOwn && deliveryStatus ? (
+            <Pressable
+              disabled={
+                deliveryStatus !== "failed" || !onDeliveryStatusPress
+              }
+              onPress={onDeliveryStatusPress}
+              testID={`message-${deliveryStatus}`}
+              hitSlop={6}
+            >
+              <Text
+                style={{
+                  marginTop: 2,
+                  marginRight: 3,
+                  fontSize: 12,
+                  lineHeight: 16,
+                  fontWeight: deliveryStatus === "failed" ? "700" : "500",
+                  color:
+                    deliveryStatus === "failed" ? "#B94A48" : "#94A3B8",
+                }}
+              >
+                {deliveryStatus === "failed"
+                  ? "Not delivered · Tap to retry"
+                  : deliveryStatus === "queued"
+                    ? "Waiting for connection…"
+                    : "Sending…"}
+              </Text>
+            </Pressable>
           ) : null}
         </View>
 
-      </View>
-
-      {isOwn ? (
-        <View className="ml-2 mt-1 flex-shrink-0">
-          <UserAvatar
-            user={{ name: senderName, image: senderImage }}
-            size={32}
-            radius={16}
-            fontSize={12}
-          />
-        </View>
-      ) : null}
+        {isOwn ? (
+          <Pressable
+            disabled={!onSenderPress}
+            onPress={onSenderPress}
+            accessibilityRole={onSenderPress ? "button" : undefined}
+            accessibilityLabel={
+              onSenderPress ? `Open ${senderName}'s profile` : undefined
+            }
+            className="ml-2 mt-1 flex-shrink-0"
+            hitSlop={6}
+          >
+            <UserAvatar
+              user={{ name: senderName, image: senderImage }}
+              size={36}
+              radius={18}
+              fontSize={13}
+            />
+          </Pressable>
+        ) : null}
       </View>
       {mediaUrl && mediaType ? (
         <MediaViewer

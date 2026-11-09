@@ -23,8 +23,8 @@ export function TaskActivityCard({ item, footer, onLongPress, testID }: Props) {
   const description = isAssigned
     ? count > 1
       ? `${actorName} was assigned ${count} tasks`
-      : `${actorName} was assigned “${taskTitle}”`
-    : `${actorName} completed “${taskTitle}”`;
+      : `${actorName} was assigned a task`
+    : `${actorName} completed a task`;
 
   const metadata = isAssigned
     ? `${count} task${count === 1 ? "" : "s"}`
@@ -45,8 +45,10 @@ export function TaskActivityCard({ item, footer, onLongPress, testID }: Props) {
         timestamp={item.timestamp}
         memberName={actorName}
         description={description}
+        detail={taskTitle}
         metadata={metadata}
         avatarResetKey={item.id}
+        showAvatar={!!item.actor}
       />
     </ActivityCardShell>
   );

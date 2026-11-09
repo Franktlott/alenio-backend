@@ -369,7 +369,7 @@ export function WalksListPage() {
       {loading ? (
         <EnterprisePageLoading label="Loading walks…" />
       ) : walks.length === 0 ? (
-        <TempsDataTable label="Walks" minHeight="short">
+        <TempsDataTable label="Guided Walks" minHeight="short">
           <TempsEmptyState
             icon={<IconWalk size={18} />}
             title="No walks yet"
@@ -383,7 +383,7 @@ export function WalksListPage() {
         </TempsDataTable>
       ) : (
         <TempsDataTable
-          label="Walks"
+          label="Guided Walks"
           footer={
             <>
               <span>

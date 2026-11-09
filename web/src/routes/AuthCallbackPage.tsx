@@ -1,9 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  AuthLoadingScreen,
-  SSO_AUTH_LOADING_STEPS,
-} from "../components/AuthLoadingScreen";
 import {
   ensureWebSessionAndToken,
   syncBackendUser,
@@ -11,9 +7,6 @@ import {
 import { setStoredToken } from "../lib/token";
 import { finishPostAuthNavigation } from "../lib/invite-auth";
 import { formatAuthFlowError } from "../lib/auth-errors";
-
-const STEP_MS = 1600;
-const EXIT_HOLD_MS = 700;
 
 function readAuthTokenFromHash(): string | null {
   try {
@@ -47,22 +40,12 @@ function readOAuthError(): string | null {
   }
 }
 
-/** Completes Microsoft OAuth with a premium full-screen workspace boot experience. */
 export function AuthCallbackPage() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [allDone, setAllDone] = useState(false);
-  const [exiting, setExiting] = useState(false);
-
-  const title = useMemo(
-    () => (error ? "Sign-in issue" : "Connecting your workspace"),
-    [error],
-  );
 
   useEffect(() => {
     let cancelled = false;
-    const timers: number[] = [];
 
     const run = async () => {
       const oauthError = readOAuthError();
@@ -86,38 +69,14 @@ export function AuthCallbackPage() {
         /* ignore */
       }
 
-      const stepsPromise = new Promise<void>((resolve) => {
-        SSO_AUTH_LOADING_STEPS.forEach((_, index) => {
-          if (index === 0) return;
-          timers.push(
-            window.setTimeout(() => {
-              if (!cancelled) setActiveIndex(index);
-            }, STEP_MS * index),
-          );
-        });
-        timers.push(
-          window.setTimeout(() => {
-            if (!cancelled) setAllDone(true);
-            resolve();
-          }, STEP_MS * SSO_AUTH_LOADING_STEPS.length),
-        );
-      });
-
       try {
-        const [, ready] = await Promise.all([
-          stepsPromise,
-          ensureWebSessionAndToken(),
-        ]);
+        const ready = await ensureWebSessionAndToken();
         if (cancelled) return;
         if (!ready) {
           setError("Could not verify your Microsoft session. Try again.");
           return;
         }
         await syncBackendUser();
-        if (cancelled) return;
-        setAllDone(true);
-        setExiting(true);
-        await new Promise((r) => setTimeout(r, EXIT_HOLD_MS));
         if (cancelled) return;
         const dest = await finishPostAuthNavigation();
         if (!cancelled) window.location.href = dest;
@@ -129,33 +88,43 @@ export function AuthCallbackPage() {
     void run();
     return () => {
       cancelled = true;
-      timers.forEach((t) => window.clearTimeout(t));
     };
   }, [navigate]);
 
+  if (error) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          padding: 24,
+          background: "#f8fafc",
+        }}
+        data-testid="auth-callback-screen"
+      >
+        <div style={{ maxWidth: 420, textAlign: "center" }}>
+          <h1 style={{ fontSize: 20, margin: "0 0 8px" }}>Sign-in issue</h1>
+          <p style={{ color: "#64748b", margin: "0 0 16px" }}>{error}</p>
+          <Link to="/login">Back to sign in</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <AuthLoadingScreen
-      title={title}
-      subtitle={
-        error
-          ? "We could not finish connecting your Microsoft account."
-          : "Securely signing you in with Microsoft"
-      }
-      steps={SSO_AUTH_LOADING_STEPS}
-      activeIndex={activeIndex}
-      allDone={allDone}
-      exiting={exiting}
-      error={error}
-      testId="auth-callback-screen"
-      errorActions={
-        <Link
-          to="/login"
-          className="auth-btn-primary"
-          style={{ display: "inline-block", textAlign: "center", textDecoration: "none" }}
-        >
-          Back to sign in
-        </Link>
-      }
-    />
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        color: "#64748b",
+        fontWeight: 600,
+        background: "#f8fafc",
+      }}
+      data-testid="auth-callback-screen"
+    >
+      Signing you in…
+    </div>
   );
 }

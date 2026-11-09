@@ -21,7 +21,7 @@ import {
   deleteStorageObjectEverywhere,
   downloadStorageObject,
 } from "./firebase-storage";
-import { transcribeAudio } from "./seneca-transcribe";
+import { checkInAudioFormatForPath, transcribeAudio } from "./seneca-transcribe";
 
 /** A single segment is capped well under the model's limit; the app rolls files every 5 minutes. */
 export const RECORDING_SEGMENT_MAX_BYTES = 12 * 1024 * 1024;
@@ -82,10 +82,11 @@ export async function transcribeSegment(
       where: { recordingId: segment.recordingId, index: segment.index - 1 },
       select: { text: true },
     });
+    const format = checkInAudioFormatForPath(segment.storagePath);
     const text = await transcribeAudio({
       bytes,
-      filename: `segment-${segment.index}.m4a`,
-      mimeType: "audio/m4a",
+      filename: `segment-${segment.index}.${format.extension}`,
+      mimeType: format.mimeType,
       prompt: previous?.text ?? undefined,
     });
     // The audio stays put: the creator can replay it until it expires, and a
@@ -130,6 +131,27 @@ async function readSegmentAudio(storagePath: string): Promise<Uint8Array> {
   return bytes;
 }
 
+export const UNTRANSCRIBED_PART_NOTE = "[part of this conversation could not be transcribed]";
+
+/**
+ * Below this many spoken words there is no conversation to write up. Speech
+ * models also invent short phrases ("Thank you for watching") from silence, so
+ * a near-empty transcript must not reach the write-up at all.
+ */
+export const MIN_TRANSCRIPT_WORDS = 15;
+
+/** Words actually heard, ignoring the gap notes stitched in for failed parts. */
+export function spokenWordCount(transcript: string): number {
+  const spoken = transcript.split(UNTRANSCRIBED_PART_NOTE).join(" ");
+  return spoken.split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
+}
+
+export const NOT_ENOUGH_HEARD_MESSAGE =
+  "We couldn't hear enough of that conversation to write it up. Nothing was created. Try recording again closer to the microphone.";
+
+export const NOTHING_TO_WRITE_UP_MESSAGE =
+  "Seneca couldn't find anything from the conversation to write up, so nothing was created.";
+
 /** Joins finished segments in order, noting any gap so the leader is not misled. */
 export function stitchTranscript(
   segments: Array<{ index: number; status: string; text: string | null }>,
@@ -141,7 +163,7 @@ export function stitchTranscript(
       const text = segment.text?.trim();
       if (text) return text;
       if (segment.status === "done") return "";
-      return "[part of this conversation could not be transcribed]";
+      return UNTRANSCRIBED_PART_NOTE;
     })
     .filter(Boolean)
     .join("\n\n");
@@ -207,17 +229,6 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     data: { transcript, status: "transcribing" },
   });
 
-  if (!transcript.trim()) {
-    await prisma.checkInRecording.update({
-      where: { id: recordingId },
-      data: {
-        status: "failed",
-        error: "We could not hear anything in that recording.",
-      },
-    });
-    return { ok: false, message: "We could not hear anything in that recording." };
-  }
-
   return writeUpTranscript({
     recordingId,
     teamId: recording.teamId,
@@ -246,6 +257,16 @@ export async function writeUpTranscript(params: {
 }): Promise<FinishRecordingResult> {
   const { recordingId, transcript } = params;
 
+  // Never write up a conversation that isn't there. Without real words the
+  // model has nothing to work from and will make a check-in up.
+  if (spokenWordCount(transcript) < MIN_TRANSCRIPT_WORDS) {
+    await prisma.checkInRecording.update({
+      where: { id: recordingId },
+      data: { status: "failed", error: NOT_ENOUGH_HEARD_MESSAGE },
+    });
+    return { ok: false, message: NOT_ENOUGH_HEARD_MESSAGE };
+  }
+
   // An open check-in has no template: Seneca decides the questions from what
   // was actually discussed, and the draft carries that structure instead.
   const template = params.templateId
@@ -273,6 +294,7 @@ export async function writeUpTranscript(params: {
     : [];
   let responses: Record<string, string | number> = {};
   let unanswered: string[] = [];
+  let modelFoundNothing = false;
   try {
     if (template) {
       const mapped = await mapTranscriptToTemplate({
@@ -283,6 +305,7 @@ export async function writeUpTranscript(params: {
       });
       responses = mapped.responses;
       unanswered = mapped.unanswered;
+      modelFoundNothing = Object.keys(responses).length === 0;
     } else {
       const structured = await structureOpenTranscript({ transcript, memberName });
       title = structured.title;
@@ -297,6 +320,8 @@ export async function writeUpTranscript(params: {
       if (leaderField && structured.summary) {
         responses[leaderField.id] = structured.summary;
       }
+      // A summary with no topics behind it has nothing in the transcript to stand on.
+      modelFoundNothing = !structured.recap;
     }
   } catch (err) {
     console.error("[check-in-recordings] mapping failed", err);
@@ -314,6 +339,14 @@ export async function writeUpTranscript(params: {
     unanswered = fields
       .filter((field) => field.type !== "section" && field.type !== "associate_notes")
       .map((field) => field.label);
+  }
+
+  if (modelFoundNothing) {
+    await prisma.checkInRecording.update({
+      where: { id: recordingId },
+      data: { status: "failed", error: NOTHING_TO_WRITE_UP_MESSAGE },
+    });
+    return { ok: false, message: NOTHING_TO_WRITE_UP_MESSAGE };
   }
 
   // Drafts tolerate blanks, but a bad value would block the leader at publish time.
@@ -541,6 +574,31 @@ export async function deleteAudioForPublishedMeeting(meetingId: string): Promise
     await deleteRecordingAudio(recording.id, new Date(), prismaAudioStore, "published");
   } catch (err) {
     console.error(`[check-in-audio] publish delete failed for meeting ${meetingId}:`, err);
+  }
+}
+
+/**
+ * Deleting a check-in takes its recording with it: the audio and the
+ * transcript. If storage refuses, the transcript still goes and the row stays
+ * behind only so the hourly sweep can finish removing the audio.
+ */
+export async function deleteRecordingForDeletedMeeting(recordingId: string): Promise<void> {
+  try {
+    const audioGone = await deleteRecordingAudio(recordingId, new Date(), prismaAudioStore, "manual");
+    if (audioGone) {
+      await prisma.checkInRecording.delete({ where: { id: recordingId } });
+      return;
+    }
+    await prisma.checkInRecording.update({
+      where: { id: recordingId },
+      data: { transcript: null, audioExpiresAt: new Date() },
+    });
+    await prisma.checkInRecordingSegment.updateMany({
+      where: { recordingId },
+      data: { text: null },
+    });
+  } catch (err) {
+    console.error(`[check-in-audio] delete with check-in failed for recording ${recordingId}:`, err);
   }
 }
 

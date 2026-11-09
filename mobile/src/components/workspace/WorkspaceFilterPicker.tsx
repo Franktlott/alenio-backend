@@ -1,40 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import {
+  Archive,
   CalendarDays,
   Check,
-  ChevronDown,
-  ChevronUp,
-  Circle,
-  Flag,
+  CheckCircle2,
+  ListTodo,
   Search,
   User,
 } from "lucide-react-native";
 import type { TeamMember } from "@/lib/types";
-import {
-  AlenioBottomSheet,
-  alenioSheetStyles,
-} from "@/components/AlenioBottomSheet";
+import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
 import { UserAvatar } from "@/components/UserAvatar";
 import type {
   AssignedToFilter,
   DueDateFilter,
   FilterPicker,
-  PriorityFilter,
-  SortFilter,
-  TaskStatusTab,
   WorkspaceFiltersState,
 } from "./workspace-types";
-import {
-  DEFAULT_WORKSPACE_FILTERS,
-} from "./workspace-types";
-import { taskStatusLabel } from "./workspace-utils";
+import { DEFAULT_WORKSPACE_FILTERS } from "./workspace-types";
 import { colors } from "@/theme";
 
 type Props = {
@@ -42,40 +26,12 @@ type Props = {
   filters: WorkspaceFiltersState;
   members: TeamMember[];
   isLeader: boolean;
-  activeCount: number;
-  completedCount: number;
   onClose: () => void;
   onApply: (next: WorkspaceFiltersState) => void;
 };
 
 function SectionTitle({ children }: { children: string }) {
   return <Text style={styles.sectionTitle}>{children}</Text>;
-}
-
-function RadioRow({
-  label,
-  selected,
-  onPress,
-  detail,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-  detail?: string;
-}) {
-  return (
-    <Pressable onPress={onPress} style={styles.radioRow}>
-      <View style={styles.radioCopy}>
-        <Text style={[styles.radioLabel, selected ? styles.selectedText : null]}>
-          {label}
-        </Text>
-        {detail ? <Text style={styles.radioDetail}>{detail}</Text> : null}
-      </View>
-      <View style={[styles.radio, selected ? styles.radioSelected : null]}>
-        {selected ? <View style={styles.radioDot} /> : null}
-      </View>
-    </Pressable>
-  );
 }
 
 function Chip({
@@ -101,7 +57,11 @@ function Chip({
         disabled ? styles.chipDisabled : null,
       ]}
     >
-      {selected ? <Check size={12} color={colors.brand} strokeWidth={2.5} /> : icon}
+      {selected ? (
+        <Check size={12} color={colors.brand} strokeWidth={2.5} />
+      ) : (
+        icon
+      )}
       <Text style={[styles.chipText, selected ? styles.selectedText : null]}>
         {label}
       </Text>
@@ -114,13 +74,10 @@ export function WorkspaceFilterPicker({
   filters,
   members,
   isLeader,
-  activeCount,
-  completedCount,
   onClose,
   onApply,
 }: Props) {
   const [draft, setDraft] = useState(filters);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [memberQuery, setMemberQuery] = useState("");
   const visible = picker === "filterView";
@@ -128,7 +85,6 @@ export function WorkspaceFilterPicker({
   useEffect(() => {
     if (!visible) return;
     setDraft(filters);
-    setAdvancedOpen(false);
     setMemberPickerOpen(typeof filters.assignedTo === "object");
     setMemberQuery("");
   }, [visible, filters]);
@@ -153,26 +109,18 @@ export function WorkspaceFilterPicker({
 
   const setAssignedTo = (assignedTo: AssignedToFilter) =>
     setDraft((current) => ({ ...current, assignedTo }));
+  const setStatusTab = (statusTab: WorkspaceFiltersState["statusTab"]) =>
+    setDraft((current) => ({ ...current, statusTab }));
   const setDueDate = (dueDate: DueDateFilter) =>
     setDraft((current) => ({ ...current, dueDate }));
-  const setPriority = (priority: PriorityFilter) =>
-    setDraft((current) => ({ ...current, priority }));
-  const setSort = (sort: SortFilter) =>
-    setDraft((current) => ({ ...current, sort }));
-  const setStatus = (statusTab: TaskStatusTab) =>
+  const reset = () => {
     setDraft((current) => ({
       ...current,
-      statusTab,
-      sort:
-        statusTab === "completed" || statusTab === "archived"
-          ? current.sort === "due"
-            ? "newest"
-            : current.sort
-          : current.sort,
+      statusTab: DEFAULT_WORKSPACE_FILTERS.statusTab,
+      assignedTo: DEFAULT_WORKSPACE_FILTERS.assignedTo,
+      dueDate: DEFAULT_WORKSPACE_FILTERS.dueDate,
+      priority: DEFAULT_WORKSPACE_FILTERS.priority,
     }));
-
-  const reset = () => {
-    setDraft(DEFAULT_WORKSPACE_FILTERS);
     setMemberPickerOpen(false);
     setMemberQuery("");
   };
@@ -180,73 +128,62 @@ export function WorkspaceFilterPicker({
   return (
     <AlenioBottomSheet
       visible={visible}
-      title="Filter & View"
-      subtitle="Customize how your task list is displayed."
+      title="Filters"
+      subtitle="Narrow down the tasks shown."
       onClose={onClose}
-      bodyHeightRatio={0.68}
+      bodyHeightRatio={0.48}
       compact
       showScrollIndicator
       testID="workspace-filter-view-sheet"
       headerRight={
-        <Pressable onPress={reset} hitSlop={10} testID="workspace-filters-reset">
+        <Pressable
+          onPress={reset}
+          hitSlop={10}
+          testID="workspace-filters-reset"
+        >
           <Text style={styles.resetText}>Reset</Text>
         </Pressable>
       }
       footer={
-        <>
-          <Pressable
-            onPress={() => {
-              onApply(draft);
-              onClose();
-            }}
-            style={styles.applyButton}
-            testID="workspace-filters-apply"
-          >
-            <Text style={styles.applyText}>Apply Filters</Text>
-          </Pressable>
-          <Pressable onPress={onClose} style={alenioSheetStyles.cancelButton}>
-            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
-          </Pressable>
-        </>
+        <Pressable
+          onPress={() => {
+            onApply(draft);
+            onClose();
+          }}
+          style={styles.applyButton}
+          testID="workspace-filters-apply"
+        >
+          <Text style={styles.applyText}>Apply Filters</Text>
+        </Pressable>
       }
     >
       <SectionTitle>VIEW</SectionTitle>
-      <View style={styles.card}>
-        <RadioRow
-          label={`Active Tasks (${activeCount})`}
+      <View style={styles.chipRow}>
+        <Chip
+          label="Active"
           selected={draft.statusTab === "active"}
-          onPress={() => setStatus("active")}
+          onPress={() => setStatusTab("active")}
+          icon={<ListTodo size={13} color="#7B8799" />}
         />
-        <View style={styles.divider} />
-        <RadioRow
-          label={`Completed Tasks (${completedCount})`}
+        <Chip
+          label="Completed"
           selected={draft.statusTab === "completed"}
-          onPress={() => setStatus("completed")}
+          onPress={() => setStatusTab("completed")}
+          icon={<CheckCircle2 size={13} color="#7B8799" />}
         />
-        <View style={styles.divider} />
-        <RadioRow
-          label="Archived Tasks"
+        <Chip
+          label="Archived"
           selected={draft.statusTab === "archived"}
-          onPress={() => setStatus("archived")}
+          onPress={() => setStatusTab("archived")}
+          icon={<Archive size={13} color="#7B8799" />}
         />
-        {isLeader ? (
-          <>
-            <View style={styles.divider} />
-            <RadioRow
-              label="All Tasks"
-              detail="Active and recently completed"
-              selected={draft.statusTab === "all"}
-              onPress={() => setStatus("all")}
-            />
-          </>
-        ) : null}
       </View>
 
       <SectionTitle>ASSIGNED TO</SectionTitle>
       <View style={styles.chipRow}>
         <Chip
           label="Assigned to Me"
-          selected={draft.assignedTo === "me"}
+          selected={draft.assignedTo === "me" && !memberPickerOpen}
           onPress={() => {
             setAssignedTo("me");
             setMemberPickerOpen(false);
@@ -255,7 +192,7 @@ export function WorkspaceFilterPicker({
         />
         <Chip
           label="Anyone"
-          selected={draft.assignedTo === "entire_team"}
+          selected={draft.assignedTo === "entire_team" && !memberPickerOpen}
           onPress={() => {
             setAssignedTo("entire_team");
             setMemberPickerOpen(false);
@@ -264,7 +201,7 @@ export function WorkspaceFilterPicker({
         />
         <Chip
           label="Specific Person…"
-          selected={typeof draft.assignedTo === "object"}
+          selected={memberPickerOpen || typeof draft.assignedTo === "object"}
           onPress={() => setMemberPickerOpen(true)}
           disabled={!isLeader}
         />
@@ -341,86 +278,7 @@ export function WorkspaceFilterPicker({
             }
           />
         ))}
-        <Chip
-          label="Custom Range… · Soon"
-          selected={draft.dueDate === "calendar_day"}
-          onPress={() => {}}
-          disabled
-        />
       </View>
-
-      <SectionTitle>PRIORITY</SectionTitle>
-      <View style={styles.chipRow}>
-        {(
-          [
-            ["all", "Any"],
-            ["high", "High"],
-            ["medium", "Medium"],
-            ["low", "Low"],
-          ] as const
-        ).map(([value, label]) => (
-          <Chip
-            key={value}
-            label={label}
-            selected={draft.priority === value}
-            onPress={() => setPriority(value)}
-            icon={value === "all" ? <Flag size={13} color="#7B8799" /> : undefined}
-          />
-        ))}
-      </View>
-
-      <SectionTitle>SORT</SectionTitle>
-      <View style={styles.card}>
-        {(
-          [
-            ["due", "Due Date"],
-            ["priority", "Priority"],
-            ["newest", "Newest"],
-            ["oldest", "Oldest"],
-            ["alphabetical", "Alphabetical"],
-          ] as const
-        ).map(([value, label], index) => (
-          <View key={value}>
-            {index > 0 ? <View style={styles.divider} /> : null}
-            <RadioRow
-              label={label}
-              selected={draft.sort === value}
-              onPress={() => setSort(value)}
-            />
-          </View>
-        ))}
-      </View>
-
-      <Pressable
-        onPress={() => setAdvancedOpen((open) => !open)}
-        style={styles.advancedHeader}
-      >
-        <View>
-          <Text style={styles.advancedTitle}>Advanced Filters</Text>
-          <Text style={styles.advancedSubtitle}>Optional task attributes</Text>
-        </View>
-        {advancedOpen ? (
-          <ChevronUp size={17} color="#758197" />
-        ) : (
-          <ChevronDown size={17} color="#758197" />
-        )}
-      </Pressable>
-      {advancedOpen ? (
-        <View style={styles.card}>
-          {["Labels", "Status", "Created By", "Tags", "Custom Fields"].map(
-            (label, index) => (
-              <View key={label}>
-                {index > 0 ? <View style={styles.divider} /> : null}
-                <View style={styles.futureRow}>
-                  <Circle size={7} color="#9AA5B5" fill="#9AA5B5" />
-                  <Text style={styles.futureLabel}>{label}</Text>
-                  <Text style={styles.futureValue}>All</Text>
-                </View>
-              </View>
-            ),
-          )}
-        </View>
-      ) : null}
     </AlenioBottomSheet>
   );
 }
@@ -441,58 +299,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.7,
     color: "#7D899C",
-  },
-  card: {
-    overflow: "hidden",
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#E4E9F0",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#172033",
-    shadowOpacity: 0.025,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  radioRow: {
-    minHeight: 39,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-  },
-  radioCopy: { flex: 1, minWidth: 0 },
-  radioLabel: {
-    fontSize: 11.5,
-    lineHeight: 14,
-    fontWeight: "600",
-    color: "#253047",
-  },
-  radioDetail: {
-    marginTop: 1,
-    fontSize: 8.5,
-    lineHeight: 10,
-    color: "#8A96A8",
-  },
-  radio: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "#CBD3DF",
-  },
-  radioSelected: { borderColor: colors.brand },
-  radioDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.brand,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 14,
-    backgroundColor: "#EDF0F4",
   },
   selectedText: { color: colors.brand },
   chipRow: {
@@ -560,45 +366,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#334155",
-  },
-  advancedHeader: {
-    minHeight: 48,
-    marginTop: 13,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: 14,
-    backgroundColor: "#F7F8FB",
-  },
-  advancedTitle: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "700",
-    color: "#344055",
-  },
-  advancedSubtitle: {
-    marginTop: 2,
-    fontSize: 9.5,
-    lineHeight: 12,
-    color: "#8A96A8",
-  },
-  futureRow: {
-    minHeight: 38,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-  },
-  futureLabel: {
-    flex: 1,
-    fontSize: 11.5,
-    fontWeight: "600",
-    color: "#536175",
-  },
-  futureValue: {
-    fontSize: 10.5,
-    color: "#9AA5B5",
   },
   applyButton: {
     minHeight: 42,

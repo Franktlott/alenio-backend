@@ -92,8 +92,9 @@ export function senecaRoleCapabilities(role: string): SenecaRoleCapabilities {
 
 export function workspaceHasSenecaEntitlement(access: {
   hasTeamFeatures: boolean;
+  features?: readonly string[];
 }): boolean {
-  return access.hasTeamFeatures;
+  return access.hasTeamFeatures && (!access.features || access.features.includes("seneca"));
 }
 
 export async function resolveSenecaScope(
