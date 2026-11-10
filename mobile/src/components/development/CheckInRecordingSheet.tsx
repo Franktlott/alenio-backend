@@ -11,13 +11,16 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
+import Svg, { Path } from "react-native-svg";
 import {
   Check,
+  ChevronLeft,
   CircleAlert,
   Mic,
   Pause,
   Play,
   ShieldCheck,
+  Sparkles,
   Square,
   X,
 } from "lucide-react-native";
@@ -365,8 +368,19 @@ function RecordingFlow({
     >
       <View style={[styles.screen, screenFrame(insets, cluster)]}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {templateTitle}
+          {step === "consent" ? (
+            <Pressable
+              onPress={confirmDiscard}
+              hitSlop={10}
+              style={styles.closeButton}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+            >
+              <ChevronLeft size={18} color="#172033" strokeWidth={2.3} />
+            </Pressable>
+          ) : null}
+          <Text style={[styles.headerTitle, step === "consent" ? styles.headerTitleCentered : null]} numberOfLines={1}>
+            {step === "consent" && !templateId ? "Open check-in" : templateTitle}
           </Text>
           {step !== "recording" && step !== "processing" ? (
             <Pressable
@@ -378,58 +392,58 @@ function RecordingFlow({
             >
               <X size={17} color="#475569" strokeWidth={2.4} />
             </Pressable>
-          ) : null}
+          ) : (
+            <View style={styles.headerSide} />
+          )}
         </View>
 
         {step === "consent" ? (
-          <>
+          <View style={styles.consentScreen}>
             <ScrollView
               style={styles.consentScroll}
-              contentContainerStyle={styles.consentBody}
+              contentContainerStyle={styles.consentContent}
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.intro}>
-                <View style={styles.introIcon}>
-                  <Mic size={20} color="#5B3FF0" strokeWidth={2.3} />
-                </View>
                 <Text style={styles.introTitle}>Record this check-in</Text>
                 <Text style={styles.introBody}>
                   {templateId
-                    ? `Alenio listens, writes up what was said, and fills in ${templateTitle} for you to review before anything is saved.`
-                    : "Talk about whatever matters. Alenio listens, then writes up the questions you covered, what was said, and a summary for you to review before anything is saved."}
+                    ? `Have a natural conversation with ${firstName}. Alenio will listen and fill in ${templateTitle} for you to review before saving.`
+                    : `Have a natural conversation with ${firstName}. Alenio will listen and create a structured summary with key takeaways for you to review before saving.`}
                 </Text>
               </View>
 
               <View style={styles.consentCard}>
-                <View style={styles.consentIcon}>
-                  <ShieldCheck size={17} color="#0F9D6E" strokeWidth={2.3} />
-                </View>
-                <View style={styles.consentCopy}>
-                  <Text style={styles.consentTitle}>Tell {firstName} first</Text>
-                  <Text style={styles.consentBody}>
-                    Let {firstName} know this conversation is being recorded and that they can ask you
-                    to stop at any point. The audio is deleted as soon as it is written up.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.facts}>
-                {[
-                  "Audio is deleted after it is written up",
-                  "Only you can see the write-up",
-                  "Nothing is saved until you publish",
-                ].map((fact) => (
-                  <View key={fact} style={styles.factLine}>
-                    <Check size={14} color="#0F9D6E" strokeWidth={2.6} />
-                    <Text style={styles.fact}>{fact}</Text>
+                <View style={styles.consentHeader}>
+                  <View style={styles.consentIcon}>
+                    <ShieldCheck size={20} color="#0F9D6E" strokeWidth={2.2} />
                   </View>
-                ))}
+                  <View style={styles.consentCopy}>
+                    <Text style={styles.consentTitle}>Tell {firstName} first</Text>
+                    <Text style={styles.consentBody}>
+                      Let {firstName} know the conversation is being recorded and that they can ask you to stop at any time. The audio is deleted as soon as it is written up.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.chips}>
+                  {[
+                    "Audio deleted after write-up",
+                    "Only you can see the write-up",
+                    "Nothing is saved until you publish",
+                  ].map((chip) => (
+                    <View key={chip} style={styles.chip}>
+                      <Check size={12} color="#0F9D6E" strokeWidth={2.6} />
+                      <Text style={styles.chipText}>{chip}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
             </ScrollView>
+
             <Pressable
               onPress={() => void begin()}
               disabled={starting}
-              style={[styles.primary, starting ? styles.primaryDisabled : null]}
+              style={[styles.startButton, starting ? styles.primaryDisabled : null]}
               accessibilityRole="button"
               accessibilityLabel={`Start recording the check-in with ${firstName}`}
               testID="start-check-in-recording"
@@ -437,13 +451,38 @@ function RecordingFlow({
               {starting ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <>
-                  <Mic size={16} color="#FFFFFF" strokeWidth={2.6} />
+                <View style={styles.startButtonRow}>
+                  <Mic size={16} color="#FFFFFF" strokeWidth={2.4} />
                   <Text style={styles.primaryLabel}>{firstName} agreed, start recording</Text>
-                </>
+                </View>
               )}
             </Pressable>
-          </>
+
+            <View style={styles.senecaFooter}>
+              <View style={styles.senecaRow}>
+                <Sparkles size={18} color="#6D4AFF" strokeWidth={2.2} />
+                <View style={styles.senecaRule} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.senecaTitle}>Seneca helps with both</Text>
+                  <Text style={styles.senecaBody}>
+                    Review and refine your check-in summary before saving.
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.senecaWave} pointerEvents="none">
+                <Svg width="100%" height="100%" viewBox="0 0 360 70" preserveAspectRatio="none">
+                  <Path
+                    d="M0 28 C80 10 150 18 210 32 C280 48 320 20 360 28 L360 70 L0 70 Z"
+                    fill="#F4F0FF"
+                  />
+                  <Path
+                    d="M0 46 C90 34 170 52 250 40 C310 32 340 42 360 40 L360 70 L0 70 Z"
+                    fill="#E9E2FF"
+                  />
+                </Svg>
+              </View>
+            </View>
+          </View>
         ) : null}
 
         {step === "recording" ? (
@@ -612,13 +651,15 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 6,
   },
+  headerSide: { width: 30, height: 30 },
   headerTitle: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
     letterSpacing: -0.2,
-    color: "#0F172A",
+    color: "#172033",
   },
+  headerTitleCentered: { textAlign: "center" },
   closeButton: {
     width: 30,
     height: 30,
@@ -628,58 +669,80 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   body: { flex: 1, paddingTop: 14, gap: 14 },
+  consentScreen: { flex: 1 },
   consentScroll: { flex: 1 },
-  consentBody: { paddingTop: 8, paddingBottom: 16, gap: 16 },
+  consentContent: { paddingTop: 10, paddingBottom: 12, gap: 14 },
   centered: { alignItems: "center", justifyContent: "center", gap: 10 },
-  intro: { gap: 8 },
-  introIcon: {
+  intro: { gap: 6 },
+  introTitle: {
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    color: "#121826",
+  },
+  introBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#7B8794",
+  },
+  consentCard: {
+    padding: 14,
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#D7F2E7",
+    backgroundColor: "#FFFFFF",
+  },
+  consentHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  consentIcon: {
     width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F3F0FF",
-  },
-  introTitle: {
-    marginTop: 4,
-    fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    color: "#0F172A",
-  },
-  introBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#64748B",
-  },
-  consentCard: {
-    flexDirection: "row",
-    gap: 11,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#D7F2E7",
-    backgroundColor: "#F3FBF8",
-  },
-  consentIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E4F7EF",
+    backgroundColor: "#E7F8F1",
   },
   consentCopy: { flex: 1, minWidth: 0 },
-  consentTitle: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
-  consentBody: { marginTop: 4, fontSize: 13.5, lineHeight: 19, color: "#4B5563" },
-  factLine: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  facts: {
-    gap: 10,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: "#F8FAFC",
+  consentTitle: { fontSize: 16, lineHeight: 20, fontWeight: "800", color: "#121826" },
+  consentBody: { marginTop: 3, fontSize: 13, lineHeight: 18, color: "#667085" },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#F3FBF8",
   },
-  fact: { flex: 1, fontSize: 13, lineHeight: 18, color: "#475569" },
+  chipText: { fontSize: 12, fontWeight: "600", color: "#3F4658" },
+  startButton: {
+    minHeight: 50,
+    marginTop: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "#1B2430",
+  },
+  startButtonRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  senecaFooter: { marginTop: 8 },
+  senecaRow: {
+    paddingTop: 8,
+    paddingBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  senecaRule: {
+    width: 2,
+    height: 38,
+    borderRadius: 1,
+    backgroundColor: "#DDD6FE",
+  },
+  senecaTitle: { fontSize: 14, lineHeight: 18, fontWeight: "800", color: "#17142B" },
+  senecaBody: { marginTop: 2, fontSize: 13, lineHeight: 18, color: "#667085" },
+  senecaWave: { height: 64, marginHorizontal: -18 },
   primary: {
     minHeight: 50,
     marginTop: 8,

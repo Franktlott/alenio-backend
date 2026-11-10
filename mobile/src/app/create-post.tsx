@@ -13,22 +13,25 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { ImagePlus, X } from "lucide-react-native";
+import { Images, X } from "lucide-react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
-import { pickAttachmentImage, type PickedFile } from "@/lib/file-picker";
+import { pickMedia, type PickedFile } from "@/lib/file-picker";
 import { uploadFile } from "@/lib/upload";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { UserAvatar } from "@/components/UserAvatar";
+import { PostMediaAttachment } from "@/components/PostMediaAttachment";
 import { useStatusClusterInset } from "@/lib/adaptive-layout";
+import { useWorkspaceAccess } from "@/lib/workspace-access";
 
 const BODY_MAX = 2000;
 
 export default function CreatePostScreen() {
-  const { teamId, attach, draft } = useLocalSearchParams<{
+  const { teamId, scope, attach, draft } = useLocalSearchParams<{
     teamId?: string;
-    /** Set when the caller was "Add a photo" rather than "Write a post". */
+    scope?: "network";
+    /** Set when the caller opened the media picker directly. */
     attach?: string;
     /** Opening line from a starter prompt, so the box is never blank. */
     draft?: string;
@@ -37,47 +40,68 @@ export default function CreatePostScreen() {
   const { data: session } = useSession();
   const { data: authReady } = useMobileAuthReady();
   const me = authReady?.me ?? session?.user;
+  const isNetworkPost = scope === "network";
+  const { access } = useWorkspaceAccess(isNetworkPost ? null : teamId);
+  const workspaceWritable = isNetworkPost || access.canWrite;
 
   const [body, setBody] = useState(draft ?? "");
-  const [photo, setPhoto] = useState<PickedFile | null>(null);
+  const [media, setMedia] = useState<PickedFile | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(
     null,
   );
-  const ratio = size ? size.width / size.height : 4 / 3;
 
   const postMutation = useMutation({
     mutationFn: async () => {
-      if (!teamId) throw new Error("No workspace selected");
+      if (!isNetworkPost && !teamId) throw new Error("No workspace selected");
+      if (!workspaceWritable) throw new Error("This workspace is read-only.");
       let imageUrl: string | undefined;
       let imageWidth: number | undefined;
       let imageHeight: number | undefined;
 
-      if (photo) {
+      const mediaType = media?.mimeType.startsWith("video/")
+        ? ("video" as const)
+        : ("image" as const);
+
+      if (media) {
         const uploaded = await uploadFile(
-          photo.uri,
-          photo.filename,
-          photo.mimeType,
-          { purpose: "team", teamId },
+          media.uri,
+          media.filename,
+          media.mimeType,
+          { purpose: "generic" },
         );
         imageUrl = uploaded.url;
-        if (size) {
+        if (mediaType === "image" && size) {
           imageWidth = Math.round(size.width);
           imageHeight = Math.round(size.height);
         }
       }
 
-      return api.post(`/api/teams/${teamId}/activity/posts`, {
-        body: body.trim() || undefined,
-        imageUrl,
-        imageWidth,
-        imageHeight,
-      });
+      return api.post(
+        isNetworkPost
+          ? "/api/network-updates"
+          : `/api/teams/${teamId}/activity/posts`,
+        {
+          body: body.trim() || undefined,
+          imageUrl,
+          imageWidth,
+          imageHeight,
+          mediaType: imageUrl ? mediaType : undefined,
+        },
+      );
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["team-activity", teamId] }),
-        queryClient.invalidateQueries({ queryKey: ["personal-recognitions"] }),
-      ]);
+      if (isNetworkPost) {
+        await queryClient.invalidateQueries({ queryKey: ["network-updates"] });
+      } else {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ["team-activity", teamId],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ["personal-recognitions"],
+          }),
+        ]);
+      }
       router.back();
     },
     onError: (error) => {
@@ -90,10 +114,12 @@ export default function CreatePostScreen() {
 
   const onAttach = async () => {
     try {
-      const picked = await pickAttachmentImage();
+      const picked = await pickMedia();
       if (!picked) return;
-      setPhoto(picked);
-      const measured = await Image.getSize(picked.uri).catch(() => null);
+      setMedia(picked);
+      const measured = picked.mimeType.startsWith("image/")
+        ? await Image.getSize(picked.uri).catch(() => null)
+        : null;
       setSize(
         measured?.width && measured?.height
           ? { width: measured.width, height: measured.height }
@@ -101,21 +127,22 @@ export default function CreatePostScreen() {
       );
     } catch (error) {
       Alert.alert(
-        "Couldn't add that photo",
-        error instanceof Error ? error.message : "Try another photo.",
+        "Couldn't add that media",
+        error instanceof Error ? error.message : "Try another photo or video.",
       );
     }
   };
 
   /** Opens the picker once, so returning from it does not reopen it. */
-  const photoRequested = useRef(false);
+  const mediaRequested = useRef(false);
   useEffect(() => {
-    if (attach !== "1" || photoRequested.current) return;
-    photoRequested.current = true;
+    if (attach !== "1" || mediaRequested.current) return;
+    mediaRequested.current = true;
     void onAttach();
   }, [attach]);
 
-  const canPost = (!!body.trim() || !!photo) && !postMutation.isPending;
+  const canPost =
+    workspaceWritable && (!!body.trim() || !!media) && !postMutation.isPending;
   const cluster = useStatusClusterInset({ fullScreen: true });
 
   return (
@@ -138,7 +165,10 @@ export default function CreatePostScreen() {
         </Pressable>
         <Text style={styles.navTitle}>New post</Text>
         <Pressable
-          onPress={() => postMutation.mutate()}
+          onPress={() => {
+            if (!workspaceWritable) return;
+            postMutation.mutate();
+          }}
           disabled={!canPost}
           hitSlop={12}
           accessibilityRole="button"
@@ -179,7 +209,11 @@ export default function CreatePostScreen() {
           </View>
 
           <TextInput
-            placeholder="Share an update with your workspace"
+            placeholder={
+              isNetworkPost
+                ? "Share an update with your network"
+                : "Share an update with your workspace"
+            }
             placeholderTextColor="#94A3B8"
             value={body}
             onChangeText={setBody}
@@ -190,23 +224,29 @@ export default function CreatePostScreen() {
             testID="create-post-input"
           />
 
-          {photo ? (
+          {media ? (
             <View style={styles.photoWrap}>
-              <Image
-                source={{ uri: photo.uri }}
-                style={[styles.photo, { aspectRatio: ratio }]}
-                resizeMode="cover"
-                accessibilityIgnoresInvertColors
-                testID="create-post-photo"
+              <PostMediaAttachment
+                url={media.uri}
+                mediaType={
+                  media.mimeType.startsWith("video/") ? "video" : "image"
+                }
+                width={size?.width}
+                height={size?.height}
+                testID={
+                  media.mimeType.startsWith("video/")
+                    ? "create-post-video"
+                    : "create-post-photo"
+                }
               />
               <Pressable
                 onPress={() => {
-                  setPhoto(null);
+                  setMedia(null);
                   setSize(null);
                 }}
                 hitSlop={10}
                 accessibilityRole="button"
-                accessibilityLabel="Remove photo"
+                accessibilityLabel="Remove media"
                 testID="create-post-remove-photo"
                 style={styles.removePhoto}
               >
@@ -220,14 +260,11 @@ export default function CreatePostScreen() {
           <Pressable
             onPress={onAttach}
             accessibilityRole="button"
-            accessibilityLabel="Add a photo"
+            accessibilityLabel="Add a photo or video"
             testID="create-post-attach"
             style={styles.attach}
           >
-            <ImagePlus size={19} color="#4361EE" strokeWidth={2.1} />
-            <Text style={styles.attachText}>
-              {photo ? "Replace photo" : "Add photo"}
-            </Text>
+            <Images size={21} color="#4361EE" strokeWidth={2.1} />
           </Pressable>
         </View>
       </SafeKeyboardAvoidingView>
@@ -307,13 +344,8 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   photoWrap: {
-    marginTop: 14,
+    marginTop: 6,
     position: "relative",
-  },
-  photo: {
-    width: "100%",
-    borderRadius: 14,
-    backgroundColor: "#EEF1F6",
   },
   removePhoto: {
     position: "absolute",
@@ -335,17 +367,11 @@ const styles = StyleSheet.create({
     borderTopColor: "#EEF1F6",
   },
   attach: {
-    flexDirection: "row",
+    width: 40,
+    height: 40,
     alignItems: "center",
-    gap: 8,
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    justifyContent: "center",
+    borderRadius: 12,
     backgroundColor: "#F3F6FF",
-  },
-  attachText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#4361EE",
   },
 });

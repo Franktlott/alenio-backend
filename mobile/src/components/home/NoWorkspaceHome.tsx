@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type ImageSourcePropType,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -16,36 +17,41 @@ import {
   UsersRound,
 } from "lucide-react-native";
 import { router } from "expo-router";
-import { UserAvatar } from "@/components/UserAvatar";
-import type { ConnectionEntry, ConnectionsResponse } from "@/lib/types";
+import { HomeDiscover } from "@/components/home/HomeDiscover";
+import type { ConnectionsResponse } from "@/lib/types";
 
 const PURPLE = "#6D5EF8";
 
 type Props = {
   connections: ConnectionsResponse | undefined;
+  hasWorkspace: boolean;
   wide: boolean;
   columnWidth: number;
+  todayCard?: React.ReactNode;
   insightTitle: string;
   insightBody: string;
   insightAction: string;
+  insightImage: ImageSourcePropType;
   onInsight: () => void;
 };
 
-function openNetwork() {
-  router.push("/(app)/team");
-}
-
-function openPerson(userId: string) {
-  router.push({ pathname: "/person", params: { userId } });
+function openNetwork(tab: "updates" | "connections" = "updates") {
+  router.push({
+    pathname: "/(app)/team",
+    params: { tab },
+  });
 }
 
 export function NoWorkspaceHome({
   connections,
+  hasWorkspace,
   wide,
   columnWidth,
+  todayCard,
   insightTitle,
   insightBody,
   insightAction,
+  insightImage,
   onInsight,
 }: Props) {
   const accepted = connections?.accepted.length ?? 0;
@@ -57,14 +63,20 @@ export function NoWorkspaceHome({
     { key: "requests", value: incoming.length, label: "Requests" },
     { key: "sent", value: sent, label: "Sent" },
   ];
+  const networkStarted = accepted > 0;
+  const showWelcomeHero =
+    !hasWorkspace && connections !== undefined && accepted < 3;
 
   const networkCard = (
-    <View style={[styles.card, wide ? styles.wideCard : null]} testID="home-network-card">
+    <View
+      style={[styles.card, wide && !hasWorkspace ? styles.wideCard : null]}
+      testID="home-network-card"
+    >
       <View style={styles.cardHeader}>
         <Users size={18} color={PURPLE} strokeWidth={2.2} />
         <Text style={styles.cardTitle}>Your network</Text>
         <Pressable
-          onPress={openNetwork}
+          onPress={() => openNetwork("connections")}
           hitSlop={8}
           style={styles.cardLink}
           accessibilityRole="button"
@@ -78,7 +90,7 @@ export function NoWorkspaceHome({
         {stats.map((stat) => (
           <Pressable
             key={stat.key}
-            onPress={openNetwork}
+            onPress={() => openNetwork("connections")}
             style={styles.statTile}
             accessibilityRole="button"
             accessibilityLabel={`${stat.value} ${stat.label}`}
@@ -95,9 +107,6 @@ export function NoWorkspaceHome({
           </Pressable>
         ))}
       </View>
-      {incoming.slice(0, 2).map((entry) => (
-        <RequestRow key={entry.id} entry={entry} />
-      ))}
       {networkIsEmpty ? (
         <View style={styles.networkEmpty}>
           <Text style={styles.networkEmptyTitle}>Your network starts here</Text>
@@ -105,7 +114,7 @@ export function NoWorkspaceHome({
             Find someone you already know on Alenio.
           </Text>
           <Pressable
-            onPress={openNetwork}
+            onPress={() => openNetwork("connections")}
             style={styles.networkEmptyAction}
             accessibilityRole="button"
             accessibilityLabel="Find people"
@@ -130,7 +139,7 @@ export function NoWorkspaceHome({
         icon={<UserPlus size={16} color={PURPLE} strokeWidth={2.2} />}
         title="Find people"
         subtitle="Search for someone you know"
-        onPress={openNetwork}
+        onPress={() => openNetwork("connections")}
         testID="home-find-people"
       />
       <StayRow
@@ -164,155 +173,187 @@ export function NoWorkspaceHome({
     </View>
   );
 
-  return (
-    <View testID="home-no-workspace">
-      <View style={[styles.hero, !wide ? styles.heroNarrow : null]}>
-        <Image
-          source={
-            wide
-              ? require("@/assets/home-no-workspace-hero.jpg")
-              : require("@/assets/home-no-workspace-hero-narrow.jpg")
-          }
-          style={[styles.heroPhoto, !wide ? styles.heroPhotoNarrow : null]}
-          resizeMode={wide ? "stretch" : "cover"}
-          accessibilityIgnoresInvertColors
-        />
-        <LinearGradient
-          colors={
-            wide
-              ? ["#F4F0FF", "rgba(244,240,255,0.94)", "rgba(244,240,255,0)"]
-              : ["#F4F0FF", "rgba(244,240,255,0.92)", "rgba(244,240,255,0)"]
-          }
-          locations={[0, 0.56, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.heroFade, !wide ? styles.heroFadeNarrow : null]}
-          pointerEvents="none"
-        />
-        <View style={[styles.heroCopy, !wide ? styles.heroCopyNarrow : null]}>
-          <Text style={styles.heroEyebrow}>WELCOME TO ALENIO</Text>
-          <Text style={[styles.heroTitle, !wide ? styles.heroTitleNarrow : null]}>
-            Connect, learn, and grow.
-          </Text>
-          <Text style={[styles.heroBody, !wide ? styles.heroBodyNarrow : null]}>
-            Build your network, discover insights, and stay inspired.
-          </Text>
-          <View
-            style={[styles.heroActions, !wide ? styles.heroActionsNarrow : null]}
-          >
-            <Pressable
-              onPress={openNetwork}
-              style={[styles.heroPrimary, !wide ? styles.heroButtonNarrow : null]}
-              accessibilityRole="button"
-              accessibilityLabel="Build your network"
-              testID="home-build-network"
-            >
-              <Users size={15} color="#FFFFFF" strokeWidth={2.3} />
-              <Text
-                style={[
-                  styles.heroPrimaryText,
-                  !wide ? styles.heroButtonTextNarrow : null,
-                ]}
-              >
-                {wide ? "Build your network" : "Build network"}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={onInsight}
-              style={[
-                styles.heroSecondary,
-                !wide ? styles.heroSecondaryNarrow : null,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Explore insights"
-              testID="home-explore-insights"
-            >
-              <Text
-                style={[
-                  styles.heroSecondaryText,
-                  !wide ? styles.heroSecondaryTextNarrow : null,
-                ]}
-              >
-                Explore insights
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-
-      {wide ? (
-        <View style={styles.cardRow}>
-          <View style={{ width: columnWidth }}>{networkCard}</View>
-          <View style={{ width: columnWidth }}>{stayCard}</View>
-        </View>
-      ) : (
-        <View style={styles.cardStack}>
-          {networkCard}
-          {stayCard}
-        </View>
-      )}
-
-      <Pressable
-        onPress={onInsight}
-        style={[styles.insight, !wide ? styles.insightNarrow : null]}
-        accessibilityRole="button"
-        accessibilityLabel={insightTitle.replace(/\n/g, " ")}
-        testID="home-no-workspace-insight"
-      >
-        <Image
-          source={require("@/assets/home-insight-panorama-v4.jpg")}
-          style={styles.insightPhoto}
-          resizeMode="stretch"
-          accessibilityIgnoresInvertColors
-        />
-        <View style={[styles.insightCopy, !wide ? styles.insightCopyNarrow : null]}>
-          <View style={styles.insightLabelRow}>
-            <Sparkles size={13} color={PURPLE} strokeWidth={2.3} />
-            <Text style={styles.insightLabel}>Insight</Text>
-          </View>
-          <Text
-            style={[styles.insightTitle, !wide ? styles.insightTitleNarrow : null]}
-          >
-            {insightTitle}
-          </Text>
-          {wide ? <Text style={styles.insightBody}>{insightBody}</Text> : null}
-          <View
-            style={[styles.insightAction, !wide ? styles.insightActionNarrow : null]}
-          >
-            <Text style={styles.insightActionText}>{insightAction}</Text>
-            <ChevronRight size={14} color={PURPLE} strokeWidth={2.4} />
-          </View>
-        </View>
-      </Pressable>
-    </View>
-  );
-}
-
-function RequestRow({ entry }: { entry: ConnectionEntry }) {
-  const name = entry.person.name?.trim() || "Someone";
-  return (
+  const insightCard = (flushTop = false) => (
     <Pressable
-      onPress={() => openPerson(entry.person.id)}
-      style={styles.requestRow}
+      onPress={onInsight}
+      style={[
+        styles.insight,
+        flushTop ? styles.insightFlush : null,
+        !wide ? styles.insightNarrow : null,
+      ]}
       accessibilityRole="button"
-      accessibilityLabel={`${name} sent you a connection request`}
+      accessibilityLabel={insightTitle.replace(/\n/g, " ")}
+      testID="home-no-workspace-insight"
     >
-      <UserAvatar
-        user={entry.person}
-        size={40}
-        radius={20}
-        backgroundColor="#EEF2FF"
-        resetKey={entry.id}
+      <Image
+        source={insightImage}
+        style={styles.insightPhoto}
+        resizeMode="cover"
+        accessibilityIgnoresInvertColors
       />
-      <View style={styles.requestCopy}>
-        <Text style={styles.requestName} numberOfLines={1}>
-          {name}
+      <LinearGradient
+        colors={[
+          "#F8F6FF",
+          "rgba(248,246,255,0.97)",
+          "rgba(248,246,255,0.72)",
+          "rgba(248,246,255,0)",
+        ]}
+        locations={[0, 0.42, 0.58, 0.78]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        pointerEvents="none"
+        style={styles.insightFade}
+      />
+      <View style={[styles.insightCopy, !wide ? styles.insightCopyNarrow : null]}>
+        <View style={styles.insightLabelRow}>
+          <Sparkles size={13} color={PURPLE} strokeWidth={2.3} />
+          <Text style={styles.insightLabel}>Insight</Text>
+        </View>
+        <Text
+          style={[styles.insightTitle, !wide ? styles.insightTitleNarrow : null]}
+        >
+          {insightTitle}
         </Text>
-        <Text style={styles.requestMeta} numberOfLines={1}>
-          Sent you a connection request
-        </Text>
+        {wide ? <Text style={styles.insightBody}>{insightBody}</Text> : null}
+        <View
+          style={[styles.insightAction, !wide ? styles.insightActionNarrow : null]}
+        >
+          <Text style={styles.insightActionText}>{insightAction}</Text>
+          <ChevronRight size={14} color={PURPLE} strokeWidth={2.4} />
+        </View>
       </View>
     </Pressable>
+  );
+
+  return (
+    <View testID="home-no-workspace">
+      {showWelcomeHero ? (
+        <View style={[styles.hero, !wide ? styles.heroNarrow : null]}>
+          <Image
+            source={require("@/assets/alenio-welcome-mountain-ridge-v2.jpg")}
+            style={[styles.heroPhoto, !wide ? styles.heroPhotoNarrow : null]}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+          />
+          <LinearGradient
+            colors={[
+              "#F7F5FF",
+              "rgba(247,245,255,0.94)",
+              "rgba(247,245,255,0.55)",
+              "rgba(247,245,255,0.12)",
+            ]}
+            locations={[0, 0.38, 0.62, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            pointerEvents="none"
+            style={styles.heroWash}
+          />
+          <View style={[styles.heroCopy, !wide ? styles.heroCopyNarrow : null]}>
+            <Text style={styles.heroEyebrow}>
+              {networkStarted ? "YOUR NETWORK" : "WELCOME TO ALENIO"}
+            </Text>
+            <Text style={[styles.heroTitle, !wide ? styles.heroTitleNarrow : null]}>
+              {networkStarted
+                ? "Your network is taking shape."
+                : "Connect, learn, and grow."}
+            </Text>
+            <Text style={[styles.heroBody, !wide ? styles.heroBodyNarrow : null]}>
+              {networkStarted
+                ? "See what’s new and keep building meaningful connections."
+                : "Build your network, discover insights, and stay inspired."}
+            </Text>
+            <View
+              style={[styles.heroActions, !wide ? styles.heroActionsNarrow : null]}
+            >
+              <Pressable
+                onPress={() =>
+                  openNetwork(networkStarted ? "updates" : "connections")
+                }
+                style={[
+                  styles.heroPrimary,
+                  !wide ? styles.heroButtonNarrow : null,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  networkStarted ? "View network updates" : "Build your network"
+                }
+                testID="home-build-network"
+              >
+                <Users size={15} color="#FFFFFF" strokeWidth={2.3} />
+                <Text
+                  style={[
+                    styles.heroPrimaryText,
+                    !wide ? styles.heroButtonTextNarrow : null,
+                  ]}
+                >
+                  {networkStarted
+                    ? "View updates"
+                    : wide
+                      ? "Build your network"
+                      : "Build network"}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={
+                  networkStarted
+                    ? () => openNetwork("connections")
+                    : onInsight
+                }
+                style={[
+                  styles.heroSecondary,
+                  !wide ? styles.heroSecondaryNarrow : null,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  networkStarted ? "Find people" : "Explore insights"
+                }
+                testID="home-explore-insights"
+              >
+                <Text
+                  style={[
+                    styles.heroSecondaryText,
+                    !wide ? styles.heroSecondaryTextNarrow : null,
+                  ]}
+                >
+                  {networkStarted ? "Find people" : "Explore insights"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {wide && hasWorkspace && todayCard ? (
+        <View style={[styles.cardRow, styles.cardRowMatch]}>
+          <View style={[styles.todayColumn, { width: columnWidth }]}>
+            <View style={styles.todayFill}>{todayCard}</View>
+          </View>
+          <View style={[styles.cardStack, styles.columnStack, { width: columnWidth }]}>
+            {networkCard}
+            {insightCard(true)}
+          </View>
+        </View>
+      ) : (
+        <>
+          {todayCard ? <View style={styles.todaySlot}>{todayCard}</View> : null}
+
+          {wide && !hasWorkspace ? (
+            <View style={styles.cardRow}>
+              <View style={{ width: columnWidth }}>{networkCard}</View>
+              <View style={{ width: columnWidth }}>{stayCard}</View>
+            </View>
+          ) : (
+            <View style={styles.cardStack}>
+              {networkCard}
+              {!hasWorkspace ? stayCard : null}
+            </View>
+          )}
+
+          {insightCard()}
+        </>
+      )}
+      <HomeDiscover wide={wide} />
+    </View>
   );
 }
 
@@ -349,7 +390,7 @@ function StayRow({
 
 const styles = StyleSheet.create({
   hero: {
-    marginTop: 16,
+    marginTop: 8,
     minHeight: 168,
     borderRadius: 22,
     overflow: "hidden",
@@ -363,26 +404,19 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     bottom: 0,
-    width: "60%",
+    width: "100%",
   },
   heroPhotoNarrow: {
     top: 0,
     bottom: 0,
     width: "100%",
   },
-  heroFade: {
+  heroWash: {
     position: "absolute",
     top: 0,
-    left: "34%",
-    bottom: 0,
-    width: "28%",
-  },
-  heroFadeNarrow: {
-    top: 0,
+    right: 0,
     bottom: 0,
     left: 0,
-    width: "100%",
-    height: undefined,
   },
   heroCopy: {
     maxWidth: "62%",
@@ -493,9 +527,30 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 10,
   },
+  /** Today stretches to the network and insight stack, and does not set the row height. */
+  cardRowMatch: {
+    alignItems: "stretch",
+  },
+  todayColumn: {
+    alignSelf: "stretch",
+  },
+  todayFill: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  todaySlot: {
+    marginTop: 12,
+  },
   cardStack: {
     marginTop: 12,
     gap: 12,
+  },
+  /** Beside Today, so the row's own top margin is the only offset. */
+  columnStack: {
+    marginTop: 0,
   },
   card: {
     borderRadius: 20,
@@ -566,29 +621,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "600",
-    color: "#667085",
-  },
-  requestRow: {
-    marginTop: 10,
-    paddingVertical: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  requestCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  requestName: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "700",
-    color: "#111A2B",
-  },
-  requestMeta: {
-    marginTop: 1,
-    fontSize: 13,
-    lineHeight: 18,
     color: "#667085",
   },
   networkEmpty: {
@@ -671,6 +703,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#F8F6FF",
   },
+  insightFlush: {
+    marginTop: 0,
+  },
   insightNarrow: {
     minHeight: 116,
   },
@@ -680,6 +715,13 @@ const styles = StyleSheet.create({
     right: 0,
     height: "100%",
     width: "100%",
+  },
+  insightFade: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   insightCopy: {
     maxWidth: "52%",

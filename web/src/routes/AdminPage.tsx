@@ -46,6 +46,34 @@ function subscriptionStatusLabel(status: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/** The date that matters for each status: when a trial ends, a plan renews, or access stopped. */
+function subscriptionDateLine(sub: AdminTeamRow["subscription"]): string | null {
+  const trialEnd = sub.trialEndsAt ?? null;
+  const periodEnd = sub.currentPeriodEnd;
+  const isPast = (iso: string) => new Date(iso).getTime() < Date.now();
+  switch (sub.status) {
+    case "trialing": {
+      const end = trialEnd ?? periodEnd;
+      if (!end) return null;
+      return `${isPast(end) ? "Ended" : "Ends"} ${formatAdminDate(end)}`;
+    }
+    case "expired": {
+      const end = trialEnd ?? periodEnd;
+      return end ? `Ended ${formatAdminDate(end)}` : null;
+    }
+    case "active":
+      if (!periodEnd) return null;
+      return `${sub.cancelAtPeriodEnd ? "Ends" : "Renews"} ${formatAdminDate(periodEnd)}`;
+    case "canceled":
+      return periodEnd ? `Ended ${formatAdminDate(periodEnd)}` : null;
+    case "past_due":
+    case "unpaid":
+      return periodEnd ? `Due ${formatAdminDate(periodEnd)}` : null;
+    default:
+      return null;
+  }
+}
+
 const WORKSPACE_COLUMNS: AlenioColumn<AdminTeamRow>[] = [
   {
     id: "name",
@@ -78,12 +106,20 @@ const WORKSPACE_COLUMNS: AlenioColumn<AdminTeamRow>[] = [
   {
     id: "status",
     header: "Status",
-    width: "112px",
-    cell: (team) => (
-      <StatusIndicator tone={SUBSCRIPTION_TONE[team.subscription.status] ?? "neutral"}>
-        {subscriptionStatusLabel(team.subscription.status)}
-      </StatusIndicator>
-    ),
+    width: "172px",
+    cell: (team) => {
+      const dateLine = subscriptionDateLine(team.subscription);
+      return (
+        <span className="al-cell-copy">
+          <span className="al-cell-inline">
+            <StatusIndicator tone={SUBSCRIPTION_TONE[team.subscription.status] ?? "neutral"}>
+              {subscriptionStatusLabel(team.subscription.status)}
+            </StatusIndicator>
+          </span>
+          {dateLine ? <span className="al-cell-sub">{dateLine}</span> : null}
+        </span>
+      );
+    },
   },
   {
     id: "members",

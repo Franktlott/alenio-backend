@@ -217,6 +217,8 @@ export async function listPlatformTeams(limit = 200) {
           status: true,
           stripeCustomerId: true,
           currentPeriodEnd: true,
+          trialEndsAt: true,
+          cancelAtPeriodEnd: true,
         },
       },
       members: {
@@ -266,8 +268,17 @@ export async function listPlatformTeams(limit = 200) {
             status: team.subscription.status,
             stripeCustomerId: team.subscription.stripeCustomerId,
             currentPeriodEnd: team.subscription.currentPeriodEnd?.toISOString() ?? null,
+            trialEndsAt: team.subscription.trialEndsAt?.toISOString() ?? null,
+            cancelAtPeriodEnd: team.subscription.cancelAtPeriodEnd,
           }
-        : { plan: "legacy", status: "active", stripeCustomerId: null, currentPeriodEnd: null },
+        : {
+            plan: "legacy",
+            status: "active",
+            stripeCustomerId: null,
+            currentPeriodEnd: null,
+            trialEndsAt: null,
+            cancelAtPeriodEnd: false,
+          },
     };
   });
 }

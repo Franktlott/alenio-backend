@@ -43,6 +43,8 @@ type Props = {
   overlapPad?: number;
   /** Light headers place the page title beside the Alenio mark. */
   tone?: "brand" | "light";
+  /** Renders over a screen-provided backdrop (e.g. a hero photo) instead of a solid bar. */
+  transparent?: boolean;
   titlePlacement?: "center" | "leading";
   showWorkspaceSubtitle?: boolean;
 };
@@ -93,6 +95,7 @@ export function AppTabHeader({
   hideCenterContent = false,
   overlapPad = 0,
   tone = "light",
+  transparent = false,
   titlePlacement = "leading",
   showWorkspaceSubtitle = false,
 }: Props) {
@@ -214,6 +217,7 @@ export function AppTabHeader({
         style={[
           styles.header,
           tone === "light" ? styles.headerLight : null,
+          transparent ? styles.headerTransparent : null,
           headerPad,
         ]}
         testID={testID}
@@ -341,6 +345,9 @@ const styles = StyleSheet.create({
   },
   headerLight: {
     backgroundColor: "#FFFFFF",
+  },
+  headerTransparent: {
+    backgroundColor: "transparent",
   },
   row: {
     flexDirection: "row",

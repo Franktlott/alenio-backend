@@ -193,7 +193,7 @@ describe("resolveWorkspaceSpotlight", () => {
       kind: "quiet",
       eventId: quietEventId("post-old"),
       headline: "Keep the conversation going",
-      cta: "share",
+      cta: null,
     });
   });
 

@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
+  ClipboardCheck,
   Eye,
   EyeOff,
   LockKeyhole,
   Mail,
+  TrendingUp,
+  UsersRound,
 } from "lucide-react-native";
 import {
   View,
@@ -52,9 +55,12 @@ import {
   AuthPrimaryButton,
   AuthScreen,
   authGoBack,
+  useAuthWideLayout,
 } from "@/components/auth/AuthScreen";
 
 export default function SignIn() {
+  /** Split layouts drop the props strip: the hero panel already carries the pitch. */
+  const wideAuth = useAuthWideLayout();
   const params = useLocalSearchParams<{
     reason?: string;
     email?: string | string[];
@@ -438,6 +444,35 @@ export default function SignIn() {
           </TouchableOpacity>
         </View>
 
+        {/* Split layouts carry these on the hero panel instead. */}
+        {wideAuth ? null : (
+          <View className="mt-7 flex-row rounded-[16px] bg-[#F6F4FF] px-2 py-4">
+            <View className="flex-1 items-center border-r border-[#E6E1FA]">
+              <View className="mb-2 h-8 w-8 items-center justify-center rounded-full bg-[#ECE8FF]">
+                <UsersRound size={17} color="#6748E8" />
+              </View>
+              <Text className="text-[10px] font-semibold text-[#30384A]">
+                Connect
+              </Text>
+            </View>
+            <View className="flex-1 items-center border-r border-[#E6E1FA]">
+              <View className="mb-2 h-8 w-8 items-center justify-center rounded-full bg-[#ECE8FF]">
+                <ClipboardCheck size={17} color="#6748E8" />
+              </View>
+              <Text className="text-[10px] font-semibold text-[#30384A]">
+                Get work done
+              </Text>
+            </View>
+            <View className="flex-1 items-center">
+              <View className="mb-2 h-8 w-8 items-center justify-center rounded-full bg-[#ECE8FF]">
+                <TrendingUp size={17} color="#6748E8" />
+              </View>
+              <Text className="text-[10px] font-semibold text-[#30384A]">
+                Grow together
+              </Text>
+            </View>
+          </View>
+        )}
       </AuthCard>
 
       <View className="mt-6 flex-row flex-wrap justify-center gap-1 px-4">

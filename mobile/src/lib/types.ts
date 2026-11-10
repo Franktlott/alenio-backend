@@ -543,3 +543,48 @@ export type CreatePersonalRecognitionRequest = {
 export type CreatePersonalRecognitionResponse = {
   id: string;
 };
+
+export type NetworkUpdateReactions = Record<
+  string,
+  {
+    count: number;
+    userIds: string[];
+    users: Array<{ id: string; name: string }>;
+  }
+>;
+
+export type NetworkUpdate = {
+  id: string;
+  teamId: null;
+  type: "network_post";
+  createdAt: string;
+  metadata: {
+    body: string | null;
+    imageUrl: string | null;
+    imageWidth: number | null;
+    imageHeight: number | null;
+    mediaType?: "image" | "video" | null;
+  } | null;
+  user: { id: string; name: string; image: string | null } | null;
+  reactions: NetworkUpdateReactions;
+  commentCount: number;
+  canDelete: boolean;
+};
+
+export type NetworkUpdateComment = {
+  id: string;
+  body: string;
+  createdAt: string;
+  parentId: string | null;
+  author: { id: string; name: string; image: string | null };
+  canDelete: boolean;
+  reactions: NetworkUpdateReactions;
+};
+
+export type NetworkUpdatesFeedResponse = {
+  items: NetworkUpdate[];
+  nextCursor: string | null;
+};
+
+export type NetworkUpdateResponse = NetworkUpdate;
+export type NetworkUpdateCommentsResponse = NetworkUpdateComment[];

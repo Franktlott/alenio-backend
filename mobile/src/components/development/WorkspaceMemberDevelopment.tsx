@@ -4,6 +4,7 @@ import { DevelopmentPlanTab } from "@/components/DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "@/components/OneOnOneHistoryTab";
 import { UserAvatar } from "@/components/UserAvatar";
 import { WS } from "@/components/workspace/workspace-ui";
+import { colors } from "@/theme";
 import type { TeamMember } from "@/lib/types";
 import type { WorkspaceDevelopmentSection } from "@/lib/workspace-development-navigation";
 
@@ -120,10 +121,13 @@ export function WorkspaceMemberDevelopment({
           marginHorizontal: WS.pageGutter,
           marginTop: onBack ? 4 : 8,
           marginBottom: 6,
-          height: 36,
+          height: 38,
           padding: 3,
           flexDirection: "row",
-          backgroundColor: "#F1F3F7",
+          alignItems: "stretch",
+          backgroundColor: "#FFFFFF",
+          borderWidth: 1,
+          borderColor: colors.borderStrong,
           borderRadius: 12,
         }}
         accessibilityRole="tablist"
@@ -139,12 +143,7 @@ export function WorkspaceMemberDevelopment({
                 alignItems: "center",
                 justifyContent: "center",
                 borderRadius: 9,
-                backgroundColor: selected ? "#FFFFFF" : "transparent",
-                shadowColor: selected ? "#0F172A" : "transparent",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: selected ? 0.1 : 0,
-                shadowRadius: 3,
-                elevation: selected ? 2 : 0,
+                backgroundColor: selected ? colors.brand : "transparent",
               }}
               accessibilityRole="tab"
               accessibilityState={{ selected }}
@@ -156,7 +155,7 @@ export function WorkspaceMemberDevelopment({
                   fontSize: 13,
                   lineHeight: 16,
                   fontWeight: selected ? "700" : "600",
-                  color: selected ? "#0F172A" : "#64748B",
+                  color: selected ? "#FFFFFF" : colors.textSecondary,
                 }}
               >
                 {label}
@@ -179,6 +178,7 @@ export function WorkspaceMemberDevelopment({
             teamId={teamId}
             memberUserId={member.userId}
             memberName={memberName}
+            isSelf={isSelf}
             memberImage={member.user.image}
             managerName={leaderName}
             canCreate={canManageGoals}

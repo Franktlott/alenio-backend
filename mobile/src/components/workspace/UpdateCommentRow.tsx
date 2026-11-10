@@ -23,6 +23,8 @@ type Props = {
   inset?: boolean;
   /** Denser type and spacing, for the thread pane beside the feed. */
   compact?: boolean;
+  /** The parent already provides the horizontal page inset. */
+  contained?: boolean;
 };
 
 /** One comment: avatar beside a soft bubble, the way chat threads read. */
@@ -36,6 +38,7 @@ export function UpdateCommentRow({
   picker,
   inset = false,
   compact = false,
+  contained = false,
 }: Props) {
   const pending = isPendingComment(comment);
   const name = comment.author.name?.trim() || "Someone";
@@ -54,6 +57,13 @@ export function UpdateCommentRow({
         styles.row,
         compact ? styles.rowCompact : null,
         inset ? (compact ? styles.rowInsetCompact : styles.rowInset) : null,
+        contained
+          ? inset
+            ? compact
+              ? styles.rowInsetCompactContained
+              : styles.rowInsetContained
+            : styles.rowContained
+          : null,
         pending ? styles.pending : null,
       ]}
       testID={`update-comment-${comment.id}`}
@@ -172,6 +182,17 @@ const styles = StyleSheet.create({
   },
   rowInsetCompact: {
     paddingLeft: 38,
+  },
+  rowContained: {
+    paddingHorizontal: 0,
+  },
+  rowInsetContained: {
+    paddingLeft: 30,
+    paddingRight: 0,
+  },
+  rowInsetCompactContained: {
+    paddingLeft: 26,
+    paddingRight: 0,
   },
   nameCompact: {
     fontSize: 12,

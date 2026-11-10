@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -8,10 +9,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowRight,
-  Info,
   MessageCircle,
   Trophy,
   UserMinus,
@@ -23,13 +23,14 @@ import { AlenioHeaderBrand } from "@/components/AlenioHeaderBrand";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { HomeTodayCard } from "@/components/home/HomeTodayCard";
 import { NoWorkspaceHome } from "@/components/home/NoWorkspaceHome";
+import { SenecaResumeCard } from "@/components/home/SenecaResumeCard";
+import { fetchSenecaConversations } from "@/lib/seneca-api";
+import {
+  formatSenecaConversationWhen,
+  recentSenecaConversations,
+} from "@/lib/seneca-conversation-presentation";
 import { PANE_GAP, useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { UserAvatar } from "@/components/UserAvatar";
-import {
-  AlenioBottomSheet,
-  AlenioSheetCard,
-  AlenioSheetIcon,
-} from "@/components/AlenioBottomSheet";
 import { type ActivityApiEvent } from "@/components/activity/types";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -52,7 +53,6 @@ import type {
   ConnectionPerson,
   ConnectionsResponse,
   Conversation,
-  HomeTodayItem,
   HomeTodayResponse,
   Team,
 } from "@/lib/types";
@@ -60,33 +60,27 @@ import type {
 /** Widest the two columns together are allowed to get before they centre. */
 const HOME_SPLIT_MAX_WIDTH = 940;
 
+/** Same mountain, three lights. The header follows the greeting's clock. */
+const HERO_IMAGE_MORNING = require("@/assets/alenio-home-hero-morning.jpg");
+const HERO_IMAGE_AFTERNOON = require("@/assets/alenio-home-hero-afternoon.jpg");
+const HERO_IMAGE_EVENING = require("@/assets/alenio-home-hero-sunset.jpg");
+
+function heroImageForHour(hour: number) {
+  if (hour < 12) return HERO_IMAGE_MORNING;
+  if (hour < 17) return HERO_IMAGE_AFTERNOON;
+  return HERO_IMAGE_EVENING;
+}
+
 /** How far back a waiting update can be. An unread message stays until it is read. */
 const RECENT_ACTIVITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** Enough to notice, short enough that Today stays on the screen. */
 const WAITING_ROW_LIMIT = 3;
 const WAITING_KINDS = new Set<HomeUpdate["kind"]>([
   "message",
-  "connection_received",
   "mention",
   "recognition",
   "workspace_invite",
 ]);
-
-function dayStatusLine(count: number): string {
-  if (count <= 0) return "You're clear today.";
-  if (count === 1) return "1 left today.";
-  return `${count} left today.`;
-}
-
-/** Open work still ahead. A finished item or a meeting that already ended does not count. */
-function countLeftToday(items: HomeTodayItem[], now: number): number {
-  return items.filter((item) => {
-    if (item.type === "holiday" || item.done) return false;
-    if (item.type === "task" || item.type === "reminder") return true;
-    const end = new Date(item.endAt ?? item.startAt).getTime();
-    return !Number.isFinite(end) || end >= now;
-  }).length;
-}
 
 /** The gap above the two columns, which is not theirs to fill. */
 const SPLIT_ROW_GAP = 16;
@@ -281,10 +275,37 @@ export default function HomeScreen() {
   const columnWidth = Math.floor(columnArea / 2);
   const { data: session } = useSession();
   const currentUserId = session?.user?.id ?? "";
-  const [todayInfoOpen, setTodayInfoOpen] = useState(false);
   const openSenecaWithPrompt = useSenecaSheetStore(
     (state) => state.openSheetWithPrompt,
   );
+  const openSeneca = useSenecaSheetStore((state) => state.openSheet);
+  const openSenecaConversation = useSenecaSheetStore(
+    (state) => state.openSheetWithConversation,
+  );
+  const { data: senecaConversations = [] } = useQuery({
+    queryKey: ["seneca-conversations"],
+    queryFn: () => fetchSenecaConversations(),
+    enabled: !!currentUserId,
+    staleTime: 15_000,
+  });
+  /**
+   * One card for every Seneca chat from the last week. Older or expired
+   * chats stay in Seneca's own history.
+   */
+  const resumeConversations = useMemo(() => {
+    const now = Date.now();
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const fresh = senecaConversations.filter((conversation) => {
+      const updated = new Date(conversation.updatedAt).getTime();
+      const expires = new Date(conversation.expiresAt).getTime();
+      return (
+        Number.isFinite(updated) &&
+        now - updated <= weekMs &&
+        (!Number.isFinite(expires) || expires > now)
+      );
+    });
+    return recentSenecaConversations(fresh, 3);
+  }, [senecaConversations]);
   const weeklyInsight = homeInsightForDate();
   const openWeeklyInsight = () => {
     if (weeklyInsight.destination.type === "recognition") {
@@ -356,6 +377,8 @@ export default function HomeScreen() {
           "teams",
           "dms",
           "dm-unread-counts",
+          "seneca-conversations",
+          "discover",
         ].map((key) => queryClient.refetchQueries({ queryKey: [key] })),
       );
     } finally {
@@ -386,10 +409,6 @@ export default function HomeScreen() {
       ...items,
     ];
   }, [todayData]);
-  const leftToday =
-    teamsPending || teams.length === 0 || (todayPending && !todayData)
-      ? null
-      : countLeftToday(todayItems, Date.now());
   const { data: accountActivity = [] } = useQuery({
     queryKey: ["account-activity", currentUserId],
     queryFn: () => api.get<ActivityApiEvent[]>("/api/activity"),
@@ -680,64 +699,82 @@ export default function HomeScreen() {
         ))}
       </View>
     ) : null;
-
-  const insightCard = (
-    <TouchableOpacity
-      onPress={openWeeklyInsight}
-      activeOpacity={0.75}
-      testID={`home-weekly-insight-${weeklyInsight.id}`}
-      accessibilityRole="button"
-      accessibilityLabel={weeklyInsight.accessibilityLabel}
+  /** The scenic header is the same for everyone, workspace or not. */
+  const showMountainHeader = true;
+  /** The photo runs from the top of the screen, behind the Alenio bar and
+   * the greeting, then dissolves into the white page before the cards. */
+  const heroBackdrop = showMountainHeader ? (
+    <View
+      pointerEvents="none"
+      style={[styles.heroBackdrop, { height: insets.top + 198 }]}
     >
-      <View style={styles.promptBlock}>
-        <Text style={styles.promptTitle}>{weeklyInsight.title}</Text>
-        <Text style={styles.promptBody}>{weeklyInsight.body}</Text>
-        <View style={styles.promptLink}>
-          <Text style={styles.promptLinkText}>{weeklyInsight.actionLabel}</Text>
-          <ArrowRight size={16} color="#6D5EF8" strokeWidth={2.2} />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      <Image
+        source={heroImageForHour(new Date().getHours())}
+        style={styles.heroBackdropImage}
+        resizeMode="cover"
+        accessibilityIgnoresInvertColors
+      />
+      <LinearGradient
+        colors={[
+          "rgba(255,255,255,0)",
+          "rgba(255,255,255,0.26)",
+          "rgba(255,255,255,0.68)",
+          "#FFFFFF",
+        ]}
+        locations={[0, 0.36, 0.7, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.heroBackdropFade}
+      />
+    </View>
+  ) : null;
 
   const headerBlock = (
-    <>
-      <View style={styles.greetingBlock} testID="home-greeting-card">
-        <Text style={styles.greeting}>
+    <View
+      style={[
+        styles.greetingBlock,
+        showMountainHeader ? styles.greetingBlockHero : null,
+      ]}
+      testID="home-greeting-card"
+    >
+      <View style={showMountainHeader ? styles.greetingCopy : null}>
+        <Text
+          style={[
+            styles.greeting,
+            bodyWidth > 0 && bodyWidth < 420 ? styles.greetingCompact : null,
+            showMountainHeader ? styles.greetingHeroText : null,
+          ]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+        >
           {timeOfDayGreeting()}, {firstName}.
         </Text>
-        {leftToday != null ? (
-          <Text style={styles.subtitle}>{dayStatusLine(leftToday)}</Text>
+        {showMountainHeader ? (
+          <Text style={styles.greetingSubtitle} numberOfLines={2}>
+            Stay connected, make progress, and grow your impact.
+          </Text>
         ) : null}
       </View>
-    </>
+    </View>
   );
-
-  /** Spacing belongs to whichever column or stack places it. */
-  const todayCard =
-    teamsPending || teams.length === 0 ? null : (
-      <HomeTodayCard
-        items={todayItems}
-        pending={todayPending}
-        onInfo={() => setTodayInfoOpen(true)}
-        fill={false}
-      />
-    );
 
   return (
     <CurvedTabLayout
       topInset={insets.top}
-      title={!teamsPending && teams.length === 0 ? "Alenio" : "Home"}
+      title="Alenio"
       leftAction={<AlenioHeaderBrand />}
+      backdrop={heroBackdrop}
+      backdropVisible={showMountainHeader}
       testID="home-screen"
       headerTestID="home-header"
     >
       <ScrollView
-        style={styles.page}
+        style={[styles.page, showMountainHeader ? styles.pageTransparent : null]}
         contentContainerStyle={[
           styles.content,
           {
-            paddingBottom: tabClearance(28),
+            paddingBottom: tabClearance(resumeConversations.length > 0 ? 56 : 28),
             paddingLeft: gutterLeft + slack,
             paddingRight: gutterRight + slack,
           },
@@ -757,56 +794,50 @@ export default function HomeScreen() {
       >
         <View>{headerBlock}</View>
 
-        {teamsPending ? null : teams.length === 0 ? (
+        {teamsPending ? null : (
           <View style={styles.sectionGap} testID="home-stack">
             {waitingBlock}
             <NoWorkspaceHome
               connections={connections}
+              hasWorkspace={teams.length > 0}
               wide={splitHome}
               columnWidth={columnWidth}
+              todayCard={
+                teams.length > 0 ? (
+                  <HomeTodayCard
+                    items={todayItems}
+                    pending={todayPending}
+                    fill={splitHome}
+                    variant="alenio"
+                  />
+                ) : undefined
+              }
               insightTitle={weeklyInsight.title}
               insightBody={weeklyInsight.body}
               insightAction={weeklyInsight.actionLabel}
+              insightImage={weeklyInsight.image}
               onInsight={openWeeklyInsight}
             />
           </View>
-        ) : (
-          <View testID="home-stack">
-            {waitingBlock ? (
-              <View style={styles.sectionGap}>{waitingBlock}</View>
-            ) : null}
-            {todayCard ? (
-              <View style={styles.sectionGap}>{todayCard}</View>
-            ) : null}
-            <View style={styles.promptGap}>{insightCard}</View>
-          </View>
         )}
-      </ScrollView>
-      <AlenioBottomSheet
-        visible={todayInfoOpen}
-        title="What appears in Today"
-        subtitle="Your day across every workspace"
-        onClose={() => setTodayInfoOpen(false)}
-        compact
-        showCloseButton
-      >
-        <AlenioSheetCard tint="purple" compact>
-          <View style={styles.todayInfoContent}>
-            <AlenioSheetIcon color="#6947E8" compact>
-              <Info size={15} color="#FFFFFF" strokeWidth={2.3} />
-            </AlenioSheetIcon>
-            <View style={styles.todayInfoCopy}>
-              <Text style={styles.todayInfoTitle}>Only items relevant to you</Text>
-              <Text style={styles.todayInfoText}>
-                Tasks and reminders due today, calendar events, meetings,
-                check-ins, Outlook events, and holidays. Items are collected
-                from all your workspaces using your timezone and visibility
-                permissions.
-              </Text>
-            </View>
+
+        {resumeConversations.length > 0 ? (
+          <View style={{ marginTop: 12 }}>
+            <SenecaResumeCard
+              conversations={resumeConversations.map((conversation) => ({
+                id: conversation.id,
+                title:
+                  conversation.title?.trim() ||
+                  conversation.preview?.trim() ||
+                  "Untitled chat",
+                whenLabel: formatSenecaConversationWhen(conversation.updatedAt),
+              }))}
+              onOpen={openSenecaConversation}
+              onContinue={openSeneca}
+            />
           </View>
-        </AlenioSheetCard>
-      </AlenioBottomSheet>
+        ) : null}
+      </ScrollView>
     </CurvedTabLayout>
   );
 }
@@ -844,25 +875,74 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   sectionGap: {
-    marginTop: 16,
+    marginTop: 0,
   },
   greetingBlock: {
+    zIndex: 1,
     paddingHorizontal: 2,
     paddingTop: 2,
     paddingBottom: 4,
   },
+  greetingBlockHero: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    justifyContent: "flex-start",
+  },
+  heroBackdrop: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    left: 0,
+    overflow: "hidden",
+  },
+  heroBackdropImage: {
+    position: "absolute",
+    // Wider than the screen and right-anchored, so the small peak stays
+    // framed at the right edge instead of being centre-cropped away.
+    // Lifted so the peak sits in the sky beside the greeting, with the
+    // pale sky still behind the Alenio bar.
+    right: 0,
+    width: "150%",
+    height: "150%",
+    top: "-24%",
+  },
+  heroBackdropFade: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    left: 0,
+    height: "58%",
+  },
+  pageTransparent: {
+    backgroundColor: "transparent",
+  },
+  greetingCopy: {
+    maxWidth: "72%",
+  },
   greeting: {
+    flexShrink: 1,
     fontSize: 28,
     lineHeight: 34,
     fontWeight: "800",
     letterSpacing: -0.6,
     color: "#111A2B",
   },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 15,
-    lineHeight: 20,
-    color: "#667085",
+  greetingCompact: {
+    fontSize: 24,
+    lineHeight: 29,
+  },
+  greetingHeroText: {
+    fontSize: 23,
+    lineHeight: 28,
+    letterSpacing: -0.45,
+  },
+  greetingSubtitle: {
+    marginTop: 3,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "500",
+    color: "#4B4356",
   },
   getStartedCard: {
     marginTop: 12,

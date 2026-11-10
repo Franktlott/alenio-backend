@@ -75,6 +75,7 @@ const CHIP_HEIGHT = 15;
 const CHIP_GAP = 2;
 const ROW_HEIGHT_FOR_ONE_CHIP = 52;
 const ROW_HEIGHT_FOR_TWO_CHIPS = 74;
+const ROW_HEIGHT_FOR_TWO_CHIPS_AND_MORE = 91;
 /**
  * A phone month cell lands around 46–52pt. That still fits a short title
  * ("Standup", "1:1") the way the wider Duo and iPad cells do. Narrower than
@@ -254,18 +255,29 @@ export function CalendarCard({
   const chipsPerCell =
     !expanded || cellWidth < CELL_WIDTH_FOR_CHIPS
       ? 0
-      : measuredRowHeight >= ROW_HEIGHT_FOR_TWO_CHIPS
-        ? 2
-        : measuredRowHeight >= ROW_HEIGHT_FOR_ONE_CHIP
-          ? 1
-          : 0;
+      : measuredRowHeight >= ROW_HEIGHT_FOR_TWO_CHIPS_AND_MORE
+        ? 3
+        : measuredRowHeight >= ROW_HEIGHT_FOR_TWO_CHIPS
+          ? 2
+          : measuredRowHeight >= ROW_HEIGHT_FOR_ONE_CHIP
+            ? 1
+            : 0;
 
-  /** Events first, then due tasks — the order people scan a day in. */
+  /** Holidays, events, then due tasks — the order people scan a day in. */
   const cellChips = (iso: string) => {
+    const dayHolidays = holidaysByDay.get(iso) ?? [];
     const dayEvents = eventsByDay.get(iso) ?? [];
     const dayTasks = taskDays.get(iso) ?? [];
     const chips: { key: string; label: string; tint: string; ink: string }[] =
       [];
+    for (const [index, holiday] of dayHolidays.entries()) {
+      chips.push({
+        key: `holiday-${iso}-${index}`,
+        label: holiday.name,
+        tint: "#FEE2E2",
+        ink: CALENDAR_EVENT_COLORS.holiday,
+      });
+    }
     for (const ev of dayEvents) {
       chips.push({
         key: `event-${ev.id}`,
@@ -310,6 +322,30 @@ export function CalendarCard({
             (taskDays.get(iso)?.length ?? 0) > 0;
           const weekday = WEEK_DAY_NAMES[day.getDay()];
           const monthName = MONTH_NAMES[day.getMonth()];
+          const chips = cellChips(iso);
+          /** At most two titled labels per day; anything past that is the +N chip. */
+          const visibleChipCount = Math.min(
+            chips.length,
+            Math.min(2, chipsPerCell),
+          );
+          const hasOverflow = chips.length > visibleChipCount;
+          const hiddenChipCount = chips.length - visibleChipCount;
+          /** Narrow cells carry dots instead of truncated titles: one per
+           * kind present, in the day's own colors, capped at three. */
+          const dots: string[] = [];
+          if (hasHoliday) dots.push(CALENDAR_EVENT_COLORS.holiday);
+          for (const ev of eventsByDay.get(iso) ?? []) {
+            if (dots.length >= 3) break;
+            const color = resolveCalendarEventColor(ev);
+            if (!dots.includes(color)) dots.push(color);
+          }
+          if (
+            dots.length < 3 &&
+            (taskDays.get(iso)?.length ?? 0) > 0 &&
+            !dots.includes(CALENDAR_EVENT_COLORS.task)
+          ) {
+            dots.push(CALENDAR_EVENT_COLORS.task);
+          }
 
           return (
             <Pressable
@@ -354,43 +390,42 @@ export function CalendarCard({
               </View>
               {chipsPerCell > 0 ? (
                 <View style={styles.chipStack}>
-                  {hasHoliday ? (
-                    <View style={[styles.chip, { backgroundColor: "#FEE2E2" }]}>
+                  {chips.slice(0, visibleChipCount).map((chip) => (
+                    <View
+                      key={chip.key}
+                      style={[styles.chip, { backgroundColor: chip.tint }]}
+                    >
                       <Text
                         numberOfLines={1}
                         maxFontSizeMultiplier={1.15}
-                        style={[
-                          styles.chipText,
-                          { color: CALENDAR_EVENT_COLORS.holiday },
-                        ]}
+                        style={[styles.chipText, { color: chip.ink }]}
                       >
-                        {holidaysByDay.get(iso)?.[0]?.name ?? "Holiday"}
+                        {chip.label}
                       </Text>
                     </View>
-                  ) : null}
-                  {cellChips(iso)
-                    .slice(0, hasHoliday ? chipsPerCell - 1 : chipsPerCell)
-                    .map((chip) => (
-                      <View
-                        key={chip.key}
-                        style={[styles.chip, { backgroundColor: chip.tint }]}
-                      >
-                        <Text
-                          numberOfLines={1}
-                          maxFontSizeMultiplier={1.15}
-                          style={[styles.chipText, { color: chip.ink }]}
-                        >
-                          {chip.label}
-                        </Text>
-                      </View>
-                    ))}
+                  ))}
                 </View>
               ) : (
                 <View style={styles.dotSlot}>
-                  {hasHoliday ? <View style={styles.holidayDot} /> : null}
-                  {hasActivity ? <View style={styles.activityDot} /> : null}
+                  {dots.map((color, dotIndex) => (
+                    <View
+                      key={`${iso}-dot-${dotIndex}`}
+                      style={[styles.activityDot, { backgroundColor: color }]}
+                    />
+                  ))}
                 </View>
               )}
+              {chipsPerCell > 0 && hasOverflow ? (
+                <View style={styles.overflowChip}>
+                  <Text
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.15}
+                    style={styles.moreChipText}
+                  >
+                    +{hiddenChipCount}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         })}
@@ -697,8 +732,31 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipText: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 9.5,
     fontWeight: "600",
+  },
+  overflowChip: {
+    position: "absolute",
+    left: "50%",
+    bottom: 4,
+    width: 28,
+    height: 16,
+    transform: [{ translateX: -14 }],
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F4F8",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#D9E0EA",
+  },
+  moreChipText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#5F6F85",
+    letterSpacing: 0.1,
   },
   dayNumber: {
     width: DAY_NUMBER_SIZE,
@@ -739,12 +797,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 3,
-  },
-  holidayDot: {
-    width: ACTIVITY_DOT_SIZE,
-    height: ACTIVITY_DOT_SIZE,
-    borderRadius: ACTIVITY_DOT_SIZE / 2,
-    backgroundColor: CALENDAR_EVENT_COLORS.holiday,
   },
   activityDot: {
     width: ACTIVITY_DOT_SIZE,

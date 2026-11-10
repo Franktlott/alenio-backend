@@ -20,12 +20,10 @@ import {
   Check,
   ChevronDown,
   Clock,
-  Compass,
-  Inbox,
   MessageCircle,
   MoreHorizontal,
+  Newspaper,
   Search,
-  Send,
   SlidersHorizontal,
   X,
   Users,
@@ -41,16 +39,15 @@ import {
   AlenioSheetIcon,
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
-import { CancelConnectionRequestSheet } from "@/components/CancelConnectionRequestSheet";
 import { ConnectRequestConfirmationSheet } from "@/components/ConnectRequestConfirmationSheet";
 import { DismissSuggestionConfirmationSheet } from "@/components/DismissSuggestionConfirmationSheet";
 import { SuggestionPersonCard } from "@/components/people/SuggestionPersonCard";
+import { NetworkUpdatesFeed } from "@/components/people/NetworkUpdatesFeed";
 import {
   connectionRequestOutcome,
   type ConnectionRequestOutcome,
 } from "@/lib/connection-request-outcome";
 import { connectionRequestErrorMessage } from "@/lib/connection-request-error";
-import { formatRelativeTime } from "@/components/activity/types";
 import { dmOtherParticipant, resolveUserImageUrl } from "@/lib/user-avatar";
 import type {
   AcceptedConnectionEntry,
@@ -58,7 +55,6 @@ import type {
   ConnectionSuggestion,
   ConnectionSuggestionDismissalResponse,
   ConnectionsResponse,
-  ConnectionEntry,
   Conversation,
   PersonSearchResult,
 } from "@/lib/types";
@@ -78,7 +74,7 @@ const BRAND = colors.brand;
 const GRID_GAP = 10;
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-type NetworkTab = "connections" | "requests" | "discover";
+type NetworkTab = "updates" | "connections";
 
 /** Phone stays one column. Tablets get two. Wide screens get three. */
 function networkColumns(width: number) {
@@ -126,6 +122,7 @@ function connectionRowDetail(entry: AcceptedConnectionEntry) {
 }
 
 export function ZeroWorkspaceTeamHome({
+  initialTab,
   onAddConnection,
   searchQuery,
   onSearchChange,
@@ -133,6 +130,7 @@ export function ZeroWorkspaceTeamHome({
   activeFilterCount = 0,
   filters,
 }: {
+  initialTab?: NetworkTab;
   onAddConnection: (mode?: AddConnectionEntryMode) => void;
   searchQuery?: string;
   onSearchChange?: (value: string) => void;
@@ -148,23 +146,18 @@ export function ZeroWorkspaceTeamHome({
   const [requestOutcomes, setRequestOutcomes] = useState<
     Record<string, ConnectionRequestOutcome>
   >({});
-  const [tab, setTab] = useState<NetworkTab>("connections");
-  const [discoverQuery, setDiscoverQuery] = useState("");
+  const [tab, setTab] = useState<NetworkTab>(initialTab ?? "updates");
   const [paneWidth, setPaneWidth] = useState(0);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [menuConnection, setMenuConnection] =
     useState<AcceptedConnectionEntry | null>(null);
-  const [chatToCreate, setChatToCreate] = useState<AcceptedConnectionEntry | null>(
-    null,
-  );
+  const [chatToCreate, setChatToCreate] =
+    useState<AcceptedConnectionEntry | null>(null);
   const [openingChatFor, setOpeningChatFor] = useState<string | null>(null);
   const [sort, setSort] = useState<ConnectionDirectorySort>("name");
   const listScrollRef = useRef<ScrollView>(null);
   const listContentRef = useRef<View>(null);
   const letterAnchors = useRef<Partial<Record<string, View | null>>>({});
-  const [requestToCancel, setRequestToCancel] = useState<ConnectionEntry | null>(
-    null,
-  );
   const [suggestionToDismiss, setSuggestionToDismiss] = useState<{
     id: string;
     name: string | null;
@@ -177,6 +170,9 @@ export function ZeroWorkspaceTeamHome({
     image: string | null;
     title: string | null;
   } | null>(null);
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
   const suggestionsKey = ["connection-suggestions", "global"] as const;
   const {
     data: connections,
@@ -190,19 +186,7 @@ export function ZeroWorkspaceTeamHome({
     staleTime: 0,
     refetchOnMount: "always",
   });
-  const {
-    data: suggestions = [],
-    isLoading: suggestionsLoading,
-  } = useQuery({
-    queryKey: suggestionsKey,
-    queryFn: () =>
-      api.get<ConnectionSuggestion[]>("/api/connections/suggestions?limit=20"),
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
   const accepted = useMemo(() => connections?.accepted ?? [], [connections]);
-  const incoming = connections?.incoming ?? [];
-  const outgoing = connections?.outgoing ?? [];
   const normalizedSearch = searchQuery?.trim().toLowerCase() ?? "";
   const matchingConnections = useMemo(
     () =>
@@ -221,7 +205,8 @@ export function ZeroWorkspaceTeamHome({
   );
   const indexLetters = useMemo(() => {
     const present = new Set<string>();
-    for (const entry of connectionPreview) present.add(connectionIndexLetter(entry));
+    for (const entry of connectionPreview)
+      present.add(connectionIndexLetter(entry));
     return present;
   }, [connectionPreview]);
   const showLetterIndex =
@@ -229,24 +214,14 @@ export function ZeroWorkspaceTeamHome({
     !connectionsLoading &&
     !connectionsError &&
     connectionPreview.length >= 8;
-  const resolvingEmptyState =
-    connectionsLoading ||
-    (!connectionsError &&
-      accepted.length === 0 &&
-      incoming.length === 0 &&
-      suggestionsLoading);
+  const resolvingEmptyState = connectionsLoading;
   const centerEmptyState =
     !connectionsLoading &&
     !connectionsError &&
-    ((tab === "connections" &&
-      accepted.length === 0 &&
-      normalizedSearch.length === 0 &&
-      !hasActiveFilters) ||
-      (tab === "requests" && incoming.length === 0 && outgoing.length === 0) ||
-      (tab === "discover" &&
-        suggestions.length === 0 &&
-        !suggestionsLoading &&
-        discoverQuery.trim().length === 0));
+    tab === "connections" &&
+    accepted.length === 0 &&
+    normalizedSearch.length === 0 &&
+    !hasActiveFilters;
   useEffect(() => {
     if (!connections) return;
     const acceptedIds = new Set(
@@ -398,44 +373,6 @@ export function ZeroWorkspaceTeamHome({
     });
   };
 
-  const respondToRequest = useMutation({
-    mutationFn: ({
-      request,
-      action,
-    }: {
-      request: ConnectionEntry;
-      action: "accept" | "decline";
-    }) => api.post(`/api/connections/${action}`, { userId: request.person.id }),
-    onSuccess: (_result, { request, action }) => {
-      const name = request.person.name?.trim() || "Alenio member";
-      toast({
-        title: action === "accept" ? `Connected with ${name}` : `Declined ${name}`,
-        preset: "done",
-      });
-      void queryClient.invalidateQueries({ queryKey: ["connections"] });
-      void queryClient.invalidateQueries({ queryKey: ["connection-suggestions"] });
-      void queryClient.invalidateQueries({ queryKey: ["person"] });
-    },
-    onError: (error: unknown) => {
-      toast({ title: connectionRequestErrorMessage(error), preset: "error" });
-    },
-  });
-
-  const cancelRequest = useMutation({
-    mutationFn: (request: ConnectionEntry) =>
-      api.delete("/api/connections", { userId: request.person.id }),
-    onSuccess: (_result, request) => {
-      const name = request.person.name?.trim() || "Alenio member";
-      setRequestToCancel(null);
-      toast({ title: `Request to ${name} cancelled`, preset: "done" });
-      void queryClient.invalidateQueries({ queryKey: ["connections"] });
-      void queryClient.invalidateQueries({ queryKey: ["connection-suggestions"] });
-    },
-    onError: (error: unknown) => {
-      toast({ title: connectionRequestErrorMessage(error), preset: "error" });
-    },
-  });
-
   const messageMutation = useMutation({
     mutationFn: (connection: AcceptedConnectionEntry) =>
       api.post<DirectConversation>("/api/dms/find-or-create", {
@@ -513,11 +450,7 @@ export function ZeroWorkspaceTeamHome({
   return (
     <View style={styles.screen} testID="zero-workspace-team-home">
       <View style={styles.networkHeader}>
-        <NetworkTabs
-          tab={activeTab}
-          incomingCount={incoming.length}
-          onChange={setTab}
-        />
+        <NetworkTabs tab={activeTab} onChange={setTab} />
         {activeTab === "connections" ? (
           <View style={styles.connectionSearchRow}>
             <View style={styles.connectionSearch} testID="no-workspace-search">
@@ -560,171 +493,65 @@ export function ZeroWorkspaceTeamHome({
             </Pressable>
           </View>
         ) : null}
-        {activeTab === "discover" ? (
-          <View style={styles.connectionSearchRow}>
-            <View style={styles.connectionSearch} testID="discover-search">
-              <Search size={15} color="#94A3B8" />
-              <TextInput
-                value={discoverQuery}
-                onChangeText={setDiscoverQuery}
-                placeholder="Search Alenio by name, username, or email"
-                placeholderTextColor="#94A3B8"
-                style={styles.connectionSearchInput}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                accessibilityLabel="Search Alenio people"
-                testID="discover-search-input"
-              />
-              {discoverQuery.length > 0 ? (
-                <Pressable
-                  onPress={() => setDiscoverQuery("")}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear Alenio search"
-                  testID="discover-search-clear"
-                >
-                  <X size={15} color="#94A3B8" strokeWidth={2.1} />
-                </Pressable>
+      </View>
+      {activeTab === "updates" ? (
+        <View style={styles.listFrame}>
+          <NetworkUpdatesFeed onFindPeople={() => onAddConnection("all")} />
+        </View>
+      ) : (
+        <View style={styles.listFrame}>
+          <ScrollView
+            ref={listScrollRef}
+            style={styles.scroller}
+            contentContainerStyle={[
+              styles.page,
+              { paddingBottom: bottomNavigationClearance },
+              showLetterIndex ? styles.pageIndexed : null,
+              resolvingEmptyState || centerEmptyState ? styles.pageFill : null,
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View
+              ref={listContentRef}
+              collapsable={false}
+              style={centerEmptyState ? styles.emptyPageFrame : null}
+              onLayout={(event) => {
+                const next = Math.round(event.nativeEvent.layout.width);
+                setPaneWidth((current) => (current === next ? current : next));
+              }}
+            >
+              {activeTab === "connections" ? (
+                <ConnectionsPane
+                  loading={connectionsLoading && !connections}
+                  error={connectionsError}
+                  onRetry={() => void refetchConnections()}
+                  entries={connectionPreview}
+                  total={accepted.length}
+                  filtering={directoryActive}
+                  columns={columns}
+                  cardWidth={cardWidth}
+                  sort={sort}
+                  sortLabel={CONNECTION_DIRECTORY_SORT_LABELS[sort]}
+                  onSort={() => setSortSheetOpen(true)}
+                  onOpen={openPerson}
+                  onMenu={setMenuConnection}
+                  registerLetter={(letter, node) => {
+                    letterAnchors.current[letter] = node;
+                  }}
+                />
               ) : null}
             </View>
-          </View>
-        ) : null}
-        {activeTab === "requests" ? (
-          <View
-            style={styles.connectionSearchSpacer}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          />
-        ) : null}
-      </View>
-      <View style={styles.listFrame}>
-      <ScrollView
-        ref={listScrollRef}
-        style={styles.scroller}
-        contentContainerStyle={[
-          styles.page,
-          { paddingBottom: bottomNavigationClearance },
-          showLetterIndex ? styles.pageIndexed : null,
-          resolvingEmptyState || centerEmptyState ? styles.pageFill : null,
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View
-          ref={listContentRef}
-          collapsable={false}
-          style={centerEmptyState ? styles.emptyPageFrame : null}
-          onLayout={(event) => {
-            const next = Math.round(event.nativeEvent.layout.width);
-            setPaneWidth((current) => (current === next ? current : next));
-          }}
-        >
-          {activeTab === "connections" ? (
-            <ConnectionsPane
-              loading={connectionsLoading && !connections}
-              error={connectionsError}
-              onRetry={() => void refetchConnections()}
-              entries={connectionPreview}
-              total={accepted.length}
-              filtering={directoryActive}
-              columns={columns}
-              cardWidth={cardWidth}
-              sort={sort}
-              sortLabel={CONNECTION_DIRECTORY_SORT_LABELS[sort]}
-              onSort={() => setSortSheetOpen(true)}
-              onOpen={openPerson}
-              onMenu={setMenuConnection}
-              registerLetter={(letter, node) => {
-                letterAnchors.current[letter] = node;
-              }}
-            />
-          ) : null}
-          {activeTab === "requests" ? (
-            <RequestsPane
-              loading={connectionsLoading && !connections}
-              incoming={incoming}
-              outgoing={outgoing}
-              onOpen={openPerson}
-              onAccept={(request) =>
-                respondToRequest.mutate({ request, action: "accept" })
-              }
-              onDecline={(request) =>
-                respondToRequest.mutate({ request, action: "decline" })
-              }
-              onCancel={setRequestToCancel}
-              pendingId={
-                respondToRequest.isPending
-                  ? respondToRequest.variables?.request.id
-                  : cancelRequest.isPending
-                    ? cancelRequest.variables?.id
-                    : undefined
-              }
-            />
-          ) : null}
-          {activeTab === "discover" ? (
-            <DiscoverPane
-              query={discoverQuery}
-              loading={suggestionsLoading && suggestions.length === 0}
-              suggestions={suggestions}
-              outcomes={requestOutcomes}
-              connectingId={
-                connectMutation.isPending ? connectMutation.variables : undefined
-              }
-              connectDisabled={connectMutation.isPending}
-              dismissingId={
-                dismissSuggestionMutation.isPending
-                  ? dismissSuggestionMutation.variables
-                  : undefined
-              }
-              columns={suggestionColumns}
-              cardWidth={suggestionCardWidth}
-              onOpen={openPerson}
-              onConnect={(suggestion) =>
-                setSuggestionToConnect({
-                  id: suggestion.person.id,
-                  name: suggestion.person.name,
-                  image: suggestion.person.image,
-                  title: suggestion.person.profileTitle ?? null,
-                })
-              }
-              onDismiss={(suggestion) =>
-                setSuggestionToDismiss({
-                  id: suggestion.person.id,
-                  name: suggestion.person.name,
-                  image: suggestion.person.image,
-                })
-              }
+          </ScrollView>
+          {showLetterIndex ? (
+            <AlphabetRail
+              present={indexLetters}
+              bottomInset={bottomNavigationClearance}
+              onJump={jumpToLetter}
             />
           ) : null}
         </View>
-      </ScrollView>
-      {showLetterIndex ? (
-        <AlphabetRail
-          present={indexLetters}
-          bottomInset={bottomNavigationClearance}
-          onJump={jumpToLetter}
-        />
-      ) : null}
-      </View>
-      <CancelConnectionRequestSheet
-        person={
-          requestToCancel
-            ? {
-                id: requestToCancel.person.id,
-                name: requestToCancel.person.name,
-                image: requestToCancel.person.image,
-              }
-            : null
-        }
-        pending={cancelRequest.isPending}
-        onClose={() => {
-          if (!cancelRequest.isPending) setRequestToCancel(null);
-        }}
-        onConfirm={() => {
-          if (requestToCancel) cancelRequest.mutate(requestToCancel);
-        }}
-      />
+      )}
       <ConnectRequestConfirmationSheet
         person={suggestionToConnect}
         pending={connectMutation.isPending}
@@ -770,7 +597,11 @@ export function ZeroWorkspaceTeamHome({
               testID={`connections-sort-${option}`}
             >
               <Text
-                style={selected ? styles.sortOptionLabelSelected : styles.sortOptionLabel}
+                style={
+                  selected
+                    ? styles.sortOptionLabelSelected
+                    : styles.sortOptionLabel
+                }
               >
                 {CONNECTION_DIRECTORY_SORT_LABELS[option]}
               </Text>
@@ -862,7 +693,11 @@ export function ZeroWorkspaceTeamHome({
         visible={menuConnection != null}
         onClose={() => setMenuConnection(null)}
         title={menuConnection?.person.name?.trim() || "Connection"}
-        subtitle={menuConnection ? connectionRowDetail(menuConnection) ?? undefined : undefined}
+        subtitle={
+          menuConnection
+            ? (connectionRowDetail(menuConnection) ?? undefined)
+            : undefined
+        }
         compact
         scrollEnabled={false}
         testID="connection-overflow-sheet"
@@ -900,24 +735,19 @@ export function ZeroWorkspaceTeamHome({
 
 function NetworkTabs({
   tab,
-  incomingCount,
   onChange,
 }: {
   tab: NetworkTab;
-  incomingCount: number;
   onChange: (tab: NetworkTab) => void;
 }) {
   const tabs: { id: NetworkTab; label: string; Icon: LucideIcon }[] = [
+    { id: "updates", label: "Updates", Icon: Newspaper },
     { id: "connections", label: "Connections", Icon: Users },
-    { id: "requests", label: "Requests", Icon: Inbox },
-    { id: "discover", label: "Discover", Icon: Compass },
   ];
   return (
     <View style={styles.tabs} accessibilityRole="tablist">
       {tabs.map((item) => {
         const selected = tab === item.id;
-        const badge = item.id === "requests" ? incomingCount : 0;
-        const showBadge = badge > 0 && !selected;
         return (
           <Pressable
             key={item.id}
@@ -925,9 +755,7 @@ function NetworkTabs({
             style={[styles.tab, selected ? styles.tabSelected : null]}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
-            accessibilityLabel={
-              showBadge ? `Requests, ${badge} pending` : item.label
-            }
+            accessibilityLabel={item.label}
             testID={`network-tab-${item.id}`}
           >
             <item.Icon
@@ -936,18 +764,14 @@ function NetworkTabs({
               strokeWidth={selected ? 2.4 : 2.1}
             />
             <Text
-              style={[styles.tabLabel, selected ? styles.tabLabelSelected : null]}
+              style={[
+                styles.tabLabel,
+                selected ? styles.tabLabelSelected : null,
+              ]}
               numberOfLines={1}
             >
               {item.label}
             </Text>
-            {showBadge ? (
-              <View style={styles.tabBadge}>
-                <Text style={styles.tabBadgeLabel}>
-                  {badge > 9 ? "9+" : String(badge)}
-                </Text>
-              </View>
-            ) : null}
           </Pressable>
         );
       })}
@@ -995,7 +819,7 @@ function ConnectionRow({
         testID={`zero-workspace-connection-${entry.person.id}`}
       >
         <UserAvatar
-          user={entry.person}
+          user={{ ...entry.person, activeNow: entry.activeNow }}
           size={40}
           radius={20}
           backgroundColor="#EEF2FF"
@@ -1016,7 +840,6 @@ function ConnectionRow({
                 {entry.sharesWorkspace ? "Workspace" : "Personal"}
               </Text>
             )}
-            {entry.activeNow ? <View style={styles.activeDot} /> : null}
           </View>
         </View>
         <Pressable
@@ -1166,7 +989,13 @@ function ConnectionsPane({
   registerLetter: (letter: string, node: View | null) => void;
 }) {
   return (
-    <View>
+    <View
+      style={
+        !loading && !error && entries.length === 0 && !filtering
+          ? styles.emptyPaneHost
+          : null
+      }
+    >
       {total > 0 || filtering ? (
         <View style={styles.paneHeader}>
           <Text style={styles.paneTitle}>
@@ -1193,7 +1022,10 @@ function ConnectionsPane({
           {Array.from({ length: columns * 2 }, (_, index) => (
             <View
               key={index}
-              style={[styles.personCard, cardWidth ? { width: cardWidth } : styles.personCardFull]}
+              style={[
+                styles.personCard,
+                cardWidth ? { width: cardWidth } : styles.personCardFull,
+              ]}
             >
               <View style={styles.boneAvatar} />
               <View style={styles.boneCopy}>
@@ -1212,51 +1044,53 @@ function ConnectionsPane({
         />
       ) : entries.length > 0 ? (
         <View testID="connections-list" style={styles.gridWrap}>
-          {sort === "name"
-            ? letterGroups(entries).map(([letter, group]) => (
-                <View
-                  key={letter}
-                  collapsable={false}
-                  ref={(node) => registerLetter(letter, node)}
-                >
-                  <Text style={styles.alphaHeading}>{letter}</Text>
-                  <CardGrid columns={columns}>
-                    {group.map((entry) => (
-                      <ConnectionRow
-                        key={entry.id}
-                        entry={entry}
-                        cardWidth={cardWidth}
-                        onOpen={onOpen}
-                        onMenu={onMenu}
-                      />
-                    ))}
-                  </CardGrid>
-                </View>
-              ))
-            : (
-              <CardGrid columns={columns}>
-                {(() => {
-                  const seen = new Set<string>();
-                  return entries.map((entry) => {
-                    const letter = connectionIndexLetter(entry);
-                    const first = !seen.has(letter);
-                    if (first) seen.add(letter);
-                    return (
-                      <ConnectionRow
-                        key={entry.id}
-                        entry={entry}
-                        cardWidth={cardWidth}
-                        onOpen={onOpen}
-                        onMenu={onMenu}
-                        anchorRef={
-                          first ? (node) => registerLetter(letter, node) : undefined
-                        }
-                      />
-                    );
-                  });
-                })()}
-              </CardGrid>
-            )}
+          {sort === "name" ? (
+            letterGroups(entries).map(([letter, group]) => (
+              <View
+                key={letter}
+                collapsable={false}
+                ref={(node) => registerLetter(letter, node)}
+              >
+                <Text style={styles.alphaHeading}>{letter}</Text>
+                <CardGrid columns={columns}>
+                  {group.map((entry) => (
+                    <ConnectionRow
+                      key={entry.id}
+                      entry={entry}
+                      cardWidth={cardWidth}
+                      onOpen={onOpen}
+                      onMenu={onMenu}
+                    />
+                  ))}
+                </CardGrid>
+              </View>
+            ))
+          ) : (
+            <CardGrid columns={columns}>
+              {(() => {
+                const seen = new Set<string>();
+                return entries.map((entry) => {
+                  const letter = connectionIndexLetter(entry);
+                  const first = !seen.has(letter);
+                  if (first) seen.add(letter);
+                  return (
+                    <ConnectionRow
+                      key={entry.id}
+                      entry={entry}
+                      cardWidth={cardWidth}
+                      onOpen={onOpen}
+                      onMenu={onMenu}
+                      anchorRef={
+                        first
+                          ? (node) => registerLetter(letter, node)
+                          : undefined
+                      }
+                    />
+                  );
+                });
+              })()}
+            </CardGrid>
+          )}
         </View>
       ) : filtering ? (
         <View style={styles.searchEmpty} testID="connections-no-search-results">
@@ -1271,7 +1105,6 @@ function ConnectionsPane({
 
 const WOMAN_TEAL = require("@/assets/connection-person-woman-teal.png");
 const WOMAN_CURLS = require("@/assets/connection-person-woman-curls.png");
-const MAN_PORTRAIT = require("@/assets/connection-person-man.png");
 
 function NetworkPaneEmpty({
   testID,
@@ -1308,26 +1141,6 @@ function Portrait({
   );
 }
 
-function RequestsEmptyState() {
-  return (
-    <NetworkPaneEmpty
-      testID="network-requests-empty"
-      art={
-        <View style={styles.paneEmptyArt} accessibilityElementsHidden>
-          <View style={styles.paneEmptyHalo} />
-          <Portrait source={WOMAN_TEAL} style={styles.paneEmptyPhotoLeft} />
-          <Portrait source={MAN_PORTRAIT} style={styles.paneEmptyPhotoRight} />
-          <View style={styles.paneEmptyMark}>
-            <Inbox size={22} color={BRAND} strokeWidth={2} />
-          </View>
-        </View>
-      }
-      title="No requests right now"
-      body="Invitations stay here until you accept them or the other person replies."
-    />
-  );
-}
-
 function DiscoverEmptyState() {
   return (
     <NetworkPaneEmpty
@@ -1338,219 +1151,13 @@ function DiscoverEmptyState() {
           <Portrait source={WOMAN_CURLS} style={styles.paneEmptyPhotoLeft} />
           <Portrait source={WOMAN_TEAL} style={styles.paneEmptyPhotoRight} />
           <View style={styles.paneEmptyMark}>
-            <Compass size={22} color={BRAND} strokeWidth={2} />
+            <Newspaper size={22} color={BRAND} strokeWidth={2} />
           </View>
         </View>
       }
       title="No suggestions yet"
       body="Search for someone you already know by name, username, or email."
     />
-  );
-}
-
-function RequestsPane({
-  loading,
-  incoming,
-  outgoing,
-  onOpen,
-  onAccept,
-  onDecline,
-  onCancel,
-  pendingId,
-}: {
-  loading: boolean;
-  incoming: ConnectionEntry[];
-  outgoing: ConnectionEntry[];
-  onOpen: (userId: string) => void;
-  onAccept: (request: ConnectionEntry) => void;
-  onDecline: (request: ConnectionEntry) => void;
-  onCancel: (request: ConnectionEntry) => void;
-  pendingId?: string;
-}) {
-  if (loading) {
-    return (
-      <View style={styles.requestList}>
-        {[0, 1, 2].map((item) => (
-          <View key={item} style={styles.requestRow}>
-            <View style={styles.boneAvatar} />
-            <View style={styles.boneCopy}>
-              <View style={styles.boneName} />
-              <View style={styles.boneMeta} />
-            </View>
-          </View>
-        ))}
-      </View>
-    );
-  }
-  if (incoming.length === 0 && outgoing.length === 0) {
-    return <RequestsEmptyState />;
-  }
-  return (
-    <View>
-      <RequestGroup
-        title="Received"
-        emptyTitle="No incoming requests"
-        emptyBody="New invitations will appear here for you to review."
-        requests={incoming}
-        kind="received"
-        onOpen={onOpen}
-        onAccept={onAccept}
-        onDecline={onDecline}
-        onCancel={onCancel}
-        pendingId={pendingId}
-      />
-      <RequestGroup
-        title="Sent"
-        emptyTitle="Nothing sent"
-        emptyBody="Invitations you send stay here until they are accepted."
-        requests={outgoing}
-        kind="sent"
-        onOpen={onOpen}
-        onAccept={onAccept}
-        onDecline={onDecline}
-        onCancel={onCancel}
-        pendingId={pendingId}
-      />
-    </View>
-  );
-}
-
-function RequestGroup({
-  title,
-  emptyTitle,
-  emptyBody,
-  requests,
-  kind,
-  onOpen,
-  onAccept,
-  onDecline,
-  onCancel,
-  pendingId,
-}: {
-  title: string;
-  emptyTitle: string;
-  emptyBody: string;
-  requests: ConnectionEntry[];
-  kind: "received" | "sent";
-  onOpen: (userId: string) => void;
-  onAccept: (request: ConnectionEntry) => void;
-  onDecline: (request: ConnectionEntry) => void;
-  onCancel: (request: ConnectionEntry) => void;
-  pendingId?: string;
-}) {
-  return (
-    <View style={styles.requestGroup} testID={`network-requests-${kind}`}>
-      <Text style={styles.paneTitle}>
-        {title}
-        {requests.length > 0 ? ` · ${requests.length}` : ""}
-      </Text>
-      {requests.length === 0 ? (
-        <View style={styles.requestEmptyCard} testID={`network-requests-empty-${kind}`}>
-          <View
-            style={[
-              styles.paneEmptyRowIcon,
-              kind === "received"
-                ? styles.paneEmptyIconViolet
-                : styles.paneEmptyIconTeal,
-            ]}
-          >
-            {kind === "received" ? (
-              <Inbox size={16} color="#6B63F5" strokeWidth={2} />
-            ) : (
-              <Send size={16} color="#0F9F8F" strokeWidth={2} />
-            )}
-          </View>
-          <View style={styles.requestEmptyCopy}>
-            <Text style={styles.requestEmptyTitle}>{emptyTitle}</Text>
-            <Text style={styles.requestEmptyBody}>{emptyBody}</Text>
-          </View>
-        </View>
-      ) : (
-        requests.map((request) => {
-          const name = request.person.name?.trim() || "Alenio member";
-          const detail =
-            request.person.profileTitle?.trim() ||
-            (request.person.username ? `@${request.person.username}` : null);
-          const busy = pendingId === request.id;
-          return (
-            <View key={request.id} style={styles.requestRow}>
-              <Pressable
-                onPress={() => onOpen(request.person.id)}
-                style={styles.requestIdentity}
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${name}'s profile`}
-              >
-                <UserAvatar
-                  user={request.person}
-                  size={40}
-                  radius={20}
-                  backgroundColor="#EEF2FF"
-                  textColor={BRAND}
-                  fontSize={14}
-                />
-                <View style={styles.personCopy}>
-                  <Text style={styles.personName} numberOfLines={1}>
-                    {name}
-                  </Text>
-                  {detail ? (
-                    <Text style={styles.personMeta} numberOfLines={1}>
-                      {detail}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.requestWhen} numberOfLines={1}>
-                    {kind === "received" ? "Requested" : "Sent"}{" "}
-                    {formatRelativeTime(request.createdAt)}
-                  </Text>
-                </View>
-              </Pressable>
-              {kind === "sent" ? (
-                <Pressable
-                  onPress={() => onCancel(request)}
-                  disabled={busy}
-                  style={styles.requestQuiet}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Cancel request to ${name}`}
-                  testID={`connection-requests-sheet-cancel-${request.person.id}`}
-                >
-                  {busy ? (
-                    <ActivityIndicator size="small" color="#64748B" />
-                  ) : (
-                    <Text style={styles.requestQuietLabel}>Cancel</Text>
-                  )}
-                </Pressable>
-              ) : (
-                <View style={styles.requestActions}>
-                  <Pressable
-                    onPress={() => onDecline(request)}
-                    disabled={busy}
-                    style={styles.requestQuiet}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Decline ${name}`}
-                    testID={`connection-requests-sheet-decline-${request.person.id}`}
-                  >
-                    <Text style={styles.requestQuietLabel}>Decline</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => onAccept(request)}
-                    disabled={busy}
-                    style={styles.requestAccept}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Accept ${name}`}
-                    testID={`connection-requests-sheet-accept-${request.person.id}`}
-                  >
-                    {busy ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.requestAcceptLabel}>Accept</Text>
-                    )}
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          );
-        })
-      )}
-    </View>
   );
 }
 
@@ -1585,7 +1192,13 @@ function DiscoverPane({
   const searching = trimmed.length > 0;
   const showResults = loading || suggestions.length > 0;
   return (
-    <View>
+    <View
+      style={
+        !searching && !loading && suggestions.length === 0
+          ? styles.emptyPaneHost
+          : null
+      }
+    >
       {searching ? (
         <DiscoverSearchResults query={trimmed} onOpen={onOpen} />
       ) : showResults ? (
@@ -1673,7 +1286,9 @@ function DiscoverSearchResults({
     },
     onSuccess: ({ response, action }) => {
       void queryClient.invalidateQueries({ queryKey: ["connections"] });
-      void queryClient.invalidateQueries({ queryKey: ["connection-suggestions"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["connection-suggestions"],
+      });
       void queryClient.invalidateQueries({ queryKey: ["user-search"] });
       toast({
         title:
@@ -1710,14 +1325,19 @@ function DiscoverSearchResults({
       <View style={[styles.requestEmptyCard, styles.discoverSearchCard]}>
         <View style={styles.requestEmptyCopy}>
           <Text style={styles.requestEmptyTitle}>Search unavailable</Text>
-          <Text style={styles.requestEmptyBody}>Please try again in a moment.</Text>
+          <Text style={styles.requestEmptyBody}>
+            Please try again in a moment.
+          </Text>
         </View>
       </View>
     );
   }
   if (results.length === 0) {
     return (
-      <View style={[styles.requestEmptyCard, styles.discoverSearchCard]} testID="discover-search-empty">
+      <View
+        style={[styles.requestEmptyCard, styles.discoverSearchCard]}
+        testID="discover-search-empty"
+      >
         <View style={styles.requestEmptyCopy}>
           <Text style={styles.requestEmptyTitle}>No people found</Text>
           <Text style={styles.requestEmptyBody}>
@@ -1746,7 +1366,7 @@ function DiscoverSearchResults({
           person.connectionStatus === "pending_incoming";
         const busy = Boolean(
           connectionMutation.isPending &&
-            connectionMutation.variables?.userId === person.id,
+          connectionMutation.variables?.userId === person.id,
         );
         const statusLabel = person.isBlockedByMe
           ? "Blocked"
@@ -1877,7 +1497,11 @@ function Section({
             {title ? (
               <View style={styles.sectionTitleRow}>
                 <Text
-                  style={prominent ? styles.sectionTitleProminent : styles.sectionTitle}
+                  style={
+                    prominent
+                      ? styles.sectionTitleProminent
+                      : styles.sectionTitle
+                  }
                 >
                   {title}
                 </Text>
@@ -2035,9 +1659,6 @@ const styles = StyleSheet.create({
     gap: 2,
     marginBottom: 2,
   },
-  connectionSearchSpacer: {
-    height: 42,
-  },
   connectionSearch: {
     flex: 1,
     flexDirection: "row",
@@ -2064,6 +1685,7 @@ const styles = StyleSheet.create({
   },
   pageFill: { flexGrow: 1 },
   emptyPageFrame: { flex: 1 },
+  emptyPaneHost: { flex: 1 },
   tabs: {
     height: 38,
     padding: 3,
@@ -2090,21 +1712,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   tabLabelSelected: { fontWeight: "700", color: "#FFFFFF" },
-  tabBadge: {
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.error,
-  },
-  tabBadgeLabel: {
-    color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "800",
-    lineHeight: 11,
-  },
   paneHeader: {
     marginTop: 16,
     marginBottom: 10,
@@ -2113,8 +1720,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
-  paneTitle: { fontSize: 15, lineHeight: 20, fontWeight: "800", color: "#0F172A" },
-  paneSubtitle: { marginTop: 2, fontSize: 12, lineHeight: 16, color: "#667085" },
+  paneTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  paneSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#667085",
+  },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP },
   gridStack: { flexDirection: "column" },
   gridWrap: { width: "100%" },
@@ -2132,10 +1749,19 @@ const styles = StyleSheet.create({
   },
   personCardFull: { width: "100%" },
   personCopy: { flex: 1, minWidth: 0 },
-  personName: { fontSize: 14, lineHeight: 18, fontWeight: "700", color: "#101828" },
-  personMetaRow: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 6 },
+  personName: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: "#101828",
+  },
+  personMetaRow: {
+    marginTop: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   personMeta: { flexShrink: 1, fontSize: 12, lineHeight: 16, color: "#667085" },
-  activeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#12B76A" },
   moreButton: {
     width: 28,
     height: 28,
@@ -2143,10 +1769,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  boneAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#E4E7EC" },
+  boneAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E4E7EC",
+  },
   boneCopy: { flex: 1, gap: 8 },
-  boneName: { width: "62%", height: 12, borderRadius: 6, backgroundColor: "#E4E7EC" },
-  boneMeta: { width: "40%", height: 10, borderRadius: 5, backgroundColor: "#EEF2F6" },
+  boneName: {
+    width: "62%",
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#E4E7EC",
+  },
+  boneMeta: {
+    width: "40%",
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#EEF2F6",
+  },
   discoverBone: {
     height: 148,
     borderRadius: 14,
@@ -2197,28 +1838,6 @@ const styles = StyleSheet.create({
   discoverStatusLabelConnected: {
     color: "#168A55",
   },
-  requestGroup: { marginTop: 16, gap: 8 },
-  requestList: { marginTop: 16, gap: 8 },
-  requestRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 8,
-  },
-  requestIdentity: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 10 },
-  requestWhen: { marginTop: 2, fontSize: 11, lineHeight: 14, color: "#98A2B3" },
-  requestActions: { flexDirection: "row", alignItems: "center", gap: 6 },
-  requestQuiet: {
-    height: 30,
-    minWidth: 64,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F2F4F7",
-  },
-  requestQuietLabel: { fontSize: 12.5, fontWeight: "700", color: "#475467" },
   requestAccept: {
     height: 30,
     minWidth: 68,
@@ -2300,15 +1919,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  paneEmptyRowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  paneEmptyIconViolet: { backgroundColor: "#F0EEFF" },
-  paneEmptyIconTeal: { backgroundColor: "#E9FAF7" },
   menuRow: {
     minHeight: 46,
     justifyContent: "center",
@@ -2662,107 +2272,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: -2, height: 2 },
     elevation: 3,
-  },
-  requestsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    minHeight: 48,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: BRAND,
-    shadowColor: "#3730A3",
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
-  /** Soft light blooms so the gradient reads as a surface, not a flat block. */
-  requestsGlowLarge: {
-    position: "absolute",
-    top: -46,
-    right: -22,
-    width: 118,
-    height: 118,
-    borderRadius: 59,
-    backgroundColor: "rgba(255,255,255,0.13)",
-  },
-  requestsGlowSmall: {
-    position: "absolute",
-    bottom: -38,
-    left: 46,
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: "rgba(255,255,255,0.09)",
-  },
-  requestsIconTile: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.34)",
-  },
-  requestsIconDot: {
-    position: "absolute",
-    top: -3,
-    right: -3,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: "#4C5BEF",
-    backgroundColor: "#FF5A5F",
-  },
-  requestsCopy: { flex: 1, minWidth: 0 },
-  requestsTitle: {
-    ...typography.sectionSubtitle,
-    fontSize: 13.5,
-    lineHeight: 17,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  requestsSubtitle: {
-    ...typography.metaTiny,
-    marginTop: 2,
-    fontSize: 11,
-    lineHeight: 14,
-    color: "rgba(255,255,255,0.82)",
-  },
-  requestsFaces: { flexDirection: "row", alignItems: "center" },
-  requestsFace: {
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.9)",
-    backgroundColor: "rgba(255,255,255,0.9)",
-  },
-  requestsFaceStacked: { marginLeft: -10 },
-  requestsChevron: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.18)",
-  },
-  requestsOverflow: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.26)",
-  },
-  requestsOverflowLabel: {
-    ...typography.metaTiny,
-    fontSize: 9.5,
-    lineHeight: 12,
-    fontWeight: "700",
-    color: "#FFFFFF",
   },
   moreAvatar: {
     position: "relative",

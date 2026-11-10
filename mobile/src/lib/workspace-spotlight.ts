@@ -167,7 +167,7 @@ function resolveQuiet(input: ResolveSpotlightInput): ResolvedSpotlight | null {
     eventId,
     headline: "Keep the conversation going",
     description: "Your workspace has been a little quiet lately.",
-    cta: "share",
+    cta: null,
     memberName: null,
   };
 }

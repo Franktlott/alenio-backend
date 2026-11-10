@@ -38,6 +38,9 @@ export type AdminTeamRow = {
     status: string;
     stripeCustomerId: string | null;
     currentPeriodEnd: string | null;
+    /** Missing until the server that sends trial dates is deployed. */
+    trialEndsAt?: string | null;
+    cancelAtPeriodEnd?: boolean;
   };
 };
 

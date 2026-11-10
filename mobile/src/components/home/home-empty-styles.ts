@@ -39,14 +39,15 @@ export const homeEmptyStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     letterSpacing: -0.2,
-    color: "#111A2B",
+    color: "#101828",
   },
   text: {
     marginTop: 2,
-    fontSize: 11.5,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "400",
     textAlign: "center",
-    color: "#98A2B2",
+    color: "#667085",
   },
 });
 

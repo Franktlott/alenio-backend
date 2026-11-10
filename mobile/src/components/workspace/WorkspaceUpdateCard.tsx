@@ -5,10 +5,6 @@ import type { ActivityReactions } from "@/components/activity/types";
 import { FeedActionButton } from "@/components/workspace/FeedActionButton";
 import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
 import { WorkspaceFeedCardShell } from "@/components/workspace/WorkspaceFeedCardShell";
-import {
-  commentActionLabel,
-  reactionActionLabel,
-} from "@/lib/workspace-updates";
 import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
 
 type Props = {
@@ -25,7 +21,7 @@ type Props = {
   myReaction?: string | null;
   /** Opens the sheet listing everyone who reacted. */
   onPressReactions?: () => void;
-  onPressLike: () => void;
+  onPressLike?: () => void;
   onMore?: () => void;
   onLongPress?: () => void;
   onPressComment?: () => void;
@@ -52,7 +48,6 @@ export function WorkspaceUpdateCard({
   onMore,
   onLongPress,
   onPressComment,
-  commentCount = 0,
   picker,
   avatarResetKey,
   children,
@@ -78,12 +73,13 @@ export function WorkspaceUpdateCard({
         <View style={styles.footer}>
           {picker}
           <View style={styles.actions}>
+            {onPressLike ? (
             <FeedActionButton
               Icon={Heart}
               glyph={myReaction}
               activeColor={feedReaction(myReaction)?.color}
               // The facepile carries the count, so the button stays an icon.
-              label={onPressReactions ? "" : reactionActionLabel(reactionCount)}
+              label=""
               active={!!myReaction}
               filled
               onPress={onPressLike}
@@ -94,10 +90,11 @@ export function WorkspaceUpdateCard({
               }
               testID={testID ? `${testID}-react` : undefined}
             />
+            ) : null}
             {onPressComment ? (
               <FeedActionButton
                 Icon={MessageCircle}
-                label={commentActionLabel(commentCount)}
+                label=""
                 onPress={onPressComment}
                 accessibilityLabel="Comment on this update"
                 testID={testID ? `${testID}-comment` : undefined}
@@ -133,20 +130,20 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
   headline: {
-    marginTop: 8,
+    marginTop: 5,
     fontSize: 14,
     lineHeight: 19,
     fontWeight: "600",
     color: "#0F172A",
   },
   body: {
-    marginTop: 3,
+    marginTop: 2,
     fontSize: 14,
     lineHeight: 19,
     color: "#475569",
   },
   footer: {
-    gap: 4,
+    gap: 2,
   },
   actions: {
     flexDirection: "row",

@@ -55,6 +55,7 @@ import { PostUpdateCard } from "@/components/workspace/PostUpdateCard";
 import { RecognitionUpdateCard } from "@/components/workspace/RecognitionUpdateCard";
 import { UpdateCommentRow } from "@/components/workspace/UpdateCommentRow";
 import { WorkspaceUpdateCard } from "@/components/workspace/WorkspaceUpdateCard";
+import { useWorkspaceAccess } from "@/lib/workspace-access";
 
 type Props = {
   teamId: string;
@@ -77,6 +78,8 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
   const currentUserId = authReady?.me?.id ?? session?.user?.id;
   const currentUserName = authReady?.me?.name ?? session?.user?.name ?? "You";
   const currentUserImage = authReady?.me?.image ?? session?.user?.image ?? null;
+  const { access } = useWorkspaceAccess(teamId);
+  const canWrite = access.canWrite;
 
   const [draft, setDraft] = useState("");
   const [showPicker, setShowPicker] = useState(false);
@@ -154,8 +157,12 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
   }, [activityId, queryClient, teamId]);
 
   const reactionMutation = useMutation({
-    mutationFn: (emoji: string) =>
-      api.post(`/api/teams/${teamId}/activity/${activityId}/react`, { emoji }),
+    mutationFn: (emoji: string) => {
+      if (!canWrite) return Promise.resolve();
+      return api.post(`/api/teams/${teamId}/activity/${activityId}/react`, {
+        emoji,
+      });
+    },
     onMutate: (emoji: string) => {
       if (!currentUserId) return;
       queryClient.setQueryData<ActivityApiEvent>(
@@ -179,11 +186,13 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
   });
 
   const commentMutation = useMutation({
-    mutationFn: (input: { body: string; parentId: string | null }) =>
-      api.post<ActivityComment>(
+    mutationFn: (input: { body: string; parentId: string | null }) => {
+      if (!canWrite) return Promise.resolve(null as unknown as ActivityComment);
+      return api.post<ActivityComment>(
         `/api/teams/${teamId}/activity/${activityId}/comments`,
         { body: input.body, parentId: input.parentId ?? undefined },
-      ),
+      );
+    },
     onMutate: (input: { body: string; parentId: string | null }) => {
       if (!currentUserId) return;
       queryClient.setQueryData<ActivityComment[]>(
@@ -215,11 +224,13 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
   });
 
   const commentReactionMutation = useMutation({
-    mutationFn: (input: { commentId: string; emoji: string }) =>
-      api.post(
+    mutationFn: (input: { commentId: string; emoji: string }) => {
+      if (!canWrite) return Promise.resolve();
+      return api.post(
         `/api/teams/${teamId}/activity/${activityId}/comments/${input.commentId}/react`,
         { emoji: input.emoji },
-      ),
+      );
+    },
     onMutate: (input: { commentId: string; emoji: string }) => {
       if (!currentUserId) return;
       queryClient.setQueryData<ActivityComment[]>(
@@ -248,10 +259,12 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
   });
 
   const deleteCommentMutation = useMutation({
-    mutationFn: (commentId: string) =>
-      api.delete(
+    mutationFn: (commentId: string) => {
+      if (!canWrite) return Promise.resolve();
+      return api.delete(
         `/api/teams/${teamId}/activity/${activityId}/comments/${commentId}`,
-      ),
+      );
+    },
     onMutate: (commentId: string) => {
       queryClient.setQueryData<ActivityComment[]>(
         activityCommentsKey(activityId),
@@ -272,7 +285,7 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
 
   const onSend = () => {
     const body = draft.trim();
-    if (!body || commentMutation.isPending) return;
+    if (!canWrite || !body || commentMutation.isPending) return;
     setDraft("");
     commentMutation.mutate({ body, parentId: replyTo?.id ?? null });
     setReplyTo(null);
@@ -311,7 +324,9 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
           <RecognitionUpdateCard
             item={item}
             currentUserId={currentUserId}
-            onPressReact={() => setShowPicker((open) => !open)}
+            onPressReact={
+              canWrite ? () => setShowPicker((open) => !open) : undefined
+            }
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
             picker={picker}
           />
@@ -319,7 +334,9 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
           <MemberJoinedUpdateCard
             item={item}
             currentUserId={currentUserId}
-            onPressReact={() => setShowPicker((open) => !open)}
+            onPressReact={
+              canWrite ? () => setShowPicker((open) => !open) : undefined
+            }
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
             picker={picker}
           />
@@ -327,7 +344,9 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
           <MilestoneUpdateCard
             item={item}
             currentUserId={currentUserId}
-            onPressReact={() => setShowPicker((open) => !open)}
+            onPressReact={
+              canWrite ? () => setShowPicker((open) => !open) : undefined
+            }
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
             picker={picker}
           />
@@ -335,7 +354,9 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
           <PostUpdateCard
             item={item}
             currentUserId={currentUserId}
-            onPressReact={() => setShowPicker((open) => !open)}
+            onPressReact={
+              canWrite ? () => setShowPicker((open) => !open) : undefined
+            }
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
             picker={picker}
           />
@@ -349,8 +370,12 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
             myReaction={myReactionEmoji(item.reactions, currentUserId)}
             reactions={item.reactions ?? {}}
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
-            onPressLike={() => setShowPicker((open) => !open)}
-            onLongPress={() => setShowPicker((open) => !open)}
+            onPressLike={
+              canWrite ? () => setShowPicker((open) => !open) : undefined
+            }
+            onLongPress={
+              canWrite ? () => setShowPicker((open) => !open) : undefined
+            }
             picker={picker}
           />
         )}
@@ -386,23 +411,25 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
         <Pressable
           onPress={() => (onClose ? onClose() : router.back())}
           hitSlop={12}
+          style={styles.backButton}
           accessibilityRole="button"
           accessibilityLabel={embedded ? "Close update" : "Back"}
           testID="update-detail-back"
         >
           {/* A pane is dismissed, not navigated back from. */}
           {embedded ? (
-            <X size={22} color="#0F172A" strokeWidth={2.4} />
+            <X size={20} color="#182238" strokeWidth={2.4} />
           ) : (
-            <ChevronLeft size={26} color="#0F172A" strokeWidth={2.2} />
+            <ChevronLeft size={22} color="#182238" strokeWidth={2.3} />
           )}
         </Pressable>
         <Text
           style={[styles.navTitle, embedded ? styles.navTitleCompact : null]}
           numberOfLines={1}
         >
-          {item?.actor?.name ?? "Update"}
+          Update
         </Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       <SafeKeyboardAvoidingView
@@ -437,13 +464,19 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
                 currentUserId={currentUserId}
                 inset={row.inset}
                 compact={embedded}
-                onDelete={confirmDelete}
-                onPressReact={(comment) =>
-                  setPickerCommentId((open) =>
-                    open === comment.id ? null : comment.id,
-                  )
+                contained
+                onDelete={canWrite ? confirmDelete : undefined}
+                onPressReact={
+                  canWrite
+                    ? (comment) =>
+                        setPickerCommentId((open) =>
+                          open === comment.id ? null : comment.id,
+                        )
+                    : undefined
                 }
-                onPressReply={(comment) => setReplyTo(comment)}
+                onPressReply={
+                  canWrite ? (comment) => setReplyTo(comment) : undefined
+                }
                 onPressReactions={(comment) =>
                   setReactionsFor({ kind: "comment", commentId: comment.id })
                 }
@@ -453,12 +486,13 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
                       activityId={row.comment.id}
                       reactions={row.comment.reactions ?? {}}
                       currentUserId={currentUserId}
-                      onToggleReaction={(emoji) =>
+                      onToggleReaction={(emoji) => {
+                        if (!canWrite) return;
                         commentReactionMutation.mutate({
                           commentId: row.comment.id,
                           emoji,
-                        })
-                      }
+                        });
+                      }}
                       showPicker
                       onClosePicker={() => setPickerCommentId(null)}
                       floatPicker
@@ -494,6 +528,7 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
           </View>
         ) : null}
 
+        {canWrite ? (
         <View
           style={[
             styles.composer,
@@ -532,6 +567,7 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
             <SendHorizontal size={18} color="#FFFFFF" strokeWidth={2.2} />
           </TouchableOpacity>
         </View>
+        ) : null}
       </SafeKeyboardAvoidingView>
 
       <ReactionListSheet
@@ -554,14 +590,19 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   navBar: {
+    height: 50,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
     paddingHorizontal: 12,
-    paddingBottom: 10,
     backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEF1F6",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E8ECF2",
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
   },
   /**
    * A pane sits beside the feed, inside a page whose type runs a step smaller
@@ -585,12 +626,19 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     flex: 1,
-    fontSize: 17,
-    lineHeight: 22,
+    textAlign: "center",
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#182238",
   },
+  headerSpacer: { width: 38 },
   listContent: {
+    width: "100%",
+    maxWidth: 680,
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 16,
     flexGrow: 1,
   },
@@ -598,9 +646,8 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   summary: {
-    paddingHorizontal: 16,
-    paddingTop: 0,
-    paddingBottom: 6,
+    paddingTop: 6,
+    paddingBottom: 4,
   },
   summaryText: {
     fontSize: 12,
@@ -609,8 +656,7 @@ const styles = StyleSheet.create({
     color: "#8A94A6",
   },
   empty: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 8,
     fontSize: 14,
     lineHeight: 20,
     color: "#8A94A6",
@@ -654,6 +700,9 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   composer: {
+    width: "100%",
+    maxWidth: 680,
+    alignSelf: "center",
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,

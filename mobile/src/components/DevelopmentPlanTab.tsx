@@ -78,6 +78,8 @@ type Props = {
   teamId: string;
   memberUserId: string;
   memberName: string;
+  /** The signed-in person is this member. */
+  isSelf?: boolean;
   memberImage?: string | null;
   managerName?: string | null;
   canCreate: boolean;
@@ -365,6 +367,7 @@ export function DevelopmentPlanTab({
   teamId,
   memberUserId,
   memberName,
+  isSelf = false,
   memberImage = null,
   managerName = null,
   canCreate,
@@ -1174,6 +1177,7 @@ export function DevelopmentPlanTab({
             <View style={showCenteredEmpty ? { flexGrow: 1, justifyContent: "center" } : undefined}>
               <GoalEmptyState
                 memberName={memberName}
+                isSelf={isSelf}
                 canCreate={canCreateGoal}
                 hasAnyGoals={goals.length > 0}
                 error={err}
