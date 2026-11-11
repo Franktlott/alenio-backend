@@ -2518,6 +2518,8 @@ model BillingPlan {
   currency      String   @default("usd")
   interval      String   @default("month")
   stripePriceId String?
+  /// When true, apps and pricing show the plan as unavailable / coming soon.
+  comingSoon    Boolean  @default(false)
   updatedById   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

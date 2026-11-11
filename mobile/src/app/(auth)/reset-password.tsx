@@ -10,8 +10,12 @@ import { resetPasswordWithOtp, resetPasswordWithToken } from "@/lib/auth/auth-ap
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { router, useLocalSearchParams } from "expo-router";
 import {
-  AUTH_INPUT_CLASS,
+  AUTH_ICON_DARK,
+  AUTH_INPUT_CLASS_DARK,
+  AUTH_PLACEHOLDER_DARK,
+  AuthCard,
   AuthField,
+  authGoBack,
   AuthHeading,
   AuthMessage,
   AuthPrimaryButton,
@@ -95,8 +99,19 @@ export default function ResetPassword() {
   };
 
   return (
-    <AuthScreen testID="reset-password-screen">
-      <AuthHeading title="New password" subtitle="Choose a strong password for your account." />
+    <AuthScreen
+      testID="reset-password-screen"
+      tone="dark"
+      onBack={authGoBack}
+      wrapContentInCard={false}
+    >
+      <AuthHeading
+        badge="Almost there"
+        title="New"
+        titleAccent="password"
+        subtitle="Choose a strong password for your account."
+      />
+      <AuthCard>
 
           {success ? (
             <AuthMessage tone="success" testID="success-message">
@@ -107,18 +122,18 @@ export default function ResetPassword() {
           {!success ? (
             <>
               {email ? (
-                <Text className="mb-4 text-xs text-[#687386]" testID="reset-password-email">
+                <Text className="mb-4 text-xs text-white/60" testID="reset-password-email">
                   Resetting password for {email}
                 </Text>
               ) : null}
 
-              <AuthField label="New password" icon={<LockKeyhole size={20} color="#593CE6" strokeWidth={1.9} />}>
+              <AuthField label="New password" icon={<LockKeyhole size={20} color={AUTH_ICON_DARK} strokeWidth={1.9} />}>
                 <View style={{ position: "relative" }}>
                   <TextInput
-                    className={AUTH_INPUT_CLASS}
+                    className={AUTH_INPUT_CLASS_DARK}
                     style={{ paddingRight: 48 }}
                     placeholder="••••••••"
-                    placeholderTextColor="#172033"
+                    placeholderTextColor={AUTH_PLACEHOLDER_DARK}
                     secureTextEntry={!showNewPassword}
                     autoComplete="new-password"
                     value={newPassword}
@@ -131,22 +146,22 @@ export default function ResetPassword() {
                     style={{ position: "absolute", right: 14, top: 0, bottom: 0, justifyContent: "center" }}
                     testID="toggle-new-password-visibility"
                   >
-                    {showNewPassword ? <EyeOff size={18} color="#94A3B8" /> : <Eye size={18} color="#94A3B8" />}
+                    {showNewPassword ? <EyeOff size={18} color="rgba(255,255,255,0.6)" /> : <Eye size={18} color="rgba(255,255,255,0.6)" />}
                   </TouchableOpacity>
                 </View>
               </AuthField>
 
               <AuthField
                 label="Confirm password"
-                icon={<LockKeyhole size={20} color="#593CE6" strokeWidth={1.9} />}
+                icon={<LockKeyhole size={20} color={AUTH_ICON_DARK} strokeWidth={1.9} />}
                 className="mb-6"
               >
                 <View style={{ position: "relative" }}>
                   <TextInput
-                    className={AUTH_INPUT_CLASS}
+                    className={AUTH_INPUT_CLASS_DARK}
                     style={{ paddingRight: 48 }}
                     placeholder="••••••••"
-                    placeholderTextColor="#172033"
+                    placeholderTextColor={AUTH_PLACEHOLDER_DARK}
                     secureTextEntry={!showConfirmPassword}
                     autoComplete="new-password"
                     value={confirmPassword}
@@ -160,7 +175,7 @@ export default function ResetPassword() {
                     style={{ position: "absolute", right: 14, top: 0, bottom: 0, justifyContent: "center" }}
                     testID="toggle-confirm-password-visibility"
                   >
-                    {showConfirmPassword ? <EyeOff size={18} color="#94A3B8" /> : <Eye size={18} color="#94A3B8" />}
+                    {showConfirmPassword ? <EyeOff size={18} color="rgba(255,255,255,0.6)" /> : <Eye size={18} color="rgba(255,255,255,0.6)" />}
                   </TouchableOpacity>
                 </View>
               </AuthField>
@@ -184,6 +199,7 @@ export default function ResetPassword() {
             onPress={() => router.push("/sign-in")}
             testID="go-to-sign-in-link"
           />
+      </AuthCard>
     </AuthScreen>
   );
 }

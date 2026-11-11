@@ -91,8 +91,8 @@ export function ReactionListSheet({
               user={{ name: person.name || "Someone" }}
               size={34}
               radius={17}
-              backgroundColor="#EEF2FF"
-              textColor="#4361EE"
+              backgroundColor="#EFE9FF"
+              textColor="#6d28d9"
               fontSize={13}
               workplaceConnected={false}
             />
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F5F9",
   },
   tabActive: {
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
   },
   tabEmoji: {
     fontSize: 14,

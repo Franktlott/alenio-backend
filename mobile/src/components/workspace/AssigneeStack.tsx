@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     overflow: "hidden",
   },
-  viewerFace: { borderColor: "#4361EE" },
+  viewerFace: { borderColor: "#6d28d9" },
   overflow: {
     alignItems: "center",
     justifyContent: "center",

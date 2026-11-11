@@ -308,7 +308,7 @@ function LinkPreview({
               width: 44,
               height: 44,
               borderRadius: 10,
-              backgroundColor: isOwn ? "#EEF2FF" : "#FFFFFF",
+              backgroundColor: isOwn ? "#EFE9FF" : "#FFFFFF",
               borderWidth: 1,
               borderColor: isOwn ? "#C7D2FE" : "#E2E8F0",
               alignItems: "center",
@@ -326,7 +326,7 @@ function LinkPreview({
               />
             ) : (
               <Text
-                style={{ fontSize: 16, fontWeight: "800", color: "#4361EE" }}
+                style={{ fontSize: 16, fontWeight: "800", color: "#6d28d9" }}
               >
                 {(domain?.[0] ?? "L").toUpperCase()}
               </Text>
@@ -412,6 +412,11 @@ interface ChatMessageProps {
   anchorHeight?: number;
   /** Brief highlight after jumping to a pinned message. */
   highlighted?: boolean;
+  /**
+   * Their avatar only — never shown on your own messages. Pass false inside a
+   * same-sender streak so only the newest bubble in the run keeps the face.
+   */
+  showAvatar?: boolean;
 }
 
 function groupReactions(reactions: MessageReaction[]) {
@@ -460,7 +465,9 @@ export function ChatMessage({
   variant = "default",
   anchorHeight,
   highlighted = false,
+  showAvatar,
 }: ChatMessageProps) {
+  const renderAvatar = !isOwn && (showAvatar ?? true);
   const grouped = groupReactions(reactions);
   const hasReactions = grouped.length > 0;
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -516,7 +523,7 @@ export function ChatMessage({
         ? "#C7D2FE"
         : "#DBEAFE"
       : isOwn
-        ? "#EEF2FF"
+        ? "#EFE9FF"
         : "#F1F5F9",
     shadowColor: "#000",
     shadowOpacity: highlighted ? 0.12 : 0.06,
@@ -718,32 +725,36 @@ export function ChatMessage({
       <View
         className={`flex-row mb-1 ${isOwn ? "justify-end" : "justify-start"}`}
       >
-        {!isOwn && (
-          <Pressable
-            disabled={!onSenderPress}
-            onPress={onSenderPress}
-            accessibilityRole={onSenderPress ? "button" : undefined}
-            accessibilityLabel={
-              onSenderPress ? `Open ${senderName}'s profile` : undefined
-            }
-            className="mr-2 mt-1 flex-shrink-0"
-            hitSlop={6}
-          >
-            <UserAvatar
-              user={{ name: senderName, image: senderImage }}
-              size={36}
-              radius={18}
-              fontSize={13}
-            />
-          </Pressable>
-        )}
+        {!isOwn ? (
+          renderAvatar ? (
+            <Pressable
+              disabled={!onSenderPress}
+              onPress={onSenderPress}
+              accessibilityRole={onSenderPress ? "button" : undefined}
+              accessibilityLabel={
+                onSenderPress ? `Open ${senderName}'s profile` : undefined
+              }
+              className="mr-2 mt-1 flex-shrink-0"
+              hitSlop={6}
+            >
+              <UserAvatar
+                user={{ name: senderName, image: senderImage }}
+                size={36}
+                radius={18}
+                fontSize={13}
+              />
+            </Pressable>
+          ) : (
+            <View className="mr-2 mt-1 flex-shrink-0" style={{ width: 36 }} />
+          )
+        ) : null}
 
         <View className={`max-w-[82%] ${isOwn ? "items-end" : "items-start"}`}>
           <View
             className={`flex-row items-center mb-1 mx-1 gap-2 ${isOwn ? "justify-end" : "justify-start"}`}
             style={{ maxWidth: "100%" }}
           >
-            {!isOwn ? (
+            {!isOwn && renderAvatar ? (
               <Text
                 className="text-[13px] text-slate-500 dark:text-slate-400 flex-shrink"
                 numberOfLines={1}
@@ -870,26 +881,6 @@ export function ChatMessage({
             </Pressable>
           ) : null}
         </View>
-
-        {isOwn ? (
-          <Pressable
-            disabled={!onSenderPress}
-            onPress={onSenderPress}
-            accessibilityRole={onSenderPress ? "button" : undefined}
-            accessibilityLabel={
-              onSenderPress ? `Open ${senderName}'s profile` : undefined
-            }
-            className="ml-2 mt-1 flex-shrink-0"
-            hitSlop={6}
-          >
-            <UserAvatar
-              user={{ name: senderName, image: senderImage }}
-              size={36}
-              radius={18}
-              fontSize={13}
-            />
-          </Pressable>
-        ) : null}
       </View>
       {mediaUrl && mediaType ? (
         <MediaViewer

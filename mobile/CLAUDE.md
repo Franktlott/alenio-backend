@@ -126,6 +126,18 @@
     Install `@expo-google-fonts/{font-name}` for fonts (eg: `@expo-google-fonts/inter`)
     Use zeego for context menus and dropdowns (native feel). Lookup the documentation on zeego.dev to see how to use it.
   </do>
+
+  <alenio_ui_kit>
+    Build screens from `@/components/ui` (same names as web/src/components/ui), not one-off styles:
+    AppText (variants: pageTitle, sectionTitle, sectionLabel, rowTitle, body, supporting, meta),
+    Button (primary, secondary, soft, ghost, destructive, link; sm/md/lg), Badge / PriorityBadge / StatusBadge,
+    Card, Panel, PanelHeader, SectionHeader, PageHeader, IconTile, EmptyState,
+    AlenioList + AlenioListRow (the app's table), SegmentedControl, FilterChip.
+    Colours, shadows and type come from `@/theme` (palette, tints, tones, elevation, premiumType).
+    Main tabs: `CurvedTabLayout band`, content on `palette.page` with white `elevation.card` cards.
+    Don't hardcode the old blue (#4361EE / #EEF2FF); the brand is violet (`palette.violet`).
+    Don't use Pressable style callbacks in kit components: the NativeWind interop drops them.
+  </alenio_ui_kit>
 </design>
 
 <mistakes>

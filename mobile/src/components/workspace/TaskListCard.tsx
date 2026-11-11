@@ -8,7 +8,7 @@ import {
 import type { Task } from "@/lib/types";
 import { TaskRow } from "./TaskRow";
 import { TasksEmptyState } from "./TasksEmptyState";
-import { colors, radii, space, surfaces, typography } from "@/theme";
+import { colors, elevation, radii, space, surfaces, typography } from "@/theme";
 import { WS } from "./workspace-ui";
 import { scheduleSectionColor } from "./workspace-utils";
 
@@ -70,6 +70,8 @@ type Props = {
   emptyActionLabel?: string;
   onEmptyAction?: () => void;
   footer?: React.ReactNode;
+  /** Each section sits in its own raised card. Off when the list is already inside one. */
+  raisedSections?: boolean;
 };
 
 function renderTaskRows(
@@ -115,6 +117,7 @@ export function TaskListCard({
   emptyActionLabel,
   onEmptyAction,
   footer,
+  raisedSections = false,
 }: Props) {
   const sectionList = sections?.filter((s) => s.tasks.length > 0) ?? null;
   const taskCount = sectionList
@@ -243,14 +246,16 @@ export function TaskListCard({
                 </Pressable>
               ) : null}
             </View>
-            {renderTaskRows(
-              section.tasks,
-              onToggle,
-              onPress,
-              onLongPress,
-              currentUserId,
-              selectedTaskId,
-            )}
+            <View style={raisedSections ? RAISED_SECTION : undefined}>
+              {renderTaskRows(
+                section.tasks,
+                onToggle,
+                onPress,
+                onLongPress,
+                currentUserId,
+                selectedTaskId,
+              )}
+            </View>
           </View>
         ))
       ) : (
@@ -267,6 +272,13 @@ export function TaskListCard({
     </View>
   );
 }
+
+const RAISED_SECTION = {
+  ...elevation.card,
+  borderRadius: 18,
+  paddingHorizontal: 10,
+  marginBottom: 8,
+};
 
 export function TaskListFooterSpinner({ visible }: { visible: boolean }) {
   if (!visible) return null;

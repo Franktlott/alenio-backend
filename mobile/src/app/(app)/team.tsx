@@ -35,8 +35,6 @@ import type { Team } from "@/lib/types";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
 import { reconcileActiveTeamAfterRemoval } from "@/lib/workspace-switch";
 import type { ConnectionDirectoryFilters } from "@/lib/connection-directory";
-import { HEADER_LIGHT_ICON_COLOR } from "@/lib/header-brand";
-
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const activeTeamId = useTeamStore((state) => state.activeTeamId);
@@ -253,7 +251,7 @@ export default function TeamScreen() {
         }}
         testID="team-hydrating"
       >
-        <ActivityIndicator color="#4361EE" size="large" />
+        <ActivityIndicator color="#6d28d9" size="large" />
       </SafeAreaView>
     );
   }
@@ -262,7 +260,8 @@ export default function TeamScreen() {
     <CurvedTabLayout
       topInset={insets.top}
       title="My Network"
-      leftAction={<AlenioHeaderBrand />}
+      leftAction={<AlenioHeaderBrand tone="dark" />}
+      band
       rightAction={
         <Pressable
           onPress={() => openConnectionSearch("all")}
@@ -277,7 +276,7 @@ export default function TeamScreen() {
           accessibilityLabel="Add a connection"
           testID="connections-add-button"
         >
-          <UserPlus size={21} color={HEADER_LIGHT_ICON_COLOR} strokeWidth={2.1} />
+          <UserPlus size={21} color="#FFFFFF" strokeWidth={2.1} />
         </Pressable>
       }
       testID="team-screen"

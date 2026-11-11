@@ -1,12 +1,9 @@
 import { Image, StyleSheet, View } from "react-native";
 
-export function AlenioHeaderBrand() {
+/** Compact mark for in-app headers. Wordmark stays on splash / auth / marketing. */
+export function AlenioHeaderBrand(_props: { tone?: "light" | "dark" } = {}) {
   return (
-    <View
-      pointerEvents="none"
-      accessibilityLabel="Alenio"
-      style={styles.container}
-    >
+    <View pointerEvents="none" accessibilityLabel="Alenio" style={styles.container}>
       <Image
         source={require("@/assets/alenio-icon.png")}
         style={styles.icon}

@@ -5,8 +5,12 @@ import { router } from "expo-router";
 import { getAuthPasswordFlowClient } from "@/lib/auth/auth-client";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import {
-  AUTH_INPUT_CLASS,
+  AUTH_ICON_DARK,
+  AUTH_INPUT_CLASS_DARK,
+  AUTH_PLACEHOLDER_DARK,
+  AuthCard,
   AuthField,
+  authGoBack,
   AuthHeading,
   AuthMessage,
   AuthPrimaryButton,
@@ -54,11 +58,19 @@ export default function ForgotPassword() {
   };
 
   return (
-    <AuthScreen testID="forgot-password-screen">
+    <AuthScreen
+      testID="forgot-password-screen"
+      tone="dark"
+      onBack={authGoBack}
+      wrapContentInCard={false}
+    >
       <AuthHeading
-        title="Reset password"
+        badge="Account recovery"
+        title="Reset"
+        titleAccent="password"
         subtitle="Enter the email for your Alenio account. We'll send a reset code if that account exists."
       />
+      <AuthCard>
 
           {success ? (
             <AuthMessage tone="success" testID="success-message">
@@ -66,11 +78,11 @@ export default function ForgotPassword() {
             </AuthMessage>
           ) : null}
 
-          <AuthField label="Email address" icon={<Mail size={20} color="#593CE6" strokeWidth={1.9} />}>
+          <AuthField label="Email address" icon={<Mail size={20} color={AUTH_ICON_DARK} strokeWidth={1.9} />}>
             <TextInput
-              className={AUTH_INPUT_CLASS}
+              className={AUTH_INPUT_CLASS_DARK}
               placeholder="you@example.com"
-              placeholderTextColor="#98A1B2"
+              placeholderTextColor={AUTH_PLACEHOLDER_DARK}
               autoCapitalize="none"
               keyboardType="email-address"
               autoComplete="email"
@@ -99,6 +111,7 @@ export default function ForgotPassword() {
             onPress={() => router.push("/sign-in")}
             testID="back-to-sign-in-link"
           />
+      </AuthCard>
     </AuthScreen>
   );
 }

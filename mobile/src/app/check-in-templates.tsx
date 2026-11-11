@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -15,7 +15,8 @@ import {
 } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { setStatusBarStyle } from "expo-status-bar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -73,7 +74,11 @@ import {
 import { useTeamStore } from "@/lib/state/team-store";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
 import { canManageWorkspace } from "@/lib/workspace-management";
-import { colors } from "@/theme";
+import { AppHeaderBand } from "@/components/AppHeaderBand";
+import { colors, palette } from "@/theme";
+
+const BAND_SHEET_RADIUS = 24;
+const HEADER_ROW = 48;
 
 const LIBRARY_MARKS: Record<
   CheckInLibraryCategory,
@@ -158,6 +163,19 @@ export default function CheckInTemplatesScreen() {
   const teamId =
     (typeof params.teamId === "string" && params.teamId) || activeTeamId || "";
   const { access, isLoading: accessLoading } = useWorkspaceAccess(teamId);
+  const bandHeight = insets.top + HEADER_ROW + 22;
+
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle("light");
+      return () => setStatusBarStyle("dark");
+    }, []),
+  );
+
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace({ pathname: "/workspace-settings", params: { teamId } });
+  };
   const [preview, setPreview] = useState<{
     title: string;
     description: string | null;
@@ -323,42 +341,52 @@ export default function CheckInTemplatesScreen() {
 
   if (!teamId) {
     return (
-      <SafeAreaView style={styles.screen} testID="check-in-templates-screen">
-        <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No workspace selected</Text>
-          <Pressable onPress={() => router.back()} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Go back</Text>
+      <View style={styles.screen} testID="check-in-templates-screen">
+        <AppHeaderBand height={bandHeight} />
+        <View style={[styles.topBar, { paddingTop: insets.top }]}>
+          <Pressable
+            onPress={goBack}
+            hitSlop={10}
+            style={styles.headerAction}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            testID="check-in-templates-back"
+          >
+            <ArrowLeft size={19} color="#FFFFFF" strokeWidth={2.2} />
           </Pressable>
+          <View style={styles.topTitleWrap}>
+            <Text style={styles.topTitle}>Check-in templates</Text>
+          </View>
+          <View style={styles.topActionPlaceholder} />
         </View>
-      </SafeAreaView>
+        <View style={styles.sheet}>
+          <View style={styles.center}>
+            <Text style={styles.emptyTitle}>No workspace selected</Text>
+            <Pressable onPress={goBack} style={styles.primaryButton}>
+              <Text style={styles.primaryButtonText}>Go back</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView
-      style={styles.screen}
-      edges={[]}
-      testID="check-in-templates-screen"
-    >
-      <LinearGradient
-        pointerEvents="none"
-        colors={["#E6DCFF", "#F4F0FF", "#F7F5FC"]}
-        locations={[0, 0.42, 1]}
-        style={styles.headerWash}
-      />
+    <View style={styles.screen} testID="check-in-templates-screen">
+      <AppHeaderBand height={bandHeight} />
       <View style={[styles.topBar, { paddingTop: insets.top }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={goBack}
           hitSlop={10}
           style={styles.headerAction}
           accessibilityRole="button"
           accessibilityLabel="Go back"
           testID="check-in-templates-back"
         >
-          <ArrowLeft size={19} color="#172033" strokeWidth={2.2} />
+          <ArrowLeft size={19} color="#FFFFFF" strokeWidth={2.2} />
         </Pressable>
         <View style={styles.topTitleWrap}>
-          <Text style={styles.topTitle}>Check-in Templates</Text>
+          <Text style={styles.topTitle}>Check-in templates</Text>
           <Text style={styles.topSubtitle}>
             Build consistent, meaningful conversations
           </Text>
@@ -375,6 +403,7 @@ export default function CheckInTemplatesScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.sheet}>
       {teamQuery.isLoading || templatesQuery.isLoading || accessLoading ? (
         <View style={styles.center} testID="check-in-templates-loading">
           <View style={styles.stateIcon}>
@@ -857,6 +886,7 @@ export default function CheckInTemplatesScreen() {
           ) : null}
         </ScrollView>
       )}
+      </View>
 
       <AlenioBottomSheet
         visible={sortSheetOpen}
@@ -1098,12 +1128,12 @@ export default function CheckInTemplatesScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F7F5FC" },
+  screen: { flex: 1, backgroundColor: palette.page },
   headerWash: {
     position: "absolute",
     top: 0,
@@ -1112,9 +1142,10 @@ const styles = StyleSheet.create({
     height: 220,
   },
   topBar: {
+    zIndex: 2,
     minHeight: 82,
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -1123,18 +1154,22 @@ const styles = StyleSheet.create({
   headerAction: {
     width: 34,
     height: 34,
-    borderRadius: 11,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
   headerAddAction: {
     width: 34,
     height: 34,
-    borderRadius: 11,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#172033",
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  topActionPlaceholder: {
+    width: 34,
+    height: 34,
   },
   topTitleWrap: {
     flex: 1,
@@ -1144,7 +1179,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 21,
     fontWeight: "700",
-    color: "#172033",
+    color: "#FFFFFF",
     letterSpacing: -0.25,
   },
   topSubtitle: {
@@ -1152,9 +1187,17 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     lineHeight: 13,
     fontWeight: "600",
-    color: "#8A96A8",
+    color: "rgba(255,255,255,0.72)",
   },
-  content: { paddingHorizontal: 16, paddingTop: 12, gap: 13 },
+  sheet: {
+    flex: 1,
+    marginTop: -8,
+    borderTopLeftRadius: BAND_SHEET_RADIUS,
+    borderTopRightRadius: BAND_SHEET_RADIUS,
+    backgroundColor: palette.page,
+    overflow: "hidden",
+  },
+  content: { paddingHorizontal: 16, paddingTop: 14, gap: 12 },
   center: {
     flex: 1,
     padding: 26,
@@ -1195,7 +1238,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
   tabSelected: {
-    backgroundColor: "#1B2430",
+    backgroundColor: palette.violet,
   },
   tabLabel: { fontSize: 13, fontWeight: "700", color: "#6B728C" },
   tabLabelSelected: { color: "#FFFFFF" },

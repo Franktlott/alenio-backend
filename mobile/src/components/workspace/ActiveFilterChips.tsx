@@ -87,21 +87,21 @@ export function ActiveFilterChips({
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: "#EEF2FF",
+                backgroundColor: "#EFE9FF",
                 borderRadius: 12,
                 paddingHorizontal: 8,
                 paddingVertical: 3,
               }}
             >
               <Text
-                style={{ fontSize: 10, fontWeight: "600", color: "#4361EE" }}
+                style={{ fontSize: 10, fontWeight: "600", color: "#6d28d9" }}
               >
                 {chip.label} ×
               </Text>
             </Pressable>
           ))}
           <Pressable onPress={onClearAll} hitSlop={6}>
-            <Text style={{ fontSize: 10, fontWeight: "600", color: "#4361EE" }}>
+            <Text style={{ fontSize: 10, fontWeight: "600", color: "#6d28d9" }}>
               Clear all
             </Text>
           </Pressable>

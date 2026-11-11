@@ -1,11 +1,17 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
 import { View, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { useFocusEffect } from "expo-router";
+import { setStatusBarStyle } from "expo-status-bar";
 import { AppTabHeader } from "@/components/AppTabHeader";
+import { AppHeaderBand } from "@/components/AppHeaderBand";
+import { palette } from "@/theme";
 
 /** Shared curve so Chat / Workspace / Activity / Team / Settings stay consistent. */
 export const CURVED_HEADER_OVERLAP = 48;
 export const CURVED_SHEET_RADIUS = 16;
 export const CURVED_SEARCH_DOCK_HEIGHT = 40;
+/** The sheet's corners when it rises over the purple band. */
+const BAND_SHEET_RADIUS = 24;
 
 type Props = {
   topInset: number;
@@ -36,6 +42,13 @@ type Props = {
   backdrop?: React.ReactNode;
   /** Header and sheet render transparent so the backdrop shows through. */
   backdropVisible?: boolean;
+  /**
+   * The website's purple band behind the header, with the warm sheet rising
+   * over it. Header icons and the status bar switch to their light versions.
+   */
+  band?: boolean;
+  /** Sheet fill. Band tabs default to the warm page so white cards can lift off it. */
+  sheetColor?: string;
   headerTitlePlacement?: "center" | "leading";
   showWorkspaceSubtitle?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -62,41 +75,68 @@ export function CurvedTabLayout({
   headerBridge,
   headerBridgeSize = 84,
   headerExtraHeight = 0,
-  sheetTopRadius = CURVED_SHEET_RADIUS,
+  sheetTopRadius,
   headerTone = "light",
   backdrop,
   backdropVisible = false,
+  band = false,
+  sheetColor,
   headerTitlePlacement = "leading",
   showWorkspaceSubtitle = false,
   style,
 }: Props) {
+  const [headerHeight, setHeaderHeight] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (!band) return undefined;
+      setStatusBarStyle("light");
+      return () => setStatusBarStyle("dark");
+    }, [band]),
+  );
+  const radius = sheetTopRadius ?? (band ? BAND_SHEET_RADIUS : CURVED_SHEET_RADIUS);
+  const fill = sheetColor ?? (band ? palette.page : "#FFFFFF");
+  /** Home paints its own band via `backdrop`; keep the sheet clear so white greeting text stays readable. */
+  const sheetClear = backdropVisible && !band;
+
   return (
-    <View style={[styles.screen, style]} testID={testID}>
-      {backdrop ?? null}
-      <AppTabHeader
-        topInset={topInset}
-        testID={headerTestID}
-        title={title}
-        leftAction={leftAction}
-        workspaceTitleSelector={workspaceTitleSelector}
-        hideCenterContent={hideHeaderTitle}
-        overlapPad={CURVED_HEADER_OVERLAP + Math.max(0, headerExtraHeight)}
-        rightAction={rightAction}
-        showNotifications={showNotifications}
-        notificationsSize={notificationsSize}
-        tone={headerTone}
-        transparent={backdropVisible}
-        titlePlacement={headerTitlePlacement}
-        showWorkspaceSubtitle={showWorkspaceSubtitle}
-      />
+    <View
+      style={[styles.screen, { backgroundColor: sheetClear ? "transparent" : fill }, style]}
+      testID={testID}
+    >
+      {band ? (
+        <AppHeaderBand
+          height={headerHeight > 0 ? headerHeight : topInset + 120}
+          pageColor={fill}
+        />
+      ) : (
+        backdrop ?? null
+      )}
+      <View onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}>
+        <AppTabHeader
+          topInset={topInset}
+          testID={headerTestID}
+          title={title}
+          leftAction={leftAction}
+          workspaceTitleSelector={workspaceTitleSelector}
+          hideCenterContent={hideHeaderTitle}
+          overlapPad={CURVED_HEADER_OVERLAP + Math.max(0, headerExtraHeight)}
+          rightAction={rightAction}
+          showNotifications={showNotifications}
+          notificationsSize={notificationsSize}
+          tone={band ? "brand" : headerTone}
+          transparent={band || backdropVisible}
+          titlePlacement={headerTitlePlacement}
+          showWorkspaceSubtitle={showWorkspaceSubtitle}
+        />
+      </View>
       <View style={styles.body}>
         <View
           style={[
             styles.sheet,
-            backdropVisible ? styles.sheetTransparent : null,
             {
-              borderTopLeftRadius: sheetTopRadius,
-              borderTopRightRadius: sheetTopRadius,
+              borderTopLeftRadius: radius,
+              borderTopRightRadius: radius,
+              backgroundColor: sheetClear ? "transparent" : fill,
             },
           ]}
         >
@@ -144,9 +184,6 @@ const styles = StyleSheet.create({
     zIndex: 1,
     backgroundColor: "#FFFFFF",
     overflow: "hidden",
-  },
-  sheetTransparent: {
-    backgroundColor: "transparent",
   },
   headerBridge: {
     position: "absolute",

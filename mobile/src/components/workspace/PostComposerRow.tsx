@@ -6,6 +6,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { UserAvatar } from "@/components/UserAvatar";
+import { elevation } from "@/theme";
 import {
   FEED_CARD_PADDING,
   FEED_CARD_WIDE_PADDING,
@@ -42,8 +43,8 @@ export function PostComposerRow({
           user={author}
           size={36}
           radius={18}
-          backgroundColor="#EEF2FF"
-          textColor="#4361EE"
+          backgroundColor="#EFE9FF"
+          textColor="#6d28d9"
           fontSize={14}
           workplaceConnected={false}
         />
@@ -66,15 +67,8 @@ export function PostComposerRow({
 const styles = StyleSheet.create({
   card: {
     padding: FEED_CARD_PADDING,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#DFE5EE",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#172554",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 2,
+    ...elevation.card,
+    borderRadius: 18,
   },
   row: {
     flexDirection: "row",

@@ -50,7 +50,9 @@ import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { isReminderTask } from "@/lib/task-kind";
 import { videoCallHref } from "@/lib/meeting-navigation";
 import { cardSurface } from "@/components/home/home-card-styles";
+import { Button, buttonInk, PanelHeader } from "@/components/ui";
 import { useTeamStore } from "@/lib/state/team-store";
+import { palette } from "@/theme";
 
 type Props = {
   items: HomeTodayItem[];
@@ -67,7 +69,7 @@ type Props = {
 type RowState = "past" | "late" | "next" | "later";
 type Lane = "past" | "late" | "open";
 
-const PURPLE = "#6D5EF8";
+const PURPLE = palette.violet;
 const BLUE = "#3B6CFF";
 const LATE = "#9F1239";
 const MARKER_TOP = 16;
@@ -261,19 +263,12 @@ export function HomeTodayCard({
       ]}
       testID="home-today-section"
     >
-      <View style={styles.header}>
-        <View style={styles.headerIcon}>
-          <CalendarDays size={16} color={PURPLE} strokeWidth={2.2} />
-        </View>
-        <View style={styles.headerCopy}>
-          <Text style={styles.title} numberOfLines={1}>
-            Today
-          </Text>
-          <Text style={styles.date} numberOfLines={1}>
-            {dateLabel}
-          </Text>
-        </View>
-      </View>
+      <PanelHeader
+        title="Today"
+        subtitle={dateLabel}
+        icon={<CalendarDays size={16} color={PURPLE} strokeWidth={2.2} />}
+        style={styles.header}
+      />
 
       {pending ? null : active.length > 0 ? (
         <View style={fill ? styles.timelineFill : undefined}>
@@ -572,19 +567,12 @@ function EmptyTodayCard({ fill = false }: { fill?: boolean }) {
   if (fill) {
     return (
       <View style={styles.emptyTall} testID="home-today-empty">
-        <View style={styles.header}>
-          <View style={styles.headerIcon}>
-            <CalendarDays size={16} color={PURPLE} strokeWidth={2.2} />
-          </View>
-          <View style={styles.headerCopy}>
-            <Text style={styles.title} numberOfLines={1}>
-              Today
-            </Text>
-            <Text style={styles.date} numberOfLines={1}>
-              {todayDateLabel()}
-            </Text>
-          </View>
-        </View>
+        <PanelHeader
+          title="Today"
+          subtitle={todayDateLabel()}
+          icon={<CalendarDays size={16} color={PURPLE} strokeWidth={2.2} />}
+          style={styles.header}
+        />
         <View style={styles.emptyTallBody}>
           <View style={styles.emptyMark}>
             <CalendarCheck size={26} color={PURPLE} strokeWidth={2.1} />
@@ -593,16 +581,14 @@ function EmptyTodayCard({ fill = false }: { fill?: boolean }) {
           <Text style={styles.emptyCaughtBody}>
             No activities or check-ins scheduled for today.
           </Text>
-          <Pressable
+          <Button
+            variant="soft"
+            label="Add to today"
             onPress={addToToday}
-            style={styles.emptyAdd}
-            accessibilityRole="button"
-            accessibilityLabel="Add to today"
+            icon={<Plus size={14} color={buttonInk("soft")} strokeWidth={2.4} />}
             testID="home-today-add"
-          >
-            <Plus size={14} color={PURPLE} strokeWidth={2.4} />
-            <Text style={styles.emptyAddText}>Add to today</Text>
-          </Pressable>
+            style={styles.emptyAdd}
+          />
         </View>
         <Hills />
       </View>
@@ -919,35 +905,28 @@ const styles = StyleSheet.create({
     ...cardSurface,
     paddingBottom: 8,
   },
-  cardAlenio: {
-    backgroundColor: "#F8F6FF",
-    shadowOpacity: 0,
-    elevation: 0,
-  },
+  cardAlenio: {},
+  /**
+   * No overflow clipping on the cards themselves: iOS drops the shadow of a
+   * view that clips, so the artwork at the corners rounds itself instead.
+   */
   emptyCard: {
     ...cardSurface,
     minHeight: 68,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    overflow: "hidden",
     paddingLeft: 14,
     paddingRight: 118,
     paddingVertical: 10,
   },
   cardWide: {
     flex: 1,
-    overflow: "hidden",
     paddingBottom: 0,
   },
   emptyTall: {
     ...cardSurface,
     flex: 1,
-    borderRadius: 20,
-    backgroundColor: "#FBFAFF",
-    overflow: "hidden",
-    shadowOpacity: 0,
-    elevation: 0,
   },
   emptyTallBody: {
     flex: 1,
@@ -991,20 +970,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   emptyAdd: {
+    alignSelf: "center",
     marginTop: 16,
-    height: 34,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#EDE9FE",
-  },
-  emptyAddText: {
-    fontSize: 13.5,
-    lineHeight: 18,
-    fontWeight: "700",
-    color: PURPLE,
   },
   hills: {
     position: "absolute",
@@ -1012,6 +979,9 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: HILLS_HEIGHT,
+    overflow: "hidden",
+    borderBottomLeftRadius: 19,
+    borderBottomRightRadius: 19,
   },
   emptyCalendar: {
     width: 32,
@@ -1043,6 +1013,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 132,
     height: 62,
+    overflow: "hidden",
+    borderBottomRightRadius: 19,
   },
   emptyCheck: {
     position: "absolute",
@@ -1056,38 +1028,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#C7B8FF",
   },
   header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
     paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 0,
-  },
-  headerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F4F0FF",
-  },
-  headerCopy: {
-    flexGrow: 1,
-    flexShrink: 1,
-    minWidth: 88,
-  },
-  title: {
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-    color: "#111A2B",
-  },
-  date: {
-    marginTop: 1,
-    fontSize: 12,
-    lineHeight: 16,
-    color: "#98A2B3",
   },
   timeline: {
     paddingHorizontal: 10,
@@ -1163,9 +1106,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(105, 71, 232, 0.08)",
-    backgroundColor: "rgba(255, 255, 255, 0.82)",
+    borderWidth: 1,
+    borderColor: palette.rowDivider,
+    backgroundColor: "#FAF9FE",
   },
   taskCheck: {
     width: 19,

@@ -41,6 +41,7 @@ export function dmOtherParticipant(
       image?: string | null;
       isWorkplaceConnected?: boolean;
       activeNow?: boolean;
+      lastActiveAt?: string | null;
     } | null;
     participants?: {
       id: string;
@@ -49,6 +50,7 @@ export function dmOtherParticipant(
       image?: string | null;
       isWorkplaceConnected?: boolean;
       activeNow?: boolean;
+      lastActiveAt?: string | null;
     }[];
   },
   currentUserId: string,

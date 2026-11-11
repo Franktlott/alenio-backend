@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
-  ClipboardCheck,
   Eye,
   EyeOff,
+  Layers,
   LockKeyhole,
   Mail,
-  TrendingUp,
   UsersRound,
+  Zap,
 } from "lucide-react-native";
 import {
   View,
@@ -47,7 +47,7 @@ import {
   useAuthLoadingSequence,
 } from "@/components/auth-loading";
 import {
-  AUTH_INPUT_CLASS,
+  AUTH_INPUT_CLASS_DARK,
   AuthCard,
   AuthField,
   AuthHeading,
@@ -266,12 +266,13 @@ export default function SignIn() {
       testID="sign-in-screen"
       onBack={authGoBack}
       wrapContentInCard={false}
+      tone="dark"
     >
       <AuthHeading
         badge="Welcome back"
-        badgeIcon={<Text style={{ fontSize: 13 }}>👋</Text>}
-        title="Sign in to Alenio"
-        subtitle="Continue to your work, people and conversations."
+        title="Log in to"
+        titleAccent="Alenio"
+        subtitle="Pick up where you left off with your network and your workspace."
       />
 
       <AuthCard>
@@ -311,12 +312,12 @@ export default function SignIn() {
 
         <AuthField
           label="Email address"
-          icon={<Mail size={20} color="#593CE6" strokeWidth={1.9} />}
+          icon={<Mail size={20} color="#c4b5fd" strokeWidth={1.9} />}
         >
           <TextInput
-            className={AUTH_INPUT_CLASS}
+            className={AUTH_INPUT_CLASS_DARK}
             placeholder="you@example.com"
-            placeholderTextColor="#98A1B2"
+            placeholderTextColor="rgba(255,255,255,0.42)"
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
@@ -338,24 +339,24 @@ export default function SignIn() {
 
         <AuthField
           label="Password"
-          icon={<LockKeyhole size={20} color="#593CE6" strokeWidth={1.9} />}
+          icon={<LockKeyhole size={20} color="#c4b5fd" strokeWidth={1.9} />}
           className="mb-6"
           labelAction={
             <TouchableOpacity
               onPress={() => router.push("/forgot-password")}
               testID="forgot-password-link"
             >
-              <Text className="text-[12px] font-semibold text-[#4F35D9]">
+              <Text className="text-[12px] font-semibold text-[#c4b5fd]">
                 Forgot password?
               </Text>
             </TouchableOpacity>
           }
         >
           <TextInput
-            className={AUTH_INPUT_CLASS}
+            className={AUTH_INPUT_CLASS_DARK}
             style={{ paddingRight: 48 }}
             placeholder="Enter your password"
-            placeholderTextColor="#98A1B2"
+            placeholderTextColor="rgba(255,255,255,0.42)"
             secureTextEntry={!showPassword}
             autoComplete="password"
             value={password}
@@ -379,9 +380,9 @@ export default function SignIn() {
             testID="toggle-password-visibility"
           >
             {showPassword ? (
-              <EyeOff size={20} color="#98A1B2" />
+              <EyeOff size={20} color="rgba(255,255,255,0.6)" />
             ) : (
-              <Eye size={20} color="#98A1B2" />
+              <Eye size={20} color="rgba(255,255,255,0.6)" />
             )}
           </TouchableOpacity>
         </AuthField>
@@ -393,7 +394,7 @@ export default function SignIn() {
         ) : null}
 
         <AuthPrimaryButton
-          label="Sign in"
+          label="Log in"
           loading={loading}
           onPress={handleSignIn}
           disabled={loading || microsoftLoading}
@@ -401,22 +402,22 @@ export default function SignIn() {
         />
 
         <View className="my-6 flex-row items-center">
-          <View className="h-px flex-1 bg-[#E4E5EB]" />
-          <Text className="mx-3 text-[10px] font-semibold uppercase text-[#8991A0]">
+          <View className="h-px flex-1 bg-white/15" />
+          <Text className="mx-3 text-[11px] font-medium text-white/50">
             or
           </Text>
-          <View className="h-px flex-1 bg-[#E4E5EB]" />
+          <View className="h-px flex-1 bg-white/15" />
         </View>
 
         <TouchableOpacity
-          className="h-[54px] flex-row items-center justify-center rounded-[14px] border border-[#DFE1E9] bg-white"
+          className="h-[54px] flex-row items-center justify-center rounded-[14px] border border-white/20 bg-white/5"
           onPress={handleMicrosoft}
           disabled={loading || microsoftLoading}
           activeOpacity={0.8}
           testID="sign-in-microsoft"
         >
           {microsoftLoading ? (
-            <ActivityIndicator color="#4361EE" />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
             <>
               <View className="mr-4 h-[22px] w-[22px] flex-row flex-wrap gap-[2px]">
@@ -425,7 +426,7 @@ export default function SignIn() {
                 <View className="h-[10px] w-[10px] bg-[#00A4EF]" />
                 <View className="h-[10px] w-[10px] bg-[#FFB900]" />
               </View>
-              <Text className="text-[15px] font-semibold text-[#172033]">
+              <Text className="text-[15px] font-semibold text-white">
                 Continue with Microsoft
               </Text>
             </>
@@ -433,71 +434,61 @@ export default function SignIn() {
         </TouchableOpacity>
 
         <View className="mt-7 flex-row items-center justify-center">
-          <Text className="text-[13px] text-[#687386]">New to Alenio? </Text>
+          <Text className="text-[13px] text-white/70">New to Alenio? </Text>
           <TouchableOpacity
             onPress={() => router.push("/sign-up")}
             testID="sign-up-link"
           >
-            <Text className="text-[13px] font-bold text-[#4F35D9]">
+            <Text className="text-[13px] font-bold text-[#c4b5fd]">
               Create account
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Split layouts carry these on the hero panel instead. */}
-        {wideAuth ? null : (
-          <View className="mt-7 flex-row rounded-[16px] bg-[#F6F4FF] px-2 py-4">
-            <View className="flex-1 items-center border-r border-[#E6E1FA]">
-              <View className="mb-2 h-8 w-8 items-center justify-center rounded-full bg-[#ECE8FF]">
-                <UsersRound size={17} color="#6748E8" />
-              </View>
-              <Text className="text-[10px] font-semibold text-[#30384A]">
-                Connect
-              </Text>
-            </View>
-            <View className="flex-1 items-center border-r border-[#E6E1FA]">
-              <View className="mb-2 h-8 w-8 items-center justify-center rounded-full bg-[#ECE8FF]">
-                <ClipboardCheck size={17} color="#6748E8" />
-              </View>
-              <Text className="text-[10px] font-semibold text-[#30384A]">
-                Get work done
-              </Text>
-            </View>
-            <View className="flex-1 items-center">
-              <View className="mb-2 h-8 w-8 items-center justify-center rounded-full bg-[#ECE8FF]">
-                <TrendingUp size={17} color="#6748E8" />
-              </View>
-              <Text className="text-[10px] font-semibold text-[#30384A]">
-                Grow together
-              </Text>
-            </View>
-          </View>
-        )}
       </AuthCard>
 
+      {/* Split layouts carry the pitch on the hero panel instead. */}
+      {wideAuth ? null : (
+        <View className="mt-7 flex-row">
+          {[
+            { label: "Your Network", Icon: UsersRound },
+            { label: "Your Workspace", Icon: Layers },
+            { label: "One Platform", Icon: Zap },
+          ].map(({ label, Icon }, index) => (
+            <View
+              key={label}
+              className={`flex-1 items-center ${index > 0 ? "border-l border-white/15" : ""}`}
+            >
+              <Icon size={20} color="#E4D8FF" strokeWidth={1.8} />
+              <Text className="mt-2 text-[11px] text-white/70">{label}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <View className="mt-6 flex-row flex-wrap justify-center gap-1 px-4">
-        <Text className="text-[10px] text-[#8C94A3]">
+        <Text className="text-[10px] text-white/45">
           By continuing you agree to our
         </Text>
         <TouchableOpacity
           onPress={() => router.push("/terms-of-service")}
           testID="terms-link"
         >
-          <Text className="text-[10px] font-semibold text-[#4F35D9]">
+          <Text className="text-[10px] font-semibold text-[#c4b5fd]">
             Terms of Service
           </Text>
         </TouchableOpacity>
-        <Text className="text-[10px] text-[#8C94A3]">and</Text>
+        <Text className="text-[10px] text-white/45">and</Text>
         <TouchableOpacity
           onPress={() => router.push("/privacy-policy")}
           testID="privacy-link"
         >
-          <Text className="text-[10px] font-semibold text-[#4F35D9]">
+          <Text className="text-[10px] font-semibold text-[#c4b5fd]">
             Privacy Policy
           </Text>
         </TouchableOpacity>
       </View>
-      <Text className="mt-3 text-center text-[10px] text-[#A0A6B2]">
+      <Text className="mt-3 text-center text-[10px] text-white/35">
         © 2026 Alenio Insights
       </Text>
     </AuthScreen>

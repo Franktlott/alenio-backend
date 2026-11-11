@@ -43,7 +43,7 @@ function EventScheduleTile({
       disabled={disabled}
       style={[eventFormStyles.tile, open ? eventFormStyles.tileOpen : null]}
     >
-      <Icon size={16} color="#4361EE" strokeWidth={2} />
+      <Icon size={16} color="#6d28d9" strokeWidth={2} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={eventFormStyles.tileLabel}>{label}</Text>
         <Text style={eventFormStyles.tileValue} numberOfLines={1}>
@@ -180,6 +180,9 @@ import {
 } from "@/components/workspace/workspace-types";
 import { WorkspaceFilterPicker } from "@/components/workspace/WorkspaceFilterPicker";
 import { splitPaneCard, WS } from "@/components/workspace/workspace-ui";
+import { buttonInk, EmptyState, tintInk } from "@/components/ui";
+import { ScheduleKindIcon } from "@/components/schedule/ScheduleKindIcon";
+import { elevation } from "@/theme";
 import {
   assignedToQueryKey,
   buildWorkspaceTasksPath,
@@ -2568,63 +2571,13 @@ export default function TasksScreen() {
   );
 
   if (!activeTeamId) {
-    const heroHour = new Date().getHours();
-    const heroSource =
-      heroHour < 12
-        ? require("@/assets/alenio-home-hero-morning.jpg")
-        : heroHour < 17
-          ? require("@/assets/alenio-home-hero-afternoon.jpg")
-          : require("@/assets/alenio-home-hero-sunset.jpg");
     return (
       <CurvedTabLayout
         topInset={insets.top}
         title="Workspace"
-        leftAction={<AlenioHeaderBrand />}
+        leftAction={<AlenioHeaderBrand tone="dark" />}
         headerTitlePlacement="leading"
-        backdrop={
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              top: 0,
-              right: 0,
-              left: 0,
-              height: insets.top + 118,
-              overflow: "hidden",
-            }}
-          >
-            <Image
-              source={heroSource}
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                width: "150%",
-                height: "150%",
-              }}
-              resizeMode="cover"
-              accessibilityIgnoresInvertColors
-            />
-            <LinearGradient
-              colors={[
-                "rgba(255,255,255,0)",
-                "rgba(255,255,255,0.7)",
-                "#FFFFFF",
-              ]}
-              locations={[0, 0.62, 1]}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={{
-                position: "absolute",
-                right: 0,
-                bottom: 0,
-                left: 0,
-                height: "52%",
-              }}
-            />
-          </View>
-        }
-        backdropVisible
+        band
         testID="execute-screen"
         headerTestID="execute-header"
       >
@@ -2651,9 +2604,10 @@ export default function TasksScreen() {
         title="Workspace"
         workspaceTitleSelector
         showWorkspaceSubtitle
-        leftAction={<AlenioHeaderBrand />}
+        leftAction={<AlenioHeaderBrand tone="dark" />}
         headerTitlePlacement="leading"
         notificationsSize="large"
+        band
         testID="workspace-access-loading-screen"
         headerTestID="workspace-header"
       >
@@ -2669,9 +2623,10 @@ export default function TasksScreen() {
         title="Workspace"
         workspaceTitleSelector
         showWorkspaceSubtitle
-        leftAction={<AlenioHeaderBrand />}
+        leftAction={<AlenioHeaderBrand tone="dark" />}
         headerTitlePlacement="leading"
         notificationsSize="large"
+        band
         testID="workspace-paywall-screen"
         headerTestID="workspace-header"
       >
@@ -2701,6 +2656,8 @@ export default function TasksScreen() {
     !tasksLoadError &&
     filters.statusTab === "active" &&
     tasks.length === 0;
+  const showTasksListEmpty =
+    !showTasksLoading && !tasksLoadError && tasks.length === 0;
 
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
@@ -2713,7 +2670,7 @@ export default function TasksScreen() {
         }}
         edges={[]}
       >
-        <ActivityIndicator color="#4361EE" />
+        <ActivityIndicator color="#6d28d9" />
       </SafeAreaView>
     );
   }
@@ -2766,13 +2723,13 @@ export default function TasksScreen() {
         }}
         testID="calendar-day-add-event"
       >
-        <Plus size={13} color="#4361EE" strokeWidth={2.4} />
+        <Plus size={13} color="#6d28d9" strokeWidth={2.4} />
         <Text
           style={{
             marginLeft: 3,
             fontSize: 12,
             fontWeight: "700",
-            color: "#4361EE",
+            color: "#6d28d9",
           }}
         >
           Add event
@@ -2813,78 +2770,19 @@ export default function TasksScreen() {
    */
   const stackedDayList =
     daySheetCount === 0 ? (
-      <View
-        style={{
-          marginTop: 10,
-          alignItems: "center",
-          paddingVertical: 22,
-          paddingHorizontal: 16,
-          borderRadius: 16,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: "#E8ECF0",
-          backgroundColor: "#FBFAFF",
-        }}
+      <EmptyState
+        card
+        icon={<CalendarDays size={20} color={tintInk("lavender")} strokeWidth={2} />}
+        title="Nothing scheduled"
+        body="No events or tasks due this day."
+        actionLabel={access.canWrite ? "Add event" : undefined}
+        actionIcon={<Plus size={13} color={buttonInk("soft")} strokeWidth={2.6} />}
+        onAction={access.canWrite ? openWorkspaceCreate : undefined}
         testID="calendar-stacked-day-empty"
-      >
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#F0EDFF",
-          }}
-        >
-          <CalendarDays size={20} color="#7567ED" strokeWidth={2} />
-        </View>
-        <Text
-          style={{
-            marginTop: 10,
-            fontSize: 14,
-            fontWeight: "700",
-            letterSpacing: -0.2,
-            color: "#0F172A",
-          }}
-        >
-          Nothing scheduled
-        </Text>
-        <Text
-          style={{
-            marginTop: 3,
-            fontSize: 12,
-            lineHeight: 16,
-            color: "#8B95A5",
-            textAlign: "center",
-          }}
-        >
-          No events or tasks due this day.
-        </Text>
-        {access.canWrite ? (
-        <Pressable
-          onPress={openWorkspaceCreate}
-          accessibilityRole="button"
-          accessibilityLabel="Add event"
-          testID="calendar-stacked-day-empty-add"
-          style={{
-            marginTop: 12,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 4,
-            paddingHorizontal: 12,
-            paddingVertical: 7,
-            borderRadius: 999,
-            backgroundColor: "#F0EDFF",
-          }}
-        >
-          <Plus size={13} color="#7567ED" strokeWidth={2.6} />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#7567ED" }}>
-            Add event
-          </Text>
-        </Pressable>
-        ) : null}
-      </View>
+        style={{ marginTop: 10 }}
+      />
     ) : (
+      <View style={{ ...elevation.card, borderRadius: 18, marginTop: 10, paddingVertical: 4 }}>
       <EventsSection
         dayEvents={dayEvents}
         dayHolidays={dayHolidays}
@@ -2907,6 +2805,7 @@ export default function TasksScreen() {
         onAddEvent={access.canWrite ? openWorkspaceCreate : undefined}
         isOwnerOrLeader={isOwnerOrLeader}
       />
+      </View>
     );
 
   const upcomingPane =
@@ -3029,11 +2928,12 @@ export default function TasksScreen() {
       title="Workspace"
       workspaceTitleSelector
       showWorkspaceSubtitle
-      leftAction={<AlenioHeaderBrand />}
+      leftAction={<AlenioHeaderBrand tone="dark" />}
       headerTitlePlacement="leading"
       testID="tasks-screen"
       headerTestID="workspace-header"
       notificationsSize="large"
+      band
       rightAction={
         activeTeamId && access.canWrite ? (
           <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -3041,7 +2941,7 @@ export default function TasksScreen() {
               onPress={openWorkspaceCreate}
               accessibilityLabel="Add"
               testID="workspace-header-add-button"
-              tone="light"
+              tone="brand"
               size="large"
             />
           </View>
@@ -3575,7 +3475,7 @@ export default function TasksScreen() {
                 <Pressable
                   onPress={() => setBlockedSubtasks(null)}
                   style={{
-                    backgroundColor: "#4361EE",
+                    backgroundColor: "#6d28d9",
                     borderRadius: 12,
                     paddingVertical: 14,
                     alignItems: "center",
@@ -3812,7 +3712,7 @@ export default function TasksScreen() {
                       user={member.user}
                       size={44}
                       radius={22}
-                      backgroundColor="#4361EE"
+                      backgroundColor="#6d28d9"
                       textColor="#FFFFFF"
                       fontSize={16}
                     />
@@ -3938,9 +3838,11 @@ export default function TasksScreen() {
           <AlenioBottomSheet
             visible={showAddModal && access.canWrite}
             title="Create"
+            subtitle="Add to this workspace"
             onClose={() => setShowAddModal(false)}
             compact
             showCloseButton
+            scrollEnabled={false}
             testID="workspace-add-sheet"
           >
             <WorkspaceCreateGrid
@@ -3949,10 +3851,13 @@ export default function TasksScreen() {
                   ? {
                       key: "event",
                       label: "Event",
-                      hint: "Add to the team calendar, with an optional video call",
-                      background: "#F5F3FF",
+                      hint: "Team calendar, optional video call",
                       icon: (
-                        <CalendarDays size={28} color="#7C3AED" strokeWidth={2} />
+                        <ScheduleKindIcon
+                          kind="event"
+                          size={16}
+                          color={tintInk("lavender")}
+                        />
                       ),
                       testID: "workspace-add-event",
                       onPress: () => {
@@ -3963,10 +3868,13 @@ export default function TasksScreen() {
                   : {
                       key: "event",
                       label: "Event",
-                      hint: "Create a private event or request a team event",
-                      background: "#F1F5F9",
+                      hint: "Private event or team request",
                       icon: (
-                        <CalendarDays size={28} color="#64748B" strokeWidth={2} />
+                        <ScheduleKindIcon
+                          kind="event"
+                          size={16}
+                          color={tintInk("lavender")}
+                        />
                       ),
                       testID: "workspace-add-event",
                       onPress: () => {
@@ -3979,10 +3887,13 @@ export default function TasksScreen() {
                       {
                         key: "task",
                         label: "Task",
-                        hint: "Create a new task for the team",
-                        background: "#ECFDF3",
+                        hint: "Assign work for the team",
                         icon: (
-                          <CheckSquare size={28} color="#128A52" strokeWidth={2} />
+                          <ScheduleKindIcon
+                            kind="task"
+                            size={16}
+                            color={tintInk("lavender")}
+                          />
                         ),
                         testID: "workspace-add-task",
                         onPress: () => {
@@ -4003,9 +3914,14 @@ export default function TasksScreen() {
                 {
                   key: "reminder",
                   label: "Reminder",
-                  hint: "Private to you and separate from Team Momentum",
-                  background: "#E0E7FF",
-                  icon: <Bell size={28} color="#4F46E5" strokeWidth={2} />,
+                  hint: "Private to you",
+                  icon: (
+                    <ScheduleKindIcon
+                      kind="reminder"
+                      size={16}
+                      color={tintInk("lavender")}
+                    />
+                  ),
                   testID: "workspace-add-reminder",
                   onPress: () => {
                     setShowAddModal(false);
@@ -4022,9 +3938,10 @@ export default function TasksScreen() {
                 {
                   key: "celebrate",
                   label: "Celebrate",
-                  hint: "Recognize a teammate on Feed",
-                  background: "#FFF7ED",
-                  icon: <Award size={28} color="#D97706" strokeWidth={2} />,
+                  hint: "Recognize someone on Feed",
+                  icon: (
+                    <Award size={16} color={tintInk("lavender")} strokeWidth={2.2} />
+                  ),
                   testID: "workspace-add-celebrate",
                   onPress: () => {
                     setShowAddModal(false);
@@ -4277,7 +4194,7 @@ export default function TasksScreen() {
                         testID="event-photo-button"
                       >
                         {eventImageUploading ? (
-                          <ActivityIndicator size="small" color="#4361EE" />
+                          <ActivityIndicator size="small" color="#6d28d9" />
                         ) : eventImageUrl ? (
                           <Image
                             source={{ uri: eventImageUrl }}
@@ -4287,7 +4204,7 @@ export default function TasksScreen() {
                           <>
                             <ImagePlus
                               size={18}
-                              color="#4361EE"
+                              color="#6d28d9"
                               strokeWidth={2}
                             />
                             <Text style={eventFormStyles.photoHint}>Photo</Text>
@@ -4362,7 +4279,7 @@ export default function TasksScreen() {
 
                     {eventModalType === "event" && isOwnerOrLeader ? (
                       <View style={eventFormStyles.videoRow}>
-                        <Video size={16} color="#4361EE" strokeWidth={2} />
+                        <Video size={16} color="#6d28d9" strokeWidth={2} />
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={eventFormStyles.settingTitle}>
                             Video call
@@ -4388,7 +4305,7 @@ export default function TasksScreen() {
                               ),
                             );
                           }}
-                          trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
+                          trackColor={{ false: "#E2E8F0", true: "#6d28d9" }}
                           thumbColor="white"
                           testID="event-video-toggle"
                         />
@@ -4765,7 +4682,7 @@ export default function TasksScreen() {
                           }}
                           testID="hidden-toggle"
                         >
-                          <Users size={16} color="#4361EE" strokeWidth={2} />
+                          <Users size={16} color="#6d28d9" strokeWidth={2} />
                           <View style={{ flex: 1, minWidth: 0 }}>
                             <Text style={eventFormStyles.settingTitle}>
                               Visibility
@@ -4968,7 +4885,7 @@ export default function TasksScreen() {
                           <Text
                             style={{
                               fontSize: 13,
-                              color: "#4361EE",
+                              color: "#6d28d9",
                               fontWeight: "700",
                             }}
                           >
@@ -4977,7 +4894,7 @@ export default function TasksScreen() {
                               : "Select all"}
                           </Text>
                           {allMeetingAssigneesSelected ? (
-                            <Check size={16} color="#4361EE" />
+                            <Check size={16} color="#6d28d9" />
                           ) : null}
                         </TouchableOpacity>
                       ) : null}
@@ -5068,8 +4985,8 @@ export default function TasksScreen() {
                                     user={member.user}
                                     size={32}
                                     radius={16}
-                                    backgroundColor="#EEF2FF"
-                                    textColor="#4361EE"
+                                    backgroundColor="#EFE9FF"
+                                    textColor="#6d28d9"
                                     fontSize={12}
                                   />
                                   <Text
@@ -5085,7 +5002,7 @@ export default function TasksScreen() {
                                   </Text>
                                 </View>
                                 {selected ? (
-                                  <Check size={16} color="#4361EE" />
+                                  <Check size={16} color="#6d28d9" />
                                 ) : (
                                   <View style={{ width: 16, height: 16 }} />
                                 )}
@@ -5101,7 +5018,7 @@ export default function TasksScreen() {
                         style={{
                           marginHorizontal: 20,
                           marginTop: 8,
-                          backgroundColor: "#4361EE",
+                          backgroundColor: "#6d28d9",
                           borderRadius: 14,
                           paddingVertical: 14,
                           alignItems: "center",
@@ -5372,7 +5289,7 @@ export default function TasksScreen() {
                               borderBottomColor: "#F1F5F9",
                               backgroundColor:
                                 meetingDurationMinutes === minutes
-                                  ? "#EEF2FF"
+                                  ? "#EFE9FF"
                                   : "transparent",
                               borderRadius:
                                 meetingDurationMinutes === minutes ? 10 : 0,
@@ -5389,14 +5306,14 @@ export default function TasksScreen() {
                                     : "500",
                                 color:
                                   meetingDurationMinutes === minutes
-                                    ? "#4361EE"
+                                    ? "#6d28d9"
                                     : "#0F172A",
                               }}
                             >
                               {formatVideoMeetingDuration(minutes)}
                             </Text>
                             {meetingDurationMinutes === minutes ? (
-                              <Check size={16} color="#4361EE" />
+                              <Check size={16} color="#6d28d9" />
                             ) : null}
                           </TouchableOpacity>
                         ))}
@@ -5435,7 +5352,7 @@ export default function TasksScreen() {
         </>
       }
     >
-      <View style={{ flex: 1, minHeight: 0, backgroundColor: "#FFFFFF" }}>
+      <View style={{ flex: 1, minHeight: 0, backgroundColor: WS.pageBg }}>
         <WorkspaceViewToggle
           mode={workspaceMode}
           onChange={(next) => {
@@ -5453,6 +5370,15 @@ export default function TasksScreen() {
         <WorkspaceSnapshotCarousel
           pages={snapshotPages}
           loading={summaryMetricsLoading}
+          onOpenSettings={
+            activeTeamId && isOwnerOrLeader && access.canWrite
+              ? () =>
+                  router.push({
+                    pathname: "/workspace-settings",
+                    params: { teamId: activeTeamId },
+                  })
+              : undefined
+          }
         />
 
         <View style={{ flex: 1 }}>
@@ -5505,7 +5431,7 @@ export default function TasksScreen() {
                   </View>
                 </View>
               ) : (
-                <ActivityIndicator color="#4361EE" style={{ marginTop: 32 }} />
+                <ActivityIndicator color="#6d28d9" style={{ marginTop: 32 }} />
               )}
             </View>
           ) : workspaceMode === "calendar" ? (
@@ -5639,7 +5565,7 @@ export default function TasksScreen() {
                                   style={{
                                     fontSize: 13,
                                     fontWeight: "700",
-                                    color: isSelected ? "#4361EE" : "#0F172A",
+                                    color: isSelected ? "#6d28d9" : "#0F172A",
                                     letterSpacing: -0.2,
                                   }}
                                 >
@@ -5781,12 +5707,13 @@ export default function TasksScreen() {
                   <RefreshControl
                     refreshing={refreshing}
                     onRefresh={onRefresh}
-                    tintColor="#4361EE"
-                    colors={["#4361EE"]}
+                    tintColor="#6d28d9"
+                    colors={["#6d28d9"]}
                   />
                 }
                 contentContainerStyle={{
-                  flexGrow: 1,
+                  flexGrow: 0,
+                  paddingTop: 4,
                 }}
               >
                 <MemberTasksEmptyState />
@@ -5848,7 +5775,7 @@ export default function TasksScreen() {
                 <View
                   style={{
                     flex: 1,
-                    minHeight: 140,
+                    minHeight: showTasksListEmpty ? undefined : 140,
                     paddingHorizontal: showTaskDetailPane ? 12 : WS.pageGutter,
                     paddingBottom: showTaskDetailPane
                       ? 8
@@ -5856,23 +5783,24 @@ export default function TasksScreen() {
                   }}
                 >
                   <ScrollView
-                    style={{ flex: 1 }}
+                    style={{ flex: showTasksListEmpty ? undefined : 1 }}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                       <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        tintColor="#4361EE"
-                        colors={["#4361EE"]}
+                        tintColor="#6d28d9"
+                        colors={["#6d28d9"]}
                       />
                     }
                     contentContainerStyle={{
-                      paddingTop: 0,
-                      flexGrow: 1,
+                      paddingTop: showTasksListEmpty ? 2 : 0,
+                      flexGrow: showTasksListEmpty ? 0 : 1,
                     }}
                   >
                     <TaskListCard
                       sections={taskListSections}
+                      raisedSections={!showTaskDetailPane}
                       loading={showTasksLoading}
                       loadError={tasksLoadError}
                       onRetry={() => void refetchActiveTasks()}
@@ -5942,7 +5870,7 @@ export default function TasksScreen() {
                                 paddingVertical: 12,
                                 borderRadius: 10,
                                 alignItems: "center",
-                                backgroundColor: "#EEF2FF",
+                                backgroundColor: "#EFE9FF",
                                 flexDirection: "row",
                                 justifyContent: "center",
                                 gap: 8,
@@ -5953,7 +5881,7 @@ export default function TasksScreen() {
                               {loadingMore ? (
                                 <ActivityIndicator
                                   size="small"
-                                  color="#4361EE"
+                                  color="#6d28d9"
                                   testID="load-more-indicator"
                                 />
                               ) : null}
@@ -5961,7 +5889,7 @@ export default function TasksScreen() {
                                 style={{
                                   fontSize: 13,
                                   fontWeight: "600",
-                                  color: "#4361EE",
+                                  color: "#6d28d9",
                                 }}
                               >
                                 {loadingMore ? "Loading..." : "Load more tasks"}
@@ -6184,7 +6112,7 @@ const eventFormStyles = StyleSheet.create({
     marginTop: 2,
     fontSize: 10,
     fontWeight: "600",
-    color: "#4361EE",
+    color: "#6d28d9",
   },
   fieldLabel: {
     fontSize: 12,
@@ -6229,7 +6157,7 @@ const eventFormStyles = StyleSheet.create({
     marginBottom: 8,
   },
   tileOpen: {
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
   },
   tileRow: {
     flexDirection: "row",
@@ -6343,7 +6271,7 @@ const eventFormStyles = StyleSheet.create({
   pickerDone: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#4361EE",
+    color: "#6d28d9",
   },
   selectBtn: {
     backgroundColor: "#F4F6FB",
@@ -6373,7 +6301,7 @@ const eventFormStyles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   primaryBtn: {
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: "center",

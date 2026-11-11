@@ -434,6 +434,20 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+.lp-plan-pill--soon {
+  background: #fef3c7;
+  color: #92400e;
+}
+.lp-plan--soon {
+  opacity: 0.92;
+}
+.lp-plan-cta.is-disabled {
+  pointer-events: none;
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-align: center;
+  justify-content: center;
+}
 .lp-plan-tagline {
   margin: 10px 0 0;
   color: var(--lp-muted);

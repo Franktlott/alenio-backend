@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
+import { palette } from "@/theme";
 import {
   Award,
   ImagePlus,
@@ -165,8 +166,8 @@ function UpdatesRail({
         <View style={styles.tileGrid}>
           <ActionTile
             Icon={PenSquare}
-            tint="#4361EE"
-            surface="#EEF2FF"
+            tint="#6d28d9"
+            surface="#EFE9FF"
             label="Write a post"
             accessibilityLabel="Write a post"
             onPress={() =>
@@ -696,7 +697,7 @@ export function WorkspaceUpdatesFeed({
         testID="workspace-updates-feed"
       >
         <View style={styles.centered} testID="workspace-updates-loading">
-          <ActivityIndicator color="#4361EE" />
+          <ActivityIndicator color="#6d28d9" />
         </View>
       </View>
     );
@@ -766,7 +767,7 @@ export function WorkspaceUpdatesFeed({
           activityQuery.isFetchingNextPage ? (
             <ActivityIndicator
               style={styles.footerLoader}
-              color="#4361EE"
+              color="#6d28d9"
             />
           ) : null
         }
@@ -783,8 +784,8 @@ export function WorkspaceUpdatesFeed({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#4361EE"
-            colors={["#4361EE"]}
+            tintColor="#6d28d9"
+            colors={["#6d28d9"]}
           />
         }
         contentContainerStyle={styles.listContent}
@@ -935,7 +936,7 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.page,
   },
   pageInset: {
     paddingHorizontal: WORKSPACE_FEED_HORIZONTAL_INSET,
@@ -1002,7 +1003,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 22,
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
     shadowColor: "#24324A",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.07,
@@ -1153,7 +1154,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 4,
     borderRadius: 2,
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
     zIndex: 1,
   },
   errorTitle: {
@@ -1167,7 +1168,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
   },
   retryText: {
     color: "#FFFFFF",

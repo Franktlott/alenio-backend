@@ -48,6 +48,7 @@ export interface User {
   profileTitle?: string | null;
   isWorkplaceConnected?: boolean;
   activeNow?: boolean;
+  lastActiveAt?: string | null;
 }
 
 export interface Team {
@@ -374,6 +375,8 @@ export type ConversationParticipant = {
   image: string | null;
   isWorkplaceConnected?: boolean;
   activeNow?: boolean;
+  /** ISO timestamp when they share active status; null when hidden or unknown. */
+  lastActiveAt?: string | null;
   role: GroupParticipantRole;
 };
 

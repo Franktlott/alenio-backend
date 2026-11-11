@@ -241,7 +241,7 @@ export function WorkspaceFilterPicker({
                   user={member.user}
                   size={32}
                   radius={16}
-                  backgroundColor="#EEF2FF"
+                  backgroundColor="#EFE9FF"
                   textColor={colors.brand}
                   fontSize={11}
                 />

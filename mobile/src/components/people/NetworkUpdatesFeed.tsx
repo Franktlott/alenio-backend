@@ -294,8 +294,8 @@ export function NetworkUpdatesFeed({
                   }}
                   size={36}
                   radius={18}
-                  backgroundColor="#EEF2FF"
-                  textColor="#4361EE"
+                  backgroundColor="#EFE9FF"
+                  textColor="#6d28d9"
                 />
                 <Pressable
                   onPress={() => openComposer()}
@@ -315,7 +315,7 @@ export function NetworkUpdatesFeed({
         ListEmptyComponent={
           feed.isLoading ? (
             <View style={styles.state} testID="network-updates-loading">
-              <ActivityIndicator color="#4361EE" />
+              <ActivityIndicator color="#6d28d9" />
               <Text style={styles.stateBody}>Loading your network…</Text>
             </View>
           ) : feed.isError ? (
@@ -335,7 +335,7 @@ export function NetworkUpdatesFeed({
           ) : (
             <View style={styles.empty} testID="network-updates-empty">
               <View style={styles.emptyIcon}>
-                <Users size={22} color="#4361EE" strokeWidth={2.2} />
+                <Users size={22} color="#6d28d9" strokeWidth={2.2} />
               </View>
               <Text style={styles.stateTitle}>Updates show up here</Text>
               <Text style={styles.stateBody}>
@@ -350,7 +350,7 @@ export function NetworkUpdatesFeed({
                   testID="network-updates-find-people"
                 >
                   <View style={styles.emptyActionIcon}>
-                    <UserPlus size={16} color="#4361EE" strokeWidth={2.2} />
+                    <UserPlus size={16} color="#6d28d9" strokeWidth={2.2} />
                   </View>
                   <View style={styles.emptyActionCopy}>
                     <Text style={styles.emptyActionTitle}>Find people</Text>
@@ -368,7 +368,7 @@ export function NetworkUpdatesFeed({
                   testID="network-updates-empty-share"
                 >
                   <View style={styles.emptyActionIcon}>
-                    <PenLine size={16} color="#4361EE" strokeWidth={2.2} />
+                    <PenLine size={16} color="#6d28d9" strokeWidth={2.2} />
                   </View>
                   <View style={styles.emptyActionCopy}>
                     <Text style={styles.emptyActionTitle}>Share an update</Text>
@@ -384,7 +384,7 @@ export function NetworkUpdatesFeed({
         }
         ListFooterComponent={
           feed.isFetchingNextPage ? (
-            <ActivityIndicator style={styles.footerLoader} color="#4361EE" />
+            <ActivityIndicator style={styles.footerLoader} color="#6d28d9" />
           ) : null
         }
         onEndReached={() => {
@@ -397,7 +397,7 @@ export function NetworkUpdatesFeed({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => void refreshFeed()}
-            tintColor="#4361EE"
+            tintColor="#6d28d9"
           />
         }
         contentContainerStyle={[
@@ -506,8 +506,8 @@ export function NetworkUpdateCard({
           user={item.user ?? { name: "Alenio member", image: null }}
           size={36}
           radius={18}
-          backgroundColor="#EEF2FF"
-          textColor="#4361EE"
+          backgroundColor="#EFE9FF"
+          textColor="#6d28d9"
           resetKey={item.id}
         />
         <View style={styles.authorCopy}>
@@ -655,7 +655,7 @@ export function NetworkComments({ update }: { update: NetworkUpdate }) {
         <ActivityIndicator
           style={styles.commentsLoader}
           size="small"
-          color="#4361EE"
+          color="#6d28d9"
         />
       ) : comments.isError ? (
         <Pressable
@@ -683,8 +683,8 @@ export function NetworkComments({ update }: { update: NetworkUpdate }) {
               user={comment.author}
               size={28}
               radius={14}
-              backgroundColor="#EEF2FF"
-              textColor="#4361EE"
+              backgroundColor="#EFE9FF"
+              textColor="#6d28d9"
             />
             <View style={styles.commentBubble}>
               <View style={styles.commentMeta}>
@@ -896,7 +896,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
   },
   emptyActions: {
     alignSelf: "stretch",
@@ -918,7 +918,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
   },
   emptyActionCopy: {
     flex: 1,
@@ -954,7 +954,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 9,
     borderRadius: 10,
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
   },
   retryText: { fontSize: 13, fontWeight: "700", color: "#FFFFFF" },
   footerLoader: { paddingVertical: 18 },
@@ -1015,7 +1015,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
   },
   commentSendDisabled: { opacity: 0.4 },
 });

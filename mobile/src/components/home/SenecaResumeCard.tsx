@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ArrowUpRight, ChevronRight, MessageSquare } from "lucide-react-native";
 import { SenecaIcon } from "@/components/seneca/SenecaIcon";
+import { elevation, palette, tints } from "@/theme";
 
 export type SenecaResumeConversation = {
   id: string;
@@ -53,7 +54,7 @@ export function SenecaResumeCard({
           >
             <View style={styles.row}>
               <View style={styles.rowIcon}>
-                <MessageSquare size={16} color="#6D5EF8" strokeWidth={2.2} />
+                <MessageSquare size={16} color={tints.lavender.fg} strokeWidth={2.2} />
               </View>
               <View style={styles.rowCopy}>
                 <Text style={styles.rowTitle} numberOfLines={1}>
@@ -74,10 +75,7 @@ export function SenecaResumeCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
-    backgroundColor: "#F8F6FF",
-    borderWidth: 1,
-    borderColor: "#E4DFF8",
+    ...elevation.card,
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 12,
@@ -114,17 +112,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: palette.rowDivider,
+    backgroundColor: "#FAF9FE",
     paddingHorizontal: 10,
     paddingVertical: 9,
   },
   rowIcon: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F0EDFF",
+    backgroundColor: tints.lavender.bg,
   },
   rowCopy: {
     flex: 1,

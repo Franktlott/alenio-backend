@@ -131,7 +131,7 @@ function KeyPreview({ kind }: { kind: KeyItem["preview"] }) {
     return <ColorBar color={CALENDAR_EVENT_COLORS.outlook} />;
   if (kind === "video") {
     return (
-      <IconBadge backgroundColor="#EEF2FF">
+      <IconBadge backgroundColor="#EFE9FF">
         <Video
           size={12}
           color={CALENDAR_EVENT_COLORS.meeting}

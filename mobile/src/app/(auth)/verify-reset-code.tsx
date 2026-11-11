@@ -4,8 +4,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import { checkForgetPasswordOtp } from "@/lib/auth/auth-api";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import {
-  AUTH_CODE_INPUT_CLASS,
+  AUTH_CODE_INPUT_CLASS_DARK,
+  AUTH_PLACEHOLDER_DARK,
+  AuthCard,
   AuthField,
+  authGoBack,
   AuthHeading,
   AuthMessage,
   AuthPrimaryButton,
@@ -54,17 +57,25 @@ export default function VerifyResetCode() {
   };
 
   return (
-    <AuthScreen testID="verify-reset-code-screen">
+    <AuthScreen
+      testID="verify-reset-code-screen"
+      tone="dark"
+      onBack={authGoBack}
+      wrapContentInCard={false}
+    >
       <AuthHeading
-        title="Verify reset code"
+        badge="Check your email"
+        title="Verify reset"
+        titleAccent="code"
         subtitle={`Enter the code sent to ${emailNorm || "your email"}.`}
       />
+      <AuthCard>
 
           <AuthField label="Reset code">
             <TextInput
-              className={AUTH_CODE_INPUT_CLASS}
+              className={AUTH_CODE_INPUT_CLASS_DARK}
               placeholder="••••••"
-              placeholderTextColor="#98A1B2"
+              placeholderTextColor={AUTH_PLACEHOLDER_DARK}
               keyboardType="number-pad"
               maxLength={10}
               value={otp}
@@ -95,6 +106,7 @@ export default function VerifyResetCode() {
             onPress={() => router.push("/forgot-password")}
             testID="back-to-forgot-password-link"
           />
+      </AuthCard>
     </AuthScreen>
   );
 }

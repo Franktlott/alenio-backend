@@ -15,7 +15,7 @@ import type { USFederalHoliday } from "@/lib/us-federal-holidays";
 import { eventCalendarDayRange } from "@/lib/calendar-grid";
 import { isSameDay, startOfWeekSunday, toLocalIso } from "./workspace-utils";
 import { WS } from "./workspace-ui";
-import { colors, radii, space, surfaces } from "@/theme";
+import { colors, elevation, radii, space, surfaces } from "@/theme";
 import {
   CALENDAR_EVENT_COLORS,
   calendarEventSoftBackground,
@@ -438,6 +438,11 @@ export function CalendarCard({
       {...swipeResponder.panHandlers}
       style={{
         ...surfaces.groupedCard,
+        ...elevation.card,
+        borderRadius: 18,
+        // The grid sits inside the padding, so nothing needs clipping, and
+        // clipping would drop the card shadow on iOS.
+        overflow: "visible",
         flex: displayMode === "week" || expanded ? 1 : 0,
         flexGrow: displayMode === "week" || expanded ? 1 : 0,
         flexShrink: displayMode === "week" || expanded ? 1 : 0,

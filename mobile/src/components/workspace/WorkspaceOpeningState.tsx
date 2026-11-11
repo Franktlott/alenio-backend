@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 16,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
   },
   name: {
     marginTop: 16,

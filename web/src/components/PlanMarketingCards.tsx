@@ -12,10 +12,14 @@ export function PlanMarketingCards() {
       <section className="lp-plan lp-plan--popular" aria-labelledby="pricing-pro-heading">
         <div className="lp-plan-top">
           <h2 id="pricing-pro-heading">{pro.name}</h2>
-          <span className="lp-plan-pill">
-            <SiteIcon name="star" size={12} />
-            Most popular
-          </span>
+          {pro.comingSoon ? (
+            <span className="lp-plan-pill lp-plan-pill--soon">Coming soon</span>
+          ) : (
+            <span className="lp-plan-pill">
+              <SiteIcon name="star" size={12} />
+              Most popular
+            </span>
+          )}
         </div>
         <p className="lp-plan-tagline">{pro.bestFor}</p>
         <div className="lp-plan-price">
@@ -28,16 +32,28 @@ export function PlanMarketingCards() {
             <li key={label}>{label}</li>
           ))}
         </ul>
-        <Link to="/sign-up" className="lp-btn lp-btn--primary lp-btn--lg lp-btn--block lp-plan-cta">
-          Start 14-day trial
-          <SiteIcon name="arrow" size={18} />
-        </Link>
-        <p className="lp-plan-note">No card required · Choose {pro.name} anytime</p>
+        {pro.comingSoon ? (
+          <span className="lp-btn lp-btn--primary lp-btn--lg lp-btn--block lp-plan-cta is-disabled" aria-disabled="true">
+            Coming soon
+          </span>
+        ) : (
+          <Link to="/sign-up" className="lp-btn lp-btn--primary lp-btn--lg lp-btn--block lp-plan-cta">
+            Start 14-day trial
+            <SiteIcon name="arrow" size={18} />
+          </Link>
+        )}
+        <p className="lp-plan-note">
+          {pro.comingSoon ? "Not available for signup yet" : `No card required · Choose ${pro.name} anytime`}
+        </p>
       </section>
 
-      <section className="lp-plan" aria-labelledby="pricing-operations-heading">
+      <section
+        className={`lp-plan${operations.comingSoon ? " lp-plan--soon" : ""}`}
+        aria-labelledby="pricing-operations-heading"
+      >
         <div className="lp-plan-top">
           <h2 id="pricing-operations-heading">{operations.name}</h2>
+          {operations.comingSoon ? <span className="lp-plan-pill lp-plan-pill--soon">Coming soon</span> : null}
         </div>
         <p className="lp-plan-tagline">{operations.bestFor}</p>
         <div className="lp-plan-price">
@@ -50,11 +66,19 @@ export function PlanMarketingCards() {
             <li key={label}>{label}</li>
           ))}
         </ul>
-        <Link to="/sign-up" className="lp-btn lp-btn--outline lp-btn--lg lp-btn--block lp-plan-cta">
-          Start 14-day {operations.name} trial
-          <SiteIcon name="arrow" size={18} />
-        </Link>
-        <p className="lp-plan-note">No card required · Includes Alenio Go</p>
+        {operations.comingSoon ? (
+          <span className="lp-btn lp-btn--outline lp-btn--lg lp-btn--block lp-plan-cta is-disabled" aria-disabled="true">
+            Coming soon
+          </span>
+        ) : (
+          <Link to="/sign-up" className="lp-btn lp-btn--outline lp-btn--lg lp-btn--block lp-plan-cta">
+            Start 14-day {operations.name} trial
+            <SiteIcon name="arrow" size={18} />
+          </Link>
+        )}
+        <p className="lp-plan-note">
+          {operations.comingSoon ? "Not available for signup yet" : "No card required · Includes Alenio Go"}
+        </p>
       </section>
     </div>
   );

@@ -256,13 +256,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
   },
   ctaText: {
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "800",
-    color: "#4361EE",
+    color: "#6d28d9",
   },
   dismiss: {
     position: "absolute",

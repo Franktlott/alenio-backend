@@ -56,7 +56,7 @@ import {
   useAuthLoadingSequence,
 } from "@/components/auth-loading";
 import {
-  AUTH_INPUT_CLASS,
+  AUTH_INPUT_CLASS_DARK,
   AuthCard,
   AuthField,
   AuthHeading,
@@ -307,23 +307,25 @@ export default function SignUp() {
       testID="sign-up-screen"
       onBack={authGoBack}
       wrapContentInCard={false}
+      tone="dark"
     >
       <AuthHeading
         badge="Let's get started"
-        badgeIcon={<UsersRound size={14} color="#6741E6" strokeWidth={2.2} />}
-        title="Create your account"
-        subtitle="Connect with your people and get started."
+        badgeIcon={<UsersRound size={13} color="#E4D8FF" strokeWidth={2.2} />}
+        title="Join"
+        titleAccent="Alenio"
+        subtitle="Free to join the network. Start a 14-day workspace trial anytime."
       />
 
       <AuthCard>
         <AuthField
           label="Full name"
-          icon={<UserRound size={20} color="#593CE6" strokeWidth={1.9} />}
+          icon={<UserRound size={20} color="#c4b5fd" strokeWidth={1.9} />}
         >
           <TextInput
-            className={AUTH_INPUT_CLASS}
+            className={AUTH_INPUT_CLASS_DARK}
             placeholder="Your name"
-            placeholderTextColor="#98A1B2"
+            placeholderTextColor="rgba(255,255,255,0.42)"
             autoCapitalize="words"
             autoComplete="name"
             value={name}
@@ -338,12 +340,12 @@ export default function SignUp() {
 
         <AuthField
           label="Email address"
-          icon={<Mail size={20} color="#593CE6" strokeWidth={1.9} />}
+          icon={<Mail size={20} color="#c4b5fd" strokeWidth={1.9} />}
         >
           <TextInput
-            className={AUTH_INPUT_CLASS}
+            className={AUTH_INPUT_CLASS_DARK}
             placeholder="you@example.com"
-            placeholderTextColor="#98A1B2"
+            placeholderTextColor="rgba(255,255,255,0.42)"
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
@@ -357,7 +359,7 @@ export default function SignUp() {
             testID="email-input"
           />
           {inviteEmailLocked ? (
-            <Text className="text-xs text-slate-400 mt-2">
+            <Text className="text-xs text-white/55 mt-2">
               This invite is locked to {emailFromInvite.trim().toLowerCase()}.
             </Text>
           ) : null}
@@ -365,14 +367,14 @@ export default function SignUp() {
 
         <AuthField
           label="Password"
-          icon={<LockKeyhole size={20} color="#593CE6" strokeWidth={1.9} />}
+          icon={<LockKeyhole size={20} color="#c4b5fd" strokeWidth={1.9} />}
         >
           <View style={{ position: "relative" }}>
             <TextInput
-              className={AUTH_INPUT_CLASS}
+              className={AUTH_INPUT_CLASS_DARK}
               style={{ paddingRight: 48 }}
               placeholder="Create a password"
-              placeholderTextColor="#98A1B2"
+              placeholderTextColor="rgba(255,255,255,0.42)"
               secureTextEntry={!showPassword}
               autoComplete="new-password"
               value={password}
@@ -395,21 +397,20 @@ export default function SignUp() {
               testID="toggle-password-visibility"
             >
               {showPassword ? (
-                <EyeOff size={18} color="#94A3B8" />
+                <EyeOff size={18} color="rgba(255,255,255,0.6)" />
               ) : (
-                <Eye size={18} color="#94A3B8" />
+                <Eye size={18} color="rgba(255,255,255,0.6)" />
               )}
             </TouchableOpacity>
           </View>
           <View className="mt-2 flex-row items-center">
             <CheckCircle2
               size={13}
-              color={password.length >= 8 ? "#25B978" : "#A3AABC"}
-              fill={password.length >= 8 ? "#EAF9F3" : "transparent"}
+              color={password.length >= 8 ? "#6EE7B7" : "rgba(255,255,255,0.45)"}
             />
             <Text
               className={`ml-1.5 text-[11px] ${
-                password.length >= 8 ? "text-[#32866A]" : "text-[#7E8798]"
+                password.length >= 8 ? "text-[#6EE7B7]" : "text-white/55"
               }`}
             >
               Use 8+ characters
@@ -419,15 +420,15 @@ export default function SignUp() {
 
         <AuthField
           label="Confirm password"
-          icon={<LockKeyhole size={20} color="#593CE6" strokeWidth={1.9} />}
+          icon={<LockKeyhole size={20} color="#c4b5fd" strokeWidth={1.9} />}
           className="mb-6"
         >
           <View style={{ position: "relative" }}>
             <TextInput
-              className={AUTH_INPUT_CLASS}
+              className={AUTH_INPUT_CLASS_DARK}
               style={{ paddingRight: 48 }}
               placeholder="Confirm your password"
-              placeholderTextColor="#98A1B2"
+              placeholderTextColor="rgba(255,255,255,0.42)"
               secureTextEntry={!showConfirmPassword}
               autoComplete="new-password"
               value={confirmPassword}
@@ -451,9 +452,9 @@ export default function SignUp() {
               testID="toggle-confirm-password-visibility"
             >
               {showConfirmPassword ? (
-                <EyeOff size={18} color="#94A3B8" />
+                <EyeOff size={18} color="rgba(255,255,255,0.6)" />
               ) : (
-                <Eye size={18} color="#94A3B8" />
+                <Eye size={18} color="rgba(255,255,255,0.6)" />
               )}
             </TouchableOpacity>
           </View>
@@ -474,22 +475,22 @@ export default function SignUp() {
         />
 
         <View className="my-6 flex-row items-center">
-          <View className="h-px flex-1 bg-[#E2E4EA]" />
-          <Text className="mx-3 text-[10px] font-medium uppercase text-[#7F8796]">
+          <View className="h-px flex-1 bg-white/15" />
+          <Text className="mx-3 text-[11px] font-medium text-white/50">
             or
           </Text>
-          <View className="h-px flex-1 bg-[#E2E4EA]" />
+          <View className="h-px flex-1 bg-white/15" />
         </View>
 
         <TouchableOpacity
-          className="h-[54px] flex-row items-center justify-center rounded-[14px] border border-[#DFE1E9] bg-white"
+          className="h-[54px] flex-row items-center justify-center rounded-[14px] border border-white/20 bg-white/5"
           onPress={handleMicrosoft}
           disabled={loading || microsoftLoading}
           activeOpacity={0.8}
           testID="sign-up-microsoft"
         >
           {microsoftLoading ? (
-            <ActivityIndicator color="#4361EE" />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
             <>
               <View className="mr-5 h-[22px] w-[22px] flex-row flex-wrap gap-[2px]">
@@ -498,7 +499,7 @@ export default function SignUp() {
                 <View className="h-[10px] w-[10px] bg-[#00A4EF]" />
                 <View className="h-[10px] w-[10px] bg-[#FFB900]" />
               </View>
-              <Text className="text-[15px] font-semibold text-[#172033]">
+              <Text className="text-[15px] font-semibold text-white">
                 Continue with Microsoft
               </Text>
             </>
@@ -506,49 +507,49 @@ export default function SignUp() {
         </TouchableOpacity>
 
         <View className="mt-7 flex-row items-center justify-center">
-          <Text className="text-[13px] text-[#687386]">
+          <Text className="text-[13px] text-white/70">
             Already have an account?{" "}
           </Text>
           <TouchableOpacity
             onPress={() => router.push("/sign-in")}
             testID="sign-in-link"
           >
-            <Text className="text-[13px] font-bold text-[#4F35D9]">
+            <Text className="text-[13px] font-bold text-[#c4b5fd]">
               Sign in
             </Text>
           </TouchableOpacity>
         </View>
 
         <View className="mt-8 flex-row flex-wrap items-center justify-center gap-1">
-          <Text className="text-[11px] text-[#7F8796]">
+          <Text className="text-[11px] text-white/45">
             By continuing you agree to our
           </Text>
           <TouchableOpacity
             onPress={() => router.push("/terms-of-service")}
             testID="terms-link"
           >
-            <Text className="text-[11px] font-medium text-[#4F35D9]">
+            <Text className="text-[11px] font-medium text-[#c4b5fd]">
               Terms of Service
             </Text>
           </TouchableOpacity>
-          <Text className="text-[11px] text-[#7F8796]">and</Text>
+          <Text className="text-[11px] text-white/45">and</Text>
           <TouchableOpacity
             onPress={() => router.push("/privacy-policy")}
             testID="privacy-link"
           >
-            <Text className="text-[11px] font-medium text-[#4F35D9]">
+            <Text className="text-[11px] font-medium text-[#c4b5fd]">
               Privacy Policy
             </Text>
           </TouchableOpacity>
         </View>
         <Text
-          className="mt-3 px-4 text-center text-[10px] text-[#8C94A3]"
+          className="mt-3 px-4 text-center text-[10px] text-white/40"
         >
           {LEGAL_APP_NAME} is operated by {LEGAL_COMPANY_NAME}. Parent company:{" "}
           {LEGAL_PARENT_COMPANY_NAME}.
         </Text>
         <Text
-          className="mt-5 text-center text-[11px] text-[#8C94A3]"
+          className="mt-5 text-center text-[11px] text-white/35"
         >
           © 2026 Alenio Insights
         </Text>

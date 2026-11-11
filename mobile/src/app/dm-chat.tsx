@@ -109,6 +109,7 @@ import {
 } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { PresenceStatus } from "@/components/PresenceStatus";
+import { formatRelativeTime } from "@/components/activity/types";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 import { GroupManageModals } from "@/components/GroupManageModals";
 import {
@@ -582,6 +583,7 @@ export function DmThread({
         image: currentConversation?.image ?? (recipientImage?.trim() || null),
         isWorkplaceConnected: false,
         activeNow: false,
+        lastActiveAt: null as string | null,
       };
     }
     const other = currentConversation
@@ -598,6 +600,7 @@ export function DmThread({
       image: other?.image ?? (recipientImage?.trim() || null),
       isWorkplaceConnected: other?.isWorkplaceConnected ?? false,
       activeNow: other?.activeNow ?? false,
+      lastActiveAt: other?.lastActiveAt ?? null,
     };
   }, [
     currentConversation,
@@ -1326,18 +1329,27 @@ export function DmThread({
               >
                 {headerUser.name}
               </Text>
-              {!isGroup && headerUser.activeNow ? (
+              {isGroup ? (
+                <Text style={{ color: "#8994A6", fontSize: 11, lineHeight: 14 }}>
+                  {groupWorkspace ?? "Group chat"}
+                </Text>
+              ) : headerUser.activeNow ? (
                 <PresenceStatus
                   activeNow
                   color="#22A06B"
                   textStyle={{ fontSize: 11, lineHeight: 14, color: "#22A06B" }}
                   testID="dm-header-presence"
                 />
+              ) : headerUser.lastActiveAt ? (
+                <Text
+                  style={{ color: "#8994A6", fontSize: 11, lineHeight: 14 }}
+                  testID="dm-header-last-active"
+                >
+                  Active {formatRelativeTime(headerUser.lastActiveAt)}
+                </Text>
               ) : (
                 <Text style={{ color: "#8994A6", fontSize: 11, lineHeight: 14 }}>
-                  {isGroup
-                    ? (groupWorkspace ?? "Group chat")
-                    : "Direct message"}
+                  Direct message
                 </Text>
               )}
             </View>
@@ -2296,7 +2308,7 @@ export function DmThread({
                   </View>
                 ) : null
               }
-              renderItem={({ item }) => {
+              renderItem={({ item, index }) => {
                 if ("type" in item && item.type === "date") {
                   return (
                     <View className="items-center my-3">
@@ -2310,6 +2322,13 @@ export function DmThread({
                 }
                 const msg = item as DirectMessage;
                 const isOwn = msg.senderId === currentUserId;
+                // listData is newest-first + inverted, so index-1 is the newer neighbor.
+                const newer = index > 0 ? listData[index - 1] : null;
+                const showAvatar =
+                  !isOwn &&
+                  (!newer ||
+                    ("type" in newer && newer.type === "date") ||
+                    (!("type" in newer) && newer.senderId !== msg.senderId));
                 return (
                   <ReanimatedSwipeable
                     key={msg.id}
@@ -2365,6 +2384,7 @@ export function DmThread({
                             : undefined
                         }
                         isOwn={isOwn}
+                        showAvatar={showAvatar}
                         currentUserId={currentUserId}
                         interactive={false}
                         onReactionTap={(reactions) =>
@@ -2779,6 +2799,7 @@ export function DmThread({
             }}
             createdAt={messageMenu.message.createdAt}
             isOwn={messageMenu.message.senderId === currentUserId}
+            showAvatar={messageMenu.message.senderId !== currentUserId}
             currentUserId={currentUserId}
             interactive={false}
             onReactionTap={() => {}}

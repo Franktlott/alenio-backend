@@ -1051,7 +1051,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     fontWeight: "700",
-    color: "#4361EE",
+    color: "#6d28d9",
   },
   join: {
     flexDirection: "row",
@@ -1061,7 +1061,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 32,
     borderRadius: radii.full,
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
     marginRight: 4,
     flexShrink: 0,
   },

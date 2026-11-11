@@ -13,6 +13,8 @@ export type PublicPlan = {
   interval: string;
   priceLabel: string;
   periodLabel: string;
+  /** When true, choose-plan and pricing treat the plan as unavailable. */
+  comingSoon: boolean;
 };
 
 /** Shown until the server answers, and if it can't be reached. Prices are edited in Admin tools. */
@@ -27,6 +29,7 @@ export const FALLBACK_PLANS: Record<PlanKey, PublicPlan> = {
     interval: "month",
     priceLabel: "$39.99",
     periodLabel: "per workspace / month",
+    comingSoon: false,
   },
   operations: {
     key: "operations",
@@ -38,6 +41,7 @@ export const FALLBACK_PLANS: Record<PlanKey, PublicPlan> = {
     interval: "month",
     priceLabel: "$69.99",
     periodLabel: "per workspace / month",
+    comingSoon: true,
   },
 };
 
@@ -51,7 +55,13 @@ export function usePlans(): Record<PlanKey, PublicPlan> {
   });
   const out = { ...FALLBACK_PLANS };
   for (const plan of data ?? []) {
-    if (plan.key === "pro" || plan.key === "operations") out[plan.key] = plan;
+    if (plan.key === "pro" || plan.key === "operations") {
+      out[plan.key] = {
+        ...FALLBACK_PLANS[plan.key],
+        ...plan,
+        comingSoon: plan.comingSoon ?? FALLBACK_PLANS[plan.key].comingSoon,
+      };
+    }
   }
   return out;
 }

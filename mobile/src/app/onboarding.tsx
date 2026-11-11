@@ -19,7 +19,6 @@ import {
   Building2,
   Camera,
   CheckCircle2,
-  ChevronRight,
   Clock3,
   ScanLine,
   ShieldCheck,
@@ -41,6 +40,17 @@ import {
   AlenioSheetIcon,
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
+import {
+  AlenioList,
+  AlenioListRow,
+  AppText,
+  Button,
+  Card,
+  IconTile,
+  PanelHeader,
+  tintInk,
+} from "@/components/ui";
+import { palette } from "@/theme";
 import { uploadFile } from "@/lib/upload";
 import { BillingPortalWebViewModal } from "@/components/BillingPortalWebViewModal";
 import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
@@ -531,51 +541,42 @@ export default function OnboardingScreen() {
           ? "Point your camera at a workspace invitation."
           : "Connect with your organization";
 
+  const submitLabel = isCoolingDown
+    ? `Wait ${Math.max(1, Math.ceil((cooldownUntilMs - Date.now()) / 1000))}s`
+    : mode === "create"
+      ? createStep === 1
+        ? "Continue"
+        : canStartWorkspaceTrial
+          ? "Start 14-Day Trial"
+          : paidCheckoutId
+            ? "Check Workspace Status"
+            : "Continue to Secure Checkout"
+      : "Join workspace";
+
   const sheetFooter = (
     <>
-      <TouchableOpacity
+      <Button
+        variant="primary"
+        size="lg"
+        fullWidth
+        label={submitLabel}
+        loading={createMutation.isPending || joinMutation.isPending || isFinalizingCheckout}
+        disabled={isLoading || isCoolingDown}
         onPress={handleSubmit}
-        disabled={isLoading}
-        style={[
-          alenioSheetStyles.primaryButton,
-          mode === "join" ? styles.joinPrimaryButton : null,
-          isLoading ? alenioSheetStyles.primaryButtonDisabled : null,
-        ]}
         testID="submit-button"
-        activeOpacity={0.92}
-      >
-        {createMutation.isPending || joinMutation.isPending || isFinalizingCheckout ? (
-          <ActivityIndicator color="white" />
-        ) : isCoolingDown ? (
-          <Text style={alenioSheetStyles.primaryButtonText}>
-            Wait {Math.max(1, Math.ceil((cooldownUntilMs - Date.now()) / 1000))}s
-          </Text>
-        ) : (
-          <Text style={alenioSheetStyles.primaryButtonText}>
-            {mode === "create"
-              ? createStep === 1
-                ? "Continue"
-                : canStartWorkspaceTrial
-                  ? "Start 14-Day Trial"
-                  : paidCheckoutId
-                    ? "Check Workspace Status"
-                    : "Continue to Secure Checkout"
-              : "Join workspace"}
-          </Text>
-        )}
-      </TouchableOpacity>
+      />
       {mode === "create" && createStep === 2 ? (
-        <TouchableOpacity
+        <Button
+          variant="ghost"
+          size="md"
+          fullWidth
+          label="Back"
           onPress={() => {
             setCreateStep(1);
             setError(null);
           }}
-          style={alenioSheetStyles.cancelButton}
           testID="onboarding-back"
-          activeOpacity={0.8}
-        >
-          <Text style={alenioSheetStyles.cancelButtonText}>Back</Text>
-        </TouchableOpacity>
+        />
       ) : null}
     </>
   );
@@ -732,24 +733,22 @@ export default function OnboardingScreen() {
         </AlenioSheetCard>
       ) : (
         <>
-          <View style={styles.joinCodeCard}>
-            <View style={styles.joinCardHeader}>
-              <View style={styles.joinIcon}>
-                <Users size={16} color="white" />
-              </View>
-              <View style={styles.joinCardCopy}>
-                <Text style={styles.joinCardTitle}>Join with invite code</Text>
-                <Text style={styles.joinCardSubtitle}>
-                  Enter the code shared by your team admin.
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.joinFieldLabel}>INVITE CODE</Text>
+          <Card>
+            <PanelHeader
+              tint="lavender"
+              icon={<Users size={16} color={tintInk("lavender")} strokeWidth={2.2} />}
+              title="Join with invite code"
+              subtitle="Enter the code shared by your team admin."
+              style={{ marginBottom: 12 }}
+            />
+            <AppText variant="sectionLabel" color={palette.violet} style={{ marginBottom: 6 }}>
+              Invite code
+            </AppText>
             <TextInput
               ref={inviteCodeInputRef}
               style={styles.joinCodeInput}
               placeholder="E.G. L7MGHETS"
-              placeholderTextColor="#A7AEC0"
+              placeholderTextColor={palette.inkMuted}
               autoCapitalize="characters"
               autoCorrect={false}
               autoComplete="off"
@@ -764,29 +763,28 @@ export default function OnboardingScreen() {
               maxLength={INVITE_CODE_MAX_LENGTH}
               testID="invite-code-input"
             />
-            <Text style={styles.joinCodeHint}>Codes are letters and numbers only</Text>
-          </View>
+            <AppText variant="supporting" style={{ marginTop: 6 }}>
+              Codes are letters and numbers only
+            </AppText>
+          </Card>
 
           {!isDirectCodeEntry ? (
-            <TouchableOpacity
-              onPress={openScanner}
-              activeOpacity={0.86}
-              style={styles.scanCard}
-              testID="scan-qr-button"
-            >
-              <View style={styles.scanIcon}>
-                    <ScanLine size={16} color="white" />
-              </View>
-              <View style={styles.joinCardCopy}>
-                    <Text style={styles.joinCardTitle}>Scan QR code</Text>
-                    <Text style={styles.joinCardSubtitle}>
-                      Point at your team QR code to join automatically.
-                    </Text>
-              </View>
-              <View style={styles.scanChevron}>
-                <ChevronRight size={17} color="#64748B" strokeWidth={2.2} />
-              </View>
-            </TouchableOpacity>
+            <View style={styles.scanListWrap}>
+              <AlenioList>
+                <AlenioListRow
+                  leading={
+                    <IconTile tint="lavender">
+                      <ScanLine size={16} color={tintInk("lavender")} strokeWidth={2.2} />
+                    </IconTile>
+                  }
+                  title="Scan QR code"
+                  subtitle="Point at your team QR code to join automatically."
+                  onPress={openScanner}
+                  chevron
+                  testID="scan-qr-button"
+                />
+              </AlenioList>
+            </View>
           ) : null}
         </>
       )}
@@ -794,11 +792,15 @@ export default function OnboardingScreen() {
       {error ? (
         <View style={styles.joinErrorBox}>
           <View style={styles.joinErrorIcon}>
-            <AlertCircle size={16} color="#DC2626" strokeWidth={2.2} />
+            <AlertCircle size={14} color="#DC2626" strokeWidth={2.2} />
           </View>
           <View style={styles.joinErrorCopy}>
-            <Text style={styles.joinErrorTitle}>We couldn’t find that workspace</Text>
-            <Text style={styles.joinErrorText}>{error}</Text>
+            <AppText variant="rowTitle" color="#B91C1C">
+              We couldn’t find that workspace
+            </AppText>
+            <AppText variant="supporting" color="#C24141" style={{ marginTop: 2 }}>
+              {error}
+            </AppText>
           </View>
         </View>
       ) : null}
@@ -813,14 +815,14 @@ export default function OnboardingScreen() {
       subtitle="Workspace leaders can now review your request."
       onClose={handleClose}
       footer={
-        <TouchableOpacity
+        <Button
+          variant="primary"
+          size="lg"
+          fullWidth
+          label="Done"
           onPress={handleClose}
-          style={alenioSheetStyles.primaryButton}
-          activeOpacity={0.92}
           testID="join-request-sent-done"
-        >
-          <Text style={alenioSheetStyles.primaryButtonText}>Done</Text>
-        </TouchableOpacity>
+        />
       }
       testID="join-request-sent-sheet"
     >
@@ -847,44 +849,27 @@ export default function OnboardingScreen() {
       onClose={handleClose}
       footer={
         <>
-          <TouchableOpacity
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            label={joinMutation.isPending ? "Sending request…" : "Send join request"}
+            loading={joinMutation.isPending}
+            disabled={joinMutation.isPending}
             onPress={() => {
               setError(null);
               joinMutation.mutate(scannedWorkspace.code);
             }}
-            disabled={joinMutation.isPending}
-            style={[
-              alenioSheetStyles.primaryButton,
-              joinMutation.isPending
-                ? alenioSheetStyles.primaryButtonDisabled
-                : null,
-            ]}
-            activeOpacity={0.92}
             testID="confirm-scanned-workspace"
-          >
-            {joinMutation.isPending ? (
-              <View style={styles.sendingRequestRow}>
-                <ActivityIndicator color="#FFFFFF" size="small" />
-                <Text style={alenioSheetStyles.primaryButtonText}>
-                  Sending request…
-                </Text>
-              </View>
-            ) : (
-              <Text style={alenioSheetStyles.primaryButtonText}>
-                Send join request
-              </Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={scanAgain}
+          />
+          <Button
+            variant="ghost"
+            size="md"
+            fullWidth
+            label="Scan a different code"
             disabled={joinMutation.isPending}
-            style={alenioSheetStyles.cancelButton}
-            activeOpacity={0.8}
-          >
-            <Text style={alenioSheetStyles.cancelButtonText}>
-              Scan a different code
-            </Text>
-          </TouchableOpacity>
+            onPress={scanAgain}
+          />
         </>
       }
       testID="confirm-scanned-workspace-sheet"
@@ -927,22 +912,20 @@ export default function OnboardingScreen() {
       onClose={handleClose}
       footer={
         <>
-          <TouchableOpacity
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            label="Scan again"
             onPress={scanAgain}
-            style={alenioSheetStyles.primaryButton}
-            activeOpacity={0.92}
-          >
-            <Text style={alenioSheetStyles.primaryButtonText}>Scan again</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          />
+          <Button
+            variant="ghost"
+            size="md"
+            fullWidth
+            label="Enter code manually"
             onPress={enterCodeFromScanner}
-            style={alenioSheetStyles.cancelButton}
-            activeOpacity={0.8}
-          >
-            <Text style={alenioSheetStyles.cancelButtonText}>
-              Enter code manually
-            </Text>
-          </TouchableOpacity>
+          />
         </>
       }
     >
@@ -1182,12 +1165,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: "#7C8798",
   },
-  sendingRequestRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-  },
   modeToggle: {
     flexDirection: "row",
     backgroundColor: WELCOME_UI.pageBg,
@@ -1213,114 +1190,21 @@ const styles = StyleSheet.create({
   modeOptionTextActive: {
     color: "#FFFFFF",
   },
-  joinCodeCard: {
-    padding: 15,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E5E7F0",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#27305F",
-    shadowOffset: { width: 0, height: 7 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 3,
-  },
-  joinCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-    marginBottom: 17,
-  },
-  joinIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#6D4AFF",
-    shadowColor: "#6D4AFF",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.25,
-    shadowRadius: 9,
-    elevation: 3,
-  },
-  joinCardCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  joinCardTitle: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: "800",
-    color: "#151B32",
-  },
-  joinCardSubtitle: {
-    marginTop: 2,
-    fontSize: 11,
-    lineHeight: 15,
-    color: "#7B8499",
-  },
-  joinFieldLabel: {
-    marginBottom: 7,
-    fontSize: 9,
-    lineHeight: 12,
-    fontWeight: "800",
-    letterSpacing: 1.15,
-    color: "#6D4AFF",
-  },
   joinCodeInput: {
-    height: 50,
-    borderRadius: 13,
-    borderWidth: 1.5,
-    borderColor: "#D9DDEC",
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E4E0EF",
     paddingHorizontal: 14,
-    backgroundColor: "#FAFBFF",
-    fontSize: 16,
+    backgroundColor: "#FFFFFF",
+    fontSize: 15,
     lineHeight: 20,
     fontWeight: "700",
-    letterSpacing: 2,
-    color: "#151B32",
+    letterSpacing: 1.6,
+    color: palette.ink,
   },
-  joinCodeHint: {
-    marginTop: 7,
-    marginLeft: 2,
-    fontSize: 9.5,
-    lineHeight: 13,
-    color: "#9AA2B4",
-  },
-  scanCard: {
-    minHeight: 66,
-    marginTop: 11,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: "#E5E7F0",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#27305F",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
-    elevation: 2,
-  },
-  scanIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#4361EE",
-  },
-  scanChevron: {
-    width: 28,
-    height: 28,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F4F6FB",
+  scanListWrap: {
+    marginTop: 10,
   },
   joinErrorBox: {
     marginTop: 11,
@@ -1328,7 +1212,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
-    borderRadius: 15,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#FED7D7",
     backgroundColor: "#FFF7F7",
@@ -1344,28 +1228,6 @@ const styles = StyleSheet.create({
   joinErrorCopy: {
     flex: 1,
     minWidth: 0,
-  },
-  joinErrorTitle: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "800",
-    color: "#B91C1C",
-  },
-  joinErrorText: {
-    marginTop: 2,
-    fontSize: 10,
-    lineHeight: 15,
-    color: "#C24141",
-  },
-  joinPrimaryButton: {
-    minHeight: 50,
-    borderRadius: 15,
-    backgroundColor: "#536DFE",
-    shadowColor: "#4361EE",
-    shadowOffset: { width: 0, height: 7 },
-    shadowOpacity: 0.25,
-    shadowRadius: 13,
-    elevation: 4,
   },
   logoPicker: {
     minHeight: 58,

@@ -72,8 +72,8 @@ export function UpdateCommentRow({
         user={{ name, image: comment.author.image }}
         size={size}
         radius={size / 2}
-        backgroundColor="#EEF2FF"
-        textColor="#4361EE"
+        backgroundColor="#EFE9FF"
+        textColor="#6d28d9"
         fontSize={compact ? (inset ? 10 : 11.5) : inset ? 11 : 13}
         workplaceConnected={false}
       />

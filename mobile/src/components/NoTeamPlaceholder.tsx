@@ -34,7 +34,7 @@ export function NoTeamPlaceholder() {
       </Text>
 
       {isLoading ? (
-        <ActivityIndicator color="#4361EE" />
+        <ActivityIndicator color="#6d28d9" />
       ) : hasPending ? (
         <Pressable
           onPress={() => router.push("/(app)/team")}
@@ -60,7 +60,7 @@ export function NoTeamPlaceholder() {
         <Pressable
           onPress={() => router.push("/onboarding")}
           style={{
-            backgroundColor: "#4361EE",
+            backgroundColor: "#6d28d9",
             paddingHorizontal: 28,
             paddingVertical: 14,
             borderRadius: 14,

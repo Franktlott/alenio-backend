@@ -1,15 +1,15 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
+import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
+import { setStatusBarStyle } from "expo-status-bar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MessageCircle,
@@ -17,9 +17,13 @@ import {
   UserMinus,
   UserPlus,
 } from "lucide-react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AlenioHeaderBrand } from "@/components/AlenioHeaderBrand";
+import { AppHeaderBand } from "@/components/AppHeaderBand";
+import { gradients, palette, tints } from "@/theme";
+import { PanelHeader, tintInk } from "@/components/ui";
+import { cardSurface } from "@/components/home/home-card-styles";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { HomeTodayCard } from "@/components/home/HomeTodayCard";
 import { NoWorkspaceHome } from "@/components/home/NoWorkspaceHome";
@@ -60,15 +64,27 @@ import type {
 /** Widest the two columns together are allowed to get before they centre. */
 const HOME_SPLIT_MAX_WIDTH = 940;
 
-/** Same mountain, three lights. The header follows the greeting's clock. */
-const HERO_IMAGE_MORNING = require("@/assets/alenio-home-hero-morning.jpg");
-const HERO_IMAGE_AFTERNOON = require("@/assets/alenio-home-hero-afternoon.jpg");
-const HERO_IMAGE_EVENING = require("@/assets/alenio-home-hero-sunset.jpg");
+/** How far the first card rises into the purple band. */
+const BAND_CARD_OVERLAP = 28;
+/** The gap the cards keep below the greeting (todaySlot / hero margin). */
+const FIRST_CARD_GAP = 12;
 
-function heroImageForHour(hour: number) {
-  if (hour < 12) return HERO_IMAGE_MORNING;
-  if (hour < 17) return HERO_IMAGE_AFTERNOON;
-  return HERO_IMAGE_EVENING;
+function GradientName({ children, style }: { children: string; style: object[] }) {
+  return (
+    <MaskedView
+      style={{ flexShrink: 1 }}
+      maskElement={<Text style={[...style, { backgroundColor: "transparent" }]}>{children}</Text>}
+    >
+      <LinearGradient
+        colors={[...gradients.brandText]}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0.2 }}
+      >
+        <Text style={[...style, { opacity: 0 }]}>{children}</Text>
+      </LinearGradient>
+    </MaskedView>
+  );
 }
 
 /** How far back a waiting update can be. An unread message stays until it is read. */
@@ -203,12 +219,12 @@ function HomeUpdateRow({
             user={update.person}
             size={40}
             radius={20}
-            backgroundColor="#EEF2FF"
+            backgroundColor={tints.lavender.bg}
             resetKey={update.id}
           />
         ) : (
           <View style={styles.happeningIcon}>
-            <UpdateIcon size={16} color="#6947E8" strokeWidth={2.2} />
+            <UpdateIcon size={16} color={tints.lavender.fg} strokeWidth={2.2} />
           </View>
         )}
         <View style={styles.happeningCopy}>
@@ -693,69 +709,121 @@ export default function HomeScreen() {
       : homeUpdates;
   const waitingBlock =
     waitingUpdates.length > 0 ? (
-      <View testID="home-waiting-list">
+      <View style={styles.waitingCard} testID="home-waiting-list">
+        <PanelHeader
+          eyebrow="Waiting for you"
+          title={
+            waitingUpdates.length === 1
+              ? "1 new update"
+              : `${waitingUpdates.length} new updates`
+          }
+          tint="peach"
+          icon={<MessageCircle size={16} color={tintInk("peach")} strokeWidth={2.2} />}
+          style={{ marginBottom: 2 }}
+        />
         {waitingUpdates.map((update, index) => (
           <HomeUpdateRow key={update.id} update={update} index={index} />
         ))}
       </View>
     ) : null;
-  /** The scenic header is the same for everyone, workspace or not. */
-  const showMountainHeader = true;
-  /** The photo runs from the top of the screen, behind the Alenio bar and
-   * the greeting, then dissolves into the white page before the cards. */
-  const heroBackdrop = showMountainHeader ? (
-    <View
-      pointerEvents="none"
-      style={[styles.heroBackdrop, { height: insets.top + 198 }]}
-    >
-      <Image
-        source={heroImageForHour(new Date().getHours())}
-        style={styles.heroBackdropImage}
-        resizeMode="cover"
-        accessibilityIgnoresInvertColors
-      />
-      <LinearGradient
-        colors={[
-          "rgba(255,255,255,0)",
-          "rgba(255,255,255,0.26)",
-          "rgba(255,255,255,0.68)",
-          "#FFFFFF",
-        ]}
-        locations={[0, 0.36, 0.7, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={styles.heroBackdropFade}
-      />
-    </View>
-  ) : null;
+
+  const unreadMessages = conversations.reduce(
+    (total, conversation) =>
+      total + Math.max(0, getDmUnreadCount(dmUnreadCounts ?? {}, conversation.id)),
+    0,
+  );
+  const openToday = todayItems.filter(
+    (item) => item.type !== "holiday" && !("done" in item && item.done),
+  ).length;
+  const glanceChips = [
+    teams.length > 0
+      ? { key: "today", value: openToday, label: "today", dot: "#a78bfa" }
+      : null,
+    unreadMessages > 0
+      ? {
+          key: "messages",
+          value: unreadMessages,
+          label: unreadMessages === 1 ? "new message" : "new messages",
+          dot: "#f472b6",
+        }
+      : null,
+    connections
+      ? {
+          key: "connections",
+          value: connections.accepted.length,
+          label: connections.accepted.length === 1 ? "connection" : "connections",
+          dot: "#22d3ee",
+        }
+      : null,
+  ].filter((chip) => chip !== null);
+
+  /**
+   * The band ends a little below the greeting, so the first card rises into
+   * it. Measured in window coordinates because the band is fixed behind the
+   * scroll view while the greeting lives inside it.
+   */
+  const greetingRef = useRef<View>(null);
+  const scrollY = useRef(0);
+  const [bandHeight, setBandHeight] = useState(0);
+  const measureBand = useCallback(() => {
+    greetingRef.current?.measureInWindow((_x, y, _width, height) => {
+      if (height <= 0) return;
+      const next = Math.round(
+        y + scrollY.current + height + FIRST_CARD_GAP + BAND_CARD_OVERLAP,
+      );
+      setBandHeight((current) => (Math.abs(current - next) > 1 ? next : current));
+    });
+  }, []);
+
+  /** The band is dark, so the status bar text is light while Home is in front. */
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle("light");
+      return () => setStatusBarStyle("dark");
+    }, []),
+  );
+
+  const heroBackdrop = (
+    <AppHeaderBand height={bandHeight > 0 ? bandHeight : insets.top + 250} />
+  );
+
+  const dateEyebrow = new Date()
+    .toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
+    .toUpperCase();
+  const greetingStyle = [
+    styles.greeting,
+    bodyWidth > 0 && bodyWidth < 420 ? styles.greetingCompact : null,
+  ].filter(Boolean) as object[];
 
   const headerBlock = (
     <View
-      style={[
-        styles.greetingBlock,
-        showMountainHeader ? styles.greetingBlockHero : null,
-      ]}
+      ref={greetingRef}
+      onLayout={measureBand}
+      style={styles.greetingBlock}
       testID="home-greeting-card"
     >
-      <View style={showMountainHeader ? styles.greetingCopy : null}>
-        <Text
-          style={[
-            styles.greeting,
-            bodyWidth > 0 && bodyWidth < 420 ? styles.greetingCompact : null,
-            showMountainHeader ? styles.greetingHeroText : null,
-          ]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.78}
-        >
-          {timeOfDayGreeting()}, {firstName}.
+      <Text style={styles.greetingEyebrow}>{dateEyebrow}</Text>
+      <View style={styles.greetingLine}>
+        <Text style={greetingStyle} numberOfLines={1}>
+          {timeOfDayGreeting()},{" "}
         </Text>
-        {showMountainHeader ? (
-          <Text style={styles.greetingSubtitle} numberOfLines={2}>
-            Stay connected, make progress, and grow your impact.
-          </Text>
-        ) : null}
+        <GradientName style={greetingStyle}>{`${firstName}.`}</GradientName>
       </View>
+      <Text style={styles.greetingSubtitle} numberOfLines={2}>
+        Stay connected, make progress, and grow your impact.
+      </Text>
+      {glanceChips.length > 0 ? (
+        <View style={styles.chips}>
+          {glanceChips.map((chip) => (
+            <View key={chip.key} style={styles.chip}>
+              <View style={[styles.chipDot, { backgroundColor: chip.dot }]} />
+              <Text style={styles.chipText}>
+                <Text style={styles.chipValue}>{chip.value}</Text> {chip.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -763,14 +831,16 @@ export default function HomeScreen() {
     <CurvedTabLayout
       topInset={insets.top}
       title="Alenio"
-      leftAction={<AlenioHeaderBrand />}
+      hideHeaderTitle
+      leftAction={<AlenioHeaderBrand tone="dark" />}
+      headerTone="brand"
       backdrop={heroBackdrop}
-      backdropVisible={showMountainHeader}
+      backdropVisible
       testID="home-screen"
       headerTestID="home-header"
     >
       <ScrollView
-        style={[styles.page, showMountainHeader ? styles.pageTransparent : null]}
+        style={[styles.page, styles.pageTransparent]}
         contentContainerStyle={[
           styles.content,
           {
@@ -780,28 +850,33 @@ export default function HomeScreen() {
           },
         ]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={32}
+        onScroll={(event) => {
+          scrollY.current = event.nativeEvent.contentOffset.y;
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={refreshHome}
-            tintColor="#7C4DFF"
-            colors={["#7C4DFF"]}
+            tintColor="#FFFFFF"
+            colors={[palette.violet]}
           />
         }
         onLayout={(event) => {
           setBodyWidth(event.nativeEvent.layout.width);
+          measureBand();
         }}
       >
         <View>{headerBlock}</View>
 
         {teamsPending ? null : (
           <View style={styles.sectionGap} testID="home-stack">
-            {waitingBlock}
             <NoWorkspaceHome
               connections={connections}
               hasWorkspace={teams.length > 0}
               wide={splitHome}
               columnWidth={columnWidth}
+              waitingCard={waitingBlock}
               todayCard={
                 teams.length > 0 ? (
                   <HomeTodayCard
@@ -822,7 +897,7 @@ export default function HomeScreen() {
         )}
 
         {resumeConversations.length > 0 ? (
-          <View style={{ marginTop: 12 }}>
+          <View style={{ marginTop: 14 }}>
             <SenecaResumeCard
               conversations={resumeConversations.map((conversation) => ({
                 id: conversation.id,
@@ -845,7 +920,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.page,
   },
   content: {
     paddingTop: 14,
@@ -879,70 +954,79 @@ const styles = StyleSheet.create({
   },
   greetingBlock: {
     zIndex: 1,
-    paddingHorizontal: 2,
-    paddingTop: 2,
+    paddingTop: 6,
     paddingBottom: 4,
-  },
-  greetingBlockHero: {
-    paddingHorizontal: 0,
-    paddingTop: 0,
-    paddingBottom: 0,
-    justifyContent: "flex-start",
-  },
-  heroBackdrop: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    left: 0,
-    overflow: "hidden",
-  },
-  heroBackdropImage: {
-    position: "absolute",
-    // Wider than the screen and right-anchored, so the small peak stays
-    // framed at the right edge instead of being centre-cropped away.
-    // Lifted so the peak sits in the sky beside the greeting, with the
-    // pale sky still behind the Alenio bar.
-    right: 0,
-    width: "150%",
-    height: "150%",
-    top: "-24%",
-  },
-  heroBackdropFade: {
-    position: "absolute",
-    right: 0,
-    bottom: 0,
-    left: 0,
-    height: "58%",
   },
   pageTransparent: {
     backgroundColor: "transparent",
   },
-  greetingCopy: {
-    maxWidth: "72%",
+  greetingEyebrow: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "700",
+    letterSpacing: 1.4,
+    color: palette.lilac,
+  },
+  greetingLine: {
+    marginTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
   },
   greeting: {
     flexShrink: 1,
     fontSize: 28,
     lineHeight: 34,
     fontWeight: "800",
-    letterSpacing: -0.6,
-    color: "#111A2B",
+    letterSpacing: -0.7,
+    color: "#FFFFFF",
   },
   greetingCompact: {
-    fontSize: 24,
-    lineHeight: 29,
-  },
-  greetingHeroText: {
-    fontSize: 23,
-    lineHeight: 28,
-    letterSpacing: -0.45,
+    fontSize: 25,
+    lineHeight: 31,
   },
   greetingSubtitle: {
-    marginTop: 3,
-    fontSize: 11,
-    lineHeight: 15,
+    marginTop: 4,
+    fontSize: 13.5,
+    lineHeight: 18,
     fontWeight: "500",
-    color: "#4B4356",
+    color: "rgba(255,255,255,0.68)",
+  },
+  chips: {
+    marginTop: 14,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    height: 30,
+    paddingHorizontal: 11,
+    borderRadius: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  chipDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  chipText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#EDE9FE",
+  },
+  chipValue: {
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  waitingCard: {
+    ...cardSurface,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 4,
   },
   getStartedCard: {
     marginTop: 12,
@@ -1010,7 +1094,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
   },
   getStartedPrimaryText: {
     fontSize: 13.5,
@@ -1023,7 +1107,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
   },
   /**
    * A line of its own, always: left to wrap on its own the text shrank and
@@ -1076,7 +1160,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
   },
   /** Sized outright: the row is too short to stretch the mark reliably. */
   joinStripMark: {
@@ -1109,7 +1193,7 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17,
     fontWeight: "700",
-    color: "#4361EE",
+    color: "#6d28d9",
   },
   joinStripDot: {
     fontSize: 12.5,
@@ -1119,13 +1203,13 @@ const styles = StyleSheet.create({
   getStartedLink: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#4361EE",
+    color: "#6d28d9",
   },
   /** Clears the avatar, so the rule sits under the name. */
   listDivider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: 54,
-    backgroundColor: "#EEF1F4",
+    backgroundColor: palette.rowDivider,
   },
   todayInfoContent: {
     flexDirection: "row",

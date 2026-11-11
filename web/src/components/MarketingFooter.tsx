@@ -12,7 +12,7 @@ export function MarketingFooter() {
       <div className="lp-footer-inner">
         <div className="lp-footer-brand">
           <img src="/alenio-logo.png" alt="Alenio" width={140} height={34} />
-          <p>Your Network. Your Operations. One Platform.</p>
+          <p>Your Network. Your Workspace. One Platform.</p>
           <a href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a>
         </div>
         <nav className="lp-footer-cols" aria-label="Footer">

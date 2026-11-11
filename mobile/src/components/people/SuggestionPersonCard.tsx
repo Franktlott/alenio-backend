@@ -153,7 +153,7 @@ export function SuggestionPersonCard({
             user={suggestion.person}
             size={32}
             radius={16}
-            backgroundColor="#EEF2FF"
+            backgroundColor="#EFE9FF"
             textColor={BRAND}
             fontSize={13}
           />
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   },
   connectPressed: { backgroundColor: "#3348C9" },
   /** Once acted on the button steps back to a tint; it is a status now. */
-  connectSettled: { backgroundColor: "#EEF2FF" },
+  connectSettled: { backgroundColor: "#EFE9FF" },
   connectConnected: { backgroundColor: "#ECFDF5" },
   connectDisabled: { opacity: 0.55 },
   connectLabel: {

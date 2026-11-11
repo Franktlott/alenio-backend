@@ -189,7 +189,7 @@ export function EventPreviewSheet({
               justifyContent: "center",
             }}
           >
-            <Pencil size={16} color="#4361EE" strokeWidth={2.2} />
+            <Pencil size={16} color="#6d28d9" strokeWidth={2.2} />
           </Pressable>
         ) : null
       }

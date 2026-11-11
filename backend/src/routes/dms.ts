@@ -197,14 +197,19 @@ dmsRouter.get("/", async (c) => {
     participant: (typeof participations)[number]["conversation"]["participants"][number]["user"],
   ) => {
     const { lastActiveAt, showActiveStatus, ...userWithCount } = participant;
+    const connectionAccepted = acceptedIds.has(participant.id);
+    const blockedEitherWay = blockedIds.has(participant.id);
+    const canSharePresence = connectionAccepted && !blockedEitherWay && showActiveStatus;
     return {
       ...serializeWorkplaceConnectedUser(userWithCount),
       activeNow: isConnectionActiveNow({
-        connectionAccepted: acceptedIds.has(participant.id),
-        blockedEitherWay: blockedIds.has(participant.id),
+        connectionAccepted,
+        blockedEitherWay,
         showActiveStatus,
         lastActiveAt,
       }),
+      // Only when they opted into status — never leak a timestamp they hid.
+      lastActiveAt: canSharePresence && lastActiveAt ? lastActiveAt.toISOString() : null,
     };
   };
 

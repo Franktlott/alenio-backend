@@ -1,4 +1,4 @@
-import { colors, radii, space } from "@/theme";
+import { colors, palette, radii, space } from "@/theme";
 
 /** Shared Workspace Calendar/Tasks density — matches Chat list cards. */
 export const WS = {
@@ -20,7 +20,8 @@ export const WS = {
   muted: colors.textSecondary,
   faint: colors.textMuted,
   surface: colors.surface,
-  pageBg: colors.pageBg,
+  /** Warm off-white, so the white cards on it read as raised. */
+  pageBg: palette.page,
   chipBg: colors.surfaceSecondary,
   accent: colors.brand,
 };
@@ -33,8 +34,8 @@ export const splitPaneCard = {
   flex: 1,
   minHeight: 0,
   backgroundColor: colors.surface,
-  borderRadius: radii.card,
+  borderRadius: 18,
   borderWidth: 1,
-  borderColor: colors.borderCard,
+  borderColor: palette.cardBorder,
   overflow: "hidden" as const,
 };

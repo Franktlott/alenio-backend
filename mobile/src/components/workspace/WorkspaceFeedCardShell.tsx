@@ -8,9 +8,10 @@ import {
 } from "react-native";
 import { MoreHorizontal } from "lucide-react-native";
 import { UserAvatar } from "@/components/UserAvatar";
+import { elevation } from "@/theme";
 
 export const FEED_AVATAR = 36;
-export const FEED_ACCENT = "#4361EE";
+export const FEED_ACCENT = "#6d28d9";
 export const WORKSPACE_FEED_HORIZONTAL_INSET = 16;
 export const WORKSPACE_FEED_MAX_WIDTH = 680;
 export const WORKSPACE_FEED_GAP = 8;
@@ -91,7 +92,7 @@ export function WorkspaceFeedCardShell({
               user={avatar ?? { name: "Someone" }}
               size={FEED_AVATAR}
               radius={FEED_AVATAR / 2}
-              backgroundColor="#EEF2FF"
+              backgroundColor="#EFE9FF"
               textColor={FEED_ACCENT}
               fontSize={14}
               resetKey={avatarResetKey}
@@ -143,15 +144,8 @@ export function WorkspaceFeedCardShell({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#DFE5EE",
-    shadowColor: "#172554",
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    ...elevation.card,
+    borderRadius: 18,
   },
   inner: {
     padding: FEED_CARD_PADDING,

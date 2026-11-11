@@ -264,7 +264,7 @@ export function EventStockPhotoSearch({
                     style={{
                       fontSize: 12,
                       fontWeight: "700",
-                      color: selected ? "#4361EE" : "#64748B",
+                      color: selected ? "#6d28d9" : "#64748B",
                     }}
                   >
                     {label}
@@ -278,7 +278,7 @@ export function EventStockPhotoSearch({
           <View
             style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
           >
-            <ActivityIndicator color="#4361EE" />
+            <ActivityIndicator color="#6d28d9" />
           </View>
         ) : emptyHint ? (
           <View

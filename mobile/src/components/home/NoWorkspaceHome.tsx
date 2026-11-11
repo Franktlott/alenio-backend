@@ -18,9 +18,20 @@ import {
 } from "lucide-react-native";
 import { router } from "expo-router";
 import { HomeDiscover } from "@/components/home/HomeDiscover";
+import {
+  AlenioList,
+  AlenioListRow,
+  Button,
+  buttonInk,
+  IconTile,
+  PanelHeader,
+  tintInk,
+  type TintName,
+} from "@/components/ui";
 import type { ConnectionsResponse } from "@/lib/types";
+import { elevation, gradients, palette, premiumType, tints } from "@/theme";
 
-const PURPLE = "#6D5EF8";
+const PURPLE = palette.violet;
 
 type Props = {
   connections: ConnectionsResponse | undefined;
@@ -28,6 +39,8 @@ type Props = {
   wide: boolean;
   columnWidth: number;
   todayCard?: React.ReactNode;
+  /** Messages and mentions waiting on the user. Sits beside or under Today. */
+  waitingCard?: React.ReactNode;
   insightTitle: string;
   insightBody: string;
   insightAction: string;
@@ -48,6 +61,7 @@ export function NoWorkspaceHome({
   wide,
   columnWidth,
   todayCard,
+  waitingCard,
   insightTitle,
   insightBody,
   insightAction,
@@ -72,20 +86,19 @@ export function NoWorkspaceHome({
       style={[styles.card, wide && !hasWorkspace ? styles.wideCard : null]}
       testID="home-network-card"
     >
-      <View style={styles.cardHeader}>
-        <Users size={18} color={PURPLE} strokeWidth={2.2} />
-        <Text style={styles.cardTitle}>Your network</Text>
-        <Pressable
-          onPress={() => openNetwork("connections")}
-          hitSlop={8}
-          style={styles.cardLink}
-          accessibilityRole="button"
-          accessibilityLabel="View network"
-        >
-          <Text style={styles.cardLinkText}>View network</Text>
-          <ChevronRight size={14} color={PURPLE} strokeWidth={2.4} />
-        </Pressable>
-      </View>
+      <PanelHeader
+        title="Your network"
+        tint="mint"
+        icon={<Users size={16} color={tintInk("mint")} strokeWidth={2.2} />}
+        action={
+          <Button
+            variant="link"
+            label="View network"
+            onPress={() => openNetwork("connections")}
+            iconRight={<ChevronRight size={14} color={buttonInk("link")} strokeWidth={2.4} />}
+          />
+        }
+      />
       <View style={styles.statRow}>
         {stats.map((stat) => (
           <Pressable
@@ -113,16 +126,15 @@ export function NoWorkspaceHome({
           <Text style={styles.networkEmptyText}>
             Find someone you already know on Alenio.
           </Text>
-          <Pressable
+          <Button
+            variant="soft"
+            size="sm"
+            label="Find people"
             onPress={() => openNetwork("connections")}
-            style={styles.networkEmptyAction}
-            accessibilityRole="button"
-            accessibilityLabel="Find people"
+            icon={<UserPlus size={13} color={buttonInk("soft")} strokeWidth={2.3} />}
             testID="home-network-empty-find"
-          >
-            <UserPlus size={13} color={PURPLE} strokeWidth={2.3} />
-            <Text style={styles.networkEmptyActionText}>Find people</Text>
-          </Pressable>
+            style={{ alignSelf: "center", marginTop: 7 }}
+          />
         </View>
       ) : null}
     </View>
@@ -130,104 +142,115 @@ export function NoWorkspaceHome({
 
   const stayCard = (
     <View style={[styles.card, wide ? styles.wideCard : null]} testID="home-stay-connected">
-      <View style={styles.cardHeader}>
-        <Sparkles size={18} color={PURPLE} strokeWidth={2.2} />
-        <Text style={styles.cardTitle}>Stay connected</Text>
-      </View>
-      <Text style={styles.cardSubtitle}>Meaningful ways to get started.</Text>
-      <StayRow
-        icon={<UserPlus size={16} color={PURPLE} strokeWidth={2.2} />}
-        title="Find people"
-        subtitle="Search for someone you know"
-        onPress={() => openNetwork("connections")}
-        testID="home-find-people"
+      <PanelHeader
+        title="Stay connected"
+        subtitle="Meaningful ways to get started."
+        icon={<Sparkles size={16} color={tintInk("lavender")} strokeWidth={2.2} />}
       />
-      <StayRow
-        icon={<MessageCircle size={16} color={PURPLE} strokeWidth={2.2} />}
-        title="Start a conversation"
-        subtitle="Message a connection"
-        onPress={() => router.push("/(app)/chat")}
-        testID="home-start-conversation"
-      />
-      <StayRow
-        icon={<UsersRound size={16} color={PURPLE} strokeWidth={2.2} />}
-        title="Join a workspace"
-        subtitle="Enter your team's workspace"
-        onPress={() =>
-          router.push({ pathname: "/onboarding", params: { mode: "join" } })
-        }
-        testID="home-join-workspace"
-      />
-      <Pressable
+      <AlenioList card={false}>
+        <StayRow
+          icon={<UserPlus size={16} color={tintInk("lavender")} strokeWidth={2.2} />}
+          tint="lavender"
+          title="Find people"
+          subtitle="Search for someone you know"
+          onPress={() => openNetwork("connections")}
+          testID="home-find-people"
+        />
+        <StayRow
+          icon={<MessageCircle size={16} color={tintInk("peach")} strokeWidth={2.2} />}
+          tint="peach"
+          title="Start a conversation"
+          subtitle="Message a connection"
+          onPress={() => router.push("/(app)/chat")}
+          testID="home-start-conversation"
+        />
+        <StayRow
+          icon={<UsersRound size={16} color={tintInk("sky")} strokeWidth={2.2} />}
+          tint="sky"
+          title="Join a workspace"
+          subtitle="Enter your team's workspace"
+          onPress={() =>
+            router.push({ pathname: "/onboarding", params: { mode: "join" } })
+          }
+          testID="home-join-workspace"
+        />
+      </AlenioList>
+      <Button
+        variant="link"
+        label="Create a workspace"
         onPress={() =>
           router.push({ pathname: "/onboarding", params: { mode: "create" } })
         }
-        hitSlop={8}
-        style={styles.createLink}
-        accessibilityRole="button"
-        accessibilityLabel="Create a workspace"
         testID="home-create-workspace"
-      >
-        <Text style={styles.createLinkText}>Create a workspace</Text>
-      </Pressable>
+        style={styles.createLink}
+      />
     </View>
   );
 
+  /** The shadow lives on an outer view: iOS drops it on a view that clips. */
   const insightCard = (flushTop = false) => (
-    <Pressable
-      onPress={onInsight}
+    <View
       style={[
-        styles.insight,
+        styles.insightShadow,
         flushTop ? styles.insightFlush : null,
-        !wide ? styles.insightNarrow : null,
       ]}
-      accessibilityRole="button"
-      accessibilityLabel={insightTitle.replace(/\n/g, " ")}
-      testID="home-no-workspace-insight"
     >
-      <Image
-        source={insightImage}
-        style={styles.insightPhoto}
-        resizeMode="cover"
-        accessibilityIgnoresInvertColors
-      />
-      <LinearGradient
-        colors={[
-          "#F8F6FF",
-          "rgba(248,246,255,0.97)",
-          "rgba(248,246,255,0.72)",
-          "rgba(248,246,255,0)",
-        ]}
-        locations={[0, 0.42, 0.58, 0.78]}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        pointerEvents="none"
-        style={styles.insightFade}
-      />
-      <View style={[styles.insightCopy, !wide ? styles.insightCopyNarrow : null]}>
-        <View style={styles.insightLabelRow}>
-          <Sparkles size={13} color={PURPLE} strokeWidth={2.3} />
-          <Text style={styles.insightLabel}>Insight</Text>
+      <Pressable
+        onPress={onInsight}
+        style={[styles.insight, !wide ? styles.insightNarrow : null]}
+        accessibilityRole="button"
+        accessibilityLabel={insightTitle.replace(/\n/g, " ")}
+        testID="home-no-workspace-insight"
+      >
+        <Image
+          source={insightImage}
+          style={styles.insightPhoto}
+          resizeMode="cover"
+          accessibilityIgnoresInvertColors
+        />
+        <LinearGradient
+          colors={[
+            "rgba(20,9,56,0.96)",
+            "rgba(26,11,69,0.86)",
+            "rgba(42,15,99,0.45)",
+            "rgba(42,15,99,0.05)",
+          ]}
+          locations={[0, 0.42, 0.66, 1]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          pointerEvents="none"
+          style={styles.insightFade}
+        />
+        <View style={[styles.insightCopy, !wide ? styles.insightCopyNarrow : null]}>
+          <View style={styles.insightLabelRow}>
+            <Sparkles size={12} color="#E9DDFF" strokeWidth={2.4} />
+            <Text style={styles.insightLabel}>INSIGHT</Text>
+          </View>
+          <Text
+            style={[styles.insightTitle, !wide ? styles.insightTitleNarrow : null]}
+          >
+            {insightTitle}
+          </Text>
+          {wide ? <Text style={styles.insightBody}>{insightBody}</Text> : null}
+          <LinearGradient
+            colors={[...gradients.cta]}
+            locations={[0, 0.55, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0.3 }}
+            style={[styles.insightAction, !wide ? styles.insightActionNarrow : null]}
+          >
+            <Text style={styles.insightActionText}>{insightAction}</Text>
+            <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.4} />
+          </LinearGradient>
         </View>
-        <Text
-          style={[styles.insightTitle, !wide ? styles.insightTitleNarrow : null]}
-        >
-          {insightTitle}
-        </Text>
-        {wide ? <Text style={styles.insightBody}>{insightBody}</Text> : null}
-        <View
-          style={[styles.insightAction, !wide ? styles.insightActionNarrow : null]}
-        >
-          <Text style={styles.insightActionText}>{insightAction}</Text>
-          <ChevronRight size={14} color={PURPLE} strokeWidth={2.4} />
-        </View>
-      </View>
-    </Pressable>
+      </Pressable>
+    </View>
   );
 
   return (
     <View testID="home-no-workspace">
       {showWelcomeHero ? (
+        <View style={styles.heroShadow}>
         <View style={[styles.hero, !wide ? styles.heroNarrow : null]}>
           <Image
             source={require("@/assets/alenio-welcome-mountain-ridge-v2.jpg")}
@@ -321,6 +344,7 @@ export function NoWorkspaceHome({
             </View>
           </View>
         </View>
+        </View>
       ) : null}
 
       {wide && hasWorkspace && todayCard ? (
@@ -329,6 +353,7 @@ export function NoWorkspaceHome({
             <View style={styles.todayFill}>{todayCard}</View>
           </View>
           <View style={[styles.cardStack, styles.columnStack, { width: columnWidth }]}>
+            {waitingCard}
             {networkCard}
             {insightCard(true)}
           </View>
@@ -336,6 +361,7 @@ export function NoWorkspaceHome({
       ) : (
         <>
           {todayCard ? <View style={styles.todaySlot}>{todayCard}</View> : null}
+          {waitingCard ? <View style={styles.todaySlot}>{waitingCard}</View> : null}
 
           {wide && !hasWorkspace ? (
             <View style={styles.cardRow}>
@@ -359,40 +385,42 @@ export function NoWorkspaceHome({
 
 function StayRow({
   icon,
+  tint,
   title,
   subtitle,
   onPress,
   testID,
 }: {
   icon: React.ReactNode;
+  tint: TintName;
   title: string;
   subtitle: string;
   onPress: () => void;
   testID: string;
 }) {
   return (
-    <Pressable
+    <AlenioListRow
+      leading={<IconTile tint={tint}>{icon}</IconTile>}
+      title={title}
+      subtitle={subtitle}
       onPress={onPress}
-      style={styles.stayRow}
-      accessibilityRole="button"
+      chevron
       accessibilityLabel={title}
       testID={testID}
-    >
-      <View style={styles.stayIcon}>{icon}</View>
-      <View style={styles.stayCopy}>
-        <Text style={styles.stayTitle}>{title}</Text>
-        <Text style={styles.staySubtitle}>{subtitle}</Text>
-      </View>
-      <ChevronRight size={16} color="#C4B5FD" strokeWidth={2.3} />
-    </Pressable>
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  hero: {
+  heroShadow: {
+    ...elevation.card,
     marginTop: 8,
-    minHeight: 168,
     borderRadius: 22,
+    backgroundColor: "#F4F0FF",
+  },
+  hero: {
+    minHeight: 168,
+    borderRadius: 21,
     overflow: "hidden",
     backgroundColor: "#F4F0FF",
   },
@@ -545,54 +573,21 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   cardStack: {
-    marginTop: 12,
-    gap: 12,
+    marginTop: 14,
+    gap: 14,
   },
   /** Beside Today, so the row's own top margin is the only offset. */
   columnStack: {
     marginTop: 0,
   },
   card: {
-    borderRadius: 20,
-    backgroundColor: "#F8F6FF",
+    ...elevation.card,
     paddingHorizontal: 14,
     paddingTop: 14,
-    paddingBottom: 8,
+    paddingBottom: 10,
   },
   wideCard: {
     height: 248,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  cardTitle: {
-    flex: 1,
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "800",
-    letterSpacing: -0.2,
-    color: "#111A2B",
-  },
-  cardLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-  },
-  cardLinkText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "700",
-    color: PURPLE,
-  },
-  cardSubtitle: {
-    marginTop: 2,
-    marginBottom: 4,
-    marginLeft: 26,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#667085",
   },
   statRow: {
     marginTop: 12,
@@ -604,14 +599,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: "center",
     paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#EEE9FB",
+    backgroundColor: "#FAF8FF",
   },
   statValue: {
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: "800",
-    color: "#111A2B",
+    letterSpacing: -0.5,
+    color: palette.ink,
   },
   statValueHot: {
     color: PURPLE,
@@ -643,65 +641,22 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     color: "#667085",
   },
-  networkEmptyAction: {
-    marginTop: 7,
-    height: 28,
-    paddingHorizontal: 10,
-    borderRadius: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#FFFFFF",
-  },
-  networkEmptyActionText: {
-    fontSize: 11.5,
-    lineHeight: 15,
-    fontWeight: "700",
-    color: PURPLE,
-  },
-  stayRow: {
-    minHeight: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  stayIcon: {
-    width: 28,
-    alignItems: "center",
-  },
-  stayCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  stayTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "700",
-    color: "#111A2B",
-  },
-  staySubtitle: {
-    fontSize: 13,
-    lineHeight: 17,
-    color: "#667085",
-  },
   createLink: {
     alignSelf: "flex-start",
-    marginLeft: 38,
+    marginLeft: 42,
     marginTop: 2,
     marginBottom: 8,
   },
-  createLinkText: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: "700",
-    color: PURPLE,
+  insightShadow: {
+    ...elevation.raised,
+    marginTop: 14,
+    backgroundColor: palette.dusk,
   },
   insight: {
-    marginTop: 12,
     minHeight: 148,
     borderRadius: 22,
     overflow: "hidden",
-    backgroundColor: "#F8F6FF",
+    backgroundColor: palette.dusk,
   },
   insightFlush: {
     marginTop: 0,
@@ -739,18 +694,19 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   insightLabel: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 10.5,
+    lineHeight: 14,
     fontWeight: "800",
-    color: PURPLE,
+    letterSpacing: 1.2,
+    color: "#E9DDFF",
   },
   insightTitle: {
-    marginTop: 6,
+    marginTop: 8,
     fontSize: 18,
     lineHeight: 24,
     fontWeight: "800",
     letterSpacing: -0.3,
-    color: "#111A2B",
+    color: "#FFFFFF",
   },
   insightTitleNarrow: {
     marginTop: 3,
@@ -762,18 +718,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     lineHeight: 18,
-    color: "#667085",
+    color: "rgba(255,255,255,0.72)",
   },
   insightAction: {
     alignSelf: "flex-start",
-    marginTop: 12,
-    height: 32,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    marginTop: 14,
+    height: 34,
+    paddingHorizontal: 13,
+    borderRadius: 11,
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
-    backgroundColor: "#FFFFFF",
   },
   insightActionNarrow: {
     marginTop: 7,
@@ -784,6 +739,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 17,
     fontWeight: "700",
-    color: PURPLE,
+    color: "#FFFFFF",
   },
 });

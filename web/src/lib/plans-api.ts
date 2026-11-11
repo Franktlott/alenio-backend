@@ -26,6 +26,8 @@ export type PublicPlan = {
   interval: string;
   priceLabel: string;
   periodLabel: string;
+  /** When true, apps and pricing show the plan as unavailable. */
+  comingSoon: boolean;
 };
 
 export type PlanFeature = {
@@ -64,6 +66,7 @@ export type PlanEdit = {
   features: string[];
   includedFeatures: string[];
   priceCents: number;
+  comingSoon: boolean;
   existingSubscribers?: "keep" | "move" | null;
 };
 
@@ -97,6 +100,7 @@ export const FALLBACK_PLANS: Record<PlanKey, PublicPlan> = {
     interval: "month",
     priceLabel: PRO_PRICE_AMOUNT,
     periodLabel: PRO_PRICE_PERIOD,
+    comingSoon: false,
   },
   operations: {
     key: "operations",
@@ -108,6 +112,7 @@ export const FALLBACK_PLANS: Record<PlanKey, PublicPlan> = {
     interval: "month",
     priceLabel: OPERATIONS_PRICE_AMOUNT,
     periodLabel: OPERATIONS_PRICE_PERIOD,
+    comingSoon: true,
   },
 };
 
@@ -123,7 +128,9 @@ export function usePlans(): Record<PlanKey, PublicPlan> {
   const query = useQuery({ queryKey: PLANS_QUERY_KEY, queryFn: fetchPublicPlans, staleTime: 60_000, retry: 1 });
   const out = { ...FALLBACK_PLANS };
   for (const plan of query.data ?? []) {
-    if (plan.key === "pro" || plan.key === "operations") out[plan.key] = plan;
+    if (plan.key === "pro" || plan.key === "operations") {
+      out[plan.key] = { ...FALLBACK_PLANS[plan.key], ...plan, comingSoon: plan.comingSoon ?? FALLBACK_PLANS[plan.key].comingSoon };
+    }
   }
   return out;
 }

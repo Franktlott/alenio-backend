@@ -1,47 +1,20 @@
-import { View, Text, Image } from "react-native";
-import { WS } from "./workspace-ui";
+import { ClipboardList } from "lucide-react-native";
+import { EmptyState, tintInk } from "@/components/ui";
 
 export function MemberTasksEmptyState() {
   return (
-    <View
-      style={{
-        alignItems: "center",
-        paddingTop: 18,
-        paddingHorizontal: 28,
-        backgroundColor: WS.surface,
-      }}
+    <EmptyState
       testID="member-tasks-empty-state"
-    >
-      <Image
-        source={require("@/assets/alenio-empty-tasks-people.png")}
-        style={{ width: 210, height: 210, marginBottom: -12 }}
-        resizeMode="contain"
-        accessibilityIgnoresInvertColors
-      />
-
-      <Text
-        style={{
-          fontSize: 19,
-          fontWeight: "800",
-          color: "#111A2B",
-          textAlign: "center",
-        }}
-      >
-        You’re all set!
-      </Text>
-      <Text
-        style={{
-          marginTop: 8,
-          maxWidth: 270,
-          fontSize: 13,
-          lineHeight: 19,
-          color: "#7A8699",
-          textAlign: "center",
-        }}
-      >
-        You don’t have any tasks right now. When your leader assigns tasks,
-        they’ll appear here.
-      </Text>
-    </View>
+      tint="lavender"
+      icon={<ClipboardList size={18} color={tintInk("lavender")} strokeWidth={2.2} />}
+      title="You're all set"
+      body="You don't have any tasks right now. When your leader assigns tasks, they'll appear here."
+      style={{
+        alignSelf: "stretch",
+        paddingTop: 10,
+        paddingBottom: 8,
+        paddingVertical: 0,
+      }}
+    />
   );
 }

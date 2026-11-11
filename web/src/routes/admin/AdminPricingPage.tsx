@@ -28,6 +28,7 @@ type Draft = {
   bestFor: string;
   included: string[];
   features: string;
+  comingSoon: boolean;
   existing: "keep" | "move" | null;
 };
 
@@ -51,6 +52,7 @@ function draftOf(plan: AdminPlan): Draft {
     bestFor: plan.bestFor,
     included: includedOf(plan),
     features: extrasOf(plan).join("\n"),
+    comingSoon: plan.comingSoon,
     existing: null,
   };
 }
@@ -102,6 +104,7 @@ function PlanEditor({
     draft.bestFor.trim() !== plan.bestFor ||
     featureLines(draft.features).join("\n") !== extrasOf(plan).join("\n") ||
     !sameKeys(draft.included, includedOf(plan)) ||
+    draft.comingSoon !== plan.comingSoon ||
     priceChanged;
   const removedLocks = catalog.filter(
     (feature) => feature.locksAccess && includedOf(plan).includes(feature.key) && !draft.included.includes(feature.key),
@@ -130,6 +133,7 @@ function PlanEditor({
         features: featureLines(draft.features),
         includedFeatures: draft.included,
         priceCents: cents ?? plan.priceCents,
+        comingSoon: draft.comingSoon,
         existingSubscribers: priceChanged ? draft.existing : null,
       }),
     onSuccess: () => {
@@ -171,6 +175,34 @@ function PlanEditor({
           {workspaces(plan.subscribers)}
         </span>
       </header>
+
+      <fieldset className="ap-availability" data-testid={`ap-availability-${plan.key}`}>
+        <legend>Availability</legend>
+        <label className={!draft.comingSoon ? "is-on" : undefined}>
+          <input
+            type="radio"
+            name={`availability-${plan.key}`}
+            checked={!draft.comingSoon}
+            onChange={() => set({ comingSoon: false })}
+          />
+          <span>
+            <strong>Available</strong>
+            <small>Shown for checkout on web and in the apps.</small>
+          </span>
+        </label>
+        <label className={draft.comingSoon ? "is-on" : undefined}>
+          <input
+            type="radio"
+            name={`availability-${plan.key}`}
+            checked={draft.comingSoon}
+            onChange={() => set({ comingSoon: true })}
+          />
+          <span>
+            <strong>Coming soon</strong>
+            <small>Visible on pricing, but not selectable yet.</small>
+          </span>
+        </label>
+      </fieldset>
 
       <div className="ap-row">
         <label className="ap-field">

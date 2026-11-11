@@ -7,7 +7,7 @@ export const colors = {
   pageGradient: ["#FFFFFF", "#FFFFFF", "#FFFFFF"] as const,
   surface: "#FFFFFF",
   surfaceSecondary: "#F1F4F8",
-  surfaceTint: "#EEF2FF",
+  surfaceTint: "#EFE9FF",
   textPrimary: "#0F172A",
   textSecondary: "#64748B",
   textMuted: "#8B95A5",
@@ -17,9 +17,10 @@ export const colors = {
   borderStrong: "#E8ECF0",
   /** Soft card stroke — modern, light edge on white. */
   borderCard: "#F1F5F9",
-  brand: "#4361EE",
-  brandAccent: "#7C3AED",
-  brandSoft: "#EEF2FF",
+  /** The website's violet. Replaced the older #4361EE blue app-wide. */
+  brand: "#6d28d9",
+  brandAccent: "#8b5cf6",
+  brandSoft: "#EFE9FF",
   success: "#128A52",
   warning: "#D97706",
   error: "#DC2626",
@@ -157,3 +158,124 @@ export const brandGradient = {
   colors: [colors.brand, colors.brandAccent] as const,
   soft: ["#5B6CF0", "#8B5CF6"] as const,
 } as const;
+
+/**
+ * The website hero's palette (web/src/routes/website-home.css), shared by the
+ * welcome and auth pages and the header band on the main tabs.
+ */
+export const palette = {
+  night: "#0d0726",
+  dusk: "#1a0b45",
+  plum: "#2a0f63",
+  violet: "#6d28d9",
+  violetBright: "#8b5cf6",
+  lilac: "#c4b5fd",
+  lilacSoft: "#ede9fe",
+  ink: "#160f2e",
+  inkSecondary: "#5b5675",
+  inkMuted: "#8d88a6",
+  /** Warm off-white under the cards, so white cards read as raised. */
+  page: "#F6F4FB",
+  cardBorder: "rgba(76, 29, 149, 0.08)",
+  rowDivider: "#F1EEF8",
+} as const;
+
+export const gradients = {
+  band: [palette.night, palette.dusk, palette.plum] as const,
+  brandText: ["#22d3ee", "#818cf8", "#d946ef"] as const,
+  cta: ["#8b5cf6", "#a855f7", "#d946ef"] as const,
+  progress: ["#8b5cf6", "#d946ef"] as const,
+} as const;
+
+/** Soft tinted tiles behind section icons. */
+export const tints = {
+  lavender: { bg: "#EFE9FF", fg: "#6d28d9" },
+  mint: { bg: "#DFF7EE", fg: "#059669" },
+  peach: { bg: "#FFE9DC", fg: "#EA580C" },
+  sky: { bg: "#E0F2FE", fg: "#0284C7" },
+} as const;
+
+export const elevation = {
+  /** White card on the warm page: hairline edge plus a soft violet-tinted lift. */
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
+    shadowColor: "#2A1660",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 22,
+    elevation: 3,
+  },
+  /** Feature surfaces that should sit above the cards around them. */
+  raised: {
+    borderRadius: 22,
+    shadowColor: "#2A0F63",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.28,
+    shadowRadius: 26,
+    elevation: 6,
+  },
+} as const;
+
+export const premiumType = {
+  sectionLabel: {
+    fontSize: 10.5,
+    lineHeight: 13,
+    fontWeight: "800" as const,
+    letterSpacing: 1.2,
+    textTransform: "uppercase" as const,
+    color: palette.inkMuted,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "800" as const,
+    letterSpacing: -0.3,
+    color: palette.ink,
+  },
+  pageTitle: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "800" as const,
+    letterSpacing: -0.6,
+    color: palette.ink,
+  },
+  rowTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "700" as const,
+    color: "#111A2B",
+  },
+  body: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "500" as const,
+    color: palette.ink,
+  },
+  supporting: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500" as const,
+    color: "#667085",
+  },
+  meta: {
+    fontSize: 11.5,
+    lineHeight: 15,
+    fontWeight: "600" as const,
+    color: palette.inkMuted,
+  },
+} as const;
+
+/** Status colours shared by badges, dots and inline alerts. Mirrors web ui.css. */
+export const tones = {
+  neutral: { bg: "#F1F0F6", fg: "#344054", dot: "#98A2B3" },
+  accent: { bg: "#EFE9FF", fg: "#5B21B6", dot: "#6d28d9" },
+  info: { bg: "#E0F2FE", fg: "#0369A1", dot: "#0284C7" },
+  success: { bg: "#DFF7EE", fg: "#047857", dot: "#059669" },
+  warning: { bg: "#FFF1DC", fg: "#B45309", dot: "#D97706" },
+  danger: { bg: "#FEE4E2", fg: "#B42318", dot: "#DC2626" },
+} as const;
+
+export type Tone = keyof typeof tones;

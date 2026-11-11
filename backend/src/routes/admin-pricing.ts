@@ -41,6 +41,7 @@ const planBody = z.object({
   features: z.array(z.string().max(PLAN_FEATURE_MAX * 2)).max(PLAN_FEATURES_MAX * 2),
   includedFeatures: z.array(z.string().max(60)).max(PLAN_FEATURES.length * 2),
   priceCents: z.number().int().min(PLAN_PRICE_MIN_CENTS).max(PLAN_PRICE_MAX_CENTS),
+  comingSoon: z.boolean(),
   existingSubscribers: z.enum(["keep", "move"]).nullable().optional(),
 });
 

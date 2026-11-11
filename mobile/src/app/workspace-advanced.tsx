@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -9,15 +9,15 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { setStatusBarStyle } from "expo-status-bar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  ChevronRight,
   Crown,
+  Layers,
   LogOut,
-  ShieldCheck,
   Trash2,
 } from "lucide-react-native";
 import { toast } from "burnt";
@@ -32,49 +32,21 @@ import { formatTeamRole } from "@/components/WorkspaceTeamUI";
 import { UserAvatar } from "@/components/UserAvatar";
 import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
 import { OwnershipTransferSheet } from "@/components/OwnershipTransferSheet";
+import { AppHeaderBand } from "@/components/AppHeaderBand";
+import {
+  AlenioList,
+  AlenioListRow,
+  AppText,
+  Button,
+  Card,
+  IconTile,
+  SectionHeader,
+  tintInk,
+} from "@/components/ui";
+import { palette, tints } from "@/theme";
 
-function AdvancedRow({
-  icon,
-  title,
-  subtitle,
-  onPress,
-  disabled = false,
-  destructive = false,
-  testID,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-  disabled?: boolean;
-  destructive?: boolean;
-  testID: string;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={[
-        styles.row,
-        destructive ? styles.destructiveRow : null,
-        disabled ? styles.disabled : null,
-      ]}
-      accessibilityRole="button"
-      testID={testID}
-    >
-      <View style={[styles.rowIcon, destructive ? styles.destructiveIcon : null]}>
-        {icon}
-      </View>
-      <View style={styles.rowCopy}>
-        <Text style={[styles.rowTitle, destructive ? styles.destructiveTitle : null]}>
-          {title}
-        </Text>
-        <Text style={styles.rowSubtitle}>{subtitle}</Text>
-      </View>
-      <ChevronRight size={17} color={destructive ? "#F87171" : "#A1AAB8"} />
-    </Pressable>
-  );
-}
+const BAND_SHEET_RADIUS = 24;
+const HEADER_ROW = 48;
 
 export default function WorkspaceAdvancedScreen() {
   const insets = useSafeAreaInsets();
@@ -90,6 +62,14 @@ export default function WorkspaceAdvancedScreen() {
   const [deletePassword, setDeletePassword] = useState("");
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [transferMember, setTransferMember] = useState<TeamMember | null>(null);
+  const bandHeight = insets.top + HEADER_ROW + 18;
+
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle("light");
+      return () => setStatusBarStyle("dark");
+    }, []),
+  );
 
   const { data: teams = [] } = useQuery({
     queryKey: ["teams"],
@@ -119,6 +99,16 @@ export default function WorkspaceAdvancedScreen() {
     [session?.user?.id, team?.members],
   );
 
+  const goBack = () => {
+    if (deleteOpen) {
+      setDeleteOpen(false);
+      setDeletePassword("");
+      return;
+    }
+    if (router.canGoBack()) router.back();
+    else router.replace({ pathname: "/workspace-settings", params: { teamId } });
+  };
+
   const finishRemoval = async (message: string) => {
     await applyTeamRemovedFromAccount(
       teamId,
@@ -144,9 +134,11 @@ export default function WorkspaceAdvancedScreen() {
       }),
   });
   const leaveMutation = useMutation({
-    mutationFn: () => api.delete(`/api/teams/${encodeURIComponent(teamId)}/leave`),
+    mutationFn: () =>
+      api.delete(`/api/teams/${encodeURIComponent(teamId)}/leave`),
     onSuccess: () => finishRemoval("Left workspace"),
-    onError: () => toast({ title: "Couldn’t leave workspace", preset: "error" }),
+    onError: () =>
+      toast({ title: "Couldn’t leave workspace", preset: "error" }),
   });
 
   const confirmLeave = () => {
@@ -164,180 +156,259 @@ export default function WorkspaceAdvancedScreen() {
     );
   };
 
-  if (!teamId) {
-    return (
-      <SafeAreaView style={styles.screen}>
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>No workspace selected</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.screen} edges={[]} testID="workspace-advanced-screen">
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+  const header = (
+    <>
+      <AppHeaderBand height={bandHeight} />
+      <View style={[styles.bandHeader, { paddingTop: insets.top }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={goBack}
           style={styles.headerAction}
           hitSlop={10}
           accessibilityLabel="Back"
           testID="workspace-advanced-back"
         >
-          <ArrowLeft size={20} color="#172033" strokeWidth={2.2} />
+          <ArrowLeft size={20} color="#FFFFFF" strokeWidth={2.2} />
         </Pressable>
-        <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>Ownership & deletion</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {team?.name ?? "Workspace"}
-            {role ? ` · ${formatTeamRole(role)}` : ""}
+        <View style={styles.topTitleWrap}>
+          <Text style={styles.bandTitle} numberOfLines={1}>
+            {deleteOpen ? "Delete workspace" : "Ownership & deletion"}
           </Text>
+          {!deleteOpen && team?.name ? (
+            <Text style={styles.bandSubtitle} numberOfLines={1}>
+              {team.name}
+              {role ? ` · ${formatTeamRole(role)}` : ""}
+            </Text>
+          ) : null}
         </View>
-        <View style={styles.headerPlaceholder} />
+        <View style={styles.topActionPlaceholder} />
       </View>
+    </>
+  );
 
-      {isLoading || !team ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color="#5B45FF" />
+  if (!teamId) {
+    return (
+      <View style={styles.screen} testID="workspace-advanced-screen">
+        {header}
+        <View style={styles.sheet}>
+          <View style={styles.centered}>
+            <AppText variant="body" color={palette.inkMuted}>
+              No workspace selected
+            </AppText>
+          </View>
         </View>
-      ) : deleteOpen ? (
-        <ScrollView
-          contentContainerStyle={[
-            styles.deleteContent,
-            { paddingBottom: insets.bottom + 24 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.deleteIcon}>
-            <Trash2 size={22} color="#DC2626" strokeWidth={2.1} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen} testID="workspace-advanced-screen">
+      {header}
+      <View style={styles.sheet}>
+        {isLoading || !team ? (
+          <View style={styles.centered}>
+            <ActivityIndicator color={palette.violet} />
           </View>
-          <Text style={styles.deleteTitle}>Delete workspace?</Text>
-          <Text style={styles.deleteBody}>
-            This permanently deletes{" "}
-            <Text style={styles.strong}>{team.name}</Text>, including its tasks
-            and messages. Members keep their accounts.
-          </Text>
-          <Text style={styles.fieldLabel}>Your account password</Text>
-          <TextInput
-            style={styles.input}
-            value={deletePassword}
-            onChangeText={setDeletePassword}
-            placeholder="Enter your password"
-            placeholderTextColor="#94A3B8"
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            testID="delete-workspace-password-input"
-          />
-          <Pressable
-            onPress={() =>
-              deleteMutation.mutate({ password: deletePassword.trim() })
-            }
-            disabled={
-              deleteMutation.isPending || deletePassword.trim().length === 0
-            }
-            style={[
-              styles.deleteButton,
-              deletePassword.trim().length === 0 ? styles.deleteButtonDisabled : null,
+        ) : deleteOpen ? (
+          <ScrollView
+            contentContainerStyle={[
+              styles.deleteContent,
+              { paddingBottom: Math.max(insets.bottom, 20) + 16 },
             ]}
-            testID="confirm-delete-workspace"
+            keyboardShouldPersistTaps="handled"
           >
-            {deleteMutation.isPending ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.deleteButtonText}>Delete forever</Text>
-            )}
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              setDeleteOpen(false);
-              setDeletePassword("");
-            }}
-            style={styles.cancelButton}
-            testID="cancel-delete-workspace"
+            <Card>
+              <View style={styles.deleteHero}>
+                <View style={styles.deleteIcon}>
+                  <Trash2 size={22} color="#DC2626" strokeWidth={2.1} />
+                </View>
+                <AppText variant="sectionTitle" style={styles.deleteTitle}>
+                  Delete workspace?
+                </AppText>
+                <AppText variant="supporting" style={{ marginTop: 6 }}>
+                  This permanently deletes{" "}
+                  <Text style={styles.strong}>{team.name}</Text>, including its
+                  tasks and messages. Members keep their accounts.
+                </AppText>
+              </View>
+            </Card>
+
+            <View style={styles.sectionBlock}>
+              <SectionHeader label="Confirm with password" />
+              <Card>
+                <AppText variant="sectionLabel" style={{ marginBottom: 6 }}>
+                  Your account password
+                </AppText>
+                <TextInput
+                  style={styles.input}
+                  value={deletePassword}
+                  onChangeText={setDeletePassword}
+                  placeholder="Enter your password"
+                  placeholderTextColor={palette.inkMuted}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  testID="delete-workspace-password-input"
+                />
+              </Card>
+            </View>
+
+            <Button
+              variant="destructive"
+              size="lg"
+              fullWidth
+              label="Delete forever"
+              loading={deleteMutation.isPending}
+              disabled={
+                deleteMutation.isPending || deletePassword.trim().length === 0
+              }
+              onPress={() =>
+                deleteMutation.mutate({ password: deletePassword.trim() })
+              }
+              testID="confirm-delete-workspace"
+            />
+            <Button
+              variant="ghost"
+              size="md"
+              fullWidth
+              label="Cancel"
+              onPress={() => {
+                setDeleteOpen(false);
+                setDeletePassword("");
+              }}
+              testID="cancel-delete-workspace"
+            />
+          </ScrollView>
+        ) : (
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: Math.max(insets.bottom, 20) + 16 },
+            ]}
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </Pressable>
-        </ScrollView>
-      ) : (
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: insets.bottom + 32 },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.introCard}>
-            <View style={styles.introIcon}>
-              <ShieldCheck size={20} color="#5B45FF" strokeWidth={2.1} />
-            </View>
-            <View style={styles.introCopy}>
-              <Text style={styles.introTitle}>Advanced workspace controls</Text>
-              <Text style={styles.introText}>
-                Ownership and access changes can affect every workspace member.
-              </Text>
-            </View>
-          </View>
-
-          {canTransfer ? (
-            <>
-              <Text style={styles.sectionLabel}>OWNERSHIP</Text>
-              <View style={styles.card}>
-                <AdvancedRow
-                  icon={<Crown size={18} color="#7C3AED" strokeWidth={2} />}
-                  title="Transfer ownership"
-                  subtitle={
-                    transferCandidates.length > 0
-                      ? "Choose a member to become the new owner"
-                      : "Add another member before transferring ownership"
-                  }
-                  onPress={() => setMemberPickerOpen(true)}
-                  disabled={transferCandidates.length === 0}
-                  testID="transfer-workspace-ownership"
-                />
+            <Card>
+              <View style={styles.heroRow}>
+                <IconTile tint="lavender" size={44}>
+                  <Layers
+                    size={20}
+                    color={tintInk("lavender")}
+                    strokeWidth={2.1}
+                  />
+                </IconTile>
+                <View style={styles.heroCopy}>
+                  <AppText variant="sectionLabel" color={palette.violet}>
+                    Advanced
+                  </AppText>
+                  <AppText variant="sectionTitle" style={styles.heroTitle}>
+                    Ownership & deletion
+                  </AppText>
+                  <AppText variant="supporting" style={{ marginTop: 2 }}>
+                    Ownership and access changes can affect every workspace
+                    member.
+                  </AppText>
+                </View>
               </View>
-            </>
-          ) : null}
+            </Card>
 
-          {canLeave ? (
-            <>
-              <Text style={styles.sectionLabel}>MEMBERSHIP</Text>
-              <View style={styles.card}>
-                <AdvancedRow
-                  icon={
-                    leaveMutation.isPending ? (
-                      <ActivityIndicator size="small" color="#64748B" />
-                    ) : (
-                      <LogOut size={18} color="#64748B" strokeWidth={2} />
-                    )
-                  }
-                  title="Leave workspace"
-                  subtitle="Remove your account from this workspace"
-                  onPress={confirmLeave}
-                  disabled={leaveMutation.isPending}
-                  testID="leave-workspace-button"
-                />
+            {canTransfer ? (
+              <View style={styles.sectionBlock}>
+                <SectionHeader label="Ownership" />
+                <AlenioList>
+                  <AlenioListRow
+                    leading={
+                      <IconTile tint="lavender">
+                        <Crown
+                          size={16}
+                          color={tintInk("lavender")}
+                          strokeWidth={2}
+                        />
+                      </IconTile>
+                    }
+                    title="Transfer ownership"
+                    subtitle={
+                      transferCandidates.length > 0
+                        ? "Choose a member to become the new owner"
+                        : "Add another member before transferring ownership"
+                    }
+                    onPress={
+                      transferCandidates.length > 0
+                        ? () => setMemberPickerOpen(true)
+                        : undefined
+                    }
+                    chevron={transferCandidates.length > 0}
+                    style={
+                      transferCandidates.length === 0
+                        ? styles.rowDisabled
+                        : undefined
+                    }
+                    testID="transfer-workspace-ownership"
+                  />
+                </AlenioList>
               </View>
-            </>
-          ) : null}
+            ) : null}
 
-          {canDelete ? (
-            <>
-              <Text style={styles.sectionLabel}>DANGER ZONE</Text>
-              <View style={styles.card}>
-                <AdvancedRow
-                  icon={<Trash2 size={18} color="#EF4444" strokeWidth={2} />}
-                  title="Delete workspace"
-                  subtitle="Permanently delete this workspace"
-                  onPress={() => setDeleteOpen(true)}
-                  destructive
-                  testID="delete-workspace-button"
-                />
+            {canLeave ? (
+              <View style={styles.sectionBlock}>
+                <SectionHeader label="Membership" />
+                <AlenioList>
+                  <AlenioListRow
+                    leading={
+                      <IconTile tint="lavender">
+                        {leaveMutation.isPending ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={tintInk("lavender")}
+                          />
+                        ) : (
+                          <LogOut
+                            size={16}
+                            color={tintInk("lavender")}
+                            strokeWidth={2}
+                          />
+                        )}
+                      </IconTile>
+                    }
+                    title="Leave workspace"
+                    subtitle="Remove your account from this workspace"
+                    onPress={
+                      leaveMutation.isPending ? undefined : confirmLeave
+                    }
+                    chevron={!leaveMutation.isPending}
+                    style={
+                      leaveMutation.isPending ? styles.rowDisabled : undefined
+                    }
+                    testID="leave-workspace-button"
+                  />
+                </AlenioList>
               </View>
-            </>
-          ) : null}
-        </ScrollView>
-      )}
+            ) : null}
+
+            {canDelete ? (
+              <View style={styles.sectionBlock}>
+                <SectionHeader label="Danger zone" />
+                <AlenioList>
+                  <AlenioListRow
+                    leading={
+                      <View style={styles.dangerTile}>
+                        <Trash2 size={16} color="#DC2626" strokeWidth={2} />
+                      </View>
+                    }
+                    title={
+                      <AppText variant="rowTitle" color="#DC2626">
+                        Delete workspace
+                      </AppText>
+                    }
+                    subtitle="Permanently delete this workspace"
+                    onPress={() => setDeleteOpen(true)}
+                    chevron
+                    testID="delete-workspace-button"
+                  />
+                </AlenioList>
+              </View>
+            ) : null}
+          </ScrollView>
+        )}
+      </View>
 
       <AlenioBottomSheet
         visible={memberPickerOpen}
@@ -348,28 +419,30 @@ export default function WorkspaceAdvancedScreen() {
         compact
         testID="ownership-transfer-member-picker"
       >
-        <View style={styles.memberList}>
+        <AlenioList>
           {transferCandidates.map((member) => (
-            <Pressable
+            <AlenioListRow
               key={member.userId}
+              leading={
+                <UserAvatar
+                  user={member.user}
+                  size={36}
+                  radius={18}
+                  backgroundColor={tints.lavender.bg}
+                  textColor={tints.lavender.fg}
+                  fontSize={14}
+                />
+              }
+              title={member.user.name?.trim() || member.user.email}
+              subtitle={formatTeamRole(member.role)}
               onPress={() => {
                 setMemberPickerOpen(false);
                 setTimeout(() => setTransferMember(member), 260);
               }}
-              style={styles.memberRow}
-              accessibilityRole="button"
-            >
-              <UserAvatar user={member.user} size={40} radius={20} />
-              <View style={styles.memberCopy}>
-                <Text style={styles.memberName} numberOfLines={1}>
-                  {member.user.name?.trim() || member.user.email}
-                </Text>
-                <Text style={styles.memberRole}>{formatTeamRole(member.role)}</Text>
-              </View>
-              <ChevronRight size={16} color="#A1AAB8" />
-            </Pressable>
+              chevron
+            />
           ))}
-        </View>
+        </AlenioList>
       </AlenioBottomSheet>
 
       <OwnershipTransferSheet
@@ -394,113 +467,109 @@ export default function WorkspaceAdvancedScreen() {
           toast({ title: "Ownership transfer requested", preset: "done" });
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#FFFFFF" },
-  header: {
-    minHeight: 82,
+  screen: {
+    flex: 1,
+    backgroundColor: palette.page,
+  },
+  bandHeader: {
+    zIndex: 2,
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E8EDF3",
-    backgroundColor: "#FFFFFF",
   },
   headerAction: {
     width: 34,
     height: 34,
-    borderRadius: 11,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
-  headerCopy: { flex: 1, minWidth: 0 },
-  headerTitle: {
+  topActionPlaceholder: {
+    width: 34,
+    height: 34,
+  },
+  topTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  bandTitle: {
     fontSize: 17,
     lineHeight: 21,
     fontWeight: "700",
-    color: "#172033",
+    color: "#FFFFFF",
     letterSpacing: -0.25,
   },
-  headerSubtitle: {
-    marginTop: 3,
-    fontSize: 10.5,
-    lineHeight: 13,
+  bandSubtitle: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: "600",
-    color: "#8A96A8",
+    color: "rgba(255,255,255,0.72)",
   },
-  headerPlaceholder: { width: 34, height: 34 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  emptyText: { fontSize: 14, fontWeight: "600", color: "#64748B" },
-  content: { paddingHorizontal: 16, paddingTop: 18 },
-  introCard: {
-    minHeight: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E8E3FF",
-    backgroundColor: "#F8F7FF",
-  },
-  introIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#ECE9FF",
-  },
-  introCopy: { flex: 1, minWidth: 0 },
-  introTitle: { fontSize: 13, fontWeight: "800", color: "#172033" },
-  introText: { marginTop: 3, fontSize: 10.5, lineHeight: 15, color: "#7C8798" },
-  sectionLabel: {
-    marginTop: 24,
-    marginBottom: 9,
-    marginLeft: 2,
-    fontSize: 9.5,
-    lineHeight: 12,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    color: "#718096",
-  },
-  card: {
+  sheet: {
+    flex: 1,
+    marginTop: -8,
+    borderTopLeftRadius: BAND_SHEET_RADIUS,
+    borderTopRightRadius: BAND_SHEET_RADIUS,
+    backgroundColor: palette.page,
     overflow: "hidden",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E1E6F0",
-    backgroundColor: "#FFFFFF",
   },
-  row: {
-    minHeight: 68,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    gap: 12,
+  },
+  deleteContent: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    gap: 12,
+  },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  heroRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-  rowIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+  heroCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  heroTitle: {
+    marginTop: 2,
+    fontSize: 16,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
+  sectionBlock: {
+    gap: 0,
+  },
+  rowDisabled: {
+    opacity: 0.45,
+  },
+  dangerTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F3F1FF",
+    backgroundColor: "#FEE2E2",
   },
-  rowCopy: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: 13, lineHeight: 17, fontWeight: "700", color: "#172033" },
-  rowSubtitle: { marginTop: 3, fontSize: 10.5, lineHeight: 14, color: "#8A96A8" },
-  destructiveRow: { backgroundColor: "#FFFBFB" },
-  destructiveIcon: { backgroundColor: "#FFF0F0" },
-  destructiveTitle: { color: "#DC2626" },
-  disabled: { opacity: 0.45 },
-  deleteContent: { paddingHorizontal: 20, paddingTop: 24 },
+  deleteHero: {
+    alignItems: "flex-start",
+  },
   deleteIcon: {
     width: 48,
     height: 48,
@@ -510,64 +579,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FECACA",
     backgroundColor: "#FFF1F2",
+    marginBottom: 12,
   },
   deleteTitle: {
-    marginTop: 18,
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  strong: {
     fontWeight: "800",
-    color: "#0F172A",
+    color: palette.ink,
   },
-  deleteBody: {
-    marginTop: 8,
-    marginBottom: 22,
-    fontSize: 13,
-    lineHeight: 20,
-    color: "#64748B",
-  },
-  strong: { fontWeight: "800", color: "#334155" },
-  fieldLabel: { marginBottom: 7, fontSize: 11, fontWeight: "700", color: "#64748B" },
   input: {
-    height: 48,
-    paddingHorizontal: 14,
-    borderRadius: 13,
+    height: 46,
+    paddingHorizontal: 13,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#DDE3EC",
+    borderColor: "#E4E0EF",
     backgroundColor: "#FFFFFF",
-    fontSize: 14,
-    color: "#0F172A",
+    fontSize: 15,
+    color: palette.ink,
   },
-  deleteButton: {
-    minHeight: 48,
-    marginTop: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 13,
-    backgroundColor: "#DC2626",
-  },
-  deleteButtonDisabled: { backgroundColor: "#CBD5E1" },
-  deleteButtonText: { fontSize: 14, fontWeight: "800", color: "#FFFFFF" },
-  cancelButton: {
-    minHeight: 46,
-    marginTop: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 13,
-    backgroundColor: "#E9EEF5",
-  },
-  cancelButtonText: { fontSize: 14, fontWeight: "700", color: "#475569" },
-  memberList: { overflow: "hidden", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0" },
-  memberRow: {
-    minHeight: 62,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5E9F1",
-  },
-  memberCopy: { flex: 1, minWidth: 0 },
-  memberName: { fontSize: 13, fontWeight: "700", color: "#172033" },
-  memberRole: { marginTop: 3, fontSize: 10.5, color: "#8A96A8" },
 });

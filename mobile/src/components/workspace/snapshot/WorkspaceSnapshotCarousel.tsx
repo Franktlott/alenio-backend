@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Animated,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,7 +11,9 @@ import {
   type NativeSyntheticEvent,
   type ViewStyle,
 } from "react-native";
+import { Settings } from "lucide-react-native";
 import { WS } from "@/components/workspace/workspace-ui";
+import { elevation, palette } from "@/theme";
 import {
   SnapshotMetricCard,
   useReduceMotion,
@@ -49,6 +52,8 @@ const GROUP_GAP = 26;
 type Props = {
   pages: SnapshotPage[];
   loading?: boolean;
+  /** Opens workplace settings. Hidden when omitted. */
+  onOpenSettings?: () => void;
 };
 
 function metricGapForCount(count: number) {
@@ -101,7 +106,11 @@ function PageDots({
   );
 }
 
-export function WorkspaceSnapshotCarousel({ pages, loading = false }: Props) {
+export function WorkspaceSnapshotCarousel({
+  pages,
+  loading = false,
+  onOpenSettings,
+}: Props) {
   const reduceMotion = useReduceMotion();
   const { columnWidth } = useAdaptiveLayout();
   const cluster = useStatusClusterInset();
@@ -162,11 +171,25 @@ export function WorkspaceSnapshotCarousel({ pages, loading = false }: Props) {
     const next = Math.floor(event.nativeEvent.layout.width);
     setMeasuredWidth((current) => (current === next ? current : next));
   };
+  const settingsButton = onOpenSettings ? (
+    <Pressable
+      onPress={onOpenSettings}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Workplace settings"
+      testID="workspace-snapshot-settings"
+      style={styles.settingsHit}
+    >
+      <Settings size={15} color={palette.inkMuted} strokeWidth={2.2} />
+    </Pressable>
+  ) : null;
+
   const headerFor = (title: string) => (
     <View style={styles.headerRow}>
       <Text style={styles.headerTitle} numberOfLines={1}>
         {title}
       </Text>
+      {settingsButton}
     </View>
   );
 
@@ -222,6 +245,7 @@ export function WorkspaceSnapshotCarousel({ pages, loading = false }: Props) {
                   </View>
                 </Fragment>
               ))}
+              {settingsButton}
             </View>
             <View
               style={styles.unifiedRow}
@@ -313,15 +337,9 @@ export function WorkspaceSnapshotCarousel({ pages, loading = false }: Props) {
 const CARD_STYLE: ViewStyle = {
   marginTop: 6,
   marginBottom: 6,
+  ...elevation.card,
   borderRadius: 18,
-  backgroundColor: WS.surface,
   borderWidth: CARD_BORDER,
-  borderColor: "#EDF1F6",
-  shadowColor: "#0F172A",
-  shadowOpacity: 0.035,
-  shadowRadius: 7,
-  shadowOffset: { width: 0, height: 2 },
-  elevation: 2,
 };
 
 const CARD_INNER_STYLE: ViewStyle = {
@@ -338,6 +356,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: CARD_PADDING,
     marginBottom: 3,
     gap: 10,
+  },
+  settingsHit: {
+    width: 28,
+    height: 28,
+    marginLeft: 4,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F4F1FB",
   },
   /** No gap: the group widths alone have to line the titles up with the row. */
   headerGroupRow: {

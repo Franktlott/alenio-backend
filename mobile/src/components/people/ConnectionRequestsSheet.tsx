@@ -135,7 +135,7 @@ export function ConnectionRequestsSheet({
       ) : requests.length === 0 ? (
         <View style={styles.empty} testID={`connection-requests-sheet-empty-${tab}`}>
           <LinearGradient
-            colors={["#EEF2FF", "#F6F3FF"]}
+            colors={["#EFE9FF", "#F6F3FF"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.emptyIcon}
@@ -188,7 +188,7 @@ export function ConnectionRequestsSheet({
                   user={request.person}
                   size={42}
                   radius={21}
-                  backgroundColor="#EEF2FF"
+                  backgroundColor="#EFE9FF"
                   textColor={colors.brand}
                   fontSize={15}
                 />

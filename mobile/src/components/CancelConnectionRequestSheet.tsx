@@ -83,7 +83,7 @@ export function CancelConnectionRequestSheet({
               user={person}
               size={42}
               radius={21}
-              backgroundColor="#EEF2FF"
+              backgroundColor="#EFE9FF"
               resetKey={person.id}
             />
           ) : null}

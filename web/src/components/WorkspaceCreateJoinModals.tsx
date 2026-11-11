@@ -86,6 +86,14 @@ export function WorkspaceCreateJoinModals({
     }
   }, [createOpen]);
 
+  useEffect(() => {
+    if (selectedPlan === "operations" && plans.operations.comingSoon && !plans.pro.comingSoon) {
+      setSelectedPlan("pro");
+    } else if (selectedPlan === "pro" && plans.pro.comingSoon && !plans.operations.comingSoon) {
+      setSelectedPlan("operations");
+    }
+  }, [plans.operations.comingSoon, plans.pro.comingSoon, selectedPlan]);
+
   const onCreateDetailsNext = async () => {
     const name = createName.trim().toLocaleLowerCase();
     setCreateErr(null);
@@ -364,12 +372,16 @@ export function WorkspaceCreateJoinModals({
                     onChange={(event) => setSelectedPlan(event.target.value === "operations" ? "operations" : "pro")}
                     data-testid="create-workspace-plan"
                   >
-                    <option value="pro">
-                      {plans.pro.name} — {plans.pro.priceLabel} {plans.pro.periodLabel}
-                    </option>
-                    <option value="operations">
-                      {plans.operations.name} — {plans.operations.priceLabel} {plans.operations.periodLabel}
-                    </option>
+                    {!plans.pro.comingSoon ? (
+                      <option value="pro">
+                        {plans.pro.name} — {plans.pro.priceLabel} {plans.pro.periodLabel}
+                      </option>
+                    ) : null}
+                    {!plans.operations.comingSoon ? (
+                      <option value="operations">
+                        {plans.operations.name} — {plans.operations.priceLabel} {plans.operations.periodLabel}
+                      </option>
+                    ) : null}
                   </select>
                   <p><strong>{createName.trim()}</strong> · {createIndustry.trim()}</p>
                 </div>

@@ -8,7 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 import type { LucideIcon } from "lucide-react-native";
 
-const ACTIVE = "#4361EE";
+const ACTIVE = "#6d28d9";
 const INACTIVE = "#8A94A6";
 const POP_SPRING = { damping: 14, stiffness: 340, mass: 0.5 };
 

@@ -15,7 +15,7 @@ export const TAB_BAR_BOTTOM_GAP = 0;
 export const TAB_BAR_ACTIVE_COLOR = colors.brand;
 export const TAB_BAR_INACTIVE_COLOR = colors.textMuted;
 export const TAB_BAR_DIVIDER_COLOR = colors.borderStrong;
-export const TAB_BAR_ACTIVE_HIGHLIGHT = "rgba(67, 97, 238, 0.08)";
+export const TAB_BAR_ACTIVE_HIGHLIGHT = "rgba(109, 40, 217, 0.08)";
 export const WORKSPACE_CARD_BOTTOM_GAP = 12;
 
 export const TAB_BAR_ICON_SIZE = 22;

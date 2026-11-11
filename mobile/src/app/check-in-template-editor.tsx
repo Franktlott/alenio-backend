@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,10 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -24,9 +21,9 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { usePreventRemove } from "expo-router/react-navigation";
+import { setStatusBarStyle } from "expo-status-bar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -73,6 +70,12 @@ import {
 import { useTeamStore } from "@/lib/state/team-store";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
 import { canManageWorkspace } from "@/lib/workspace-management";
+import { AppHeaderBand } from "@/components/AppHeaderBand";
+import { palette } from "@/theme";
+
+const BAND_SHEET_RADIUS = 24;
+const HEADER_ROW = 48;
+
 type SelectedQuestion = { sectionIndex: number; questionIndex: number };
 type ConfirmMode = "leave" | "delete" | null;
 type CreateStep = 1 | 2 | 3;
@@ -305,6 +308,14 @@ export default function CheckInTemplateEditorScreen() {
   const sectionTitleRef = useRef("");
   const formScrollRef = useRef<ScrollView>(null);
   const isCreating = !templateId;
+  const bandHeight = insets.top + HEADER_ROW + 22;
+
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle("light");
+      return () => setStatusBarStyle("dark");
+    }, []),
+  );
 
   const teamQuery = useQuery({
     queryKey: ["team", teamId],
@@ -1190,15 +1201,20 @@ export default function CheckInTemplateEditorScreen() {
     (templateId && templatesQuery.isLoading)
   ) {
     return (
-      <SafeAreaView
-        style={styles.screen}
-        testID="check-in-template-editor-loading"
-      >
-        <View style={styles.center}>
-          <ActivityIndicator color={"#6D4AFF"} />
-          <Text style={styles.sectionHint}>Loading editor…</Text>
+      <View style={styles.screen} testID="check-in-template-editor-loading">
+        <AppHeaderBand height={bandHeight} />
+        <View style={[styles.topBar, { paddingTop: insets.top }]}>
+          <View style={styles.topAction} />
+          <View style={{ flex: 1 }} />
+          <View style={styles.topAction} />
         </View>
-      </SafeAreaView>
+        <View style={styles.pageSheet}>
+          <View style={styles.center}>
+            <ActivityIndicator color={palette.violet} />
+            <Text style={styles.sectionHint}>Loading editor…</Text>
+          </View>
+        </View>
+      </View>
     );
   }
 
@@ -1207,48 +1223,41 @@ export default function CheckInTemplateEditorScreen() {
     (templateId && (templatesQuery.isError || templateMissing))
   ) {
     return (
-      <SafeAreaView
-        style={styles.screen}
-        testID="check-in-template-editor-error"
-      >
-        <View style={styles.topBar}>
+      <View style={styles.screen} testID="check-in-template-editor-error">
+        <AppHeaderBand height={bandHeight} />
+        <View style={[styles.topBar, { paddingTop: insets.top }]}>
           <Pressable onPress={() => router.back()} style={styles.topAction}>
-            <ArrowLeft size={20} color="#0F172A" />
+            <ArrowLeft size={20} color="#FFFFFF" strokeWidth={2.2} />
           </Pressable>
-          <Text style={styles.topTitle}>Check-in template</Text>
+          <View style={{ flex: 1, alignItems: "center" }}>
+            <Text style={styles.topTitle}>Check-in template</Text>
+          </View>
           <View style={styles.topAction} />
         </View>
-        <View style={styles.center}>
-          <Text style={styles.previewTitle}>
-            {!canManage
-              ? "Leader access required"
-              : templateMissing
-                ? "Template not found"
-                : "Couldn’t load template"}
-          </Text>
-          <Text style={styles.sectionHint}>
-            {templatesQuery.error instanceof Error
-              ? templatesQuery.error.message
-              : "Ask a workspace leader for access."}
-          </Text>
+        <View style={styles.pageSheet}>
+          <View style={styles.center}>
+            <Text style={styles.previewTitle}>
+              {!canManage
+                ? "Leader access required"
+                : templateMissing
+                  ? "Template not found"
+                  : "Couldn’t load template"}
+            </Text>
+            <Text style={styles.sectionHint}>
+              {templatesQuery.error instanceof Error
+                ? templatesQuery.error.message
+                : "Ask a workspace leader for access."}
+            </Text>
+          </View>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView
-      style={styles.screen}
-      edges={["top"]}
-      testID="check-in-template-editor-screen"
-    >
-      <LinearGradient
-        pointerEvents="none"
-        colors={["#E6DCFF", "#F4F0FF", "#F7F5FC"]}
-        locations={[0, 0.45, 1]}
-        style={styles.headerWash}
-      />
-      <View style={styles.topBar}>
+    <View style={styles.screen} testID="check-in-template-editor-screen">
+      <AppHeaderBand height={bandHeight} />
+      <View style={[styles.topBar, { paddingTop: insets.top }]}>
         <Pressable
           onPress={navigateBack}
           style={styles.topAction}
@@ -1257,11 +1266,11 @@ export default function CheckInTemplateEditorScreen() {
           accessibilityLabel="Go back"
           testID="check-in-template-editor-back"
         >
-          <ArrowLeft size={20} color="#0F172A" />
+          <ArrowLeft size={20} color="#FFFFFF" strokeWidth={2.2} />
         </Pressable>
-        <View style={{ flex: 1, alignItems: "center" }}>
-          <Text style={styles.topTitle}>
-            {templateId ? "Edit Template" : "Create a Template"}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.topTitle} numberOfLines={1}>
+            {templateId ? "Edit template" : "Create a template"}
           </Text>
           <Text style={styles.topSubtitle} numberOfLines={1}>
             {templateId
@@ -1277,7 +1286,7 @@ export default function CheckInTemplateEditorScreen() {
             accessibilityLabel="Close"
             testID="check-in-template-editor-close"
           >
-            <X size={18} color="#172033" strokeWidth={2.2} />
+            <X size={18} color="#FFFFFF" strokeWidth={2.2} />
           </Pressable>
         ) : (
           <Pressable
@@ -1288,14 +1297,15 @@ export default function CheckInTemplateEditorScreen() {
             testID="toggle-check-in-template-preview"
           >
             {previewing ? (
-              <Pencil size={18} color={"#6D4AFF"} />
+              <Pencil size={18} color="#FFFFFF" strokeWidth={2.2} />
             ) : (
-              <Eye size={19} color={"#6D4AFF"} />
+              <Eye size={19} color="#FFFFFF" strokeWidth={2.2} />
             )}
           </Pressable>
         )}
       </View>
 
+      <View style={styles.pageSheet}>
       {previewing ? renderPreview() : renderEditor()}
 
       <View
@@ -1384,6 +1394,7 @@ export default function CheckInTemplateEditorScreen() {
             </>
           )}
         </Pressable>
+      </View>
       </View>
 
       <Modal
@@ -1771,12 +1782,12 @@ export default function CheckInTemplateEditorScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F7F5FC" },
+  screen: { flex: 1, backgroundColor: palette.page },
   headerWash: {
     position: "absolute",
     top: 0,
@@ -1792,11 +1803,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   topBar: {
+    zIndex: 2,
     minHeight: 58,
     paddingHorizontal: 12,
-    paddingBottom: 4,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
     backgroundColor: "transparent",
   },
   topAction: {
@@ -1804,12 +1817,30 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
-    backgroundColor: "#F1F0F6",
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
-  topActionActive: { backgroundColor: "#EDE7FF" },
-  topTitle: { fontSize: 16, fontWeight: "800", color: "#17142B" },
-  topSubtitle: { marginTop: 1, maxWidth: 240, fontSize: 12, color: "#8A96A8" },
+  topActionActive: { backgroundColor: "rgba(255,255,255,0.28)" },
+  topTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.2,
+  },
+  topSubtitle: {
+    marginTop: 1,
+    maxWidth: 260,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.72)",
+  },
+  pageSheet: {
+    flex: 1,
+    marginTop: -8,
+    borderTopLeftRadius: BAND_SHEET_RADIUS,
+    borderTopRightRadius: BAND_SHEET_RADIUS,
+    backgroundColor: palette.page,
+    overflow: "hidden",
+  },
   stepper: {
     marginBottom: 16,
     flexDirection: "row",
@@ -1831,7 +1862,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EDE7FF",
     zIndex: 1,
   },
-  stepperDotOn: { backgroundColor: "#6D4AFF" },
+  stepperDotOn: { backgroundColor: palette.violet },
   stepperDotDone: { backgroundColor: "#0F9D6E" },
   stepperNumber: { fontSize: 13, fontWeight: "800", color: "#8B7CC8" },
   stepperNumberOn: { color: "#FFFFFF" },
@@ -1842,7 +1873,7 @@ const styles = StyleSheet.create({
     color: "#8B95A8",
     textAlign: "center",
   },
-  stepperLabelOn: { color: "#6D4AFF" },
+  stepperLabelOn: { color: palette.violet },
   stepperLine: {
     position: "absolute",
     top: 13,
@@ -1851,12 +1882,12 @@ const styles = StyleSheet.create({
   },
   stepperLineLeft: { left: 0, right: "50%", marginRight: 18 },
   stepperLineRight: { left: "50%", right: 0, marginLeft: 18 },
-  stepperLineOn: { backgroundColor: "#6D4AFF" },
+  stepperLineOn: { backgroundColor: palette.violet },
   content: { padding: 16, gap: 14 },
   stepCount: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#6D4AFF",
+    color: palette.violet,
   },
   stepTitle: {
     marginTop: 2,
@@ -1873,7 +1904,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#E4DFF4",
   },
-  stepSegmentActive: { backgroundColor: "#6D4AFF" },
+  stepSegmentActive: { backgroundColor: palette.violet },
   formCard: {
     padding: 14,
     gap: 8,
@@ -2350,7 +2381,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 7,
     borderRadius: 14,
-    backgroundColor: "#6D4AFF",
+    backgroundColor: palette.violet,
   },
   saveButtonText: { fontSize: 15, fontWeight: "700", color: "#FFFFFF" },
   previewHero: { paddingHorizontal: 2, paddingTop: 4 },

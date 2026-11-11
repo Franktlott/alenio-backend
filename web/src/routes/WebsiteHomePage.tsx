@@ -191,13 +191,13 @@ export function WebsiteHomePage() {
             <h1>
               Your Network.
               <br />
-              Your Operations.
+              Your Workspace.
               <br />
               <span className="lp-gradient-text">One Platform.</span>
             </h1>
             <p className="lp-hero-sub">
-              Alenio brings together a professional network for frontline leaders and a powerful operations workspace to
-              keep your team aligned, productive, and growing.
+              Alenio brings together a professional network for frontline leaders and a workspace that runs your
+              store&apos;s tasks, schedules, and checklists.
             </p>
             <div className="lp-hero-cta">
               <Link to="/sign-up" className="lp-btn lp-btn--primary lp-btn--lg">

@@ -13,7 +13,7 @@ export const TODAY_ITEM_PRESENTATION: Record<
   HomeTodayItemType,
   { label: string; Icon: LucideIcon; color: string; surface: string }
 > = {
-  task: { label: "Task", Icon: SquareCheckBig, color: "#4361EE", surface: "#EEF2FF" },
+  task: { label: "Task", Icon: SquareCheckBig, color: "#6d28d9", surface: "#EFE9FF" },
   reminder: { label: "Reminder", Icon: Bell, color: "#A65B13", surface: "#FFF5E8" },
   event: { label: "Event", Icon: CalendarDays, color: "#167C63", surface: "#EAF8F3" },
   meeting: { label: "Meeting", Icon: Video, color: "#7550D9", surface: "#F1EDFF" },

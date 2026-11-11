@@ -19,8 +19,11 @@ import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 import { getBackendUrl } from "@/lib/backend-url";
 import { safeFetch } from "@/lib/auth/safe-fetch";
 import {
-  AUTH_CODE_INPUT_CLASS,
+  AUTH_CODE_INPUT_CLASS_DARK,
+  AUTH_PLACEHOLDER_DARK,
+  AuthCard,
   AuthField,
+  authGoBack,
   AuthHeading,
   AuthMessage,
   AuthPrimaryButton,
@@ -169,17 +172,24 @@ export default function VerifyOtp() {
 
   if (!email.trim()) {
     return (
-      <AuthScreen testID="verify-otp-missing-email">
+      <AuthScreen
+        testID="verify-otp-missing-email"
+        tone="dark"
+        onBack={authGoBack}
+        wrapContentInCard={false}
+      >
         <AuthHeading
           title="Email required"
           subtitle="Missing email. Go back to sign in and try again."
         />
-        <AuthPrimaryButton
-          label="Back to sign in"
-          loading={false}
-          onPress={() => router.replace("/sign-in")}
-          testID="verify-otp-back-sign-in"
-        />
+        <AuthCard>
+          <AuthPrimaryButton
+            label="Back to sign in"
+            loading={false}
+            onPress={() => router.replace("/sign-in")}
+            testID="verify-otp-back-sign-in"
+          />
+        </AuthCard>
       </AuthScreen>
     );
   }
@@ -189,24 +199,32 @@ export default function VerifyOtp() {
   }
 
   return (
-    <AuthScreen testID="verify-otp-screen" scrollTestID="verify-otp-scroll">
+    <AuthScreen
+      testID="verify-otp-screen"
+      scrollTestID="verify-otp-scroll"
+      tone="dark"
+      onBack={authGoBack}
+      wrapContentInCard={false}
+    >
       <AuthHeading
-        title="Verify your email"
+        badge="One last step"
+        title="Verify your"
+        titleAccent="email"
         subtitle={
           <>
             We sent a verification code to{" "}
-            <Text className="font-semibold text-[#172033]" selectable testID="verify-otp-email-display">
+            <Text className="font-semibold text-white" selectable testID="verify-otp-email-display">
               {email.trim().toLowerCase()}
             </Text>
           </>
         }
       />
-
+      <AuthCard>
           <AuthField label="Verification code">
             <TextInput
-              className={AUTH_CODE_INPUT_CLASS}
+              className={AUTH_CODE_INPUT_CLASS_DARK}
               placeholder="••••••"
-              placeholderTextColor="#98A1B2"
+              placeholderTextColor={AUTH_PLACEHOLDER_DARK}
               keyboardType="number-pad"
               maxLength={OTP_MAX_LEN}
               value={otp}
@@ -242,9 +260,9 @@ export default function VerifyOtp() {
             testID="verify-otp-resend"
           >
             {resendLoading ? (
-              <ActivityIndicator color="#6366F1" />
+              <ActivityIndicator color="#c4b5fd" />
             ) : (
-              <Text className="text-[14px] font-medium text-[#4F35D9]">Resend code</Text>
+              <Text className="text-[14px] font-medium text-[#c4b5fd]">Resend code</Text>
             )}
           </TouchableOpacity>
 
@@ -254,6 +272,7 @@ export default function VerifyOtp() {
             testID="verify-otp-cancel"
             className="mt-2"
           />
+      </AuthCard>
     </AuthScreen>
   );
 }

@@ -294,8 +294,8 @@ export function ManagerCoachingHome({
     <RefreshControl
       refreshing={refreshing}
       onRefresh={onRefresh}
-      tintColor="#4361EE"
-      colors={["#4361EE"]}
+      tintColor="#6d28d9"
+      colors={["#6d28d9"]}
     />
   );
 
@@ -567,7 +567,7 @@ export function ManagerCoachingHome({
                       user={member.user}
                       size={38}
                       radius={19}
-                      backgroundColor="#EEF2FF"
+                      backgroundColor="#EFE9FF"
                       textColor={colors.brand}
                       fontSize={14}
                     />

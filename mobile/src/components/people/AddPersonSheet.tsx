@@ -40,7 +40,7 @@ const ACTIONS: Record<AddPersonActionKey, ActionDefinition> = {
     description:
       "Find anyone on Alenio by username or name and send a connection request.",
     icon: UserRoundPlus,
-    tint: "#EEF2FF",
+    tint: "#EFE9FF",
     iconColor: colors.brand,
   },
   invite: {

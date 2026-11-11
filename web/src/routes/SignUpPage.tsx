@@ -215,7 +215,7 @@ export function SignUpPage() {
           <h1 className="auth-v2-hero-title">
             Your Network.
             <br />
-            Your Operations.
+            Your Workspace.
             <br />
             <span>One Platform.</span>
           </h1>

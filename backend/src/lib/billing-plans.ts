@@ -25,7 +25,10 @@ export const PLAN_PRICE_MAX_CENTS = 1_000_000;
 
 export type ExistingSubscribers = "keep" | "move";
 
-type PlanDefaults = Pick<BillingPlan, "name" | "bestFor" | "priceCents" | "currency" | "interval"> & { features: string[] };
+type PlanDefaults = Pick<
+  BillingPlan,
+  "name" | "bestFor" | "priceCents" | "currency" | "interval" | "comingSoon"
+> & { features: string[] };
 
 const DEFAULTS: Record<BillingPlanKey, PlanDefaults> = {
   pro: {
@@ -45,6 +48,7 @@ const DEFAULTS: Record<BillingPlanKey, PlanDefaults> = {
     priceCents: 3999,
     currency: "usd",
     interval: "month",
+    comingSoon: false,
   },
   operations: {
     name: "Operations",
@@ -59,6 +63,7 @@ const DEFAULTS: Record<BillingPlanKey, PlanDefaults> = {
     priceCents: 6999,
     currency: "usd",
     interval: "month",
+    comingSoon: true,
   },
 };
 
@@ -110,8 +115,18 @@ export function includedOf(plan: Pick<BillingPlan, "key" | "includedFeatures">):
 
 /** One-line description of an edit for the history list and the activity log. */
 export function describePlanEdit(
-  before: Pick<BillingPlan, "name" | "bestFor" | "priceCents" | "currency"> & { features: string[]; included?: string[] },
-  after: { name: string; bestFor: string; priceCents: number; features: string[]; included?: string[] },
+  before: Pick<BillingPlan, "name" | "bestFor" | "priceCents" | "currency" | "comingSoon"> & {
+    features: string[];
+    included?: string[];
+  },
+  after: {
+    name: string;
+    bestFor: string;
+    priceCents: number;
+    features: string[];
+    included?: string[];
+    comingSoon: boolean;
+  },
   existing: ExistingSubscribers | null,
 ): string {
   const parts: string[] = [];
@@ -121,6 +136,9 @@ export function describePlanEdit(
   }
   if (before.name !== after.name) parts.push(`name “${before.name}” → “${after.name}”`);
   if (before.bestFor !== after.bestFor) parts.push("description");
+  if (before.comingSoon !== after.comingSoon) {
+    parts.push(after.comingSoon ? "marked coming soon" : "marked available");
+  }
   if (before.included && after.included) {
     const added = after.included.filter((key) => !before.included!.includes(key)).map(featureName);
     const removed = before.included.filter((key) => !after.included!.includes(key)).map(featureName);
@@ -221,6 +239,7 @@ export function serializePublicPlan(plan: BillingPlan, allPlans: BillingPlan[] =
     interval: plan.interval,
     priceLabel: formatPlanPrice(plan.priceCents, plan.currency),
     periodLabel: planPeriodLabel(plan.interval),
+    comingSoon: plan.comingSoon,
   };
 }
 
@@ -230,6 +249,7 @@ export type PlanEdit = {
   features: string[];
   includedFeatures: string[];
   priceCents: number;
+  comingSoon: boolean;
   existingSubscribers: ExistingSubscribers | null;
 };
 
@@ -286,7 +306,14 @@ export async function updateBillingPlan(
 
   const summary = describePlanEdit(
     { ...current, features: featuresOf(current), included: includedOf(current) },
-    { name: edit.name, bestFor: edit.bestFor, priceCents: edit.priceCents, features, included },
+    {
+      name: edit.name,
+      bestFor: edit.bestFor,
+      priceCents: edit.priceCents,
+      features,
+      included,
+      comingSoon: edit.comingSoon,
+    },
     priceChanged ? edit.existingSubscribers : null,
   );
   const moving = priceChanged && edit.existingSubscribers === "move" && Boolean(oldPriceId);
@@ -299,6 +326,7 @@ export async function updateBillingPlan(
         features,
         includedFeatures: included,
         priceCents: edit.priceCents,
+        comingSoon: edit.comingSoon,
         stripePriceId: newPriceId,
         updatedById: actorId,
       },

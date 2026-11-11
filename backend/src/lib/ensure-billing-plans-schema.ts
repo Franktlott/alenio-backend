@@ -21,6 +21,25 @@ export async function ensureBillingPlansSchema(prisma: PrismaClient): Promise<vo
   await prisma.$executeRawUnsafe(`
     ALTER TABLE public."BillingPlan" ADD COLUMN IF NOT EXISTS "includedFeatures" JSONB;
   `);
+  // Add availability flag once; seed Operations as coming soon so existing installs keep current behavior.
+  await prisma.$executeRawUnsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'BillingPlan'
+          AND column_name = 'comingSoon'
+      ) THEN
+        ALTER TABLE public."BillingPlan"
+          ADD COLUMN "comingSoon" BOOLEAN NOT NULL DEFAULT false;
+        UPDATE public."BillingPlan"
+          SET "comingSoon" = true
+          WHERE "key" = 'operations';
+      END IF;
+    END $$;
+  `);
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS public."BillingPlanChange" (
       "id" TEXT NOT NULL,

@@ -60,7 +60,7 @@ import type {
 } from "@/lib/types";
 import type { AddConnectionEntryMode } from "@/components/people/AddConnectionSheet";
 import { useTabBarClearanceFn } from "@/lib/tab-bar";
-import { colors, typography } from "@/theme";
+import { colors, elevation, palette, typography } from "@/theme";
 import {
   CONNECTION_DIRECTORY_SORT_LABELS,
   connectionIndexLetter,
@@ -454,16 +454,17 @@ export function ZeroWorkspaceTeamHome({
         {activeTab === "connections" ? (
           <View style={styles.connectionSearchRow}>
             <View style={styles.connectionSearch} testID="no-workspace-search">
-              <Search size={15} color="#94A3B8" />
+              <Search size={14} color="#8A96A8" strokeWidth={2.1} />
               <TextInput
                 value={searchQuery ?? ""}
                 onChangeText={onSearchChange}
                 placeholder="Search by name, role, or workspace..."
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#8A96A8"
                 style={styles.connectionSearchInput}
                 autoCorrect={false}
                 autoCapitalize="none"
                 returnKeyType="search"
+                clearButtonMode="while-editing"
                 accessibilityLabel="Search connections"
                 testID="connections-search-input"
               />
@@ -474,13 +475,16 @@ export function ZeroWorkspaceTeamHome({
                   accessibilityRole="button"
                   accessibilityLabel="Clear connection search"
                 >
-                  <X size={15} color="#94A3B8" strokeWidth={2.1} />
+                  <X size={14} color="#8A96A8" strokeWidth={2.1} />
                 </Pressable>
               ) : null}
             </View>
             <Pressable
               onPress={onOpenFilters}
-              style={styles.connectionFilterButton}
+              style={[
+                styles.connectionFilterButton,
+                activeFilterCount > 0 ? styles.connectionFilterButtonActive : null,
+              ]}
               accessibilityRole="button"
               accessibilityLabel={
                 activeFilterCount > 0
@@ -489,7 +493,20 @@ export function ZeroWorkspaceTeamHome({
               }
               testID="connections-filter-button"
             >
-              <SlidersHorizontal size={19} color="#111827" strokeWidth={2.1} />
+              <SlidersHorizontal
+                size={13}
+                color={activeFilterCount > 0 ? "#111827" : "#667085"}
+                strokeWidth={2.2}
+              />
+              <Text
+                style={[
+                  styles.connectionFilterLabel,
+                  activeFilterCount > 0 ? styles.connectionFilterLabelActive : null,
+                ]}
+              >
+                Filters
+                {activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+              </Text>
             </Pressable>
           </View>
         ) : null}
@@ -671,7 +688,7 @@ export function ZeroWorkspaceTeamHome({
                 user={chatToCreate.person}
                 size={42}
                 radius={21}
-                backgroundColor="#EEF2FF"
+                backgroundColor="#EFE9FF"
                 resetKey={chatToCreate.person.id}
               />
             ) : null}
@@ -683,7 +700,7 @@ export function ZeroWorkspaceTeamHome({
                 This starts a private conversation with them.
               </Text>
             </View>
-            <AlenioSheetIcon color="#4361EE" compact>
+            <AlenioSheetIcon color="#6d28d9" compact>
               <MessageCircle size={15} color="#FFFFFF" strokeWidth={2.2} />
             </AlenioSheetIcon>
           </View>
@@ -822,7 +839,7 @@ function ConnectionRow({
           user={{ ...entry.person, activeNow: entry.activeNow }}
           size={40}
           radius={20}
-          backgroundColor="#EEF2FF"
+          backgroundColor="#EFE9FF"
           textColor={BRAND}
           fontSize={14}
         />
@@ -1387,7 +1404,7 @@ function DiscoverSearchResults({
                 user={person}
                 size={40}
                 radius={20}
-                backgroundColor="#EEF2FF"
+                backgroundColor="#EFE9FF"
                 textColor={BRAND}
                 fontSize={14}
               />
@@ -1598,7 +1615,7 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     color: "#667085",
   },
-  screen: { flex: 1, minHeight: 0, backgroundColor: "#FFFFFF" },
+  screen: { flex: 1, minHeight: 0, backgroundColor: palette.page },
   scroller: { flex: 1, minHeight: 0 },
   listFrame: { flex: 1, minHeight: 0 },
   page: { paddingHorizontal: 16, paddingTop: 4 },
@@ -1656,32 +1673,56 @@ const styles = StyleSheet.create({
   connectionSearchRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: 8,
     marginBottom: 2,
   },
   connectionSearch: {
     flex: 1,
+    minWidth: 0,
+    height: 36,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    minHeight: 40,
-    paddingHorizontal: 12,
-    borderRadius: 13,
-    backgroundColor: "#F3F5F9",
+    gap: 7,
+    paddingHorizontal: 11,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    backgroundColor: "#FFFFFF",
   },
   connectionSearchInput: {
     flex: 1,
-    padding: 0,
+    minWidth: 0,
+    height: "100%",
+    paddingVertical: 0,
+    margin: 0,
     color: "#0F172A",
     fontSize: 13,
-    lineHeight: 16,
+    lineHeight: 18,
     fontWeight: "400",
+    textAlignVertical: "center",
   },
   connectionFilterButton: {
-    height: 40,
-    width: 28,
+    height: 36,
+    paddingHorizontal: 11,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 5,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    backgroundColor: "#FFFFFF",
+  },
+  connectionFilterButtonActive: {
+    borderColor: "#D7DEE8",
+    backgroundColor: "#F5F7FA",
+  },
+  connectionFilterLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#667085",
+  },
+  connectionFilterLabelActive: {
+    color: "#111827",
   },
   pageFill: { flexGrow: 1 },
   emptyPageFrame: { flex: 1 },
@@ -1893,7 +1934,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     borderWidth: 3,
     borderColor: "#FFFFFF",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
     overflow: "hidden",
     shadowColor: "#4654A7",
     shadowOffset: { width: 0, height: 4 },
@@ -2019,7 +2060,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     borderWidth: 3,
     borderColor: "#FFFFFF",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
     shadowColor: "#4654A7",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.16,

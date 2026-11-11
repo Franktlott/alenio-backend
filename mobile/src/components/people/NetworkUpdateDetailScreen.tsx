@@ -98,7 +98,7 @@ export function NetworkUpdateDetailScreen({
 
       {detail.isLoading && !item ? (
         <View style={styles.state}>
-          <ActivityIndicator color="#4361EE" />
+          <ActivityIndicator color="#6d28d9" />
         </View>
       ) : detail.isError || !item ? (
         <View style={styles.state}>
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
   },
   primaryButtonText: {
     fontSize: 13,

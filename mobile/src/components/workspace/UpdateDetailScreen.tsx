@@ -439,7 +439,7 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
       >
         {!item && activityQuery.isLoading ? (
           <View style={styles.centered} testID="update-detail-loading">
-            <ActivityIndicator color="#4361EE" />
+            <ActivityIndicator color="#6d28d9" />
           </View>
         ) : !item ? (
           <View style={styles.centered} testID="update-detail-error">
@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
   },
   retryText: {
     color: "#FFFFFF",
@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#4361EE",
+    backgroundColor: "#6d28d9",
   },
   sendDisabled: {
     opacity: 0.4,

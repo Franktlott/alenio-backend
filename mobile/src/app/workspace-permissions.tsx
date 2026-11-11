@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -7,8 +7,9 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { setStatusBarStyle } from "expo-status-bar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -21,7 +22,18 @@ import {
 } from "lucide-react-native";
 import { toast } from "burnt";
 import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
+import { AppHeaderBand } from "@/components/AppHeaderBand";
 import { UserAvatar } from "@/components/UserAvatar";
+import {
+  AlenioList,
+  AlenioListRow,
+  AppText,
+  Button,
+  Card,
+  IconTile,
+  SectionHeader,
+  tintInk,
+} from "@/components/ui";
 import { api, ApiError } from "@/lib/api/api";
 import type { Team, TeamMember, TeamRole } from "@/lib/types";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
@@ -32,7 +44,10 @@ import {
   sortWorkspacePermissionMembers,
   type EditableWorkspaceRole,
 } from "@/lib/workspace-permissions";
-import { colors } from "@/theme";
+import { palette, tints } from "@/theme";
+
+const BAND_SHEET_RADIUS = 24;
+const HEADER_ROW = 48;
 
 const OVERVIEW_ROLES: readonly TeamRole[] = [
   "owner",
@@ -53,6 +68,12 @@ function friendlyRoleError(error: unknown): string {
   return "Please check your connection and try again.";
 }
 
+function overviewIcon(role: TeamRole) {
+  if (role === "owner") return Crown;
+  if (role === "team_leader") return UserRoundCog;
+  return UsersRound;
+}
+
 export default function WorkspacePermissionsScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -62,6 +83,15 @@ export default function WorkspacePermissionsScreen() {
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [selectedRole, setSelectedRole] =
     useState<EditableWorkspaceRole>("member");
+
+  const bandHeight = insets.top + HEADER_ROW + 18;
+
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle("light");
+      return () => setStatusBarStyle("dark");
+    }, []),
+  );
 
   const {
     data: team,
@@ -144,222 +174,245 @@ export default function WorkspacePermissionsScreen() {
     else router.replace({ pathname: "/workspace-settings", params: { teamId } });
   };
 
-  if (!teamId) {
-    return (
-      <SafeAreaView style={styles.screen} testID="workspace-permissions-screen">
-        <View style={styles.centered}>
-          <Text style={styles.stateTitle}>No workspace selected</Text>
-          <Pressable
-            onPress={goBack}
-            style={styles.stateButton}
-            accessibilityRole="button"
-            testID="workspace-permissions-missing-back"
-          >
-            <Text style={styles.stateButtonText}>Go back</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView
-      style={styles.screen}
-      edges={["top"]}
-      testID="workspace-permissions-screen"
-    >
-      <View style={styles.topBar}>
+  const header = (
+    <>
+      <AppHeaderBand height={bandHeight} />
+      <View style={[styles.bandHeader, { paddingTop: insets.top }]}>
         <Pressable
           onPress={goBack}
           hitSlop={10}
-          style={styles.topAction}
+          style={styles.headerAction}
           accessibilityRole="button"
           accessibilityLabel="Back to workspace settings"
           testID="workspace-permissions-back"
         >
-          <ArrowLeft size={20} color="#0F172A" strokeWidth={2.2} />
+          <ArrowLeft size={20} color="#FFFFFF" strokeWidth={2.2} />
         </Pressable>
-        <Text style={styles.topTitle}>Workspace Permissions</Text>
-        <View style={styles.topSpacer} />
-      </View>
-
-      {isLoading ? (
-        <View style={styles.centered} testID="workspace-permissions-loading">
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      ) : isError || !team ? (
-        <View style={styles.centered} testID="workspace-permissions-error">
-          <Text style={styles.stateTitle}>Permissions aren’t available</Text>
-          <Text style={styles.stateBody}>
-            We couldn’t load this workspace. Please try again.
+        <View style={styles.topTitleWrap}>
+          <Text style={styles.bandTitle} numberOfLines={1}>
+            Roles & permissions
           </Text>
-          <Pressable
-            onPress={() => void refetch()}
-            style={styles.stateButton}
-            accessibilityRole="button"
-            testID="workspace-permissions-retry"
-          >
-            <Text style={styles.stateButtonText}>Try again</Text>
-          </Pressable>
         </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: insets.bottom + 32 },
-          ]}
-          testID="workspace-permissions-content"
-        >
-          <View style={styles.hero}>
-            <View style={styles.heroOrbLarge} />
-            <View style={styles.heroOrbSmall} />
-            <View style={styles.heroIcon}>
-              <ShieldCheck size={23} color={colors.brand} strokeWidth={2.2} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={styles.heroEyebrow}>ALENIO ACCESS</Text>
-              <Text style={styles.heroTitle}>Clear roles. Confident teams.</Text>
-              <Text style={styles.heroBody}>
-                Keep responsibilities simple while protecting workspace
-                ownership.
-              </Text>
-            </View>
-          </View>
+        <View style={styles.topActionPlaceholder} />
+      </View>
+    </>
+  );
 
-          <Text style={styles.sectionLabel}>ROLE OVERVIEW</Text>
-          <View style={styles.overviewCard}>
-            {OVERVIEW_ROLES.map((role, index) => {
-              const presentation = getWorkspaceRolePresentation(role);
-              const Icon =
-                role === "owner"
-                  ? Crown
-                  : role === "team_leader"
-                    ? UserRoundCog
-                    : UsersRound;
-              return (
-                <View key={role}>
-                  {index > 0 ? <View style={styles.overviewDivider} /> : null}
-                  <View style={styles.overviewRow}>
-                    <View style={styles.overviewIcon}>
-                      <Icon size={16} color={colors.brand} strokeWidth={2.1} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.overviewTitle}>
-                        {presentation.label}
-                      </Text>
-                      <Text style={styles.overviewBody}>
-                        {presentation.description}
-                      </Text>
-                    </View>
-                  </View>
+  if (!teamId) {
+    return (
+      <View style={styles.screen} testID="workspace-permissions-screen">
+        {header}
+        <View style={styles.sheet}>
+          <View style={styles.centered}>
+            <AppText variant="body" color={palette.inkMuted}>
+              No workspace selected
+            </AppText>
+            <Button
+              variant="primary"
+              size="md"
+              label="Go back"
+              onPress={goBack}
+              style={{ marginTop: 16 }}
+              testID="workspace-permissions-missing-back"
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen} testID="workspace-permissions-screen">
+      {header}
+      <View style={styles.sheet}>
+        {isLoading ? (
+          <View style={styles.centered} testID="workspace-permissions-loading">
+            <ActivityIndicator color={palette.violet} />
+          </View>
+        ) : isError || !team ? (
+          <View style={styles.centered} testID="workspace-permissions-error">
+            <AppText variant="sectionTitle">Permissions aren’t available</AppText>
+            <AppText
+              variant="supporting"
+              style={{ marginTop: 6, textAlign: "center", maxWidth: 280 }}
+            >
+              We couldn’t load this workspace. Please try again.
+            </AppText>
+            <Button
+              variant="primary"
+              size="md"
+              label="Try again"
+              onPress={() => void refetch()}
+              style={{ marginTop: 16 }}
+              testID="workspace-permissions-retry"
+            />
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: Math.max(insets.bottom, 20) + 16 },
+            ]}
+            testID="workspace-permissions-content"
+          >
+            <Card>
+              <View style={styles.heroRow}>
+                <IconTile tint="lavender" size={44}>
+                  <ShieldCheck
+                    size={20}
+                    color={tintInk("lavender")}
+                    strokeWidth={2.2}
+                  />
+                </IconTile>
+                <View style={styles.heroCopy}>
+                  <AppText variant="sectionLabel" color={palette.violet}>
+                    Access
+                  </AppText>
+                  <AppText variant="sectionTitle" style={styles.heroTitle}>
+                    Clear roles. Confident teams.
+                  </AppText>
+                  <AppText variant="supporting" style={{ marginTop: 2 }}>
+                    Keep responsibilities simple while protecting workspace
+                    ownership.
+                  </AppText>
                 </View>
-              );
-            })}
-          </View>
+              </View>
+            </Card>
 
-          {isTeamLeader ? (
-            <View style={styles.readOnlyNote} testID="permissions-read-only-note">
-              <ShieldCheck size={16} color="#64748B" />
-              <Text style={styles.readOnlyText}>
-                Team Leaders can view access. Only the workspace Owner can
-                change roles.
-              </Text>
-            </View>
-          ) : isOwner && !access.canWrite ? (
-            <View style={styles.readOnlyNote} testID="permissions-plan-note">
-              <ShieldCheck size={16} color="#64748B" />
-              <Text style={styles.readOnlyText}>
-                This workspace is read-only. Tap a manageable member to choose
-                a plan and restore role changes.
-              </Text>
-            </View>
-          ) : null}
-
-          <View style={styles.listHeading}>
-            <View>
-              <Text style={styles.sectionLabelNoMargin}>WORKSPACE ACCESS</Text>
-              <Text style={styles.listTitle}>
-                {members.length} member{members.length === 1 ? "" : "s"}
-              </Text>
-            </View>
-            {isOwner && access.canWrite ? (
-              <Text style={styles.ownerHint}>Tap to manage</Text>
-            ) : (
-              <Text style={styles.ownerHint}>View only</Text>
-            )}
-          </View>
-
-          <View style={styles.memberCard} testID="workspace-access-list">
-            {members.map((member, index) => {
-              const presentation = getWorkspaceRolePresentation(member.role);
-              const editable = canEditWorkspacePermissionTarget({
-                viewerRole,
-                targetRole: member.role,
-              });
-              return (
-                <View key={member.id}>
-                  {index > 0 ? <View style={styles.memberDivider} /> : null}
-                  <Pressable
-                    onPress={() => openMember(member)}
-                    disabled={!editable}
-                    style={styles.memberRow}
-                    accessibilityRole={editable ? "button" : undefined}
-                    accessibilityLabel={
-                      editable
-                        ? `Manage ${member.user.name || member.user.email}'s role`
-                        : undefined
-                    }
-                    accessibilityHint={
-                      editable && !access.canWrite
-                        ? "Opens plan options"
-                        : editable
-                          ? "Opens role options"
-                          : undefined
-                    }
-                    testID={`workspace-permission-member-${member.userId}`}
-                  >
-                    <UserAvatar
-                      user={member.user}
-                      size={38}
-                      radius={19}
-                      backgroundColor="#EEF2FF"
-                      textColor={colors.brand}
-                      fontSize={14}
+            <View style={styles.sectionBlock}>
+              <SectionHeader label="Role overview" />
+              <AlenioList>
+                {OVERVIEW_ROLES.map((role) => {
+                  const presentation = getWorkspaceRolePresentation(role);
+                  const Icon = overviewIcon(role);
+                  return (
+                    <AlenioListRow
+                      key={role}
+                      leading={
+                        <IconTile tint="lavender">
+                          <Icon
+                            size={16}
+                            color={tintInk("lavender")}
+                            strokeWidth={2.1}
+                          />
+                        </IconTile>
+                      }
+                      title={presentation.label}
+                      subtitle={presentation.description}
                     />
-                    <View style={styles.memberIdentity}>
-                      <Text style={styles.memberName} numberOfLines={1}>
-                        {member.user.name || "Alenio member"}
-                      </Text>
-                      <Text style={styles.memberEmail} numberOfLines={1}>
-                        {member.user.email}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.roleBadge,
-                        { backgroundColor: presentation.badgeBackground },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.roleBadgeText,
-                          { color: presentation.badgeText },
-                        ]}
-                      >
-                        {presentation.shortLabel}
-                      </Text>
-                    </View>
-                    {editable ? (
-                      <ChevronRight size={15} color="#A7B0BF" />
-                    ) : null}
-                  </Pressable>
-                </View>
-              );
-            })}
-          </View>
-        </ScrollView>
-      )}
+                  );
+                })}
+              </AlenioList>
+            </View>
+
+            {isTeamLeader ? (
+              <View style={styles.noteCard} testID="permissions-read-only-note">
+                <IconTile tint="lavender" size={28}>
+                  <ShieldCheck
+                    size={14}
+                    color={tintInk("lavender")}
+                    strokeWidth={2.2}
+                  />
+                </IconTile>
+                <AppText variant="supporting" style={{ flex: 1 }}>
+                  Team Leaders can view access. Only the workspace Owner can
+                  change roles.
+                </AppText>
+              </View>
+            ) : isOwner && !access.canWrite ? (
+              <View style={styles.noteCard} testID="permissions-plan-note">
+                <IconTile tint="lavender" size={28}>
+                  <ShieldCheck
+                    size={14}
+                    color={tintInk("lavender")}
+                    strokeWidth={2.2}
+                  />
+                </IconTile>
+                <AppText variant="supporting" style={{ flex: 1 }}>
+                  This workspace is read-only. Tap a manageable member to choose
+                  a plan and restore role changes.
+                </AppText>
+              </View>
+            ) : null}
+
+            <View style={styles.sectionBlock}>
+              <SectionHeader
+                label="Workspace access"
+                action={
+                  <AppText variant="meta">
+                    {isOwner && access.canWrite ? "Tap to manage" : "View only"}
+                  </AppText>
+                }
+              />
+              <AppText variant="supporting" style={styles.memberCount}>
+                {members.length} member{members.length === 1 ? "" : "s"}
+              </AppText>
+              <AlenioList testID="workspace-access-list">
+                {members.map((member) => {
+                  const presentation = getWorkspaceRolePresentation(member.role);
+                  const editable = canEditWorkspacePermissionTarget({
+                    viewerRole,
+                    targetRole: member.role,
+                  });
+                  return (
+                    <AlenioListRow
+                      key={member.id}
+                      leading={
+                        <UserAvatar
+                          user={member.user}
+                          size={36}
+                          radius={18}
+                          backgroundColor={tints.lavender.bg}
+                          textColor={tints.lavender.fg}
+                          fontSize={14}
+                        />
+                      }
+                      title={member.user.name || "Alenio member"}
+                      subtitle={member.user.email}
+                      trailing={
+                        <View style={styles.memberTrailing}>
+                          <View
+                            style={[
+                              styles.roleBadge,
+                              {
+                                backgroundColor: presentation.badgeBackground,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.roleBadgeText,
+                                { color: presentation.badgeText },
+                              ]}
+                            >
+                              {presentation.shortLabel}
+                            </Text>
+                          </View>
+                          {editable ? (
+                            <ChevronRight
+                              size={16}
+                              color={palette.inkMuted}
+                              strokeWidth={2.2}
+                            />
+                          ) : null}
+                        </View>
+                      }
+                      onPress={editable ? () => openMember(member) : undefined}
+                      accessibilityLabel={
+                        editable
+                          ? `Manage ${member.user.name || member.user.email}'s role`
+                          : undefined
+                      }
+                      testID={`workspace-permission-member-${member.userId}`}
+                    />
+                  );
+                })}
+              </AlenioList>
+            </View>
+          </ScrollView>
+        )}
+      </View>
 
       <AlenioBottomSheet
         visible={selectedMember != null}
@@ -375,7 +428,17 @@ export default function WorkspacePermissionsScreen() {
         scrollEnabled={false}
         testID="workspace-role-sheet"
         footer={
-          <Pressable
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            label="Update role"
+            loading={roleMutation.isPending}
+            disabled={
+              !selectedMember ||
+              roleMutation.isPending ||
+              selectedRole === selectedMember.role
+            }
             onPress={() => {
               if (!selectedMember) return;
               roleMutation.mutate({
@@ -383,116 +446,94 @@ export default function WorkspacePermissionsScreen() {
                 role: selectedRole,
               });
             }}
-            disabled={
-              !selectedMember ||
-              roleMutation.isPending ||
-              selectedRole === selectedMember.role
-            }
-            style={[
-              styles.updateButton,
-              !selectedMember ||
-              roleMutation.isPending ||
-              selectedRole === selectedMember.role
-                ? styles.updateButtonDisabled
-                : null,
-            ]}
-            accessibilityRole="button"
-            accessibilityState={{
-              disabled:
-                !selectedMember ||
-                roleMutation.isPending ||
-                selectedRole === selectedMember.role,
-            }}
             testID="workspace-role-update"
-          >
-            {roleMutation.isPending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.updateButtonText}>Update role</Text>
-            )}
-          </Pressable>
+          />
         }
       >
-        <Text style={styles.sheetIntro}>
+        <AppText variant="supporting" style={{ marginBottom: 10 }}>
           Select the access level, then confirm the change.
-        </Text>
-        {EDITABLE_WORKSPACE_ROLES.map((role) => {
-          const presentation = getWorkspaceRolePresentation(role);
-          const selected = selectedRole === role;
-          return (
-            <Pressable
-              key={role}
-              onPress={() => setSelectedRole(role)}
-              style={[
-                styles.roleOption,
-                selected ? styles.roleOptionSelected : null,
-              ]}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: selected }}
-              accessibilityLabel={presentation.label}
-              testID={`workspace-role-option-${role}`}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.roleOptionTitle}>{presentation.label}</Text>
-                <Text style={styles.roleOptionBody}>
-                  {presentation.description}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.radio,
-                  selected ? styles.radioSelected : null,
-                ]}
-              >
-                {selected ? (
-                  <Check size={13} color="#FFFFFF" strokeWidth={3} />
-                ) : null}
-              </View>
-            </Pressable>
-          );
-        })}
+        </AppText>
+        <AlenioList>
+          {EDITABLE_WORKSPACE_ROLES.map((role) => {
+            const presentation = getWorkspaceRolePresentation(role);
+            const selected = selectedRole === role;
+            return (
+              <AlenioListRow
+                key={role}
+                title={presentation.label}
+                subtitle={presentation.description}
+                onPress={() => setSelectedRole(role)}
+                trailing={
+                  <View
+                    style={[
+                      styles.radio,
+                      selected ? styles.radioSelected : null,
+                    ]}
+                  >
+                    {selected ? (
+                      <Check size={13} color="#FFFFFF" strokeWidth={3} />
+                    ) : null}
+                  </View>
+                }
+                accessibilityLabel={presentation.label}
+                testID={`workspace-role-option-${role}`}
+              />
+            );
+          })}
+        </AlenioList>
       </AlenioBottomSheet>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.page,
   },
-  topBar: {
-    height: 56,
+  bandHeader: {
+    zIndex: 2,
     paddingHorizontal: 16,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 12,
   },
-  topAction: {
+  headerAction: {
     width: 34,
     height: 34,
-    borderRadius: 11,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E3E8F2",
-    backgroundColor: "#F8FAFF",
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
-  topTitle: {
-    maxWidth: "72%",
+  topActionPlaceholder: {
+    width: 34,
+    height: 34,
+  },
+  topTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  bandTitle: {
     fontSize: 17,
     lineHeight: 21,
     fontWeight: "700",
-    color: "#0F172A",
-    letterSpacing: -0.3,
+    color: "#FFFFFF",
+    letterSpacing: -0.25,
   },
-  topSpacer: {
-    width: 34,
-    height: 34,
+  sheet: {
+    flex: 1,
+    marginTop: -8,
+    borderTopLeftRadius: BAND_SHEET_RADIUS,
+    borderTopRightRadius: BAND_SHEET_RADIUS,
+    backgroundColor: palette.page,
+    overflow: "hidden",
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 14,
+    gap: 12,
   },
   centered: {
     flex: 1,
@@ -500,304 +541,68 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stateTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#10213B",
-  },
-  stateBody: {
-    marginTop: 6,
-    maxWidth: 280,
-    textAlign: "center",
-    fontSize: 12,
-    lineHeight: 17,
-    color: "#7B8798",
-  },
-  stateButton: {
-    minHeight: 42,
-    marginTop: 16,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.brand,
-  },
-  stateButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  hero: {
-    position: "relative",
-    minHeight: 126,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 13,
-    overflow: "hidden",
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: "#D7DFFF",
-    backgroundColor: "#F2F5FF",
-  },
-  heroOrbLarge: {
-    position: "absolute",
-    width: 124,
-    height: 124,
-    right: -50,
-    top: -62,
-    borderRadius: 62,
-    backgroundColor: "#E2E7FF",
-  },
-  heroOrbSmall: {
-    position: "absolute",
-    width: 58,
-    height: 58,
-    right: 52,
-    bottom: -39,
-    borderRadius: 29,
-    backgroundColor: "#E7EBFF",
-  },
-  heroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#D7DFFF",
-    backgroundColor: "#FFFFFF",
-  },
-  heroText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  heroEyebrow: {
-    fontSize: 9.5,
-    lineHeight: 12,
-    fontWeight: "800",
-    letterSpacing: 0.85,
-    color: colors.brand,
-  },
-  heroTitle: {
-    marginTop: 4,
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: "800",
-    color: "#10213B",
-    letterSpacing: -0.2,
-  },
-  heroBody: {
-    marginTop: 5,
-    fontSize: 10.5,
-    lineHeight: 15,
-    color: "#718096",
-  },
-  sectionLabel: {
-    marginTop: 16,
-    marginBottom: 6,
-    paddingHorizontal: 3,
-    fontSize: 9.5,
-    lineHeight: 12,
-    fontWeight: "700",
-    letterSpacing: 0.78,
-    color: "#8A96A8",
-  },
-  sectionLabelNoMargin: {
-    fontSize: 9.5,
-    lineHeight: 12,
-    fontWeight: "700",
-    letterSpacing: 0.78,
-    color: colors.brand,
-  },
-  overviewCard: {
-    overflow: "hidden",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E1E6F0",
-    backgroundColor: "#FFFFFF",
-  },
-  overviewRow: {
-    minHeight: 52,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-  },
-  overviewIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EEF2FF",
-  },
-  overviewTitle: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: "700",
-    color: "#10213B",
-  },
-  overviewBody: {
-    marginTop: 1,
-    fontSize: 9.5,
-    lineHeight: 12.5,
-    color: "#8A96A8",
-  },
-  overviewDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 48,
-    backgroundColor: "#E5E9F1",
-  },
-  readOnlyNote: {
-    minHeight: 50,
-    marginTop: 12,
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-  },
-  readOnlyText: {
-    flex: 1,
-    fontSize: 10.5,
-    lineHeight: 15,
-    fontWeight: "500",
-    color: "#64748B",
-  },
-  listHeading: {
-    marginTop: 20,
-    marginBottom: 8,
-    paddingHorizontal: 3,
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-  },
-  listTitle: {
-    marginTop: 3,
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: "800",
-    color: "#10213B",
-  },
-  ownerHint: {
-    fontSize: 9.5,
-    fontWeight: "600",
-    color: "#94A3B8",
-  },
-  memberCard: {
-    overflow: "hidden",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E1E6F0",
-    backgroundColor: "#FFFFFF",
-  },
-  memberRow: {
-    minHeight: 62,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  memberDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 60,
-    backgroundColor: "#E5E9F1",
-  },
-  memberIdentity: {
-    flex: 1,
-    minWidth: 0,
-  },
-  memberName: {
-    fontSize: 12.5,
-    lineHeight: 16,
-    fontWeight: "700",
-    color: "#10213B",
-  },
-  memberEmail: {
-    marginTop: 2,
-    fontSize: 10,
-    lineHeight: 13,
-    color: "#94A3B8",
-  },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  roleBadgeText: {
-    fontSize: 9,
-    lineHeight: 11,
-    fontWeight: "800",
-  },
-  sheetIntro: {
-    marginBottom: 2,
-    fontSize: 11,
-    lineHeight: 15,
-    color: "#7B8798",
-  },
-  roleOption: {
-    minHeight: 68,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+  heroRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderRadius: 12,
+  },
+  heroCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  heroTitle: {
+    marginTop: 2,
+    fontSize: 16,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
+  sectionBlock: {
+    gap: 0,
+  },
+  noteCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: palette.cardBorder,
     backgroundColor: "#FFFFFF",
   },
-  roleOptionSelected: {
-    borderColor: "#B9C5FF",
-    backgroundColor: "#F2F5FF",
+  memberCount: {
+    marginTop: -4,
+    marginBottom: 8,
+    paddingHorizontal: 2,
   },
-  roleOptionTitle: {
-    fontSize: 13,
-    lineHeight: 17,
+  memberTrailing: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  roleBadge: {
+    minHeight: 22,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    lineHeight: 12,
     fontWeight: "700",
-    color: "#10213B",
-  },
-  roleOptionBody: {
-    marginTop: 3,
-    fontSize: 10.5,
-    lineHeight: 14,
-    color: "#7B8798",
   },
   radio: {
     width: 22,
     height: 22,
     borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: "#D8D3E8",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "#CBD5E1",
     backgroundColor: "#FFFFFF",
   },
   radioSelected: {
-    borderColor: colors.brand,
-    backgroundColor: colors.brand,
-  },
-  updateButton: {
-    width: "100%",
-    minHeight: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.brand,
-  },
-  updateButtonDisabled: {
-    opacity: 0.45,
-  },
-  updateButtonText: {
-    fontSize: 13.5,
-    fontWeight: "700",
-    color: "#FFFFFF",
+    borderColor: palette.violet,
+    backgroundColor: palette.violet,
   },
 });

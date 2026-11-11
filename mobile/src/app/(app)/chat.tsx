@@ -37,7 +37,7 @@ import {
   AlenioSheetOption,
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
-import { typography } from "@/theme";
+import { elevation, palette, typography } from "@/theme";
 import { useTabBarClearanceFn } from "@/lib/tab-bar";
 
 const PINNED_DMS_KEY = "pinned_dms";
@@ -222,7 +222,7 @@ function ChatEmptyState({
             justifyContent: "center",
             alignSelf: "center",
             gap: discovery ? 9 : 4,
-            backgroundColor: "#4361EE",
+            backgroundColor: "#6d28d9",
             borderRadius: discovery ? 10 : 9,
             paddingHorizontal: discovery ? 18 : 14,
             paddingVertical: discovery ? 0 : 8,
@@ -258,7 +258,7 @@ function ChatEmptyState({
           accessibilityLabel={secondaryLabel}
           style={{ paddingVertical: 8, marginTop: 2 }}
         >
-          <Text style={{ color: "#4361EE", fontSize: 12, fontWeight: "600" }}>{secondaryLabel}</Text>
+          <Text style={{ color: "#6d28d9", fontSize: 12, fontWeight: "600" }}>{secondaryLabel}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -630,8 +630,8 @@ export default function ChatScreen() {
                 user={otherUser}
                 size={PINNED_CIRCLE - 3}
                 radius={(PINNED_CIRCLE - 3) / 2}
-                backgroundColor="#EEF2FF"
-                textColor="#4361EE"
+                backgroundColor="#EFE9FF"
+                textColor="#6d28d9"
                 fontSize={13}
               />
             </View>
@@ -641,14 +641,14 @@ export default function ChatScreen() {
                 width: PINNED_CIRCLE,
                 height: PINNED_CIRCLE,
                 borderRadius: PINNED_CIRCLE / 2,
-                backgroundColor: "#EEF2FF",
+                backgroundColor: "#EFE9FF",
                 borderWidth: 1.5,
                 borderColor: "#A5B4FC",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <MessageCircle size={18} color="#4361EE" />
+              <MessageCircle size={18} color="#6d28d9" />
             </View>
           )}
           {unreadCount > 0 ? (
@@ -657,7 +657,7 @@ export default function ChatScreen() {
                 position: "absolute",
                 top: -1,
                 right: -1,
-                backgroundColor: "#4361EE",
+                backgroundColor: "#6d28d9",
                 borderRadius: 9,
                 minWidth: 18,
                 height: 18,
@@ -754,13 +754,11 @@ export default function ChatScreen() {
     return (
       <View
         key={conv.id}
-        style={{
-          height: 76,
-          borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-          borderBottomColor: "#E9EDF3",
-          backgroundColor: "#FFFFFF",
-          flexDirection: "row",
-        }}
+        style={[
+          styles.dmCard,
+          isOpen ? styles.dmCardOpen : null,
+          isLast ? styles.dmCardLast : null,
+        ]}
       >
         {/**
          * The accent bar keeps its width when unselected so rows never shift
@@ -771,7 +769,7 @@ export default function ChatScreen() {
             width: 3,
             borderTopRightRadius: 3,
             borderBottomRightRadius: 3,
-            backgroundColor: isOpen ? "#4361EE" : "transparent",
+            backgroundColor: isOpen ? "#6d28d9" : "transparent",
           }}
         />
         <Pressable
@@ -779,13 +777,7 @@ export default function ChatScreen() {
           onPress={() => openDm(conv)}
           onLongPress={() => togglePin(conv.id)}
           delayLongPress={350}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            paddingHorizontal: 13,
-            paddingVertical: 9,
-            backgroundColor: isOpen ? "#F5F7FF" : "#FFFFFF",
-          }}
+          style={styles.dmCardPress}
         >
           <View
             style={{
@@ -832,8 +824,8 @@ export default function ChatScreen() {
                 user={otherUser}
                 size={AVATAR}
                 radius={AVATAR / 2}
-                backgroundColor="#EEF2FF"
-                textColor="#4361EE"
+                backgroundColor="#EFE9FF"
+                textColor="#6d28d9"
                 fontSize={16}
               />
             </Pressable>
@@ -843,13 +835,13 @@ export default function ChatScreen() {
                 width: AVATAR,
                 height: AVATAR,
                 borderRadius: AVATAR / 2,
-                backgroundColor: "#EEF2FF",
+                backgroundColor: "#EFE9FF",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <MessageCircle size={19} color="#4361EE" />
+              <MessageCircle size={19} color="#6d28d9" />
             </View>
           )}
 
@@ -896,7 +888,7 @@ export default function ChatScreen() {
               {unreadCount > 0 ? (
                 <View
                   style={{
-                    backgroundColor: "#4361EE",
+                    backgroundColor: "#6d28d9",
                     borderRadius: 9,
                     minWidth: 18,
                     height: 18,
@@ -981,7 +973,7 @@ export default function ChatScreen() {
   ) : (
     <View style={styles.threadPlaceholder} testID="chat-thread-placeholder">
       <View style={styles.threadPlaceholderIcon}>
-        <MessageCircle size={22} color="#4361EE" strokeWidth={2.1} />
+        <MessageCircle size={22} color="#6d28d9" strokeWidth={2.1} />
       </View>
       <Text style={styles.threadPlaceholderTitle}>Pick a conversation</Text>
       <Text style={styles.threadPlaceholderBody}>
@@ -994,7 +986,8 @@ export default function ChatScreen() {
     <CurvedTabLayout
       topInset={insets.top}
       title="Chat"
-      leftAction={<AlenioHeaderBrand />}
+      leftAction={<AlenioHeaderBrand tone="dark" />}
+      band
       testID="chat-screen"
       headerTestID="chat-header"
       /**
@@ -1007,7 +1000,7 @@ export default function ChatScreen() {
           onPress={() => setShowAddModal(true)}
           accessibilityLabel="Start a conversation"
           testID="chat-header-add-button"
-          tone="light"
+          tone="brand"
         />
       }
       overlays={
@@ -1132,7 +1125,8 @@ export default function ChatScreen() {
               }
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
-                paddingTop: 8,
+                paddingTop: 4,
+                paddingHorizontal: 12,
                 paddingBottom:
                   conversations.length === 0
                     ? tabClearance(8)
@@ -1287,11 +1281,32 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
+  dmCard: {
+    ...elevation.card,
+    height: 76,
+    marginBottom: 10,
+    borderRadius: 18,
+    flexDirection: "row",
+    shadowOpacity: 0.08,
+  },
+  dmCardOpen: {
+    borderColor: "rgba(109, 40, 217, 0.22)",
+    backgroundColor: "#FAF8FF",
+  },
+  dmCardLast: {
+    marginBottom: 4,
+  },
+  dmCardPress: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+  },
   chatColumns: {
     flex: 1,
     minHeight: 0,
     flexDirection: "column",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.page,
   },
   inboxPane: {
     flex: 0,
@@ -1338,7 +1353,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EFE9FF",
     marginBottom: 4,
   },
   threadPlaceholderTitle: {
@@ -1448,8 +1463,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     minHeight: 40,
-    backgroundColor: "#F3F5F9",
+    backgroundColor: "#FFFFFF",
     borderRadius: 13,
+    borderWidth: 1,
+    borderColor: palette.cardBorder,
     paddingHorizontal: 12,
   },
   searchInput: {

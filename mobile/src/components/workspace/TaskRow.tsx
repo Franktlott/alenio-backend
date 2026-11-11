@@ -7,7 +7,8 @@ import { instantHasPassed, scheduleTimeParts } from "@/lib/schedule-time";
 import { CheckBurst } from "@/components/schedule/CheckBurst";
 import { ScheduleKindIcon } from "@/components/schedule/ScheduleKindIcon";
 import { TODAY_ITEM_PRESENTATION } from "@/lib/home-today-item";
-import { colors, typography } from "@/theme";
+import { colors, palette, typography } from "@/theme";
+import { PriorityBadge } from "@/components/ui";
 import { AssigneeStack } from "./AssigneeStack";
 
 const TIME_COL = 56;
@@ -99,7 +100,7 @@ export function TaskRow({
         flexDirection: "row",
         alignItems: "stretch",
         borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-        borderBottomColor: "#E8EAED",
+        borderBottomColor: palette.rowDivider,
       }}
     >
       <View
@@ -278,19 +279,12 @@ export function TaskRow({
         ) : null}
 
         {!isReminder ? (
-          <View
-            style={{
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 999,
-              backgroundColor: "#EEF0F3",
-              marginRight: 2,
-            }}
-          >
-            <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>
-              {priorityLabel(task.priority)}
-            </Text>
-          </View>
+          <PriorityBadge
+            priority={task.priority}
+            label={priorityLabel(task.priority)}
+            faded={isDone}
+            style={{ marginRight: 2 }}
+          />
         ) : null}
 
         {onLongPress ? (

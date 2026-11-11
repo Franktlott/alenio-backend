@@ -336,7 +336,7 @@ export function AddConnectionSheet({
                         user={person}
                         size={46}
                         radius={23}
-                        backgroundColor="#EEF2FF"
+                        backgroundColor="#EFE9FF"
                         textColor={colors.brand}
                         fontSize={15}
                       />

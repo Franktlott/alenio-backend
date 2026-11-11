@@ -25,7 +25,14 @@ describe("cleanFeatures", () => {
 });
 
 describe("describePlanEdit", () => {
-  const before = { name: "Pro", bestFor: "Teams", priceCents: 3999, currency: "usd", features: ["Tasks"] };
+  const before = {
+    name: "Pro",
+    bestFor: "Teams",
+    priceCents: 3999,
+    currency: "usd",
+    comingSoon: false,
+    features: ["Tasks"],
+  };
 
   test("says what happens to existing subscribers on a price change", () => {
     expect(describePlanEdit(before, { ...before, priceCents: 4999 }, "keep")).toBe(
@@ -41,6 +48,13 @@ describe("describePlanEdit", () => {
       "Changed name “Pro” → “Team”, extra pricing lines",
     );
     expect(describePlanEdit(before, { ...before }, null)).toBe("No changes");
+  });
+
+  test("names availability changes", () => {
+    expect(describePlanEdit(before, { ...before, comingSoon: true }, null)).toBe("Changed marked coming soon");
+    expect(describePlanEdit({ ...before, comingSoon: true }, { ...before, comingSoon: false }, null)).toBe(
+      "Changed marked available",
+    );
   });
 
   test("names features switched on or off", () => {

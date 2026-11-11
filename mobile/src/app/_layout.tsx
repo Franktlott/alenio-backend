@@ -2,7 +2,7 @@ import { Toaster } from "burnt/web";
 import { Stack, router, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { AppState, Image, View, useWindowDimensions } from "react-native";
+import { AppState, View, useWindowDimensions } from "react-native";
 import { fitsFormSheet } from "@/lib/adaptive-layout";
 import { useScreenOrientation } from "@/lib/use-screen-orientation";
 import { useColorScheme } from "@/lib/useColorScheme";
@@ -33,14 +33,8 @@ import {
   isAuthEntryPath,
   navigateToMobileHomeWithRetry,
 } from "@/lib/auth/auth-entry";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  runOnJS,
-} from "react-native-reanimated";
 import { AppPageBackground } from "@/components/AppPageBackground";
+import { LaunchScreen } from "@/components/LaunchScreen";
 import { toast } from "burnt";
 import { subscribeToWorkspaceReadOnly } from "@/lib/workspace-access";
 import { api } from "@/lib/api/api";
@@ -77,77 +71,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-function CustomSplash({
-  isReady,
-  onDone,
-}: {
-  isReady: boolean;
-  onDone: () => void;
-}) {
-  const logoOpacity = useSharedValue(0);
-  const logoScale = useSharedValue(0.85);
-  const containerOpacity = useSharedValue(1);
-  const hasStartedFadeOut = useRef(false);
-
-  // Fade logo in on mount
-  useEffect(() => {
-    logoOpacity.value = withTiming(1, { duration: 500 });
-    logoScale.value = withTiming(1, { duration: 500 });
-  }, []);
-
-  // Fade entire splash out once app is ready
-  useEffect(() => {
-    if (!isReady || hasStartedFadeOut.current) return;
-    hasStartedFadeOut.current = true;
-    containerOpacity.value = withDelay(
-      300,
-      withTiming(0, { duration: 400 }, () => runOnJS(onDone)()),
-    );
-  }, [isReady]);
-
-  const logoStyle = useAnimatedStyle(() => ({
-    opacity: logoOpacity.value,
-    transform: [{ scale: logoScale.value }],
-  }));
-
-  const containerStyle = useAnimatedStyle(() => ({
-    opacity: containerOpacity.value,
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        {
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "#fff",
-          alignItems: "center",
-          justifyContent: "center",
-        },
-        containerStyle,
-      ]}
-    >
-      <Animated.View style={[logoStyle, { alignItems: "center" }]}>
-        <Image
-          source={require("@/assets/alenio-logo.png")}
-          style={{ width: 230, height: 230 }}
-          resizeMode="contain"
-        />
-      </Animated.View>
-      <View style={{ position: "absolute", bottom: 48, alignItems: "center" }}>
-        <Image
-          source={require("@/assets/lotttech-logo.png")}
-          style={{ width: 204, height: 66 }}
-          resizeMode="contain"
-        />
-      </View>
-    </Animated.View>
-  );
-}
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
@@ -510,6 +433,20 @@ function RootLayoutNav() {
             }}
           />
           <Stack.Screen
+            name="workspace-standards"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+          <Stack.Screen
+            name="workspace-timezone"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
+          <Stack.Screen
             name="check-in-templates"
             options={{
               headerShown: false,
@@ -583,7 +520,13 @@ function RootLayoutNav() {
             }}
           />
           <Stack.Screen name="account-hub" />
-          <Stack.Screen name="choose-plan" />
+          <Stack.Screen
+            name="choose-plan"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
           <Stack.Screen name="workspace-welcome" />
           <Stack.Screen name="billing" />
           <Stack.Screen name="subscription" />
@@ -637,7 +580,7 @@ function RootLayoutNav() {
         <Stack.Screen name="terms-of-service" />
       </Stack>
       {showSplash ? (
-        <CustomSplash
+        <LaunchScreen
           isReady={animDone && sessionSettled && workspaceMembershipReady}
           onDone={() => setShowSplash(false)}
         />

@@ -21,7 +21,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Bookmark, Plus, Square, Camera, Pencil, Trash2, ImageIcon, Check, CheckSquare, Bell, ChevronDown, ChevronRight, ChevronUp, Lock, Search, Calendar, Clock, Users, SlidersHorizontal, FileText, ArrowLeft, ArrowRight } from "lucide-react-native";
+import { X, BookOpen, Plus, Square, Camera, Pencil, Trash2, ImageIcon, Check, CheckSquare, Bell, ChevronRight, Lock, Search, Calendar, Clock, Users, FileText, ListChecks, ArrowLeft, ArrowRight } from "lucide-react-native";
 import { colors } from "@/theme";
 import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
@@ -106,24 +106,25 @@ const formStyles = StyleSheet.create({
     fontWeight: "600",
     color: "#312E81",
   },
-  moreRow: {
-    marginTop: 18,
-    paddingTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E6E8F0",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
 });
 
 const ACCENT = "#4F46E5";
 const ACCENT_SOFT = "#EEF0FF";
 const ACCENT_INK = "#3730A3";
 
-type BuilderStep = "details" | "when" | "who";
-const STEP_LABEL: Record<BuilderStep, string> = { details: "Details", when: "When", who: "Who" };
-const STEP_ICON: Record<BuilderStep, typeof FileText> = { details: FileText, when: Calendar, who: Users };
+type BuilderStep = "details" | "who" | "when" | "review";
+const STEP_LABEL: Record<BuilderStep, string> = {
+  details: "Details",
+  who: "Who",
+  when: "When",
+  review: "Review",
+};
+const STEP_ICON: Record<BuilderStep, typeof FileText> = {
+  details: FileText,
+  who: Users,
+  when: Calendar,
+  review: ListChecks,
+};
 
 const builderStyles = StyleSheet.create({
   header: {
@@ -158,14 +159,16 @@ const builderStyles = StyleSheet.create({
   stepper: {
     flexDirection: "row",
     alignItems: "flex-start",
-    paddingHorizontal: 20,
+    justifyContent: "center",
+    paddingHorizontal: 12,
     paddingBottom: 12,
     marginBottom: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#E6E8F0",
   },
   stepNode: {
-    width: 64,
+    flex: 1,
+    maxWidth: 72,
     alignItems: "center",
     gap: 5,
   },
@@ -410,7 +413,6 @@ export default function CreateTaskScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [savingTemplate, setSavingTemplate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subtaskTitles, setSubtaskTitles] = useState<string[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
@@ -419,7 +421,6 @@ export default function CreateTaskScreen() {
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showAssigneePicker, setShowAssigneePicker] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
-  const [moreOpen, setMoreOpen] = useState(false);
   const [step, setStep] = useState(0);
 
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
@@ -444,10 +445,13 @@ export default function CreateTaskScreen() {
   });
   const presentation = resolveTaskCreationPresentation(myRole, selectedKind);
   const isReminder = presentation.kind === "reminder";
-  const steps: BuilderStep[] = isReminder ? ["details", "when"] : ["details", "when", "who"];
+  const steps: BuilderStep[] = isReminder
+    ? ["details", "when", "review"]
+    : ["details", "who", "when", "review"];
   const stepIndex = Math.min(step, steps.length - 1);
   const currentStep = steps[stepIndex];
   const isLastStep = stepIndex === steps.length - 1;
+  const whoStepIndex = steps.indexOf("who");
   // Member-only due-date limit only when role is explicitly member (never on a failed roster match).
   const memberDueDateLimit = myRole === "member";
 
@@ -527,53 +531,6 @@ export default function CreateTaskScreen() {
     }
     setIsJoint(t.isJoint ?? false);
     setShowTemplatePicker(false);
-  };
-
-  const handleSaveAsTemplate = async () => {
-    if (isReminder) return;
-    if (!title.trim()) {
-      setError("Please enter a task title before saving as template");
-      return;
-    }
-    setSavingTemplate(true);
-    try {
-      let templateAttachmentUrl: string | undefined;
-      if (attachmentUri) {
-        if (attachmentUri.startsWith("file://") || attachmentUri.startsWith("/")) {
-          setUploadingPhoto(true);
-          const filename = attachmentUri.split("/").pop() ?? "photo.jpg";
-          const uploaded = await uploadFile(attachmentUri, filename, "image/jpeg");
-          templateAttachmentUrl = uploaded.url;
-          setUploadingPhoto(false);
-        } else {
-          templateAttachmentUrl = attachmentUri;
-        }
-      }
-      await api.post(`/api/teams/${teamId}/templates`, {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        priority,
-        attachmentUrl: templateAttachmentUrl || undefined,
-        subtasks: subtaskTitles.map((s, i) => ({ title: s, order: i })),
-        isRecurring,
-        recurrenceType: isRecurring ? recurrenceType : undefined,
-        recurrenceInterval: isRecurring ? clampRecurrenceCount(recurrenceCount, recurrenceType) : undefined,
-        recurrenceDaysOfWeek: isRecurring && recurrenceType === "weekly" && selectedDayOfWeek !== null
-          ? String(selectedDayOfWeek)
-          : undefined,
-        recurrenceDayOfMonth: isRecurring && recurrenceType === "monthly" && selectedDayOfMonth !== null
-          ? selectedDayOfMonth
-          : undefined,
-        isJoint,
-      });
-      queryClient.invalidateQueries({ queryKey: ["templates", teamId] });
-      setError(null);
-    } catch {
-      setError("Failed to save template");
-    } finally {
-      setSavingTemplate(false);
-      setUploadingPhoto(false);
-    }
   };
 
   const createMutation = useMutation({
@@ -656,7 +613,7 @@ export default function CreateTaskScreen() {
     const assigneeIds = selectedAssignees;
     if (!isReminder && assigneeIds.length === 0) {
       setError("Please assign this task to at least one person");
-      setStep(steps.length - 1);
+      setStep(whoStepIndex >= 0 ? whoStepIndex : 0);
       return;
     }
     setError(null);
@@ -670,6 +627,16 @@ export default function CreateTaskScreen() {
   const goToStep = (index: number) => {
     if (index > stepIndex && !title.trim()) {
       setError(isReminder ? "Please enter a reminder title" : "Please enter a task title");
+      return;
+    }
+    if (
+      !isReminder &&
+      whoStepIndex >= 0 &&
+      index > whoStepIndex &&
+      selectedAssignees.length === 0
+    ) {
+      setError("Please assign this task to at least one person");
+      setStep(whoStepIndex);
       return;
     }
     setError(null);
@@ -986,6 +953,80 @@ export default function CreateTaskScreen() {
                     </TouchableOpacity>
                   );
                 })}
+              </View>
+            </View>
+          ) : null}
+
+          {!isReminder ? (
+            <View className="py-4 border-b border-slate-100 dark:border-slate-800" style={{ marginTop: 8 }}>
+              <Text className="text-sm font-semibold text-slate-500 mb-3">Photo</Text>
+              {attachmentUri ? (
+                <View className="relative">
+                  <Image
+                    source={{ uri: attachmentUri }}
+                    style={{ width: "100%", height: 180, borderRadius: 12 }}
+                    resizeMode="cover"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setAttachmentUri(null)}
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 items-center justify-center"
+                    testID="remove-photo-button"
+                  >
+                    <X size={14} color="white" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setShowPhotoOptions(true)}
+                  disabled={uploadingPhoto}
+                  className="flex-row items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-6"
+                  style={{ gap: 8 }}
+                  testID="pick-photo-button"
+                >
+                  <Camera size={20} color="#94A3B8" />
+                  <Text className="text-sm text-slate-400">Add a photo</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null}
+
+          {!isReminder ? (
+            <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+              <Text className="text-sm font-semibold text-slate-500 mb-3">
+                Subtasks{subtaskTitles.length > 0 ? ` (${subtaskTitles.length})` : ""}
+              </Text>
+              {subtaskTitles.length > 0 ? (
+                <View className="mb-3" style={{ gap: 6 }}>
+                  {subtaskTitles.map((subtaskTitle, index) => (
+                    <View key={index} className="flex-row items-center" style={{ gap: 8 }}>
+                      <Square size={16} color="#CBD5E1" />
+                      <Text className="flex-1 text-sm text-slate-700 dark:text-slate-300">{subtaskTitle}</Text>
+                      <TouchableOpacity
+                        onPress={() => removeSubtask(index)}
+                        className="w-6 h-6 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
+                        testID={`remove-subtask-${index}`}
+                      >
+                        <X size={12} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              <View className="flex-row items-center border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2" style={{ gap: 8 }}>
+                <TextInput
+                  value={newSubtaskTitle}
+                  onChangeText={setNewSubtaskTitle}
+                  placeholder="Add a subtask..."
+                  placeholderTextColor="#94A3B8"
+                  className="flex-1 text-sm text-slate-900 dark:text-white"
+                  onSubmitEditing={addSubtask}
+                  returnKeyType="done"
+                  blurOnSubmit={false}
+                  testID="new-subtask-input"
+                />
+                <TouchableOpacity onPress={addSubtask} disabled={!newSubtaskTitle.trim()} testID="add-subtask-button">
+                  <Plus size={18} color={newSubtaskTitle.trim() ? "#4361EE" : "#CBD5E1"} />
+                </TouchableOpacity>
               </View>
             </View>
           ) : null}
@@ -1307,27 +1348,8 @@ export default function CreateTaskScreen() {
 
           {currentStep === "who" ? (
           <>
-          <View style={builderStyles.summary} testID="task-builder-summary">
-            <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }} numberOfLines={2}>
-              {title.trim() || "Untitled task"}
-            </Text>
-            <Text style={{ marginTop: 3, fontSize: 12.5, color: "#64748B" }} numberOfLines={1}>
-              {[
-                dueDate
-                  ? `Due ${dueDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}${
-                      dueHasTime ? `, ${dueDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""
-                    }`
-                  : "No due date",
-                `${PRIORITIES.find((p) => p.value === priority)?.label ?? "Medium"} priority`,
-                isRecurring ? "Repeats" : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </Text>
-          </View>
-
           {!isReminder && members.length > 0 ? (
-            <View style={{ marginTop: 16 }}>
+            <View style={{ marginTop: 4 }}>
               <Text style={formStyles.label}>
                 Assign to <Text style={formStyles.required}>*</Text>
               </Text>
@@ -1388,7 +1410,6 @@ export default function CreateTaskScreen() {
             </View>
           ) : null}
 
-          {/* Joint Task — only shown when 2+ assignees selected */}
           {!isReminder && selectedAssignees.length >= 2 ? (
             <View style={[builderStyles.card, { marginTop: 14 }]}>
               <View className="flex-row items-center justify-between">
@@ -1419,114 +1440,48 @@ export default function CreateTaskScreen() {
               ) : null}
             </View>
           ) : null}
-
-          <Pressable
-            onPress={() => setMoreOpen((open) => !open)}
-            style={formStyles.moreRow}
-            testID="more-options-toggle"
-          >
-            <SlidersHorizontal size={16} color={ACCENT} strokeWidth={2} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>More options</Text>
-              <Text style={{ marginTop: 1, fontSize: 12, color: "#94A3B8" }}>Photo, subtasks, save as template</Text>
-            </View>
-            {moreOpen ? (
-              <ChevronUp size={16} color="#94A3B8" strokeWidth={2.2} />
-            ) : (
-              <ChevronDown size={16} color="#94A3B8" strokeWidth={2.2} />
-            )}
-          </Pressable>
-
-          {moreOpen ? (
-          <>
-          {/* Photo attachment */}
-          {!isReminder ? (
-          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-            <Text className="text-sm font-semibold text-slate-500 mb-3">Photo</Text>
-            {attachmentUri ? (
-              <View className="relative">
-                <Image
-                  source={{ uri: attachmentUri }}
-                  style={{ width: "100%", height: 180, borderRadius: 12 }}
-                  resizeMode="cover"
-                />
-                <TouchableOpacity
-                  onPress={() => setAttachmentUri(null)}
-                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 items-center justify-center"
-                  testID="remove-photo-button"
-                >
-                  <X size={14} color="white" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={() => setShowPhotoOptions(true)}
-                disabled={uploadingPhoto}
-                className="flex-row items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-6"
-                style={{ gap: 8 }}
-                testID="pick-photo-button"
-              >
-                <Camera size={20} color="#94A3B8" />
-                <Text className="text-sm text-slate-400">Add a photo</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          </>
           ) : null}
 
-          {/* Subtasks */}
-          {!isReminder ? (
-          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-            <Text className="text-sm font-semibold text-slate-500 mb-3">
-              Subtasks{subtaskTitles.length > 0 ? ` (${subtaskTitles.length})` : ""}
+          {currentStep === "review" ? (
+          <View style={builderStyles.summary} testID="task-builder-summary">
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }} numberOfLines={2}>
+              {title.trim() || (isReminder ? "Untitled reminder" : "Untitled task")}
             </Text>
-            {subtaskTitles.length > 0 ? (
-              <View className="mb-3" style={{ gap: 6 }}>
-                {subtaskTitles.map((title, index) => (
-                  <View key={index} className="flex-row items-center" style={{ gap: 8 }}>
-                    <Square size={16} color="#CBD5E1" />
-                    <Text className="flex-1 text-sm text-slate-700 dark:text-slate-300">{title}</Text>
-                    <TouchableOpacity
-                      onPress={() => removeSubtask(index)}
-                      className="w-6 h-6 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
-                      testID={`remove-subtask-${index}`}
-                    >
-                      <X size={12} color="#94A3B8" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-            <View className="flex-row items-center border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2" style={{ gap: 8 }}>
-              <TextInput
-                value={newSubtaskTitle}
-                onChangeText={setNewSubtaskTitle}
-                placeholder="Add a subtask..."
-                placeholderTextColor="#94A3B8"
-                className="flex-1 text-sm text-slate-900 dark:text-white"
-                onSubmitEditing={addSubtask}
-                returnKeyType="done"
-                blurOnSubmit={false}
-                testID="new-subtask-input"
-              />
-              <TouchableOpacity onPress={addSubtask} disabled={!newSubtaskTitle.trim()} testID="add-subtask-button">
-                <Plus size={18} color={newSubtaskTitle.trim() ? "#4361EE" : "#CBD5E1"} />
-              </TouchableOpacity>
-            </View>
+            <Text style={{ marginTop: 3, fontSize: 12.5, color: "#64748B" }} numberOfLines={2}>
+              {[
+                dueDate
+                  ? `Due ${dueDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}${
+                      dueHasTime ? `, ${dueDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""
+                    }`
+                  : "No due date",
+                isReminder
+                  ? null
+                  : `${PRIORITIES.find((p) => p.value === priority)?.label ?? "Medium"} priority`,
+                isRecurring ? "Repeats" : null,
+                isReminder
+                  ? "Private to you"
+                  : allAssigneesSelected
+                    ? "All associates"
+                    : selectedMembers.length > 0
+                      ? selectedMembers
+                          .map((member) =>
+                            myId && member.userId === myId
+                              ? "You"
+                              : (member.user.name?.trim() || member.user.email || "Unknown").split(/\s+/)[0],
+                          )
+                          .join(", ")
+                      : "Unassigned",
+                !isReminder && isJoint ? "Joint task" : null,
+                !isReminder && subtaskTitles.length > 0
+                  ? `${subtaskTitles.length} subtask${subtaskTitles.length === 1 ? "" : "s"}`
+                  : null,
+                !isReminder && attachmentUri ? "Photo attached" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </Text>
           </View>
-          ) : null}
-
-          <Pressable
-            onPress={handleSaveAsTemplate}
-            disabled={savingTemplate}
-            style={[builderStyles.rowButton, { marginTop: 14 }]}
-            testID="save-template-button"
-          >
-            {savingTemplate ? <ActivityIndicator color={ACCENT} size="small" /> : <Bookmark size={17} color="#64748B" strokeWidth={2} />}
-            <Text style={builderStyles.rowButtonText}>Save as template</Text>
-          </Pressable>
-          </>
-          ) : null}
-          </>
           ) : null}
           </ScrollView>
 
