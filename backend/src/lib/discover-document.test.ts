@@ -57,6 +57,35 @@ describe("sanitizeDiscoverDoc designed blocks", () => {
     ]);
   });
 
+  test("keeps youtube embeds from ids or watch urls", () => {
+    const doc = sanitizeDiscoverDoc({
+      type: "doc",
+      content: [
+        {
+          type: "discoverYoutube",
+          attrs: { videoId: "dQw4w9WgXcQ", title: "Demo" },
+        },
+        {
+          type: "discoverYoutube",
+          attrs: {
+            url: "https://www.youtube.com/watch?v=abcdefghijk",
+            title: "From URL",
+          },
+        },
+        { type: "discoverYoutube", attrs: { videoId: "short", title: "Bad" } },
+        { type: "discoverYoutube", attrs: { videoId: "<script>xss", title: "Nope" } },
+      ],
+    });
+    expect(doc.content).toEqual([
+      { type: "discoverYoutube", attrs: { videoId: "dQw4w9WgXcQ", title: "Demo" } },
+      {
+        type: "discoverYoutube",
+        attrs: { videoId: "abcdefghijk", title: "From URL" },
+      },
+    ]);
+    expect(discoverPlainText(doc)).toBe("Demo From URL");
+  });
+
   test("drops empty designed blocks and caps cards at four", () => {
     const card = { title: "T", text: "x" };
     const doc = sanitizeDiscoverDoc({

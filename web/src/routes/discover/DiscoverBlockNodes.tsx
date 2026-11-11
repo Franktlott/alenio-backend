@@ -6,15 +6,19 @@ import {
   DEFAULT_CALLOUT,
   DEFAULT_CARDS,
   DEFAULT_CHECKLIST,
+  DEFAULT_YOUTUBE,
   DISCOVER_ICONS,
   DISCOVER_TONES,
   MAX_DISCOVER_CARDS,
+  parseYoutubeVideoId,
   type DiscoverCalloutAttrs,
   type DiscoverCard,
   type DiscoverCardGridAttrs,
   type DiscoverChecklistAttrs,
+  type DiscoverYoutubeAttrs,
 } from "../../lib/discover-blocks";
 import { DiscoverCallout, DiscoverCardGrid, DiscoverChecklist } from "./DiscoverDesignedBlocks";
+import { DiscoverYoutubeEmbed } from "./DiscoverYoutubeEmbed";
 
 type NodeViewProps = ReactNodeViewProps<HTMLElement>;
 
@@ -35,6 +39,7 @@ export const SIZED_TYPES = [
   "discoverCallout",
   "discoverCards",
   "discoverChecklist",
+  "discoverYoutube",
 ];
 
 /** Lets any top-level block sit beside others; blocks fill a row left to right, then wrap. */
@@ -308,6 +313,38 @@ function ChecklistView(props: NodeViewProps) {
   );
 }
 
+function YoutubeView(props: NodeViewProps) {
+  const attrs = props.node.attrs as DiscoverYoutubeAttrs;
+  const set = (patch: Partial<DiscoverYoutubeAttrs>) => props.updateAttributes(patch);
+  return (
+    <BlockFrame
+      props={props}
+      label="YouTube video"
+      defaults={DEFAULT_YOUTUBE}
+      preview={<DiscoverYoutubeEmbed videoId={attrs.videoId} title={attrs.title} />}
+      form={
+        <>
+          <TextField
+            label="YouTube link or video id"
+            value={attrs.videoId}
+            placeholder="https://www.youtube.com/watch?v=…"
+            onChange={(value) => {
+              const id = parseYoutubeVideoId(value);
+              set({ videoId: id ?? value.trim() });
+            }}
+          />
+          <TextField
+            label="Title (for accessibility)"
+            value={attrs.title}
+            maxLength={160}
+            onChange={(title) => set({ title })}
+          />
+        </>
+      }
+    />
+  );
+}
+
 function designedNode(name: string, defaults: Record<string, unknown>, view: ComponentType<NodeViewProps>) {
   const tag = `div[data-discover-block="${name}"]`;
   const read = (element: HTMLElement) => {
@@ -352,3 +389,4 @@ function designedNode(name: string, defaults: Record<string, unknown>, view: Com
 export const DiscoverCalloutNode = designedNode("discoverCallout", DEFAULT_CALLOUT, CalloutView);
 export const DiscoverCardsNode = designedNode("discoverCards", DEFAULT_CARDS, CardsView);
 export const DiscoverChecklistNode = designedNode("discoverChecklist", DEFAULT_CHECKLIST, ChecklistView);
+export const DiscoverYoutubeNode = designedNode("discoverYoutube", DEFAULT_YOUTUBE, YoutubeView);

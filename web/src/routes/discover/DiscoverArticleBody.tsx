@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 import type { DiscoverNode } from "../../lib/discover-public-api";
-import type { DiscoverCalloutAttrs, DiscoverCardGridAttrs, DiscoverChecklistAttrs } from "../../lib/discover-blocks";
+import type {
+  DiscoverCalloutAttrs,
+  DiscoverCardGridAttrs,
+  DiscoverChecklistAttrs,
+  DiscoverYoutubeAttrs,
+} from "../../lib/discover-blocks";
 import { DiscoverCallout, DiscoverCardGrid, DiscoverChecklist } from "./DiscoverDesignedBlocks";
+import { DiscoverYoutubeEmbed } from "./DiscoverYoutubeEmbed";
 
 function isSafeHttpsUrl(value: string | undefined | null): value is string {
   return Boolean(value && /^https:\/\//i.test(value));
@@ -115,6 +121,10 @@ function Block({ block }: { block: DiscoverNode }) {
   if (block.type === "discoverCallout") return <DiscoverCallout attrs={(block.attrs ?? {}) as Partial<DiscoverCalloutAttrs>} />;
   if (block.type === "discoverCards") return <DiscoverCardGrid attrs={(block.attrs ?? {}) as Partial<DiscoverCardGridAttrs>} />;
   if (block.type === "discoverChecklist") return <DiscoverChecklist attrs={(block.attrs ?? {}) as Partial<DiscoverChecklistAttrs>} />;
+  if (block.type === "discoverYoutube") {
+    const attrs = (block.attrs ?? {}) as Partial<DiscoverYoutubeAttrs>;
+    return <DiscoverYoutubeEmbed videoId={attrs.videoId} title={attrs.title} />;
+  }
   if (block.type !== "paragraph") return null;
   return (
     <p>

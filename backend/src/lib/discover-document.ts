@@ -31,6 +31,10 @@ export type DiscoverBulletList = { type: "bulletList"; attrs?: Sized; content: D
 export type DiscoverOrderedList = { type: "orderedList"; attrs?: Sized; content: DiscoverListItem[] };
 export type DiscoverBlockquote = { type: "blockquote"; attrs?: Sized; content: DiscoverParagraph[] };
 export type DiscoverImage = { type: "image"; attrs: { src: string; alt: string | null } & Sized };
+export type DiscoverYoutube = {
+  type: "discoverYoutube";
+  attrs: { videoId: string; title: string } & Sized;
+};
 
 export const DISCOVER_BLOCK_ICONS = [
   "users", "target", "zap", "heart", "rocket", "star", "lightbulb", "shield",
@@ -59,9 +63,40 @@ export type DiscoverBlock =
   | DiscoverOrderedList
   | DiscoverBlockquote
   | DiscoverImage
+  | DiscoverYoutube
   | DiscoverCallout
   | DiscoverCards
   | DiscoverChecklist;
+
+/** 11-character YouTube ids only — never store arbitrary watch URLs in the doc. */
+const YOUTUBE_ID = /^[a-zA-Z0-9_-]{11}$/;
+
+export function parseYoutubeVideoId(value: string): string | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  if (YOUTUBE_ID.test(raw)) return raw;
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+    if (host === "youtu.be") {
+      const id = url.pathname.split("/").filter(Boolean)[0] ?? "";
+      return YOUTUBE_ID.test(id) ? id : null;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
+      const fromQuery = url.searchParams.get("v")?.trim() ?? "";
+      if (YOUTUBE_ID.test(fromQuery)) return fromQuery;
+      const parts = url.pathname.split("/").filter(Boolean);
+      const embedIndex = parts.findIndex((part) => part === "embed" || part === "shorts" || part === "live");
+      if (embedIndex >= 0) {
+        const id = parts[embedIndex + 1] ?? "";
+        return YOUTUBE_ID.test(id) ? id : null;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 export type DiscoverDoc = { type: "doc"; content: DiscoverBlock[] };
 
@@ -191,6 +226,22 @@ function sanitizeChecklist(attrs: Record<string, unknown> | null): DiscoverCheck
   };
 }
 
+function sanitizeYoutube(attrs: Record<string, unknown> | null): DiscoverYoutube | null {
+  const fromId =
+    typeof attrs?.videoId === "string" ? parseYoutubeVideoId(attrs.videoId) : null;
+  const fromUrl =
+    typeof attrs?.url === "string" ? parseYoutubeVideoId(attrs.url) : null;
+  const videoId = fromId ?? fromUrl;
+  if (!videoId) return null;
+  return {
+    type: "discoverYoutube",
+    attrs: {
+      videoId,
+      title: cleanText(attrs?.title, 160) || "YouTube video",
+    },
+  };
+}
+
 function sanitizeWidth(value: unknown): Sized["width"] | undefined {
   return value === "2/3" || value === "1/2" || value === "1/3" ? value : undefined;
 }
@@ -251,6 +302,11 @@ function sanitizeBlocks(value: unknown): DiscoverBlock[] {
       push({ type: "image", attrs: { src, alt } });
       continue;
     }
+    if (record.type === "discoverYoutube") {
+      const youtube = sanitizeYoutube(asRecord(record.attrs));
+      if (youtube) push(youtube);
+      continue;
+    }
     const designed =
       record.type === "discoverCallout"
         ? sanitizeCallout(asRecord(record.attrs))
@@ -283,6 +339,10 @@ export function discoverPlainText(doc: DiscoverDoc): string {
   for (const block of doc.content) {
     if (block.type === "image") {
       if (block.attrs.alt) parts.push(block.attrs.alt);
+      continue;
+    }
+    if (block.type === "discoverYoutube") {
+      if (block.attrs.title) parts.push(block.attrs.title);
       continue;
     }
     if (block.type === "bulletList" || block.type === "orderedList") {

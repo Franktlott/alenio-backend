@@ -1,6 +1,7 @@
 import { Image, Linking, Text, View } from "react-native";
 import type { DiscoverNode } from "@/lib/discover";
 import { DiscoverCallout, DiscoverCardGrid, DiscoverChecklist } from "./DiscoverDesignedBlocks";
+import { DiscoverYoutubeEmbed } from "./DiscoverYoutubeEmbed";
 
 function Inline({ nodes }: { nodes?: DiscoverNode[] }) {
   if (!nodes?.length) return null;
@@ -110,6 +111,23 @@ export function DiscoverArticleBody({ blocks }: { blocks: DiscoverNode[] }) {
         if (block.type === "discoverCallout") return <DiscoverCallout key={index} attrs={block.attrs ?? {}} />;
         if (block.type === "discoverCards") return <DiscoverCardGrid key={index} attrs={block.attrs ?? {}} />;
         if (block.type === "discoverChecklist") return <DiscoverChecklist key={index} attrs={block.attrs ?? {}} />;
+        if (block.type === "discoverYoutube") {
+          return (
+            <DiscoverYoutubeEmbed
+              key={index}
+              videoId={
+                typeof block.attrs?.videoId === "string"
+                  ? block.attrs.videoId
+                  : ""
+              }
+              title={
+                typeof block.attrs?.title === "string"
+                  ? block.attrs.title
+                  : "YouTube video"
+              }
+            />
+          );
+        }
         if (block.type !== "paragraph") return null;
         return (
           <Text key={index} style={{ marginTop: 8, fontSize: 16, lineHeight: 24, color: "#1F2937" }}>

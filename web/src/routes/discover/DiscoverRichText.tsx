@@ -20,13 +20,27 @@ import {
   Quote,
   Redo2,
   Undo2,
+  Video,
 } from "lucide-react";
 import { TextSelection } from "@tiptap/pm/state";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { uploadChatMedia } from "../../lib/api";
-import { DEFAULT_CALLOUT, DEFAULT_CARDS, DEFAULT_CHECKLIST, FRAMEWORK_TEMPLATE } from "../../lib/discover-blocks";
+import {
+  DEFAULT_CALLOUT,
+  DEFAULT_CARDS,
+  DEFAULT_CHECKLIST,
+  DEFAULT_YOUTUBE,
+  FRAMEWORK_TEMPLATE,
+  parseYoutubeVideoId,
+} from "../../lib/discover-blocks";
 import { DiscoverBlockHandles } from "./DiscoverBlockHandles";
-import { BlockWidth, DiscoverCalloutNode, DiscoverCardsNode, DiscoverChecklistNode } from "./DiscoverBlockNodes";
+import {
+  BlockWidth,
+  DiscoverCalloutNode,
+  DiscoverCardsNode,
+  DiscoverChecklistNode,
+  DiscoverYoutubeNode,
+} from "./DiscoverBlockNodes";
 
 type Tool = {
   label: string;
@@ -78,6 +92,7 @@ export function DiscoverRichText({ value, onChange }: Props) {
       DiscoverCalloutNode,
       DiscoverCardsNode,
       DiscoverChecklistNode,
+      DiscoverYoutubeNode,
       BlockWidth,
       Placeholder.configure({
         showOnlyCurrent: false,
@@ -197,6 +212,22 @@ export function DiscoverRichText({ value, onChange }: Props) {
       { label: "Callout box", text: "Callout", icon: <MessageSquareText size={17} />, onClick: () => insertBlock("discoverCallout", DEFAULT_CALLOUT) },
       { label: "Card grid", text: "Cards", icon: <LayoutGrid size={17} />, onClick: () => insertBlock("discoverCards", DEFAULT_CARDS) },
       { label: "Action checklist", text: "Checklist", icon: <ListChecks size={17} />, onClick: () => insertBlock("discoverChecklist", DEFAULT_CHECKLIST) },
+      {
+        label: "YouTube video",
+        text: "YouTube",
+        icon: <Video size={17} />,
+        onClick: () => {
+          const pasted = window.prompt("Paste a YouTube link", "https://www.youtube.com/watch?v=");
+          if (pasted == null) return;
+          const videoId = parseYoutubeVideoId(pasted);
+          if (!videoId) {
+            setUploadError("That doesn’t look like a YouTube link. Try a watch, share, or embed URL.");
+            return;
+          }
+          setUploadError(null);
+          insertBlock("discoverYoutube", { ...DEFAULT_YOUTUBE, videoId });
+        },
+      },
     ],
     [
       { label: "Undo", icon: <Undo2 size={16} />, disabled: !editor.can().undo(), onClick: () => run(() => chain().undo().run()) },

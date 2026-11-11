@@ -105,6 +105,7 @@ Increments the view count only when the article is live. Returns `{ "data": { "v
 - `bulletList` / `orderedList` → `listItem` → paragraphs
 - `blockquote` → paragraphs
 - `image` → `attrs.src` must be `https`, `attrs.alt` is optional
+- `discoverYoutube` → `attrs.videoId` is an 11-character YouTube id, `attrs.title` is optional accessibility text. Render with `https://www.youtube-nocookie.com/embed/{videoId}` only — never inject arbitrary URLs.
 - `text` → `text`, optional marks `bold`, `italic`, or `link`
 - `hardBreak`
 
