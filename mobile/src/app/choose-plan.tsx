@@ -16,7 +16,11 @@ import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
-import { postBillingCheckout, type SubscriptionApiRow } from "@/lib/account-hub-api";
+import {
+  postBillingCheckout,
+  postBillingPortal,
+  type SubscriptionApiRow,
+} from "@/lib/account-hub-api";
 import { isPlayCheckoutCanceled } from "@/lib/play-external-links";
 import { BillingPortalWebViewModal } from "@/components/BillingPortalWebViewModal";
 import { AppHeaderBand } from "@/components/AppHeaderBand";
@@ -28,6 +32,8 @@ import {
   tintInk,
 } from "@/components/ui";
 import { shortPeriod, usePlans } from "@/lib/plans";
+import { WORKSPACE_PLAN_TITLE } from "@/lib/plan-access-copy";
+import { refreshTeamSubscription } from "@/lib/workspace-access";
 import { palette, tints } from "@/theme";
 
 type PlanId = "pro" | "operations";
@@ -115,10 +121,36 @@ export default function ChoosePlanScreen() {
     },
   });
 
+  const manageBilling = useMutation({
+    mutationFn: () => postBillingPortal(teamId),
+    onSuccess: (result) => {
+      if (!result.url) {
+        toast({
+          title: "Billing portal unavailable",
+          message: "Try again in a moment.",
+          preset: "error",
+        });
+        return;
+      }
+      setBillingUrl(result.url);
+    },
+    onError: (error: Error) => {
+      if (isPlayCheckoutCanceled(error)) return;
+      toast({
+        title: "Couldn’t open billing",
+        message: error.message,
+        preset: "error",
+      });
+    },
+  });
+
   const closeBilling = useCallback(() => {
     setBillingUrl(null);
-    void queryClient.invalidateQueries({ queryKey: ["subscription", teamId] });
-  }, [queryClient, teamId]);
+    void refreshTeamSubscription(queryClient, teamId, {
+      poll: true,
+      previous: subscription ?? null,
+    });
+  }, [queryClient, subscription, teamId]);
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
@@ -145,7 +177,7 @@ export default function ChoosePlanScreen() {
         </Pressable>
         <View style={styles.topTitleWrap}>
           <Text style={styles.bandTitle} numberOfLines={1}>
-            Choose a plan
+            {WORKSPACE_PLAN_TITLE}
           </Text>
           <Text style={styles.bandSubtitle} numberOfLines={1}>
             {team?.name ?? "Workspace access"}
@@ -158,7 +190,7 @@ export default function ChoosePlanScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.content,
-            { paddingBottom: Math.max(insets.bottom, 12) + 120 },
+            { paddingBottom: Math.max(insets.bottom, 12) + 140 },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -309,24 +341,24 @@ export default function ChoosePlanScreen() {
             fullWidth
             label={`Continue with ${plans[selected].name}`}
             loading={checkout.isPending}
-            disabled={!teamId || !isOwner || checkout.isPending}
+            disabled={
+              !teamId || !isOwner || checkout.isPending || manageBilling.isPending
+            }
             onPress={() => checkout.mutate()}
             testID="continue-to-checkout"
           />
-          <Button
-            variant="link"
-            size="md"
-            fullWidth
-            label="View plan & access"
-            onPress={() =>
-              router.push({
-                pathname: "/account-hub",
-                params: teamId ? { teamId } : undefined,
-              })
-            }
-            testID="plan-access-link"
-            style={{ alignSelf: "center" }}
-          />
+          {isOwner && teamId && subscription?.hasStripeCustomer ? (
+            <Button
+              variant="secondary"
+              size="lg"
+              fullWidth
+              label="Manage billing"
+              loading={manageBilling.isPending}
+              disabled={checkout.isPending || manageBilling.isPending}
+              onPress={() => manageBilling.mutate()}
+              testID="choose-plan-manage-billing"
+            />
+          ) : null}
         </View>
       </View>
 
@@ -338,9 +370,6 @@ export default function ChoosePlanScreen() {
         onFlowComplete={(result) => {
           if (result === "success") {
             toast({ title: "Plan updated", preset: "done" });
-            void queryClient.invalidateQueries({
-              queryKey: ["subscription", teamId],
-            });
           }
         }}
       />
@@ -524,8 +553,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
-    paddingTop: 10,
-    gap: 4,
+    paddingTop: 12,
+    gap: 10,
     backgroundColor: palette.page,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: palette.cardBorder,

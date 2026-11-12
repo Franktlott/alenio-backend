@@ -102,8 +102,10 @@ subscriptionRouter.get("/", async (c) => {
   const { reconcileStripeForSubscriptionRead, syncSubscriptionDetailsFromStripe } = await import(
     "../lib/stripe-billing"
   );
+  const forceRefresh =
+    c.req.query("refresh") === "1" || c.req.query("refresh") === "true";
   try {
-    await reconcileStripeForSubscriptionRead(teamId);
+    await reconcileStripeForSubscriptionRead(teamId, { force: forceRefresh });
   } catch (err) {
     console.warn("[subscription] Stripe reconcile skipped:", err);
   }

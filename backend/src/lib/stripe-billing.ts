@@ -383,12 +383,16 @@ export async function syncCancelAtPeriodEndFromStripe(teamId: string): Promise<b
 /**
  * Best-effort pull from Stripe when the app reads subscription (Plan page, mobile layout).
  * Throttled per team to avoid hammering Stripe when the UI polls. Webhooks remain primary.
+ * Pass `{ force: true }` right after checkout/portal so the UI is not stuck on the cooldown.
  */
-export async function reconcileStripeForSubscriptionRead(teamId: string): Promise<void> {
+export async function reconcileStripeForSubscriptionRead(
+  teamId: string,
+  opts?: { force?: boolean },
+): Promise<void> {
   if (!getStripeClient()) return;
   const now = Date.now();
   const prev = lastSubscriptionReadReconcileAt.get(teamId) ?? 0;
-  if (now - prev < subscriptionReadReconcileCooldownMs) return;
+  if (!opts?.force && now - prev < subscriptionReadReconcileCooldownMs) return;
   lastSubscriptionReadReconcileAt.set(teamId, now);
   try {
     await reconcileTeamStripeSubscription(teamId);
