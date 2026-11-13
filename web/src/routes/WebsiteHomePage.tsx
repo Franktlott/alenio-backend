@@ -1,13 +1,14 @@
 import { Link } from "react-router-dom";
 import { MarketingFooter } from "../components/MarketingFooter";
 import { SiteHeader, SiteIcon, type SiteIconName } from "../components/SiteHeader";
-import { MARKETING_CTA_START_FREE } from "../lib/marketing-constants";
+import { MARKETING_CTA_JOIN_FREE } from "../lib/marketing-constants";
 import "../components/site-chrome.css";
 import "./website-home.css";
 
-const HERO_TRUST = ["Free to join the network", "14-day free workspace trial", "No credit card required"];
+const HERO_TRUST = ["Always free to join", "14-day free workspace trial", "No credit card required"];
 
 const NETWORK_POINTS = [
+  "Forever free to join",
   "Build your professional network",
   "Share wins, ideas, and best practices",
   "Discover leaders and new opportunities",
@@ -186,7 +187,7 @@ export function WebsiteHomePage() {
         <div className="lp-hero-main">
           <div className="lp-hero-copy">
             <p className="lp-badge">
-              Built for frontline teams
+              Forever free to join
             </p>
             <h1>
               Your Network.
@@ -201,7 +202,7 @@ export function WebsiteHomePage() {
             </p>
             <div className="lp-hero-cta">
               <Link to="/sign-up" className="lp-btn lp-btn--primary lp-btn--lg">
-                {MARKETING_CTA_START_FREE}
+                {MARKETING_CTA_JOIN_FREE}
                 <SiteIcon name="arrow" size={18} />
               </Link>
               <a href="#experiences" className="lp-btn lp-btn--ghost lp-btn--lg">
@@ -289,7 +290,7 @@ export function WebsiteHomePage() {
           </div>
           <div className="lp-final-actions">
             <Link to="/sign-up" className="lp-btn lp-btn--light lp-btn--lg">
-              {MARKETING_CTA_START_FREE}
+              {MARKETING_CTA_JOIN_FREE}
               <SiteIcon name="arrow" size={18} />
             </Link>
             <Link to="/network" className="lp-btn lp-btn--ghost lp-btn--lg">

@@ -1,6 +1,7 @@
 import { LEGAL_CONTACT_EMAIL } from "./legal-constants";
 
 export const MARKETING_CTA_START_FREE = "Start Free Trial";
+export const MARKETING_CTA_JOIN_FREE = "Join free forever";
 export const MARKETING_CTA_REQUEST_DEMO = "Request demo";
 
 export const MARKETING_DEMO_HREF = `mailto:${LEGAL_CONTACT_EMAIL}?subject=${encodeURIComponent("Alenio demo request")}`;

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { MARKETING_CTA_START_FREE } from "../lib/marketing-constants";
+import { MARKETING_CTA_JOIN_FREE } from "../lib/marketing-constants";
 
 export type SiteIconName =
   | "chat"
@@ -155,7 +155,7 @@ export function SiteHeader({ active }: { active?: SiteNavId }) {
           Log In
         </Link>
         <Link to="/sign-up" className="lp-btn lp-btn--primary lp-btn--sm">
-          {MARKETING_CTA_START_FREE}
+          {MARKETING_CTA_JOIN_FREE}
         </Link>
       </div>
     </header>
