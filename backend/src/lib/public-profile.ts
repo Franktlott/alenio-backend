@@ -2,6 +2,7 @@ export type AcceptedConnectionPair = { requesterId: string; recipientId: string 
 
 export const PUBLIC_PROFILE_LIMITS = {
   profileTitle: 80,
+  profileOrganization: 80,
   profileWebsite: 2048,
   profileLocation: 100,
   profileBio: 500,
@@ -45,6 +46,22 @@ export function validatePublicProfileUpdate(
     data[field] = trimmed || null;
   }
   return { ok: true, data };
+}
+
+/** Accept an uploaded header photo URL, or null to restore the default mountain. */
+export function normalizeProfileHeaderImage(
+  value: unknown,
+): { ok: true; url: string | null } | { ok: false; message: string } {
+  if (value === null) return { ok: true, url: null };
+  if (typeof value !== "string") {
+    return { ok: false, message: "Header image must be a photo." };
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return { ok: true, url: null };
+  if (!/^https:\/\//i.test(trimmed) || trimmed.length > 2048) {
+    return { ok: false, message: "Header image must be an uploaded photo." };
+  }
+  return { ok: true, url: trimmed };
 }
 
 /** Canonicalize a public website to HTTPS and reject non-public or unsafe URLs. */

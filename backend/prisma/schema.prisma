@@ -49,6 +49,8 @@ model User {
   profileWebsite                    String?
   profileLocation                   String?
   profileBio                        String?
+  /** Wide cover shown behind the profile name. Null uses the default mountain. */
+  profileHeaderImage                String?
   profilePhotos                     UserProfilePhoto[]
   /**
    * Sticky, account-level completion marker for the five-step mobile onboarding checklist.

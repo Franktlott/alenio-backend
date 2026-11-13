@@ -623,9 +623,11 @@ connectionsRouter.get("/person/:userId", async (c) => {
       ...personSelect,
       emailVerified: true,
       createdAt: true,
+      profileOrganization: true,
       profileWebsite: true,
       profileLocation: true,
       profileBio: true,
+      profileHeaderImage: true,
       profilePhotos: {
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
         select: { id: true, url: true, width: true, height: true },
@@ -682,9 +684,11 @@ connectionsRouter.get("/person/:userId", async (c) => {
       emailVerified: person.emailVerified,
       memberSince: person.createdAt,
       profileTitle: person.profileTitle,
+      profileOrganization: person.profileOrganization,
       profileWebsite: person.profileWebsite,
       profileLocation: person.profileLocation,
       profileBio: person.profileBio,
+      profileHeaderImage: person.profileHeaderImage,
       photos: person.profilePhotos,
       stats: {
         connections: personConnectionCount,

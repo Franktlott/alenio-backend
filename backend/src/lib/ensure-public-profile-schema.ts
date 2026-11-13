@@ -8,12 +8,10 @@ export async function ensurePublicProfileSchema(prisma: PrismaClient): Promise<v
     "profileWebsite",
     "profileLocation",
     "profileBio",
+    "profileHeaderImage",
   ]) {
-    await prisma.$executeRawUnsafe(`
-      DO $$ BEGIN
-        ALTER TABLE "User" ADD COLUMN "${column}" TEXT;
-      EXCEPTION WHEN duplicate_column THEN NULL;
-      END $$;
-    `);
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE public."User" ADD COLUMN IF NOT EXISTS "${column}" TEXT`,
+    );
   }
 }

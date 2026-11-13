@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   countMutualConnections,
   mutualConnectionIds,
+  normalizeProfileHeaderImage,
   validatePublicProfileUpdate,
 } from "./public-profile";
 
@@ -76,6 +77,43 @@ describe("validatePublicProfileUpdate: profileTitle", () => {
 
   test("ignores a title that was not sent", () => {
     expect(validatePublicProfileUpdate({})).toEqual({ ok: true, data: {} });
+  });
+});
+
+describe("validatePublicProfileUpdate: profileOrganization", () => {
+  test("trims an employer name and keeps it", () => {
+    const result = validatePublicProfileUpdate({
+      profileOrganization: "  Northstar Hospitality  ",
+    });
+    expect(result).toEqual({
+      ok: true,
+      data: { profileOrganization: "Northstar Hospitality" },
+    });
+  });
+
+  test("stores a blank employer as null", () => {
+    expect(validatePublicProfileUpdate({ profileOrganization: "   " })).toEqual({
+      ok: true,
+      data: { profileOrganization: null },
+    });
+  });
+});
+
+describe("normalizeProfileHeaderImage", () => {
+  test("keeps an uploaded https photo", () => {
+    expect(
+      normalizeProfileHeaderImage(" https://cdn.example.com/header.jpg "),
+    ).toEqual({ ok: true, url: "https://cdn.example.com/header.jpg" });
+  });
+
+  test("clears a blank header back to the default", () => {
+    expect(normalizeProfileHeaderImage(null)).toEqual({ ok: true, url: null });
+    expect(normalizeProfileHeaderImage("  ")).toEqual({ ok: true, url: null });
+  });
+
+  test("rejects a header that is not an uploaded photo", () => {
+    expect(normalizeProfileHeaderImage("http://cdn.example.com/a.jpg").ok).toBe(false);
+    expect(normalizeProfileHeaderImage(4).ok).toBe(false);
   });
 });
 
