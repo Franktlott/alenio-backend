@@ -14,7 +14,6 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Path } from "react-native-svg";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { setStatusBarStyle } from "expo-status-bar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +30,7 @@ import {
   ListFilter,
   LockKeyhole,
   MessageCircle,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
@@ -66,7 +66,10 @@ import {
   type CheckInLibraryCategoryFilter,
   type CheckInTemplateSort,
 } from "@/lib/check-in-template-directory";
-import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
+import {
+  AlenioBottomSheet,
+  AlenioSheetOption,
+} from "@/components/AlenioBottomSheet";
 import {
   countTemplateQuestions,
   fieldsToTemplateSections,
@@ -75,7 +78,8 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
 import { canManageWorkspace } from "@/lib/workspace-management";
 import { AppHeaderBand } from "@/components/AppHeaderBand";
-import { colors, palette } from "@/theme";
+import { Button } from "@/components/ui";
+import { colors, elevation, palette, tints } from "@/theme";
 
 const BAND_SHEET_RADIUS = 24;
 const HEADER_ROW = 48;
@@ -93,31 +97,6 @@ const LIBRARY_MARKS: Record<
   Onboarding: { icon: UserRound, color: "#F08A5D", background: "#FFF1E8" },
   Team: { icon: CalendarDays, color: "#6366F1", background: "#EEF2FF" },
 };
-
-function EmptyHills() {
-  return (
-    <Svg
-      width="100%"
-      height="100%"
-      viewBox="0 0 360 180"
-      preserveAspectRatio="none"
-    >
-      <Path
-        d="M0 86 C72 64 128 28 188 50 C252 74 304 24 360 46 L360 180 L0 180 Z"
-        fill="#E3EDF6"
-      />
-      <Path
-        d="M0 118 C84 96 154 78 214 104 C274 130 322 96 360 112 L360 180 L0 180 Z"
-        fill="#F4F8FB"
-      />
-      <Path
-        d="M0 146 C96 132 176 156 252 138 C312 126 338 142 360 140 L360 180 L0 180 Z"
-        fill="#EAF2F8"
-        opacity={0.9}
-      />
-    </Svg>
-  );
-}
 
 function LibraryExploreArt() {
   return (
@@ -189,6 +168,7 @@ export default function CheckInTemplatesScreen() {
   const [sort, setSort] = useState<CheckInTemplateSort>("recent");
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [addingLibraryKey, setAddingLibraryKey] = useState<string | null>(null);
+  const [menuTarget, setMenuTarget] = useState<CheckInTemplate | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CheckInTemplate | null>(
     null,
   );
@@ -715,63 +695,42 @@ export default function CheckInTemplatesScreen() {
           ) : templates.length === 0 ? (
             <View style={styles.emptyWrap} testID="check-in-templates-empty">
               <View style={styles.emptyMark}>
-                <MessageCircle size={28} color="#1B2430" strokeWidth={2.1} />
+                <MessageCircle
+                  size={26}
+                  color={tints.lavender.fg}
+                  strokeWidth={2.1}
+                />
               </View>
               <Text style={styles.emptyHeadline}>
                 Start a meaningful{"\n"}conversation
               </Text>
               <Text style={styles.emptyBody}>
-                Add a check-in template to keep your conversations focused and
-                consistent.
+                Pick a ready-made check-in from the library, or build your own
+                when you need something custom.
               </Text>
-              <View style={styles.emptyStage}>
-                <View style={styles.emptyHills} pointerEvents="none">
-                  <EmptyHills />
-                </View>
-                <Pressable
+              <View style={styles.emptyActions}>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  label="Explore the library"
+                  icon={
+                    <BookOpen size={17} color="#FFFFFF" strokeWidth={2.3} />
+                  }
                   onPress={() => setTab("library")}
-                  style={styles.emptyChoice}
-                  accessibilityRole="button"
-                  accessibilityLabel="Explore the library"
                   testID="empty-browse-check-in-library"
-                >
-                  <View style={styles.emptyChoiceRow}>
-                    <View style={styles.emptyChoiceIcon}>
-                      <BookOpen size={18} color="#1B2430" strokeWidth={2.2} />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.emptyChoiceTitle}>
-                        Explore the library
-                      </Text>
-                      <Text style={styles.emptyChoiceBody}>
-                        Choose from ready-to-use templates
-                      </Text>
-                    </View>
-                    <ChevronRight size={18} color="#C5CDD8" strokeWidth={2.2} />
-                  </View>
-                </Pressable>
-                <Pressable
+                />
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  label="Create your own"
+                  icon={
+                    <Plus size={17} color={palette.ink} strokeWidth={2.3} />
+                  }
                   onPress={() => editTemplate()}
-                  style={styles.emptyChoice}
-                  accessibilityRole="button"
-                  accessibilityLabel="Create your own"
                   testID="empty-new-check-in-template"
-                >
-                  <View style={styles.emptyChoiceRow}>
-                    <View style={styles.emptyChoiceIcon}>
-                      <Plus size={18} color="#1B2430" strokeWidth={2.2} />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.emptyChoiceTitle}>
-                        Create your own
-                      </Text>
-                      <Text style={styles.emptyChoiceBody}>
-                        Build a custom check-in from scratch
-                      </Text>
-                    </View>
-                    <ChevronRight size={18} color="#C5CDD8" strokeWidth={2.2} />
-                  </View>
-                </Pressable>
+                />
               </View>
             </View>
           ) : visibleTemplates.length === 0 ? (
@@ -783,91 +742,86 @@ export default function CheckInTemplatesScreen() {
             </View>
           ) : (
             <View style={{ gap: 8 }} testID="check-in-templates-list">
-              {visibleTemplates.map((template) => (
-                <View
-                  key={template.id}
-                  style={styles.card}
-                  testID={`check-in-template-card-${template.id}`}
-                >
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardIcon}>
-                      <CalendarDays size={16} color={colors.brand} strokeWidth={2.1} />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.cardTitle} numberOfLines={2}>
-                        {template.title}
-                      </Text>
-                      <Text style={styles.cardMeta}>
-                        {countTemplateQuestions(template.fields)} question
-                        {countTemplateQuestions(template.fields) === 1
-                          ? ""
-                          : "s"}{" "}
-                        · {formatUpdatedDate(template.updatedAt)}
-                      </Text>
-                    </View>
-                  </View>
-                  {template.description ? (
-                    <Text style={styles.cardDescription} numberOfLines={3}>
-                      {template.description}
-                    </Text>
-                  ) : null}
-                  {template.libraryKey || template.id === requiredTemplateId ? (
-                    <View style={styles.chipRow}>
-                      {template.id === requiredTemplateId ? (
-                        <View style={[styles.chip, styles.chipRequired]}>
-                          <Text style={[styles.chipText, styles.chipTextRequired]}>
-                            Required check-in
+              {visibleTemplates.map((template) => {
+                const questionCount = countTemplateQuestions(template.fields);
+                return (
+                  <Pressable
+                    key={template.id}
+                    onPress={() => setPreview(template)}
+                    style={styles.card}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Preview ${template.title}`}
+                    testID={`check-in-template-card-${template.id}`}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardIcon}>
+                        <CalendarDays
+                          size={15}
+                          color={tints.lavender.fg}
+                          strokeWidth={2.1}
+                        />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                          {template.title}
+                        </Text>
+                        {template.description ? (
+                          <Text style={styles.cardDescription} numberOfLines={1}>
+                            {template.description}
+                          </Text>
+                        ) : null}
+                        <View style={styles.cardMetaRow}>
+                          <View style={styles.metaChip}>
+                            <Text style={styles.metaChipText}>
+                              {questionCount} question
+                              {questionCount === 1 ? "" : "s"}
+                            </Text>
+                          </View>
+                          {template.id === requiredTemplateId ? (
+                            <View
+                              style={[styles.metaChip, styles.metaChipRequired]}
+                            >
+                              <Text
+                                style={[
+                                  styles.metaChipText,
+                                  styles.metaChipTextRequired,
+                                ]}
+                              >
+                                Required
+                              </Text>
+                            </View>
+                          ) : null}
+                          {template.libraryKey ? (
+                            <View style={styles.metaChip}>
+                              <Text style={styles.metaChipText}>Library</Text>
+                            </View>
+                          ) : null}
+                          <Text style={styles.cardMeta} numberOfLines={1}>
+                            {formatUpdatedDate(template.updatedAt)}
                           </Text>
                         </View>
-                      ) : null}
-                      {template.libraryKey ? (
-                        <View style={styles.chip}>
-                          <Text style={styles.chipText}>From library</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  ) : null}
-                  <View style={styles.cardActions}>
-                    <Pressable
-                      onPress={() => setPreview(template)}
-                      style={styles.secondaryAction}
-                      accessibilityRole="button"
-                      testID={`preview-check-in-template-${template.id}`}
-                    >
-                      <Eye size={14} color="#475569" />
-                      <Text style={styles.secondaryActionText}>Preview</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => editTemplate(template)}
-                      style={styles.secondaryAction}
-                      accessibilityRole="button"
-                      testID={`edit-check-in-template-${template.id}`}
-                    >
-                      <Pencil size={14} color={colors.brand} />
-                      <Text
-                        style={[
-                          styles.secondaryActionText,
-                          { color: colors.brand },
-                        ]}
+                      </View>
+                      <Pressable
+                        onPress={(event) => {
+                          event.stopPropagation?.();
+                          setMenuTarget(template);
+                        }}
+                        hitSlop={10}
+                        style={styles.cardMenuButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Options for ${template.title}`}
+                        testID={`check-in-template-menu-${template.id}`}
                       >
-                        Edit
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() =>
-                        access.canWrite
-                          ? (setDeleteBlock(null), setDeleteTarget(template))
-                          : openPlan()
-                      }
-                      style={styles.deleteAction}
-                      accessibilityRole="button"
-                      testID={`delete-check-in-template-${template.id}`}
-                    >
-                      <Trash2 size={15} color="#EF4444" />
-                    </Pressable>
-                  </View>
-                </View>
-              ))}
+                        <MoreHorizontal
+                          size={18}
+                          color={palette.inkMuted}
+                          strokeWidth={2.2}
+                        />
+                      </Pressable>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
 
@@ -887,6 +841,79 @@ export default function CheckInTemplatesScreen() {
         </ScrollView>
       )}
       </View>
+
+      <AlenioBottomSheet
+        visible={!!menuTarget}
+        title={menuTarget?.title ?? "Template"}
+        subtitle="Preview, edit, or delete this check-in template"
+        onClose={() => setMenuTarget(null)}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+        testID="check-in-template-menu-sheet"
+      >
+        <View style={{ gap: 8 }}>
+          <AlenioSheetOption
+            compact
+            tint="slate"
+            icon={<Eye size={16} color="#FFFFFF" />}
+            title="Preview"
+            subtitle="See how this check-in will look"
+            onPress={() => {
+              const template = menuTarget;
+              setMenuTarget(null);
+              if (template) setTimeout(() => setPreview(template), 220);
+            }}
+            testID={
+              menuTarget
+                ? `preview-check-in-template-${menuTarget.id}`
+                : "preview-check-in-template"
+            }
+          />
+          <AlenioSheetOption
+            compact
+            tint="purple"
+            icon={<Pencil size={16} color="#FFFFFF" />}
+            title="Edit"
+            subtitle="Update questions, prep, and details"
+            onPress={() => {
+              const template = menuTarget;
+              setMenuTarget(null);
+              if (template) setTimeout(() => editTemplate(template), 220);
+            }}
+            testID={
+              menuTarget
+                ? `edit-check-in-template-${menuTarget.id}`
+                : "edit-check-in-template"
+            }
+          />
+          <AlenioSheetOption
+            compact
+            destructive
+            icon={<Trash2 size={16} color="#FFFFFF" />}
+            title="Delete"
+            subtitle="Remove this template from the workspace"
+            onPress={() => {
+              const template = menuTarget;
+              setMenuTarget(null);
+              if (!template) return;
+              setTimeout(() => {
+                if (access.canWrite) {
+                  setDeleteBlock(null);
+                  setDeleteTarget(template);
+                } else {
+                  openPlan();
+                }
+              }, 220);
+            }}
+            testID={
+              menuTarget
+                ? `delete-check-in-template-${menuTarget.id}`
+                : "delete-check-in-template"
+            }
+          />
+        </View>
+      </AlenioBottomSheet>
 
       <AlenioBottomSheet
         visible={sortSheetOpen}
@@ -1473,7 +1500,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   emptyWrap: {
-    paddingTop: 28,
+    paddingTop: 36,
+    paddingHorizontal: 8,
     alignItems: "center",
   },
   emptyMark: {
@@ -1482,9 +1510,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F7F8FA",
-    borderWidth: 1,
-    borderColor: "#E6EAF0",
+    backgroundColor: tints.lavender.bg,
   },
   emptyTitle: {
     fontSize: 16,
@@ -1498,68 +1524,21 @@ const styles = StyleSheet.create({
     lineHeight: 31,
     fontWeight: "800",
     letterSpacing: -0.5,
-    color: "#121826",
+    color: palette.ink,
     textAlign: "center",
   },
   emptyBody: {
     marginTop: 8,
-    maxWidth: 280,
+    maxWidth: 300,
     fontSize: 14,
     lineHeight: 20,
-    color: "#7B8794",
+    color: palette.inkMuted,
     textAlign: "center",
   },
-  emptyStage: {
+  emptyActions: {
     alignSelf: "stretch",
-    marginTop: 4,
-    paddingTop: 56,
+    marginTop: 28,
     gap: 10,
-  },
-  emptyHills: {
-    position: "absolute",
-    left: -16,
-    right: -16,
-    top: 0,
-    height: 240,
-  },
-  emptyChoice: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E6EBF2",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#1B2430",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 1,
-  },
-  emptyChoiceRow: {
-    minHeight: 72,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  emptyChoiceIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F4F6F8",
-  },
-  emptyChoiceTitle: {
-    fontSize: 15,
-    lineHeight: 19,
-    fontWeight: "700",
-    color: "#171E2B",
-  },
-  emptyChoiceBody: {
-    marginTop: 2,
-    fontSize: 12.5,
-    lineHeight: 16,
-    color: "#8A94A3",
   },
   libraryLink: {
     marginTop: 4,
@@ -1584,76 +1563,65 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { fontSize: 13, fontWeight: "700", color: "#FFFFFF" },
   card: {
-    padding: 11,
+    ...elevation.card,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E5E9F0",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#242057",
-    shadowOpacity: 0.035,
-    shadowRadius: 9,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 1,
   },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   cardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F0ECFF",
+    backgroundColor: tints.lavender.bg,
   },
   cardTitle: {
     fontSize: 14,
     lineHeight: 18,
     fontWeight: "700",
-    color: "#172036",
-  },
-  cardMeta: {
-    marginTop: 2,
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#8290A5",
+    color: palette.ink,
   },
   cardDescription: {
-    marginTop: 8,
-    fontSize: 11,
-    lineHeight: 15,
-    color: "#667085",
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+    color: palette.inkSecondary,
   },
-  cardActions: {
-    marginTop: 10,
-    paddingTop: 9,
-    flexDirection: "row",
-    gap: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E9EDF3",
-  },
-  secondaryAction: {
-    flex: 1,
-    minHeight: 32,
-    paddingHorizontal: 10,
+  cardMetaRow: {
+    marginTop: 6,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "#E2E5EC",
-    backgroundColor: "#FFFFFF",
+    flexWrap: "wrap",
+    gap: 6,
   },
-  secondaryActionText: { fontSize: 11.5, fontWeight: "700", color: "#475569" },
-  deleteAction: {
-    width: 32,
-    height: 32,
-    marginLeft: "auto",
+  metaChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 7,
+    backgroundColor: palette.page,
+  },
+  metaChipRequired: { backgroundColor: tints.lavender.bg },
+  metaChipText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: palette.inkSecondary,
+  },
+  metaChipTextRequired: { color: tints.lavender.fg },
+  cardMeta: {
+    flexShrink: 1,
+    fontSize: 10,
+    fontWeight: "600",
+    color: palette.inkMuted,
+  },
+  cardMenuButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "#F7DDDD",
-    backgroundColor: "#FFF8F8",
+    marginTop: 1,
   },
   previewScreen: { flex: 1, backgroundColor: "#F7F5FC" },
   previewTop: {

@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     paddingHorizontal: WS.pageGutter,
-    paddingTop: 8,
+    paddingTop: 2,
     paddingBottom: 6,
   },
   card: {

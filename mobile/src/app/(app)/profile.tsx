@@ -5,10 +5,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
-  TextInput,
   ScrollView,
   Pressable,
-  Modal,
   RefreshControl,
   StyleSheet,
   Alert,
@@ -18,10 +16,9 @@ import {
 } from "react-native";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Activity, AtSign, Ban, Bell, Building2, Camera, CircleHelp, Clock3, FileText, ImageIcon, Info, LogOut, Mail, MessageSquareText, Search, X, Check, AlertTriangle, ShieldAlert, ChevronLeft, ChevronRight, Lock, Settings, Shield, ShieldCheck, Sparkles, Trash2, UserRound } from "lucide-react-native";
-import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
-import { authClient, agentDebugLog, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
+import { Activity, AtSign, Ban, Bell, Building2, Camera, CircleHelp, Clock3, FileText, ImageIcon, Info, LogOut, Mail, MessageSquareText, Search, ChevronLeft, ChevronRight, Settings, Shield, ShieldCheck, Sparkles, Trash2, UserRound } from "lucide-react-native";
+import { formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
+import { authClient, agentDebugLog, clearAccessToken } from "@/lib/auth/auth-client";
 import {
   SESSION_QUERY_KEY,
   markSessionSignedOut,
@@ -35,16 +32,12 @@ import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNo
 import { router, useLocalSearchParams, useFocusEffect, usePathname } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
-import { readJsonSafe } from "@/lib/api/api";
-import { getBackendUrl } from "@/lib/backend-url";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { uploadFile } from "@/lib/upload";
 import { pickImage, takePhoto } from "@/lib/file-picker";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
-import { ACCOUNT_HUB_TITLE } from "@/lib/plan-access-copy";
 import type { Team } from "@/lib/types";
-import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import {
   AlenioBottomSheet,
 } from "@/components/AlenioBottomSheet";
@@ -94,28 +87,6 @@ type BlockedPerson = {
 
 const PRIVACY_SETTINGS_QUERY_KEY = ["privacy-settings"] as const;
 
-const MESSAGE_PRIVACY_OPTIONS: Array<{
-  value: MessagePrivacy;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "everyone",
-    label: "Everyone",
-    description: "Anyone on Alenio can start a conversation with you.",
-  },
-  {
-    value: "connections_and_shared",
-    label: "Connections and shared workspaces",
-    description: "Your connections, plus anyone in a workspace or group you share.",
-  },
-  {
-    value: "connections_only",
-    label: "Connections only",
-    description: "Only people you have accepted as connections.",
-  },
-];
-
 const MESSAGE_PRIVACY_LABELS: Record<MessagePrivacy, string> = {
   everyone: "Everyone",
   connections_and_shared: "Connections + shared",
@@ -133,7 +104,6 @@ export function ProfileScreen({
   onClose?: () => void;
   asTab?: boolean;
 }) {
-  const insets = useSafeAreaInsets();
   const tabClearance = useTabBarClearanceFn();
   const { height: viewportHeight } = useWindowDimensions();
   const pathname = usePathname();
@@ -189,25 +159,6 @@ export function ProfileScreen({
   }, [openPhoto]);
 
   // Delete account state
-  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
-  const [deletePassword, setDeletePassword] = useState<string>("");
-  const [deletePasswordVisible, setDeletePasswordVisible] = useState<boolean>(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const closeDeleteModal = () => {
-    setDeleteStep(0);
-    setDeletePassword("");
-    setDeleteError(null);
-    setDeletePasswordVisible(false);
-  };
-
-  const [timezoneModalOpen, setTimezoneModalOpen] = useState(false);
-  const [messagePrivacyOpen, setMessagePrivacyOpen] = useState(false);
-  const [blockedOpen, setBlockedOpen] = useState(false);
-  const [unblockTarget, setUnblockTarget] = useState<
-    BlockedPerson["person"] | null
-  >(null);
-  const [timezoneSaving, setTimezoneSaving] = useState(false);
 
   const { data: teams = [], isLoading: teamsLoading } = useQuery({
     queryKey: ["teams"],
@@ -287,49 +238,12 @@ export function ProfileScreen({
     enabled: !!user,
   });
 
-  const unblockMutation = useMutation({
-    mutationFn: (userId: string) => api.delete("/api/connections/block", { userId }),
-    onSuccess: (_data, userId) => {
-      setUnblockTarget(null);
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["blocked-people"] }),
-        queryClient.invalidateQueries({ queryKey: ["connections"] }),
-        queryClient.invalidateQueries({ queryKey: ["dms"] }),
-        queryClient.invalidateQueries({ queryKey: ["person", userId] }),
-        queryClient.invalidateQueries({ queryKey: ["profile"] }),
-        queryClient.invalidateQueries({ queryKey: ["user-search"] }),
-      ]);
-      toast({ title: "Person unblocked", preset: "done" });
-    },
-    onError: () => toast({ title: "Could not unblock", preset: "error" }),
-  });
-
   const { data: notifPrefs } = useQuery({
     queryKey: ["notification-preferences"],
     queryFn: () => api.get<NotifPrefs>("/api/notification-preferences"),
     enabled: !!user,
   });
 
-  const { data: deletionReadiness, isLoading: deletionReadinessLoading } = useQuery({
-    queryKey: ["deletion-readiness"],
-    queryFn: () =>
-      api.get<{
-        canDelete: boolean;
-        issues: Array<{
-          code: string;
-          message: string;
-          teamId: string;
-          teamName: string;
-          blocking: boolean;
-        }>;
-      }>("/api/user/deletion-readiness"),
-    enabled: deleteStep > 0 && !!user,
-    staleTime: 0,
-  });
-
-  const deleteBlockers = deletionReadiness?.issues.filter((issue) => issue.blocking) ?? [];
-  const deleteWarnings = deletionReadiness?.issues.filter((issue) => !issue.blocking) ?? [];
-  const canContinueDelete = deletionReadiness?.canDelete === true;
 
   const activeTeam = teams.find((t) => t.id === activeTeamId) as (Team & { role?: string }) | undefined;
 
@@ -413,34 +327,6 @@ export function ProfileScreen({
     },
   });
 
-  const deleteAccountMutation = useMutation({
-    mutationFn: async () => {
-      const authHeaders = await getAuthHeaders();
-      const res = await fetch(`${getBackendUrl()}/api/user`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-        credentials: "include",
-        body: JSON.stringify({ password: deletePassword }),
-      });
-      const json = await readJsonSafe<{ data?: unknown; error?: { message?: string } }>(res);
-      if (!res.ok) throw new Error(json?.error?.message ?? "Failed to delete account");
-      return json?.data;
-    },
-    onSuccess: async () => {
-      closeDeleteModal();
-      markSessionSignedOut();
-      clearAccessToken();
-      await clearMobileAuthCaches(queryClient);
-      await authClient.signOut();
-      clearAllCachesForSignedOutUser(queryClient);
-      setActiveTeamId(null);
-      router.replace("/welcome");
-    },
-    onError: (err: Error) => {
-      setDeleteError(err.message === "Incorrect password" ? "Incorrect password. Please try again." : err.message);
-      setDeleteStep(2);
-    },
-  });
 
   const handlePhotoPress = () => {
     if (uploadMutation.isPending || removePhotoMutation.isPending) return;
@@ -1106,647 +992,6 @@ export function ProfileScreen({
         </View>
       </AlenioBottomSheet>
 
-      {/* Delete Account Modal */}
-      <Modal visible={deleteStep > 0} transparent animationType="slide" onRequestClose={closeDeleteModal}>
-        <Pressable className="flex-1 bg-black/50 justify-end" onPress={closeDeleteModal}>
-          <SafeKeyboardAvoidingView style={{ width: "100%" }}>
-            <Pressable
-              onPress={(e) => e.stopPropagation()}
-              style={{
-                width: "100%",
-                maxWidth: 440,
-                maxHeight: "90%",
-                alignSelf: "center",
-                paddingHorizontal: 10,
-                marginBottom: Math.max(insets.bottom, 10),
-              }}
-            >
-              <View
-                className="bg-white dark:bg-slate-900 overflow-hidden"
-                style={{
-                  borderRadius: 28,
-                  borderWidth: 1,
-                  borderColor: "rgba(226,232,240,0.9)",
-                  shadowColor: "#0F172A",
-                  shadowOpacity: 0.22,
-                  shadowRadius: 32,
-                  shadowOffset: { width: 0, height: 12 },
-                  elevation: 18,
-                }}
-              >
-                <View className="items-center pt-3.5 pb-1">
-                  <View className="w-9 h-1 rounded-full bg-slate-200 dark:bg-slate-700" />
-                </View>
-
-                {/* Step 1: Impact */}
-                {deleteStep === 1 && (
-                  <View className="px-5 pt-3 pb-8">
-                    <View className="flex-row items-start justify-between mb-1" style={{ gap: 12 }}>
-                      <View
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 14,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          borderWidth: 1,
-                          borderColor: "#FECACA",
-                          backgroundColor: "#FFF1F2",
-                        }}
-                      >
-                        <AlertTriangle size={20} color="#DC2626" strokeWidth={2.1} />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-xl font-bold text-slate-900 dark:text-white">Delete account</Text>
-                        <Text className="text-[13px] text-slate-500 mt-1 leading-5">
-                          Review what happens and resolve any blockers before continuing.
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={closeDeleteModal}
-                        className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 items-center justify-center"
-                        accessibilityLabel="Close delete account"
-                      >
-                        <X size={18} color="#64748B" />
-                      </TouchableOpacity>
-                    </View>
-
-                    <View
-                      className="mt-5 border border-slate-200 bg-white overflow-hidden"
-                      style={{ borderRadius: 16 }}
-                    >
-                      <View className="flex-row items-center px-4 pt-3.5 pb-2" style={{ gap: 8 }}>
-                        <View
-                          style={{
-                            width: 26,
-                            height: 26,
-                            borderRadius: 8,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            backgroundColor: "#FFF1F2",
-                          }}
-                        >
-                          <AlertTriangle size={13} color="#E11D48" strokeWidth={2.2} />
-                        </View>
-                        <Text className="text-[13px] font-bold text-slate-800">
-                          Deleting your account will
-                        </Text>
-                      </View>
-                      <View className="px-4 pb-4 pt-2" style={{ gap: 9 }}>
-                        {[
-                          "You'll be removed from all your teams",
-                          "All your messages will be deleted",
-                          "Your task history will be removed",
-                          "This action cannot be undone",
-                        ].map((item) => (
-                          <View key={item} className="flex-row items-start" style={{ gap: 10 }}>
-                            <View className="w-1.5 h-1.5 rounded-full bg-rose-400 mt-1.5" />
-                            <Text className="flex-1 text-[13px] text-slate-700 leading-5">{item}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-
-                    {deletionReadinessLoading ? (
-                      <View className="items-center py-6 mt-4 rounded-xl border border-slate-200 bg-slate-50">
-                        <ActivityIndicator color="#64748B" />
-                        <Text className="text-sm text-slate-500 mt-2">Checking workspaces and billing…</Text>
-                      </View>
-                    ) : null}
-
-                    {!deletionReadinessLoading && deleteBlockers.length > 0 ? (
-                      <View
-                        className="mt-4 border border-slate-200 bg-white overflow-hidden"
-                        style={{
-                          borderRadius: 18,
-                          shadowColor: "#0F172A",
-                          shadowOpacity: 0.06,
-                          shadowRadius: 12,
-                          shadowOffset: { width: 0, height: 4 },
-                          elevation: 2,
-                        }}
-                      >
-                        <View className="flex-row items-center px-4 pt-4 pb-3" style={{ gap: 10 }}>
-                          <View
-                            style={{
-                              width: 34,
-                              height: 34,
-                              borderRadius: 11,
-                              alignItems: "center",
-                              justifyContent: "center",
-                              borderWidth: 1,
-                              borderColor: "#FDE68A",
-                              backgroundColor: "#FFFBEB",
-                            }}
-                          >
-                            <ShieldAlert size={16} color="#B45309" strokeWidth={2.1} />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text className="text-[14px] font-bold text-slate-900">
-                              Workspace ownership required
-                            </Text>
-                            <Text className="text-[11px] text-slate-500 mt-0.5">
-                              Complete this before deleting your account.
-                            </Text>
-                          </View>
-                        </View>
-                        <View className="px-4 pb-4" style={{ gap: 12 }}>
-                          {deleteBlockers.map((issue) => (
-                            <View
-                              key={`${issue.code}-${issue.teamId}`}
-                              style={{ gap: 12 }}
-                            >
-                              <Text className="text-[13px] text-slate-700 leading-5">{issue.message}</Text>
-                              {issue.code === "active_web_billing" || issue.code === "mobile_store_billing" ? (
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    closeDeleteModal();
-                                    router.push({ pathname: "/account-hub", params: { teamId: issue.teamId } });
-                                  }}
-                                  className="w-full flex-row items-center justify-center bg-indigo-600 px-3 py-3.5"
-                                  style={{
-                                    gap: 7,
-                                    borderRadius: 12,
-                                    shadowColor: "#4F46E5",
-                                    shadowOpacity: 0.18,
-                                    shadowRadius: 8,
-                                    shadowOffset: { width: 0, height: 4 },
-                                    elevation: 2,
-                                  }}
-                                >
-                                  <Text className="text-sm font-semibold text-white">Open {ACCOUNT_HUB_TITLE}</Text>
-                                  <ChevronRight size={14} color="#FFFFFF" />
-                                </TouchableOpacity>
-                              ) : null}
-                              {issue.code === "multi_member_owner" ? (
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    closeDeleteModal();
-                                    router.push("/(app)/team");
-                                  }}
-                                  className="w-full flex-row items-center justify-center bg-indigo-600 px-3 py-3.5"
-                                  style={{
-                                    gap: 7,
-                                    borderRadius: 12,
-                                    shadowColor: "#4F46E5",
-                                    shadowOpacity: 0.18,
-                                    shadowRadius: 8,
-                                    shadowOffset: { width: 0, height: 4 },
-                                    elevation: 2,
-                                  }}
-                                >
-                                  <Text className="text-sm font-semibold text-white">Resolve in Team</Text>
-                                  <ChevronRight size={14} color="#FFFFFF" />
-                                </TouchableOpacity>
-                              ) : null}
-                            </View>
-                          ))}
-                        </View>
-                      </View>
-                    ) : null}
-
-                    {!deletionReadinessLoading && deleteWarnings.length > 0 ? (
-                      <View className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" style={{ gap: 8 }}>
-                        <Text className="text-sm font-semibold text-slate-700">Before you continue</Text>
-                        {deleteWarnings.map((issue) => (
-                          <Text key={`${issue.code}-${issue.teamId}`} className="text-sm text-slate-600 leading-5">
-                            {issue.message}
-                          </Text>
-                        ))}
-                      </View>
-                    ) : null}
-
-                    {!deletionReadinessLoading && canContinueDelete ? (
-                      <>
-                        <TouchableOpacity
-                          onPress={() => setDeleteStep(2)}
-                          className="py-4 items-center mt-5 mb-2 bg-slate-900"
-                          style={{ borderRadius: 14 }}
-                          testID="delete-continue-step1"
-                        >
-                          <Text className="font-semibold text-base text-white">
-                            Continue to verification
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={closeDeleteModal} className="py-3 items-center">
-                          <Text className="text-slate-500 font-medium">Cancel</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : !deletionReadinessLoading ? (
-                      <TouchableOpacity
-                        onPress={closeDeleteModal}
-                        className="py-3.5 items-center mt-5 border border-slate-200 bg-slate-50"
-                        style={{ borderRadius: 14 }}
-                      >
-                        <Text className="text-slate-600 font-semibold">Close</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                )}
-
-                {/* Step 2: Password + confirm deletion */}
-                {deleteStep === 2 && (
-                  <View className="px-5 pt-3 pb-8">
-                    <View className="flex-row items-start justify-between mb-1" style={{ gap: 12 }}>
-                      <View
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 14,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          borderWidth: 1,
-                          borderColor: "#E0E7FF",
-                          backgroundColor: "#EEF2FF",
-                        }}
-                      >
-                        <Lock size={19} color="#4F46E5" strokeWidth={2.1} />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-xl font-bold text-slate-900 dark:text-white">Verify your identity</Text>
-                        <Text className="text-[13px] text-slate-500 mt-1 leading-5">
-                          Enter your password to permanently delete this account.
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={closeDeleteModal}
-                        className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 items-center justify-center"
-                        accessibilityLabel="Close delete account"
-                      >
-                        <X size={18} color="#64748B" />
-                      </TouchableOpacity>
-                    </View>
-
-                    <View
-                      className="mt-5 px-4 py-4 flex-row items-center"
-                      style={{
-                        gap: 12,
-                        borderRadius: 16,
-                        backgroundColor: "#FFF8F7",
-                        borderWidth: 1,
-                        borderColor: "#F5E4E1",
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: 12,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: "#FCEAE7",
-                        }}
-                      >
-                        <Trash2 size={17} color="#B94A3F" strokeWidth={2} />
-                      </View>
-                      <View className="flex-1">
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            lineHeight: 13,
-                            fontWeight: "700",
-                            letterSpacing: 0.7,
-                            color: "#A75A52",
-                          }}
-                        >
-                          PERMANENT ACTION
-                        </Text>
-                        <Text className="text-[13px] font-semibold text-slate-800 mt-0.5">
-                          Your account cannot be restored
-                        </Text>
-                        <Text className="text-[12px] text-slate-500 mt-1 leading-[17px]">
-                          Your profile and associated account data will be permanently removed.
-                        </Text>
-                      </View>
-                    </View>
-
-                    <Text className="text-sm font-semibold text-slate-700 mt-5 mb-2">Account password</Text>
-                    <View className="flex-row items-center bg-white rounded-xl px-4 border border-slate-200 mb-2">
-                      <Lock size={16} color="#94A3B8" />
-                      <TextInput
-                        className="flex-1 py-3.5 px-3 text-base text-slate-900"
-                        placeholder="Enter your password"
-                        placeholderTextColor="#94A3B8"
-                        secureTextEntry={!deletePasswordVisible}
-                        value={deletePassword}
-                        onChangeText={(t) => { setDeletePassword(t); setDeleteError(null); }}
-                        autoCapitalize="none"
-                        testID="delete-password-input"
-                      />
-                      <TouchableOpacity onPress={() => setDeletePasswordVisible((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Text className="text-slate-500 text-sm font-medium">{deletePasswordVisible ? "Hide" : "Show"}</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {deleteError ? <Text className="text-red-600 text-xs mb-3 ml-1">{deleteError}</Text> : <View className="mb-3" />}
-
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (!deletePassword.trim()) {
-                          setDeleteError("Enter your password to confirm deletion.");
-                          return;
-                        }
-                        deleteAccountMutation.mutate();
-                      }}
-                      disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
-                      className="rounded-xl py-4 items-center mt-2 mb-2 bg-red-600"
-                      style={{ opacity: deletePassword.trim() ? 1 : 0.45 }}
-                      testID="confirm-delete-account"
-                    >
-                      {deleteAccountMutation.isPending ? (
-                        <ActivityIndicator color="white" />
-                      ) : (
-                        <Text className="font-semibold text-white text-base">Delete my account</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setDeletePassword("");
-                        setDeleteError(null);
-                        setDeleteStep(1);
-                      }}
-                      className="py-3 items-center"
-                    >
-                      <Text className="text-slate-500 font-medium">Back</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            </Pressable>
-          </SafeKeyboardAvoidingView>
-        </Pressable>
-      </Modal>
-
-      <Modal visible={timezoneModalOpen} transparent animationType="slide" onRequestClose={() => setTimezoneModalOpen(false)}>
-        <Pressable className="flex-1 bg-black/40 justify-end" onPress={() => setTimezoneModalOpen(false)}>
-          <Pressable className="bg-white dark:bg-slate-900 rounded-t-3xl max-h-[70%]" onPress={(e) => e.stopPropagation()}>
-            <View className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <Text className="text-lg font-bold text-slate-900 dark:text-white">Time zone</Text>
-              <Text className="text-sm text-slate-500 mt-1">Used for due dates and recurring tasks.</Text>
-            </View>
-            <ScrollView className="px-5 py-3">
-              {COMMON_TIMEZONES.map((tz) => {
-                const selected = resolveTimeZone(meProfile?.timezone) === tz;
-                return (
-                  <TouchableOpacity
-                    key={tz}
-                    disabled={timezoneSaving}
-                    onPress={async () => {
-                      setTimezoneSaving(true);
-                      try {
-                        await api.patch("/api/profile", { timezone: tz });
-                        await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
-                        setTimezoneModalOpen(false);
-                      } finally {
-                        setTimezoneSaving(false);
-                      }
-                    }}
-                    className="py-3 border-b border-slate-100 dark:border-slate-800 flex-row items-center justify-between"
-                  >
-                    <Text className={`text-sm ${selected ? "font-bold text-indigo-600" : "text-slate-700 dark:text-slate-200"}`}>
-                      {formatTimeZoneLabel(tz)}
-                    </Text>
-                    {selected ? <Check size={18} color="#4361EE" /> : null}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal
-        visible={messagePrivacyOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setMessagePrivacyOpen(false)}
-      >
-        <Pressable className="flex-1 bg-black/40 justify-end" onPress={() => setMessagePrivacyOpen(false)}>
-          <Pressable className="bg-white dark:bg-slate-900 rounded-t-3xl" onPress={(e) => e.stopPropagation()}>
-            <View className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <Text className="text-lg font-bold text-slate-900 dark:text-white">Who can message me</Text>
-              <Text className="text-sm text-slate-500 mt-1">
-                Existing conversations are never affected.
-              </Text>
-            </View>
-            <View className="px-5 py-3 pb-6">
-              {MESSAGE_PRIVACY_OPTIONS.map((option) => {
-                const selected = messagePrivacy === option.value;
-                return (
-                  <TouchableOpacity
-                    key={option.value}
-                    onPress={() => {
-                      privacyMutation.mutate({ messagePrivacy: option.value });
-                      setMessagePrivacyOpen(false);
-                    }}
-                    className="py-3 border-b border-slate-100 dark:border-slate-800 flex-row items-center justify-between"
-                    testID={`message-privacy-option-${option.value}`}
-                  >
-                    <View style={{ flex: 1, paddingRight: 12 }}>
-                      <Text
-                        className={`text-sm ${selected ? "font-bold text-indigo-600" : "text-slate-700 dark:text-slate-200"}`}
-                      >
-                        {option.label}
-                      </Text>
-                      <Text className="text-xs text-slate-400 mt-0.5">{option.description}</Text>
-                    </View>
-                    {selected ? <Check size={18} color="#4361EE" /> : null}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <AlenioBottomSheet
-        visible={blockedOpen}
-        title="Blocked people"
-        subtitle="They cannot message you or send a connection request. Shared workspaces are unaffected."
-        onClose={() => setBlockedOpen(false)}
-        compact
-        showCloseButton
-        bodyHeightRatio={0.5}
-        showScrollIndicator={blockedPeople.length > 4}
-        sheetStyle={{ minHeight: 260 }}
-        testID="blocked-people-sheet"
-      >
-        <View style={{ paddingBottom: 12 }}>
-          {blockedPeople.length === 0 ? (
-            <Text className="text-sm text-slate-400 py-8 text-center">
-              You have not blocked anyone.
-            </Text>
-          ) : (
-            blockedPeople.map((row, index) => (
-              <View
-                key={row.id}
-                className="py-3 flex-row items-center justify-between"
-                style={{
-                  borderBottomWidth:
-                    index === blockedPeople.length - 1 ? 0 : 1,
-                  borderBottomColor: "#F1F3F7",
-                }}
-              >
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                    {row.person.name ?? "Alenio member"}
-                  </Text>
-                  {row.person.username ? (
-                    <Text className="text-xs text-slate-400 mt-0.5">
-                      @{row.person.username}
-                    </Text>
-                  ) : null}
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    setBlockedOpen(false);
-                    setTimeout(() => setUnblockTarget(row.person), 250);
-                  }}
-                  disabled={unblockMutation.isPending}
-                  testID={`unblock-${row.person.id}`}
-                  style={{
-                    minHeight: 36,
-                    paddingHorizontal: 12,
-                    borderRadius: 12,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#F1EFFF",
-                  }}
-                >
-                  <Text className="text-[12px] font-bold text-indigo-600">
-                    Unblock
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
-        </View>
-      </AlenioBottomSheet>
-
-      <AlenioBottomSheet
-        visible={unblockTarget !== null}
-        title="Unblock person"
-        subtitle="Review this privacy change"
-        onClose={() => {
-          if (!unblockMutation.isPending) setUnblockTarget(null);
-        }}
-        compact
-        showCloseButton
-        scrollEnabled={false}
-        sheetStyle={{ minHeight: 390 }}
-        testID="unblock-person-confirmation"
-      >
-        <View style={{ alignItems: "center", paddingHorizontal: 12, paddingTop: 4 }}>
-          <View
-            style={{
-              width: 76,
-              height: 76,
-              borderRadius: 38,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#F1F0FF",
-              borderWidth: 1,
-              borderColor: "#E4E1FA",
-            }}
-          >
-            <UserAvatar
-              user={{
-                name: unblockTarget?.name ?? "Alenio member",
-                image: unblockTarget?.image ?? null,
-              }}
-              size={64}
-              radius={32}
-            />
-            <View
-              style={{
-                position: "absolute",
-                right: -1,
-                bottom: -1,
-                width: 27,
-                height: 27,
-                borderRadius: 14,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#E9F7F1",
-                borderWidth: 3,
-                borderColor: "#FFFFFF",
-              }}
-            >
-              <ShieldCheck size={13} color="#278668" strokeWidth={2.2} />
-            </View>
-          </View>
-
-          <Text
-            style={{
-              marginTop: 15,
-              fontSize: 18,
-              lineHeight: 23,
-              fontWeight: "800",
-              letterSpacing: -0.25,
-              color: "#172033",
-              textAlign: "center",
-            }}
-          >
-            Unblock {unblockTarget?.name ?? "this person"}?
-          </Text>
-          <Text
-            style={{
-              maxWidth: 310,
-              marginTop: 6,
-              fontSize: 12,
-              lineHeight: 18,
-              color: "#718096",
-              textAlign: "center",
-            }}
-          >
-            They can find your profile again, but messaging, reactions, and video
-            remain unavailable until a new connection is accepted.
-          </Text>
-        </View>
-
-        <View style={{ marginTop: 20, width: "100%" }}>
-          <TouchableOpacity
-            onPress={() => {
-              if (unblockTarget) unblockMutation.mutate(unblockTarget.id);
-            }}
-            disabled={!unblockTarget || unblockMutation.isPending}
-            activeOpacity={0.82}
-            style={{
-              width: "100%",
-              minHeight: 48,
-              borderRadius: 15,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#4F46E5",
-              opacity: unblockMutation.isPending ? 0.72 : 1,
-            }}
-            testID="confirm-unblock-person"
-          >
-            {unblockMutation.isPending ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={{ fontSize: 14, fontWeight: "800", color: "#FFFFFF" }}>
-                Unblock person
-              </Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setUnblockTarget(null)}
-            disabled={unblockMutation.isPending}
-            activeOpacity={0.65}
-            style={{
-              minHeight: 40,
-              marginTop: 5,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            testID="cancel-unblock-person"
-          >
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#68758A" }}>
-              Keep blocked
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </AlenioBottomSheet>
         </>
   );
 
@@ -1770,13 +1015,6 @@ export function ProfileScreen({
           {/* Account */}
           <ProfileSection title="Account">
             <ProfileCard>
-              <ProfileMenuRow
-                icon={Lock}
-                title={ACCOUNT_HUB_TITLE}
-                onPress={() => router.push("/account-hub")}
-                testID="account-hub-row"
-              />
-              <ProfileDivider inset />
               <ProfileMenuRow
                 icon={UserRound}
                 title="Public profile"
@@ -1914,7 +1152,7 @@ export function ProfileScreen({
                 title="Time Zone"
                 subtitle="Used for due dates, schedules, and recurring work"
                 value={timezoneValue}
-                onPress={() => setTimezoneModalOpen(true)}
+                onPress={() => router.push("/timezone")}
                 testID="timezone-menu-row"
               />
             </ProfileCard>
@@ -1939,7 +1177,7 @@ export function ProfileScreen({
                 title="Who can message me"
                 subtitle="Applies to new conversations only"
                 value={MESSAGE_PRIVACY_LABELS[messagePrivacy]}
-                onPress={() => setMessagePrivacyOpen(true)}
+                onPress={() => router.push("/message-privacy")}
                 testID="message-privacy-row"
               />
               <ProfileDivider inset />
@@ -1982,7 +1220,7 @@ export function ProfileScreen({
                 title="Blocked people"
                 subtitle="Blocking never changes a workspace you share"
                 value={blockedPeople.length > 0 ? String(blockedPeople.length) : undefined}
-                onPress={() => setBlockedOpen(true)}
+                onPress={() => router.push("/blocked-people")}
                 testID="blocked-people-row"
               />
             </ProfileCard>
@@ -1997,7 +1235,7 @@ export function ProfileScreen({
                 icon={ShieldCheck}
                 title="Security"
                 subtitle="Review account protection and deletion options"
-                onPress={() => setDeleteStep(1)}
+                onPress={() => router.push("/security")}
                 testID="security-menu-row"
               />
             </ProfileCard>
@@ -2143,33 +1381,37 @@ export function ProfileScreen({
   const signOutConfirm = showSignOutConfirm ? (
     <Pressable
       style={StyleSheet.absoluteFill}
-      className="bg-black/40 items-center justify-center px-6"
       onPress={() => setShowSignOutConfirm(false)}
     >
-      <Pressable onPress={(e) => e.stopPropagation()} style={{ width: "100%" }}>
-        <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full">
-          <Text className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">Sign out?</Text>
-          <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
+      <View style={signOutStyles.backdrop}>
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={signOutStyles.card}
+        >
+          <Text style={signOutStyles.title}>Sign out?</Text>
+          <Text style={signOutStyles.copy}>
             You'll need to sign in again to access your account.
           </Text>
-          <View className="flex-row" style={{ gap: 10 }}>
+          <View style={signOutStyles.actions}>
             <TouchableOpacity
               onPress={() => setShowSignOutConfirm(false)}
-              className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
+              style={signOutStyles.cancelBtn}
+              activeOpacity={0.85}
               testID="cancel-sign-out-button"
             >
-              <Text className="font-semibold text-slate-600 dark:text-slate-300">Cancel</Text>
+              <Text style={signOutStyles.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSignOut}
-              className="flex-1 py-3 rounded-xl bg-red-500 items-center"
+              style={signOutStyles.confirmBtn}
+              activeOpacity={0.9}
               testID="confirm-sign-out-button"
             >
-              <Text className="font-semibold text-white">Sign out</Text>
+              <Text style={signOutStyles.confirmText}>Sign out</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
     </Pressable>
   ) : null;
 
@@ -2222,6 +1464,78 @@ export function ProfileScreen({
     </>
   );
 }
+
+const signOutStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 16,
+  },
+  title: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "700",
+    color: "#0F172A",
+    textAlign: "center",
+    letterSpacing: -0.2,
+  },
+  copy: {
+    marginTop: 6,
+    marginBottom: 18,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#64748B",
+    textAlign: "center",
+  },
+  actions: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 10,
+  },
+  cancelBtn: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 12,
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  confirmBtn: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EF4444",
+    paddingHorizontal: 12,
+  },
+  confirmText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+});
 
 export default function ProfileRoute() {
   const openSheet = useProfileSheetStore((state) => state.openSheet);

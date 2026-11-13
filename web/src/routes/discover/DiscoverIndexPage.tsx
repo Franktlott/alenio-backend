@@ -1,23 +1,15 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
-  Award,
   BookOpen,
   Bookmark,
   BookmarkCheck,
   ChevronLeft,
   ChevronRight,
-  Heart,
-  HeartHandshake,
-  Layers,
-  MessageCircle,
   Sparkles,
-  Sprout,
   TrendingUp,
-  Users,
-  Zap,
 } from "lucide-react";
 import {
   discoverCategoryColor,
@@ -29,20 +21,45 @@ import {
 import { useDiscoverLibrary } from "../../lib/discover-library";
 import "./discover-index.css";
 
-type Tab = "for-you" | "newest" | "saved";
+type Tab = "for-you" | "all" | "saved";
 
-const TOPIC_ICON: Record<string, ComponentType<{ size?: number; strokeWidth?: number }>> = {
-  leadership: Award,
-  communication: MessageCircle,
-  growth: Sprout,
-  teamwork: Users,
-  wellbeing: Heart,
-  "well-being": Heart,
-  productivity: Zap,
-  change: Layers,
-  connection: HeartHandshake,
-  reflection: Sparkles,
+const TOPIC_PHOTO: Record<string, string> = {
+  reflection: "/discover-topics/discover-topic-reflection-editorial.jpg",
+  growth: "/discover-topics/discover-topic-growth-editorial.jpg",
+  leadership: "/discover-topics/discover-topic-leadership-editorial.jpg",
+  communication: "/discover-topics/discover-topic-communication-editorial.jpg",
+  connection: "/discover-topics/discover-topic-connection-editorial.jpg",
+  wellbeing: "/discover-topics/discover-topic-wellbeing-editorial.jpg",
+  "well-being": "/discover-topics/discover-topic-wellbeing-editorial.jpg",
+  productivity: "/discover-topics/discover-topic-productivity-editorial.jpg",
+  "help-article": "/discover-topics/discover-topic-help-article-editorial.jpg",
+  help: "/discover-topics/discover-topic-help-article-editorial.jpg",
+  "help article": "/discover-topics/discover-topic-help-article-editorial.jpg",
+  change: "/discover-topics/discover-topic-leadership-editorial.jpg",
+  teamwork: "/discover-topics/discover-topic-connection-editorial.jpg",
 };
+
+const TOPIC_PHOTO_FALLBACK = "/discover-topics/discover-topic-reflection-editorial.jpg";
+
+function topicPhotoUrl(category: DiscoverPublicCategory): string {
+  const slug = category.slug.trim().toLowerCase();
+  const nameKey = category.name.trim().toLowerCase();
+  const compact = `${slug} ${nameKey}`.replace(/[^a-z0-9]+/g, " ");
+  const direct =
+    TOPIC_PHOTO[slug] ??
+    TOPIC_PHOTO[nameKey] ??
+    TOPIC_PHOTO[nameKey.replace(/\s+/g, "-")];
+  if (direct) return direct;
+  if (/\bhelp\b/.test(compact)) return TOPIC_PHOTO["help-article"];
+  if (/\breflect/.test(compact)) return TOPIC_PHOTO.reflection;
+  if (/\bgrowth\b|\blearn/.test(compact)) return TOPIC_PHOTO.growth;
+  if (/\blead/.test(compact)) return TOPIC_PHOTO.leadership;
+  if (/\bcommunicat|\bmessage/.test(compact)) return TOPIC_PHOTO.communication;
+  if (/\bconnect|\bteam/.test(compact)) return TOPIC_PHOTO.connection;
+  if (/\bwell.?being|\bwellness|\bhealth/.test(compact)) return TOPIC_PHOTO.wellbeing;
+  if (/\bproductiv|\bfocus/.test(compact)) return TOPIC_PHOTO.productivity;
+  return TOPIC_PHOTO_FALLBACK;
+}
 
 function matches(article: DiscoverPublicArticle, term: string): boolean {
   const haystack = [article.title, article.excerpt, article.category?.name ?? ""].join(" ").toLowerCase();
@@ -115,66 +132,157 @@ function ArticleCard({ article }: { article: DiscoverPublicArticle }) {
   );
 }
 
-function FeaturedCarousel({ articles }: { articles: DiscoverPublicArticle[] }) {
+function FeaturedPlaceholder({
+  kicker = "FEATURED",
+  topicName,
+}: {
+  kicker?: string;
+  topicName?: string;
+}) {
+  return (
+    <div
+      className="dx-featured"
+      aria-label="Featured article coming soon"
+      data-testid="dx-featured-placeholder"
+    >
+      <div className="dx-featured-card dx-featured-card--placeholder">
+        <div className="dx-featured-photo dx-featured-photo--placeholder" aria-hidden>
+          <span className="dx-featured-orb dx-featured-orb--one" />
+          <span className="dx-featured-orb dx-featured-orb--two" />
+          <span className="dx-featured-orb dx-featured-orb--three" />
+          <Sparkles size={28} strokeWidth={1.8} className="dx-featured-placeholder-mark" />
+        </div>
+        <div className="dx-featured-fade" aria-hidden />
+        <div className="dx-featured-copy">
+          <span className="dx-featured-kicker">{kicker}</span>
+          <h2 className="dx-featured-title">Featured article coming soon</h2>
+          <p className="dx-featured-excerpt">
+            {topicName
+              ? `A premium pick for ${topicName} is on the way. Browse articles below while we finish it.`
+              : "A premium Discover highlight is on the way. Browse articles below while we finish it."}
+          </p>
+          <div className="dx-featured-actions">
+            <span className="dx-featured-soon">Coming soon</span>
+          </div>
+        </div>
+      </div>
+      <div className="dx-featured-dots" aria-hidden />
+    </div>
+  );
+}
+
+function FeaturedCarousel({
+  articles,
+  kicker = "FEATURED",
+  topicName,
+  onSeeAll,
+}: {
+  articles: DiscoverPublicArticle[];
+  kicker?: string;
+  topicName?: string;
+  onSeeAll: () => void;
+}) {
   const [index, setIndex] = useState(0);
   const count = articles.length;
   useEffect(() => {
+    setIndex(0);
+  }, [articles]);
+  useEffect(() => {
     if (index > count - 1) setIndex(0);
   }, [count, index]);
-  if (count === 0) return null;
-  const article = articles[Math.min(index, count - 1)]!;
+
+  const article = count > 0 ? articles[Math.min(index, count - 1)]! : null;
   const go = (delta: number) => setIndex((current) => (current + delta + count) % count);
 
   return (
-    <section className="dx-featured" aria-roledescription="carousel" aria-label="Featured articles" data-testid="dx-featured">
-      <div className="dx-featured-card" key={article.id}>
-        {article.coverImageUrl ? (
-          <img src={article.coverImageUrl} alt="" className="dx-featured-photo" />
-        ) : (
-          <div className="dx-featured-photo dx-featured-photo--blank" aria-hidden />
-        )}
-        <div className="dx-featured-fade" aria-hidden />
-        <div className="dx-featured-copy">
-          <span className="dx-featured-kicker">FEATURED</span>
-          <h2 className="dx-featured-title">{article.title}</h2>
-          {article.excerpt ? <p className="dx-featured-excerpt">{article.excerpt}</p> : null}
-          <div className="dx-featured-actions">
-            <Link to={`/discover/${encodeURIComponent(article.slug)}`} className="dx-featured-read">
-              Read article
-              <ArrowRight size={15} strokeWidth={2.4} />
-            </Link>
-            <SaveLabelButton slug={article.slug} />
-          </div>
-        </div>
-        {count > 1 ? (
-          <div className="dx-featured-nav">
-            <button type="button" aria-label="Previous featured article" onClick={() => go(-1)}>
-              <ChevronLeft size={16} strokeWidth={2.4} />
-            </button>
-            <span>
-              {index + 1}/{count}
-            </span>
-            <button type="button" aria-label="Next featured article" onClick={() => go(1)}>
-              <ChevronRight size={16} strokeWidth={2.4} />
-            </button>
-          </div>
-        ) : null}
+    <section className="dx-featured-block" data-testid="dx-featured">
+      <div className="dx-section-head">
+        <h2>{topicName ? `Featured in ${topicName}` : "Featured"}</h2>
+        <button
+          type="button"
+          className="dx-link"
+          onClick={onSeeAll}
+          data-testid="dx-see-all-articles"
+        >
+          {topicName ? `See all in ${topicName}` : "See all articles"}
+        </button>
       </div>
-      {count > 1 ? (
-        <div className="dx-featured-dots" role="tablist" aria-label="Featured articles">
-          {articles.map((item, i) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={i === index}
-              aria-label={`Show featured article ${i + 1}`}
-              className={i === index ? "is-active" : undefined}
-              onClick={() => setIndex(i)}
-            />
-          ))}
+      {article ? (
+        <div
+          className="dx-featured"
+          aria-roledescription="carousel"
+          aria-label="Featured articles"
+        >
+          <div className="dx-featured-card" key={article.id}>
+            {article.coverImageUrl ? (
+              <img src={article.coverImageUrl} alt="" className="dx-featured-photo" />
+            ) : (
+              <div className="dx-featured-photo dx-featured-photo--blank" aria-hidden />
+            )}
+            <div className="dx-featured-fade" aria-hidden />
+            <div className="dx-featured-copy">
+              <span className="dx-featured-kicker">{kicker}</span>
+              <h2 className="dx-featured-title">{article.title}</h2>
+              {article.excerpt ? (
+                <p className="dx-featured-excerpt">{article.excerpt}</p>
+              ) : null}
+              <div className="dx-featured-actions">
+                <Link
+                  to={`/discover/${encodeURIComponent(article.slug)}`}
+                  className="dx-featured-read"
+                >
+                  Read article
+                  <ArrowRight size={15} strokeWidth={2.4} />
+                </Link>
+                <SaveLabelButton slug={article.slug} />
+              </div>
+            </div>
+            {count > 1 ? (
+              <div className="dx-featured-nav">
+                <button
+                  type="button"
+                  aria-label="Previous featured article"
+                  onClick={() => go(-1)}
+                >
+                  <ChevronLeft size={16} strokeWidth={2.4} />
+                </button>
+                <span>
+                  {index + 1}/{count}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Next featured article"
+                  onClick={() => go(1)}
+                >
+                  <ChevronRight size={16} strokeWidth={2.4} />
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div
+            className="dx-featured-dots"
+            role={count > 1 ? "tablist" : undefined}
+            aria-label={count > 1 ? "Featured articles" : undefined}
+            aria-hidden={count <= 1}
+          >
+            {count > 1
+              ? articles.map((item, i) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={i === index}
+                    aria-label={`Show featured article ${i + 1}`}
+                    className={i === index ? "is-active" : undefined}
+                    onClick={() => setIndex(i)}
+                  />
+                ))
+              : null}
+          </div>
         </div>
-      ) : null}
+      ) : (
+        <FeaturedPlaceholder kicker={kicker} topicName={topicName} />
+      )}
     </section>
   );
 }
@@ -195,6 +303,7 @@ export function DiscoverIndexPage() {
   const term = (params.get("q") ?? "").trim().toLowerCase();
   const topic = params.get("topic") ?? "";
   const [tab, setTab] = useState<Tab>("for-you");
+  const feedRef = useRef<HTMLElement | null>(null);
   const { saved, progress } = useDiscoverLibrary();
 
   const articlesQuery = useQuery({
@@ -218,18 +327,28 @@ export function DiscoverIndexPage() {
   }, [categoriesQuery.data, all]);
 
   const featured = useMemo(() => {
-    const picks = all.filter((a) => a.isFeatured).sort((a, b) => a.displayOrder - b.displayOrder);
-    if (picks.length > 0) return picks.slice(0, 5);
-    return [...all].sort((a, b) => publishedTime(b) - publishedTime(a)).slice(0, 3);
-  }, [all]);
+    if (topic) {
+      return all
+        .filter((a) => a.category?.slug === topic && a.featuredInCategory)
+        .sort((a, b) => a.displayOrder - b.displayOrder)
+        .slice(0, 5);
+    }
+    return all
+      .filter((a) => a.isFeatured)
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .slice(0, 5);
+  }, [all, topic]);
 
-  const newest = useMemo(() => [...all].sort((a, b) => publishedTime(b) - publishedTime(a)), [all]);
+  const allSorted = useMemo(
+    () => [...all].sort((a, b) => publishedTime(b) - publishedTime(a)),
+    [all],
+  );
 
   const newThisWeek = useMemo(() => {
     const cutoff = Date.now() - 14 * 864e5;
-    const recent = newest.filter((a) => publishedTime(a) >= cutoff);
-    return (recent.length >= 3 ? recent : newest).slice(0, 3);
-  }, [newest]);
+    const recent = allSorted.filter((a) => publishedTime(a) >= cutoff);
+    return (recent.length >= 3 ? recent : allSorted).slice(0, 3);
+  }, [allSorted]);
 
   const reading = useMemo(
     () =>
@@ -245,8 +364,8 @@ export function DiscoverIndexPage() {
     if (tab === "saved") {
       const order = new Map(saved.map((slug, i) => [slug, i]));
       list = all.filter((a) => order.has(a.slug)).sort((a, b) => order.get(a.slug)! - order.get(b.slug)!);
-    } else if (tab === "newest") {
-      list = newest;
+    } else if (tab === "all") {
+      list = allSorted;
     } else {
       // For you: featured first, then the rest by date.
       list = [...all].sort((a, b) => {
@@ -257,7 +376,14 @@ export function DiscoverIndexPage() {
     if (topic) list = list.filter((a) => a.category?.slug === topic);
     if (term) list = list.filter((a) => matches(a, term));
     return list;
-  }, [all, tab, saved, newest, topic, term]);
+  }, [all, tab, saved, allSorted, topic, term]);
+
+  const showAllArticles = () => {
+    setTab("all");
+    window.requestAnimationFrame(() => {
+      feedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const setTopic = (slug: string) => {
     const next = new URLSearchParams(params);
@@ -268,7 +394,21 @@ export function DiscoverIndexPage() {
 
   const searching = Boolean(term);
   const loading = articlesQuery.isLoading;
-  const topicName = categories.find((c) => c.slug === topic)?.name;
+  const activeTopic = categories.find((c) => c.slug === topic) ?? null;
+  const topicName = activeTopic?.name;
+  const heroTitle = searching
+    ? `Search results`
+    : topicName
+      ? topicName
+      : "Discover";
+  const heroSubtitle = searching
+    ? `${visible.length} ${visible.length === 1 ? "article" : "articles"} for “${params.get("q")}”${
+        topicName ? ` in ${topicName}` : ""
+      }.`
+    : topicName
+      ? activeTopic?.description?.trim() ||
+        `Ideas and resources in ${topicName} to help you grow, lead, and create impact.`
+      : "Ideas, perspectives, and resources to help you grow, lead, and create impact.";
 
   return (
     <div className="dx-page" data-testid="discover-index">
@@ -276,8 +416,11 @@ export function DiscoverIndexPage() {
         <img src="/alenio-home-hero-sunset.jpg" alt="" className="dx-hero-photo" />
         <div className="dx-hero-fade" aria-hidden />
         <div className="dx-hero-copy">
-          <h1>Discover</h1>
-          <p>Ideas, perspectives, and resources to help you grow, lead, and create impact.</p>
+          {topicName && !searching ? (
+            <p className="dx-hero-eyebrow">Discover · Topic</p>
+          ) : null}
+          <h1>{heroTitle}</h1>
+          <p>{heroSubtitle}</p>
         </div>
       </header>
 
@@ -297,34 +440,71 @@ export function DiscoverIndexPage() {
               </Link>
             </div>
           ) : (
-            <FeaturedCarousel articles={featured} />
+            <FeaturedCarousel
+              key={topic || "home"}
+              articles={featured}
+              topicName={topicName}
+              onSeeAll={showAllArticles}
+              kicker={
+                topicName
+                  ? `FEATURED · ${topicName.toUpperCase()}`
+                  : "FEATURED"
+              }
+            />
           )}
 
-          {categories.length > 0 ? (
-            <section className="dx-topics" aria-label="Browse by topic">
+          {categories.length > 0 && !searching ? (
+            <section className="dx-topics" aria-label="Explore topics">
               <div className="dx-section-head">
-                <h2>Browse by topic</h2>
-                {topic ? (
-                  <button type="button" className="dx-link" onClick={() => setTopic("")}>
-                    Show all topics
+                <h2>Explore topics</h2>
+                {topic || searching ? (
+                  <button
+                    type="button"
+                    className="dx-link"
+                    onClick={() => {
+                      const next = new URLSearchParams(params);
+                      next.delete("topic");
+                      next.delete("q");
+                      setParams(next, { replace: true });
+                    }}
+                    data-testid="dx-remove-all-filters"
+                  >
+                    Remove all filters
                   </button>
-                ) : null}
+                ) : (
+                  <button
+                    type="button"
+                    className="dx-link"
+                    onClick={() => {
+                      const row = document.querySelector(".dx-topic-row");
+                      row?.scrollTo({ left: row.scrollWidth, behavior: "smooth" });
+                    }}
+                    data-testid="dx-view-all-topics"
+                  >
+                    View all →
+                  </button>
+                )}
               </div>
-              <div className="dx-topic-row">
+              <div className="dx-topic-row" data-testid="dx-topic-row">
                 {categories.map((category) => {
-                  const Icon = TOPIC_ICON[category.slug] ?? BookOpen;
                   const active = category.slug === topic;
+                  const photo = topicPhotoUrl(category);
                   return (
                     <button
                       key={category.id}
                       type="button"
-                      className={`dx-topic${active ? " is-active" : ""}`}
+                      className={`dx-topic-card${active ? " is-active" : ""}`}
                       aria-pressed={active}
-                      onClick={() => setTopic(category.slug)}
+                      onClick={() => setTopic(active ? "" : category.slug)}
                       data-testid={`dx-topic-${category.slug}`}
                     >
-                      <Icon size={20} strokeWidth={1.9} />
-                      <span>{category.name}</span>
+                      <img
+                        src={photo}
+                        alt=""
+                        className="dx-topic-card-photo"
+                      />
+                      <span className="dx-topic-card-fade" aria-hidden />
+                      <span className="dx-topic-card-label">{category.name}</span>
                     </button>
                   );
                 })}
@@ -332,13 +512,18 @@ export function DiscoverIndexPage() {
             </section>
           ) : null}
 
-          <section className="dx-feed" aria-label="Articles">
+          <section
+            ref={feedRef}
+            className="dx-feed"
+            aria-label="Articles"
+            data-testid="dx-feed"
+          >
             <div className="dx-tabs-row">
               <div className="dx-tabs" role="tablist" aria-label="Article lists">
                 {(
                   [
                     ["for-you", "For you"],
-                    ["newest", "Newest"],
+                    ["all", topicName ? `All in ${topicName}` : "All"],
                     ["saved", saved.length > 0 ? `Saved (${saved.length})` : "Saved"],
                   ] as Array<[Tab, string]>
                 ).map(([id, label]) => (

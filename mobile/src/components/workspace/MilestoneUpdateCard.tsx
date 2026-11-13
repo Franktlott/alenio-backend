@@ -1,20 +1,16 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Flame, Heart, MessageCircle } from "lucide-react-native";
+import { Flame } from "lucide-react-native";
 import type { ActivityFeedItem } from "@/components/activity/types";
-import { FeedActionButton } from "@/components/workspace/FeedActionButton";
+import { FeedEngagementRow } from "@/components/workspace/FeedEngagementRow";
 import { FeedEventPill } from "@/components/workspace/FeedEventPill";
-import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
 import { WorkspaceFeedCardShell } from "@/components/workspace/WorkspaceFeedCardShell";
 import {
   formatFeedTimestamp,
   milestoneStreakCount,
   milestoneSubtitle,
-  myReactionEmoji,
   nextMilestoneTarget,
-  totalReactionCount,
 } from "@/lib/workspace-updates";
-import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
 
 /** Milestones are the one warm note in an otherwise indigo feed. */
 const GOLD = "#B7791F";
@@ -23,6 +19,7 @@ type Props = {
   item: ActivityFeedItem;
   currentUserId?: string;
   onPressReact?: () => void;
+  onToggleReaction?: (emoji: string) => void;
   onPressComment?: () => void;
   /** Opens the sheet listing everyone who reacted. */
   onPressReactions?: () => void;
@@ -36,16 +33,16 @@ export function MilestoneUpdateCard({
   item,
   currentUserId,
   onPressReact,
+  onToggleReaction,
   onPressComment,
   onPressReactions,
+  commentCount = 0,
   picker,
   testID,
 }: Props) {
   const name = item.actor?.name ?? "Someone";
   const streak = milestoneStreakCount(item.metadata.count);
   const target = nextMilestoneTarget(item.metadata.count);
-  const reactionCount = totalReactionCount(item.reactions);
-  const mine = myReactionEmoji(item.reactions, currentUserId);
   const cardTestID = testID ?? `milestone-update-card-${item.id}`;
 
   return (
@@ -66,44 +63,16 @@ export function MilestoneUpdateCard({
       footer={
         <View style={styles.footer}>
           {picker}
-          <View style={styles.actions}>
-            {onPressReact ? (
-            <FeedActionButton
-              Icon={Heart}
-              glyph={mine}
-              activeColor={feedReaction(mine)?.color}
-              // The facepile carries the count, so the button stays an icon.
-              label=""
-              active={!!mine}
-              filled
-              onPress={onPressReact}
-              accessibilityLabel={
-                mine
-                  ? `Your reaction: ${feedReactionLabel(mine)}. Change or remove it.`
-                  : "React to this milestone"
-              }
-              testID={`${cardTestID}-react`}
-            />
-            ) : null}
-            {onPressComment ? (
-              <FeedActionButton
-                Icon={MessageCircle}
-                label=""
-                onPress={onPressComment}
-                accessibilityLabel="Comment on this milestone"
-                testID={`${cardTestID}-comment`}
-              />
-            ) : null}
-            {onPressReactions && reactionCount > 0 ? (
-              <View style={styles.summary}>
-                <ReactionFacepile
-                  reactions={item.reactions ?? {}}
-                  onPress={onPressReactions}
-                  testID={`${cardTestID}-reaction-facepile`}
-                />
-              </View>
-            ) : null}
-          </View>
+          <FeedEngagementRow
+            reactions={item.reactions ?? {}}
+            currentUserId={currentUserId}
+            onToggleReaction={onToggleReaction}
+            onOpenPicker={onPressReact}
+            onPressReactions={onPressReactions}
+            onPressComment={onPressComment}
+            commentCount={commentCount}
+            testID={`${cardTestID}-engage`}
+          />
         </View>
       }
     >
@@ -171,12 +140,5 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: 1,
     gap: 1,
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  summary: {
-    marginLeft: "auto",
   },
 });

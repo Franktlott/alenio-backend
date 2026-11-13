@@ -1,0 +1,16 @@
+{
+  "name": "alenio-hinge",
+  "version": "1.0.0",
+  "description": "Duo hinge posture via UIHingeInteraction",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT",
+  "author": "Alenio",
+  "homepage": "https://github.com/alenio",
+  "scripts": {},
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

@@ -2,37 +2,48 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
   AtSign,
   BriefcaseBusiness,
-  Camera,
+  Building2,
   ChevronRight,
   FileText,
-  Link2,
   MapPin,
+  Pencil,
   UserRound,
 } from "lucide-react-native";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { refreshMeInAuthCaches } from "@/lib/auth/use-session";
-import { uploadFile } from "@/lib/upload";
-import { pickImage, takePhoto } from "@/lib/file-picker";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ProfilePhotosEditor } from "@/components/profile/ProfilePhotosEditor";
-import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import {
+  AlenioBottomSheet,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
+import { colors } from "@/theme";
+import {
+  clearProfileHeaderImage,
+  profileHeaderSource,
+} from "@/lib/profile-header";
+import { useHeaderPhotoChooser } from "@/components/profile/use-header-photo";
+import {
+  HEADER_SIZE_NOTE,
+  headerBannerHeight,
+} from "@/lib/profile-header-frame";
+
+const BRAND = colors.brand;
 
 type EditableProfile = {
   id: string;
@@ -41,15 +52,17 @@ type EditableProfile = {
   image: string | null;
   username: string | null;
   profileTitle: string | null;
+  profileOrganization: string | null;
   profileWebsite: string | null;
   profileLocation: string | null;
   profileBio: string | null;
+  profileHeaderImage: string | null;
 };
 
 type ProfileDraft = {
   name: string;
   profileTitle: string;
-  profileWebsite: string;
+  profileOrganization: string;
   profileLocation: string;
   profileBio: string;
 };
@@ -57,16 +70,16 @@ type ProfileDraft = {
 const EMPTY_DRAFT: ProfileDraft = {
   name: "",
   profileTitle: "",
-  profileWebsite: "",
+  profileOrganization: "",
   profileLocation: "",
   profileBio: "",
 };
 
 export default function EditProfileScreen() {
-  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const window = useWindowDimensions();
   const [draft, setDraft] = useState<ProfileDraft>(EMPTY_DRAFT);
-  const [localImage, setLocalImage] = useState<string | null>(null);
+  const [headerPreviewWidth, setHeaderPreviewWidth] = useState(0);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ME_QUERY_KEY,
@@ -78,11 +91,10 @@ export default function EditProfileScreen() {
     setDraft({
       name: profile.name ?? "",
       profileTitle: profile.profileTitle ?? "",
-      profileWebsite: profile.profileWebsite ?? "",
+      profileOrganization: profile.profileOrganization ?? "",
       profileLocation: profile.profileLocation ?? "",
       profileBio: profile.profileBio ?? "",
     });
-    setLocalImage(profile.image ?? null);
   }, [profile]);
 
   const refreshIdentity = async () => {
@@ -99,12 +111,37 @@ export default function EditProfileScreen() {
     ]);
   };
 
+  const headerPhoto = useHeaderPhotoChooser({
+    onSaved: async (url) => {
+      queryClient.setQueryData<EditableProfile>(ME_QUERY_KEY, (current) =>
+        current ? { ...current, profileHeaderImage: url } : current,
+      );
+      await refreshIdentity();
+    },
+  });
+
+  const headerReset = useMutation({
+    mutationFn: clearProfileHeaderImage,
+    onSuccess: async () => {
+      queryClient.setQueryData<EditableProfile>(ME_QUERY_KEY, (current) =>
+        current ? { ...current, profileHeaderImage: null } : current,
+      );
+      await refreshIdentity();
+    },
+    onError: (err: unknown) => {
+      Alert.alert(
+        "Could not update header",
+        err instanceof Error ? err.message : "Please try again.",
+      );
+    },
+  });
+
   const save = useMutation({
     mutationFn: () =>
       api.patch<EditableProfile>("/api/profile", {
         name: draft.name,
         profileTitle: draft.profileTitle,
-        profileWebsite: draft.profileWebsite,
+        profileOrganization: draft.profileOrganization,
         profileLocation: draft.profileLocation,
         profileBio: draft.profileBio,
       }),
@@ -115,104 +152,155 @@ export default function EditProfileScreen() {
       router.back();
     },
     onError: (err: unknown) => {
-      Alert.alert("Could not save profile", err instanceof Error ? err.message : "Please try again.");
+      Alert.alert(
+        "Could not save profile",
+        err instanceof Error ? err.message : "Please try again.",
+      );
     },
   });
 
-  const uploadPhoto = useMutation({
-    mutationFn: async (source: "library" | "camera") => {
-      const file = source === "library" ? await pickImage() : await takePhoto();
-      if (!file) throw new Error("cancelled");
-      setLocalImage(file.uri);
-      return uploadFile(file.uri, file.filename, file.mimeType, { purpose: "profile" });
-    },
-    onSuccess: async (uploaded) => {
-      setLocalImage(uploaded.url);
-      await refreshIdentity();
-      toast({ title: "Profile photo updated", preset: "done" });
-    },
-    onError: (err: Error) => {
-      setLocalImage(profile?.image ?? null);
-      if (err.message !== "cancelled") Alert.alert("Could not update photo", err.message);
-    },
-  });
-
-  const choosePhoto = () => {
-    Alert.alert("Profile photo", "Choose a photo source.", [
-      { text: "Photo Library", onPress: () => uploadPhoto.mutate("library") },
-      { text: "Camera", onPress: () => uploadPhoto.mutate("camera") },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  };
-
+  const headerPreviewHeight =
+    headerPreviewWidth > 0
+      ? headerBannerHeight(headerPreviewWidth, {
+          windowHeight: window.height,
+        })
+      : 148;
   const changed =
     !!profile &&
     (draft.name.trim() !== profile.name ||
       draft.profileTitle.trim() !== (profile.profileTitle ?? "") ||
-      draft.profileWebsite.trim() !== (profile.profileWebsite ?? "") ||
+      draft.profileOrganization.trim() !== (profile.profileOrganization ?? "") ||
       draft.profileLocation.trim() !== (profile.profileLocation ?? "") ||
       draft.profileBio.trim() !== (profile.profileBio ?? ""));
   const canSave = changed && draft.name.trim().length > 0 && !save.isPending;
 
+  const handleClose = () => router.back();
+
   return (
-    <SafeKeyboardAvoidingView style={styles.screen}>
-      <LinearGradient
-        colors={["#4361EE", "#6D38E8"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.hero, { paddingTop: insets.top + 4 }]}
-      >
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.headerButton}>
-            <ArrowLeft size={21} color="#FFFFFF" />
-          </Pressable>
-          <Text style={styles.headerTitle}>Edit profile</Text>
-          <Pressable
+    <AlenioBottomSheet
+      asScreen
+      title="Edit profile"
+      subtitle="How you appear to people on Alenio"
+      onClose={handleClose}
+      showCloseButton
+      showScrollIndicator
+      showMoreIndicator
+      bodyHeightRatio={0.82}
+      testID="edit-profile-screen"
+      footer={
+        <>
+          <TouchableOpacity
+            testID="edit-profile-save"
             onPress={() => save.mutate()}
             disabled={!canSave}
-            style={styles.saveButton}
-            testID="edit-profile-save"
+            style={[
+              alenioSheetStyles.primaryButton,
+              { backgroundColor: BRAND },
+              !canSave ? alenioSheetStyles.primaryButtonDisabled : null,
+            ]}
+            activeOpacity={0.92}
+            accessibilityRole="button"
+            accessibilityLabel="Save profile"
           >
             {save.isPending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text
-                style={[
-                  styles.saveText,
-                  !canSave ? styles.saveTextDisabled : null,
-                ]}
-              >
-                Save
-              </Text>
+              <Text style={alenioSheetStyles.primaryButtonText}>Save profile</Text>
             )}
-          </Pressable>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleClose}
+            style={alenioSheetStyles.cancelButton}
+            testID="edit-profile-cancel"
+            activeOpacity={0.8}
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </>
+      }
+    >
+      {isLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color={BRAND} />
         </View>
-
-        {!isLoading ? (
-          <View style={styles.heroProfile}>
+      ) : (
+        <View style={styles.content}>
+          {headerPhoto.sheet}
+          <Text style={styles.sectionTitle}>Header</Text>
+          <Pressable
+            onLayout={(event) => {
+              const width = Math.round(event.nativeEvent.layout.width);
+              setHeaderPreviewWidth((current) =>
+                current === width ? current : width,
+              );
+            }}
+            onPress={() => {
+              void headerPhoto.choose();
+            }}
+            disabled={headerPhoto.busy || headerReset.isPending}
+            style={[styles.headerPreview, { height: headerPreviewHeight }]}
+            accessibilityRole="button"
+            accessibilityLabel="Edit header"
+            testID="edit-profile-header"
+          >
+            {headerPreviewWidth > 0 ? (
+              <Image
+                source={profileHeaderSource(profile?.profileHeaderImage)}
+                style={{ width: headerPreviewWidth, height: headerPreviewHeight }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={{ height: headerPreviewHeight }} />
+            )}
+            <View style={styles.headerEdit}>
+              {headerPhoto.busy ? (
+                <ActivityIndicator color="#111A2B" size="small" />
+              ) : (
+                <>
+                  <Pencil size={14} color="#111A2B" strokeWidth={2.3} />
+                  <Text style={styles.headerEditText}>Edit</Text>
+                </>
+              )}
+            </View>
+          </Pressable>
+          <Text style={styles.headerNote} testID="edit-profile-header-note">
+            {HEADER_SIZE_NOTE}
+          </Text>
+          {profile?.profileHeaderImage ? (
             <Pressable
-              onPress={choosePhoto}
-              style={styles.photoButton}
-              testID="edit-profile-photo"
+              onPress={() => {
+                Alert.alert(
+                  "Remove header?",
+                  "This removes the custom header you uploaded and restores the default.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Remove header",
+                      style: "destructive",
+                      onPress: () => headerReset.mutate(),
+                    },
+                  ],
+                );
+              }}
+              disabled={headerReset.isPending || headerPhoto.busy}
+              style={styles.headerReset}
+              accessibilityRole="button"
+              testID="edit-profile-header-reset"
             >
-              <View style={styles.avatarFrame}>
-                <UserAvatar
-                  user={{ name: draft.name, image: localImage }}
-                  size={76}
-                  radius={38}
-                  backgroundColor="#6366F1"
-                  textColor="#FFFFFF"
-                  fontSize={27}
-                />
-              </View>
-              <View style={styles.cameraBadge}>
-                {uploadPhoto.isPending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Camera size={13} color="#FFFFFF" />
-                )}
-              </View>
+              <Text style={styles.headerResetText}>
+                {headerReset.isPending ? "Removing…" : "Remove header"}
+              </Text>
             </Pressable>
+          ) : null}
+          <View style={styles.heroCard}>
+            <UserAvatar
+              user={{ name: draft.name, image: profile?.image }}
+              size={64}
+              radius={32}
+              backgroundColor="#EEF2FF"
+              textColor={BRAND}
+              fontSize={22}
+            />
             <View style={styles.heroIdentity}>
               <Text style={styles.heroName} numberOfLines={1}>
                 {draft.name || "Your profile"}
@@ -222,33 +310,19 @@ export default function EditProfileScreen() {
                   ? `@${profile.username}`
                   : "Choose a username"}
               </Text>
-              <Pressable onPress={choosePhoto} hitSlop={6}>
-                <Text style={styles.changePhoto}>Change photo</Text>
-              </Pressable>
             </View>
           </View>
-        ) : (
-          <View style={styles.heroPlaceholder} />
-        )}
-      </LinearGradient>
 
-      {isLoading ? (
-        <View style={styles.centered}><ActivityIndicator color="#4361EE" /></View>
-      ) : (
-        <ScrollView
-          style={styles.profileScroll}
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
           <Text style={styles.sectionTitle}>Profile details</Text>
           <View style={styles.formCard}>
             <Field
-              icon={<UserRound size={16} color="#4361EE" />}
+              icon={<UserRound size={16} color={BRAND} />}
               label="Display name"
               value={draft.name}
               maxLength={80}
-              onChangeText={(name) => setDraft((current) => ({ ...current, name }))}
+              onChangeText={(name) =>
+                setDraft((current) => ({ ...current, name }))
+              }
               testID="edit-profile-name"
             />
             <Divider />
@@ -258,12 +332,14 @@ export default function EditProfileScreen() {
               testID="edit-profile-username"
             >
               <View style={styles.fieldIcon}>
-                <AtSign size={16} color="#4361EE" />
+                <AtSign size={16} color={BRAND} />
               </View>
               <View style={styles.fieldContent}>
                 <Text style={styles.label}>Username</Text>
                 <Text style={styles.usernameValue}>
-                  {profile?.username ? `@${profile.username}` : "Choose a username"}
+                  {profile?.username
+                    ? `@${profile.username}`
+                    : "Choose a username"}
                 </Text>
               </View>
               <ChevronRight size={17} color="#A7B0C0" />
@@ -282,16 +358,15 @@ export default function EditProfileScreen() {
             />
             <Divider />
             <Field
-              icon={<Link2 size={16} color="#718097" />}
-              label="Website"
-              value={draft.profileWebsite}
-              placeholder="e.g. alenio.com"
-              maxLength={2048}
-              autoCapitalize="none"
-              keyboardType="url"
-              onChangeText={(profileWebsite) =>
-                setDraft((current) => ({ ...current, profileWebsite }))
+              icon={<Building2 size={16} color="#718097" />}
+              label="Employer"
+              value={draft.profileOrganization}
+              placeholder="e.g. Northstar Hospitality"
+              maxLength={80}
+              onChangeText={(profileOrganization) =>
+                setDraft((current) => ({ ...current, profileOrganization }))
               }
+              testID="edit-profile-employer"
             />
             <Divider />
             <Field
@@ -305,8 +380,6 @@ export default function EditProfileScreen() {
               }
             />
           </View>
-
-          <ProfilePhotosEditor />
 
           <View style={styles.aboutHeader}>
             <Text style={styles.sectionTitle}>About you</Text>
@@ -325,6 +398,7 @@ export default function EditProfileScreen() {
               placeholderTextColor="#A0AABB"
               multiline
               maxLength={500}
+              autoCapitalize="sentences"
               textAlignVertical="top"
               style={styles.bioInput}
               testID="edit-profile-bio"
@@ -333,9 +407,9 @@ export default function EditProfileScreen() {
           <Text style={styles.helper}>
             This information is visible to other authenticated Alenio users.
           </Text>
-        </ScrollView>
+        </View>
       )}
-    </SafeKeyboardAvoidingView>
+    </AlenioBottomSheet>
   );
 }
 
@@ -345,8 +419,6 @@ function Field({
   value,
   placeholder,
   maxLength,
-  autoCapitalize,
-  keyboardType,
   onChangeText,
   testID,
 }: {
@@ -355,8 +427,6 @@ function Field({
   value: string;
   placeholder?: string;
   maxLength: number;
-  autoCapitalize?: "none" | "sentences" | "words" | "characters";
-  keyboardType?: "default" | "url";
   onChangeText: (value: string) => void;
   testID?: string;
 }) {
@@ -371,8 +441,10 @@ function Field({
           placeholder={placeholder}
           placeholderTextColor="#A0AABB"
           maxLength={maxLength}
-          autoCapitalize={autoCapitalize}
-          keyboardType={keyboardType}
+          autoCapitalize="words"
+          autoCorrect
+          keyboardType="default"
+          textContentType="none"
           style={styles.input}
           testID={testID}
         />
@@ -386,105 +458,88 @@ function Divider() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#FFFFFF" },
-  hero: {
-    paddingBottom: 29,
-  },
-  header: {
-    paddingHorizontal: 18,
+  content: {
+    gap: 0,
     paddingBottom: 4,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
-  headerButton: {
-    width: 44,
-    height: 36,
-    alignItems: "flex-start",
-    justifyContent: "center",
+  headerPreview: {
+    width: "100%",
+    marginBottom: 8,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#D7E0EE",
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  saveButton: {
-    width: 52,
-    height: 36,
-    alignItems: "flex-end",
-    justifyContent: "center",
-  },
-  saveText: { fontSize: 13, fontWeight: "700", color: "#FFFFFF" },
-  saveTextDisabled: { color: "rgba(255,255,255,0.45)" },
-  heroProfile: {
-    minHeight: 96,
-    paddingHorizontal: 28,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 15,
-  },
-  heroPlaceholder: { height: 96 },
-  photoButton: {
-    position: "relative",
-  },
-  avatarFrame: {
-    padding: 3,
-    borderRadius: 44,
-    backgroundColor: "rgba(255,255,255,0.96)",
-    shadowColor: "#172033",
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  cameraBadge: {
+  headerEdit: {
     position: "absolute",
-    right: -1,
-    bottom: 1,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#4361EE",
-    borderWidth: 3,
-    borderColor: "#FFFFFF",
+    right: 10,
+    bottom: 10,
+    minWidth: 72,
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.94)",
+  },
+  headerEditText: {
+    color: "#111A2B",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  headerNote: {
+    marginBottom: 12,
+    paddingHorizontal: 2,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#667085",
+  },
+  headerReset: {
+    alignSelf: "center",
+    marginTop: -4,
+    marginBottom: 12,
+    paddingVertical: 2,
+  },
+  headerResetText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  centered: {
+    paddingVertical: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroCard: {
+    marginBottom: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E3E7EE",
+    backgroundColor: "#FFFFFF",
   },
   heroIdentity: {
     flex: 1,
     minWidth: 0,
   },
   heroName: {
-    fontSize: 19,
-    lineHeight: 23,
+    fontSize: 17,
+    lineHeight: 21,
     fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.35,
+    color: "#0F172A",
+    letterSpacing: -0.3,
   },
   heroUsername: {
-    marginTop: 3,
-    fontSize: 10.5,
-    lineHeight: 14,
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 15,
     fontWeight: "600",
-    color: "rgba(255,255,255,0.8)",
-  },
-  changePhoto: {
-    marginTop: 7,
-    fontSize: 10.5,
-    lineHeight: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  profileScroll: {
-    marginTop: -22,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    backgroundColor: "#FFFFFF",
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    backgroundColor: "#FFFFFF",
+    color: "#64748B",
   },
   sectionTitle: {
     marginLeft: 2,
@@ -529,7 +584,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     padding: 0,
     fontSize: 13,
-    lineHeight: 18,
     fontWeight: "600",
     color: "#172033",
   },
@@ -553,7 +607,7 @@ const styles = StyleSheet.create({
     color: "#334155",
   },
   aboutHeader: {
-    marginTop: 20,
+    marginTop: 16,
     marginBottom: 8,
     paddingHorizontal: 2,
     flexDirection: "row",
@@ -589,5 +643,11 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: "#334155",
   },
-  helper: { marginTop: 8, paddingHorizontal: 3, fontSize: 10, lineHeight: 14, color: "#94A3B8" },
+  helper: {
+    marginTop: 8,
+    paddingHorizontal: 3,
+    fontSize: 10,
+    lineHeight: 14,
+    color: "#94A3B8",
+  },
 });

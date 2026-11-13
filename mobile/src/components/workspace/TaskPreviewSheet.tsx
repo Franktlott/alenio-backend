@@ -103,7 +103,7 @@ export function TaskPreviewSheet({
 
   const reminder = isReminderTask(task);
   const overdue = isTaskOverdue(task);
-  const kindLabel = reminder ? "Reminder" : "Task";
+  const kindLabel = reminder ? "Task · Only you" : "Task";
   const headerSubtitle = [kindLabel, overdue ? "Overdue" : null].filter(Boolean).join(" · ");
   const description = isFeedbackTaskDescription(task.description)
     ? ""

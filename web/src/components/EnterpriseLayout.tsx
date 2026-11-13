@@ -627,7 +627,6 @@ export function EnterpriseLayout({
           <NavItem to="/home" navId="home" activeNav={activeNav} icon={<IconHome />} label="Home" />
           <NavItem to="/workspace" navId="workspace" activeNav={activeNav} icon={<IconTasks />} label="Workspace" />
           <NavItem to="/network" navId="network" activeNav={activeNav} icon={<IconUsers />} label="Network" />
-          <NavItem to="/seneca" navId="seneca" activeNav={activeNav} icon={<IconSeneca />} label="Seneca" />
           <NavItem to="/discover" navId="discover" activeNav={activeNav} icon={<IconSparkles />} label="Discover" />
           {location.pathname.startsWith("/go") && showGoNav && !setupNavMode ? (
             <NavItem

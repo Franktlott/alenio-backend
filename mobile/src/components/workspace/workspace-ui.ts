@@ -20,8 +20,8 @@ export const WS = {
   muted: colors.textSecondary,
   faint: colors.textMuted,
   surface: colors.surface,
-  /** Warm off-white, so the white cards on it read as raised. */
-  pageBg: palette.page,
+  /** Page sheet behind Workspace cards. */
+  pageBg: "#FFFFFF",
   chipBg: colors.surfaceSecondary,
   accent: colors.brand,
 };

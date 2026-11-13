@@ -23,7 +23,7 @@ const TRIAL_HIGHLIGHTS: Highlight[] = [
 const PAID_HIGHLIGHTS: Highlight[] = [
   { title: "Paid access is active", detail: "Every workspace tool, no limits" },
   { title: "Invite your team", detail: "Start assigning work right away" },
-  { title: "Billing when you need it", detail: "Manage it from Plan & Access" },
+  { title: "Billing when you need it", detail: "Manage it in Workspace Settings" },
 ];
 
 export default function WorkspaceWelcomeScreen() {
@@ -123,7 +123,7 @@ export default function WorkspaceWelcomeScreen() {
         </TouchableOpacity>
         <Text style={styles.footerNote}>
           {isPaid
-            ? "Billing details are available in Plan & Access."
+            ? "Billing details are in Workspace Settings → Plan & billing."
             : "We’ll keep your remaining trial time visible in the app."}
         </Text>
       </View>

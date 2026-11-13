@@ -1,22 +1,16 @@
 import { useRef, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Heart, MessageCircle } from "lucide-react-native";
 import type { ActivityFeedItem } from "@/components/activity/types";
-import { FeedActionButton } from "@/components/workspace/FeedActionButton";
-import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
+import { FeedEngagementRow } from "@/components/workspace/FeedEngagementRow";
 import { WorkspaceFeedCardShell } from "@/components/workspace/WorkspaceFeedCardShell";
-import {
-  formatFeedTimestamp,
-  myReactionEmoji,
-  totalReactionCount,
-} from "@/lib/workspace-updates";
-import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
+import { formatFeedTimestamp } from "@/lib/workspace-updates";
 import { PostMediaAttachment } from "@/components/PostMediaAttachment";
 
 type Props = {
   item: ActivityFeedItem;
   currentUserId?: string;
   onPressReact?: () => void;
+  onToggleReaction?: (emoji: string) => void;
   /** Only shown when the reader may delete this post. */
   onPressMore?: () => void;
   onPressComment?: () => void;
@@ -32,9 +26,11 @@ export function PostUpdateCard({
   item,
   currentUserId,
   onPressReact,
+  onToggleReaction,
   onPressMore,
   onPressComment,
   onPressReactions,
+  commentCount = 0,
   picker,
   testID,
 }: Props) {
@@ -43,8 +39,6 @@ export function PostUpdateCard({
   const width = item.metadata.imageWidth ?? null;
   const height = item.metadata.imageHeight ?? null;
   const mediaType = item.metadata.mediaType ?? "image";
-  const reactionCount = totalReactionCount(item.reactions);
-  const mine = myReactionEmoji(item.reactions, currentUserId);
   const cardTestID = testID ?? `post-update-card-${item.id}`;
   const suppressOpenUntil = useRef(0);
   const openPost = () => {
@@ -69,44 +63,16 @@ export function PostUpdateCard({
       footer={
         <View style={styles.footer}>
           {picker}
-          <View style={styles.actions}>
-            {onPressReact ? (
-            <FeedActionButton
-              Icon={Heart}
-              glyph={mine}
-              activeColor={feedReaction(mine)?.color}
-              // The facepile carries the count, so the button stays an icon.
-              label=""
-              active={!!mine}
-              filled
-              onPress={onPressReact}
-              accessibilityLabel={
-                mine
-                  ? `Your reaction: ${feedReactionLabel(mine)}. Change or remove it.`
-                  : "React to this post"
-              }
-              testID={`${cardTestID}-react`}
-            />
-            ) : null}
-            {onPressComment ? (
-              <FeedActionButton
-                Icon={MessageCircle}
-                label=""
-                onPress={onPressComment}
-                accessibilityLabel="Comment on this post"
-                testID={`${cardTestID}-comment`}
-              />
-            ) : null}
-            {onPressReactions && reactionCount > 0 ? (
-              <View style={styles.summary}>
-                <ReactionFacepile
-                  reactions={item.reactions ?? {}}
-                  onPress={onPressReactions}
-                  testID={`${cardTestID}-reaction-facepile`}
-                />
-              </View>
-            ) : null}
-          </View>
+          <FeedEngagementRow
+            reactions={item.reactions ?? {}}
+            currentUserId={currentUserId}
+            onToggleReaction={onToggleReaction}
+            onOpenPicker={onPressReact}
+            onPressReactions={onPressReactions}
+            onPressComment={onPressComment}
+            commentCount={commentCount}
+            testID={`${cardTestID}-engage`}
+          />
         </View>
       }
     >
@@ -148,12 +114,5 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: 4,
     gap: 2,
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  summary: {
-    marginLeft: "auto",
   },
 });

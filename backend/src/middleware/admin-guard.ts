@@ -79,7 +79,7 @@ export function requireAbilityByMethod(view: StaffAbility, edit: StaffAbility) {
  * the route, since these routers have many small endpoints.
  */
 export function auditStaffChanges(
-  targetType: "article" | "category" | "seneca",
+  targetType: "article" | "category" | "seneca" | "home_insight",
   describe: (method: string, path: string) => { action: string; summary: string; targetId?: string | null },
 ) {
   return createMiddleware(async (c, next) => {

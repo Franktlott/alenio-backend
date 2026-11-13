@@ -162,8 +162,8 @@ export function AuthScreen({
   tone = "light",
 }: AuthScreenProps) {
   /**
-   * The page is only the column here: on wide screens the (auth) layout owns the
-   * row and the hero panel beside it, so this renders into the space it is given.
+   * Wide screens still centre a readable form column; there is no side hero
+   * panel anymore, so the page paints its own full-bleed backdrop.
    */
   const wide = useAuthWideLayout();
   const dark = tone === "dark";
@@ -223,7 +223,7 @@ export function AuthScreen({
         testID={testID}
       >
         <StatusBar style={dark ? "light" : "dark"} />
-        {dark ? <AuthDarkBackdrop /> : !wide ? <AuthBackdrop /> : null}
+        {dark ? <AuthDarkBackdrop /> : <AuthBackdrop />}
 
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -293,15 +293,9 @@ export function AuthHeading({
 }
 
 export function AuthCard({ children }: { children: ReactNode }) {
-  const wide = useAuthWideLayout();
   const dark = useAuthTone() === "dark";
-  /**
-   * Split layouts drop the card's border, shadow and gutters: the hero panel
-   * beside it already gives the page its structure, so an outline here only
-   * nests a box in a box and costs the fields their width.
-   */
   return (
-    <View style={wide ? styles.cardPlain : dark ? styles.cardDark : styles.card}>{children}</View>
+    <View style={dark ? styles.cardDark : styles.card}>{children}</View>
   );
 }
 
@@ -613,8 +607,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 30,
     elevation: 4,
-  },
-  cardPlain: {
-    backgroundColor: "transparent",
   },
 });

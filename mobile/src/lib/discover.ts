@@ -83,6 +83,10 @@ export function fetchDiscoverArticles() {
   return api.get<DiscoverArticleSummary[]>("/api/discover/articles?limit=50");
 }
 
+export function fetchDiscoverCategories() {
+  return api.get<DiscoverCategory[]>("/api/discover/categories");
+}
+
 export function fetchDiscoverArticle(slug: string) {
   return api.get<DiscoverArticleDetail>(
     `/api/discover/articles/${encodeURIComponent(slug)}`,

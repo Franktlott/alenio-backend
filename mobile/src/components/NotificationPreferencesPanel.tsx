@@ -421,18 +421,6 @@ export function NotificationPreferencesPanel() {
             })
           : null}
       </View>
-
-      <Text
-        style={{
-          fontSize: 11,
-          color: C.faint,
-          lineHeight: 15,
-          marginTop: 12,
-          paddingHorizontal: 2,
-        }}
-      >
-        Preferences sync across devices. System permissions are managed in device settings.
-      </Text>
     </View>
   );
 }

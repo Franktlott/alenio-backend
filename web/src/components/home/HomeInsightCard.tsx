@@ -1,19 +1,34 @@
+import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { homeInsightForDate } from "../../lib/home-insight-rotation";
+import {
+  homeInsightForDate,
+  mapApiHomeInsight,
+} from "../../lib/home-insight-rotation";
+import { fetchHomeInsightsPublic } from "../../lib/home-insights-api";
 import "./home-insight-card.css";
 
 /**
- * Weekly leadership prompt, same card the phone shows. Rotates every Monday.
- * Seneca prompts open a new Seneca chat; Recognition isn't on the web app yet.
+ * Leadership prompt on Home. Server picks the live card from admin schedule
+ * (automatic daily/weekly or a manual pin).
  */
 export function HomeInsightCard() {
   const navigate = useNavigate();
-  const insight = useMemo(() => homeInsightForDate(), []);
+  const { data: remote } = useQuery({
+    queryKey: ["home-insights"],
+    queryFn: fetchHomeInsightsPublic,
+    staleTime: 5 * 60_000,
+  });
+  const insight = useMemo(() => {
+    if (remote?.current) return mapApiHomeInsight(remote.current);
+    const deck = (remote?.cards ?? []).map(mapApiHomeInsight);
+    return homeInsightForDate(new Date(), deck);
+  }, [remote]);
   const destination = insight.destination;
-  const ready = destination.type === "seneca";
-  const hint = ready ? undefined : "Recognition is coming to the web app";
+  const ready = destination.type === "seneca" || destination.type === "discover";
+  const hint =
+    destination.type === "recognition" ? "Recognition is coming to the web app" : undefined;
 
   return (
     <section
@@ -37,11 +52,15 @@ export function HomeInsightCard() {
           aria-disabled={!ready}
           title={hint}
           onClick={(event) => {
-            if (destination.type !== "seneca") {
-              event.preventDefault();
+            if (destination.type === "seneca") {
+              navigate(`/seneca?q=${encodeURIComponent(destination.prompt)}`);
               return;
             }
-            navigate(`/seneca?q=${encodeURIComponent(destination.prompt)}`);
+            if (destination.type === "discover") {
+              navigate(`/discover/${encodeURIComponent(destination.slug)}`);
+              return;
+            }
+            event.preventDefault();
           }}
           data-testid="home-insight-action"
         >

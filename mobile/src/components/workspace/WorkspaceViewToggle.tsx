@@ -1,3 +1,4 @@
+import { View } from "react-native";
 import {
   CalendarDays,
   ListChecks,
@@ -5,7 +6,11 @@ import {
   Users,
 } from "lucide-react-native";
 import { SegmentedControl, type SegmentOption } from "@/components/ui";
-import { useStatusClusterInset } from "@/lib/adaptive-layout";
+import {
+  CONTENT_MAX_WIDTH,
+  useAdaptiveLayout,
+  useStatusClusterInset,
+} from "@/lib/adaptive-layout";
 import { WS } from "./workspace-ui";
 
 export type WorkspaceViewMode =
@@ -27,6 +32,7 @@ export function WorkspaceViewToggle({
   calendarBadge = 0,
   tasksBadge = 0,
 }: Props) {
+  const { columnWidth } = useAdaptiveLayout();
   const cluster = useStatusClusterInset();
   const options: SegmentOption<WorkspaceViewMode>[] = [
     { key: "updates", label: "Feed", Icon: Megaphone },
@@ -37,18 +43,24 @@ export function WorkspaceViewToggle({
   ];
 
   return (
-    <SegmentedControl
-      options={options}
-      value={mode}
-      onChange={onChange}
-      testID="workspace-view-toggle"
-      testIDPrefix="workspace-view"
+    <View
       style={{
+        alignSelf: "center",
+        width: "100%",
+        maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
         marginTop: 10,
         marginBottom: 6,
-        marginLeft: WS.pageGutter + cluster.left,
-        marginRight: WS.pageGutter + cluster.right,
+        paddingLeft: WS.pageGutter + cluster.left,
+        paddingRight: WS.pageGutter + cluster.right,
       }}
-    />
+    >
+      <SegmentedControl
+        options={options}
+        value={mode}
+        onChange={onChange}
+        testID="workspace-view-toggle"
+        testIDPrefix="workspace-view"
+      />
+    </View>
   );
 }

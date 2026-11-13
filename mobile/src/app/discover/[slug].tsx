@@ -193,7 +193,7 @@ export default function DiscoverArticleScreen() {
       <View style={styles.topRow}>
         <Pressable onPress={() => router.back()} style={styles.back} accessibilityRole="button" accessibilityLabel="Back">
           <ChevronLeft size={22} color="#111A2B" />
-          <Text style={styles.backText}>Discover</Text>
+          <Text style={styles.backText}>Explore</Text>
         </Pressable>
         {article ? (
           <Pressable

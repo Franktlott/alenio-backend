@@ -11,7 +11,7 @@ import {
   Shield,
 } from "lucide-react-native";
 import { router } from "expo-router";
-import { webBillingUrlForTeam } from "@/lib/plan-access-copy";
+import { webBillingUrlForTeam, workspacePlanHref } from "@/lib/plan-access-copy";
 
 type Props = {
   isOwner?: boolean;
@@ -44,7 +44,7 @@ export function DevelopmentToolsLockedCard({
 
   const openOwnerManage = async () => {
     if (Platform.OS === "android") {
-      router.push("/account-hub");
+      router.push(workspacePlanHref(teamId));
       return;
     }
     const url = webBillingUrlForTeam(teamId ?? undefined, { subscribe: true });
@@ -57,7 +57,7 @@ export function DevelopmentToolsLockedCard({
     } catch {
       // fall through
     }
-    router.push("/account-hub");
+    router.push(workspacePlanHref(teamId));
   };
 
   return (
@@ -190,7 +190,7 @@ export function DevelopmentToolsLockedCard({
           </Pressable>
         ) : (
           <Pressable
-            onPress={() => router.push("/account-hub")}
+            onPress={() => router.push(workspacePlanHref(teamId))}
             style={{
               flexDirection: "row",
               alignItems: "center",

@@ -367,6 +367,20 @@ async function collectScheduleItems(
             status: true,
             dueDate: true,
             team: { select: { id: true, name: true } },
+            assignments: {
+              select: {
+                id: true,
+                userId: true,
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    image: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -405,6 +419,11 @@ async function collectScheduleItems(
       priority: task.priority,
       done: task.status === "done",
       overdue: task.status !== "done" && task.dueDate! < start,
+      assignees: task.assignments.map((assignment) => ({
+        id: assignment.id,
+        userId: assignment.userId,
+        user: assignment.user,
+      })),
     }));
 
   const eventItems: HomeTodayItem[] = events.flatMap((event) => {

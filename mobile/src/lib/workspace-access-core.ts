@@ -19,6 +19,8 @@ export type WorkspaceSubscription = {
   cancelAtPeriodEnd?: boolean;
   billingInterval?: string | null;
   billingProvider?: string | null;
+  hasStripeCustomer?: boolean;
+  hasStripeSubscription?: boolean;
 };
 
 export type WorkspaceAccess = WorkspaceSubscription & {

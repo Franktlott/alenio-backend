@@ -40,7 +40,21 @@ export function hasWorkspaceTaskAccess(
 
 export const PLAN_SCREEN_TITLE = "Workplace Access";
 
-export const ACCOUNT_HUB_TITLE = "Plan & Access";
+/** Multi-workspace hub title (deep links / legacy). Prefer workspace settings for day-to-day. */
+export const ACCOUNT_HUB_TITLE = "Plan & billing";
+
+/** Primary label on Workspace Settings for this workspace’s plan. */
+export const WORKSPACE_PLAN_TITLE = "Plan & billing";
+
+/** Open the per-workspace plan screen. */
+export function workspacePlanHref(teamId?: string | null): {
+  pathname: "/choose-plan";
+  params?: { teamId: string };
+} {
+  const id = typeof teamId === "string" ? teamId.trim() : "";
+  if (id) return { pathname: "/choose-plan", params: { teamId: id } };
+  return { pathname: "/choose-plan" };
+}
 
 export function workplaceAccessSubtitle(isOwner: boolean): string {
   if (isOwner) {

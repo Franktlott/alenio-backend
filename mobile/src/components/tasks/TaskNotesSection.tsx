@@ -19,6 +19,7 @@ import {
 } from "@/lib/task-notes-api";
 import type { TaskNote } from "@/lib/types";
 import { UserAvatar } from "@/components/UserAvatar";
+import { elevation, palette, tints } from "@/theme";
 
 type Props = {
   teamId: string;
@@ -120,36 +121,59 @@ export function TaskNotesSection({
   const notes = notesQuery.data ?? [];
 
   return (
-    <View className="mb-4" testID="task-notes-section">
-      <View className="mb-2 flex-row items-center justify-between">
-        <View className="flex-row items-center" style={{ gap: 6 }}>
-          <MessageSquareText size={15} color="#64748B" />
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+    <View style={{ marginBottom: 14 }} testID="task-notes-section">
+      <View
+        style={{
+          marginBottom: 8,
+          paddingHorizontal: 2,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: "800",
+              color: palette.inkSecondary,
+              letterSpacing: 0.7,
+              textTransform: "uppercase",
+            }}
+          >
             {isJoint ? "Team notes" : "Notes"}
+            {notes.length > 0 ? ` · ${notes.length}` : ""}
           </Text>
-          {notes.length > 0 ? (
-            <View className="min-w-5 items-center rounded-full bg-indigo-50 px-1.5 py-0.5">
-              <Text className="text-[10px] font-bold text-indigo-600">{notes.length}</Text>
-            </View>
-          ) : null}
         </View>
         {canWrite ? (
           <Pressable
             onPress={openAdd}
-            className="flex-row items-center px-1 py-1.5"
-            style={{ gap: 4 }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4 }}
             accessibilityRole="button"
             testID="add-task-note-button"
+            hitSlop={8}
           >
-            <Plus size={13} color="#4361EE" strokeWidth={2.5} />
-            <Text className="text-xs font-semibold text-indigo-600">Add note</Text>
+            <Plus size={13} color={palette.violet} strokeWidth={2.5} />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: palette.violet }}>
+              Add note
+            </Text>
           </Pressable>
         ) : null}
       </View>
 
       {notesQuery.isLoading ? (
-        <View className="items-center rounded-xl border border-slate-200 bg-slate-50 py-5" testID="task-notes-loading">
-          <ActivityIndicator size="small" color="#4361EE" />
+        <View
+          style={[
+            elevation.card,
+            {
+              borderRadius: 16,
+              paddingVertical: 20,
+              alignItems: "center",
+            },
+          ]}
+          testID="task-notes-loading"
+        >
+          <ActivityIndicator size="small" color={palette.violet} />
         </View>
       ) : notesQuery.isError ? (
         <Pressable
@@ -164,35 +188,42 @@ export function TaskNotesSection({
         </Pressable>
       ) : notes.length === 0 ? (
         <View
-          className="rounded-xl px-3 py-3"
-          style={{
-            minHeight: 144,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#FFFFFF",
-            borderWidth: 1,
-            borderStyle: "dashed",
-            borderColor: "#DFE4EF",
-          }}
+          style={[
+            elevation.card,
+            {
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 18,
+              alignItems: "center",
+            },
+          ]}
           testID="task-notes-empty"
         >
           <View
             style={{
-              width: 44,
-              height: 44,
-              marginBottom: 10,
-              borderRadius: 22,
+              width: 36,
+              height: 36,
+              marginBottom: 8,
+              borderRadius: 11,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "#F0EDFF",
+              backgroundColor: tints.lavender.bg,
             }}
           >
-            <MessageSquareText size={21} color="#6958E8" strokeWidth={2} />
+            <MessageSquareText size={17} color={tints.lavender.fg} strokeWidth={2} />
           </View>
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E293B" }}>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: palette.ink }}>
             No notes yet
           </Text>
-          <Text style={{ marginTop: 5, fontSize: 11, color: "#94A3B8", textAlign: "center" }}>
+          <Text
+            style={{
+              marginTop: 4,
+              fontSize: 12,
+              color: palette.inkMuted,
+              textAlign: "center",
+              lineHeight: 17,
+            }}
+          >
             {canWrite
               ? isReminder
                 ? "Add context or anything you want to remember."

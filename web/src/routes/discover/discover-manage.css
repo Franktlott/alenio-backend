@@ -179,19 +179,38 @@
 
 /* Stats */
 .dm-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
 }
 
 .dm-stat {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 14px;
   border: 1px solid var(--dm-line);
   border-radius: 16px;
   background: #faf9ff;
+}
+
+button.dm-stat--action {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+button.dm-stat--action:hover,
+button.dm-stat--action:focus-visible {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  box-shadow: 0 0 0 3px rgba(109, 85, 231, 0.12);
+  outline: none;
 }
 
 .dm-stat-icon {
@@ -208,8 +227,8 @@
 
 .dm-stat strong {
   display: block;
-  font-size: 20px;
-  line-height: 24px;
+  font-size: 18px;
+  line-height: 22px;
   font-weight: 800;
   letter-spacing: -0.3px;
 }
@@ -217,9 +236,46 @@
 .dm-stat span:last-child {
   display: block;
   margin-top: 1px;
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 11px;
+  line-height: 15px;
   color: var(--dm-muted);
+  white-space: nowrap;
+}
+
+.dm-missing-features {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(360px, 50vh);
+  overflow: auto;
+}
+
+.dm-missing-feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--dm-line);
+  border-radius: 12px;
+  background: #faf9ff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dm-missing-feature:hover,
+.dm-missing-feature:focus-visible {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  outline: none;
 }
 
 /* Articles card: header and footer stay put, the table scrolls inside. */
@@ -888,7 +944,11 @@
 
 @container (max-width: 720px) {
   .dm-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex-wrap: wrap;
+  }
+
+  .dm-stat {
+    flex: 1 1 calc(50% - 6px);
   }
 
   .dm-hero-copy,

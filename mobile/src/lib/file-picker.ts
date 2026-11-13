@@ -22,7 +22,9 @@ export type PickedFile = {
   sizeBytes?: number;
 };
 
-export async function pickImage(): Promise<PickedFile | null> {
+export async function pickImage(options?: {
+  aspect?: [number, number];
+}): Promise<PickedFile | null> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
     throw new Error("Photo library access is required. Enable it in your device Settings.");
@@ -32,7 +34,7 @@ export async function pickImage(): Promise<PickedFile | null> {
     mediaTypes: ['images'] as ImagePicker.MediaType[],
     quality: 0.8,
     allowsEditing: true,
-    aspect: [1, 1],
+    aspect: options?.aspect ?? [1, 1],
   });
 
   if (result.canceled) return null;

@@ -19,15 +19,14 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft,
   Trash2,
   RefreshCw,
-  UserPlus,
   X,
   Check,
   Plus,
@@ -41,6 +40,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Lock,
+  Sparkles,
 } from "lucide-react-native";
 import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { api } from "@/lib/api/api";
@@ -82,6 +82,8 @@ import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { TaskNotesSection } from "@/components/tasks/TaskNotesSection";
+import { AssigneeStack } from "@/components/workspace/AssigneeStack";
+import { AssigneesSheet } from "@/components/workspace/AssigneesSheet";
 import { UserAvatar } from "@/components/UserAvatar";
 import { CONTENT_MAX_WIDTH, fitsFormSheet } from "@/lib/adaptive-layout";
 import { HEADER_BRAND_COLOR } from "@/lib/header-brand";
@@ -93,6 +95,14 @@ import {
   completedByOtherMember,
 } from "@/lib/subtask-completion";
 import { StreakCelebrationModal } from "@/components/StreakCelebrationModal";
+import {
+  Badge,
+  Button,
+  PriorityBadge,
+  StatusBadge,
+  type StatusKind,
+} from "@/components/ui";
+import { elevation, palette, tints } from "@/theme";
 
 function sameCalendarDay(a: Date | null, b: Date | null): boolean {
   if (!a && !b) return true;
@@ -204,8 +214,10 @@ export function TaskDetail({
     "delete" | "edit" | null
   >(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showAssigneesSheet, setShowAssigneesSheet] = useState(false);
   const [showRecallConfirm, setShowRecallConfirm] = useState(false);
   const [showDoneConfirm, setShowDoneConfirm] = useState(false);
+  const [doneConfirmReady, setDoneConfirmReady] = useState(false);
   const [showCompletionSuccess, setShowCompletionSuccess] = useState(false);
   const [milestoneModal, setMilestoneModal] = useState<number | null>(null);
   const [personalBestModal, setPersonalBestModal] = useState<number | null>(
@@ -240,24 +252,44 @@ export function TaskDetail({
   const feedbackCompletionActiveRef = useRef(false);
   feedbackCompletionActiveRef.current = feedbackCompletionActive;
   const promptCompleteTaskRef = useRef<() => void>(() => {});
-  const completionScale = useRef(new Animated.Value(0.65)).current;
+  const completionScale = useRef(new Animated.Value(0.86)).current;
+  const completionRing = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!showDoneConfirm) {
+      setDoneConfirmReady(false);
+      return;
+    }
+    // Avoid the Mark complete press releasing onto Complete.
+    const readyTimer = setTimeout(() => setDoneConfirmReady(true), 420);
+    return () => clearTimeout(readyTimer);
+  }, [showDoneConfirm]);
 
   useEffect(() => {
     if (!showCompletionSuccess) return;
-    completionScale.setValue(0.65);
-    Animated.spring(completionScale, {
-      toValue: 1,
-      damping: 11,
-      stiffness: 180,
-      mass: 0.7,
-      useNativeDriver: true,
-    }).start();
+    completionScale.setValue(0.86);
+    completionRing.setValue(0);
+    Animated.parallel([
+      Animated.spring(completionScale, {
+        toValue: 1,
+        damping: 12,
+        stiffness: 190,
+        mass: 0.75,
+        useNativeDriver: true,
+      }),
+      Animated.timing(completionRing, {
+        toValue: 1,
+        duration: 780,
+        useNativeDriver: true,
+      }),
+    ]).start();
     const closeTimer = setTimeout(() => {
       setShowCompletionSuccess(false);
       if (!milestoneModal && !personalBestModal) close();
-    }, 950);
+    }, 1600);
     return () => clearTimeout(closeTimer);
   }, [
+    completionRing,
     completionScale,
     milestoneModal,
     personalBestModal,
@@ -534,6 +566,13 @@ export function TaskDetail({
     !isCompleted &&
     displayedDueDate.getTime() < Date.now(),
   );
+  const statusKind: StatusKind = isCompleted
+    ? "done"
+    : displayedDueOverdue
+      ? "overdue"
+      : displayedDueToday
+        ? "soon"
+        : "open";
 
   const { data: seriesTasksData, isPending: seriesTasksPending } = useQuery({
     queryKey: ["series-tasks", teamId, seriesId],
@@ -620,6 +659,32 @@ export function TaskDetail({
     setShowTimePicker(false);
     setIsEditMode(true);
   };
+
+  const cancelEdit = () => {
+    setIsEditMode(false);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+    setRecurringScopeMode(null);
+  };
+
+  const requestSaveEdit = () => {
+    if (taskIsRecurring && seriesFieldsChanged()) {
+      setRecurringScopeMode("edit");
+      return;
+    }
+    saveTaskEdit("task");
+  };
+
+  const requestDelete = () => {
+    if (taskIsRecurring) {
+      setRecurringScopeMode("delete");
+      return;
+    }
+    setShowDeleteConfirm(true);
+  };
+
+  const canDeleteTask =
+    (isCreator || isOwnerOrLeader) && !isReminder;
 
   const dueDraftChanged = () => {
     const originalTimed = taskDueHasClock(originalDueDate, userTimeZone);
@@ -898,7 +963,7 @@ export function TaskDetail({
     <SafeAreaView
       edges={embedded ? [] : ["top"]}
       testID="task-detail-screen"
-      style={{ flex: 1, backgroundColor: "#FFFFFF" }}
+      style={{ flex: 1, backgroundColor: palette.page }}
       onLayout={(event) => setPaneWidth(event.nativeEvent.layout.width)}
     >
       {/* Header */}
@@ -917,38 +982,57 @@ export function TaskDetail({
           flexDirection: "row",
           alignItems: "center",
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: "#E6E9F0",
-          backgroundColor: "#FFFFFF",
+          borderBottomColor: palette.cardBorder,
+          backgroundColor: palette.page,
         }}
       >
-        <TouchableOpacity
-          onPress={() => {
-            setIsEditMode(false);
-            close();
-          }}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#F3F5F8",
-          }}
-          testID="back-button"
-          accessibilityLabel={embedded ? "Close task" : "Back"}
-        >
-          {/* A pane is dismissed, not navigated back from. */}
-          {embedded ? (
-            <X size={19} color="#111827" strokeWidth={2.4} />
-          ) : (
-            <ArrowLeft size={20} color="#111827" strokeWidth={2.2} />
-          )}
-        </TouchableOpacity>
+        {isEditMode ? (
+          <TouchableOpacity
+            onPress={cancelEdit}
+            hitSlop={8}
+            style={{
+              minWidth: 64,
+              height: 36,
+              justifyContent: "center",
+            }}
+            testID="cancel-edit-button"
+            accessibilityLabel="Cancel editing"
+          >
+            <Text
+              style={{ color: "#64748B", fontSize: 16, fontWeight: "600" }}
+            >
+              Cancel
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={close}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#FFFFFF",
+              borderWidth: 1,
+              borderColor: palette.cardBorder,
+            }}
+            testID="back-button"
+            accessibilityLabel={embedded ? "Close task" : "Back"}
+          >
+            {/* A pane is dismissed, not navigated back from. */}
+            {embedded ? (
+              <X size={19} color={palette.ink} strokeWidth={2.4} />
+            ) : (
+              <ArrowLeft size={20} color={palette.ink} strokeWidth={2.2} />
+            )}
+          </TouchableOpacity>
+        )}
         <Text
           style={{
             flex: 1,
             marginHorizontal: 12,
-            color: "#111827",
+            color: palette.ink,
             fontSize: 17,
             fontWeight: "700",
             letterSpacing: -0.2,
@@ -956,60 +1040,46 @@ export function TaskDetail({
           }}
           numberOfLines={1}
         >
-          {isReminder ? "Reminder details" : "Task details"}
+          {isEditMode
+            ? "Edit task"
+            : showFocusedFeedbackTask
+              ? "Task details"
+              : task.title}
         </Text>
         <View
           style={{
-            minWidth: 36,
+            minWidth: 64,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "flex-end",
-            gap: 8,
           }}
         >
           {canEdit && isEditMode ? (
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+            <TouchableOpacity
+              onPress={requestSaveEdit}
+              disabled={updateMutation.isPending}
+              hitSlop={8}
+              style={{
+                minHeight: 36,
+                justifyContent: "center",
+                alignItems: "flex-end",
+              }}
+              testID="save-edit-button"
             >
-              <TouchableOpacity
-                onPress={() => {
-                  setIsEditMode(false);
-                  setShowDatePicker(false);
-                }}
-                testID="cancel-edit-button"
-              >
+              {updateMutation.isPending ? (
+                <ActivityIndicator size="small" color={palette.violet} />
+              ) : (
                 <Text
-                  style={{ color: "#64748B", fontSize: 14, fontWeight: "600" }}
+                  style={{
+                    color: palette.violet,
+                    fontSize: 16,
+                    fontWeight: "700",
+                  }}
                 >
-                  Cancel
+                  Save
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  if (taskIsRecurring && seriesFieldsChanged()) {
-                    setRecurringScopeMode("edit");
-                    return;
-                  }
-                  saveTaskEdit("task");
-                }}
-                disabled={updateMutation.isPending}
-                testID="save-edit-button"
-              >
-                {updateMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#3657EA" />
-                ) : (
-                  <Text
-                    style={{
-                      color: "#3657EA",
-                      fontSize: 14,
-                      fontWeight: "700",
-                    }}
-                  >
-                    Save
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
+              )}
+            </TouchableOpacity>
           ) : null}
           {canEdit && !isEditMode && !isFeedbackTask ? (
             <TouchableOpacity
@@ -1026,33 +1096,20 @@ export function TaskDetail({
                 borderRadius: 18,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "#F3F5F8",
+                backgroundColor: tints.lavender.bg,
               }}
               testID={
                 isReminder ? "reminder-options-button" : "enter-edit-button"
               }
             >
               {isReminder ? (
-                <MoreHorizontal size={20} color="#111827" strokeWidth={2.1} />
+                <MoreHorizontal
+                  size={20}
+                  color={tints.lavender.fg}
+                  strokeWidth={2.1}
+                />
               ) : (
-                <Pencil size={17} color="#111827" strokeWidth={2.1} />
-              )}
-            </TouchableOpacity>
-          ) : null}
-          {(isCreator || isOwnerOrLeader) && isEditMode && !isReminder ? (
-            <TouchableOpacity
-              onPress={() =>
-                taskIsRecurring
-                  ? setRecurringScopeMode("delete")
-                  : setShowDeleteConfirm(true)
-              }
-              disabled={deleteMutation.isPending}
-              testID="delete-button"
-            >
-              {deleteMutation.isPending ? (
-                <ActivityIndicator size="small" color="#EF4444" />
-              ) : (
-                <Trash2 size={19} color="#EF4444" />
+                <Pencil size={17} color={tints.lavender.fg} strokeWidth={2.1} />
               )}
             </TouchableOpacity>
           ) : null}
@@ -1063,11 +1120,11 @@ export function TaskDetail({
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
-        style={{ flex: 1, backgroundColor: "#FFFFFF" }}
+        style={{ flex: 1, backgroundColor: palette.page }}
         contentContainerStyle={[
           {
             paddingHorizontal: COLUMN_PADDING + columnGutter,
-            backgroundColor: "#FFFFFF",
+            backgroundColor: palette.page,
             flexGrow: 1,
           },
           showFocusedFeedbackTask
@@ -1080,11 +1137,11 @@ export function TaskDetail({
         {!showFocusedFeedbackTask && isReminder ? (
           <Text
             style={{
-              marginTop: 22,
+              marginTop: 18,
               marginBottom: 7,
               fontSize: 10,
               fontWeight: "800",
-              color: "#6958E8",
+              color: palette.violet,
               letterSpacing: 0.55,
             }}
           >
@@ -1092,107 +1149,56 @@ export function TaskDetail({
           </Text>
         ) : null}
 
-        {/* Title — hidden for focused check-in follow-up (title is in the header) */}
-        {!showFocusedFeedbackTask ? (
-          <View
-            style={{
-              marginTop: isReminder ? 0 : 18,
-              marginBottom: 6,
-            }}
-          >
-            {isEditMode ? (
-              <TextInput
-                value={draftTitle}
-                onChangeText={setDraftTitle}
-                style={{
-                  fontSize: 26,
-                  fontWeight: "700",
-                  color: "#0F172A",
-                  borderBottomWidth: 1,
-                  borderBottomColor: "#4361EE",
-                  paddingBottom: 4,
-                }}
-                placeholder={isReminder ? "Reminder title" : "Task title"}
-                placeholderTextColor="#94A3B8"
-                testID="edit-title-input"
-              />
-            ) : (
-              <Text
-                style={{
-                  fontSize: 26,
-                  lineHeight: 32,
-                  fontWeight: "700",
-                  color: "#111827",
-                  letterSpacing: -0.45,
-                }}
-              >
-                {task.title}
-              </Text>
-            )}
+        {/* Title — edit mode; read mode title lives in the header */}
+        {!showFocusedFeedbackTask && isEditMode ? (
+          <View style={{ marginTop: isReminder ? 0 : 16, marginBottom: 10 }}>
+            <TextInput
+              value={draftTitle}
+              onChangeText={setDraftTitle}
+              style={{
+                fontSize: 24,
+                fontWeight: "700",
+                color: palette.ink,
+                borderBottomWidth: 1,
+                borderBottomColor: palette.violet,
+                paddingBottom: 4,
+              }}
+              placeholder="Task title"
+              placeholderTextColor={palette.inkMuted}
+              testID="edit-title-input"
+            />
           </View>
         ) : null}
 
         {!showFocusedFeedbackTask && !isReminder && !isEditMode ? (
           <View
-            className="flex-row items-center flex-wrap"
-            style={{ gap: 8, marginBottom: 16 }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 8,
+              marginTop: 14,
+              marginBottom: 14,
+            }}
           >
-            <View className="flex-row items-center" style={{ gap: 6 }}>
-              <View
-                className="w-2 h-2 rounded-full"
-                style={{
-                  backgroundColor: PRIORITY_COLORS[task.priority] ?? "#94A3B8",
-                }}
-              />
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "500",
-                  color: "#64748B",
-                  textTransform: "capitalize",
-                }}
-              >
-                {task.priority} priority
-              </Text>
-            </View>
+            <PriorityBadge
+              priority={task.priority}
+              label={
+                task.priority.charAt(0).toUpperCase() + task.priority.slice(1)
+              }
+            />
             {task.isJoint ? (
-              <>
-                <Text style={{ fontSize: 12, color: "#CBD5E1" }}>|</Text>
-                <View
-                  className="flex-row items-center"
-                  style={{ gap: 5 }}
-                  testID="joint-task-badge"
-                >
-                  <Text style={{ fontSize: 13 }}>🤝</Text>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "500",
-                      color: "#64748B",
-                    }}
-                  >
-                    Joint task
-                  </Text>
-                </View>
-              </>
+              <View testID="joint-task-badge">
+                <Badge tone="info" size="sm">
+                  Joint
+                </Badge>
+              </View>
             ) : null}
+            <StatusBadge status={statusKind} />
             {task.recurrenceRule ? (
-              <>
-                <Text style={{ fontSize: 12, color: "#CBD5E1" }}>|</Text>
-                <View className="flex-row items-center" style={{ gap: 4 }}>
-                  <RefreshCw size={12} color="#64748B" />
-                  <Text
-                    className="capitalize"
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "500",
-                      color: "#64748B",
-                    }}
-                  >
-                    {task.recurrenceRule.type}
-                  </Text>
-                </View>
-              </>
+              <Badge tone="neutral" size="sm" icon={<RefreshCw size={10} color={palette.inkMuted} />}>
+                {task.recurrenceRule.type}
+              </Badge>
             ) : null}
           </View>
         ) : null}
@@ -1297,7 +1303,7 @@ export function TaskDetail({
                       letterSpacing: 0.35,
                     }}
                   >
-                    REMINDER
+                    ONLY YOU
                   </Text>
                 </View>
                 {task.recurrenceRule ? (
@@ -1392,188 +1398,185 @@ export function TaskDetail({
 
         {!showFocusedFeedbackTask ? (
           <View
-            style={{
-              marginBottom: 18,
-              borderRadius: 18,
-              backgroundColor: "#FFFFFF",
-              shadowColor: "#64748B",
-              shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.045,
-              shadowRadius: 10,
-              elevation: 1,
-            }}
+            style={[
+              elevation.card,
+              {
+                marginBottom: 14,
+                borderRadius: 18,
+                overflow: "hidden",
+                paddingVertical: 4,
+              },
+            ]}
             testID="task-timeline-card"
           >
-            <LinearGradient
-              colors={["#4361EE", "#5B4FE9"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={{ height: 0 }}
+            <TouchableOpacity
+              disabled={!isEditMode}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={isEditMode ? 0.65 : 1}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                gap: 10,
+              }}
+              testID="edit-due-date-button"
+            >
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 11,
+                  backgroundColor: displayedDueOverdue
+                    ? "#FEF2F2"
+                    : displayedDueToday
+                      ? tints.peach.bg
+                      : tints.lavender.bg,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Clock3
+                  size={17}
+                  color={
+                    displayedDueOverdue
+                      ? "#EF4444"
+                      : displayedDueToday
+                        ? tints.peach.fg
+                        : tints.lavender.fg
+                  }
+                  strokeWidth={2.2}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "800",
+                    color: palette.inkMuted,
+                    letterSpacing: 0.6,
+                  }}
+                >
+                  DUE
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 2,
+                    fontSize: 14,
+                    fontWeight: "700",
+                    color: displayedDueOverdue
+                      ? "#DC2626"
+                      : displayedDueToday
+                        ? tints.peach.fg
+                        : displayedDueDate
+                          ? palette.ink
+                          : palette.inkMuted,
+                  }}
+                  numberOfLines={1}
+                >
+                  {displayedDueOverdue
+                    ? "Overdue"
+                    : displayedDueToday
+                      ? "Today"
+                      : displayedDueLabel}
+                </Text>
+                {displayedDueOverdue && !displayedDueToday ? (
+                  <Text
+                    style={{ marginTop: 2, fontSize: 11, color: "#DC2626" }}
+                  >
+                    {displayedDueClock
+                      ? `${displayedDueLabel} · ${displayedDueClock}`
+                      : displayedDueLabel}
+                  </Text>
+                ) : displayedDueClock ? (
+                  <Text
+                    style={{
+                      marginTop: 2,
+                      fontSize: 11,
+                      color: displayedDueOverdue
+                        ? "#DC2626"
+                        : palette.inkMuted,
+                    }}
+                  >
+                    {displayedDueClock}
+                  </Text>
+                ) : isReminder ? (
+                  <Text
+                    style={{
+                      marginTop: 2,
+                      fontSize: 11,
+                      color: palette.inkMuted,
+                    }}
+                  >
+                    Anytime
+                  </Text>
+                ) : null}
+              </View>
+              {isEditMode ? (
+                <ChevronRight size={15} color={palette.lilac} />
+              ) : null}
+            </TouchableOpacity>
+
+            <View
+              style={{
+                height: StyleSheet.hairlineWidth,
+                backgroundColor: palette.rowDivider,
+                marginHorizontal: 14,
+              }}
             />
+
             <View
               style={{
                 flexDirection: "row",
-                alignItems: "stretch",
-                paddingVertical: 14,
+                alignItems: "center",
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                gap: 10,
               }}
             >
               <View
                 style={{
-                  flex: 1,
-                  flexDirection: "row",
+                  width: 34,
+                  height: 34,
+                  borderRadius: 11,
+                  backgroundColor: tints.lavender.bg,
                   alignItems: "center",
-                  paddingHorizontal: 14,
-                  gap: 10,
+                  justifyContent: "center",
                 }}
               >
-                <View
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 11,
-                    backgroundColor: "#EEF2FF",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <CalendarDays size={17} color="#4F46E5" strokeWidth={2.2} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      fontWeight: "600",
-                      color: "#94A3B8",
-                      letterSpacing: 0,
-                    }}
-                  >
-                    Created
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 3,
-                      fontSize: 13,
-                      fontWeight: "700",
-                      color: "#0F172A",
-                    }}
-                    numberOfLines={1}
-                  >
-                    {new Date(task.createdAt).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </Text>
-                </View>
+                <CalendarDays
+                  size={17}
+                  color={tints.lavender.fg}
+                  strokeWidth={2.2}
+                />
               </View>
-
-              <View
-                style={{
-                  width: 1,
-                  marginVertical: 2,
-                  backgroundColor: "#EEF2F7",
-                }}
-              />
-
-              <TouchableOpacity
-                disabled={!isEditMode}
-                onPress={() => setShowDatePicker(true)}
-                activeOpacity={isEditMode ? 0.65 : 1}
-                style={{
-                  flex: 1,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 14,
-                  gap: 10,
-                }}
-                testID="edit-due-date-button"
-              >
-                <View
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
                   style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 11,
-                    backgroundColor: displayedDueOverdue
-                      ? "#FEF2F2"
-                      : displayedDueToday
-                        ? "#FFF7ED"
-                        : "#F5F3FF",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    fontSize: 10,
+                    fontWeight: "800",
+                    color: palette.inkMuted,
+                    letterSpacing: 0.6,
                   }}
                 >
-                  <Clock3
-                    size={17}
-                    color={
-                      displayedDueOverdue
-                        ? "#EF4444"
-                        : displayedDueToday
-                          ? "#EA580C"
-                          : "#7C3AED"
-                    }
-                    strokeWidth={2.2}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      fontWeight: "600",
-                      color: "#94A3B8",
-                      letterSpacing: 0,
-                    }}
-                  >
-                    Due
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 3,
-                      fontSize: 13,
-                      fontWeight: "700",
-                      color: displayedDueOverdue
-                        ? "#DC2626"
-                        : displayedDueToday
-                          ? "#EA580C"
-                          : displayedDueDate
-                            ? "#0F172A"
-                            : "#94A3B8",
-                    }}
-                    numberOfLines={1}
-                  >
-                    {displayedDueOverdue
-                      ? "Overdue"
-                      : displayedDueToday
-                        ? "Today"
-                        : displayedDueLabel}
-                  </Text>
-                  {displayedDueOverdue && !displayedDueToday ? (
-                    <Text
-                      style={{ marginTop: 2, fontSize: 10, color: "#DC2626" }}
-                    >
-                      {displayedDueClock
-                        ? `${displayedDueLabel} · ${displayedDueClock}`
-                        : displayedDueLabel}
-                    </Text>
-                  ) : displayedDueClock ? (
-                    <Text
-                      style={{
-                        marginTop: 2,
-                        fontSize: 10,
-                        color: displayedDueOverdue ? "#DC2626" : "#94A3B8",
-                      }}
-                    >
-                      {displayedDueClock}
-                    </Text>
-                  ) : isReminder ? (
-                    <Text
-                      style={{ marginTop: 2, fontSize: 10, color: "#94A3B8" }}
-                    >
-                      Anytime
-                    </Text>
-                  ) : null}
-                </View>
-                {isEditMode ? <ChevronRight size={15} color="#A5B4FC" /> : null}
-              </TouchableOpacity>
+                  CREATED
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 2,
+                    fontSize: 14,
+                    fontWeight: "700",
+                    color: palette.ink,
+                  }}
+                  numberOfLines={1}
+                >
+                  {new Date(task.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </Text>
+              </View>
             </View>
 
             {isEditMode ? (
@@ -1585,7 +1588,7 @@ export function TaskDetail({
                   paddingHorizontal: 14,
                   paddingVertical: 10,
                   borderTopWidth: StyleSheet.hairlineWidth,
-                  borderTopColor: "#E2E8F0",
+                  borderTopColor: palette.rowDivider,
                 }}
               >
                 <TouchableOpacity
@@ -1644,10 +1647,8 @@ export function TaskDetail({
                   paddingHorizontal: 14,
                   paddingVertical: 9,
                   borderTopWidth: StyleSheet.hairlineWidth,
-                  borderTopColor: "#E2E8F0",
-                  backgroundColor: "#F0FDF4",
-                  borderBottomLeftRadius: 18,
-                  borderBottomRightRadius: 18,
+                  borderTopColor: palette.rowDivider,
+                  backgroundColor: tints.mint.bg,
                 }}
               >
                 <CheckCircle2 size={14} color="#059669" strokeWidth={2.4} />
@@ -2162,7 +2163,7 @@ export function TaskDetail({
                   fontWeight: "700",
                 }}
               >
-                {isReminder ? "Reminder completed" : "Task completed"}
+                Task completed
               </Text>
               <Text
                 style={{
@@ -2221,13 +2222,23 @@ export function TaskDetail({
               ).length;
               const totalCount = subtasks.length;
               return (
-                <View className="mb-4">
-                  <View className="flex-row items-center justify-between mb-2">
+                <View style={{ marginBottom: 14 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                      paddingHorizontal: 2,
+                    }}
+                  >
                     <Text
                       style={{
-                        fontSize: 13,
-                        fontWeight: "700",
-                        color: "#334155",
+                        fontSize: 11,
+                        fontWeight: "800",
+                        color: palette.inkSecondary,
+                        letterSpacing: 0.7,
+                        textTransform: "uppercase",
                       }}
                     >
                       Subtasks
@@ -2236,8 +2247,14 @@ export function TaskDetail({
                         : ""}
                     </Text>
                   </View>
+                  <View
+                    style={[
+                      elevation.card,
+                      { borderRadius: 16, paddingHorizontal: 8, paddingVertical: 4 },
+                    ]}
+                  >
                   {subtasks.length > 0 && (
-                    <View className="mb-2" style={{ gap: 2 }}>
+                    <View style={{ gap: 2 }}>
                       {subtasks.map((subtask) => {
                         const done = isSubtaskSharedComplete(subtask);
                         const completions = (subtask.completions ?? []).slice(
@@ -2327,9 +2344,10 @@ export function TaskDetail({
                   {subtasks.length === 0 ? (
                     <Text
                       style={{
-                        marginBottom: isEditable ? 8 : 0,
-                        fontSize: 12,
-                        color: "#94A3B8",
+                        paddingVertical: 12,
+                        paddingHorizontal: 8,
+                        fontSize: 13,
+                        color: palette.inkMuted,
                       }}
                     >
                       No subtasks yet
@@ -2337,15 +2355,28 @@ export function TaskDetail({
                   ) : null}
                   {isEditable ? (
                     <View
-                      className="flex-row items-center border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2"
-                      style={{ gap: 8 }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        marginTop: 4,
+                        marginBottom: 6,
+                        paddingHorizontal: 8,
+                        paddingVertical: 8,
+                        borderRadius: 12,
+                        backgroundColor: palette.page,
+                      }}
                     >
                       <TextInput
                         value={newSubtaskTitle}
                         onChangeText={setNewSubtaskTitle}
                         placeholder="Add a subtask..."
-                        placeholderTextColor="#94A3B8"
-                        className="flex-1 text-sm text-slate-900 dark:text-white"
+                        placeholderTextColor={palette.inkMuted}
+                        style={{
+                          flex: 1,
+                          fontSize: 14,
+                          color: palette.ink,
+                        }}
                         onSubmitEditing={() => {
                           if (newSubtaskTitle.trim())
                             createSubtaskMutation.mutate(
@@ -2369,144 +2400,142 @@ export function TaskDetail({
                         testID="add-subtask-button"
                       >
                         {createSubtaskMutation.isPending ? (
-                          <ActivityIndicator size="small" color="#4361EE" />
+                          <ActivityIndicator
+                            size="small"
+                            color={palette.violet}
+                          />
                         ) : (
                           <Plus
                             size={18}
                             color={
-                              newSubtaskTitle.trim() ? "#4361EE" : "#CBD5E1"
+                              newSubtaskTitle.trim()
+                                ? palette.violet
+                                : palette.lilac
                             }
                           />
                         )}
                       </TouchableOpacity>
                     </View>
                   ) : null}
+                  </View>
                 </View>
               );
             })()
           : null}
 
-        {/* Assignees */}
+        {/* Assignees — compact stack; full list opens in a sheet */}
         {!showFocusedFeedbackTask && !isReminder ? (
-          <View className="mb-4">
-            <View className="flex-row items-center justify-between mb-1">
+          <View style={{ marginBottom: 14 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 8,
+                paddingHorizontal: 2,
+              }}
+            >
               <Text
-                style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}
+                style={{
+                  fontSize: 11,
+                  fontWeight: "800",
+                  color: palette.inkSecondary,
+                  letterSpacing: 0.7,
+                  textTransform: "uppercase",
+                }}
               >
-                Assignees
+                People
                 {task.assignments?.length
                   ? ` · ${task.assignments.length}`
                   : ""}
               </Text>
-              {isEditable ? (
+              {canEdit ? (
                 <TouchableOpacity
                   testID="manage-assignees-button"
                   onPress={() => setShowAssignModal(true)}
-                  className="flex-row items-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700"
-                  style={{ gap: 4 }}
+                  hitSlop={8}
                 >
-                  <UserPlus size={12} color="#64748B" />
-                  <Text className="text-xs font-semibold text-slate-500">
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: palette.violet,
+                    }}
+                  >
                     Manage
                   </Text>
                 </TouchableOpacity>
               ) : null}
             </View>
 
-            {task.isJoint && (task.assignments?.length ?? 0) > 1 ? (
-              <Text
-                className="text-xs text-blue-600 mb-2"
-                testID="joint-assignees-note"
-              >
-                Working together
-              </Text>
-            ) : null}
+            <View style={[elevation.card, { borderRadius: 16, padding: 12 }]}>
+              {task.isJoint && (task.assignments?.length ?? 0) > 1 ? (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "600",
+                    color: palette.violet,
+                    marginBottom: 8,
+                  }}
+                  testID="joint-assignees-note"
+                >
+                  Working together
+                </Text>
+              ) : null}
 
-            {task.assignments && task.assignments.length > 0 ? (
-              <ScrollView
-                horizontal
-                nestedScrollEnabled
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingVertical: 2,
-                  paddingRight: 8,
-                  paddingTop: isEditable ? 6 : 2,
-                  gap: 8,
-                }}
-                testID="assignee-avatar-row"
-              >
-                {task.assignments.map((a) => {
-                  const isYou = a.userId === currentUserId;
-                  const label = isYou
-                    ? "You"
-                    : a.user.name?.trim().split(/\s+/)[0] || "Member";
-                  return (
-                    <View
-                      key={a.id}
+              {task.assignments && task.assignments.length > 0 ? (
+                <Pressable
+                  onPress={() => setShowAssigneesSheet(true)}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: 2,
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show all assignees"
+                  testID="assignee-avatar-row"
+                >
+                  <AssigneeStack
+                    assignments={task.assignments}
+                    currentUserId={currentUserId}
+                  />
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <Text
                       style={{
-                        width: 36,
-                        alignItems: "center",
-                        gap: 3,
+                        fontSize: 12,
+                        fontWeight: "600",
+                        color: palette.inkSecondary,
                       }}
-                      accessible
-                      accessibilityLabel={
-                        isYou
-                          ? `${a.user.name ?? "You"} (you)`
-                          : (a.user.name ?? a.user.email ?? "Assignee")
-                      }
                     >
-                      <View>
-                        <UserAvatar
-                          user={a.user}
-                          size={24}
-                          radius={12}
-                          backgroundColor="#4F46E5"
-                          textColor="#FFFFFF"
-                          fontSize={9}
-                        />
-                        {isEditable ? (
-                          <TouchableOpacity
-                            onPress={() => unassignMutation.mutate(a.userId)}
-                            disabled={unassignMutation.isPending}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            style={{
-                              position: "absolute",
-                              top: -5,
-                              right: -5,
-                              width: 14,
-                              height: 14,
-                              borderRadius: 7,
-                              backgroundColor: "#F1F5F9",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                            testID={`unassign-${a.userId}`}
-                          >
-                            <X size={8} color="#64748B" />
-                          </TouchableOpacity>
-                        ) : null}
-                      </View>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          fontSize: 9,
-                          fontWeight: isYou ? "700" : "500",
-                          color: "#64748B",
-                          textAlign: "center",
-                          width: 36,
-                        }}
-                      >
-                        {label}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            ) : (
-              <Text className="text-sm text-slate-400 italic">
-                No one assigned yet
-              </Text>
-            )}
+                      {(task.assignments?.length ?? 0) > 2
+                        ? `View all ${task.assignments.length}`
+                        : "View"}
+                    </Text>
+                    <ChevronRight
+                      size={14}
+                      color={palette.inkMuted}
+                      strokeWidth={2.2}
+                    />
+                  </View>
+                </Pressable>
+              ) : (
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: palette.inkMuted,
+                  }}
+                >
+                  No one assigned yet
+                </Text>
+              )}
+            </View>
           </View>
         ) : null}
 
@@ -2586,72 +2615,88 @@ export function TaskDetail({
         <View style={{ height: 32 }} />
       </ScrollView>
 
-      {!showFocusedFeedbackTask && canComplete && access.canWrite ? (
+      {!showFocusedFeedbackTask && isEditMode ? (
         <View
           style={{
             paddingHorizontal: COLUMN_PADDING + columnGutter,
-            paddingTop: 10,
+            paddingTop: 12,
             paddingBottom: Math.max(insets.bottom, 16),
-            borderTopWidth: 1,
-            borderTopColor: "#E9EBF2",
-            backgroundColor: "#FFFFFF",
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: palette.cardBorder,
+            backgroundColor: palette.page,
+            gap: 10,
           }}
         >
-          <TouchableOpacity
-            onPress={handleMarkComplete}
-            disabled={updateMutation.isPending}
-            activeOpacity={0.86}
-            style={{
-              borderRadius: 15,
-              shadowColor: "#1D2F86",
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.24,
-              shadowRadius: 12,
-              elevation: 5,
-            }}
-            testID="mark-complete-button"
-          >
-            <LinearGradient
-              colors={["#6D3CEB", "#3F6CF2"]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            label="Save changes"
+            loading={updateMutation.isPending}
+            onPress={requestSaveEdit}
+            testID="save-edit-footer-button"
+          />
+          {canDeleteTask ? (
+            <TouchableOpacity
+              onPress={requestDelete}
+              disabled={deleteMutation.isPending}
+              hitSlop={8}
               style={{
-                minHeight: 52,
-                borderRadius: 15,
-                flexDirection: "row",
+                minHeight: 40,
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 8,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.18)",
+                flexDirection: "row",
+                gap: 6,
               }}
+              testID="delete-button"
             >
-              {updateMutation.isPending ? (
-                <ActivityIndicator size="small" color="white" />
+              {deleteMutation.isPending ? (
+                <ActivityIndicator size="small" color="#EF4444" />
               ) : (
                 <>
-                  <Check size={17} color="#FFFFFF" strokeWidth={2.5} />
+                  <Trash2 size={15} color="#EF4444" strokeWidth={2.2} />
                   <Text
                     style={{
-                      color: "white",
-                      fontSize: 15,
-                      fontWeight: "700",
-                      letterSpacing: 0.1,
+                      color: "#EF4444",
+                      fontSize: 14,
+                      fontWeight: "600",
                     }}
                   >
-                    {isReminder ? "Complete reminder" : "Mark as complete"}
+                    Delete task
                   </Text>
                 </>
               )}
-            </LinearGradient>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : !showFocusedFeedbackTask && canComplete && access.canWrite ? (
+        <View
+          style={{
+            paddingHorizontal: COLUMN_PADDING + columnGutter,
+            paddingTop: 12,
+            paddingBottom: Math.max(insets.bottom, 16),
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: palette.cardBorder,
+            backgroundColor: palette.page,
+          }}
+        >
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            label="Mark complete"
+            loading={updateMutation.isPending}
+            icon={<Check size={17} color="#FFFFFF" strokeWidth={2.5} />}
+            onPress={handleMarkComplete}
+            testID="mark-complete-button"
+          />
         </View>
       ) : null}
 
       <AlenioBottomSheet
         visible={showReminderActions && isReminder}
-        title="Reminder options"
-        subtitle="Manage this private reminder"
+        title="Task options"
+        subtitle="Manage this private task"
         onClose={() => setShowReminderActions(false)}
         compact
         showCloseButton
@@ -2663,7 +2708,7 @@ export function TaskDetail({
             compact
             tint="slate"
             icon={<Pencil size={16} color="#FFFFFF" />}
-            title="Edit reminder"
+            title="Edit task"
             subtitle="Update the title, due date, or recurrence"
             onPress={() => {
               setShowReminderActions(false);
@@ -2676,8 +2721,8 @@ export function TaskDetail({
               compact
               destructive
               icon={<Trash2 size={16} color="#FFFFFF" />}
-              title="Delete reminder"
-              subtitle="Permanently remove this reminder"
+              title="Delete task"
+              subtitle="Permanently remove this task"
               onPress={() => {
                 setShowReminderActions(false);
                 setTimeout(() => {
@@ -2693,6 +2738,19 @@ export function TaskDetail({
           ) : null}
         </View>
       </AlenioBottomSheet>
+
+      <AssigneesSheet
+        visible={showAssigneesSheet && !isReminder}
+        assignments={task?.assignments ?? []}
+        currentUserId={currentUserId}
+        taskTitle={task?.title}
+        canManage={canEdit}
+        onClose={() => setShowAssigneesSheet(false)}
+        onManage={() => {
+          setShowAssigneesSheet(false);
+          setTimeout(() => setShowAssignModal(true), 220);
+        }}
+      />
 
       {/* Assign members modal */}
       <AlenioBottomSheet
@@ -3190,72 +3248,82 @@ export function TaskDetail({
         statusBarTranslucent
       >
         <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(15, 23, 42, 0.28)",
-            alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 32,
-          }}
+          style={completionMomentStyles.backdrop}
           accessibilityViewIsModal
         >
-          <View
-            style={{
-              width: "100%",
-              maxWidth: 320,
-              paddingHorizontal: 24,
-              paddingVertical: 28,
-              borderRadius: 24,
-              backgroundColor: "#FFFFFF",
-              alignItems: "center",
-              shadowColor: "#0F172A",
-              shadowOpacity: 0.16,
-              shadowRadius: 24,
-              shadowOffset: { width: 0, height: 12 },
-              elevation: 12,
-            }}
+          <Animated.View
+            style={[
+              completionMomentStyles.card,
+              { transform: [{ scale: completionScale }] },
+            ]}
             accessible
             accessibilityRole="alert"
-            accessibilityLabel={`${isReminder ? "Reminder" : "Task"} complete`}
+            accessibilityLabel="Task complete"
             testID="task-completion-success"
           >
-            <Animated.View
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 36,
-                backgroundColor: "#DCFCE7",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 16,
-                transform: [{ scale: completionScale }],
-              }}
+            <LinearGradient
+              colors={["#F5F3FF", "#FFFBF2", "#FFFFFF"]}
+              locations={[0, 0.56, 1]}
+              style={completionMomentStyles.successHero}
             >
-              <Check size={36} color="#16A34A" strokeWidth={3} />
-            </Animated.View>
-            <Text
-              style={{
-                fontSize: 20,
-                lineHeight: 26,
-                fontWeight: "800",
-                color: "#0F172A",
-                textAlign: "center",
-              }}
-            >
-              {isReminder ? "Reminder complete" : "Task complete"}
-            </Text>
-            <Text
-              style={{
-                marginTop: 5,
-                fontSize: 14,
-                lineHeight: 20,
-                color: "#64748B",
-                textAlign: "center",
-              }}
-            >
-              Nice work.
-            </Text>
-          </View>
+              <View style={completionMomentStyles.brandRow}>
+                <Image
+                  source={require("@/assets/alenio-icon.png")}
+                  style={completionMomentStyles.brandLogo}
+                />
+                <Text style={completionMomentStyles.brandText}>
+                  ALENIO MOMENTUM
+                </Text>
+              </View>
+              <Sparkles
+                size={18}
+                color="#B9A8FF"
+                strokeWidth={1.9}
+                style={completionMomentStyles.sparkleLeft}
+              />
+              <Sparkles
+                size={15}
+                color="#F2B84B"
+                strokeWidth={1.9}
+                style={completionMomentStyles.sparkleRight}
+              />
+              <View style={completionMomentStyles.markStage}>
+                <Animated.View
+                  style={[
+                    completionMomentStyles.pulseRing,
+                    {
+                      opacity: completionRing.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.5, 0],
+                      }),
+                      transform: [
+                        {
+                          scale: completionRing.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.86, 1.35],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+                <View style={completionMomentStyles.successMark}>
+                  <Check size={32} color="#6D55E7" strokeWidth={3.2} />
+                </View>
+              </View>
+              <Text style={completionMomentStyles.eyebrow}>
+                {isReminder ? "REMINDER COMPLETE" : "TASK COMPLETE"}
+              </Text>
+              <Text style={completionMomentStyles.successTitle}>
+                Nice work.
+              </Text>
+              <Text style={completionMomentStyles.successSubtitle}>
+                {isReminder
+                  ? "This reminder is locked in."
+                  : "This task is locked in for the team."}
+              </Text>
+            </LinearGradient>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -3276,53 +3344,97 @@ export function TaskDetail({
         onClose={closePersonalBestCelebration}
       />
 
-      {/* Done confirmation modal */}
-      <Modal
+      <AlenioBottomSheet
         visible={showDoneConfirm}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDoneConfirm(false)}
+        title={isReminder ? "Complete reminder?" : "Complete task?"}
+        subtitle={
+          isReminder
+            ? "This locks the reminder from further edits."
+            : "This locks the task from further edits."
+        }
+        onClose={() => {
+          if (updateMutation.isPending) return;
+          setShowDoneConfirm(false);
+        }}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+        testID="done-confirm-sheet"
+        footer={
+          <>
+            <TouchableOpacity
+              testID="confirm-done-button"
+              onPress={confirmCompleteTask}
+              disabled={!doneConfirmReady || updateMutation.isPending}
+              activeOpacity={0.92}
+              style={[
+                alenioSheetStyles.primaryButton,
+                (!doneConfirmReady || updateMutation.isPending) && {
+                  opacity: 0.55,
+                },
+              ]}
+            >
+              {updateMutation.isPending ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={alenioSheetStyles.primaryButtonText}>
+                  {isReminder ? "Complete reminder" : "Complete task"}
+                </Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowDoneConfirm(false)}
+              disabled={!doneConfirmReady || updateMutation.isPending}
+              style={alenioSheetStyles.cancelButton}
+              activeOpacity={0.8}
+              testID="done-confirm-cancel"
+            >
+              <Text style={alenioSheetStyles.cancelButtonText}>Not yet</Text>
+            </TouchableOpacity>
+          </>
+        }
       >
-        <TouchableOpacity
-          className="flex-1 bg-black/40 items-center justify-center px-8"
-          activeOpacity={1}
-          onPress={() => setShowDoneConfirm(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={{ maxWidth: DIALOG_MAX_WIDTH }}
-            className="w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
+        <AlenioSheetCard tint="purple" compact>
+          <View
+            style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}
           >
-            <View className="px-5 pt-5 pb-4 items-center">
-              <View
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                backgroundColor: "#EDE9FE",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CheckCircle2 size={18} color="#6D55E7" strokeWidth={2.25} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{ fontSize: 14, fontWeight: "700", color: "#312E81" }}
+                numberOfLines={2}
+              >
+                {task?.title ?? "Task"}
+              </Text>
+              <Text
                 style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 26,
-                  backgroundColor: "#D1FAE5",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: 12,
+                  fontSize: 12,
+                  color: "#5B21B6",
+                  marginTop: 4,
+                  lineHeight: 17,
                 }}
               >
-                <Text style={{ fontSize: 24 }}>✓</Text>
-              </View>
-              <Text className="text-lg font-bold text-slate-900 dark:text-white mb-1">
-                Mark {isReminder ? "reminder" : "task"} as done?
-              </Text>
-              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center">
-                This will complete the {isReminder ? "reminder" : "task"} and
-                lock it from further edits.
+                Confirm to mark it done and close this screen.
               </Text>
               {warnOwnerNotAssigned ? (
                 <Text
                   style={{
-                    marginTop: 10,
-                    fontSize: 13,
-                    lineHeight: 18,
+                    marginTop: 8,
+                    fontSize: 12,
+                    lineHeight: 17,
                     fontWeight: "700",
                     color: "#B45309",
-                    textAlign: "center",
                   }}
                   testID="owner-unassigned-complete-warning"
                 >
@@ -3330,29 +3442,9 @@ export function TaskDetail({
                 </Text>
               ) : null}
             </View>
-            <View className="flex-row border-t border-slate-100 dark:border-slate-700">
-              <TouchableOpacity
-                onPress={() => setShowDoneConfirm(false)}
-                className="flex-1 py-3.5 items-center border-r border-slate-100 dark:border-slate-700"
-              >
-                <Text className="text-base font-medium text-slate-600 dark:text-slate-300">
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                testID="confirm-done-button"
-                onPress={confirmCompleteTask}
-                disabled={updateMutation.isPending}
-                className="flex-1 py-3.5 items-center"
-              >
-                <Text className="text-base font-semibold text-emerald-500">
-                  Complete
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+          </View>
+        </AlenioSheetCard>
+      </AlenioBottomSheet>
 
       <AlenioBottomSheet
         visible={showSeriesOrderWarning}
@@ -3434,3 +3526,104 @@ export function TaskDetail({
     </SafeAreaView>
   );
 }
+
+const completionMomentStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    paddingHorizontal: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.52)",
+  },
+  card: {
+    width: "100%",
+    maxWidth: 336,
+    overflow: "hidden",
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.92)",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.24,
+    shadowRadius: 32,
+    elevation: 18,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    marginBottom: 18,
+  },
+  brandLogo: { width: 24, height: 24, borderRadius: 7 },
+  brandText: {
+    fontSize: 9.5,
+    lineHeight: 13,
+    fontWeight: "800",
+    letterSpacing: 1.35,
+    color: "#716A86",
+  },
+  sparkleLeft: { position: "absolute", left: 34, top: 72 },
+  sparkleRight: { position: "absolute", right: 38, top: 96 },
+  successHero: {
+    paddingHorizontal: 24,
+    paddingTop: 22,
+    paddingBottom: 28,
+    alignItems: "center",
+  },
+  markStage: {
+    width: 96,
+    height: 96,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  pulseRing: {
+    position: "absolute",
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 2,
+    borderColor: "#C4B5FD",
+    backgroundColor: "rgba(109, 85, 231, 0.12)",
+  },
+  successMark: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DDD6FE",
+    shadowColor: "#6D55E7",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  eyebrow: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    color: "#6D55E7",
+    marginBottom: 8,
+  },
+  successTitle: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "800",
+    color: "#0F172A",
+    textAlign: "center",
+  },
+  successSubtitle: {
+    marginTop: 6,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "500",
+    color: "#64748B",
+    textAlign: "center",
+  },
+});

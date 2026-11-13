@@ -28,8 +28,10 @@ import type {
   ConnectionSuggestion,
   ConnectionSuggestionDismissalResponse,
   ConnectionsResponse,
+  Conversation,
   PersonSearchResult,
 } from "@/lib/types";
+import { existingDirectConversation } from "@/lib/existing-direct-conversation";
 import { resolveUserImageUrl } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { DismissSuggestionConfirmationSheet } from "@/components/DismissSuggestionConfirmationSheet";
@@ -118,32 +120,54 @@ export default function NewDMScreen() {
     enabled: searchQuery.trim().length >= 2,
   });
 
-  const dmMutation = useMutation({
-    mutationFn: (recipientId: string) =>
-      api.post<{
-        id: string;
-        recipient: { name: string; image?: string | null } | null;
-      }>("/api/dms/find-or-create", { recipientId }),
-    onSuccess: (conv) => {
-      queryClient.invalidateQueries({ queryKey: ["dms"] });
+  const [openingMessageFor, setOpeningMessageFor] = useState<string | null>(
+    null,
+  );
+  const openMessage = async (person: {
+    id: string;
+    name?: string | null;
+    image?: string | null;
+  }) => {
+    if (openingMessageFor) return;
+    setOpeningMessageFor(person.id);
+    try {
+      const list = await queryClient.fetchQuery({
+        queryKey: ["dms"],
+        queryFn: () => api.get<Conversation[]>("/api/dms"),
+      });
+      const existing = currentUserId
+        ? existingDirectConversation(list, person.id, currentUserId)
+        : null;
+      if (existing) {
+        router.replace({
+          pathname: "/dm-chat",
+          params: {
+            conversationId: existing.id,
+            recipientName: person.name ?? "Direct Message",
+            recipientImage: resolveUserImageUrl(person.image) ?? "",
+            isGroup: "false",
+          },
+        });
+        return;
+      }
       router.replace({
         pathname: "/dm-chat",
         params: {
-          conversationId: conv.id,
-          recipientName: conv.recipient?.name ?? "Direct Message",
-          recipientImage: resolveUserImageUrl(conv.recipient?.image) ?? "",
+          recipientId: person.id,
+          recipientName: person.name ?? "Direct Message",
+          recipientImage: resolveUserImageUrl(person.image) ?? "",
           isGroup: "false",
         },
       });
-    },
-    onError: (err) => {
+    } catch (err) {
       toast({
-        title:
-          err instanceof Error ? err.message : "Couldn't start conversation",
+        title: err instanceof Error ? err.message : "Couldn't open message",
         preset: "error",
       });
-    },
-  });
+    } finally {
+      setOpeningMessageFor(null);
+    }
+  };
 
   const connectionMutation = useMutation({
     mutationFn: async ({
@@ -638,8 +662,7 @@ export default function NewDMScreen() {
             const connectionPending =
               connectionMutation.isPending &&
               connectionMutation.variables?.userId === item.id;
-            const messagePending =
-              dmMutation.isPending && dmMutation.variables === item.id;
+            const messagePending = openingMessageFor === item.id;
             const connectionAction =
               item.action === "accept" ? "accept" : "request";
             const actionLabel =
@@ -674,7 +697,7 @@ export default function NewDMScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       if (item.action === "message") {
-                        dmMutation.mutate(item.id);
+                        void openMessage(item);
                         return;
                       }
                       if (item.section === "Suggested") {
@@ -685,7 +708,7 @@ export default function NewDMScreen() {
                       }
                     }}
                     disabled={
-                      dmMutation.isPending ||
+                      !!openingMessageFor ||
                       (item.action !== "message" &&
                         item.section !== "Suggested")
                     }
@@ -773,14 +796,14 @@ export default function NewDMScreen() {
                       onPress={(event) => {
                         event.stopPropagation();
                         return item.action === "message"
-                          ? dmMutation.mutate(item.id)
+                          ? void openMessage(item)
                           : connectionMutation.mutate({
                               userId: item.id,
                               action: connectionAction,
                             });
                       }}
                       disabled={
-                        dmMutation.isPending || connectionMutation.isPending
+                        !!openingMessageFor || connectionMutation.isPending
                       }
                       accessibilityRole="button"
                       accessibilityLabel={`${actionLabel} ${item.name ?? "person"}`}

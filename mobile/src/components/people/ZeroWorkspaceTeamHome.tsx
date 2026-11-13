@@ -59,8 +59,13 @@ import type {
   PersonSearchResult,
 } from "@/lib/types";
 import type { AddConnectionEntryMode } from "@/components/people/AddConnectionSheet";
+import {
+  MASTER_PANE_WIDTH,
+  PANE_GAP,
+  useAdaptiveLayout,
+} from "@/lib/adaptive-layout";
 import { useTabBarClearanceFn } from "@/lib/tab-bar";
-import { colors, elevation, palette, typography } from "@/theme";
+import { colors, elevation, typography } from "@/theme";
 import {
   CONNECTION_DIRECTORY_SORT_LABELS,
   connectionIndexLetter,
@@ -94,11 +99,6 @@ function columnWidth(width: number, columns: number) {
   if (columns <= 1 || width <= 0) return undefined;
   return Math.floor((width - GRID_GAP * (columns - 1)) / columns);
 }
-
-type DirectConversation = {
-  id: string;
-  recipient: { name: string; image?: string | null } | null;
-};
 
 /** Their title and handle; the shared-workspace badge already carries the workspace. */
 function existingDirectConversation(
@@ -150,8 +150,6 @@ export function ZeroWorkspaceTeamHome({
   const [paneWidth, setPaneWidth] = useState(0);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [menuConnection, setMenuConnection] =
-    useState<AcceptedConnectionEntry | null>(null);
-  const [chatToCreate, setChatToCreate] =
     useState<AcceptedConnectionEntry | null>(null);
   const [openingChatFor, setOpeningChatFor] = useState<string | null>(null);
   const [sort, setSort] = useState<ConnectionDirectorySort>("name");
@@ -373,29 +371,8 @@ export function ZeroWorkspaceTeamHome({
     });
   };
 
-  const messageMutation = useMutation({
-    mutationFn: (connection: AcceptedConnectionEntry) =>
-      api.post<DirectConversation>("/api/dms/find-or-create", {
-        recipientId: connection.person.id,
-      }),
-    onSuccess: (conversation, connection) => {
-      setChatToCreate(null);
-      void queryClient.invalidateQueries({ queryKey: ["dms"] });
-      openDirectChat(conversation, connection);
-    },
-    onError: (error: unknown) => {
-      toast({
-        title:
-          error instanceof Error
-            ? error.message
-            : "Couldn't start conversation",
-        preset: "error",
-      });
-    },
-  });
-
   const onMessagePress = async (connection: AcceptedConnectionEntry) => {
-    if (messageMutation.isPending || openingChatFor) return;
+    if (openingChatFor) return;
     setOpeningChatFor(connection.person.id);
     try {
       const list = directChats.isSuccess
@@ -413,9 +390,23 @@ export function ZeroWorkspaceTeamHome({
         openDirectChat(existing, connection);
         return;
       }
-      setChatToCreate(connection);
-    } catch {
-      setChatToCreate(connection);
+      router.push({
+        pathname: "/dm-chat",
+        params: {
+          recipientId: connection.person.id,
+          recipientName: connection.person.name ?? "Direct Message",
+          recipientImage: resolveUserImageUrl(connection.person.image) ?? "",
+          isGroup: "false",
+        },
+      });
+    } catch (error: unknown) {
+      toast({
+        title:
+          error instanceof Error
+            ? error.message
+            : "Couldn't open message",
+        preset: "error",
+      });
     } finally {
       setOpeningChatFor(null);
     }
@@ -438,6 +429,13 @@ export function ZeroWorkspaceTeamHome({
     );
   };
 
+  const adaptive = useAdaptiveLayout();
+  /**
+   * Open foldable / tablet: People directory beside the Updates feed.
+   * Closed cover or phone: one column with Updates | People tabs.
+   */
+  const splitNetwork = adaptive.isSplit;
+  const peoplePaneWidth = MASTER_PANE_WIDTH;
   const { width: windowWidth } = useWindowDimensions();
   const directoryActive = normalizedSearch.length > 0 || hasActiveFilters;
   const activeTab = tab;
@@ -447,127 +445,159 @@ export function ZeroWorkspaceTeamHome({
   const suggestionColumns = discoverColumns(layoutWidth);
   const suggestionCardWidth = columnWidth(layoutWidth, suggestionColumns);
 
-  return (
-    <View style={styles.screen} testID="zero-workspace-team-home">
-      <View style={styles.networkHeader}>
-        <NetworkTabs tab={activeTab} onChange={setTab} />
-        {activeTab === "connections" ? (
-          <View style={styles.connectionSearchRow}>
-            <View style={styles.connectionSearch} testID="no-workspace-search">
-              <Search size={14} color="#8A96A8" strokeWidth={2.1} />
-              <TextInput
-                value={searchQuery ?? ""}
-                onChangeText={onSearchChange}
-                placeholder="Search by name, role, or workspace..."
-                placeholderTextColor="#8A96A8"
-                style={styles.connectionSearchInput}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-                accessibilityLabel="Search connections"
-                testID="connections-search-input"
-              />
-              {(searchQuery ?? "").length > 0 ? (
-                <Pressable
-                  onPress={() => onSearchChange?.("")}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear connection search"
-                >
-                  <X size={14} color="#8A96A8" strokeWidth={2.1} />
-                </Pressable>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={onOpenFilters}
-              style={[
-                styles.connectionFilterButton,
-                activeFilterCount > 0 ? styles.connectionFilterButtonActive : null,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={
-                activeFilterCount > 0
-                  ? `Filter connections, ${activeFilterCount} active`
-                  : "Filter connections"
-              }
-              testID="connections-filter-button"
-            >
-              <SlidersHorizontal
-                size={13}
-                color={activeFilterCount > 0 ? "#111827" : "#667085"}
-                strokeWidth={2.2}
-              />
-              <Text
-                style={[
-                  styles.connectionFilterLabel,
-                  activeFilterCount > 0 ? styles.connectionFilterLabelActive : null,
-                ]}
-              >
-                Filters
-                {activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-              </Text>
-            </Pressable>
-          </View>
+  const peopleSearchRow = (
+    <View style={styles.connectionSearchRow}>
+      <View style={styles.connectionSearch} testID="no-workspace-search">
+        <Search size={14} color="#8A96A8" strokeWidth={2.1} />
+        <TextInput
+          value={searchQuery ?? ""}
+          onChangeText={onSearchChange}
+          placeholder="Search by name, role, or workspace..."
+          placeholderTextColor="#8A96A8"
+          style={styles.connectionSearchInput}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          accessibilityLabel="Search people"
+          testID="connections-search-input"
+        />
+        {(searchQuery ?? "").length > 0 ? (
+          <Pressable
+            onPress={() => onSearchChange?.("")}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Clear people search"
+          >
+            <X size={14} color="#8A96A8" strokeWidth={2.1} />
+          </Pressable>
         ) : null}
       </View>
-      {activeTab === "updates" ? (
-        <View style={styles.listFrame}>
-          <NetworkUpdatesFeed onFindPeople={() => onAddConnection("all")} />
+      <Pressable
+        onPress={onOpenFilters}
+        style={[
+          styles.connectionFilterButton,
+          activeFilterCount > 0 ? styles.connectionFilterButtonActive : null,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={
+          activeFilterCount > 0
+            ? `Filter people, ${activeFilterCount} active`
+            : "Filter people"
+        }
+        testID="connections-filter-button"
+      >
+        <SlidersHorizontal
+          size={13}
+          color={activeFilterCount > 0 ? "#111827" : "#667085"}
+          strokeWidth={2.2}
+        />
+        <Text
+          style={[
+            styles.connectionFilterLabel,
+            activeFilterCount > 0 ? styles.connectionFilterLabelActive : null,
+          ]}
+        >
+          Filters
+          {activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  const peopleDirectory = (
+    <View style={styles.listFrame} testID="network-people-pane">
+      <ScrollView
+        ref={listScrollRef}
+        style={styles.scroller}
+        contentContainerStyle={[
+          styles.page,
+          { paddingBottom: bottomNavigationClearance },
+          showLetterIndex ? styles.pageIndexed : null,
+          resolvingEmptyState || centerEmptyState ? styles.pageFill : null,
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View
+          ref={listContentRef}
+          collapsable={false}
+          style={centerEmptyState ? styles.emptyPageFrame : null}
+          onLayout={(event) => {
+            const next = Math.round(event.nativeEvent.layout.width);
+            setPaneWidth((current) => (current === next ? current : next));
+          }}
+        >
+          <ConnectionsPane
+            loading={connectionsLoading && !connections}
+            error={connectionsError}
+            onRetry={() => void refetchConnections()}
+            entries={connectionPreview}
+            total={accepted.length}
+            filtering={directoryActive}
+            columns={columns}
+            cardWidth={cardWidth}
+            sort={sort}
+            sortLabel={CONNECTION_DIRECTORY_SORT_LABELS[sort]}
+            onSort={() => setSortSheetOpen(true)}
+            onOpen={openPerson}
+            onMenu={setMenuConnection}
+            registerLetter={(letter, node) => {
+              letterAnchors.current[letter] = node;
+            }}
+          />
+        </View>
+      </ScrollView>
+      {showLetterIndex ? (
+        <AlphabetRail
+          present={indexLetters}
+          bottomInset={bottomNavigationClearance}
+          onJump={jumpToLetter}
+        />
+      ) : null}
+    </View>
+  );
+
+  const updatesFeed = (
+    <View style={styles.listFrame} testID="network-updates-pane">
+      <NetworkUpdatesFeed onFindPeople={() => onAddConnection("all")} />
+    </View>
+  );
+
+  return (
+    <View style={styles.screen} testID="zero-workspace-team-home">
+      {splitNetwork ? (
+        <View
+          style={[
+            styles.splitRow,
+            {
+              // Same edge padding as Chat's split body so both screens line up.
+              paddingLeft: adaptive.contentPadLeft,
+              paddingRight: adaptive.contentPadRight,
+            },
+          ]}
+          testID="network-split"
+        >
+          <View style={[styles.peoplePane, { width: peoplePaneWidth }]}>
+            <View style={styles.splitPeopleHeader}>{peopleSearchRow}</View>
+            {peopleDirectory}
+          </View>
+          <View style={[styles.updatesPane, { paddingLeft: PANE_GAP }]}>
+            <View style={styles.splitUpdatesHeader}>
+              <Newspaper size={13} color={BRAND} strokeWidth={2.4} />
+              <Text style={styles.splitUpdatesTitle}>Updates</Text>
+            </View>
+            {updatesFeed}
+          </View>
         </View>
       ) : (
-        <View style={styles.listFrame}>
-          <ScrollView
-            ref={listScrollRef}
-            style={styles.scroller}
-            contentContainerStyle={[
-              styles.page,
-              { paddingBottom: bottomNavigationClearance },
-              showLetterIndex ? styles.pageIndexed : null,
-              resolvingEmptyState || centerEmptyState ? styles.pageFill : null,
-            ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View
-              ref={listContentRef}
-              collapsable={false}
-              style={centerEmptyState ? styles.emptyPageFrame : null}
-              onLayout={(event) => {
-                const next = Math.round(event.nativeEvent.layout.width);
-                setPaneWidth((current) => (current === next ? current : next));
-              }}
-            >
-              {activeTab === "connections" ? (
-                <ConnectionsPane
-                  loading={connectionsLoading && !connections}
-                  error={connectionsError}
-                  onRetry={() => void refetchConnections()}
-                  entries={connectionPreview}
-                  total={accepted.length}
-                  filtering={directoryActive}
-                  columns={columns}
-                  cardWidth={cardWidth}
-                  sort={sort}
-                  sortLabel={CONNECTION_DIRECTORY_SORT_LABELS[sort]}
-                  onSort={() => setSortSheetOpen(true)}
-                  onOpen={openPerson}
-                  onMenu={setMenuConnection}
-                  registerLetter={(letter, node) => {
-                    letterAnchors.current[letter] = node;
-                  }}
-                />
-              ) : null}
-            </View>
-          </ScrollView>
-          {showLetterIndex ? (
-            <AlphabetRail
-              present={indexLetters}
-              bottomInset={bottomNavigationClearance}
-              onJump={jumpToLetter}
-            />
-          ) : null}
-        </View>
+        <>
+          <View style={styles.networkHeader}>
+            <NetworkTabs tab={activeTab} onChange={setTab} />
+            {activeTab === "connections" ? peopleSearchRow : null}
+          </View>
+          {activeTab === "updates" ? updatesFeed : peopleDirectory}
+        </>
       )}
       <ConnectRequestConfirmationSheet
         person={suggestionToConnect}
@@ -592,7 +622,7 @@ export function ZeroWorkspaceTeamHome({
       <AlenioBottomSheet
         visible={sortSheetOpen}
         onClose={() => setSortSheetOpen(false)}
-        title="Sort connections"
+        title="Sort people"
         subtitle={CONNECTION_DIRECTORY_SORT_LABELS[sort]}
         compact
         scrollEnabled={false}
@@ -628,83 +658,6 @@ export function ZeroWorkspaceTeamHome({
             </Pressable>
           );
         })}
-      </AlenioBottomSheet>
-      <AlenioBottomSheet
-        visible={chatToCreate != null}
-        title="Create a connection chat?"
-        subtitle={
-          chatToCreate
-            ? `You don't have a chat with ${chatToCreate.person.name?.trim() || "this connection"} yet.`
-            : undefined
-        }
-        onClose={() => {
-          if (!messageMutation.isPending) setChatToCreate(null);
-        }}
-        compact
-        showCloseButton
-        scrollEnabled={false}
-        testID="connection-chat-prompt"
-        footer={
-          <>
-            <Pressable
-              onPress={() => {
-                if (chatToCreate) messageMutation.mutate(chatToCreate);
-              }}
-              disabled={messageMutation.isPending}
-              style={[
-                alenioSheetStyles.primaryButton,
-                messageMutation.isPending
-                  ? alenioSheetStyles.primaryButtonDisabled
-                  : null,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Create connection chat"
-              testID="confirm-connection-chat"
-            >
-              {messageMutation.isPending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={alenioSheetStyles.primaryButtonText}>
-                  Create chat
-                </Text>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={() => setChatToCreate(null)}
-              disabled={messageMutation.isPending}
-              style={alenioSheetStyles.cancelButton}
-              accessibilityRole="button"
-              testID="cancel-connection-chat"
-            >
-              <Text style={alenioSheetStyles.cancelButtonText}>Not now</Text>
-            </Pressable>
-          </>
-        }
-      >
-        <AlenioSheetCard tint="blue" compact>
-          <View style={styles.chatPromptRow}>
-            {chatToCreate ? (
-              <UserAvatar
-                user={chatToCreate.person}
-                size={42}
-                radius={21}
-                backgroundColor="#EFE9FF"
-                resetKey={chatToCreate.person.id}
-              />
-            ) : null}
-            <View style={styles.chatPromptCopy}>
-              <Text style={styles.chatPromptName} numberOfLines={1}>
-                {chatToCreate?.person.name?.trim() || "This connection"}
-              </Text>
-              <Text style={styles.chatPromptBody}>
-                This starts a private conversation with them.
-              </Text>
-            </View>
-            <AlenioSheetIcon color="#6d28d9" compact>
-              <MessageCircle size={15} color="#FFFFFF" strokeWidth={2.2} />
-            </AlenioSheetIcon>
-          </View>
-        </AlenioSheetCard>
       </AlenioBottomSheet>
       <AlenioBottomSheet
         visible={menuConnection != null}
@@ -759,7 +712,7 @@ function NetworkTabs({
 }) {
   const tabs: { id: NetworkTab; label: string; Icon: LucideIcon }[] = [
     { id: "updates", label: "Updates", Icon: Newspaper },
-    { id: "connections", label: "Connections", Icon: Users },
+    { id: "connections", label: "People", Icon: Users },
   ];
   return (
     <View style={styles.tabs} accessibilityRole="tablist">
@@ -1016,7 +969,7 @@ function ConnectionsPane({
       {total > 0 || filtering ? (
         <View style={styles.paneHeader}>
           <Text style={styles.paneTitle}>
-            {total > 0 ? `Connections · ${total}` : "Connections"}
+            {total > 0 ? `People · ${total}` : "People"}
           </Text>
           {total > 0 ? (
             <Pressable
@@ -1024,7 +977,7 @@ function ConnectionsPane({
               hitSlop={8}
               style={styles.sortControl}
               accessibilityRole="button"
-              accessibilityLabel={`Sort connections, currently ${sortLabel}`}
+              accessibilityLabel={`Sort people, currently ${sortLabel}`}
               testID="connections-sort"
             >
               <Text style={styles.sortLabel}>Sort</Text>
@@ -1054,7 +1007,7 @@ function ConnectionsPane({
         </CardGrid>
       ) : error ? (
         <InlineState
-          message="Connections could not be loaded."
+          message="People could not be loaded."
           action="Try again"
           onPress={onRetry}
           testID="connections-error"
@@ -1111,7 +1064,7 @@ function ConnectionsPane({
         </View>
       ) : filtering ? (
         <View style={styles.searchEmpty} testID="connections-no-search-results">
-          <Text style={styles.searchEmptyText}>No connections found</Text>
+          <Text style={styles.searchEmptyText}>No people found</Text>
         </View>
       ) : (
         <ConnectionsEmptyState />
@@ -1565,7 +1518,7 @@ function ConnectionsEmptyState() {
           />
         </View>
       }
-      title="No connections yet"
+      title="No one here yet"
       body="Search for someone you already know by name, username, or email."
     />
   );
@@ -1597,25 +1550,46 @@ function InlineState({
 }
 
 const styles = StyleSheet.create({
-  chatPromptRow: {
+  screen: { flex: 1, minHeight: 0, backgroundColor: "#FFFFFF" },
+  splitRow: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  peoplePane: {
+    flexShrink: 0,
+    minHeight: 0,
+    // Matches Chat's split inbox pane.
+    backgroundColor: "#F7F8FA",
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: "#E7EAF0",
+  },
+  updatesPane: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    backgroundColor: "#FFFFFF",
+  },
+  splitPeopleHeader: {
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  splitUpdatesHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 6,
+    paddingTop: 14,
+    paddingBottom: 4,
+    paddingHorizontal: 4,
   },
-  chatPromptCopy: { flex: 1, minWidth: 0 },
-  chatPromptName: {
+  splitUpdatesTitle: {
     fontSize: 13,
-    lineHeight: 17,
+    lineHeight: 16,
     fontWeight: "700",
-    color: "#172033",
+    color: "#344054",
   },
-  chatPromptBody: {
-    marginTop: 2,
-    fontSize: 11,
-    lineHeight: 15,
-    color: "#667085",
-  },
-  screen: { flex: 1, minHeight: 0, backgroundColor: palette.page },
   scroller: { flex: 1, minHeight: 0 },
   listFrame: { flex: 1, minHeight: 0 },
   page: { paddingHorizontal: 16, paddingTop: 4 },

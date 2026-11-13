@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ContentSectionTabs } from "../../components/admin/ContentSectionTabs";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import {
   deleteDiscoverArticle,
@@ -133,6 +134,7 @@ export function DiscoverListPage() {
   const [pendingDelete, setPendingDelete] = useState<DiscoverAdminArticle | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [showMissingFeatures, setShowMissingFeatures] = useState(false);
 
   useEffect(() => {
     if (me && !staffCan(me, "content.view")) navigate("/settings", { replace: true });
@@ -199,6 +201,25 @@ export function DiscoverListPage() {
   }, [query, status, categoryId, sort, page, reloadTick]);
 
   const mostRead = useMemo(() => [...published].sort((a, b) => b.viewCount - a.viewCount).slice(0, 5), [published]);
+
+  const categoryFeatureCoverage = useMemo(() => {
+    if (categories.length === 0) {
+      return { pct: null as number | null, missing: [] as DiscoverCategory[] };
+    }
+    const featuredCategoryIds = new Set(
+      published
+        .filter((article) => article.featuredInCategory && article.category)
+        .map((article) => article.category!.id),
+    );
+    const missing = categories.filter(
+      (category) => !featuredCategoryIds.has(category.id),
+    );
+    const covered = categories.length - missing.length;
+    return {
+      pct: Math.round((covered / categories.length) * 100),
+      missing,
+    };
+  }, [categories, published]);
 
   // Every category, busiest first, with its share of the published articles.
   const categoryShare = useMemo(() => {
@@ -383,21 +404,7 @@ export function DiscoverListPage() {
         </div>
       </header>
 
-      <nav className="dm-tabs" aria-label="Content sections">
-        <span className="dm-tab dm-tab--active" aria-current="page">
-          <FileText size={15} strokeWidth={2.2} />
-          Content
-        </span>
-        <button
-          type="button"
-          className="dm-tab"
-          onClick={() => setCategoriesOpen(true)}
-          data-testid="dm-tab-categories"
-        >
-          <LayoutGrid size={15} strokeWidth={2.2} />
-          Categories
-        </button>
-      </nav>
+      <ContentSectionTabs active="discover" />
 
       {error ? <p className="discover-error">{error}</p> : null}
 
@@ -440,6 +447,26 @@ export function DiscoverListPage() {
                 <span>Total views</span>
               </div>
             </div>
+            <button
+              type="button"
+              className="dm-stat dm-stat--action"
+              data-testid="dm-stat-category-feature-pct"
+              onClick={() => setShowMissingFeatures(true)}
+              aria-haspopup="dialog"
+              title="See categories missing a featured article"
+            >
+              <span className="dm-stat-icon">
+                <Sparkles size={18} strokeWidth={2} />
+              </span>
+              <div>
+                <strong>
+                  {categoryFeatureCoverage.pct == null
+                    ? "—"
+                    : `${categoryFeatureCoverage.pct}%`}
+                </strong>
+                <span>% with a feature</span>
+              </div>
+            </button>
           </section>
 
           {metrics && metrics.featured > 6 ? (
@@ -608,6 +635,67 @@ export function DiscoverListPage() {
         onChanged={() => setReloadTick((tick) => tick + 1)}
         counts={Object.fromEntries(categoryShare.map((row) => [row.category.id, row.count]))}
       />
+
+      {showMissingFeatures ? (
+        <div
+          className="discover-confirm"
+          role="presentation"
+          onClick={() => setShowMissingFeatures(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dm-missing-features-title"
+            data-testid="dm-missing-features-dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="dm-missing-features-title">Categories without a feature</h2>
+            {categoryFeatureCoverage.missing.length === 0 ? (
+              <p>Every category has a featured article.</p>
+            ) : (
+              <>
+                <p>
+                  {categoryFeatureCoverage.missing.length === 1
+                    ? "1 category still needs a featured article."
+                    : `${categoryFeatureCoverage.missing.length} categories still need a featured article.`}
+                </p>
+                <ul className="dm-missing-features">
+                  {categoryFeatureCoverage.missing.map((category) => (
+                    <li key={category.id}>
+                      <button
+                        type="button"
+                        className="dm-missing-feature"
+                        onClick={() => {
+                          setShowMissingFeatures(false);
+                          resetAnd(() => setCategoryId(category.id));
+                        }}
+                      >
+                        <span
+                          className="al-ind-dot"
+                          style={{
+                            background: discoverCategoryColor(category.slug),
+                          }}
+                          aria-hidden
+                        />
+                        <span>{category.name}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <div className="discover-actions">
+              <button
+                type="button"
+                className="discover-btn"
+                onClick={() => setShowMissingFeatures(false)}
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {pendingDelete ? (
         <div className="discover-confirm" role="presentation" onClick={() => setPendingDelete(null)}>

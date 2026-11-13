@@ -17,6 +17,14 @@ const DiscoverIndexPage = lazyPage(() => import("./routes/discover/DiscoverIndex
 const DiscoverReaderPage = lazyPage(() => import("./routes/discover/DiscoverReaderPage"), "DiscoverReaderPage");
 const DiscoverListPage = lazyPage(() => import("./routes/discover/DiscoverListPage"), "DiscoverListPage");
 const DiscoverEditorPage = lazyPage(() => import("./routes/discover/DiscoverEditorPage"), "DiscoverEditorPage");
+const HomeInsightsListPage = lazyPage(
+  () => import("./routes/admin/HomeInsightsListPage"),
+  "HomeInsightsListPage",
+);
+const HomeInsightEditorPage = lazyPage(
+  () => import("./routes/admin/HomeInsightEditorPage"),
+  "HomeInsightEditorPage",
+);
 const HelpCenterPage = lazyPage(() => import("./routes/HelpCenterPage"), "HelpCenterPage");
 const HelpArticlePage = lazyPage(() => import("./routes/HelpArticlePage"), "HelpArticlePage");
 const AdminPage = lazyPage(() => import("./routes/AdminPage"), "AdminPage");
@@ -217,6 +225,9 @@ export default function App() {
           <Route path="/admin/discover/categories" element={<Navigate to="/admin/discover?categories=1" replace />} />
           <Route path="/admin/discover/new" element={<DiscoverEditorPage />} />
           <Route path="/admin/discover/:articleId" element={<DiscoverEditorPage />} />
+          <Route path="/admin/home-insights" element={<HomeInsightsListPage />} />
+          <Route path="/admin/home-insights/new" element={<HomeInsightEditorPage />} />
+          <Route path="/admin/home-insights/:insightId" element={<HomeInsightEditorPage />} />
           <Route path="/settings" element={<ProfilePage />} />
           <Route path="/settings/ai" element={<SettingsAiHubPage />} />
           <Route path="/settings/ai/seneca-studio" element={<Navigate to="/admin/seneca" replace />} />

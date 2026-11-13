@@ -1,24 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import {
-  ArrowLeft,
+  AtSign,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -27,10 +22,17 @@ import {
   X,
 } from "lucide-react-native";
 import { toast } from "burnt";
+import {
+  AlenioBottomSheet,
+  AlenioSheetCard,
+  AlenioSheetIcon,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
 import { api } from "@/lib/api/api";
 import { ME_QUERY_KEY, type MeUser } from "@/lib/auth/me-query";
+import { colors } from "@/theme";
 
-const BRAND = "#6D5EF8";
+const BRAND = colors.brand;
 const USERNAME_MAX_LENGTH = 15;
 const AVAILABILITY_DEBOUNCE_MS = 400;
 const USERNAME_CHANGE_COOLDOWN_DAYS = 30;
@@ -59,7 +61,6 @@ function localValidationMessage(value: string): string | null {
 }
 
 export default function UsernameScreen() {
-  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [value, setValue] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -116,7 +117,8 @@ export default function UsernameScreen() {
     staleTime: 30_000,
   });
 
-  const settled = shouldCheck && !checking && debounced === value ? availability : undefined;
+  const settled =
+    shouldCheck && !checking && debounced === value ? availability : undefined;
 
   const save = useMutation({
     mutationFn: () => api.patch<MeUser>("/api/profile", { username: value }),
@@ -127,7 +129,9 @@ export default function UsernameScreen() {
       router.back();
     },
     onError: (err: unknown) => {
-      setSaveError(err instanceof Error ? err.message : "Could not save your username.");
+      setSaveError(
+        err instanceof Error ? err.message : "Could not save your username.",
+      );
     },
   });
 
@@ -153,12 +157,17 @@ export default function UsernameScreen() {
     if (checking || debounced !== value) {
       return { tone: "muted", text: "Checking availability...", loading: true };
     }
-    if (settled?.available === true) return { tone: "ok", text: "Username available" };
+    if (settled?.available === true) {
+      return { tone: "ok", text: "Username available" };
+    }
     if (settled && !settled.available) {
       return { tone: "error", text: "Username already taken" };
     }
     if (checkFailed) {
-      return { tone: "error", text: "Could not check availability. Please try again." };
+      return {
+        tone: "error",
+        text: "Could not check availability. Please try again.",
+      };
     }
     return null;
   }, [
@@ -185,192 +194,187 @@ export default function UsernameScreen() {
     toast({ title: "Copied", preset: "done" });
   };
 
+  const handleClose = () => router.back();
+
   return (
-    <View style={styles.screen} testID="username-screen">
-      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={8}
-          style={styles.backButton}
-          testID="username-back-button"
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ArrowLeft size={20} color="#0F172A" strokeWidth={2.25} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Username</Text>
-        <Pressable
-          onPress={submit}
-          disabled={!canSave}
-          style={({ pressed }) => [
-            styles.headerSaveButton,
-            !canSave ? styles.headerSaveButtonDisabled : null,
-            pressed && canSave ? styles.headerSaveButtonPressed : null,
+    <AlenioBottomSheet
+      asScreen
+      title="Username"
+      subtitle="How people find you on Alenio"
+      onClose={handleClose}
+      showCloseButton
+      showScrollIndicator
+      bodyHeightRatio={0.62}
+      testID="username-screen"
+      footer={
+        <>
+          <TouchableOpacity
+            testID="username-save-button"
+            onPress={submit}
+            disabled={!canSave}
+            style={[
+              alenioSheetStyles.primaryButton,
+              { backgroundColor: BRAND },
+              !canSave ? alenioSheetStyles.primaryButtonDisabled : null,
+            ]}
+            activeOpacity={0.92}
+            accessibilityRole="button"
+            accessibilityLabel="Save username"
+          >
+            {save.isPending ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={alenioSheetStyles.primaryButtonText}>Save username</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleClose}
+            style={alenioSheetStyles.cancelButton}
+            testID="username-cancel-button"
+            activeOpacity={0.8}
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </>
+      }
+    >
+      <AlenioSheetCard tint="purple">
+        <View style={alenioSheetStyles.optionRow}>
+          <AlenioSheetIcon color={BRAND}>
+            <AtSign size={22} color="#FFFFFF" strokeWidth={2.25} />
+          </AlenioSheetIcon>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={alenioSheetStyles.optionTitle}>Make it yours</Text>
+            <Text style={alenioSheetStyles.optionSubtitle}>
+              Your username helps people find and connect with you.
+            </Text>
+          </View>
+        </View>
+      </AlenioSheetCard>
+
+      <View style={styles.block}>
+        <Text style={alenioSheetStyles.fieldLabel}>Your username</Text>
+        <View
+          style={[
+            styles.inputShell,
+            focused ? styles.inputFocused : null,
+            status?.tone === "error" ? styles.inputError : null,
           ]}
-          accessibilityRole="button"
-          accessibilityLabel="Save username"
-          testID="username-header-save-button"
         >
-          {save.isPending ? (
-            <ActivityIndicator size="small" color={BRAND} />
-          ) : (
-            <Text style={styles.headerSaveText}>Save</Text>
-          )}
-        </Pressable>
+          <View style={styles.mark}>
+            <Text style={styles.markText}>@</Text>
+          </View>
+          <TextInput
+            value={value}
+            onChangeText={(next) => {
+              setSaveError(null);
+              setValue(next.trim().toLowerCase().slice(0, USERNAME_MAX_LENGTH));
+            }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onSubmitEditing={submit}
+            returnKeyType="done"
+            enablesReturnKeyAutomatically
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="username"
+            placeholderTextColor="#94A3B8"
+            maxLength={USERNAME_MAX_LENGTH}
+            style={styles.input}
+            testID="username-input"
+          />
+          <Pressable
+            onPress={() => void copyUsername()}
+            hitSlop={8}
+            style={styles.copyButton}
+            accessibilityRole="button"
+            accessibilityLabel="Copy username"
+            testID="username-copy-button"
+          >
+            <Copy size={15} color={BRAND} strokeWidth={2.1} />
+          </Pressable>
+        </View>
+
+        {status ? (
+          <Animated.View
+            key={`${status.tone}-${status.text}`}
+            entering={FadeIn.duration(160)}
+            exiting={FadeOut.duration(120)}
+            style={styles.statusRow}
+            testID="username-status"
+          >
+            {status.loading ? (
+              <ActivityIndicator size="small" color="#64748B" />
+            ) : status.tone === "error" ? (
+              <X size={14} color="#DC2626" strokeWidth={2.5} />
+            ) : (
+              <Check size={14} color="#16A34A" strokeWidth={2.6} />
+            )}
+            <Text
+              style={[
+                styles.statusText,
+                status.tone === "error"
+                  ? styles.statusTextError
+                  : status.tone === "ok"
+                    ? styles.statusTextOk
+                    : null,
+              ]}
+            >
+              {status.text}
+            </Text>
+          </Animated.View>
+        ) : null}
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.top + 52}
-      >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: Math.max(insets.bottom, 16) + 22 },
-          ]}
-        >
-          <View style={styles.hero}>
-            <Image
-              source={require("@/assets/alenio-welcome-mountain-ridge-v2.jpg")}
-              style={styles.heroImage}
-              resizeMode="cover"
-            />
-            <LinearGradient
-              colors={["rgba(246,243,255,0.97)", "rgba(246,243,255,0.78)", "rgba(246,243,255,0.12)"]}
-              locations={[0, 0.46, 1]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.heroIcon}>
-              <Text style={styles.heroAt}>@</Text>
-            </View>
-            <Text style={styles.heroTitle}>Make it yours.</Text>
-            <Text style={styles.heroBody}>
-              Your username helps people find and connect with you across Alenio.
+      <View style={styles.block}>
+        <Text style={alenioSheetStyles.fieldLabel}>Username requirements</Text>
+        <View style={styles.rules}>
+          <RuleRow label="3–15 characters" />
+          <RuleRow label="Letters, numbers, and underscores only" />
+          <RuleRow label="Must be unique across Alenio" />
+        </View>
+      </View>
+
+      <View testID="username-history-card">
+      <AlenioSheetCard tint="purple">
+        <View style={alenioSheetStyles.optionRow}>
+          <View style={styles.changesIcon}>
+            <CalendarDays size={16} color={BRAND} strokeWidth={2.1} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={alenioSheetStyles.optionTitle}>Username changes</Text>
+            <Text style={alenioSheetStyles.optionSubtitle}>
+              You can change your username once every 30 days.
             </Text>
           </View>
-
-          <Text style={styles.sectionLabel}>Your username</Text>
-          <View
-            style={[
-              styles.inputShell,
-              focused ? styles.inputFocused : null,
-              status?.tone === "error" ? styles.inputError : null,
-            ]}
-          >
-            <View style={styles.mark}>
-              <Text style={styles.markText}>@</Text>
+        </View>
+        {changedAt && nextChangeAt ? (
+          <View style={styles.historyRow}>
+            <View style={styles.historyColumn}>
+              <Text style={styles.historyLabel}>Last changed</Text>
+              <Text style={styles.historyDate}>{formatShortDate(changedAt)}</Text>
             </View>
-            <TextInput
-              value={value}
-              onChangeText={(next) => {
-                setSaveError(null);
-                setValue(next.trim().toLowerCase().slice(0, USERNAME_MAX_LENGTH));
-              }}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onSubmitEditing={submit}
-              returnKeyType="done"
-              enablesReturnKeyAutomatically
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="username"
-              placeholderTextColor="#B8C1CE"
-              maxLength={USERNAME_MAX_LENGTH}
-              style={styles.input}
-              testID="username-input"
-            />
-            <Pressable
-              onPress={() => void copyUsername()}
-              hitSlop={8}
-              style={styles.copyButton}
-              accessibilityRole="button"
-              accessibilityLabel="Copy username"
-              testID="username-copy-button"
-            >
-              <Copy size={16} color={BRAND} strokeWidth={2} />
-            </Pressable>
-          </View>
-
-          {status ? (
-            <Animated.View
-              key={`${status.tone}-${status.text}`}
-              entering={FadeIn.duration(160)}
-              exiting={FadeOut.duration(120)}
-              style={styles.statusRow}
-              testID="username-status"
-            >
-              {status.loading ? (
-                <ActivityIndicator size="small" color="#7A869A" />
-              ) : status.tone === "error" ? (
-                <X size={14} color="#DC2626" strokeWidth={2.5} />
-              ) : (
-                <Check size={14} color="#16A34A" strokeWidth={2.6} />
-              )}
-              <Text
-                style={[
-                  styles.statusText,
-                  status.tone === "error"
-                    ? styles.statusTextError
-                    : status.tone === "ok"
-                      ? styles.statusTextOk
-                      : null,
-                ]}
-              >
-                {status.text}
+            <View style={styles.historyDivider} />
+            <View style={styles.historyColumn}>
+              <Text style={styles.historyLabel}>Next available</Text>
+              <Text style={styles.historyDate}>
+                {formatShortDate(nextChangeAt)}
               </Text>
-            </Animated.View>
-          ) : null}
-
-          <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Username requirements</Text>
-          <View style={styles.rules}>
-            <RuleRow label="3–15 characters" />
-            <RuleRow label="Letters, numbers, and underscores only" />
-            <RuleRow label="Must be unique across Alenio" />
-          </View>
-
-          <View style={styles.changesCard} testID="username-history-card">
-            <View style={styles.changesHeading}>
-              <View style={styles.changesIcon}>
-                <CalendarDays size={16} color={BRAND} strokeWidth={2} />
-              </View>
-              <View style={styles.changesCopy}>
-                <Text style={styles.changesTitle}>Username changes</Text>
-                <Text style={styles.changesBody}>
-                  You can change your username once every 30 days.
-                </Text>
-              </View>
             </View>
-            {changedAt && nextChangeAt ? (
-              <View style={styles.historyRow}>
-                <View style={styles.historyColumn}>
-                  <Text style={styles.historyLabel}>Last changed</Text>
-                  <Text style={styles.historyDate}>{formatShortDate(changedAt)}</Text>
-                </View>
-                <View style={styles.historyDivider} />
-                <View style={styles.historyColumn}>
-                  <Text style={styles.historyLabel}>Next change available</Text>
-                  <Text style={styles.historyDate}>{formatShortDate(nextChangeAt)}</Text>
-                </View>
-              </View>
-            ) : null}
           </View>
+        ) : null}
+      </AlenioSheetCard>
+      </View>
 
-          <View style={styles.footer}>
-            <LockKeyhole size={13} color="#8B95A5" strokeWidth={1.9} />
-            <Text style={styles.footerText}>
-              Your username is public and visible across Alenio.
-            </Text>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+      <View style={styles.footerNote}>
+        <LockKeyhole size={13} color="#94A3B8" strokeWidth={1.9} />
+        <Text style={styles.footerNoteText}>
+          Your username is public and visible across Alenio.
+        </Text>
+      </View>
+    </AlenioBottomSheet>
   );
 }
 
@@ -413,102 +417,14 @@ function formatShortDate(date: Date): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F6F5FB" },
-  header: {
-    paddingHorizontal: 14,
-    paddingBottom: 8,
-    backgroundColor: "#F6F5FB",
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  backButton: {
-    width: 56,
-    height: 36,
-    alignItems: "flex-start",
-    justifyContent: "center",
-    paddingLeft: 6,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#111A2B",
-    letterSpacing: -0.3,
-    textAlign: "center",
-  },
-  headerSaveButton: {
-    width: 56,
-    height: 36,
-    alignItems: "flex-end",
-    justifyContent: "center",
-    paddingRight: 4,
-  },
-  headerSaveButtonDisabled: { opacity: 0.38 },
-  headerSaveButtonPressed: { opacity: 0.65 },
-  headerSaveText: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: "700",
-    color: BRAND,
-  },
-  keyboardView: { flex: 1 },
-  content: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 6 },
-  hero: {
-    height: 148,
-    borderRadius: 22,
-    overflow: "hidden",
-    backgroundColor: "#F3EEFF",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    justifyContent: "center",
-  },
-  heroImage: {
-    position: "absolute",
-    width: "150%",
-    aspectRatio: 16 / 9,
-    right: -12,
-    bottom: -6,
-  },
-  heroIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.82)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroAt: { fontSize: 18, fontWeight: "700", color: BRAND },
-  heroTitle: {
-    marginTop: 10,
-    fontSize: 22,
-    lineHeight: 26,
-    fontWeight: "800",
-    color: "#111A2B",
-    letterSpacing: -0.5,
-  },
-  heroBody: {
+  block: {
     marginTop: 4,
-    maxWidth: 230,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#5C6578",
   },
-  sectionLabel: {
-    marginTop: 18,
-    marginBottom: 8,
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "700",
-    color: "#98A2B3",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-  },
-  sectionLabelSpaced: { marginTop: 20 },
   inputShell: {
-    height: 56,
-    borderRadius: 16,
+    minHeight: 48,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E6E4F0",
+    borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
@@ -516,46 +432,52 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   inputFocused: { borderColor: BRAND },
-  inputError: { borderColor: "#F3A6A6" },
+  inputError: { borderColor: "#FECACA" },
   mark: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: "#F3F0FF",
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#EFE9FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  markText: { fontSize: 16, fontWeight: "700", color: BRAND },
+  markText: { fontSize: 15, fontWeight: "700", color: BRAND },
   input: {
     flex: 1,
-    height: "100%",
-    fontSize: 16,
+    minWidth: 0,
+    height: 46,
+    fontSize: 15,
     fontWeight: "700",
-    color: "#111A2B",
+    color: "#0F172A",
     letterSpacing: -0.2,
+    paddingVertical: 0,
   },
   copyButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: "#F3F0FF",
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#EFE9FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  statusRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 6 },
-  statusText: { flex: 1, fontSize: 13, lineHeight: 18, color: "#8B95A5" },
+  statusRow: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  statusText: { flex: 1, fontSize: 13, lineHeight: 18, color: "#64748B" },
   statusTextOk: { color: "#16A34A" },
   statusTextError: { color: "#DC2626" },
-  rules: { gap: 12, paddingLeft: 2 },
-  ruleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  ruleText: { flex: 1, fontSize: 15, lineHeight: 20, fontWeight: "500", color: "#1F2937" },
-  changesCard: {
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 20,
-    backgroundColor: "#F3F0FF",
+  rules: { gap: 10, paddingTop: 2 },
+  ruleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  ruleText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#334155",
   },
-  changesHeading: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   changesIcon: {
     width: 34,
     height: 34,
@@ -564,39 +486,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  changesCopy: { flex: 1, minWidth: 0 },
-  changesTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "800",
-    color: "#111A2B",
-    letterSpacing: -0.2,
-  },
-  changesBody: { marginTop: 2, fontSize: 13, lineHeight: 18, color: "#667085" },
   historyRow: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#E0D9F8",
     flexDirection: "row",
     alignItems: "stretch",
   },
   historyColumn: { flex: 1, minWidth: 0 },
-  historyDivider: { width: StyleSheet.hairlineWidth, backgroundColor: "#E0D9F8", marginHorizontal: 12 },
-  historyLabel: { fontSize: 12, lineHeight: 16, color: "#98A2B3" },
+  historyDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: "#E0D9F8",
+    marginHorizontal: 12,
+  },
+  historyLabel: { fontSize: 11, lineHeight: 14, color: "#94A3B8" },
   historyDate: {
     marginTop: 2,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: "700",
-    color: "#111A2B",
+    color: "#0F172A",
   },
-  footer: {
-    marginTop: 16,
+  footerNote: {
+    marginTop: 4,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
   },
-  footerText: { fontSize: 12, lineHeight: 16, color: "#98A2B3", textAlign: "center" },
+  footerNoteText: {
+    flexShrink: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#94A3B8",
+    textAlign: "center",
+  },
 });

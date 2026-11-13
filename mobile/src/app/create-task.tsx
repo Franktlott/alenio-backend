@@ -18,10 +18,9 @@ import {
   useWindowDimensions,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Plus, Square, Camera, Pencil, Trash2, ImageIcon, Check, CheckSquare, Bell, ChevronRight, Lock, Search, Calendar, Clock, Users, FileText, ListChecks, ArrowLeft, ArrowRight } from "lucide-react-native";
+import { X, BookOpen, Plus, Square, Camera, Pencil, Trash2, ImageIcon, Check, CheckSquare, ChevronRight, Lock, Search, Calendar, Clock, Users, FileText, ListChecks, ArrowLeft, ArrowRight } from "lucide-react-native";
 import { colors } from "@/theme";
 import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
@@ -31,10 +30,11 @@ import type { Task, TaskKind, TaskPriority, RecurrenceType, Team, TeamMember, Ta
 import { clampRecurrenceCount, maxRecurrenceCount, recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { resolveMyTeamRole } from "@/lib/member-identity";
-import { fitsFormSheet } from "@/lib/adaptive-layout";
 import { resolveTimeZone, suggestedDueClock, taskDuePayload, withDueClock } from "@/lib/timezone";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { UserAvatar } from "@/components/UserAvatar";
+import { AlenioBottomSheet, AlenioSheetCard } from "@/components/AlenioBottomSheet";
+import { AlenioList, AlenioListRow, Button } from "@/components/ui";
 import { toast } from "burnt";
 import { parseTaskKind, resolveTaskCreationPresentation } from "@/lib/task-kind";
 
@@ -325,13 +325,6 @@ const builderStyles = StyleSheet.create({
 });
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
-const CREATE_TASK_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.92);
-/**
- * A centred dialog is read as an object on the page, so it keeps a margin on
- * every side rather than running to the edges the way a bottom sheet does.
- */
-const DIALOG_MAX_WIDTH = 520;
-const DIALOG_MAX_HEIGHT = 640;
 const ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.72);
 
 export default function CreateTaskScreen() {
@@ -345,36 +338,9 @@ export default function CreateTaskScreen() {
     }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-  const insets = useSafeAreaInsets();
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const { height: windowHeight } = useWindowDimensions();
   const [selectedKind, setSelectedKind] = useState<TaskKind>(
     parseTaskKind(routeKind) ?? "workspace_task",
-  );
-
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const onShow = Keyboard.addListener(showEvent, (event) => {
-      setKeyboardHeight(event.endCoordinates?.height ?? 0);
-    });
-    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
-    return () => {
-      onShow.remove();
-      onHide.remove();
-    };
-  }, []);
-
-  /**
-   * Past this the form stops hugging the bottom edge and becomes a centred
-   * dialog, which is what every other sheet in the app already does on a
-   * tablet. Same rule, so they all change over at the same window size.
-   */
-  const dialog = fitsFormSheet(windowWidth, windowHeight);
-  /** Keep the sheet inside the visible area above the keyboard so the header stays on-screen. */
-  const sheetMaxHeight = Math.min(
-    dialog ? DIALOG_MAX_HEIGHT : CREATE_TASK_SHEET_MAX_HEIGHT,
-    Math.max(320, SCREEN_HEIGHT - keyboardHeight - Math.max(insets.top, 8)),
   );
 
   const { data: meProfile } = useQuery({
@@ -555,7 +521,7 @@ export default function CreateTaskScreen() {
     onSuccess: () => {
       invalidateTaskCaches(queryClient, teamId);
       toast({
-        title: isReminder ? "Reminder created" : "Task created",
+        title: "Task created",
         message: isReminder
           ? "Only you can see it. It won’t affect Team Momentum."
           : "Your workspace task is ready.",
@@ -564,11 +530,7 @@ export default function CreateTaskScreen() {
       router.back();
     },
     onError: () =>
-      setError(
-        isReminder
-          ? "Failed to create reminder. Please try again."
-          : "Failed to create task. Please try again.",
-      ),
+      setError("Failed to create task. Please try again."),
   });
 
   const confirmCreate = (assigneeIds: string[] = selectedAssignees) => {
@@ -602,7 +564,7 @@ export default function CreateTaskScreen() {
 
   const handleCreate = () => {
     if (!title.trim()) {
-      setError(isReminder ? "Please enter a reminder title" : "Please enter a task title");
+      setError("Please enter a task title");
       setStep(0);
       return;
     }
@@ -626,7 +588,7 @@ export default function CreateTaskScreen() {
 
   const goToStep = (index: number) => {
     if (index > stepIndex && !title.trim()) {
-      setError(isReminder ? "Please enter a reminder title" : "Please enter a task title");
+      setError("Please enter a task title");
       return;
     }
     if (
@@ -639,6 +601,14 @@ export default function CreateTaskScreen() {
       setStep(whoStepIndex);
       return;
     }
+    const whenStepIndex = steps.indexOf("when");
+    if (whenStepIndex >= 0 && index > whenStepIndex && !dueDate) {
+      setError("Please choose a due date");
+      setStep(whenStepIndex);
+      return;
+    }
+    // Leave any open keyboard so the footer Next control stays tappable.
+    Keyboard.dismiss();
     setError(null);
     setStep(Math.max(0, Math.min(index, steps.length - 1)));
   };
@@ -711,125 +681,126 @@ export default function CreateTaskScreen() {
     }
   };
 
+  const primaryLabel = isLastStep
+    ? presentation.createLabel
+    : `Next: ${STEP_LABEL[steps[stepIndex + 1]]}`;
+
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        justifyContent: dialog ? "center" : "flex-end",
-        alignItems: dialog ? "center" : "stretch",
-        paddingHorizontal: dialog ? 24 : 0,
-      }}
-      testID="create-task-screen"
-    >
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        onPress={() => router.back()}
-        testID="create-task-backdrop"
-      />
-      <View
-        style={{
-          width: "100%",
-          maxWidth: dialog ? DIALOG_MAX_WIDTH : undefined,
-          marginBottom: keyboardHeight,
-        }}
-      >
-        <View
-          style={{
-            backgroundColor: "white",
-            borderTopLeftRadius: dialog ? 22 : 32,
-            borderTopRightRadius: dialog ? 22 : 32,
-            borderBottomLeftRadius: dialog ? 22 : 0,
-            borderBottomRightRadius: dialog ? 22 : 0,
-            borderCurve: "continuous",
-            maxHeight: sheetMaxHeight,
-            width: "100%",
-            overflow: "hidden",
-          }}
-        >
-          {/** A grab handle promises a drag the centred dialog does not do. */}
-          {dialog ? null : (
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 12 }} />
-          )}
-          <View style={[builderStyles.header, { marginTop: dialog ? 18 : 0 }]}>
-            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 32, height: 32, borderRadius: 8 }} />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={builderStyles.eyebrow}>{isReminder ? "REMINDER BUILDER" : "TASK BUILDER"}</Text>
-              <Text style={builderStyles.title}>{presentation.newTitle}</Text>
-            </View>
-            <View style={builderStyles.stepPill} testID="task-builder-step-count">
-              <Text style={builderStyles.stepPillText}>
-                Step {stepIndex + 1} of {steps.length}
+    <>
+      <AlenioBottomSheet
+        asScreen
+        title={presentation.newTitle}
+        subtitle={
+          presentation.privacyHint
+            ? presentation.privacyHint
+            : "Task builder"
+        }
+        onClose={() => router.back()}
+        showCloseButton
+        showScrollIndicator
+        testID="create-task-screen"
+        headerRight={
+          <View style={builderStyles.stepPill} testID="task-builder-step-count">
+            <Text style={builderStyles.stepPillText}>
+              Step {stepIndex + 1} of {steps.length}
+            </Text>
+          </View>
+        }
+        footer={
+          <View style={{ width: "100%" }}>
+            {error ? (
+              <Text style={[builderStyles.error, { marginBottom: 10 }]} testID="task-builder-error">
+                {error}
               </Text>
+            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", width: "100%" }}>
+              {stepIndex === 0 ? null : (
+                <TouchableOpacity
+                  onPress={() => setStep(stepIndex - 1)}
+                  style={[builderStyles.backButton, { marginRight: 12 }]}
+                  accessibilityRole="button"
+                  testID="back-step-button"
+                >
+                  <ArrowLeft size={17} color="#334155" strokeWidth={2.2} />
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#334155" }}>Back</Text>
+                </TouchableOpacity>
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  label={primaryLabel}
+                  iconRight={
+                    isLastStep ? undefined : <ArrowRight size={17} color="#FFFFFF" strokeWidth={2.4} />
+                  }
+                  loading={isLastStep && createMutation.isPending}
+                  disabled={isLastStep && createMutation.isPending}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    if (isLastStep) handleCreate();
+                    else goToStep(stepIndex + 1);
+                  }}
+                  testID={isLastStep ? "create-button" : "next-step-button"}
+                />
+              </View>
             </View>
-            <Pressable
-              onPress={() => router.back()}
-              style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center", marginLeft: 10 }}
-              testID="close-button"
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <X size={16} color="#64748B" />
-            </Pressable>
           </View>
-
+        }
+      >
           <View style={builderStyles.stepper} testID="task-builder-stepper">
-            {steps.map((id, i) => {
-              const Icon = STEP_ICON[id];
-              const active = i === stepIndex;
-              const done = i < stepIndex;
-              return (
-                <React.Fragment key={id}>
-                  {i > 0 ? (
-                    <View style={[builderStyles.stepLine, i <= stepIndex ? { backgroundColor: ACCENT } : null]} />
-                  ) : null}
-                  <Pressable
-                    onPress={() => goToStep(i)}
-                    style={builderStyles.stepNode}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={STEP_LABEL[id]}
-                    testID={`task-builder-step-${id}`}
-                  >
-                    <View
-                      style={[
-                        builderStyles.stepDot,
-                        active ? { backgroundColor: ACCENT } : done ? { backgroundColor: ACCENT_SOFT } : null,
-                      ]}
+              {steps.map((id, i) => {
+                const Icon = STEP_ICON[id];
+                const active = i === stepIndex;
+                const done = i < stepIndex;
+                return (
+                  <React.Fragment key={id}>
+                    {i > 0 ? (
+                      <View style={[builderStyles.stepLine, i <= stepIndex ? { backgroundColor: ACCENT } : null]} />
+                    ) : null}
+                    <Pressable
+                      onPress={() => goToStep(i)}
+                      style={builderStyles.stepNode}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={STEP_LABEL[id]}
+                      testID={`task-builder-step-${id}`}
                     >
-                      {done ? (
-                        <Check size={16} color={ACCENT} strokeWidth={2.6} />
-                      ) : (
-                        <Icon size={16} color={active ? "#FFFFFF" : "#94A3B8"} strokeWidth={2.2} />
-                      )}
-                    </View>
-                    <Text style={[builderStyles.stepLabel, active || done ? { color: ACCENT_INK } : null]}>
-                      {STEP_LABEL[id]}
-                    </Text>
-                  </Pressable>
-                </React.Fragment>
-              );
-            })}
-          </View>
+                      <View
+                        style={[
+                          builderStyles.stepDot,
+                          active ? { backgroundColor: ACCENT } : done ? { backgroundColor: ACCENT_SOFT } : null,
+                        ]}
+                      >
+                        {done ? (
+                          <Check size={16} color={ACCENT} strokeWidth={2.6} />
+                        ) : (
+                          <Icon size={16} color={active ? "#FFFFFF" : "#94A3B8"} strokeWidth={2.2} />
+                        )}
+                      </View>
+                      <Text style={[builderStyles.stepLabel, active || done ? { color: ACCENT_INK } : null]}>
+                        {STEP_LABEL[id]}
+                      </Text>
+                    </Pressable>
+                  </React.Fragment>
+                );
+              })}
+            </View>
 
-          <ScrollView
-            style={{ flexGrow: 0, flexShrink: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
-            showsVerticalScrollIndicator
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            nestedScrollEnabled
-            bounces
-          >
           {currentStep === "details" ? (
           <>
           {presentation.canChooseKind ? (
             <>
-              <Text style={[formStyles.label, { marginTop: 4 }]}>Type</Text>
+              <Text style={[formStyles.label, { marginTop: 4 }]}>Who is this for?</Text>
               <View style={{ flexDirection: "row", gap: 10 }} testID="task-kind-selector">
                 {(["workspace_task", "reminder"] as TaskKind[]).map((option) => {
                   const selected = presentation.kind === option;
-                  const Icon = option === "workspace_task" ? CheckSquare : Bell;
+                  const Icon = option === "workspace_task" ? CheckSquare : Lock;
+                  const label = option === "workspace_task" ? "Team" : "Just for me";
+                  const hint =
+                    option === "workspace_task"
+                      ? "Assigned, with a due date"
+                      : "Only you can see this";
                   return (
                     <Pressable
                       key={option}
@@ -837,16 +808,16 @@ export default function CreateTaskScreen() {
                       style={[builderStyles.kindCard, selected ? builderStyles.kindCardSelected : null]}
                       accessibilityRole="tab"
                       accessibilityState={{ selected }}
-                      accessibilityLabel={`Create ${option === "workspace_task" ? "Task" : "Reminder"}`}
+                      accessibilityLabel={`Create ${label} task`}
                       testID={`task-kind-${option}`}
                     >
                       <Icon size={18} color={selected ? ACCENT : "#64748B"} strokeWidth={2.2} />
                       <View style={{ flex: 1 }}>
                         <Text style={[builderStyles.kindTitle, selected ? { color: ACCENT_INK } : null]}>
-                          {option === "workspace_task" ? "Task" : "Reminder"}
+                          {label}
                         </Text>
                         <Text style={builderStyles.kindSub} numberOfLines={1}>
-                          {option === "workspace_task" ? "Assigned, with a due date" : "Private to you"}
+                          {hint}
                         </Text>
                       </View>
                     </Pressable>
@@ -894,13 +865,13 @@ export default function CreateTaskScreen() {
 
           <View style={{ marginTop: 16 }}>
           <Text style={formStyles.label}>
-            {isReminder ? "Reminder title" : "Task title"}{" "}
+            Task title{" "}
             <Text style={formStyles.required}>*</Text>
           </Text>
           <View style={formStyles.field}>
             <TextInput
               style={formStyles.fieldInput}
-              placeholder={isReminder ? "What should you remember?" : "What needs to get done?"}
+              placeholder="What needs to get done?"
               placeholderTextColor="#94A3B8"
               value={title}
               onChangeText={(t) => {
@@ -1088,7 +1059,7 @@ export default function CreateTaskScreen() {
                 <Text style={formStyles.choiceText} numberOfLines={1}>
                   {dueHasTime && dueDate
                     ? dueDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-                    : "Anytime"}
+                    : "End of day"}
                 </Text>
                 <ChevronRight size={15} color="#C4C9D4" strokeWidth={2.2} />
               </TouchableOpacity>
@@ -1197,7 +1168,34 @@ export default function CreateTaskScreen() {
                       }}
                       testID="due-time-picker"
                     />
-                    <View style={{ height: 12 }} />
+                    <TouchableOpacity
+                      onPress={() => {
+                        setDueHasTime(false);
+                        setDueDate((current) => {
+                          const next = new Date(current ?? new Date());
+                          next.setHours(23, 59, 59, 0);
+                          return next;
+                        });
+                        setShowTimePicker(false);
+                      }}
+                      style={{
+                        marginHorizontal: 20,
+                        marginTop: 4,
+                        marginBottom: 8,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        backgroundColor: "#F8FAFC",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                        alignItems: "center",
+                      }}
+                      testID="clear-due-time-sheet-button"
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#475569" }}>
+                        Use end of day
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={{ height: 8 }} />
                   </View>
                 </View>
               </Modal>
@@ -1222,7 +1220,7 @@ export default function CreateTaskScreen() {
             <View className="flex-row items-center justify-between mb-3">
               <View>
                 <Text className="text-sm font-semibold text-slate-500">
-                  {isReminder ? "Recurring reminder" : "Recurring task"}
+                  Recurring task
                 </Text>
                 {isRecurring ? (
                   <Text className="text-xs text-slate-400 mt-0.5">
@@ -1446,7 +1444,7 @@ export default function CreateTaskScreen() {
           {currentStep === "review" ? (
           <View style={builderStyles.summary} testID="task-builder-summary">
             <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }} numberOfLines={2}>
-              {title.trim() || (isReminder ? "Untitled reminder" : "Untitled task")}
+              {title.trim() || "Untitled task"}
             </Text>
             <Text style={{ marginTop: 3, fontSize: 12.5, color: "#64748B" }} numberOfLines={2}>
               {[
@@ -1483,223 +1481,171 @@ export default function CreateTaskScreen() {
             </Text>
           </View>
           ) : null}
-          </ScrollView>
+      </AlenioBottomSheet>
 
-          <View
-            style={[
-              builderStyles.footer,
-              { paddingBottom: keyboardHeight > 0 || dialog ? 14 : insets.bottom + 12 },
-            ]}
-          >
-            {error ? (
-              <Text style={builderStyles.error} testID="task-builder-error">
-                {error}
-              </Text>
-            ) : null}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              {stepIndex === 0 ? null : (
-                <Pressable
-                  onPress={() => setStep(stepIndex - 1)}
-                  style={builderStyles.backButton}
-                  accessibilityRole="button"
-                  testID="back-step-button"
-                >
-                  <ArrowLeft size={17} color="#334155" strokeWidth={2.2} />
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#334155" }}>Back</Text>
-                </Pressable>
-              )}
-              <TouchableOpacity
-                onPress={isLastStep ? () => handleCreate() : () => goToStep(stepIndex + 1)}
-                disabled={createMutation.isPending}
-                style={[builderStyles.primary, { flex: 1 }]}
-                testID={isLastStep ? "create-button" : "next-step-button"}
-                accessibilityRole="button"
-                accessibilityLabel={isLastStep ? presentation.createLabel : `Next: ${STEP_LABEL[steps[stepIndex + 1]]}`}
-              >
-                {createMutation.isPending ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <>
-                    <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>
-                      {isLastStep ? presentation.createLabel : `Next: ${STEP_LABEL[steps[stepIndex + 1]]}`}
-                    </Text>
-                    {isLastStep ? null : <ArrowRight size={17} color="white" strokeWidth={2.4} />}
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      <Modal visible={showAssigneePicker} transparent animationType="slide" onRequestClose={() => {
-        setShowAssigneePicker(false);
-        setAssigneeSearch("");
-      }}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
-          onPress={() => {
-            setShowAssigneePicker(false);
-            setAssigneeSearch("");
+      <AlenioBottomSheet
+        visible={showAssigneePicker}
+        title="Assign to"
+        subtitle={
+          selectedAssignees.length === 0
+            ? "Pick who this task is for."
+            : `${selectedAssignees.length} selected`
+        }
+        onClose={() => {
+          setShowAssigneePicker(false);
+          setAssigneeSearch("");
+        }}
+        showCloseButton
+        compact
+        scrollEnabled={false}
+        testID="assignee-picker-sheet"
+        footer={
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            label="Done"
+            onPress={() => {
+              setShowAssigneePicker(false);
+              setAssigneeSearch("");
+            }}
+            testID="assignee-picker-done"
+          />
+        }
+      >
+        <View
+          style={{
+            minHeight: 42,
+            paddingHorizontal: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 9,
+            borderRadius: 12,
+            backgroundColor: "#F8FAFC",
+            borderWidth: 1,
+            borderColor: "#E2E8F0",
           }}
         >
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View
-              style={{
-                backgroundColor: "white",
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                maxHeight: ASSIGNEE_SHEET_MAX_HEIGHT,
-                paddingBottom: insets.bottom + 12,
-                overflow: "hidden",
-              }}
+          <Search size={17} color="#94A3B8" strokeWidth={2} />
+          <TextInput
+            value={assigneeSearch}
+            onChangeText={setAssigneeSearch}
+            placeholder="Search members"
+            placeholderTextColor="#94A3B8"
+            autoCorrect={false}
+            returnKeyType="search"
+            style={{
+              flex: 1,
+              paddingVertical: 10,
+              fontSize: 14,
+              color: "#0F172A",
+            }}
+            testID="assignee-search-input"
+          />
+          {assigneeSearch ? (
+            <Pressable
+              onPress={() => setAssigneeSearch("")}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear member search"
             >
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 10, marginBottom: 14 }} />
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 }}>
-                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Assign to</Text>
-                <Pressable
-                  onPress={() => {
-                    setShowAssigneePicker(false);
-                    setAssigneeSearch("");
-                  }}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
-                >
-                  <X size={16} color="#64748B" />
-                </Pressable>
-              </View>
-              <View
-                style={{
-                  marginHorizontal: 20,
-                  marginBottom: 10,
-                  minHeight: 42,
-                  paddingHorizontal: 12,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 9,
-                  borderRadius: 12,
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                }}
-              >
-                <Search size={17} color="#94A3B8" strokeWidth={2} />
-                <TextInput
-                  value={assigneeSearch}
-                  onChangeText={setAssigneeSearch}
-                  placeholder="Search members"
-                  placeholderTextColor="#94A3B8"
-                  autoCorrect={false}
-                  returnKeyType="search"
-                  style={{
-                    flex: 1,
-                    paddingVertical: 10,
-                    fontSize: 14,
-                    color: "#0F172A",
-                  }}
-                  testID="assignee-search-input"
-                />
-                {assigneeSearch ? (
-                  <Pressable
-                    onPress={() => setAssigneeSearch("")}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Clear member search"
-                  >
-                    <X size={16} color="#94A3B8" />
-                  </Pressable>
-                ) : null}
-              </View>
-              <Pressable
-                onPress={toggleAllAssignees}
-                style={{
-                  marginHorizontal: 20,
-                  marginBottom: 8,
-                  paddingHorizontal: 12,
-                  paddingVertical: 11,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  borderRadius: 12,
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                }}
-                testID="assignee-select-all"
-              >
-                <Text style={{ fontSize: 13, color: "#4361EE", fontWeight: "700" }}>
-                  {allAssigneesSelected ? "Deselect all" : "Select all"}
-                </Text>
-                {allAssigneesSelected ? <Check size={16} color="#4361EE" /> : null}
-              </Pressable>
-              <ScrollView
-                style={{ maxHeight: ASSIGNEE_SHEET_MAX_HEIGHT - 260 }}
-                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
-                showsVerticalScrollIndicator
-                keyboardShouldPersistTaps="handled"
-              >
-                {filteredAssigneeOptions.map((member, idx) => {
-                  const isSelected = selectedAssignees.includes(member.userId);
-                  return (
-                    <Pressable
-                      key={member.userId}
-                      onPress={() => toggleAssignee(member.userId)}
-                      style={{
-                        paddingVertical: 12,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        borderBottomWidth: idx === filteredAssigneeOptions.length - 1 ? 0 : 1,
-                        borderBottomColor: "#F1F5F9",
-                      }}
-                      testID={`assignee-${member.userId}`}
-                    >
-                      <View style={{ width: 32, height: 32, flexShrink: 0 }}>
+              <X size={16} color="#94A3B8" />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <Pressable
+          onPress={toggleAllAssignees}
+          style={{
+            marginTop: 4,
+            paddingHorizontal: 4,
+            paddingVertical: 10,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+          testID="assignee-select-all"
+          accessibilityRole="button"
+          accessibilityLabel={allAssigneesSelected ? "Deselect all members" : "Select all members"}
+        >
+          <Text style={{ fontSize: 13, color: ACCENT, fontWeight: "700" }}>
+            {allAssigneesSelected ? "Deselect all" : "Select all"}
+          </Text>
+          <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8" }}>
+            {selectedAssignees.length}/{allAssigneeIds.length}
+          </Text>
+        </Pressable>
+
+        <ScrollView
+          style={{ maxHeight: Math.min(ASSIGNEE_SHEET_MAX_HEIGHT - 280, Math.round(windowHeight * 0.42)) }}
+          contentContainerStyle={{ paddingBottom: 4 }}
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
+          {filteredAssigneeOptions.length === 0 ? (
+            <View style={{ paddingVertical: 28, alignItems: "center" }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B" }}>
+                No members found
+              </Text>
+            </View>
+          ) : (
+            <AlenioList>
+              {filteredAssigneeOptions.map((member) => {
+                const isSelected = selectedAssignees.includes(member.userId);
+                return (
+                  <AlenioListRow
+                    key={member.userId}
+                    leading={
+                      <View style={{ width: 36, height: 36, flexShrink: 0 }}>
                         <UserAvatar
                           user={member.user}
-                          size={32}
-                          radius={16}
-                          backgroundColor="#EEF2FF"
-                          textColor="#4361EE"
-                          fontSize={11}
+                          size={36}
+                          radius={18}
+                          backgroundColor={ACCENT_SOFT}
+                          textColor={ACCENT}
+                          fontSize={12}
                         />
                       </View>
-                      <Text style={{ fontSize: 15, color: "#334155", fontWeight: isSelected ? "700" : "500", flex: 1 }} numberOfLines={1}>
-                        {memberDisplayName(member)}
-                      </Text>
-                      {isSelected ? <Check size={16} color="#4361EE" /> : <View style={{ width: 16, height: 16 }} />}
-                    </Pressable>
-                  );
-                })}
-                {filteredAssigneeOptions.length === 0 ? (
-                  <View style={{ paddingVertical: 28, alignItems: "center" }}>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B" }}>
-                      No members found
-                    </Text>
-                  </View>
-                ) : null}
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowAssigneePicker(false);
-                  setAssigneeSearch("");
-                }}
-                style={{
-                  marginHorizontal: 20,
-                  marginTop: 8,
-                  backgroundColor: "#4361EE",
-                  borderRadius: 14,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                }}
-                testID="assignee-picker-done"
-              >
-                <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+                    }
+                    title={memberDisplayName(member)}
+                    trailing={
+                      isSelected ? (
+                        <View
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            backgroundColor: ACCENT,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Check size={13} color="#FFFFFF" strokeWidth={3} />
+                        </View>
+                      ) : (
+                        <View
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            borderWidth: 1.5,
+                            borderColor: "#CBD5E1",
+                            backgroundColor: "#FFFFFF",
+                          }}
+                        />
+                      )
+                    }
+                    onPress={() => toggleAssignee(member.userId)}
+                    accessibilityLabel={`${isSelected ? "Unassign" : "Assign"} ${memberDisplayName(member)}`}
+                    testID={`assignee-${member.userId}`}
+                  />
+                );
+              })}
+            </AlenioList>
+          )}
+        </ScrollView>
+      </AlenioBottomSheet>
 
       {/* Photo options modal */}
       <Modal visible={showPhotoOptions} transparent animationType="slide" onRequestClose={() => setShowPhotoOptions(false)}>
@@ -1745,54 +1691,50 @@ export default function CreateTaskScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Split confirm modal */}
-      <Modal visible={showSplitConfirm} transparent animationType="fade" onRequestClose={() => setShowSplitConfirm(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
-          <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full" style={{ shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 24 }}>
-            <View className="flex-row items-start justify-between mb-3" style={{ gap: 12 }}>
-              <Text className="flex-1 text-base font-bold text-slate-900 dark:text-white">Creating separate tasks</Text>
-              {/* Backing out returns to the form with nothing created. */}
-              <TouchableOpacity
-                onPress={() => setShowSplitConfirm(false)}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                testID="split-confirm-close"
-              >
-                <X size={20} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-            <Text className="text-sm text-slate-600 dark:text-slate-300 mb-1">
-              {"You've selected "}
-              <Text style={{ fontWeight: "bold" }}>{selectedAssignees.length} people</Text>
-              {" without enabling Joint Task. This will create "}
-              <Text style={{ fontWeight: "bold" }}>{selectedAssignees.length} separate tasks</Text>
-              {" — one for each person."}
-            </Text>
-            <Text className="text-sm text-slate-600 dark:text-slate-300 mb-5">
-              {"\nEnable Joint Task if you want everyone working on the same shared task."}
-            </Text>
-            <TouchableOpacity
-              onPress={() => { setIsJoint(true); setShowSplitConfirm(false); }}
-              className="py-3 rounded-xl items-center mb-3"
-              style={{ backgroundColor: "#4361EE" }}
+      <AlenioBottomSheet
+        visible={showSplitConfirm}
+        title="Separate tasks?"
+        subtitle="Choose how this work is shared."
+        onClose={() => setShowSplitConfirm(false)}
+        showCloseButton
+        compact
+        scrollEnabled={false}
+        testID="split-confirm-sheet"
+        footer={
+          <View style={{ width: "100%", gap: 10 }}>
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              label="Enable Joint Task"
+              icon={<Users size={16} color="#FFFFFF" strokeWidth={2.4} />}
+              onPress={() => {
+                setIsJoint(true);
+                setShowSplitConfirm(false);
+              }}
               testID="split-confirm-enable-joint"
-            >
-              <Text className="text-sm font-semibold text-white">Enable Joint Task</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            />
+            <Button
+              variant="secondary"
+              size="lg"
+              fullWidth
+              label={`Create ${selectedAssignees.length} separate tasks`}
               onPress={() => confirmCreate()}
-              className="py-3 rounded-xl items-center border"
-              style={{ borderColor: "#CBD5E1" }}
               testID="split-confirm-create-separate"
-            >
-              <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                {`Create ${selectedAssignees.length} separate tasks`}
-              </Text>
-            </TouchableOpacity>
+            />
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <AlenioSheetCard tint="blue" compact>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E3A8A", lineHeight: 18 }}>
+            You picked {selectedAssignees.length} people without Joint Task on. That creates{" "}
+            {selectedAssignees.length} separate tasks — one each.
+          </Text>
+          <Text style={{ marginTop: 6, fontSize: 12, color: "#64748B", lineHeight: 17 }}>
+            Turn on Joint Task if everyone should share one task.
+          </Text>
+        </AlenioSheetCard>
+      </AlenioBottomSheet>
 
       {/* Template picker modal */}
       <Modal visible={showTemplatePicker} transparent animationType="slide" onRequestClose={() => { setShowTemplatePicker(false); setEditingTemplate(null); }}>
@@ -1942,6 +1884,6 @@ export default function CreateTaskScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </>
   );
 }

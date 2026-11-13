@@ -111,14 +111,14 @@ export function HomeDiscover({ wide }: { wide: boolean }) {
   return (
     <View style={styles.section} testID="home-discover">
       <PanelHeader
-        title="Discover"
+        title="Explore"
         tint="sky"
         icon={<Sparkles size={16} color={tintInk("sky")} strokeWidth={2.3} />}
         action={
           <Button
             variant="link"
-            label="Explore all"
-            accessibilityLabel="Explore all Discover articles"
+            label="Discover all"
+            accessibilityLabel="Discover all Explore articles"
             onPress={() => router.push("/discover")}
             iconRight={<ChevronRight size={14} color={buttonInk("link")} strokeWidth={2.4} />}
           />

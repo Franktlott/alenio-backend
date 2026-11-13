@@ -336,9 +336,11 @@ export type PublicPersonProfile = {
   emailVerified: boolean;
   memberSince: string;
   profileTitle: string | null;
+  profileOrganization: string | null;
   profileWebsite: string | null;
   profileLocation: string | null;
   profileBio: string | null;
+  profileHeaderImage: string | null;
   photos?: PublicProfilePhoto[];
   stats: {
     connections: number;
@@ -505,6 +507,17 @@ export type HomeTodayItemType =
   | "holiday"
   | "external";
 
+export type HomeTodayAssignee = {
+  id: string;
+  userId: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    image?: string | null;
+  };
+};
+
 export type HomeTodayItem = {
   id: string;
   type: HomeTodayItemType;
@@ -519,6 +532,8 @@ export type HomeTodayItem = {
   done?: boolean;
   /** A task carried in from an earlier day, still unfinished. */
   overdue?: boolean;
+  /** Present for tasks/reminders so preview sheets can render without a second fetch. */
+  assignees?: HomeTodayAssignee[];
 };
 
 export type HomeUpcomingResponse = {

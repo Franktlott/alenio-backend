@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Image,
   Pressable,
@@ -18,6 +18,8 @@ import {
 } from "lucide-react-native";
 import { router } from "expo-router";
 import { HomeDiscover } from "@/components/home/HomeDiscover";
+import { AddConnectionSheet } from "@/components/people/AddConnectionSheet";
+import { ConnectionRequestsSheet } from "@/components/people/ConnectionRequestsSheet";
 import {
   AlenioList,
   AlenioListRow,
@@ -29,7 +31,7 @@ import {
   type TintName,
 } from "@/components/ui";
 import type { ConnectionsResponse } from "@/lib/types";
-import { elevation, gradients, palette, premiumType, tints } from "@/theme";
+import { elevation, gradients, palette } from "@/theme";
 
 const PURPLE = palette.violet;
 
@@ -41,7 +43,8 @@ type Props = {
   todayCard?: React.ReactNode;
   /** Messages and mentions waiting on the user. Sits beside or under Today. */
   waitingCard?: React.ReactNode;
-  insightTitle: string;
+  /** When null, the Insight card is held until Home has a resolved card. */
+  insightTitle: string | null;
   insightBody: string;
   insightAction: string;
   insightImage: ImageSourcePropType;
@@ -68,80 +71,87 @@ export function NoWorkspaceHome({
   insightImage,
   onInsight,
 }: Props) {
+  const [requestsOpen, setRequestsOpen] = useState(false);
+  const [findPeopleOpen, setFindPeopleOpen] = useState(false);
+  const networkReady = connections !== undefined;
   const accepted = connections?.accepted.length ?? 0;
-  const incoming = connections?.incoming ?? [];
+  const incomingCount = connections?.incoming.length ?? 0;
   const sent = connections?.outgoing.length ?? 0;
-  const networkIsEmpty = accepted === 0 && incoming.length === 0 && sent === 0;
-  const stats = [
-    { key: "connections", value: accepted, label: "Connections" },
-    { key: "requests", value: incoming.length, label: "Requests" },
-    { key: "sent", value: sent, label: "Sent" },
-  ];
+  const networkIsEmpty =
+    networkReady && accepted === 0 && incomingCount === 0 && sent === 0;
   const networkStarted = accepted > 0;
   const showWelcomeHero =
-    !hasWorkspace && connections !== undefined && accepted < 3;
-
-  const networkCard = (
+    !hasWorkspace && networkReady && accepted < 3;
+  const showInsight = insightTitle != null && insightTitle.length > 0;
+  /**
+   * Network has its own tab now — Home only surfaces a signal when someone is
+   * waiting, or an empty-state nudge for brand-new accounts.
+   */
+  const networkSignal = networkIsEmpty ? (
     <View
       style={[styles.card, wide && !hasWorkspace ? styles.wideCard : null]}
-      testID="home-network-card"
+      testID="home-network-empty"
     >
       <PanelHeader
         title="Your network"
         tint="mint"
         icon={<Users size={16} color={tintInk("mint")} strokeWidth={2.2} />}
-        action={
-          <Button
-            variant="link"
-            label="View network"
-            onPress={() => openNetwork("connections")}
-            iconRight={<ChevronRight size={14} color={buttonInk("link")} strokeWidth={2.4} />}
-          />
-        }
       />
-      <View style={styles.statRow}>
-        {stats.map((stat) => (
-          <Pressable
-            key={stat.key}
-            onPress={() => openNetwork("connections")}
-            style={styles.statTile}
-            accessibilityRole="button"
-            accessibilityLabel={`${stat.value} ${stat.label}`}
-          >
-            <Text
-              style={[
-                styles.statValue,
-                stat.key === "requests" ? styles.statValueHot : null,
-              ]}
-            >
-              {stat.value}
-            </Text>
-            <Text style={styles.statLabel}>{stat.label}</Text>
-          </Pressable>
-        ))}
+      <View style={styles.networkEmpty}>
+        <Text style={styles.networkEmptyTitle}>Your network starts here</Text>
+        <Text style={styles.networkEmptyText}>
+          Find someone you already know on Alenio.
+        </Text>
+        <Button
+          variant="soft"
+          size="sm"
+          label="Find people"
+          onPress={() => setFindPeopleOpen(true)}
+          icon={<UserPlus size={13} color={buttonInk("soft")} strokeWidth={2.3} />}
+          testID="home-network-empty-find"
+          style={{ alignSelf: "center", marginTop: 7 }}
+        />
       </View>
-      {networkIsEmpty ? (
-        <View style={styles.networkEmpty}>
-          <Text style={styles.networkEmptyTitle}>Your network starts here</Text>
-          <Text style={styles.networkEmptyText}>
-            Find someone you already know on Alenio.
-          </Text>
-          <Button
-            variant="soft"
-            size="sm"
-            label="Find people"
-            onPress={() => openNetwork("connections")}
-            icon={<UserPlus size={13} color={buttonInk("soft")} strokeWidth={2.3} />}
-            testID="home-network-empty-find"
-            style={{ alignSelf: "center", marginTop: 7 }}
-          />
-        </View>
-      ) : null}
     </View>
-  );
+  ) : networkReady && incomingCount > 0 ? (
+    <View style={styles.card} testID="home-network-requests">
+      <Pressable
+        onPress={() => setRequestsOpen(true)}
+        style={styles.requestsRow}
+        accessibilityRole="button"
+        accessibilityLabel={
+          incomingCount === 1
+            ? "1 connection request waiting"
+            : `${incomingCount} connection requests waiting`
+        }
+        testID="home-network-requests-row"
+      >
+        <IconTile tint="lavender">
+          <UserPlus size={16} color={tintInk("lavender")} strokeWidth={2.2} />
+        </IconTile>
+        <View style={styles.requestsCopy}>
+          <Text style={styles.requestsTitle}>
+            {incomingCount === 1
+              ? "1 connection request"
+              : `${incomingCount} connection requests`}
+          </Text>
+          <Text style={styles.requestsSubtitle}>Waiting for your response</Text>
+        </View>
+        <Text style={styles.requestsCount}>{incomingCount}</Text>
+        <ChevronRight size={16} color={PURPLE} strokeWidth={2.3} />
+      </Pressable>
+    </View>
+  ) : null;
 
-  const stayCard = (
-    <View style={[styles.card, wide ? styles.wideCard : null]} testID="home-stay-connected">
+  const stayCard = (paired = false) => (
+    <View
+      style={[
+        styles.card,
+        wide ? styles.wideCard : null,
+        paired ? styles.stayBesideHero : null,
+      ]}
+      testID="home-stay-connected"
+    >
       <PanelHeader
         title="Stay connected"
         subtitle="Meaningful ways to get started."
@@ -153,11 +163,13 @@ export function NoWorkspaceHome({
           tint="lavender"
           title="Find people"
           subtitle="Search for someone you know"
-          onPress={() => openNetwork("connections")}
+          onPress={() => setFindPeopleOpen(true)}
           testID="home-find-people"
         />
         <StayRow
-          icon={<MessageCircle size={16} color={tintInk("peach")} strokeWidth={2.2} />}
+          icon={
+            <MessageCircle size={16} color={tintInk("peach")} strokeWidth={2.2} />
+          }
           tint="peach"
           title="Start a conversation"
           subtitle="Message a connection"
@@ -165,7 +177,9 @@ export function NoWorkspaceHome({
           testID="home-start-conversation"
         />
         <StayRow
-          icon={<UsersRound size={16} color={tintInk("sky")} strokeWidth={2.2} />}
+          icon={
+            <UsersRound size={16} color={tintInk("sky")} strokeWidth={2.2} />
+          }
           tint="sky"
           title="Join a workspace"
           subtitle="Enter your team's workspace"
@@ -188,18 +202,23 @@ export function NoWorkspaceHome({
   );
 
   /** The shadow lives on an outer view: iOS drops it on a view that clips. */
-  const insightCard = (flushTop = false) => (
+  const insightCard = (flushTop = false, paired = false) => (
     <View
       style={[
         styles.insightShadow,
         flushTop ? styles.insightFlush : null,
+        paired ? styles.insightShadowPaired : null,
       ]}
     >
       <Pressable
         onPress={onInsight}
-        style={[styles.insight, !wide ? styles.insightNarrow : null]}
+        style={[
+          styles.insight,
+          !wide ? styles.insightNarrow : null,
+          paired ? styles.insightPaired : null,
+        ]}
         accessibilityRole="button"
-        accessibilityLabel={insightTitle.replace(/\n/g, " ")}
+        accessibilityLabel={(insightTitle ?? "").replace(/\n/g, " ")}
         testID="home-no-workspace-insight"
       >
         <Image
@@ -247,138 +266,180 @@ export function NoWorkspaceHome({
     </View>
   );
 
+  const welcomeHero = showWelcomeHero ? (
+    <View style={[styles.heroShadow, wide ? styles.heroShadowWide : null]}>
+      <View style={[styles.hero, !wide ? styles.heroNarrow : styles.heroWide]}>
+        <Image
+          source={require("@/assets/alenio-welcome-mountain-ridge-v2.jpg")}
+          style={[styles.heroPhoto, !wide ? styles.heroPhotoNarrow : null]}
+          resizeMode="cover"
+          accessibilityIgnoresInvertColors
+        />
+        <LinearGradient
+          colors={[
+            "#F7F5FF",
+            "rgba(247,245,255,0.94)",
+            "rgba(247,245,255,0.55)",
+            "rgba(247,245,255,0.12)",
+          ]}
+          locations={[0, 0.38, 0.62, 1]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          pointerEvents="none"
+          style={styles.heroWash}
+        />
+        <View
+          style={[
+            styles.heroCopy,
+            !wide ? styles.heroCopyNarrow : styles.heroCopyWide,
+          ]}
+        >
+          <Text style={styles.heroEyebrow}>
+            {networkStarted ? "YOUR NETWORK" : "WELCOME TO ALENIO"}
+          </Text>
+          <Text style={[styles.heroTitle, !wide ? styles.heroTitleNarrow : null]}>
+            {networkStarted
+              ? "Your network is taking shape."
+              : "Connect, learn, and grow."}
+          </Text>
+          <Text style={[styles.heroBody, !wide ? styles.heroBodyNarrow : null]}>
+            {networkStarted
+              ? "See what’s new and keep building meaningful connections."
+              : "Build your network, discover insights, and stay inspired."}
+          </Text>
+          <View
+            style={[styles.heroActions, !wide ? styles.heroActionsNarrow : null]}
+          >
+            <Pressable
+              onPress={() =>
+                networkStarted
+                  ? openNetwork("updates")
+                  : setFindPeopleOpen(true)
+              }
+              style={[
+                styles.heroPrimary,
+                !wide ? styles.heroButtonNarrow : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                networkStarted ? "View network updates" : "Build your network"
+              }
+              testID="home-build-network"
+            >
+              <Users size={15} color="#FFFFFF" strokeWidth={2.3} />
+              <Text
+                style={[
+                  styles.heroPrimaryText,
+                  !wide ? styles.heroButtonTextNarrow : null,
+                ]}
+              >
+                {networkStarted
+                  ? "View updates"
+                  : wide
+                    ? "Build your network"
+                    : "Build network"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={
+                networkStarted ? () => setFindPeopleOpen(true) : onInsight
+              }
+              style={[
+                styles.heroSecondary,
+                !wide ? styles.heroSecondaryNarrow : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                networkStarted ? "Find people" : "Explore insights"
+              }
+              testID="home-explore-insights"
+            >
+              <Text
+                style={[
+                  styles.heroSecondaryText,
+                  !wide ? styles.heroSecondaryTextNarrow : null,
+                ]}
+              >
+                {networkStarted ? "Find people" : "Explore insights"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </View>
+  ) : null;
+
   return (
     <View testID="home-no-workspace">
-      {showWelcomeHero ? (
-        <View style={styles.heroShadow}>
-        <View style={[styles.hero, !wide ? styles.heroNarrow : null]}>
-          <Image
-            source={require("@/assets/alenio-welcome-mountain-ridge-v2.jpg")}
-            style={[styles.heroPhoto, !wide ? styles.heroPhotoNarrow : null]}
-            resizeMode="cover"
-            accessibilityIgnoresInvertColors
-          />
-          <LinearGradient
-            colors={[
-              "#F7F5FF",
-              "rgba(247,245,255,0.94)",
-              "rgba(247,245,255,0.55)",
-              "rgba(247,245,255,0.12)",
-            ]}
-            locations={[0, 0.38, 0.62, 1]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            pointerEvents="none"
-            style={styles.heroWash}
-          />
-          <View style={[styles.heroCopy, !wide ? styles.heroCopyNarrow : null]}>
-            <Text style={styles.heroEyebrow}>
-              {networkStarted ? "YOUR NETWORK" : "WELCOME TO ALENIO"}
-            </Text>
-            <Text style={[styles.heroTitle, !wide ? styles.heroTitleNarrow : null]}>
-              {networkStarted
-                ? "Your network is taking shape."
-                : "Connect, learn, and grow."}
-            </Text>
-            <Text style={[styles.heroBody, !wide ? styles.heroBodyNarrow : null]}>
-              {networkStarted
-                ? "See what’s new and keep building meaningful connections."
-                : "Build your network, discover insights, and stay inspired."}
-            </Text>
-            <View
-              style={[styles.heroActions, !wide ? styles.heroActionsNarrow : null]}
-            >
-              <Pressable
-                onPress={() =>
-                  openNetwork(networkStarted ? "updates" : "connections")
-                }
-                style={[
-                  styles.heroPrimary,
-                  !wide ? styles.heroButtonNarrow : null,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  networkStarted ? "View network updates" : "Build your network"
-                }
-                testID="home-build-network"
-              >
-                <Users size={15} color="#FFFFFF" strokeWidth={2.3} />
-                <Text
-                  style={[
-                    styles.heroPrimaryText,
-                    !wide ? styles.heroButtonTextNarrow : null,
-                  ]}
-                >
-                  {networkStarted
-                    ? "View updates"
-                    : wide
-                      ? "Build your network"
-                      : "Build network"}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={
-                  networkStarted
-                    ? () => openNetwork("connections")
-                    : onInsight
-                }
-                style={[
-                  styles.heroSecondary,
-                  !wide ? styles.heroSecondaryNarrow : null,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  networkStarted ? "Find people" : "Explore insights"
-                }
-                testID="home-explore-insights"
-              >
-                <Text
-                  style={[
-                    styles.heroSecondaryText,
-                    !wide ? styles.heroSecondaryTextNarrow : null,
-                  ]}
-                >
-                  {networkStarted ? "Find people" : "Explore insights"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-        </View>
-      ) : null}
-
       {wide && hasWorkspace && todayCard ? (
-        <View style={[styles.cardRow, styles.cardRowMatch]}>
-          <View style={[styles.todayColumn, { width: columnWidth }]}>
-            <View style={styles.todayFill}>{todayCard}</View>
-          </View>
-          <View style={[styles.cardStack, styles.columnStack, { width: columnWidth }]}>
-            {waitingCard}
-            {networkCard}
-            {insightCard(true)}
-          </View>
-        </View>
+        <>
+          {showInsight ? (
+            <View style={[styles.cardRow, styles.cardRowMatch]}>
+              <View style={[styles.todayColumn, { width: columnWidth }]}>
+                <View style={styles.todayFill}>{todayCard}</View>
+              </View>
+              <View style={[styles.insightColumn, { width: columnWidth }]}>
+                {insightCard(true, true)}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.todaySlot}>{todayCard}</View>
+          )}
+          {waitingCard ? <View style={styles.belowPair}>{waitingCard}</View> : null}
+          {networkSignal ? (
+            <View style={styles.belowPair}>{networkSignal}</View>
+          ) : null}
+          <HomeDiscover wide={wide} />
+        </>
       ) : (
         <>
           {todayCard ? <View style={styles.todaySlot}>{todayCard}</View> : null}
           {waitingCard ? <View style={styles.todaySlot}>{waitingCard}</View> : null}
 
-          {wide && !hasWorkspace ? (
-            <View style={styles.cardRow}>
-              <View style={{ width: columnWidth }}>{networkCard}</View>
-              <View style={{ width: columnWidth }}>{stayCard}</View>
-            </View>
+          {wide && !hasWorkspace && showWelcomeHero ? (
+            <>
+              <View style={[styles.cardRow, styles.cardRowMatch, styles.heroPairRow]}>
+                <View style={{ width: columnWidth }}>{welcomeHero}</View>
+                <View style={{ width: columnWidth }}>{stayCard(true)}</View>
+              </View>
+              {networkSignal ? (
+                <View style={styles.belowPair}>{networkSignal}</View>
+              ) : null}
+            </>
           ) : (
-            <View style={styles.cardStack}>
-              {networkCard}
-              {!hasWorkspace ? stayCard : null}
-            </View>
+            <>
+              {welcomeHero}
+              {wide && !hasWorkspace ? (
+                <View style={styles.cardRow}>
+                  {networkSignal ? (
+                    <View style={{ width: columnWidth }}>{networkSignal}</View>
+                  ) : null}
+                  <View style={{ width: columnWidth }}>{stayCard()}</View>
+                </View>
+              ) : (
+                <View style={styles.cardStack}>
+                  {networkSignal}
+                  {!hasWorkspace ? stayCard() : null}
+                </View>
+              )}
+            </>
           )}
 
-          {insightCard()}
+          <HomeDiscover wide={wide} />
+          {showInsight ? insightCard() : null}
         </>
       )}
-      <HomeDiscover wide={wide} />
+      <ConnectionRequestsSheet
+        visible={requestsOpen}
+        onClose={() => setRequestsOpen(false)}
+        initialTab="received"
+      />
+      <AddConnectionSheet
+        visible={findPeopleOpen}
+        entryMode="all"
+        hasWorkspaces={hasWorkspace}
+        onClose={() => setFindPeopleOpen(false)}
+      />
     </View>
   );
 }
@@ -418,11 +479,20 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: "#F4F0FF",
   },
+  heroShadowWide: {
+    marginTop: 0,
+    flex: 1,
+    minHeight: 248,
+  },
   hero: {
     minHeight: 168,
     borderRadius: 21,
     overflow: "hidden",
     backgroundColor: "#F4F0FF",
+  },
+  heroWide: {
+    flex: 1,
+    minHeight: 248,
   },
   heroNarrow: {
     minHeight: 0,
@@ -451,11 +521,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 18,
   },
+  heroCopyWide: {
+    maxWidth: "78%",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
   heroCopyNarrow: {
     maxWidth: "100%",
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 12,
+  },
+  heroPairRow: {
+    marginTop: 8,
+  },
+  stayBesideHero: {
+    marginTop: 0,
   },
   heroEyebrow: {
     fontSize: 11,
@@ -555,7 +636,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 10,
   },
-  /** Today stretches to the network and insight stack, and does not set the row height. */
+  /** Today stretches to the Insight column beside it. */
   cardRowMatch: {
     alignItems: "stretch",
   },
@@ -569,8 +650,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
   },
+  insightColumn: {
+    alignSelf: "stretch",
+  },
   todaySlot: {
     marginTop: 12,
+  },
+  belowPair: {
+    marginTop: 14,
   },
   cardStack: {
     marginTop: 14,
@@ -589,37 +676,33 @@ const styles = StyleSheet.create({
   wideCard: {
     height: 248,
   },
-  statRow: {
-    marginTop: 12,
+  requestsRow: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 4,
   },
-  statTile: {
+  requestsCopy: {
     flex: 1,
     minWidth: 0,
-    alignItems: "center",
-    paddingVertical: 12,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#EEE9FB",
-    backgroundColor: "#FAF8FF",
   },
-  statValue: {
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: "800",
-    letterSpacing: -0.5,
+  requestsTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "700",
     color: palette.ink,
   },
-  statValueHot: {
-    color: PURPLE,
-  },
-  statLabel: {
-    marginTop: 2,
+  requestsSubtitle: {
+    marginTop: 1,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: "600",
     color: "#667085",
+  },
+  requestsCount: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "800",
+    color: PURPLE,
   },
   networkEmpty: {
     flex: 1,
@@ -652,11 +735,19 @@ const styles = StyleSheet.create({
     marginTop: 14,
     backgroundColor: palette.dusk,
   },
+  insightShadowPaired: {
+    flex: 1,
+    minHeight: 228,
+  },
   insight: {
     minHeight: 148,
     borderRadius: 22,
     overflow: "hidden",
     backgroundColor: palette.dusk,
+  },
+  insightPaired: {
+    flex: 1,
+    minHeight: 228,
   },
   insightFlush: {
     marginTop: 0,

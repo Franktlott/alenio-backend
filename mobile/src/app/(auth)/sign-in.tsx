@@ -55,12 +55,9 @@ import {
   AuthPrimaryButton,
   AuthScreen,
   authGoBack,
-  useAuthWideLayout,
 } from "@/components/auth/AuthScreen";
 
 export default function SignIn() {
-  /** Split layouts drop the props strip: the hero panel already carries the pitch. */
-  const wideAuth = useAuthWideLayout();
   const params = useLocalSearchParams<{
     reason?: string;
     email?: string | string[];
@@ -447,24 +444,21 @@ export default function SignIn() {
 
       </AuthCard>
 
-      {/* Split layouts carry the pitch on the hero panel instead. */}
-      {wideAuth ? null : (
-        <View className="mt-7 flex-row">
-          {[
-            { label: "Your Network", Icon: UsersRound },
-            { label: "Your Workspace", Icon: Layers },
-            { label: "One Platform", Icon: Zap },
-          ].map(({ label, Icon }, index) => (
-            <View
-              key={label}
-              className={`flex-1 items-center ${index > 0 ? "border-l border-white/15" : ""}`}
-            >
-              <Icon size={20} color="#E4D8FF" strokeWidth={1.8} />
-              <Text className="mt-2 text-[11px] text-white/70">{label}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+      <View className="mt-7 flex-row">
+        {[
+          { label: "Your Network", Icon: UsersRound },
+          { label: "Your Workspace", Icon: Layers },
+          { label: "One Platform", Icon: Zap },
+        ].map(({ label, Icon }, index) => (
+          <View
+            key={label}
+            className={`flex-1 items-center ${index > 0 ? "border-l border-white/15" : ""}`}
+          >
+            <Icon size={20} color="#E4D8FF" strokeWidth={1.8} />
+            <Text className="mt-2 text-[11px] text-white/70">{label}</Text>
+          </View>
+        ))}
+      </View>
 
       <View className="mt-6 flex-row flex-wrap justify-center gap-1 px-4">
         <Text className="text-[10px] text-white/45">

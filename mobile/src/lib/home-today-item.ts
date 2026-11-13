@@ -1,5 +1,4 @@
 import {
-  Bell,
   CalendarDays,
   SquareCheckBig,
   Users,
@@ -14,7 +13,7 @@ export const TODAY_ITEM_PRESENTATION: Record<
   { label: string; Icon: LucideIcon; color: string; surface: string }
 > = {
   task: { label: "Task", Icon: SquareCheckBig, color: "#6d28d9", surface: "#EFE9FF" },
-  reminder: { label: "Reminder", Icon: Bell, color: "#A65B13", surface: "#FFF5E8" },
+  reminder: { label: "Task", Icon: SquareCheckBig, color: "#6d28d9", surface: "#EFE9FF" },
   event: { label: "Event", Icon: CalendarDays, color: "#167C63", surface: "#EAF8F3" },
   meeting: { label: "Meeting", Icon: Video, color: "#7550D9", surface: "#F1EDFF" },
   check_in: { label: "Check-in", Icon: Users, color: "#23789B", surface: "#EAF7FB" },
@@ -25,7 +24,7 @@ export const TODAY_ITEM_PRESENTATION: Record<
 /** The verb has to fit the thing: "Review notes" on a task reads as a bug. */
 export const TODAY_ITEM_ACTION: Record<HomeTodayItemType, string> = {
   task: "Open task",
-  reminder: "Open reminder",
+  reminder: "Open task",
   event: "View event",
   meeting: "View meeting",
   check_in: "Review notes",

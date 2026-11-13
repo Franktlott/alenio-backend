@@ -1,24 +1,19 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Heart, MessageCircle } from "lucide-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ActivityFeedItem } from "@/components/activity/types";
 import {
   CELEBRATION_CARD_THEMES,
   getCelebrationCardTheme,
 } from "@/components/activity/celebration-themes";
-import { FeedActionButton } from "@/components/workspace/FeedActionButton";
+import { FeedEngagementRow } from "@/components/workspace/FeedEngagementRow";
 import { FeedEventPill } from "@/components/workspace/FeedEventPill";
-import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
 import { WorkspaceFeedCardShell } from "@/components/workspace/WorkspaceFeedCardShell";
 import {
   formatFeedTimestamp,
-  myReactionEmoji,
   recognitionCategoryLabel,
   recognitionParticipants,
-  totalReactionCount,
 } from "@/lib/workspace-updates";
-import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
 
 function themeLabel(key: string): string | null {
   return key in CELEBRATION_CARD_THEMES
@@ -50,6 +45,7 @@ type Props = {
   currentUserId?: string;
   /** Opens the reaction menu so people can pick an emoji, same as chat. */
   onPressReact?: () => void;
+  onToggleReaction?: (emoji: string) => void;
   /** Card actions; the overflow button hides when there is nothing to do. */
   onPressMore?: () => void;
   /** Opens the thread, from the comment button or from the card itself. */
@@ -66,9 +62,11 @@ export function RecognitionUpdateCard({
   item,
   currentUserId,
   onPressReact,
+  onToggleReaction,
   onPressMore,
   onPressComment,
   onPressReactions,
+  commentCount = 0,
   picker,
   testID,
 }: Props) {
@@ -84,8 +82,6 @@ export function RecognitionUpdateCard({
   const firstName = recipientName.trim().split(/\s+/)[0] || recipientName;
   const headline = celebrationHeadline(theme.key, firstName);
   const message = item.metadata.message?.trim() || null;
-  const reactionCount = totalReactionCount(item.reactions);
-  const mine = myReactionEmoji(item.reactions, currentUserId);
   const cardTestID = testID ?? `recognition-update-card-${item.id}`;
 
   return (
@@ -147,44 +143,16 @@ export function RecognitionUpdateCard({
       footer={
         <View style={styles.footer}>
           {picker}
-          <View style={styles.actions}>
-            {onPressReact ? (
-            <FeedActionButton
-              Icon={Heart}
-              glyph={mine}
-              activeColor={feedReaction(mine)?.color}
-              // The facepile carries the count, so the button stays an icon.
-              label=""
-              active={!!mine}
-              filled
-              onPress={onPressReact}
-              accessibilityLabel={
-                mine
-                  ? `Your reaction: ${feedReactionLabel(mine)}. Change or remove it.`
-                  : "React to this recognition"
-              }
-              testID={`${cardTestID}-react`}
-            />
-            ) : null}
-            {onPressComment ? (
-              <FeedActionButton
-                Icon={MessageCircle}
-                label=""
-                onPress={onPressComment}
-                accessibilityLabel="Comment on this recognition"
-                testID={`${cardTestID}-comment`}
-              />
-            ) : null}
-            {onPressReactions && reactionCount > 0 ? (
-              <View style={styles.summary}>
-                <ReactionFacepile
-                  reactions={item.reactions ?? {}}
-                  onPress={onPressReactions}
-                  testID={`${cardTestID}-reaction-facepile`}
-                />
-              </View>
-            ) : null}
-          </View>
+          <FeedEngagementRow
+            reactions={item.reactions ?? {}}
+            currentUserId={currentUserId}
+            onToggleReaction={onToggleReaction}
+            onOpenPicker={onPressReact}
+            onPressReactions={onPressReactions}
+            onPressComment={onPressComment}
+            commentCount={commentCount}
+            testID={`${cardTestID}-engage`}
+          />
         </View>
       }
     >
@@ -241,13 +209,6 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: 6,
     gap: 2,
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  summary: {
-    marginLeft: "auto",
   },
   decoration: {
     position: "absolute",

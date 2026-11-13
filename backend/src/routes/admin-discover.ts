@@ -430,6 +430,9 @@ async function saveArticle(
     const category = await prisma.discoverCategory.findUnique({ where: { id: input.categoryId }, select: { id: true } });
     if (!category) return { ok: false, message: "Choose a category that exists." };
   }
+  const categoryId = input.categoryId || null;
+  // Category feature is per-category: one article only, and only when a category is set.
+  const featuredInCategory = Boolean(input.featuredInCategory) && !!categoryId;
   const content = sanitizeDiscoverDoc(input.content);
   const slugSource = input.slug?.trim() || input.title;
   const slug = await uniqueArticleSlug(slugSource, existingId ?? undefined);
@@ -439,12 +442,12 @@ async function saveArticle(
     slug,
     excerpt: input.excerpt?.trim() ?? "",
     content: content as Prisma.InputJsonValue,
-    categoryId: input.categoryId || null,
+    categoryId,
     coverImageUrl: cover,
     coverImageAlt: input.coverImageAlt?.trim() || null,
     status: publication.status,
     isFeatured: input.isFeatured ?? false,
-    featuredInCategory: input.featuredInCategory ?? false,
+    featuredInCategory,
     displayOrder: input.displayOrder ?? 0,
     readingTimeMinutes: readingTimeMinutes(content),
     senecaEnabled: input.senecaEnabled ?? false,
@@ -457,8 +460,20 @@ async function saveArticle(
     ...(publication.status === "published" ? { lastPublishedAt: new Date(), lastPublishedById: userId } : {}),
     ...extra,
   };
-  const article = existingId
-    ? await prisma.discoverArticle.update({ where: { id: existingId }, data, include: articleInclude })
-    : await prisma.discoverArticle.create({ data: { ...data, createdById: userId }, include: articleInclude });
+  const article = await prisma.$transaction(async (tx) => {
+    if (featuredInCategory && categoryId) {
+      await tx.discoverArticle.updateMany({
+        where: {
+          categoryId,
+          featuredInCategory: true,
+          ...(existingId ? { id: { not: existingId } } : {}),
+        },
+        data: { featuredInCategory: false },
+      });
+    }
+    return existingId
+      ? tx.discoverArticle.update({ where: { id: existingId }, data, include: articleInclude })
+      : tx.discoverArticle.create({ data: { ...data, createdById: userId }, include: articleInclude });
+  });
   return { ok: true, article: toAdminArticle(article) };
 }

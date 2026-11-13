@@ -8,7 +8,7 @@ import {
 import type { Task } from "@/lib/types";
 import { TaskRow } from "./TaskRow";
 import { TasksEmptyState } from "./TasksEmptyState";
-import { colors, elevation, radii, space, surfaces, typography } from "@/theme";
+import { colors, radii, space, surfaces, typography } from "@/theme";
 import { WS } from "./workspace-ui";
 import { scheduleSectionColor } from "./workspace-utils";
 
@@ -61,6 +61,7 @@ type Props = {
   onToggle: (task: Task) => void;
   onPress: (task: Task) => void;
   onLongPress?: (task: Task) => void;
+  onAssigneesPress?: (task: Task) => void;
   currentUserId?: string | null;
   /** The task open in the detail pane, so the list shows where it came from. */
   selectedTaskId?: string | null;
@@ -79,6 +80,7 @@ function renderTaskRows(
   onToggle: (task: Task) => void,
   onPress: (task: Task) => void,
   onLongPress?: (task: Task) => void,
+  onAssigneesPress?: (task: Task) => void,
   currentUserId?: string | null,
   selectedTaskId?: string | null,
 ) {
@@ -88,12 +90,16 @@ function renderTaskRows(
         <TaskRow
           key={task.id}
           task={task}
+          isFirst={index === 0}
           isLast={index === tasks.length - 1}
           selected={task.id === selectedTaskId}
           currentUserId={currentUserId}
           onToggle={() => onToggle(task)}
           onPress={() => onPress(task)}
           onLongPress={onLongPress ? () => onLongPress(task) : undefined}
+          onAssigneesPress={
+            onAssigneesPress ? () => onAssigneesPress(task) : undefined
+          }
         />
       ))}
     </View>
@@ -109,6 +115,7 @@ export function TaskListCard({
   onToggle,
   onPress,
   onLongPress,
+  onAssigneesPress,
   currentUserId,
   selectedTaskId,
   emptyTitle,
@@ -246,12 +253,13 @@ export function TaskListCard({
                 </Pressable>
               ) : null}
             </View>
-            <View style={raisedSections ? RAISED_SECTION : undefined}>
+            <View style={raisedSections ? TIMELINE_SECTION : undefined}>
               {renderTaskRows(
                 section.tasks,
                 onToggle,
                 onPress,
                 onLongPress,
+                onAssigneesPress,
                 currentUserId,
                 selectedTaskId,
               )}
@@ -264,6 +272,7 @@ export function TaskListCard({
           onToggle,
           onPress,
           onLongPress,
+          onAssigneesPress,
           currentUserId,
           selectedTaskId,
         )
@@ -273,11 +282,15 @@ export function TaskListCard({
   );
 }
 
-const RAISED_SECTION = {
-  ...elevation.card,
-  borderRadius: 18,
+/** Connected timeline surface — quieter than a stack of floating cards. */
+const TIMELINE_SECTION = {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 16,
+  borderWidth: StyleSheet.hairlineWidth,
+  borderColor: "#E8EAED",
   paddingHorizontal: 10,
-  marginBottom: 8,
+  marginBottom: 10,
+  overflow: "hidden" as const,
 };
 
 export function TaskListFooterSpinner({ visible }: { visible: boolean }) {

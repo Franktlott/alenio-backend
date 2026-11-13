@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppState,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -47,7 +48,11 @@ import {
   useUnreadStore,
 } from "@/lib/state/unread-store";
 import { useHomeScheduleRealtime } from "@/lib/use-home-schedule-realtime";
-import { homeInsightForDate } from "@/lib/home-insight-rotation";
+import { fetchHomeInsights } from "@/lib/home-insight-api";
+import {
+  homeInsightForDate,
+  mapApiHomeInsight,
+} from "@/lib/home-insight-rotation";
 import {
   calendarDayFromInstant,
   getBrowserTimeZone,
@@ -253,16 +258,13 @@ export default function HomeScreen() {
   const splitHome =
     adaptive.isSplit && adaptive.height >= 560 && bodyWidth > 0;
   /**
-   * The layout's own gutters never fall below the page inset, so the rail
-   * cannot slide under the rounded corner on the side the system bar took.
+   * Scenes stay full-bleed under the Duo status column; cards clear that
+   * column with the rail width so they don't sit under the icons.
    */
-  /**
-   * The icon rail already claims the status column, so the page gutter stays
-   * the normal 16. Adding the safe-area inset again left a white strip
-   * between the cards and the icons.
-   */
-  const edgeInsetLeft = adaptive.iconRailEdge === "left" ? 0 : insets.left;
-  const edgeInsetRight = adaptive.iconRailEdge === "right" ? 0 : insets.right;
+  const edgeInsetLeft =
+    adaptive.iconRailEdge === "left" ? adaptive.iconRailWidth : insets.left;
+  const edgeInsetRight =
+    adaptive.iconRailEdge === "right" ? adaptive.iconRailWidth : insets.right;
   const gutterLeft = Math.max(
     splitHome ? adaptive.contentPadLeft : 16,
     edgeInsetLeft + 16,
@@ -322,10 +324,33 @@ export default function HomeScreen() {
     });
     return recentSenecaConversations(fresh, 3);
   }, [senecaConversations]);
-  const weeklyInsight = homeInsightForDate();
+  const { data: remoteInsights, isPending: insightsPending } = useQuery({
+    queryKey: ["home-insights"],
+    queryFn: fetchHomeInsights,
+    enabled: !!currentUserId,
+    staleTime: 5 * 60_000,
+  });
+  const weeklyInsight = useMemo(() => {
+    if (remoteInsights && !Array.isArray(remoteInsights) && remoteInsights.current) {
+      return mapApiHomeInsight(remoteInsights.current);
+    }
+    if (insightsPending) return null;
+    const legacy = Array.isArray(remoteInsights)
+      ? remoteInsights
+      : remoteInsights?.cards ?? remoteInsights?.items ?? [];
+    return homeInsightForDate(new Date(), legacy.map(mapApiHomeInsight));
+  }, [insightsPending, remoteInsights]);
   const openWeeklyInsight = () => {
+    if (!weeklyInsight) return;
     if (weeklyInsight.destination.type === "recognition") {
       router.push("/recognition-hub");
+      return;
+    }
+    if (weeklyInsight.destination.type === "discover") {
+      router.push({
+        pathname: "/discover/[slug]",
+        params: { slug: weeklyInsight.destination.slug },
+      });
       return;
     }
     openSenecaWithPrompt(weeklyInsight.destination.prompt);
@@ -736,7 +761,7 @@ export default function HomeScreen() {
     (item) => item.type !== "holiday" && !("done" in item && item.done),
   ).length;
   const glanceChips = [
-    teams.length > 0
+    teams.length > 0 && !todayPending
       ? { key: "today", value: openToday, label: "today", dot: "#a78bfa" }
       : null,
     unreadMessages > 0
@@ -761,30 +786,56 @@ export default function HomeScreen() {
    * The band ends a little below the greeting, so the first card rises into
    * it. Measured in window coordinates because the band is fixed behind the
    * scroll view while the greeting lives inside it.
+   *
+   * Cold start and returning from background can report a stale window frame
+   * on the first layout, so we measure again on focus and when the app wakes.
    */
   const greetingRef = useRef<View>(null);
   const scrollY = useRef(0);
   const [bandHeight, setBandHeight] = useState(0);
   const measureBand = useCallback(() => {
-    greetingRef.current?.measureInWindow((_x, y, _width, height) => {
-      if (height <= 0) return;
-      const next = Math.round(
-        y + scrollY.current + height + FIRST_CARD_GAP + BAND_CARD_OVERLAP,
-      );
-      setBandHeight((current) => (Math.abs(current - next) > 1 ? next : current));
-    });
+    const read = () => {
+      greetingRef.current?.measureInWindow((_x, y, _width, height) => {
+        if (height <= 0) return;
+        const next = Math.round(
+          y + scrollY.current + height + FIRST_CARD_GAP + BAND_CARD_OVERLAP,
+        );
+        setBandHeight((current) =>
+          Math.abs(current - next) > 1 ? next : current,
+        );
+      });
+    };
+    read();
+    // Second pass after the window / safe-area settle on open.
+    requestAnimationFrame(read);
   }, []);
 
   /** The band is dark, so the status bar text is light while Home is in front. */
   useFocusEffect(
     useCallback(() => {
       setStatusBarStyle("light");
-      return () => setStatusBarStyle("dark");
-    }, []),
+      measureBand();
+      const wake = AppState.addEventListener("change", (state) => {
+        if (state !== "active") return;
+        setStatusBarStyle("light");
+        measureBand();
+      });
+      return () => {
+        wake.remove();
+        setStatusBarStyle("dark");
+      };
+    }, [measureBand]),
   );
 
+  useEffect(() => {
+    measureBand();
+  }, [measureBand, insets.top, adaptive.iconRailWidth, adaptive.width]);
+
   const heroBackdrop = (
-    <AppHeaderBand height={bandHeight > 0 ? bandHeight : insets.top + 250} />
+    <AppHeaderBand
+      height={bandHeight > 0 ? bandHeight : insets.top + 250}
+      pageColor="#FFFFFF"
+    />
   );
 
   const dateEyebrow = new Date()
@@ -882,15 +933,16 @@ export default function HomeScreen() {
                   <HomeTodayCard
                     items={todayItems}
                     pending={todayPending}
-                    fill={splitHome}
+                    // Wide Home pairs Today with Insight; fill matches that column.
+                    fill={splitHome && !!weeklyInsight?.title}
                     variant="alenio"
                   />
                 ) : undefined
               }
-              insightTitle={weeklyInsight.title}
-              insightBody={weeklyInsight.body}
-              insightAction={weeklyInsight.actionLabel}
-              insightImage={weeklyInsight.image}
+              insightTitle={weeklyInsight?.title ?? null}
+              insightBody={weeklyInsight?.body ?? ""}
+              insightAction={weeklyInsight?.actionLabel ?? ""}
+              insightImage={weeklyInsight?.image ?? { uri: "" }}
               onInsight={openWeeklyInsight}
             />
           </View>
@@ -920,7 +972,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: palette.page,
+    backgroundColor: "#FFFFFF",
   },
   content: {
     paddingTop: 14,

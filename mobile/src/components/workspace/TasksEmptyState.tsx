@@ -9,7 +9,7 @@ type Props = {
   onAction?: () => void;
 };
 
-/** Compact empty state — sits under the search row, not mid-screen. */
+/** Empty list state — centers in the pane beside the detail empty. */
 export function TasksEmptyState({
   title,
   accentTitle,
@@ -32,9 +32,7 @@ export function TasksEmptyState({
       onAction={onAction}
       style={{
         alignSelf: "stretch",
-        paddingTop: 10,
-        paddingBottom: 8,
-        paddingVertical: 0,
+        paddingVertical: 22,
       }}
     />
   );

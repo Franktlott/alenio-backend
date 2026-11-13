@@ -339,9 +339,24 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
               </div>
             )}
           </div>
-          <button type="button" className="seneca-drawer-close" aria-label="Close Seneca" onClick={handleClose}>
-            ×
-          </button>
+          <div className="seneca-drawer-header-actions">
+            <button
+              type="button"
+              className="seneca-drawer-expand"
+              aria-label="Open Seneca full page"
+              title="Open full Seneca"
+              onClick={() => {
+                handleClose();
+                navigate("/seneca");
+              }}
+              data-testid="seneca-drawer-expand"
+            >
+              Expand
+            </button>
+            <button type="button" className="seneca-drawer-close" aria-label="Close Seneca" onClick={handleClose}>
+              ×
+            </button>
+          </div>
         </header>
 
         {view === "briefing" ? (

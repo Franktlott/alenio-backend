@@ -1,38 +1,23 @@
 import {
   useCallback,
-  useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Modal,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
-  useWindowDimensions,
 } from "react-native";
-import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
-import { palette } from "@/theme";
-import {
-  Award,
-  ImagePlus,
-  PenSquare,
-  UserPlus,
-  type LucideIcon,
-} from "lucide-react-native";
+import { Megaphone, PenSquare } from "lucide-react-native";
 import {
   useInfiniteQuery,
   useMutation,
-  useQuery,
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
@@ -41,13 +26,11 @@ import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import type {
   PersonalRecognition,
   PersonalRecognitionsResponse,
-  Team,
 } from "@/lib/types";
 import {
   applyReactionToggle,
   formatFeedTimestamp,
   isWorkspaceUpdateActivity,
-  myReactionEmoji,
   totalReactionCount,
   workspaceUpdateBody,
   workspaceUpdateHeadline,
@@ -73,20 +56,12 @@ import {
 } from "@/components/activity";
 import type { ActivityReactions } from "@/components/activity/types";
 import { ActivityReactionRow } from "@/components/activity/ActivityReactionRow";
-import { UpdateDetailScreen } from "@/components/workspace/UpdateDetailScreen";
-import { WorkspaceSpotlight } from "@/components/workspace/WorkspaceSpotlight";
-import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
-import { useWorkspaceSpotlight } from "@/lib/state/workspace-spotlight-store";
-import type {
-  SpotlightActivity,
-  SpotlightSource,
-} from "@/lib/workspace-spotlight";
 
 type Props = {
   teamId: string | null;
   canManageWorkspace: boolean;
-  /** Invites live in the Workspace screen's modal, so the rail asks for one. */
+  /** Kept for Workspace screen call sites; invites live in the header modal. */
   onInvite?: () => void;
 };
 
@@ -95,132 +70,6 @@ type WorkspaceActivityPage = {
   nextCursor: string | null;
 };
 
-/**
- * Past this a line of post text is more travel than reading, which is why a
- * feed on a wide screen centres its column instead of filling the window.
- */
-const RAIL_WIDTH = 304;
-const RAIL_GAP = 16;
-
-function ActionTile({
-  Icon,
-  tint,
-  surface,
-  label,
-  accessibilityLabel,
-  onPress,
-  testID,
-}: {
-  Icon: LucideIcon;
-  tint: string;
-  surface: string;
-  label: string;
-  accessibilityLabel: string;
-  onPress: () => void;
-  testID: string;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.tile,
-        pressed ? styles.tilePressed : null,
-      ]}
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-    >
-      <View style={[styles.tileIcon, { backgroundColor: surface }]}>
-        <Icon size={17} color={tint} strokeWidth={2.2} />
-      </View>
-      <Text style={styles.tileLabel} numberOfLines={2}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function UpdatesRail({
-  teamId,
-  canManageWorkspace,
-  canWrite,
-  onInvite,
-  spotlight,
-}: {
-  teamId: string;
-  canManageWorkspace: boolean;
-  canWrite: boolean;
-  onInvite?: () => void;
-  spotlight: ReactNode;
-}) {
-  if (!canWrite) return null;
-  return (
-    <ScrollView
-      style={styles.rail}
-      contentContainerStyle={styles.railContent}
-      showsVerticalScrollIndicator={false}
-      testID="workspace-updates-rail"
-    >
-      <View style={styles.railCard}>
-        <Text style={styles.railEyebrow}>QUICK ACTIONS</Text>
-        <View style={styles.tileGrid}>
-          <ActionTile
-            Icon={PenSquare}
-            tint="#6d28d9"
-            surface="#EFE9FF"
-            label="Write a post"
-            accessibilityLabel="Write a post"
-            onPress={() =>
-              router.push({ pathname: "/create-post", params: { teamId } })
-            }
-            testID="workspace-rail-write-post"
-          />
-          <ActionTile
-            Icon={Award}
-            tint="#D97706"
-            surface="#FEF3E2"
-            label="Celebrate"
-            accessibilityLabel="Celebrate someone"
-            onPress={() =>
-              router.push({
-                pathname: "/recognition-hub",
-                params: { openGive: "1", teamId },
-              })
-            }
-            testID="workspace-rail-celebrate"
-          />
-          <ActionTile
-            Icon={ImagePlus}
-            tint="#6366F1"
-            surface="#EEF0FF"
-            label="Add a photo"
-            accessibilityLabel="Add a photo"
-            onPress={() =>
-              router.push({
-                pathname: "/create-post",
-                params: { teamId, attach: "1" },
-              })
-            }
-            testID="workspace-rail-photo"
-          />
-          {canManageWorkspace && onInvite ? (
-            <ActionTile
-              Icon={UserPlus}
-              tint="#0F9D6E"
-              surface="#E4F6EE"
-              label="Invite"
-              accessibilityLabel="Invite a teammate"
-              onPress={onInvite}
-              testID="workspace-rail-invite"
-            />
-          ) : null}
-        </View>
-      </View>
-      <View style={styles.spotlightWrap}>{spotlight}</View>
-    </ScrollView>
-  );
-}
-
 function UpdatesFeedItem({
   item,
   teamId,
@@ -228,7 +77,6 @@ function UpdatesFeedItem({
   canManageWorkspace,
   canWrite,
   showPicker,
-  selected,
   onOpenPicker,
   onClosePicker,
   onOpenThread,
@@ -239,11 +87,8 @@ function UpdatesFeedItem({
   canManageWorkspace: boolean;
   canWrite: boolean;
   showPicker: boolean;
-  /** True when the detail pane is showing this update. */
-  selected: boolean;
   onOpenPicker: () => void;
   onClosePicker: () => void;
-  /** The feed decides whether a thread opens in the pane or on its own screen. */
   onOpenThread: (activityId: string) => void;
 }) {
   const queryClient = useQueryClient();
@@ -375,15 +220,14 @@ function UpdatesFeedItem({
 
   return (
     <View>
-      {/* Marks the post the pane is showing, on a feed of full-bleed bands. */}
-      {selected ? (
-        <View pointerEvents="none" style={styles.selectedAccent} />
-      ) : null}
       {item.type === "celebration" ? (
         <RecognitionUpdateCard
           item={item}
           currentUserId={currentUserId}
           onPressReact={react}
+          onToggleReaction={
+            canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+          }
           onPressMore={onPressDelete}
           onPressComment={openThread}
           onPressReactions={openReactions}
@@ -395,6 +239,9 @@ function UpdatesFeedItem({
           item={item}
           currentUserId={currentUserId}
           onPressReact={react}
+          onToggleReaction={
+            canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+          }
           onPressComment={openThread}
           onPressReactions={openReactions}
           commentCount={item.commentCount ?? 0}
@@ -405,6 +252,9 @@ function UpdatesFeedItem({
           item={item}
           currentUserId={currentUserId}
           onPressReact={react}
+          onToggleReaction={
+            canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+          }
           onPressComment={openThread}
           onPressReactions={openReactions}
           commentCount={item.commentCount ?? 0}
@@ -415,6 +265,9 @@ function UpdatesFeedItem({
           item={item}
           currentUserId={currentUserId}
           onPressReact={react}
+          onToggleReaction={
+            canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+          }
           onPressMore={onPressDelete}
           onPressComment={openThread}
           onPressReactions={openReactions}
@@ -429,9 +282,12 @@ function UpdatesFeedItem({
           body={workspaceUpdateBody(item)}
           reactionCount={totalReactionCount(item.reactions)}
           reactions={item.reactions ?? {}}
-          myReaction={myReactionEmoji(item.reactions, currentUserId)}
+          currentUserId={currentUserId}
           onPressReactions={openReactions}
           onPressLike={react}
+          onToggleReaction={
+            canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+          }
           onMore={react}
           onLongPress={react}
           onPressComment={openThread}
@@ -464,7 +320,6 @@ function UpdatesFeedItem({
 export function WorkspaceUpdatesFeed({
   teamId,
   canManageWorkspace,
-  onInvite,
 }: Props) {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
@@ -477,55 +332,22 @@ export function WorkspaceUpdatesFeed({
   );
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const adaptive = useAdaptiveLayout();
-  const { columnWidth } = adaptive;
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  /**
-   * A wide screen keeps one centred feed and spends the leftover width on a
-   * rail. A post is the content, so there is nothing left to put in a second
-   * pane — splitting only shrinks the post and leaves a placeholder beside it.
-   */
-  const splitFeed = adaptive.isSplit;
-  const [openActivityId, setOpenActivityId] = useState<string | null>(null);
-  /** Wide enough to read a thread, narrow enough to stay a card over the feed. */
-  const overlayWidth = Math.min(660, windowWidth - 120);
+  // Same centred column as Network — no wide rail beside the feed.
+  const column = {
+    width: "100%",
+    maxWidth: WORKSPACE_FEED_MAX_WIDTH,
+    alignSelf: "center",
+  } as const;
 
   const openThread = useCallback(
     (activityId: string) => {
-      if (splitFeed) {
-        setOpenActivityId(activityId);
-        return;
-      }
       router.push({
         pathname: "/update-detail",
         params: { teamId: teamId ?? "", activityId },
       });
     },
-    [splitFeed, teamId],
+    [teamId],
   );
-
-  /**
-   * Folding the screen takes the pane away; carry the open thread onto the full
-   * screen rather than dropping the conversation someone was reading.
-   */
-  useEffect(() => {
-    if (!openActivityId || splitFeed) return;
-    setOpenActivityId(null);
-    if (!teamId) return;
-    router.push({
-      pathname: "/update-detail",
-      params: { teamId, activityId: openActivityId },
-    });
-  }, [openActivityId, splitFeed, teamId]);
-  /**
-   * The chrome above keeps the full width; only the reading column is capped,
-   * so an iPad portrait feed stays a feed instead of a row of stranded text.
-   */
-  const column = {
-    width: "100%",
-    maxWidth: columnWidth,
-    alignSelf: "center",
-  } as const;
 
   const activityQuery = useInfiniteQuery({
     queryKey: ["team-activity", teamId ?? "", "feed"],
@@ -555,86 +377,15 @@ export function WorkspaceUpdatesFeed({
     () => activityQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [activityQuery.data],
   );
-  const teamQuery = useQuery({
-    queryKey: ["team", teamId],
-    queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
-    enabled: !!teamId,
-    // Recognition rows are filtered by workspace membership, so a stale
-    // roster silently hides updates about whoever just joined.
-    refetchOnWindowFocus: true,
-  });
-  const spotlightActivities = useMemo<SpotlightActivity[]>(
-    () =>
-      activityEvents.map((event) => ({
-        id: event.id,
-        type: event.type,
-        createdAt: event.createdAt,
-        actorId: event.user?.id ?? null,
-        actorName: event.user?.name ?? null,
-        metadataName: event.metadata?.userName ?? null,
-      })),
-    [activityEvents],
-  );
-  const spotlightStatus: SpotlightSource = !teamId
-    ? "loading"
-    : activityQuery.isLoading ||
-        (activityQuery.isSuccess && teamQuery.isLoading)
-      ? "loading"
-      : activityQuery.isError
-        ? "unavailable"
-        : "ready";
-  const { spotlight, dismiss: dismissSpotlight } = useWorkspaceSpotlight({
-    teamId,
-    viewerId: currentUserId ?? null,
-    workspaceCreatedAt: teamQuery.isSuccess
-      ? teamQuery.data?.createdAt
-      : undefined,
-    activities: spotlightActivities,
-    status: spotlightStatus,
-  });
   const { access } = useWorkspaceAccess(teamId);
   const canWrite = access.canWrite;
-  const openComposer = useCallback(
-    (draft?: string, attach = false) => {
-      if (!teamId || !canWrite) return;
-      router.push({
-        pathname: "/create-post",
-        params: {
-          teamId,
-          ...(draft ? { draft } : {}),
-          ...(attach ? { attach: "1" } : {}),
-        },
-      });
-    },
-    [canWrite, teamId],
-  );
-  const sayHello = useCallback(
-    (name: string) => {
-      const who = name.trim();
-      openComposer(
-        who && who !== "a teammate" ? `Welcome, ${who}! ` : "Welcome! ",
-      );
-    },
-    [openComposer],
-  );
-  const celebrateSomeone = useCallback(() => {
+  const openComposer = useCallback(() => {
     if (!teamId || !canWrite) return;
     router.push({
-      pathname: "/recognition-hub",
-      params: { openGive: "1", teamId },
+      pathname: "/create-post",
+      params: { teamId },
     });
   }, [canWrite, teamId]);
-  const spotlightCard =
-    canWrite && teamId && splitFeed ? (
-      <WorkspaceSpotlight
-        spotlight={spotlight}
-        variant="rail"
-        onSayHello={sayHello}
-        onCelebrate={celebrateSomeone}
-        onShare={() => openComposer()}
-        onDismiss={dismissSpotlight}
-      />
-    ) : null;
 
   const items = useMemo(() => {
     const currentUser = authReady?.me;
@@ -690,7 +441,7 @@ export function WorkspaceUpdatesFeed({
     );
   }
 
-  if (activityQuery.isLoading || teamQuery.isLoading) {
+  if (activityQuery.isLoading) {
     return (
       <View
         style={[styles.page, styles.pageInset, column]}
@@ -723,11 +474,8 @@ export function WorkspaceUpdatesFeed({
     );
   }
 
-  const feed = (
-    <View
-      style={[styles.page, splitFeed ? null : column]}
-      testID="workspace-updates-feed"
-    >
+  return (
+    <View style={[styles.page, column]} testID="workspace-updates-feed">
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
@@ -743,7 +491,6 @@ export function WorkspaceUpdatesFeed({
               setOpenPickerId((open) => (open === item.id ? null : item.id))
             }
             onClosePicker={() => setOpenPickerId(null)}
-            selected={item.id === openActivityId}
             onOpenThread={openThread}
           />
         )}
@@ -755,13 +502,13 @@ export function WorkspaceUpdatesFeed({
                   name: currentUserName,
                   image: authReady?.me?.image ?? session?.user?.image ?? null,
                 }}
-                onPress={() => openComposer()}
+                onPress={openComposer}
               />
             </View>
           ) : null
         }
         ListEmptyComponent={
-          <UpdatesEmptyState teamId={teamId} canWrite={canWrite} />
+          <UpdatesEmptyState canWrite={canWrite} onCompose={openComposer} />
         }
         ListFooterComponent={
           activityQuery.isFetchingNextPage ? (
@@ -788,146 +535,65 @@ export function WorkspaceUpdatesFeed({
             colors={["#6d28d9"]}
           />
         }
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          items.length === 0 ? styles.listEmpty : null,
+        ]}
         showsVerticalScrollIndicator={false}
         testID="workspace-updates-list"
       />
     </View>
   );
-
-  if (!splitFeed) return feed;
-
-  return (
-    <View style={styles.wideRow} testID="workspace-updates-wide">
-      <View style={styles.wideFeedArea}>
-        <View style={styles.wideFeedColumn}>{feed}</View>
-      </View>
-      <UpdatesRail
-        teamId={teamId}
-        canManageWorkspace={canManageWorkspace}
-        canWrite={canWrite}
-        onInvite={onInvite}
-        spotlight={spotlightCard}
-      />
-      {/* The thread opens over the feed, the way a post does on Facebook. */}
-      <Modal
-        visible={!!openActivityId}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpenActivityId(null)}
-      >
-        <View style={styles.overlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setOpenActivityId(null)}
-            accessibilityRole="button"
-            accessibilityLabel="Close update"
-          />
-          <View
-            style={[
-              styles.overlayCard,
-              { width: overlayWidth, maxHeight: windowHeight * 0.86 },
-            ]}
-            testID="update-thread-overlay"
-          >
-            {openActivityId ? (
-              <UpdateDetailScreen
-                key={openActivityId}
-                teamId={teamId}
-                activityId={openActivityId}
-                onClose={() => setOpenActivityId(null)}
-              />
-            ) : null}
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
 }
 
-/** Openers that seed the composer, so nobody faces an empty box. */
-const STARTER_PROMPTS: { label: string; draft: string }[] = [
-  { label: "Introduce yourself", draft: "Hi everyone — I'm " },
-  { label: "This week's focus", draft: "This week I'm focused on " },
-  { label: "Celebrate someone", draft: "Shout out to " },
-];
-
+/** Quiet empty — same language as Network, without the wide promo art. */
 function UpdatesEmptyState({
-  teamId,
   canWrite,
+  onCompose,
 }: {
-  teamId: string;
   canWrite: boolean;
+  onCompose: () => void;
 }) {
-  const openComposer = (draft?: string) => {
-    if (!canWrite) return;
-    router.push({
-      pathname: "/create-post",
-      params: draft ? { teamId, draft } : { teamId },
-    });
-  };
-
-  if (!canWrite) {
-    return (
-      <View style={styles.emptyWrap} testID="workspace-updates-empty">
-        <ExpoImage
-          source={require("@/assets/alenio-empty-activity-people.png")}
-          style={styles.emptyArt}
-          contentFit="contain"
-          accessibilityLabel="Updates from your workspace"
-        />
-        <Text style={styles.emptyTitle}>Your workspace is ready</Text>
-        <Text style={styles.emptyBody}>
-          Updates and conversations will appear here when posting is enabled.
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.emptyWrap} testID="workspace-updates-empty">
-      <ExpoImage
-        source={require("@/assets/alenio-empty-activity-people.png")}
-        style={styles.emptyArt}
-        contentFit="contain"
-        accessibilityLabel="Updates from your workspace"
-      />
-      <Text style={styles.emptyTitle}>Start the conversation</Text>
-      <Text style={styles.emptyBody}>
-        Posts, wins, and questions live here. Be the first to say something.
-      </Text>
-
-      <TouchableOpacity
-        onPress={() => openComposer()}
-        activeOpacity={0.85}
-        style={styles.emptyPrimary}
-        accessibilityRole="button"
-        accessibilityLabel="Write the first post"
-        testID="workspace-updates-empty-post"
-      >
-        <Text style={styles.emptyPrimaryText}>Write the first post</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.emptyEyebrow}>OR TRY ONE OF THESE</Text>
-      <View style={styles.emptyChips}>
-        {STARTER_PROMPTS.map((prompt) => (
-          <TouchableOpacity
-            key={prompt.label}
-            onPress={() => openComposer(prompt.draft)}
-            activeOpacity={0.7}
-            style={styles.emptyChip}
-            accessibilityRole="button"
-            accessibilityLabel={prompt.label}
-          >
-            <Text style={styles.emptyChipText}>{prompt.label}</Text>
-          </TouchableOpacity>
-        ))}
+    <View style={styles.emptyQuiet} testID="workspace-updates-empty">
+      <View style={styles.emptySkeletons} accessibilityElementsHidden>
+        <View style={styles.emptySkeletonCard}>
+          <View style={styles.emptySkeletonAvatar} />
+          <View style={styles.emptySkeletonCopy}>
+            <View style={[styles.emptySkeletonLine, { width: "42%" }]} />
+            <View style={[styles.emptySkeletonLine, { width: "78%" }]} />
+            <View style={[styles.emptySkeletonLine, { width: "58%" }]} />
+          </View>
+        </View>
+        <View style={[styles.emptySkeletonCard, styles.emptySkeletonCardMuted]}>
+          <View style={styles.emptySkeletonAvatar} />
+          <View style={styles.emptySkeletonCopy}>
+            <View style={[styles.emptySkeletonLine, { width: "36%" }]} />
+            <View style={[styles.emptySkeletonLine, { width: "70%" }]} />
+          </View>
+        </View>
       </View>
-
-      <Text style={styles.emptyFootnote}>
-        Completed tasks, new members, and celebrations show up here on their
-        own.
+      <View style={styles.emptyIcon}>
+        <Megaphone size={22} color="#6d28d9" strokeWidth={2.2} />
+      </View>
+      <Text style={styles.emptyTitle}>Your workspace feed is quiet</Text>
+      <Text style={styles.emptyBody}>
+        {canWrite
+          ? "Posts, wins, and team updates will show up here."
+          : "Updates and conversations will appear here when posting is enabled."}
       </Text>
+      {canWrite ? (
+        <Pressable
+          onPress={onCompose}
+          style={styles.emptyCta}
+          accessibilityRole="button"
+          accessibilityLabel="Write the first post"
+          testID="workspace-updates-empty-post"
+        >
+          <PenSquare size={16} color="#FFFFFF" strokeWidth={2.3} />
+          <Text style={styles.emptyCtaText}>Write the first post</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -936,7 +602,7 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: palette.page,
+    backgroundColor: "#FFFFFF",
   },
   pageInset: {
     paddingHorizontal: WORKSPACE_FEED_HORIZONTAL_INSET,
@@ -950,6 +616,9 @@ const styles = StyleSheet.create({
     gap: WORKSPACE_FEED_GAP,
     // Clears the fixed bottom navigation so the last card stays reachable.
     paddingBottom: 28,
+    flexGrow: 1,
+  },
+  listEmpty: {
     flexGrow: 1,
   },
   composerWrap: {
@@ -972,190 +641,85 @@ const styles = StyleSheet.create({
     color: "#64748B",
     textAlign: "center",
   },
-  emptyWrap: {
+  emptyQuiet: {
+    flex: 1,
+    minHeight: 300,
     alignItems: "center",
-    paddingTop: 18,
-    paddingHorizontal: 28,
+    justifyContent: "flex-start",
+    paddingHorizontal: 22,
+    paddingTop: 10,
   },
-  emptyArt: {
-    width: 210,
-    height: 210,
-    marginBottom: -12,
+  emptySkeletons: {
+    alignSelf: "stretch",
+    gap: 8,
+    marginBottom: 18,
+  },
+  emptySkeletonCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "#F7F8FB",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#ECEEF3",
+  },
+  emptySkeletonCardMuted: {
+    opacity: 0.55,
+  },
+  emptySkeletonAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#E6E8EE",
+  },
+  emptySkeletonCopy: {
+    flex: 1,
+    gap: 7,
+    paddingTop: 4,
+  },
+  emptySkeletonLine: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "#E6E8EE",
+  },
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    marginBottom: 12,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EFE9FF",
   },
   emptyTitle: {
-    fontSize: 19,
+    fontSize: 17,
     fontWeight: "800",
-    color: "#111A2B",
+    color: "#172033",
     textAlign: "center",
   },
   emptyBody: {
-    marginTop: 8,
-    maxWidth: 270,
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#7A8699",
+    marginTop: 6,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: "#718096",
     textAlign: "center",
   },
-  emptyPrimary: {
-    marginTop: 20,
-    minWidth: 220,
-    alignItems: "center",
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 22,
+  emptyCta: {
+    marginTop: 16,
+    minHeight: 42,
+    paddingHorizontal: 16,
+    borderRadius: 999,
     backgroundColor: "#6d28d9",
-    shadowColor: "#24324A",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 11,
-    elevation: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-  emptyPrimaryText: {
+  emptyCtaText: {
     fontSize: 14.5,
     fontWeight: "700",
     color: "#FFFFFF",
-  },
-  emptyEyebrow: {
-    marginTop: 22,
-    fontSize: 9.5,
-    fontWeight: "700",
-    letterSpacing: 0.7,
-    color: "#A2ACBC",
-  },
-  emptyChips: {
-    marginTop: 12,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 8,
-  },
-  emptyChip: {
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "#F8FAFD",
-    borderWidth: 1,
-    borderColor: "#E8ECF4",
-  },
-  emptyChipText: {
-    fontSize: 11.5,
-    fontWeight: "700",
-    color: "#3E4A5C",
-  },
-  emptyFootnote: {
-    marginTop: 26,
-    maxWidth: 280,
-    fontSize: 11,
-    lineHeight: 16,
-    color: "#A8B2C0",
-    textAlign: "center",
-  },
-  wideRow: {
-    flex: 1,
-    minHeight: 0,
-    flexDirection: "row",
-    backgroundColor: "#F8FAFC",
-  },
-  wideFeedArea: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-  },
-  wideFeedColumn: {
-    flex: 1,
-    minHeight: 0,
-    width: "100%",
-    maxWidth: WORKSPACE_FEED_MAX_WIDTH,
-    alignSelf: "center",
-  },
-  rail: {
-    flexGrow: 0,
-    flexShrink: 0,
-    width: RAIL_WIDTH,
-    marginLeft: RAIL_GAP,
-    marginRight: 16,
-  },
-  railContent: {
-    paddingTop: 8,
-    paddingBottom: 28,
-  },
-  railCard: {
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#24324A",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 11,
-    elevation: 2,
-  },
-  railEyebrow: {
-    paddingHorizontal: 16,
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: "800",
-    letterSpacing: 1.1,
-    color: "#8A93A8",
-  },
-  /** Equal columns, so each icon and its label share the same width. */
-  tileGrid: {
-    marginTop: 10,
-    paddingHorizontal: 8,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-evenly",
-  },
-  tile: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: "center",
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  tilePressed: {
-    opacity: 0.7,
-  },
-  tileIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tileLabel: {
-    width: "100%",
-    marginTop: 8,
-    height: 26,
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: "700",
-    color: "#2E3A4C",
-    textAlign: "center",
-  },
-  spotlightWrap: {
-    marginTop: 12,
-  },
-  overlay: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
-  },
-  overlayCard: {
-    flex: 1,
-    borderRadius: 18,
-    overflow: "hidden",
-    backgroundColor: "#FFFFFF",
-  },
-  selectedAccent: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    borderRadius: 2,
-    backgroundColor: "#6d28d9",
-    zIndex: 1,
   },
   errorTitle: {
     fontSize: 15,

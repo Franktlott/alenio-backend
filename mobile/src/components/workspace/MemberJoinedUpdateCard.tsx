@@ -1,24 +1,21 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Heart, MessageCircle, UsersRound } from "lucide-react-native";
+import { UsersRound } from "lucide-react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ActivityFeedItem } from "@/components/activity/types";
-import { FeedActionButton } from "@/components/workspace/FeedActionButton";
+import { FeedEngagementRow } from "@/components/workspace/FeedEngagementRow";
 import { FeedEventPill } from "@/components/workspace/FeedEventPill";
-import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
 import { WorkspaceFeedCardShell } from "@/components/workspace/WorkspaceFeedCardShell";
 import {
   formatFeedTimestamp,
   joinedMemberName,
-  myReactionEmoji,
-  totalReactionCount,
 } from "@/lib/workspace-updates";
-import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
 
 type Props = {
   item: ActivityFeedItem;
   currentUserId?: string;
   onPressReact?: () => void;
+  onToggleReaction?: (emoji: string) => void;
   onPressComment?: () => void;
   /** Opens the sheet listing everyone who reacted. */
   onPressReactions?: () => void;
@@ -32,15 +29,15 @@ export function MemberJoinedUpdateCard({
   item,
   currentUserId,
   onPressReact,
+  onToggleReaction,
   onPressComment,
   onPressReactions,
+  commentCount = 0,
   picker,
   testID,
 }: Props) {
   const name = joinedMemberName(item);
   const firstName = name.trim().split(/\s+/)[0] || name;
-  const reactionCount = totalReactionCount(item.reactions);
-  const mine = myReactionEmoji(item.reactions, currentUserId);
   const cardTestID = testID ?? `member-joined-update-card-${item.id}`;
 
   return (
@@ -73,44 +70,16 @@ export function MemberJoinedUpdateCard({
       footer={
         <View style={styles.footer}>
           {picker}
-          <View style={styles.actions}>
-            {onPressReact ? (
-            <FeedActionButton
-              Icon={Heart}
-              glyph={mine}
-              activeColor={feedReaction(mine)?.color}
-              // The facepile carries the count, so the button stays an icon.
-              label=""
-              active={!!mine}
-              filled
-              onPress={onPressReact}
-              accessibilityLabel={
-                mine
-                  ? `Your reaction: ${feedReactionLabel(mine)}. Change or remove it.`
-                  : `Welcome ${name} with a reaction`
-              }
-              testID={`${cardTestID}-react`}
-            />
-            ) : null}
-            {onPressComment ? (
-              <FeedActionButton
-                Icon={MessageCircle}
-                label=""
-                onPress={onPressComment}
-                accessibilityLabel={`Say hello to ${name}`}
-                testID={`${cardTestID}-comment`}
-              />
-            ) : null}
-            {onPressReactions && reactionCount > 0 ? (
-              <View style={styles.summary}>
-                <ReactionFacepile
-                  reactions={item.reactions ?? {}}
-                  onPress={onPressReactions}
-                  testID={`${cardTestID}-reaction-facepile`}
-                />
-              </View>
-            ) : null}
-          </View>
+          <FeedEngagementRow
+            reactions={item.reactions ?? {}}
+            currentUserId={currentUserId}
+            onToggleReaction={onToggleReaction}
+            onOpenPicker={onPressReact}
+            onPressReactions={onPressReactions}
+            onPressComment={onPressComment}
+            commentCount={commentCount}
+            testID={`${cardTestID}-engage`}
+          />
         </View>
       }
     >
@@ -164,13 +133,6 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: 6,
     gap: 1,
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  summary: {
-    marginLeft: "auto",
   },
   decoration: {
     position: "absolute",

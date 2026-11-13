@@ -1,12 +1,10 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { UserAvatar } from "@/components/UserAvatar";
+import { SPLIT_MIN_WIDTH } from "@/lib/adaptive-layout";
 import type { Task } from "@/lib/types";
 
-/** Faces shown before the rest collapse into a +N chip. */
-const MAX_FACES = 2;
-const SIZE = 22;
-/** Negative gap, so faces tuck behind each other like a stacked deck. */
-const OVERLAP = 7;
+const SIZE = 26;
+const OVERLAP = 8;
 
 type Assignment = Task["assignments"][number];
 
@@ -15,23 +13,32 @@ type Props = {
   currentUserId?: string | null;
   /** Dims the whole stack to match a completed row. */
   faded?: boolean;
+  /** Opens the Assignees sheet; stops the parent row press. */
+  onPress?: () => void;
 };
 
 /**
  * The people on a task, as faces.
  *
- * Your own face always sorts first so it survives the cut to two, which is the
- * whole point: a row is yours or it is not, and that has to be readable
- * without opening it.
+ * Your own face always sorts first so it survives the cut. Mobile shows two
+ * faces + overflow; wider screens can show three.
  */
-export function AssigneeStack({ assignments, currentUserId, faded }: Props) {
+export function AssigneeStack({
+  assignments,
+  currentUserId,
+  faded,
+  onPress,
+}: Props) {
+  const { width } = useWindowDimensions();
+  const maxFaces = width >= SPLIT_MIN_WIDTH ? 3 : 2;
+
   if (!assignments?.length) return null;
 
   const ordered = orderByViewerFirst(assignments, currentUserId);
-  const faces = ordered.slice(0, MAX_FACES);
+  const faces = ordered.slice(0, maxFaces);
   const overflow = ordered.length - faces.length;
 
-  return (
+  const stack = (
     <View
       style={[styles.row, faded ? styles.faded : null]}
       accessible
@@ -46,7 +53,6 @@ export function AssigneeStack({ assignments, currentUserId, faded }: Props) {
             style={[
               styles.face,
               index > 0 ? { marginLeft: -OVERLAP } : null,
-              // A ring in the brand colour marks which face is you.
               isViewer ? styles.viewerFace : null,
             ]}
           >
@@ -54,7 +60,7 @@ export function AssigneeStack({ assignments, currentUserId, faded }: Props) {
               user={assignment.user}
               size={SIZE}
               radius={SIZE / 2}
-              fontSize={9}
+              fontSize={10}
               resetKey={assignment.userId}
             />
           </View>
@@ -66,6 +72,23 @@ export function AssigneeStack({ assignments, currentUserId, faded }: Props) {
         </View>
       ) : null}
     </View>
+  );
+
+  if (!onPress) return stack;
+
+  return (
+    <Pressable
+      onPress={(event) => {
+        event.stopPropagation?.();
+        onPress();
+      }}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={`${describe(ordered, currentUserId)}. Show assignees`}
+      style={styles.hit}
+    >
+      {stack}
+    </Pressable>
   );
 }
 
@@ -93,6 +116,12 @@ function describe(
 }
 
 const styles = StyleSheet.create({
+  hit: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   row: { flexDirection: "row", alignItems: "center", flexShrink: 0 },
   faded: { opacity: 0.45 },
   face: {
@@ -100,7 +129,6 @@ const styles = StyleSheet.create({
     height: SIZE,
     borderRadius: SIZE / 2,
     borderWidth: 1.5,
-    // Matches the row behind it, so the cut-out reads as a gap not an outline.
     borderColor: "#FFFFFF",
     backgroundColor: "#FFFFFF",
     overflow: "hidden",

@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   useColorScheme,
 } from "react-native";
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react-native";
 import type { CalendarEvent, Task, TeamMember } from "@/lib/types";
 import type { USFederalHoliday } from "@/lib/us-federal-holidays";
 import { eventCalendarDayRange } from "@/lib/calendar-grid";
@@ -112,6 +112,8 @@ type Props = {
   expanded?: boolean;
   /** Overrides the page gutter when a parent already positions the card. */
   insetHorizontal?: number;
+  /** Opens the create flow for events, tasks, and related items. */
+  onAddPress?: () => void;
   children?: ReactNode;
 };
 
@@ -129,6 +131,7 @@ export function CalendarCard({
   splitFooter = false,
   expanded = false,
   insetHorizontal,
+  onAddPress,
   children,
 }: Props) {
   const colorScheme = useColorScheme();
@@ -141,12 +144,11 @@ export function CalendarCard({
   const gridLine = isDark ? "rgba(148, 163, 184, 0.28)" : colors.borderStrong;
   const mutedDate = isDark ? "#94A3B8" : colors.textMuted;
   /**
-   * A full-size header wants about 370pt for the title, the chips and the
-   * arrows. Narrower than that the controls tighten so the row still holds
-   * them all — arrows stranded on a second line read as a separate toolbar.
+   * Without the month title in the card, the toolbar is mode + New + arrows.
+   * Tighten only on very narrow panes so chips and buttons stay one row.
    */
   const [headerWidth, setHeaderWidth] = useState(0);
-  const compactHeader = headerWidth > 0 && headerWidth < 370;
+  const compactHeader = headerWidth > 0 && headerWidth < 280;
   const [ownDisplayMode, setOwnDisplayMode] =
     useState<CalendarDisplayMode>("month");
   const displayMode = controlledDisplayMode ?? ownDisplayMode;
@@ -433,16 +435,15 @@ export function CalendarCard({
     );
   };
 
+  const periodLabel =
+    displayMode === "week"
+      ? weekRangeLabel
+      : `${MONTH_NAMES[viewMonth]} ${viewYear}`;
+
   return (
     <View
       {...swipeResponder.panHandlers}
       style={{
-        ...surfaces.groupedCard,
-        ...elevation.card,
-        borderRadius: 18,
-        // The grid sits inside the padding, so nothing needs clipping, and
-        // clipping would drop the card shadow on iOS.
-        overflow: "visible",
         flex: displayMode === "week" || expanded ? 1 : 0,
         flexGrow: displayMode === "week" || expanded ? 1 : 0,
         flexShrink: displayMode === "week" || expanded ? 1 : 0,
@@ -450,13 +451,38 @@ export function CalendarCard({
         marginHorizontal: insetHorizontal ?? WS.pageGutter,
         marginTop: 2,
         marginBottom: 0,
-        paddingHorizontal: space.md,
-        paddingTop: space.sm,
-        paddingBottom: splitFooter ? 4 : space.sm,
-        borderBottomLeftRadius: splitFooter ? 0 : undefined,
-        borderBottomRightRadius: splitFooter ? 0 : undefined,
       }}
     >
+      <Text
+        style={styles.periodTitle}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.82}
+        maxFontSizeMultiplier={1.35}
+        testID="workspace-calendar-period-label"
+      >
+        {periodLabel}
+      </Text>
+
+      <View
+        style={{
+          ...surfaces.groupedCard,
+          ...elevation.card,
+          borderRadius: 18,
+          // The grid sits inside the padding, so nothing needs clipping, and
+          // clipping would drop the card shadow on iOS.
+          overflow: "visible",
+          flex: displayMode === "week" || expanded ? 1 : 0,
+          flexGrow: displayMode === "week" || expanded ? 1 : 0,
+          flexShrink: displayMode === "week" || expanded ? 1 : 0,
+          minHeight: displayMode === "week" || expanded ? 0 : undefined,
+          paddingHorizontal: space.md,
+          paddingTop: space.sm,
+          paddingBottom: splitFooter ? 4 : space.sm,
+          borderBottomLeftRadius: splitFooter ? 0 : undefined,
+          borderBottomRightRadius: splitFooter ? 0 : undefined,
+        }}
+      >
       <View
         style={styles.header}
         onLayout={(event) => {
@@ -464,19 +490,6 @@ export function CalendarCard({
           setHeaderWidth((current) => (current === next ? current : next));
         }}
       >
-        <Text
-          style={[styles.monthTitle, compactHeader && styles.monthTitleCompact]}
-          numberOfLines={1}
-          /** Last resort past the wrap: shrink the type rather than clip it. */
-          adjustsFontSizeToFit
-          minimumFontScale={0.82}
-          maxFontSizeMultiplier={1.35}
-        >
-          {displayMode === "week"
-            ? weekRangeLabel
-            : `${MONTH_NAMES[viewMonth]} ${viewYear}`}
-        </Text>
-
         <View style={styles.modeSwitch} testID="workspace-calendar-mode-switch">
           {(["month", "week"] as CalendarDisplayMode[]).map((mode) => {
             const selected = displayMode === mode;
@@ -510,7 +523,30 @@ export function CalendarCard({
           })}
         </View>
 
+        <View style={styles.headerSpacer} />
+
         <View style={styles.navRow}>
+          {onAddPress ? (
+            <TouchableOpacity
+              onPress={onAddPress}
+              activeOpacity={0.82}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={[
+                styles.addBtn,
+                compactHeader && styles.addBtnCompact,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="New"
+              testID="workspace-calendar-add"
+            >
+              <Plus size={compactHeader ? 14 : 15} color="#FFFFFF" strokeWidth={2.6} />
+              {compactHeader ? null : (
+                <Text style={styles.addBtnLabel} maxFontSizeMultiplier={1.2}>
+                  New
+                </Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             onPress={() => moveCalendar(-1)}
             activeOpacity={0.82}
@@ -587,11 +623,20 @@ export function CalendarCard({
       {displayMode === "week" ? (
         <View style={{ flex: 1, minHeight: 0, marginTop: 8 }}>{children}</View>
       ) : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  periodTitle: {
+    marginBottom: 8,
+    paddingHorizontal: 2,
+    fontSize: 20,
+    fontWeight: "700",
+    color: colors.textPrimary,
+    letterSpacing: -0.4,
+  },
   /** One line always: the controls give up size before they give up the row. */
   header: {
     flexDirection: "row",
@@ -599,19 +644,9 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 6,
   },
-  monthTitle: {
-    flexGrow: 1,
-    flexShrink: 1,
-    /** Room for the longest label, "September 2026". */
-    minWidth: 152,
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    letterSpacing: -0.3,
-  },
-  monthTitleCompact: {
-    minWidth: 118,
-    fontSize: 15,
+  headerSpacer: {
+    flex: 1,
+    minWidth: 8,
   },
   modeSwitch: {
     flexDirection: "row",
@@ -650,6 +685,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     flexShrink: 0,
+  },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: radii.full,
+    backgroundColor: colors.brand,
+  },
+  addBtnCompact: {
+    width: 30,
+    height: 30,
+    minHeight: 30,
+    paddingHorizontal: 0,
+  },
+  addBtnLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: -0.1,
   },
   navBtn: {
     width: 36,

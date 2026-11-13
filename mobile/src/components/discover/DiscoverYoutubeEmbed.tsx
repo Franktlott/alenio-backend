@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
-import { youtubeEmbedUrl } from "@/lib/discover-youtube";
+import {
+  YOUTUBE_EMBED_BASE_URL,
+  youtubeEmbedHtml,
+} from "@/lib/discover-youtube";
 import { palette } from "@/theme";
 
 type Props = {
@@ -13,21 +16,25 @@ export function DiscoverYoutubeEmbed({
   videoId = "",
   title = "YouTube video",
 }: Props) {
-  const src = useMemo(() => youtubeEmbedUrl(videoId), [videoId]);
-  if (!src) return null;
+  const html = useMemo(
+    () => youtubeEmbedHtml(videoId, title),
+    [title, videoId],
+  );
+  if (!html) return null;
 
   return (
     <View style={styles.wrap} accessibilityLabel={title}>
       <WebView
-        source={{ uri: src }}
+        source={{ html, baseUrl: YOUTUBE_EMBED_BASE_URL }}
         style={styles.webview}
         allowsFullscreenVideo
         allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction
+        mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled
         domStorageEnabled
+        scrollEnabled={false}
         setSupportMultipleWindows={false}
-        originWhitelist={["https://*"]}
+        originWhitelist={["https://*", "about:srcdoc"]}
         startInLoadingState
       />
     </View>

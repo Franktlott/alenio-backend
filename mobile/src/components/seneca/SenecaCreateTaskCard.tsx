@@ -72,7 +72,7 @@ export function SenecaCreateTaskCard({ teamId, role, proposal, onSaved, onDismis
   const hasMultipleAssignees = assigneeCount > 1;
   const confirmLabel =
     isReminder
-      ? "Confirm & create reminder"
+      ? "Confirm & create task"
       : hasMultipleAssignees && !isJoint
       ? `Create ${assigneeCount} separate tasks`
       : hasMultipleAssignees && isJoint
@@ -83,7 +83,7 @@ export function SenecaCreateTaskCard({ teamId, role, proposal, onSaved, onDismis
     mutationFn: async () => {
       const trimmedTitle = title.trim();
       if (!trimmedTitle) {
-        throw new Error(isReminder ? "Please enter a reminder title." : "Please enter a task title.");
+        throw new Error("Please enter a task title.");
       }
       await api.post(`/api/teams/${teamId}/tasks`, {
         kind: presentation.kind,
@@ -104,7 +104,7 @@ export function SenecaCreateTaskCard({ teamId, role, proposal, onSaved, onDismis
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const duePart = dueDate ? ` due ${formatDueDate(dueDate)}` : "";
       const summary = isReminder
-        ? `Done — created your private reminder: "${title.trim()}"${duePart}. It won’t affect Team Momentum.`
+        ? `Done — created your private task: "${title.trim()}"${duePart}. It won’t affect Team Momentum.`
         : hasMultipleAssignees && !isJoint
           ? `Done — created ${assigneeCount} separate tasks for ${assigneeLabel}: "${title.trim()}"${duePart}.`
           : hasMultipleAssignees && isJoint
@@ -116,9 +116,7 @@ export function SenecaCreateTaskCard({ teamId, role, proposal, onSaved, onDismis
       setError(
         err instanceof Error
           ? err.message
-          : isReminder
-            ? "Could not create this reminder."
-            : "Could not create this task.",
+          : "Could not create this task.",
       );
     },
   });

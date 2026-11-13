@@ -1,41 +1,25 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  LayoutAnimation,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  UIManager,
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import Svg, { Path } from "react-native-svg";
 import {
-  Bell,
   CalendarCheck,
   CalendarDays,
   Check,
   ChevronDown,
-  Pencil,
   Plus,
-  SquareCheckBig,
-  SquareArrowOutUpRight,
+  Square,
 } from "lucide-react-native";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
-import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import {
-  AlenioBottomSheet,
-  AlenioSheetCard,
-  AlenioSheetOption,
-  alenioSheetStyles,
-} from "@/components/AlenioBottomSheet";
-import {
-  TODAY_ITEM_ACTION,
   TODAY_ITEM_PRESENTATION,
   editTodayItem,
   isTaskLike,
@@ -43,16 +27,15 @@ import {
   todayItemHasClock,
 } from "@/lib/home-today-item";
 import { instantHasPassed, scheduleTimeParts } from "@/lib/schedule-time";
-import type { CalendarEvent, HomeTodayItem, Task } from "@/lib/types";
+import type { CalendarEvent, HomeTodayItem } from "@/lib/types";
+import { CheckBurst } from "@/components/schedule/CheckBurst";
+import { TimelineRow } from "@/components/schedule/TimelineRow";
 import { EventPreviewSheet } from "@/components/workspace/EventPreviewSheet";
-import { TaskPreviewSheet } from "@/components/workspace/TaskPreviewSheet";
-import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
-import { isReminderTask } from "@/lib/task-kind";
 import { videoCallHref } from "@/lib/meeting-navigation";
 import { cardSurface } from "@/components/home/home-card-styles";
 import { Button, buttonInk, PanelHeader } from "@/components/ui";
 import { useTeamStore } from "@/lib/state/team-store";
-import { palette } from "@/theme";
+import { colors, palette } from "@/theme";
 
 type Props = {
   items: HomeTodayItem[];
@@ -60,8 +43,8 @@ type Props = {
   onInfo?: () => void;
   variant?: "default" | "alenio";
   /**
-   * Wide layout. The card fills the height of the network and insight
-   * cards beside it. Items scroll inside once they pass that height.
+   * Wide Home: stretch Today to the Insight column beside it. Items scroll
+   * inside once they pass that height.
    */
   fill?: boolean;
 };
@@ -70,25 +53,11 @@ type RowState = "past" | "late" | "next" | "later";
 type Lane = "past" | "late" | "open";
 
 const PURPLE = palette.violet;
-const BLUE = "#3B6CFF";
 const LATE = "#9F1239";
-const MARKER_TOP = 16;
-const MARKER_SIZE = 16;
-const MARKER_CENTER = MARKER_TOP + MARKER_SIZE / 2;
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-function easeTodayList() {
-  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-}
 
 /** On a phone the card shows this many rows, then the rest scroll. */
 const VISIBLE_ROWS = 3;
-const ROW_FALLBACK = 72;
+const ROW_FALLBACK = 44;
 
 export function HomeTodayCard({
   items,
@@ -97,11 +66,7 @@ export function HomeTodayCard({
   variant = "default",
 }: Props) {
   const queryClient = useQueryClient();
-  const [menuItem, setMenuItem] = useState<HomeTodayItem | null>(null);
-  const [confirmItem, setConfirmItem] = useState<HomeTodayItem | null>(null);
-  const [justDoneId, setJustDoneId] = useState<string | null>(null);
   const [previewEvent, setPreviewEvent] = useState<CalendarEvent | null>(null);
-  const [previewTask, setPreviewTask] = useState<Task | null>(null);
   const previewRequest = useRef<string | null>(null);
   const [rowHeights, setRowHeights] = useState<Record<string, number>>({});
   const [moreBelow, setMoreBelow] = useState(false);
@@ -110,13 +75,10 @@ export function HomeTodayCard({
   const lanes = items.map((item) => laneFor(item, now));
   const byTime = (a: HomeTodayItem, b: HomeTodayItem) =>
     new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
-  const held = (item: HomeTodayItem) => item.id === justDoneId;
   const active = items
-    .filter((item, index) => lanes[index] !== "past" || held(item))
+    .filter((_item, index) => lanes[index] !== "past")
     .sort(byTime);
-  const activeLanes = active.map((item) =>
-    item.id === justDoneId ? ("past" as const) : laneFor(item, now),
-  );
+  const activeLanes = active.map((item) => laneFor(item, now));
   const nextIndex = nextUpIndex(active, activeLanes, now);
   const dateLabel = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -124,61 +86,20 @@ export function HomeTodayCard({
     day: "numeric",
   });
 
-  const completeMutation = useMutation({
-    mutationFn: (item: HomeTodayItem) =>
-      api.patchFull<Task>(
-        `/api/teams/${item.workspace?.id}/tasks/${item.id}`,
-        { status: "done" },
-      ),
-    onSuccess: (_result, item) => {
-      invalidateTaskCaches(queryClient, item.workspace?.id);
-    },
-    onError: (error) => {
-      easeTodayList();
-      setJustDoneId(null);
-      Alert.alert(
-        "Couldn't complete that",
-        error instanceof Error ? error.message : "Try again in a moment.",
-      );
-    },
-  });
-
-  useEffect(() => {
-    if (!justDoneId) return;
-    const timer = setTimeout(() => {
-      easeTodayList();
-      setJustDoneId(null);
-    }, 900);
-    return () => clearTimeout(timer);
-  }, [justDoneId]);
-
-  const closeMenu = () => setMenuItem(null);
   const closePreview = () => {
     previewRequest.current = null;
     setPreviewEvent(null);
-    setPreviewTask(null);
   };
   const openScheduleItem = (item: HomeTodayItem) => {
     if (isTaskLike(item)) {
-      const draft = previewFromTodayTask(item);
-      previewRequest.current = item.id;
-      setPreviewEvent(null);
-      setPreviewTask(draft);
       const teamId = item.workspace?.id;
       if (!teamId) return;
-      void queryClient
-        .fetchQuery({
-          queryKey: ["task", item.id, teamId],
-          queryFn: () => api.get<Task>(`/api/teams/${teamId}/tasks/${item.id}`),
-        })
-        .then((task) => {
-          if (previewRequest.current !== item.id) return;
-          setPreviewTask(task);
-        })
-        .catch(() => {});
+      router.push({
+        pathname: "/task-detail",
+        params: { taskId: item.id, teamId },
+      });
       return;
     }
-    setPreviewTask(null);
     const draft = previewFromTodayItem(item);
     previewRequest.current = item.id;
     setPreviewEvent(draft);
@@ -220,35 +141,41 @@ export function HomeTodayCard({
       next.content > next.view + 12 && next.y + next.view < next.content - 12;
     setMoreBelow((current) => (current === more ? current : more));
   };
-  const itemRow = (item: HomeTodayItem, index: number, isLast: boolean) => {
-    const celebrate = item.id === justDoneId;
+  const itemRow = (
+    item: HomeTodayItem,
+    index: number,
+    isFirst: boolean,
+    isLast: boolean,
+  ) => {
     const lane = activeLanes[index];
     const state: RowState =
-      celebrate
-        ? "past"
-        : lane === "late"
-          ? "late"
-          : index === nextIndex
-            ? "next"
-            : "later";
+      lane === "late"
+        ? "late"
+        : index === nextIndex
+          ? "next"
+          : "later";
     const key = `${item.type}-${item.id}`;
     return (
       <TodayRow
         key={key}
         item={item}
         state={state}
+        isFirst={isFirst}
         isLast={isLast}
-        celebrate={celebrate}
         onOpen={() => openScheduleItem(item)}
-        onMenu={() => setMenuItem(item)}
+        onLongPress={
+          isTaskLike(item) ? () => editTodayItem(item) : undefined
+        }
         onHeight={(height) => noteRowHeight(key, height)}
       />
     );
   };
+  const firstKey = displayKeys[0];
   const lastKey = displayKeys[displayKeys.length - 1];
-  const timelineRows = active.map((item, index) =>
-    itemRow(item, index, `${item.type}-${item.id}` === lastKey),
-  );
+  const timelineRows = active.map((item, index) => {
+    const key = `${item.type}-${item.id}`;
+    return itemRow(item, index, key === firstKey, key === lastKey);
+  });
 
   if (!pending && active.length === 0) {
     return <EmptyTodayCard fill={fill} />;
@@ -315,64 +242,6 @@ export function HomeTodayCard({
 
       {fill ? <Hills /> : null}
 
-      <AlenioBottomSheet
-        visible={!!menuItem}
-        title={menuItem?.title ?? ""}
-        subtitle={
-          menuItem
-            ? TODAY_ITEM_PRESENTATION[menuItem.type].label +
-              (menuItem.workspace ? ` · ${menuItem.workspace.name}` : "")
-            : undefined
-        }
-        onClose={closeMenu}
-        compact
-        showCloseButton
-      >
-        {menuItem && isTaskLike(menuItem) && menuItem.workspace ? (
-          <AlenioSheetOption
-            icon={<Check size={15} color="#FFFFFF" strokeWidth={2.6} />}
-            iconColor="#0F9D6E"
-            tint="slate"
-            title="Mark complete"
-            onPress={() => {
-              const item = menuItem;
-              setMenuItem(null);
-              if (item) setConfirmItem(item);
-            }}
-            testID="home-today-complete"
-          />
-        ) : null}
-        <AlenioSheetOption
-          icon={
-            <SquareArrowOutUpRight
-              size={15}
-              color="#FFFFFF"
-              strokeWidth={2.3}
-            />
-          }
-          title={menuItem ? TODAY_ITEM_ACTION[menuItem.type] : "Open"}
-          onPress={() => {
-            const item = menuItem;
-            setMenuItem(null);
-            if (item) openScheduleItem(item);
-          }}
-          testID="home-today-open"
-        />
-        {menuItem && isTaskLike(menuItem) ? (
-          <AlenioSheetOption
-            icon={<Pencil size={15} color="#FFFFFF" strokeWidth={2.3} />}
-            tint="purple"
-            iconColor="#6947E8"
-            title="Edit"
-            onPress={() => {
-              const item = menuItem;
-              setMenuItem(null);
-              if (item) editTodayItem(item);
-            }}
-            testID="home-today-edit"
-          />
-        ) : null}
-      </AlenioBottomSheet>
       <EventPreviewSheet
         visible={!!previewEvent}
         event={previewEvent}
@@ -387,150 +256,6 @@ export function HomeTodayCard({
             : undefined
         }
       />
-      <TaskPreviewSheet
-        visible={!!previewTask}
-        task={previewTask}
-        onClose={closePreview}
-        onEdit={
-          previewTask
-            ? () => {
-                const task = previewTask;
-                closePreview();
-                router.push({
-                  pathname: "/task-detail",
-                  params: {
-                    taskId: task.id,
-                    teamId: task.teamId,
-                    ...(isFeedbackTaskDescription(task.description)
-                      ? {}
-                      : { startEdit: "1" }),
-                  },
-                });
-              }
-            : undefined
-        }
-        onComplete={
-          previewTask &&
-          previewTask.status !== "done" &&
-          !isFeedbackTaskDescription(previewTask.description)
-            ? () => {
-                const task = previewTask;
-                closePreview();
-                setConfirmItem({
-                  id: task.id,
-                  type: isReminderTask(task) ? "reminder" : "task",
-                  title: task.title,
-                  startAt: task.dueDate ?? new Date().toISOString(),
-                  endAt: null,
-                  allDay: false,
-                  workspace: { id: task.teamId, name: "" },
-                });
-              }
-            : undefined
-        }
-      />
-      <AlenioBottomSheet
-        visible={confirmItem != null}
-        title={`Complete ${confirmItem?.type === "reminder" ? "reminder" : "task"}?`}
-        subtitle="This will move it to completed"
-        onClose={() => {
-          if (completeMutation.isPending) return;
-          setConfirmItem(null);
-        }}
-        compact
-        showCloseButton
-        testID="home-today-complete-confirm"
-        footer={
-          <View style={{ gap: 4 }}>
-            <Pressable
-              onPress={() => {
-                const item = confirmItem;
-                if (!item || completeMutation.isPending) return;
-                setConfirmItem(null);
-                easeTodayList();
-                setJustDoneId(item.id);
-                completeMutation.mutate(item);
-              }}
-              disabled={completeMutation.isPending}
-              style={[
-                alenioSheetStyles.primaryButton,
-                {
-                  backgroundColor:
-                    confirmItem?.type === "reminder" ? "#635BDB" : "#16A36A",
-                  opacity: completeMutation.isPending ? 0.65 : 1,
-                },
-              ]}
-              testID="home-today-complete-yes"
-            >
-              {completeMutation.isPending ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={alenioSheetStyles.primaryButtonText}>
-                  {`Complete ${confirmItem?.type === "reminder" ? "reminder" : "task"}`}
-                </Text>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={() => setConfirmItem(null)}
-              disabled={completeMutation.isPending}
-              style={alenioSheetStyles.cancelButton}
-              testID="home-today-complete-cancel"
-            >
-              <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
-            </Pressable>
-          </View>
-        }
-      >
-        {confirmItem ? (
-          <AlenioSheetCard
-            tint={confirmItem.type === "reminder" ? "purple" : "slate"}
-            compact
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor:
-                    confirmItem.type === "reminder" ? "#E9E5FF" : "#E7F7F0",
-                }}
-              >
-                {confirmItem.type === "reminder" ? (
-                  <Bell size={17} color="#635BDB" strokeWidth={2.2} />
-                ) : (
-                  <SquareCheckBig size={17} color="#15805D" strokeWidth={2.2} />
-                )}
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
-                  style={{
-                    fontSize: 13.5,
-                    lineHeight: 18,
-                    fontWeight: "700",
-                    color: "#172033",
-                  }}
-                  numberOfLines={2}
-                >
-                  {confirmItem.title}
-                </Text>
-                <Text
-                  style={{
-                    marginTop: 2,
-                    fontSize: 10.5,
-                    lineHeight: 14,
-                    color: "#7C8799",
-                  }}
-                >
-                  {confirmItem.type === "reminder" ? "Private reminder" : "Workspace task"}
-                </Text>
-              </View>
-            </View>
-          </AlenioSheetCard>
-        ) : null}
-      </AlenioBottomSheet>
     </View>
   );
 }
@@ -656,24 +381,6 @@ function Hills() {
   );
 }
 
-function previewFromTodayTask(item: HomeTodayItem): Task {
-  return {
-    id: item.id,
-    kind: item.type === "reminder" ? "reminder" : "workspace_task",
-    title: item.title,
-    status: item.done ? "done" : "todo",
-    priority: item.priority ?? "medium",
-    dueDate: item.startAt,
-    createdAt: item.startAt,
-    updatedAt: item.startAt,
-    teamId: item.workspace?.id ?? "",
-    creatorId: "",
-    creator: { id: "", name: "", email: "" },
-    assignments: [],
-    subtasks: [],
-  };
-}
-
 function previewFromTodayItem(item: HomeTodayItem): CalendarEvent {
   return {
     id: item.id,
@@ -732,10 +439,11 @@ function nextUpIndex(items: HomeTodayItem[], lanes: Lane[], now: number) {
 }
 
 function timeParts(item: HomeTodayItem) {
+  /** Always show a clock on Today — overdue stays in the meta line, not the time column. */
   return scheduleTimeParts({
     at: item.startAt,
     allDay: item.allDay,
-    taskLike: isTaskLike(item),
+    taskLike: false,
     done: false,
   });
 }
@@ -775,127 +483,98 @@ function metaLine(item: HomeTodayItem, now = Date.now()) {
 function TodayRow({
   item,
   state,
+  isFirst,
   isLast,
-  celebrate = false,
   onOpen,
-  onMenu,
+  onLongPress,
   onHeight,
 }: {
   item: HomeTodayItem;
   state: RowState;
+  isFirst: boolean;
   isLast: boolean;
-  celebrate?: boolean;
   onOpen: () => void;
-  onMenu: () => void;
+  onLongPress?: () => void;
   onHeight: (height: number) => void;
 }) {
   const time = timeParts(item);
   const meta = metaLine(item, Date.now());
-  const late = celebrate ? null : meta.late;
-  const timeLabel =
-    state === "late"
-      ? new Date(item.startAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        })
-      : time.sub
-        ? `${time.main} ${time.sub}`
-        : time.main;
-  const done = state === "past" || celebrate;
-  const dotColor = state === "next" ? BLUE : state === "later" ? PURPLE : "#D0D5DD";
-  const ItemTypeIcon = TODAY_ITEM_PRESENTATION[item.type].Icon;
+  const late = meta.late;
+  const done = item.done === true;
+  const presentation = TODAY_ITEM_PRESENTATION[item.type];
+  const ItemTypeIcon = presentation.Icon;
+
+  const leading = isTaskLike(item) ? (
+    <Pressable
+      onPress={(press) => {
+        press.stopPropagation?.();
+        onOpen();
+      }}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityState={{ checked: done }}
+      accessibilityLabel="Open task"
+      style={styles.leadingHit}
+      testID={`home-today-open-${item.id}`}
+    >
+      <CheckBurst checked={done}>
+        {done ? (
+          <View style={styles.checkboxOn}>
+            <Check size={12} color="#FFFFFF" strokeWidth={3} />
+          </View>
+        ) : (
+          <Square size={17} color="#8B95A5" strokeWidth={2.1} />
+        )}
+      </CheckBurst>
+    </Pressable>
+  ) : (
+    <View
+      style={[styles.itemTypeIcon, { backgroundColor: presentation.surface }]}
+    >
+      <ItemTypeIcon
+        size={12}
+        color={presentation.color}
+        strokeWidth={2.2}
+      />
+    </View>
+  );
 
   return (
-    <View
-      style={[styles.row, isLast ? styles.rowLast : null]}
-      onLayout={(event) => onHeight(event.nativeEvent.layout.height)}
-    >
-      <View style={styles.timeCol}>
-        <Text style={[styles.timeMain, done ? styles.timePast : null]}>
-          {timeLabel}
-        </Text>
-      </View>
-      <View style={styles.rail}>
-        {isLast ? null : <View style={styles.railLine} />}
-        <View style={styles.markerSlot}>
-          {state === "late" ? (
-            <View style={styles.lateDot} />
-          ) : done && isTaskLike(item) ? (
-            <View style={styles.timelineCheck}>
-              <Check size={10} color="#FFFFFF" strokeWidth={3} />
-            </View>
-          ) : (
-            <View style={[styles.dot, { backgroundColor: done ? "#D0D5DD" : dotColor }]} />
-          )}
-        </View>
-      </View>
-      <View style={styles.rowBody}>
-        <Pressable
-          onPress={onOpen}
-          style={styles.itemCard}
-          accessibilityRole="button"
-          accessibilityLabel={
-            late
-              ? `${TODAY_ITEM_PRESENTATION[item.type].label}, overdue: ${item.title}`
-              : celebrate
-                ? `${TODAY_ITEM_PRESENTATION[item.type].label} complete: ${item.title}`
-                : `${TODAY_ITEM_PRESENTATION[item.type].label}: ${item.title}`
-          }
+    <View onLayout={(event) => onHeight(event.nativeEvent.layout.height)}>
+      <TimelineRow
+        timeMain={time.main}
+        timeSub={time.sub || null}
+        leading={leading}
+        isFirst={isFirst}
+        isLast={isLast}
+        timeMuted={state === "late" || done}
+        onPress={onOpen}
+        onLongPress={onLongPress}
+        testID={`home-today-row-${item.id}`}
+      >
+        <Text
+          style={[
+            styles.itemTitle,
+            done
+              ? {
+                  color: colors.textMuted,
+                  textDecorationLine: "line-through",
+                }
+              : null,
+          ]}
+          numberOfLines={2}
         >
-          {isTaskLike(item) && !done ? (
-            <Pressable
-              onPress={(press) => {
-                press.stopPropagation();
-                onMenu();
-              }}
-              style={styles.taskCheck}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={`Complete or manage ${item.title}`}
-              testID={`home-today-menu-${item.id}`}
-            />
-          ) : null}
-          <View style={styles.itemCopy}>
-            <Text
-              style={[styles.itemTitle, done ? styles.titlePast : null]}
-              numberOfLines={1}
-            >
-              {item.title}
-            </Text>
-            <Text
-              style={[
-                styles.itemMeta,
-                done ? styles.metaPast : null,
-                late ? styles.itemMetaLate : null,
-              ]}
-              numberOfLines={1}
-            >
-              {late || meta.line}
-            </Text>
-          </View>
-          {done && isTaskLike(item) ? (
-            <View style={[styles.statusPill, styles.statusPillDone]}>
-              <Text style={[styles.statusPillText, styles.statusPillTextDone]}>
-                Completed
-              </Text>
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.itemTypeIcon,
-                { backgroundColor: TODAY_ITEM_PRESENTATION[item.type].surface },
-              ]}
-              accessibilityLabel={TODAY_ITEM_PRESENTATION[item.type].label}
-            >
-              <ItemTypeIcon
-                size={12}
-                color={TODAY_ITEM_PRESENTATION[item.type].color}
-                strokeWidth={2.2}
-              />
-            </View>
-          )}
-        </Pressable>
-      </View>
+          {item.title}
+        </Text>
+        {late || meta.line ? (
+          <Text
+            style={[styles.itemMeta, late ? styles.itemMetaLate : null]}
+            numberOfLines={1}
+          >
+            {late || meta.line}
+          </Text>
+        ) : null}
+      </TimelineRow>
     </View>
   );
 }
@@ -1033,151 +712,40 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   timeline: {
-    paddingHorizontal: 10,
-    paddingTop: 4,
+    paddingHorizontal: 14,
+    paddingTop: 2,
     paddingBottom: 2,
-    overflow: "visible",
+    overflow: "hidden",
   },
-  row: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 6,
-    overflow: "visible",
+  leadingHit: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  rowLast: {
-    marginBottom: 0,
-  },
-  timeCol: {
-    width: 56,
-    paddingTop: 14,
-    alignItems: "flex-start",
-  },
-  timeMain: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "600",
-    color: "#4E596D",
-  },
-  rail: {
+  checkboxOn: {
     width: 18,
-    alignSelf: "stretch",
-    alignItems: "center",
-    overflow: "visible",
-  },
-  railLine: {
-    position: "absolute",
-    left: 8,
-    width: 2,
-    top: MARKER_CENTER,
-    bottom: -MARKER_CENTER,
-    backgroundColor: "#DCD5F7",
-  },
-  markerSlot: {
-    marginTop: MARKER_TOP,
-    width: MARKER_SIZE,
-    height: MARKER_SIZE,
+    height: 18,
+    borderRadius: 5,
+    backgroundColor: "#16A34A",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 1,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  lateDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: LATE,
-    backgroundColor: "#FFFFFF",
-  },
-  rowBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  itemCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    minHeight: 50,
-    marginVertical: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.rowDivider,
-    backgroundColor: "#FAF9FE",
-  },
-  taskCheck: {
-    width: 19,
-    height: 19,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "#D0D5DD",
-    backgroundColor: "#FFFFFF",
-  },
-  timePast: {
-    color: "#98A2B3",
-  },
-  titlePast: {
-    color: "#98A2B3",
-    fontWeight: "600",
-  },
-  metaPast: {
-    color: "#C5CAD3",
-  },
-  itemCopy: {
-    flex: 1,
-    minWidth: 0,
   },
   itemTitle: {
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 17,
     fontWeight: "700",
-    color: "#111A2B",
+    color: colors.textPrimary,
   },
   itemMeta: {
-    marginTop: 3,
-    fontSize: 11.5,
-    lineHeight: 16,
-    color: "#667085",
+    marginTop: 0,
+    fontSize: 11,
+    lineHeight: 14,
+    color: colors.textSecondary,
   },
   itemMetaLate: {
     color: LATE,
     fontWeight: "600",
-  },
-  timelineCheck: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: PURPLE,
-  },
-  statusPill: {
-    minWidth: 38,
-    height: 24,
-    paddingHorizontal: 9,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EEEAFE",
-  },
-  statusPillDone: {
-    backgroundColor: "#F0F1F4",
-  },
-  statusPillText: {
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: "700",
-    color: PURPLE,
-  },
-  statusPillTextDone: {
-    color: "#697386",
   },
   itemTypeIcon: {
     width: 24,

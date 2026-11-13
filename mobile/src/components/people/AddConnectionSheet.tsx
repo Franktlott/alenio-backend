@@ -383,13 +383,13 @@ export function AddConnectionSheet({
                         }
                       >
                         {busy ? (
-                          <ActivityIndicator size="small" color={colors.brand} />
+                          <ActivityIndicator size="small" color="#FFFFFF" />
                         ) : (
                           <>
                             {canAccept ? (
-                              <Check size={14} color={colors.brand} />
+                              <Check size={14} color="#FFFFFF" strokeWidth={2.4} />
                             ) : (
-                              <UserPlus size={14} color={colors.brand} />
+                              <UserPlus size={14} color="#FFFFFF" strokeWidth={2.3} />
                             )}
                             <Text style={styles.connectText}>
                               {canAccept ? "Accept" : "Connect"}
@@ -407,9 +407,9 @@ export function AddConnectionSheet({
                         ]}
                       >
                         {person.connectionStatus === "connected" ? (
-                          <Check size={12} color="#168A55" />
+                          <Check size={13} color="#0F8A5A" strokeWidth={2.4} />
                         ) : (
-                          <Clock size={12} color="#78869A" />
+                          <Clock size={13} color="#78869A" strokeWidth={2.2} />
                         )}
                         <Text
                           style={[
@@ -638,41 +638,50 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8ECF2",
   },
   connectButton: {
-    minWidth: 82,
-    height: 32,
-    paddingHorizontal: 10,
+    minHeight: 36,
+    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#AFC0FF",
-    backgroundColor: "#F8FAFF",
+    gap: 6,
+    borderRadius: 14,
+    backgroundColor: colors.brand,
+    shadowColor: "#2F4FD0",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   connectText: {
-    fontSize: 10.5,
+    fontSize: 13,
+    lineHeight: 16,
     fontWeight: "700",
-    color: colors.brand,
+    letterSpacing: -0.1,
+    color: "#FFFFFF",
   },
   statusBadge: {
-    height: 29,
-    paddingHorizontal: 9,
+    minHeight: 36,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    borderRadius: 9,
-    backgroundColor: "#F1F4F8",
+    gap: 6,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E8ECF3",
+    backgroundColor: "#FAFBFD",
   },
   statusConnected: {
-    backgroundColor: "#ECFDF5",
+    borderColor: "#D7F0E4",
+    backgroundColor: "#F3FBF7",
   },
   statusText: {
-    fontSize: 9.5,
+    fontSize: 12,
+    lineHeight: 15,
     fontWeight: "700",
+    letterSpacing: -0.1,
     color: "#78869A",
   },
   statusTextConnected: {
-    color: "#168A55",
+    color: "#0F8A5A",
   },
 });

@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { Dimensions, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { space } from "@/theme";
+import { PANE_GAP } from "@/lib/adaptive-layout-constants";
+
+export {
+  MASTER_PANE_WIDTH,
+  PANE_GAP,
+} from "@/lib/adaptive-layout-constants";
 
 /**
  * Wide-screen layout rules shared by the Workspace screens.
@@ -24,7 +30,6 @@ export const SPLIT_MIN_WIDTH = 700;
 export const SPLIT_MIN_ASPECT = 1.1;
 
 export const RAIL_WIDTH = 74;
-export const PANE_GAP = 10;
 
 /** A sheet needs height as well as width, or it covers the screen regardless. */
 export const SHEET_MIN_HEIGHT = 600;
@@ -220,12 +225,9 @@ export function useAdaptiveLayout(): AdaptiveLayout {
   const paneArea = Math.max(0, paneEnd - paneStart - PANE_GAP);
 
   /**
-   * The hinge runs down the middle of the display, which is only the middle
-   * of our window when the system kept nothing for itself.
-   *
-   * TODO: read the fold's reserved region once it is bridged to React Native.
-   * Today RN reports `screen` in portrait and hides the system bar from both
-   * the window size and the insets, so this is an estimate.
+   * Display-centre estimate for Workspace grids.
+   * RN still reports `screen` in portrait and hides the system bar from both
+   * the window size and the insets, so this remains an estimate.
    */
   const hingeX =
     displayWidth / 2 - (systemBarEdge === "left" ? systemBarWidth : 0);
@@ -247,14 +249,23 @@ export function useAdaptiveLayout(): AdaptiveLayout {
     railWidth: RAIL_WIDTH,
     padLeft,
     padRight,
+    /**
+     * Icon-rail scenes are full-bleed so the mountain band can reach the glass.
+     * Content clears the status column itself. Labeled-rail scenes stay inset
+     * by the tab layout, so they only need the plain page gutter here.
+     */
     contentPadLeft:
-      iconRailEdge === "left" || (showRail && railEdge === "left")
-        ? space.pagePad
-        : padLeft,
+      iconRailEdge === "left"
+        ? CLOSED_DUO_CLUSTER + space.pagePad
+        : showRail && railEdge === "left"
+          ? space.pagePad
+          : padLeft,
     contentPadRight:
-      iconRailEdge === "right" || (showRail && railEdge === "right")
-        ? space.pagePad
-        : padRight,
+      iconRailEdge === "right"
+        ? CLOSED_DUO_CLUSTER + space.pagePad
+        : showRail && railEdge === "right"
+          ? space.pagePad
+          : padRight,
     columnWidth: isSplit ? width : Math.min(width, CONTENT_MAX_WIDTH),
     gridPaneWidth: panes.gridPaneWidth,
     detailPaneWidth: panes.detailPaneWidth,
@@ -311,9 +322,17 @@ export function useStatusClusterInset(options?: {
 }): { left: number; right: number } {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { showRail, railEdge, iconRailEdge } = useAdaptiveLayout();
-  // The icon rail's scene padding already clears the column.
-  if (iconRailEdge && !options?.fullScreen) return { left: 0, right: 0 };
+  const { showRail, railEdge, iconRailEdge, iconRailWidth } = useAdaptiveLayout();
+  /**
+   * Tab scenes paint full-bleed under the icon rail so the header band can
+   * reach the glass. Headers still clear the status column themselves.
+   */
+  if (iconRailEdge && !options?.fullScreen) {
+    return {
+      left: iconRailEdge === "left" ? iconRailWidth : 0,
+      right: iconRailEdge === "right" ? iconRailWidth : 0,
+    };
+  }
   let left = showRail && railEdge === "left" ? 0 : insets.left;
   let right = showRail && railEdge === "right" ? 0 : insets.right;
   const edge = statusClusterEdge(width, height, { left, right });

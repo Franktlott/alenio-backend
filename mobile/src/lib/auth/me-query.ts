@@ -20,9 +20,12 @@ export type MeUser = {
   usernameUpdatedAt?: string | null;
   emailVerified?: boolean;
   createdAt?: string;
+  profileTitle?: string | null;
+  profileOrganization?: string | null;
   profileWebsite?: string | null;
   profileLocation?: string | null;
   profileBio?: string | null;
+  profileHeaderImage?: string | null;
   getStartedCompletedAt?: string | null;
   canStartWorkspaceTrial?: boolean;
   workspaceTrialStartedAt?: string | null;

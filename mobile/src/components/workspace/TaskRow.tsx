@@ -1,17 +1,13 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
-import { Check, MoreHorizontal, Square } from "lucide-react-native";
+import { View, Text, Pressable } from "react-native";
+import { Check, Square } from "lucide-react-native";
 import type { Task } from "@/lib/types";
-import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { isReminderTask } from "@/lib/task-kind";
 import { instantHasPassed, scheduleTimeParts } from "@/lib/schedule-time";
 import { CheckBurst } from "@/components/schedule/CheckBurst";
-import { ScheduleKindIcon } from "@/components/schedule/ScheduleKindIcon";
-import { TODAY_ITEM_PRESENTATION } from "@/lib/home-today-item";
-import { colors, palette, typography } from "@/theme";
+import { TimelineRow } from "@/components/schedule/TimelineRow";
+import { colors, typography } from "@/theme";
 import { PriorityBadge } from "@/components/ui";
 import { AssigneeStack } from "./AssigneeStack";
-
-const TIME_COL = 56;
 
 function startOfDay(value: Date): Date {
   const copy = new Date(value);
@@ -32,13 +28,20 @@ function formatDay(value: Date): string {
 }
 
 function priorityLabel(priority?: string | null): string {
-  if (priority === "urgent" || priority === "high") return "High";
+  if (priority === "urgent") return "Urgent";
+  if (priority === "high") return "High";
   if (priority === "low") return "Low";
   return "Medium";
 }
 
+/** Medium is the default — only show a chip when priority is notable. */
+function shouldShowPriority(priority?: string | null): boolean {
+  return priority === "urgent" || priority === "high" || priority === "low";
+}
+
 type Props = {
   task: Task;
+  isFirst?: boolean;
   isLast?: boolean;
   /** True when this row's task is the one open in the detail pane. */
   selected?: boolean;
@@ -47,19 +50,21 @@ type Props = {
   onToggle: () => void;
   onPress: () => void;
   onLongPress?: () => void;
+  onAssigneesPress?: () => void;
 };
 
 export function TaskRow({
   task,
+  isFirst,
   isLast,
   selected,
   currentUserId,
   onToggle,
   onPress,
   onLongPress,
+  onAssigneesPress,
 }: Props) {
   const isDone = task.status === "done";
-  const isLocked = isDone && isFeedbackTaskDescription(task.description);
   const isReminder = isReminderTask(task);
   const now = new Date();
   const due = task.dueDate ? new Date(task.dueDate) : null;
@@ -71,15 +76,7 @@ export function TaskRow({
     done: isDone,
     now,
   });
-  const kind = isReminder ? "reminder" : "task";
-  const kindPresentation = TODAY_ITEM_PRESENTATION[kind];
-  const kindLabel = kindPresentation.label;
-  const kindColor = isDone ? colors.textMuted : kindPresentation.color;
-  const context = isReminder
-    ? "Only you"
-    : (task.assignments ?? [])
-        .map((assignment) => assignment.user?.name?.trim().split(/\s+/)[0])
-        .find((name) => Boolean(name));
+  const assignments = task.assignments ?? [];
   const statusWord = isDone
     ? "Completed"
     : isOverdue
@@ -93,216 +90,153 @@ export function TaskRow({
             : due
               ? formatDay(due)
               : null;
+  const showAvatars = !isReminder && assignments.length >= 1;
+  const showPriority = !isReminder && shouldShowPriority(task.priority);
 
-  return (
-    <View
+  const checkbox = (
+    <Pressable
+      onPress={(event) => {
+        event.stopPropagation?.();
+        onToggle();
+      }}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityState={{ checked: isDone }}
+      accessibilityLabel="Open task"
       style={{
-        flexDirection: "row",
-        alignItems: "stretch",
-        borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-        borderBottomColor: palette.rowDivider,
+        width: 28,
+        height: 28,
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      <View
-        style={{
-          width: TIME_COL,
-          paddingTop: 10,
-          paddingRight: 8,
-          flexShrink: 0,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 12,
-            lineHeight: 15,
-            fontWeight: "700",
-            color: colors.textPrimary,
-          }}
-        >
-          {time.main}
-        </Text>
-        {time.sub ? (
-          <Text
+      <CheckBurst checked={isDone}>
+        {isDone ? (
+          <View
             style={{
-              fontSize: 10,
-              lineHeight: 13,
-              fontWeight: "600",
-              color: colors.textMuted,
-            }}
-          >
-            {time.sub}
-          </Text>
-        ) : null}
-      </View>
-
-      <View
-        style={{
-          width: StyleSheet.hairlineWidth,
-          backgroundColor: "#E8EAED",
-          marginVertical: 8,
-        }}
-      />
-
-      <Pressable
-        onPress={onPress}
-        onLongPress={onLongPress}
-        delayLongPress={400}
-        testID="task-row"
-        style={{
-          flex: 1,
-          minHeight: 48,
-          minWidth: 0,
-          paddingVertical: 10,
-          paddingLeft: 10,
-          paddingRight: 4,
-          flexDirection: "row",
-          alignItems: "center",
-          backgroundColor: selected ? "#F5F7FF" : "transparent",
-        }}
-      >
-        <Pressable
-          onPress={isLocked ? undefined : onToggle}
-          disabled={isLocked}
-          hitSlop={6}
-          accessibilityLabel={isDone ? "Mark active" : "Mark complete"}
-          style={{
-            width: 22,
-            height: 22,
-            alignItems: "center",
-            justifyContent: "center",
-            marginRight: 8,
-            flexShrink: 0,
-          }}
-        >
-          <CheckBurst checked={isDone}>
-            {isDone ? (
-              <View
-                style={{
-                  width: 16,
-                  height: 16,
-                  borderRadius: 4,
-                  backgroundColor: "#16A34A",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Check size={11} color="#FFFFFF" strokeWidth={3} />
-              </View>
-            ) : (
-              <Square size={15} color="#8B95A5" strokeWidth={2.1} />
-            )}
-          </CheckBurst>
-        </Pressable>
-
-        <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <View
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 7,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: isDone ? "#F2F4F7" : kindPresentation.surface,
-              }}
-            >
-              <ScheduleKindIcon kind={kind} size={12} color={kindColor} />
-            </View>
-            <Text
-              numberOfLines={1}
-              style={[
-                typography.rowTitle,
-                {
-                  flexShrink: 1,
-                  fontSize: 13,
-                  lineHeight: 16,
-                  fontWeight: "700",
-                },
-                isDone
-                  ? {
-                      color: colors.textMuted,
-                      textDecorationLine: "line-through",
-                    }
-                  : null,
-              ]}
-            >
-              {task.title}
-            </Text>
-            {/* The same handshake the detail page uses for a joint task, so
-                the one shared task is told apart from the identical-looking
-                separate copies a multi-person assignment creates. */}
-            {task.isJoint ? (
-              <Text
-                style={{ fontSize: 12, lineHeight: 16, flexShrink: 0 }}
-                accessibilityLabel="Joint task"
-                testID="task-row-joint-badge"
-              >
-                🤝
-              </Text>
-            ) : null}
-          </View>
-          <Text
-            numberOfLines={1}
-            style={{
-              marginTop: 1,
-              fontSize: 11,
-              lineHeight: 14,
-              color: colors.textMuted,
-              fontWeight: "400",
-            }}
-          >
-            <Text style={{ color: kindColor, fontWeight: "600" }}>{kindLabel}</Text>
-            {context ? ` · ${context}` : ""}
-            {statusWord ? " · " : ""}
-            {statusWord ? (
-              <Text
-                style={{
-                  color: isOverdue ? "#9F2A2A" : colors.textMuted,
-                  fontWeight: isOverdue ? "600" : "400",
-                }}
-              >
-                {statusWord}
-              </Text>
-            ) : null}
-          </Text>
-        </View>
-
-        {/* A reminder is only ever your own, so its face would say nothing. */}
-        {!isReminder ? (
-          <View style={{ marginRight: 6 }}>
-            <AssigneeStack
-              assignments={task.assignments}
-              currentUserId={currentUserId}
-              faded={isDone}
-            />
-          </View>
-        ) : null}
-
-        {!isReminder ? (
-          <PriorityBadge
-            priority={task.priority}
-            label={priorityLabel(task.priority)}
-            faded={isDone}
-            style={{ marginRight: 2 }}
-          />
-        ) : null}
-
-        {onLongPress ? (
-          <Pressable
-            onPress={onLongPress}
-            hitSlop={6}
-            accessibilityLabel="Task actions"
-            style={{
-              width: 22,
-              height: 22,
+              width: 18,
+              height: 18,
+              borderRadius: 5,
+              backgroundColor: "#16A34A",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <MoreHorizontal size={16} color="#94A3B8" strokeWidth={2.2} />
-          </Pressable>
-        ) : null}
-      </Pressable>
-    </View>
+            <Check size={12} color="#FFFFFF" strokeWidth={3} />
+          </View>
+        ) : (
+          <Square size={17} color="#8B95A5" strokeWidth={2.1} />
+        )}
+      </CheckBurst>
+    </Pressable>
+  );
+
+  return (
+    <TimelineRow
+      timeMain={time.main}
+      timeSub={time.sub}
+      leading={checkbox}
+      selected={selected}
+      isFirst={isFirst}
+      isLast={isLast}
+      // Tasks tab is a list, not a day timeline — keep the rail for schedule views.
+      showRail={false}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      testID="task-row"
+      trailing={
+        showAvatars ? (
+          <AssigneeStack
+            assignments={assignments}
+            currentUserId={currentUserId}
+            faded={isDone}
+            onPress={onAssigneesPress}
+          />
+        ) : null
+      }
+    >
+      <Text
+        numberOfLines={2}
+        style={[
+          typography.rowTitle,
+          {
+            fontSize: 14,
+            lineHeight: 19,
+            fontWeight: "700",
+            color: colors.textPrimary,
+          },
+          isDone
+            ? {
+                color: colors.textMuted,
+                textDecorationLine: "line-through",
+              }
+            : null,
+        ]}
+      >
+        {task.title}
+      </Text>
+
+      {task.isJoint ? (
+        <Text
+          style={{
+            marginTop: 2,
+            fontSize: 11,
+            lineHeight: 14,
+            fontWeight: "600",
+            color: "#64748B",
+          }}
+          accessibilityLabel="Joint task"
+          testID="task-row-joint-badge"
+        >
+          🤝 Joint task
+        </Text>
+      ) : null}
+
+      {statusWord || showPriority ? (
+        <View
+          style={{
+            marginTop: task.isJoint ? 2 : 3,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
+          }}
+        >
+          {statusWord ? (
+            <Text
+              numberOfLines={1}
+              style={{
+                flexShrink: 1,
+                fontSize: 11,
+                lineHeight: 14,
+                fontWeight: isOverdue ? "600" : "500",
+                color: isOverdue ? "#9F2A2A" : colors.textMuted,
+              }}
+            >
+              {statusWord}
+            </Text>
+          ) : null}
+          {showPriority && task.priority ? (
+            <PriorityBadge
+              priority={task.priority}
+              label={priorityLabel(task.priority)}
+              faded={isDone}
+            />
+          ) : null}
+        </View>
+      ) : isReminder ? (
+        <Text
+          style={{
+            marginTop: 3,
+            fontSize: 11,
+            lineHeight: 14,
+            fontWeight: "500",
+            color: colors.textMuted,
+          }}
+        >
+          Only you
+        </Text>
+      ) : null}
+    </TimelineRow>
   );
 }

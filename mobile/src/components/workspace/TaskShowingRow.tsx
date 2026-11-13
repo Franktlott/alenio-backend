@@ -11,7 +11,7 @@ type Props = {
   onOpenFilterView: () => void;
   canCreateTask: boolean;
   onCreateTask: () => void;
-  createLabel?: "Task" | "Reminder";
+  createLabel?: "Task";
 };
 
 const CONTROL_HEIGHT = 32;

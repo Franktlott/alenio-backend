@@ -876,26 +876,6 @@ export default function CheckInTemplateEditorScreen() {
             ) : null}
           </View>
         ) : null}
-        {isCreating && createStep === 1 ? (
-          <View style={styles.detailsArt} accessibilityElementsHidden>
-            <View style={styles.detailsArtBlob} />
-            <View style={styles.detailsArtCard}>
-              <View style={styles.detailsArtRow}>
-                <View style={styles.detailsArtBox} />
-                <View style={styles.detailsArtLine} />
-              </View>
-              <View style={styles.detailsArtRow}>
-                <View style={[styles.detailsArtBox, styles.detailsArtBoxOn]} />
-                <View style={[styles.detailsArtLine, { width: 54 }]} />
-              </View>
-              <View style={styles.detailsArtRow}>
-                <View style={styles.detailsArtBox} />
-                <View style={[styles.detailsArtLine, { width: 40 }]} />
-              </View>
-            </View>
-          </View>
-        ) : null}
-
         {!isCreating || createStep === 2 ? (
           <>
           <View style={styles.formCard}>
@@ -1939,46 +1919,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: "#A0A8B8",
-  },
-  detailsArt: {
-    height: 120,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  detailsArtBlob: {
-    position: "absolute",
-    width: 150,
-    height: 78,
-    borderRadius: 40,
-    backgroundColor: "#E7DEFF",
-  },
-  detailsArtCard: {
-    width: 108,
-    height: 78,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    justifyContent: "space-between",
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#6D4AFF",
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  detailsArtRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  detailsArtBox: {
-    width: 12,
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: "#EDE9FE",
-  },
-  detailsArtBoxOn: { backgroundColor: "#C4B5FD" },
-  detailsArtLine: {
-    width: 48,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#EDE9FE",
   },
   sectionQuestionCount: {
     fontSize: 12,

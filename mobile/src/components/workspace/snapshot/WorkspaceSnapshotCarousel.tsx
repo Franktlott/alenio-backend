@@ -23,6 +23,7 @@ import {
   type SnapshotPage,
 } from "@/components/workspace/snapshot/snapshot-types";
 import {
+  CONTENT_MAX_WIDTH,
   useAdaptiveLayout,
   useStatusClusterInset,
 } from "@/lib/adaptive-layout";
@@ -132,9 +133,15 @@ export function WorkspaceSnapshotCarousel({
    * or a pane inset means the window width overstates the room we have, and
    * sizing rows against it pushes the last metric under the card's clip.
    */
+  /**
+   * Same reading column as the Workspace feed (CONTENT_MAX_WIDTH). On split
+   * screens adaptive.columnWidth is the full window; without this cap At a
+   * Glance stretches wider than the posts under it.
+   */
+  const columnMax = Math.min(columnWidth, CONTENT_MAX_WIDTH);
   const pageWidth = Math.max(
     1,
-    measuredWidth || columnWidth - WS.pageGutter * 2 - CARD_BORDER * 2,
+    measuredWidth || columnMax - WS.pageGutter * 2 - CARD_BORDER * 2,
   );
 
   // Keep the retained page valid when the page set shrinks (e.g. manager → member).
@@ -160,11 +167,11 @@ export function WorkspaceSnapshotCarousel({
 
   if (pageCount === 0) return null;
 
-  /** Keeps the card's left edge on the same line as the feed below it. */
+  /** Same outer column as the Workspace feed under it. */
   const columnStyle: ViewStyle = {
     alignSelf: "center",
     width: "100%",
-    maxWidth: columnWidth,
+    maxWidth: columnMax,
   };
   const multiPage = pageCount > 1;
   const onCardLayout = (event: LayoutChangeEvent) => {

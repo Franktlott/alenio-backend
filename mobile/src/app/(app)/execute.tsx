@@ -77,12 +77,9 @@ import {
   Lock,
   Trash2,
   Pencil,
-  RefreshCw,
-  AlertTriangle,
   Search,
   Globe2,
   Award,
-  Bell,
 } from "lucide-react-native";
 import {
   SafeAreaView,
@@ -110,9 +107,6 @@ import { uploadFile } from "@/lib/upload";
 import { NoWorkspaceTabState } from "@/components/people/NoWorkspaceTabState";
 import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
-import { earlierIncompleteSeriesTasks } from "@/lib/recurring-task";
-import { incompleteSubtasks } from "@/lib/subtask-completion";
-import { formatTaskDueDateLabel } from "@/lib/timezone";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { useTabBarClearanceFn, WORKSPACE_CARD_BOTTOM_GAP } from "@/lib/tab-bar";
 import {
@@ -124,7 +118,6 @@ import {
 import { AlenioHeaderBrand } from "@/components/AlenioHeaderBrand";
 import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
-import { HeaderAddButton } from "@/components/HeaderAddButton";
 import { StreakCelebrationModal } from "@/components/StreakCelebrationModal";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
 import {
@@ -143,6 +136,7 @@ import { EventsSection } from "@/components/workspace/EventsSection";
 import { WorkspaceOpeningState } from "@/components/workspace/WorkspaceOpeningState";
 import { TaskShowingRow } from "@/components/workspace/TaskShowingRow";
 import { TaskListCard } from "@/components/workspace/TaskListCard";
+import { AssigneesSheet } from "@/components/workspace/AssigneesSheet";
 import { TeamDevelopmentCard } from "@/components/development/TeamDevelopmentCard";
 import { MemberManageSheet } from "@/components/development/MemberManageSheet";
 import { AddMemberModal } from "@/components/AddMemberModal";
@@ -182,7 +176,6 @@ import { WorkspaceFilterPicker } from "@/components/workspace/WorkspaceFilterPic
 import { splitPaneCard, WS } from "@/components/workspace/workspace-ui";
 import { buttonInk, EmptyState, tintInk } from "@/components/ui";
 import { ScheduleKindIcon } from "@/components/schedule/ScheduleKindIcon";
-import { elevation } from "@/theme";
 import {
   assignedToQueryKey,
   buildWorkspaceTasksPath,
@@ -195,7 +188,7 @@ import {
 } from "@/components/workspace/workspace-utils";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays } from "@/lib/us-federal-holidays";
-import { mergeViewerReminders, ownerCompletingUnassignedTask, workspaceTasksOnly } from "@/lib/task-kind";
+import { mergeViewerReminders, workspaceTasksOnly } from "@/lib/task-kind";
 import {
   datedItemLocalIso,
   dedupeDatedTasksAgainstEvents,
@@ -332,16 +325,7 @@ export default function TasksScreen() {
   const [calendarMonth, setCalendarMonth] = useState(() =>
     new Date().getMonth(),
   );
-  const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(
-    null,
-  );
-  const [seriesOrderWarning, setSeriesOrderWarning] = useState<{
-    task: Task;
-    earlierCount: number;
-    nextDueLabel: string;
-  } | null>(null);
-  const [checkingSeriesOrder, setCheckingSeriesOrder] = useState(false);
-  const [actionMenuTask, setActionMenuTask] = useState<Task | null>(null);
+  const [assigneesSheetTask, setAssigneesSheetTask] = useState<Task | null>(null);
   const [actionMenuEvent, setActionMenuEvent] = useState<CalendarEvent | null>(
     null,
   );
@@ -353,7 +337,6 @@ export default function TasksScreen() {
     newUserId: string;
     newUserName: string;
   } | null>(null);
-  const [blockedSubtasks, setBlockedSubtasks] = useState<string[] | null>(null);
   const [confirmDeleteEvent, setConfirmDeleteEvent] = useState(false);
   const [milestoneModal, setMilestoneModal] = useState<{
     count: number;
@@ -1203,32 +1186,6 @@ export default function TasksScreen() {
     setDevelopmentFocus(null);
   }, [activeTeamId]);
 
-  const toggleMutation = useMutation({
-    mutationFn: (task: Task) =>
-      api.patchFull<Task>(`/api/teams/${activeTeamId}/tasks/${task.id}`, {
-        status: task.status === "done" ? "todo" : "done",
-      }),
-    onSuccess: (result) => {
-      invalidateTaskCaches(queryClient, activeTeamId);
-      if (result.milestone) {
-        setMilestoneModal({
-          count: result.milestone,
-          userName: session?.user?.name ?? "You",
-        });
-      }
-      if (result.comeback) {
-        setPersonalBestModal({
-          count: result.comeback,
-          userName: session?.user?.name ?? "You",
-        });
-      }
-    },
-    onError: (error: Error, task: Task) => {
-      if (!/subtask/i.test(error.message)) return;
-      setBlockedSubtasks(incompleteSubtasks(task.subtasks).map((s) => s.title));
-    },
-  });
-
   /**
    * Folding the screen or leaving Tasks takes the pane away; carry the open task
    * onto the full screen rather than dropping what someone was reading.
@@ -1278,77 +1235,6 @@ export default function TasksScreen() {
       return;
     }
     setPreviewTask(task);
-  };
-
-  const handleToggleTask = (task: Task) => {
-    if (!access.canWrite) return;
-    if (isFeedbackTaskDescription(task.description)) {
-      // Check-in follow-ups must be completed via the feedback form, not the quick toggle.
-      if (task.status === "done") return;
-      openTaskDetails(task);
-      return;
-    }
-    setConfirmCompleteTask(task);
-  };
-
-  const completeTaskFromList = (task: Task) => {
-    if (!access.canWrite) return;
-    if (task.status !== "done") {
-      const incomplete = incompleteSubtasks(task.subtasks);
-      if (incomplete.length > 0) {
-        setBlockedSubtasks(incomplete.map((s) => s.title));
-        setConfirmCompleteTask(null);
-        setSeriesOrderWarning(null);
-        return;
-      }
-    }
-    toggleMutation.mutate(task);
-    setConfirmCompleteTask(null);
-    setSeriesOrderWarning(null);
-  };
-
-  const confirmListComplete = async () => {
-    const task = confirmCompleteTask;
-    if (!task) return;
-
-    if (task.status !== "done" && isFeedbackTaskDescription(task.description)) {
-      setConfirmCompleteTask(null);
-      openTaskDetails(task);
-      return;
-    }
-
-    if (task.status === "done" || !task.recurrenceSeriesId || !activeTeamId) {
-      completeTaskFromList(task);
-      return;
-    }
-
-    setCheckingSeriesOrder(true);
-    try {
-      const data = await queryClient.fetchQuery({
-        queryKey: ["series-tasks", activeTeamId, task.recurrenceSeriesId],
-        queryFn: () =>
-          api.get<{ tasks: Task[]; nextCursor: string | null }>(
-            `/api/teams/${activeTeamId}/tasks?recurrenceSeriesId=${encodeURIComponent(task.recurrenceSeriesId!)}&limit=400`,
-          ),
-        staleTime: 15_000,
-      });
-      const earlier = earlierIncompleteSeriesTasks(data.tasks, task.id);
-      if (earlier.length > 0) {
-        setConfirmCompleteTask(null);
-        setSeriesOrderWarning({
-          task,
-          earlierCount: earlier.length,
-          nextDueLabel: formatTaskDueDateLabel(earlier[0]!.dueDate),
-        });
-        return;
-      }
-    } catch {
-      // If series check fails, still allow completion.
-    } finally {
-      setCheckingSeriesOrder(false);
-    }
-
-    completeTaskFromList(task);
   };
 
   const reassignMutation = useMutation({
@@ -2486,59 +2372,6 @@ export default function TasksScreen() {
     : "Day";
   const daySheetCount = dayEvents.length + dayHolidays.length + dayTasks.length;
   const daySheetSubtitle = `${daySheetCount} item${daySheetCount === 1 ? "" : "s"}`;
-  /**
-   * The wide layout gives the day its own column, which would sit mostly empty
-   * on a quiet day. This fills the space below it with what is coming up.
-   */
-  const upcomingThisWeek = React.useMemo(() => {
-    if (!targetIso) return [];
-    const start = new Date(`${targetIso}T12:00:00`);
-    const rows: {
-      key: string;
-      iso: string;
-      dayLabel: string;
-      timeLabel: string;
-      title: string;
-    }[] = [];
-    for (let offset = 1; offset <= 6 && rows.length < 6; offset++) {
-      const day = new Date(
-        start.getFullYear(),
-        start.getMonth(),
-        start.getDate() + offset,
-      );
-      const iso = toLocalIso(day);
-      const dayLabel = day.toLocaleDateString("en-US", {
-        weekday: "short",
-        day: "numeric",
-      });
-      for (const ev of eventsOnLocalIso(calendarEventsWithOutlook, iso)) {
-        rows.push({
-          /** A multi-day event lands on several days, so the day scopes the key. */
-          key: `upcoming-event-${iso}-${ev.id}`,
-          iso,
-          dayLabel,
-          timeLabel: ev.allDay
-            ? "All day"
-            : new Date(ev.startDate).toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-              }),
-          title: ev.title,
-        });
-      }
-      for (const task of visibleDatedTasks) {
-        if (!task.dueDate || datedItemLocalIso(task.dueDate) !== iso) continue;
-        rows.push({
-          key: `upcoming-task-${task.id}`,
-          iso,
-          dayLabel,
-          timeLabel: "Due",
-          title: task.title,
-        });
-      }
-    }
-    return rows.slice(0, 6);
-  }, [targetIso, calendarEventsWithOutlook, visibleDatedTasks]);
   const weekAgendaIsos = React.useMemo(() => {
     const focus = selectedDay
       ? new Date(`${selectedDay}T12:00:00`)
@@ -2578,6 +2411,7 @@ export default function TasksScreen() {
         leftAction={<AlenioHeaderBrand tone="dark" />}
         headerTitlePlacement="leading"
         band
+        sheetColor="#FFFFFF"
         testID="execute-screen"
         headerTestID="execute-header"
       >
@@ -2608,6 +2442,7 @@ export default function TasksScreen() {
         headerTitlePlacement="leading"
         notificationsSize="large"
         band
+        sheetColor="#FFFFFF"
         testID="workspace-access-loading-screen"
         headerTestID="workspace-header"
       >
@@ -2627,6 +2462,7 @@ export default function TasksScreen() {
         headerTitlePlacement="leading"
         notificationsSize="large"
         band
+        sheetColor="#FFFFFF"
         testID="workspace-paywall-screen"
         headerTestID="workspace-header"
       >
@@ -2753,10 +2589,10 @@ export default function TasksScreen() {
       onEventPress={openEventPreview}
       onEventLongPress={openEventActions}
       onTaskPress={openScheduleTask}
-      onToggleTask={handleToggleTask}
+      onToggleTask={openScheduleTask}
       onTaskLongPress={(task) => {
         if (!canManageTaskMenu(task)) return;
-        setActionMenuTask(task);
+        openTaskDetails(task, { startEdit: true });
       }}
       onAddEvent={access.canWrite ? openWorkspaceCreate : undefined}
       isOwnerOrLeader={isOwnerOrLeader}
@@ -2782,93 +2618,41 @@ export default function TasksScreen() {
         style={{ marginTop: 10 }}
       />
     ) : (
-      <View style={{ ...elevation.card, borderRadius: 18, marginTop: 10, paddingVertical: 4 }}>
-      <EventsSection
-        dayEvents={dayEvents}
-        dayHolidays={dayHolidays}
-        dayTasks={dayTasks}
-        members={teamMembers}
-        selectedDayIso={targetIso}
-        variant="dayList"
-        plainDayRows
-        embedded
-        scrollEnabled={false}
-        canManageEvent={canManageEvent}
-        onEventPress={openEventPreview}
-        onEventLongPress={openEventActions}
-        onTaskPress={openScheduleTask}
-        onToggleTask={handleToggleTask}
-        onTaskLongPress={(task) => {
-          if (!canManageTaskMenu(task)) return;
-          setActionMenuTask(task);
+      <View
+        style={{
+          marginTop: 10,
+          backgroundColor: "#FFFFFF",
+          borderRadius: 16,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: "#E8EAED",
+          paddingHorizontal: 10,
+          overflow: "hidden",
         }}
-        onAddEvent={access.canWrite ? openWorkspaceCreate : undefined}
-        isOwnerOrLeader={isOwnerOrLeader}
-      />
+      >
+        <EventsSection
+          dayEvents={dayEvents}
+          dayHolidays={dayHolidays}
+          dayTasks={dayTasks}
+          members={teamMembers}
+          selectedDayIso={targetIso}
+          variant="dayList"
+          plainDayRows
+          embedded
+          scrollEnabled={false}
+          canManageEvent={canManageEvent}
+          onEventPress={openEventPreview}
+          onEventLongPress={openEventActions}
+          onTaskPress={openScheduleTask}
+          onToggleTask={openScheduleTask}
+          onTaskLongPress={(task) => {
+            if (!canManageTaskMenu(task)) return;
+            openTaskDetails(task, { startEdit: true });
+          }}
+          onAddEvent={access.canWrite ? openWorkspaceCreate : undefined}
+          isOwnerOrLeader={isOwnerOrLeader}
+        />
       </View>
     );
-
-  const upcomingPane =
-    upcomingThisWeek.length > 0 ? (
-      <View style={{ flexShrink: 0, paddingTop: 10 }}>
-        <View
-          style={{
-            height: StyleSheet.hairlineWidth,
-            backgroundColor: "#E8ECF0",
-            marginBottom: 8,
-          }}
-        />
-        <Text
-          style={{
-            fontSize: 10,
-            fontWeight: "700",
-            letterSpacing: 0.7,
-            color: "#8B95A5",
-            marginBottom: 6,
-          }}
-        >
-          LATER THIS WEEK
-        </Text>
-        {upcomingThisWeek.map((row) => (
-          <Pressable
-            key={row.key}
-            onPress={() => handleSelectDay(row.iso)}
-            accessibilityRole="button"
-            accessibilityLabel={`${row.dayLabel}, ${row.title}`}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              minHeight: 28,
-            }}
-          >
-            <Text
-              style={{
-                width: 46,
-                fontSize: 11,
-                fontWeight: "700",
-                color: "#64748B",
-              }}
-              numberOfLines={1}
-            >
-              {row.dayLabel}
-            </Text>
-            <Text
-              style={{ width: 52, fontSize: 11, color: "#8B95A5" }}
-              numberOfLines={1}
-            >
-              {row.timeLabel}
-            </Text>
-            <Text
-              style={{ flex: 1, minWidth: 0, fontSize: 12, color: "#0F172A" }}
-              numberOfLines={1}
-            >
-              {row.title}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    ) : null;
 
   const membersRoster = (
     <TeamDevelopmentCard
@@ -2934,19 +2718,7 @@ export default function TasksScreen() {
       headerTestID="workspace-header"
       notificationsSize="large"
       band
-      rightAction={
-        activeTeamId && access.canWrite ? (
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <HeaderAddButton
-              onPress={openWorkspaceCreate}
-              accessibilityLabel="Add"
-              testID="workspace-header-add-button"
-              tone="brand"
-              size="large"
-            />
-          </View>
-        ) : null
-      }
+      sheetColor="#FFFFFF"
       overlays={
         <>
           <WorkspaceFilterPicker
@@ -3138,7 +2910,7 @@ export default function TasksScreen() {
                 ? () => {
                     const task = previewTask;
                     setPreviewTask(null);
-                    handleToggleTask(task);
+                    openTaskDetails(task);
                   }
                 : undefined
             }
@@ -3181,364 +2953,25 @@ export default function TasksScreen() {
             onSelectStatus={openHealthStatusTasks}
           />
 
-          <AlenioBottomSheet
-            visible={confirmCompleteTask != null}
-            title={
-              confirmCompleteTask?.status === "done"
-                ? `Reopen ${confirmCompleteTask.kind === "reminder" ? "reminder" : "task"}?`
-                : `Complete ${confirmCompleteTask?.kind === "reminder" ? "reminder" : "task"}?`
+          <AssigneesSheet
+            visible={!!assigneesSheetTask}
+            assignments={assigneesSheetTask?.assignments ?? []}
+            currentUserId={currentUserId}
+            taskTitle={assigneesSheetTask?.title}
+            canManage={
+              !!assigneesSheetTask &&
+              canManageTaskMenu(assigneesSheetTask) &&
+              isOwnerOrLeader &&
+              assigneesSheetTask.status !== "done"
             }
-            subtitle={
-              confirmCompleteTask?.status === "done"
-                ? "This will return it to your active list"
-                : confirmCompleteTask &&
-                    ownerCompletingUnassignedTask(
-                      currentRole,
-                      session?.user?.id,
-                      confirmCompleteTask,
-                    )
-                  ? "This task is not assigned to you"
-                  : "This will move it to completed"
-            }
-            onClose={() => {
-              if (checkingSeriesOrder || toggleMutation.isPending) return;
-              setConfirmCompleteTask(null);
+            onClose={() => setAssigneesSheetTask(null)}
+            onManage={() => {
+              const task = assigneesSheetTask;
+              setAssigneesSheetTask(null);
+              if (!task) return;
+              setReassignTask(task);
             }}
-            compact
-            showCloseButton
-            testID="complete-confirm-overlay"
-            footer={
-              <View style={{ gap: 4 }}>
-                <Pressable
-                  onPress={() => void confirmListComplete()}
-                  disabled={checkingSeriesOrder || toggleMutation.isPending}
-                  style={[
-                    alenioSheetStyles.primaryButton,
-                    {
-                      backgroundColor:
-                        confirmCompleteTask?.status === "done"
-                          ? "#D97706"
-                          : confirmCompleteTask?.kind === "reminder"
-                            ? "#635BDB"
-                            : "#16A36A",
-                      opacity:
-                        checkingSeriesOrder || toggleMutation.isPending
-                          ? 0.65
-                          : 1,
-                    },
-                  ]}
-                  testID="complete-confirm-yes"
-                >
-                  {checkingSeriesOrder || toggleMutation.isPending ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={alenioSheetStyles.primaryButtonText}>
-                      {confirmCompleteTask?.status === "done"
-                        ? `Reopen ${confirmCompleteTask.kind === "reminder" ? "reminder" : "task"}`
-                        : `Complete ${confirmCompleteTask?.kind === "reminder" ? "reminder" : "task"}`}
-                    </Text>
-                  )}
-                </Pressable>
-                <Pressable
-                  onPress={() => setConfirmCompleteTask(null)}
-                  disabled={checkingSeriesOrder || toggleMutation.isPending}
-                  style={alenioSheetStyles.cancelButton}
-                  testID="complete-confirm-cancel"
-                >
-                  <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
-                </Pressable>
-              </View>
-            }
-          >
-            {confirmCompleteTask ? (
-              <AlenioSheetCard
-                tint={
-                  confirmCompleteTask.kind === "reminder" ? "purple" : "slate"
-                }
-                compact
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 12,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor:
-                        confirmCompleteTask.kind === "reminder"
-                          ? "#E9E5FF"
-                          : "#E7F7F0",
-                    }}
-                  >
-                    {confirmCompleteTask.kind === "reminder" ? (
-                      <Bell size={17} color="#635BDB" strokeWidth={2.2} />
-                    ) : (
-                      <CheckSquare
-                        size={17}
-                        color="#15805D"
-                        strokeWidth={2.2}
-                      />
-                    )}
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text
-                      style={{
-                        fontSize: 13.5,
-                        lineHeight: 18,
-                        fontWeight: "700",
-                        color: "#172033",
-                      }}
-                      numberOfLines={2}
-                    >
-                      {confirmCompleteTask.title}
-                    </Text>
-                    <Text
-                      style={{
-                        marginTop: 2,
-                        fontSize: 10.5,
-                        lineHeight: 14,
-                        color: "#7C8799",
-                      }}
-                    >
-                      {confirmCompleteTask.kind === "reminder"
-                        ? "Private reminder"
-                        : ownerCompletingUnassignedTask(
-                            currentRole,
-                            session?.user?.id,
-                            confirmCompleteTask,
-                          )
-                          ? "Not assigned to you"
-                          : "Workspace task"}
-                    </Text>
-                  </View>
-                </View>
-              </AlenioSheetCard>
-            ) : null}
-          </AlenioBottomSheet>
-
-          <AlenioBottomSheet
-            visible={!!seriesOrderWarning}
-            title="Earlier tasks still open"
-            subtitle="You're completing this out of order"
-            onClose={() => setSeriesOrderWarning(null)}
-            compact
-            showCloseButton
-            testID="series-order-warning-sheet"
-            footer={
-              <TouchableOpacity
-                onPress={() => setSeriesOrderWarning(null)}
-                style={alenioSheetStyles.cancelButton}
-                activeOpacity={0.8}
-                testID="series-order-warning-cancel"
-              >
-                <Text style={alenioSheetStyles.cancelButtonText}>Go back</Text>
-              </TouchableOpacity>
-            }
-          >
-            <AlenioSheetCard tint="danger" compact>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 10,
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    backgroundColor: "#FEE2E2",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <AlertTriangle size={18} color="#EF4444" strokeWidth={2.25} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "700",
-                      color: "#991B1B",
-                    }}
-                  >
-                    {seriesOrderWarning?.earlierCount === 1
-                      ? "1 earlier task is still incomplete"
-                      : `${seriesOrderWarning?.earlierCount ?? 0} earlier tasks are still incomplete`}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: "#B91C1C",
-                      marginTop: 4,
-                      lineHeight: 17,
-                    }}
-                  >
-                    {seriesOrderWarning
-                      ? `The next open date is ${seriesOrderWarning.nextDueLabel}. You can still complete this one if you want.`
-                      : "You can still complete this one if you want."}
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  if (!seriesOrderWarning) return;
-                  completeTaskFromList(seriesOrderWarning.task);
-                }}
-                disabled={toggleMutation.isPending}
-                style={[alenioSheetStyles.primaryButton, { marginTop: 14 }]}
-                activeOpacity={0.92}
-                testID="series-order-warning-continue"
-              >
-                {toggleMutation.isPending ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={alenioSheetStyles.primaryButtonText}>
-                    Complete anyway
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </AlenioSheetCard>
-          </AlenioBottomSheet>
-
-          {/* Subtask block modal */}
-          {blockedSubtasks ? (
-            <View
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: "rgba(0,0,0,0.45)",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 101,
-              }}
-              testID="subtask-block-overlay"
-            >
-              <View
-                style={{
-                  backgroundColor: "white",
-                  borderRadius: 20,
-                  marginHorizontal: 32,
-                  padding: 24,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.2,
-                  shadowRadius: 16,
-                  shadowOffset: { width: 0, height: 8 },
-                  elevation: 12,
-                  width: "85%",
-                }}
-              >
-                <View
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 26,
-                    backgroundColor: "#FEF3C7",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    alignSelf: "center",
-                    marginBottom: 14,
-                  }}
-                >
-                  <Text style={{ fontSize: 26 }}>⚠️</Text>
-                </View>
-                <Text
-                  style={{
-                    fontSize: 17,
-                    fontWeight: "700",
-                    color: "#0F172A",
-                    textAlign: "center",
-                    marginBottom: 6,
-                  }}
-                >
-                  Subtasks Incomplete
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: "#64748B",
-                    textAlign: "center",
-                    marginBottom: 24,
-                  }}
-                >
-                  Subtasks are incomplete. Finish them before marking this task
-                  as done.
-                </Text>
-                <Pressable
-                  onPress={() => setBlockedSubtasks(null)}
-                  style={{
-                    backgroundColor: "#6d28d9",
-                    borderRadius: 12,
-                    paddingVertical: 14,
-                    alignItems: "center",
-                  }}
-                  testID="subtask-block-ok"
-                >
-                  <Text
-                    style={{ color: "white", fontSize: 15, fontWeight: "700" }}
-                  >
-                    Got it
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-
-          {/* Task action menu */}
-          <AlenioBottomSheet
-            visible={!!actionMenuTask}
-            title={actionMenuTask?.title ?? "Task"}
-            subtitle="Choose an action"
-            onClose={() => setActionMenuTask(null)}
-            testID="task-action-sheet"
-            footer={
-              <TouchableOpacity
-                onPress={() => setActionMenuTask(null)}
-                style={alenioSheetStyles.cancelButton}
-                activeOpacity={0.8}
-              >
-                <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            }
-          >
-            {actionMenuTask && canManageTaskMenu(actionMenuTask) ? (
-              <AlenioSheetOption
-                icon={<Pencil size={20} color="white" strokeWidth={2.25} />}
-                title="Edit"
-                subtitle="Change title, due date, priority, and more"
-                onPress={() => {
-                  const task = actionMenuTask;
-                  setActionMenuTask(null);
-                  openTaskDetails(task, { startEdit: true });
-                }}
-                testID="task-action-edit"
-              />
-            ) : null}
-            {isOwnerOrLeader &&
-            actionMenuTask?.status !== "done" &&
-            (actionMenuTask?.assignments.length ?? 0) > 0 ? (
-              <AlenioSheetOption
-                icon={<RefreshCw size={20} color="white" strokeWidth={2.25} />}
-                iconColor="#7C3AED"
-                title="Reassign"
-                subtitle="Move this task to another teammate"
-                onPress={() => {
-                  const t = actionMenuTask!;
-                  setActionMenuTask(null);
-                  setReassignTask(t);
-                }}
-                testID="task-action-reassign"
-              />
-            ) : null}
-          </AlenioBottomSheet>
+          />
 
           {/* Event action menu */}
           <AlenioBottomSheet
@@ -3882,55 +3315,29 @@ export default function TasksScreen() {
                         openPersonalEventModal();
                       },
                     },
-                ...(isOwnerOrLeader
-                  ? [
-                      {
-                        key: "task",
-                        label: "Task",
-                        hint: "Assign work for the team",
-                        icon: (
-                          <ScheduleKindIcon
-                            kind="task"
-                            size={16}
-                            color={tintInk("lavender")}
-                          />
-                        ),
-                        testID: "workspace-add-task",
-                        onPress: () => {
-                          setShowAddModal(false);
-                          router.push({
-                            pathname: "/create-task",
-                            params: {
-                              teamId: activeTeamId!,
-                              initialDueDate:
-                                selectedDay ?? toLocalIso(new Date()),
-                              kind: "workspace_task",
-                            },
-                          });
-                        },
-                      },
-                    ]
-                  : []),
                 {
-                  key: "reminder",
-                  label: "Reminder",
-                  hint: "Private to you",
+                  key: "task",
+                  label: "Task",
+                  hint: isOwnerOrLeader
+                    ? "Team work or just for you"
+                    : "Private to you",
                   icon: (
                     <ScheduleKindIcon
-                      kind="reminder"
+                      kind="task"
                       size={16}
                       color={tintInk("lavender")}
                     />
                   ),
-                  testID: "workspace-add-reminder",
+                  testID: "workspace-add-task",
                   onPress: () => {
                     setShowAddModal(false);
                     router.push({
                       pathname: "/create-task",
                       params: {
                         teamId: activeTeamId!,
-                        initialDueDate: selectedDay ?? toLocalIso(new Date()),
-                        kind: "reminder",
+                        initialDueDate:
+                          selectedDay ?? toLocalIso(new Date()),
+                        kind: isOwnerOrLeader ? "workspace_task" : "reminder",
                       },
                     });
                   },
@@ -5525,6 +4932,9 @@ export default function TasksScreen() {
                     onViewMonthChange={handleViewMonthChange}
                     displayMode={calendarDisplayMode}
                     onDisplayModeChange={setCalendarModeChoice}
+                    onAddPress={
+                      access.canWrite ? openWorkspaceCreate : undefined
+                    }
                   >
                     {calendarDisplayMode === "week" ? (
                       <ScrollView
@@ -5596,10 +5006,10 @@ export default function TasksScreen() {
                                   onEventPress={openEventPreview}
                                   onEventLongPress={openEventActions}
                                   onTaskPress={openScheduleTask}
-                                  onToggleTask={handleToggleTask}
+                                  onToggleTask={openScheduleTask}
                                   onTaskLongPress={(task) => {
                                     if (!canManageTaskMenu(task)) return;
-                                    setActionMenuTask(task);
+                                    openTaskDetails(task, { startEdit: true });
                                   }}
                                   onAddEvent={
                                     access.canWrite
@@ -5649,7 +5059,6 @@ export default function TasksScreen() {
                         >
                           {dayPaneHeader}
                           <View style={{ flex: 1, minHeight: 0 }}>{dayPaneList}</View>
-                          {upcomingPane}
                         </View>
                       )}
                     </View>
@@ -5734,7 +5143,6 @@ export default function TasksScreen() {
                   minHeight: 0,
                   ...(showTaskDetailPane
                     ? {
-                        paddingTop: 8,
                         paddingLeft: WS.pageGutter,
                         paddingBottom: workspacePageBottom,
                       }
@@ -5746,7 +5154,9 @@ export default function TasksScreen() {
                   style={{
                     flexShrink: 0,
                     paddingHorizontal: showTaskDetailPane ? 12 : WS.pageGutter,
-                    paddingTop: 8,
+                    // Match CalendarCard marginTop / Members titleRow so the
+                    // first task card doesn't sit a step below the other tabs.
+                    paddingTop: 2,
                     paddingBottom: 6,
                     backgroundColor: WS.pageBg,
                   }}
@@ -5757,7 +5167,7 @@ export default function TasksScreen() {
                     onChangeSearch={setTaskSearchQuery}
                     onOpenFilterView={() => setFilterPicker("filterView")}
                     canCreateTask={access.canWrite}
-                    createLabel={isOwnerOrLeader ? "Task" : "Reminder"}
+                    createLabel="Task"
                     onCreateTask={() => {
                       if (!access.canWrite || !activeTeamId) return;
                       router.push({
@@ -5775,7 +5185,7 @@ export default function TasksScreen() {
                 <View
                   style={{
                     flex: 1,
-                    minHeight: showTasksListEmpty ? undefined : 140,
+                    minHeight: 140,
                     paddingHorizontal: showTaskDetailPane ? 12 : WS.pageGutter,
                     paddingBottom: showTaskDetailPane
                       ? 8
@@ -5783,7 +5193,7 @@ export default function TasksScreen() {
                   }}
                 >
                   <ScrollView
-                    style={{ flex: showTasksListEmpty ? undefined : 1 }}
+                    style={{ flex: 1 }}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                       <RefreshControl
@@ -5794,8 +5204,8 @@ export default function TasksScreen() {
                       />
                     }
                     contentContainerStyle={{
-                      paddingTop: showTasksListEmpty ? 2 : 0,
-                      flexGrow: showTasksListEmpty ? 0 : 1,
+                      flexGrow: 1,
+                      justifyContent: showTasksListEmpty ? "center" : undefined,
                     }}
                   >
                     <TaskListCard
@@ -5806,11 +5216,12 @@ export default function TasksScreen() {
                       onRetry={() => void refetchActiveTasks()}
                       currentUserId={currentUserId}
                       selectedTaskId={showTaskDetailPane ? openTaskId : null}
-                      onToggle={handleToggleTask}
+                      onToggle={openTaskDetails}
                       onPress={openTaskDetails}
+                      onAssigneesPress={(task) => setAssigneesSheetTask(task)}
                       onLongPress={(task) => {
                         if (!canManageTaskMenu(task)) return;
-                        setActionMenuTask(task);
+                        openTaskDetails(task, { startEdit: true });
                       }}
                       emptyTitle={
                         taskSearchQuery.trim()
@@ -5916,7 +5327,6 @@ export default function TasksScreen() {
                     alignSelf: "stretch",
                     flexShrink: 0,
                     minHeight: 0,
-                    paddingTop: 8,
                     paddingRight: WS.pageGutter,
                     paddingLeft: PANE_GAP,
                     paddingBottom: workspacePageBottom,

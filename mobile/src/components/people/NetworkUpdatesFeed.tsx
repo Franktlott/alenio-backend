@@ -11,12 +11,8 @@ import {
   View,
 } from "react-native";
 import {
-  ChevronRight,
   EyeOff,
-  Heart,
-  MessageCircle,
   MoreHorizontal,
-  PenLine,
   SendHorizontal,
   Trash2,
   UserPlus,
@@ -41,14 +37,11 @@ import {
   AlenioSheetOption,
 } from "@/components/AlenioBottomSheet";
 import { ActivityReactionRow } from "@/components/activity/ActivityReactionRow";
-import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
-import { FeedActionButton } from "@/components/workspace/FeedActionButton";
+import { FeedEngagementRow } from "@/components/workspace/FeedEngagementRow";
 import {
   formatFeedTimestamp,
   myReactionEmoji,
-  totalReactionCount,
 } from "@/lib/workspace-updates";
-import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
 import { useTabBarClearanceFn } from "@/lib/tab-bar";
 import type {
   NetworkUpdate,
@@ -334,51 +327,40 @@ export function NetworkUpdatesFeed({
             </View>
           ) : (
             <View style={styles.empty} testID="network-updates-empty">
+              <View style={styles.emptySkeletons} accessibilityElementsHidden>
+                <View style={styles.emptySkeletonCard}>
+                  <View style={styles.emptySkeletonAvatar} />
+                  <View style={styles.emptySkeletonCopy}>
+                    <View style={[styles.emptySkeletonLine, { width: "42%" }]} />
+                    <View style={[styles.emptySkeletonLine, { width: "78%" }]} />
+                    <View style={[styles.emptySkeletonLine, { width: "58%" }]} />
+                  </View>
+                </View>
+                <View style={[styles.emptySkeletonCard, styles.emptySkeletonCardMuted]}>
+                  <View style={styles.emptySkeletonAvatar} />
+                  <View style={styles.emptySkeletonCopy}>
+                    <View style={[styles.emptySkeletonLine, { width: "36%" }]} />
+                    <View style={[styles.emptySkeletonLine, { width: "70%" }]} />
+                  </View>
+                </View>
+              </View>
               <View style={styles.emptyIcon}>
                 <Users size={22} color="#6d28d9" strokeWidth={2.2} />
               </View>
-              <Text style={styles.stateTitle}>Updates show up here</Text>
+              <Text style={styles.stateTitle}>Your network feed is quiet</Text>
               <Text style={styles.stateBody}>
-                Connect with someone you know, or share an update of your own.
+                Updates from people you connect with will show up here.
               </Text>
-              <View style={styles.emptyActions}>
-                <Pressable
-                  onPress={onFindPeople}
-                  style={styles.emptyAction}
-                  accessibilityRole="button"
-                  accessibilityLabel="Find people"
-                  testID="network-updates-find-people"
-                >
-                  <View style={styles.emptyActionIcon}>
-                    <UserPlus size={16} color="#6d28d9" strokeWidth={2.2} />
-                  </View>
-                  <View style={styles.emptyActionCopy}>
-                    <Text style={styles.emptyActionTitle}>Find people</Text>
-                    <Text style={styles.emptyActionBody}>
-                      Search by name, username, or email.
-                    </Text>
-                  </View>
-                  <ChevronRight size={16} color="#98A2B3" strokeWidth={2.2} />
-                </Pressable>
-                <Pressable
-                  onPress={() => openComposer()}
-                  style={styles.emptyAction}
-                  accessibilityRole="button"
-                  accessibilityLabel="Share an update"
-                  testID="network-updates-empty-share"
-                >
-                  <View style={styles.emptyActionIcon}>
-                    <PenLine size={16} color="#6d28d9" strokeWidth={2.2} />
-                  </View>
-                  <View style={styles.emptyActionCopy}>
-                    <Text style={styles.emptyActionTitle}>Share an update</Text>
-                    <Text style={styles.emptyActionBody}>
-                      Post something for the people you connect with.
-                    </Text>
-                  </View>
-                  <ChevronRight size={16} color="#98A2B3" strokeWidth={2.2} />
-                </Pressable>
-              </View>
+              <Pressable
+                onPress={onFindPeople}
+                style={styles.emptyCta}
+                accessibilityRole="button"
+                accessibilityLabel="Find people"
+                testID="network-updates-find-people"
+              >
+                <UserPlus size={16} color="#FFFFFF" strokeWidth={2.3} />
+                <Text style={styles.emptyCtaText}>Find people</Text>
+              </Pressable>
             </View>
           )
         }
@@ -484,8 +466,6 @@ export function NetworkUpdateCard({
   const width = item.metadata?.imageWidth;
   const height = item.metadata?.imageHeight;
   const mediaType = item.metadata?.mediaType ?? "image";
-  const mine = myReactionEmoji(item.reactions, currentUserId);
-  const reactionCount = totalReactionCount(item.reactions);
   const suppressOpenUntil = useRef(0);
   const openUpdate = () => {
     if (Date.now() < suppressOpenUntil.current) return;
@@ -554,51 +534,16 @@ export function NetworkUpdateCard({
           showPills={false}
         />
       </View>
-      {reactionCount > 0 || item.commentCount > 0 ? (
-        <View style={styles.engagementSummary}>
-          {reactionCount > 0 ? (
-            <ReactionFacepile
-              reactions={item.reactions}
-              onPress={onTogglePicker}
-              testID={`network-update-${item.id}-reactions`}
-            />
-          ) : (
-            <View />
-          )}
-          {item.commentCount > 0 ? (
-            <Pressable onPress={onToggleComments} hitSlop={8}>
-              <Text style={styles.commentSummary}>
-                {item.commentCount}{" "}
-                {item.commentCount === 1 ? "comment" : "comments"}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-      <View style={styles.actionRow}>
-        <FeedActionButton
-          Icon={Heart}
-          glyph={mine}
-          activeColor={feedReaction(mine)?.color}
-          label=""
-          active={!!mine}
-          filled
-          onPress={onTogglePicker}
-          accessibilityLabel={
-            mine
-              ? `Your reaction: ${feedReactionLabel(mine)}. Change or remove it.`
-              : "React to this network update"
-          }
-          testID={`network-update-${item.id}-react`}
-        />
-        <FeedActionButton
-          Icon={MessageCircle}
-          label=""
-          onPress={onToggleComments}
-          accessibilityLabel="Comment on this network update"
-          testID={`network-update-${item.id}-comments`}
-        />
-      </View>
+      <FeedEngagementRow
+        reactions={item.reactions}
+        currentUserId={currentUserId}
+        onToggleReaction={onReact}
+        onOpenPicker={onTogglePicker}
+        onPressReactions={onTogglePicker}
+        onPressComment={onToggleComments}
+        commentCount={item.commentCount}
+        testID={`network-update-${item.id}-engage`}
+      />
       {commentsOpen ? <NetworkComments update={item} /> : null}
     </Pressable>
   );
@@ -819,13 +764,15 @@ const styles = StyleSheet.create({
   },
   composerPrompt: {
     flex: 1,
-    minHeight: 34,
+    minHeight: 36,
     justifyContent: "center",
-    paddingHorizontal: 11,
-    borderRadius: 17,
-    backgroundColor: "#F7F8FB",
+    paddingHorizontal: 12,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    backgroundColor: "#FFFFFF",
   },
-  composerPlaceholder: { fontSize: 13, color: "#7B8798" },
+  composerPlaceholder: { fontSize: 13, color: "#8A96A8" },
   card: {
     padding: 12,
     borderRadius: 16,
@@ -855,25 +802,6 @@ const styles = StyleSheet.create({
   },
   body: { marginTop: 8, fontSize: 14.5, lineHeight: 21, color: "#243149" },
   reactionPicker: { position: "relative", zIndex: 5 },
-  engagementSummary: {
-    minHeight: 24,
-    paddingTop: 5,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  commentSummary: {
-    fontSize: 11.5,
-    color: "#7C8899",
-  },
-  actionRow: {
-    marginTop: 1,
-    paddingTop: 5,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#EBEEF3",
-    flexDirection: "row",
-    alignItems: "center",
-  },
   state: {
     flex: 1,
     minHeight: 250,
@@ -883,58 +811,70 @@ const styles = StyleSheet.create({
   },
   empty: {
     flex: 1,
-    minHeight: 280,
+    minHeight: 300,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     paddingHorizontal: 22,
-    paddingTop: 8,
+    paddingTop: 10,
+  },
+  emptySkeletons: {
+    alignSelf: "stretch",
+    gap: 8,
+    marginBottom: 18,
+  },
+  emptySkeletonCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "#F7F8FB",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#ECEEF3",
+  },
+  emptySkeletonCardMuted: {
+    opacity: 0.55,
+  },
+  emptySkeletonAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#E6E8EE",
+  },
+  emptySkeletonCopy: {
+    flex: 1,
+    gap: 7,
+    paddingTop: 4,
+  },
+  emptySkeletonLine: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "#E6E8EE",
   },
   emptyIcon: {
     width: 52,
     height: 52,
-    marginBottom: 14,
+    marginBottom: 12,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#EFE9FF",
   },
-  emptyActions: {
-    alignSelf: "stretch",
-    marginTop: 18,
-    gap: 8,
-  },
-  emptyAction: {
+  emptyCta: {
+    marginTop: 16,
+    minHeight: 42,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    backgroundColor: "#6d28d9",
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: "#F7F8FB",
+    gap: 8,
   },
-  emptyActionIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EFE9FF",
-  },
-  emptyActionCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  emptyActionTitle: {
+  emptyCtaText: {
     fontSize: 14.5,
-    lineHeight: 19,
     fontWeight: "700",
-    color: "#172033",
-  },
-  emptyActionBody: {
-    marginTop: 1,
-    fontSize: 12.5,
-    lineHeight: 17,
-    color: "#667085",
+    color: "#FFFFFF",
   },
   stateTitle: {
     fontSize: 17,

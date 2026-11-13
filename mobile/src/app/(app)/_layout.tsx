@@ -19,7 +19,9 @@ import {
   TAB_BAR_LABEL_SIZE,
   TAB_BAR_DIVIDER_COLOR,
   TAB_BAR_ACTIVE_HIGHLIGHT,
+  SENECA_FAB_SIZE,
   SENECA_FAB_VISIBLE_SIZE,
+  SENECA_FAB_RIGHT_INSET,
 } from "@/lib/tab-bar";
 import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { colors, radii } from "@/theme";
@@ -62,16 +64,12 @@ const ALL_TABS = [
 function NavigationRail({
   descriptors,
   onTabPress,
-  senecaOpen,
-  onSenecaPress,
   edge,
   width,
   insets,
 }: {
   descriptors: any[];
   onTabPress: (route: any, isFocused: boolean) => void;
-  senecaOpen: boolean;
-  onSenecaPress: () => void;
   edge: "left" | "right";
   width: number;
   insets: { top: number; bottom: number; left: number; right: number };
@@ -140,48 +138,6 @@ function NavigationRail({
     );
   });
 
-  // Seneca keeps its middle slot, but as a flat rail item — the raised disc is
-  // a bottom-bar affordance and reads as a stray FAB in a vertical list.
-  const senecaItem = (
-    <Pressable
-      key="seneca"
-      onPress={onSenecaPress}
-      style={railStyles.item}
-      testID="tab-seneca"
-      accessibilityRole="button"
-      accessibilityLabel="Open Seneca leadership assistant"
-      accessibilityState={{ selected: senecaOpen }}
-    >
-      <View
-        style={[
-          railStyles.itemInner,
-          senecaOpen ? railStyles.itemInnerActive : null,
-        ]}
-      >
-        <Image
-          source={require("@/assets/seneca-button-icon.png")}
-          style={railStyles.senecaIcon}
-          resizeMode="cover"
-        />
-        <Text
-          style={[
-            tabBarStyles.label,
-            {
-              color: senecaOpen ? TAB_BAR_ACTIVE_COLOR : TAB_BAR_INACTIVE_COLOR,
-              fontWeight: "700",
-            },
-          ]}
-          numberOfLines={1}
-        >
-          Seneca
-        </Text>
-      </View>
-    </Pressable>
-  );
-
-  const middle = Math.ceil(items.length / 2);
-  const railItems = [...items.slice(0, middle), senecaItem, ...items.slice(middle)];
-
   return (
     <View
       style={[
@@ -200,8 +156,45 @@ function NavigationRail({
       ]}
       testID="navigation-rail"
     >
-      {railItems}
+      {items}
     </View>
+  );
+}
+
+/** Floating Seneca control — bottom-right, clear of the tab bar / side rail. */
+function SenecaFab({
+  open,
+  onPress,
+  bottom,
+  right,
+}: {
+  open: boolean;
+  onPress: () => void;
+  bottom: number;
+  right: number;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[tabBarStyles.senecaFab, { bottom, right }]}
+      testID="tab-seneca"
+      accessibilityRole="button"
+      accessibilityLabel="Open Seneca leadership assistant"
+      accessibilityState={{ selected: open }}
+    >
+      <View
+        style={[
+          tabBarStyles.senecaFabDisc,
+          open ? tabBarStyles.senecaFabDiscOpen : null,
+        ]}
+      >
+        <Image
+          source={require("@/assets/seneca-button-icon.png")}
+          style={tabBarStyles.senecaFabIcon}
+          resizeMode="cover"
+        />
+      </View>
+    </Pressable>
   );
 }
 
@@ -212,16 +205,12 @@ function NavigationRail({
 function DuoIconRail({
   descriptors,
   onTabPress,
-  senecaOpen,
-  onSenecaPress,
   edge,
   width,
   bottomInset,
 }: {
   descriptors: any[];
   onTabPress: (route: any, isFocused: boolean) => void;
-  senecaOpen: boolean;
-  onSenecaPress: () => void;
   edge: "left" | "right";
   width: number;
   bottomInset: number;
@@ -264,28 +253,6 @@ function DuoIconRail({
     );
   };
 
-  const items = descriptors.map(iconFor);
-  const middle = Math.ceil(items.length / 2);
-  const senecaItem = (
-    <Pressable
-      key="seneca"
-      onPress={onSenecaPress}
-      style={iconRailStyles.item}
-      testID="tab-seneca"
-      accessibilityRole="button"
-      accessibilityLabel="Open Seneca leadership assistant"
-      accessibilityState={{ selected: senecaOpen }}
-    >
-      <View style={[iconRailStyles.disc, senecaOpen ? iconRailStyles.discActive : null]}>
-        <Image
-          source={require("@/assets/seneca-button-icon.png")}
-          style={iconRailStyles.seneca}
-          resizeMode="cover"
-        />
-      </View>
-    </Pressable>
-  );
-
   return (
     <View
       pointerEvents="box-none"
@@ -297,7 +264,7 @@ function DuoIconRail({
       testID="duo-icon-rail"
     >
       <View style={iconRailStyles.dock} testID="duo-icon-dock">
-        {[...items.slice(0, middle), senecaItem, ...items.slice(middle)]}
+        {descriptors.map(iconFor)}
       </View>
     </View>
   );
@@ -449,11 +416,21 @@ function FixedTabBar({ state, navigation }: any) {
   }, [joinRequestQueries, goLoginRequestQueries]);
 
   // Account-first navigation: main destinations stay in the tab bar. Profile
-  // opens from the header photo. Each screen adapts to workspace membership.
+  // opens from the header photo. Workspace only appears once the account has
+  // a team — Home already carries join / create.
+  const hasWorkspace = teamsList.length > 0;
   const visibleRoutes = state.routes.filter((r: any) => {
     const tab = ALL_TABS.find((t) => t.name === r.name);
-    return !!tab;
+    if (!tab) return false;
+    if (tab.name === "execute" && !hasWorkspace) return false;
+    return true;
   });
+
+  useEffect(() => {
+    if (hasWorkspace) return;
+    if (state.routes[state.index]?.name !== "execute") return;
+    navigation.navigate("home");
+  }, [hasWorkspace, navigation, state.index, state.routes]);
 
   const prefetchRouteData = (routeName: string) => {
     if (!session?.user) return;
@@ -546,18 +523,38 @@ function FixedTabBar({ state, navigation }: any) {
     })
     .filter(Boolean);
 
+  const sideRail = showRail || iconRailEdge != null;
+  /** Clears Chat’s composer; same height on every tab. */
+  const fabLift = 72;
+  const fabBottom = sideRail
+    ? Math.max(insets.bottom, 8) + 20 + fabLift
+    : TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 12 + fabLift;
+  const fabRight =
+    iconRailEdge === "right"
+      ? iconRailWidth + SENECA_FAB_RIGHT_INSET
+      : showRail && railEdge === "right"
+        ? railWidth + insets.right + SENECA_FAB_RIGHT_INSET
+        : SENECA_FAB_RIGHT_INSET;
+  const senecaFab = (
+    <SenecaFab
+      open={senecaOpen}
+      onPress={toggleSeneca}
+      bottom={fabBottom}
+      right={fabRight}
+    />
+  );
+
   if (iconRailEdge) {
     return (
       <>
         <DuoIconRail
           descriptors={tabDescriptors}
           onTabPress={onTabPress}
-          senecaOpen={senecaOpen}
-          onSenecaPress={toggleSeneca}
           edge={iconRailEdge}
           width={iconRailWidth}
           bottomInset={insets.bottom}
         />
+        {senecaFab}
         <SenecaAssistantSheet open={senecaOpen} onClose={closeSeneca} />
       </>
     );
@@ -569,12 +566,11 @@ function FixedTabBar({ state, navigation }: any) {
         <NavigationRail
           descriptors={tabDescriptors}
           onTabPress={onTabPress}
-          senecaOpen={senecaOpen}
-          onSenecaPress={toggleSeneca}
           edge={railEdge}
           width={railWidth}
           insets={insets}
         />
+        {senecaFab}
         <SenecaAssistantSheet open={senecaOpen} onClose={closeSeneca} />
       </>
     );
@@ -633,17 +629,13 @@ function FixedTabBar({ state, navigation }: any) {
     );
   });
 
-  const leftTabs = tabs.slice(0, 2);
-  const rightTabs = tabs.slice(2);
-  const senecaLift = 16;
-
   return (
     <>
       <View
         style={[
           tabBarStyles.container,
           {
-            height: TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + senecaLift,
+            height: TAB_BAR_HEIGHT + Math.max(insets.bottom, 8),
           },
         ]}
         pointerEvents="box-none"
@@ -662,44 +654,10 @@ function FixedTabBar({ state, navigation }: any) {
             { bottom: Math.max(insets.bottom, 8) },
           ]}
         >
-          {leftTabs}
-          <View style={tabBarStyles.tab} pointerEvents="none" />
-          {rightTabs}
+          {tabs}
         </View>
-        <Pressable
-          onPress={toggleSeneca}
-          style={[
-            tabBarStyles.senecaSlot,
-            { bottom: Math.max(insets.bottom, 8) },
-          ]}
-          testID="tab-seneca"
-          accessibilityRole="button"
-          accessibilityLabel="Open Seneca leadership assistant"
-          accessibilityState={{ selected: senecaOpen }}
-        >
-          <View
-            style={[
-              tabBarStyles.senecaDisc,
-              senecaOpen ? tabBarStyles.senecaDiscOpen : null,
-            ]}
-          >
-            <Image
-              source={require("@/assets/seneca-button-icon.png")}
-              style={tabBarStyles.senecaIcon}
-              resizeMode="cover"
-            />
-          </View>
-          <Text
-            style={[
-              tabBarStyles.senecaLabel,
-              { color: senecaOpen ? TAB_BAR_ACTIVE_COLOR : TAB_BAR_INACTIVE_COLOR },
-            ]}
-            numberOfLines={1}
-          >
-            Seneca
-          </Text>
-        </Pressable>
       </View>
+      {senecaFab}
       <SenecaAssistantSheet
         open={senecaOpen}
         onClose={closeSeneca}
@@ -738,7 +696,7 @@ const tabBarStyles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   tab: {
-    width: "20%",
+    flex: 1,
     minHeight: 44,
     minWidth: 44,
     alignItems: "center",
@@ -770,44 +728,36 @@ const tabBarStyles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "700",
   },
-  senecaSlot: {
+  senecaFab: {
     position: "absolute",
-    left: "50%",
-    marginLeft: -38,
-    width: 76,
-    height: TAB_BAR_HEIGHT + 16,
+    width: SENECA_FAB_SIZE + 8,
+    height: SENECA_FAB_SIZE + 8,
     alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 2,
+    justifyContent: "center",
     zIndex: 10102,
     elevation: 14,
   },
-  senecaDisc: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginBottom: 2,
+  senecaFabDisc: {
+    width: SENECA_FAB_SIZE + 8,
+    height: SENECA_FAB_SIZE + 8,
+    borderRadius: (SENECA_FAB_SIZE + 8) / 2,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "rgba(105, 71, 232, 0.12)",
     shadowColor: "#33218A",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
   },
-  senecaDiscOpen: {
+  senecaFabDiscOpen: {
     borderColor: "#4361EE",
   },
-  senecaIcon: {
-    width: SENECA_FAB_VISIBLE_SIZE + 2,
-    height: SENECA_FAB_VISIBLE_SIZE + 2,
-    borderRadius: (SENECA_FAB_VISIBLE_SIZE + 2) / 2,
-  },
-  senecaLabel: {
-    fontSize: TAB_BAR_LABEL_SIZE,
-    fontWeight: "700",
+  senecaFabIcon: {
+    width: SENECA_FAB_VISIBLE_SIZE + 6,
+    height: SENECA_FAB_VISIBLE_SIZE + 6,
+    borderRadius: (SENECA_FAB_VISIBLE_SIZE + 6) / 2,
   },
 });
 
@@ -820,7 +770,8 @@ const iconRailStyles = StyleSheet.create({
     elevation: 10100,
     alignItems: "center",
     justifyContent: "flex-end",
-    backgroundColor: "#FFFFFF",
+    // Clear so the mountain band shows through the status column.
+    backgroundColor: "transparent",
   },
   dock: {
     width: 56,
@@ -853,11 +804,6 @@ const iconRailStyles = StyleSheet.create({
   discActive: {
     backgroundColor: TAB_BAR_ACTIVE_HIGHLIGHT,
   },
-  seneca: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
 });
 
 const railStyles = StyleSheet.create({
@@ -889,16 +835,11 @@ const railStyles = StyleSheet.create({
   itemInnerActive: {
     backgroundColor: TAB_BAR_ACTIVE_HIGHLIGHT,
   },
-  senecaIcon: {
-    width: TAB_BAR_ICON_SIZE + 6,
-    height: TAB_BAR_ICON_SIZE + 6,
-    borderRadius: (TAB_BAR_ICON_SIZE + 6) / 2,
-  },
 });
 
 export default function AppLayout() {
   const insets = useSafeAreaInsets();
-  const { showRail, railEdge, railWidth, iconRailEdge, iconRailWidth } = useAdaptiveLayout();
+  const { showRail, railEdge, railWidth } = useAdaptiveLayout();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const { data: session } = useSession();
@@ -949,23 +890,16 @@ export default function AppLayout() {
         screenOptions={{
           headerShown: false,
           animation: "none",
-          // Scenes stop where the rail starts; the rail itself is a sibling of
-          // this container, so it keeps its full-height edge position.
+          // Duo icon-rail scenes stay full-bleed so the mountain band reaches
+          // the glass; content clears the status column itself. Labeled rails
+          // still inset the scene — the rail is a sibling overlay.
           sceneStyle: {
             backgroundColor: "transparent",
             flex: 1,
             paddingLeft:
-              iconRailEdge === "left"
-                ? iconRailWidth
-                : showRail && railEdge === "left"
-                  ? railWidth + insets.left
-                  : 0,
+              showRail && railEdge === "left" ? railWidth + insets.left : 0,
             paddingRight:
-              iconRailEdge === "right"
-                ? iconRailWidth
-                : showRail && railEdge === "right"
-                  ? railWidth + insets.right
-                  : 0,
+              showRail && railEdge === "right" ? railWidth + insets.right : 0,
           },
           // Full-bleed scenes under the fixed overlay tab bar
           tabBarStyle: {
@@ -982,7 +916,14 @@ export default function AppLayout() {
       >
         <Tabs.Screen name="home" options={{ title: "Home" }} />
         <Tabs.Screen name="chat" options={{}} />
-        <Tabs.Screen name="execute" options={{ title: "Workspace" }} />
+        <Tabs.Screen
+          name="execute"
+          options={{
+            title: "Workspace",
+            // Hidden until the account has a workspace; Home owns join / create.
+            href: teams && teams.length > 0 ? undefined : null,
+          }}
+        />
         <Tabs.Screen name="team" options={{ title: "Team" }} />
         <Tabs.Screen name="profile" options={{ href: null, title: "Settings" }} />
       </Tabs>
@@ -996,5 +937,8 @@ export default function AppLayout() {
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
+    // Fills the Duo status column under a transparent icon rail so cards keep
+    // a white edge while the header band can paint the mountain through.
+    backgroundColor: "#FFFFFF",
   },
 });

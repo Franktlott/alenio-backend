@@ -10,7 +10,7 @@ import {
 import type { Task } from "@/lib/types";
 
 describe("task kind presentation", () => {
-  test("defaults leaders to workspace tasks and honors an intentional reminder route", () => {
+  test("defaults leaders to workspace tasks and honors a private task route", () => {
     expect(resolveTaskCreationPresentation("owner").kind).toBe(
       "workspace_task",
     );
@@ -19,17 +19,20 @@ describe("task kind presentation", () => {
     ).toMatchObject({
       kind: "reminder",
       canChooseKind: true,
-      createLabel: "Create Reminder",
+      createLabel: "Create Task",
+      audienceLabel: "Just for me",
+      privacyHint: "Only you can see this",
     });
   });
 
-  test("forces members and legacy admins into the private reminder flow", () => {
+  test("forces members and legacy admins into the private task flow", () => {
     expect(
       resolveTaskCreationPresentation("member", "workspace_task"),
     ).toMatchObject({
       kind: "reminder",
       canChooseKind: false,
-      newTitle: "New Reminder",
+      newTitle: "New Task",
+      privacyHint: "Only you can see this",
     });
     expect(resolveTaskCreationPresentation("admin").kind).toBe("reminder");
   });

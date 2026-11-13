@@ -142,6 +142,7 @@ export default function WorkspaceSettingsScreen() {
     access.status === "trialing" && access.remainingDays != null
       ? access.remainingDays
       : null;
+  const isCanceling = access.cancelAtPeriodEnd === true;
   const planInfo =
     access.status === "trialing"
       ? trialDaysLeft == null
@@ -149,11 +150,13 @@ export default function WorkspaceSettingsScreen() {
         : `${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left in trial`
       : !access.canWrite
         ? "Read-only workspace access"
-        : access.cancelAtPeriodEnd && planPeriodDate
-          ? `Plan ends ${planPeriodDate}`
-          : planPeriodDate
-            ? `Renews ${planPeriodDate}`
-            : "Active workspace access";
+        : isCanceling && planPeriodDate
+          ? `Cancels ${planPeriodDate}`
+          : isCanceling
+            ? "Canceling at period end"
+            : planPeriodDate
+              ? `Renews ${planPeriodDate}`
+              : "Active workspace access";
   const billingSubtitle = `${planLabel} · ${planInfo}`;
 
   const goBack = () =>
@@ -746,6 +749,10 @@ export default function WorkspaceSettingsScreen() {
                             {trialDaysLeft === 1 ? "" : "s"} left
                           </Text>
                         </View>
+                      ) : isCanceling ? (
+                        <View style={styles.cancelingChip}>
+                          <Text style={styles.cancelingChipText}>Canceling</Text>
+                        </View>
                       ) : null}
                       <ChevronRight
                         size={16}
@@ -1024,6 +1031,18 @@ const styles = StyleSheet.create({
     lineHeight: 12,
     fontWeight: "700",
     color: palette.violet,
+  },
+  cancelingChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#FEF3C7",
+  },
+  cancelingChipText: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: "700",
+    color: "#B45309",
   },
   nameEditorInput: {
     height: 46,

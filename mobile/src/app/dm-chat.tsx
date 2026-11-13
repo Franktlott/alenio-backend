@@ -113,11 +113,10 @@ import { formatRelativeTime } from "@/components/activity/types";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 import { GroupManageModals } from "@/components/GroupManageModals";
 import {
-  ProfileCard,
-  ProfileDivider,
-  ProfileMenuRow,
-  PROFILE_UI,
-} from "@/components/profile/ProfileEnterpriseUI";
+  AlenioBottomSheet,
+  AlenioSheetOption,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
 
 function DmChatEmptyState({
   user,
@@ -399,7 +398,10 @@ const dmOutboxKey = (userId: string, conversationId: string) =>
   `alenio:dm-outbox:v1:${userId}:${conversationId}`;
 
 export type DmThreadProps = {
-  conversationId: string;
+  /** Empty when composing to someone for the first time. */
+  conversationId?: string;
+  /** Opens a draft thread; the chat is created when the first message is sent. */
+  recipientId?: string;
   /** Shown until the `dms` query fills in the real name and photo. */
   recipientName?: string;
   recipientImage?: string;
@@ -416,7 +418,8 @@ export type DmThreadProps = {
  * portrait, and inline in the inbox's second pane on wide landscape screens.
  */
 export function DmThread({
-  conversationId,
+  conversationId: conversationIdProp = "",
+  recipientId = "",
   recipientName,
   recipientImage,
   isGroup = false,
@@ -431,6 +434,16 @@ export function DmThread({
   const cluster = useStatusClusterInset({ fullScreen: !embedded });
   const keyboardVisible = useSafeKeyboardVisible();
   const queryClient = useQueryClient();
+  const [activeConversationId, setActiveConversationId] = useState(() =>
+    conversationIdProp.trim(),
+  );
+  useEffect(() => {
+    const next = conversationIdProp.trim();
+    if (next) setActiveConversationId(next);
+  }, [conversationIdProp]);
+  const conversationId = activeConversationId;
+  const draftRecipientId = recipientId.trim();
+  const isDraftThread = !conversationId && draftRecipientId.length > 0;
   const [input, setInput] = useState("");
   const [localOutgoingMessages, setLocalOutgoingMessages] = useState<
     LocalOutgoingMessage[]
@@ -485,7 +498,12 @@ export function DmThread({
   }, []);
 
   useEffect(() => {
-    if (!currentUserId || !conversationId) return;
+    if (!conversationId) {
+      setLocalOutgoingMessages([]);
+      setOutboxHydrated(true);
+      return;
+    }
+    if (!currentUserId) return;
     let cancelled = false;
     setOutboxHydrated(false);
     void AsyncStorage.getItem(dmOutboxKey(currentUserId, conversationId))
@@ -543,7 +561,7 @@ export function DmThread({
   const { data: conversations = [] } = useQuery({
     queryKey: ["dms"],
     queryFn: () => api.get<Conversation[]>("/api/dms"),
-    enabled: !!conversationId,
+    enabled: !!conversationId || isDraftThread,
   });
 
   const currentConversation = conversations.find(
@@ -551,7 +569,9 @@ export function DmThread({
   );
   const messagingStatus = isGroup
     ? "available"
-    : (currentConversation?.messagingStatus ?? "loading");
+    : isDraftThread
+      ? "available"
+      : (currentConversation?.messagingStatus ?? "loading");
   const messagingDisabled = messagingStatus !== "available";
   useEffect(() => {
     if (!messagingDisabled || messagingStatus === "loading") return;
@@ -751,12 +771,46 @@ export function DmThread({
     [jumpingToPin, queryClient, conversationId, fetchNextPage, scrollToIndex],
   );
 
+  const ensureConversationId = useCallback(async () => {
+    if (conversationId) return conversationId;
+    if (!draftRecipientId) {
+      throw new Error("Pick someone to message first.");
+    }
+    const created = await api.post<{
+      id: string;
+      recipient: { name: string; image?: string | null } | null;
+    }>("/api/dms/find-or-create", { recipientId: draftRecipientId });
+    setActiveConversationId(created.id);
+    if (!embedded) {
+      router.setParams({
+        conversationId: created.id,
+        recipientName:
+          created.recipient?.name ?? recipientName ?? "Direct Message",
+        recipientImage:
+          resolveUserImageUrl(created.recipient?.image) ??
+          recipientImage ??
+          "",
+        isGroup: "false",
+      });
+    }
+    void queryClient.invalidateQueries({ queryKey: ["dms"] });
+    return created.id;
+  }, [
+    conversationId,
+    draftRecipientId,
+    embedded,
+    queryClient,
+    recipientImage,
+    recipientName,
+  ]);
+
   const sendMutation = useMutation({
     mutationFn: async ({
       localMessageId,
       mediaDraft,
       ...payload
     }: SendMessageVariables) => {
+      const threadId = await ensureConversationId();
       let nextPayload = payload;
       if (mediaDraft && !payload.mediaUrl) {
         setUploading(true);
@@ -788,17 +842,20 @@ export function DmThread({
           setUploading(false);
         }
       }
-      return api.post<DirectMessage>(
-        `/api/dms/${conversationId}/messages`,
-        nextPayload,
-      );
+      return {
+        threadId,
+        message: await api.post<DirectMessage>(
+          `/api/dms/${threadId}/messages`,
+          nextPayload,
+        ),
+      };
     },
-    onSuccess: (_message, variables) => {
+    onSuccess: (result, variables) => {
       setLocalOutgoingMessages((current) =>
         current.filter((message) => message.id !== variables.localMessageId),
       );
       queryClient.invalidateQueries({
-        queryKey: ["dm-messages", conversationId],
+        queryKey: ["dm-messages", result.threadId],
       });
       queryClient.invalidateQueries({ queryKey: ["dms"] });
       setReplyTo(null);
@@ -1227,8 +1284,12 @@ export function DmThread({
       className="flex-1"
       style={{
         backgroundColor: "#FFFFFF",
-        paddingLeft: cluster.left,
-        paddingRight: cluster.right,
+        /**
+         * Split chat already clears the Duo icon column on the body. Applying
+         * the same inset here left a second empty band before the rail.
+         */
+        paddingLeft: embedded ? 0 : cluster.left,
+        paddingRight: embedded ? 0 : cluster.right,
       }}
       /** In a pane the tab layout has already cleared the status bar. */
       edges={embedded ? [] : ["top"]}
@@ -1579,72 +1640,25 @@ export function DmThread({
         animationType="fade"
         onRequestClose={() => setDeleteTarget(null)}
       >
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.4)",
-            alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 32,
-          }}
-          activeOpacity={1}
+        <Pressable
+          style={dmConfirmStyles.backdrop}
           onPress={() => setDeleteTarget(null)}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={{
-              width: "100%",
-              backgroundColor: "white",
-              borderRadius: 16,
-              overflow: "hidden",
-            }}
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={dmConfirmStyles.card}
           >
-            <View
-              style={{
-                paddingHorizontal: 20,
-                paddingTop: 20,
-                paddingBottom: 16,
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 17,
-                  fontWeight: "700",
-                  color: "#0F172A",
-                  marginBottom: 4,
-                }}
-              >
-                Delete message?
-              </Text>
-              <Text
-                style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}
-              >
-                This message will be permanently removed.
-              </Text>
-            </View>
-            <View
-              style={{
-                flexDirection: "row",
-                borderTopWidth: 1,
-                borderTopColor: "#F1F5F9",
-              }}
-            >
+            <Text style={dmConfirmStyles.title}>Delete message?</Text>
+            <Text style={dmConfirmStyles.copy}>
+              This message will be permanently removed.
+            </Text>
+            <View style={dmConfirmStyles.actions}>
               <TouchableOpacity
                 onPress={() => setDeleteTarget(null)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  borderRightWidth: 1,
-                  borderRightColor: "#F1F5F9",
-                }}
+                style={dmConfirmStyles.cancelBtn}
+                activeOpacity={0.85}
               >
-                <Text
-                  style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}
-                >
-                  Cancel
-                </Text>
+                <Text style={dmConfirmStyles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 testID="confirm-delete-button"
@@ -1655,351 +1669,167 @@ export function DmThread({
                   }
                 }}
                 disabled={deleteMutation.isPending}
-                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
+                style={dmConfirmStyles.deleteBtn}
+                activeOpacity={0.9}
               >
                 {deleteMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#EF4444" />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: "700",
-                      color: "#EF4444",
-                    }}
-                  >
-                    Delete
-                  </Text>
+                  <Text style={dmConfirmStyles.deleteText}>Delete</Text>
                 )}
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      {/* Conversation options sheet */}
-      <Modal
+      <AlenioBottomSheet
         visible={showOptions}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowOptions(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(15,23,42,0.45)",
-            justifyContent: "flex-end",
-          }}
-        >
+        title={
+          isGroup
+            ? (currentConversation?.name ?? headerUser.name)
+            : headerUser.name
+        }
+        subtitle={
+          isGroup
+            ? [
+                `${groupParticipantCount} ${
+                  groupParticipantCount === 1 ? "member" : "members"
+                }`,
+                myGroupRole === "owner"
+                  ? "Owner"
+                  : myGroupRole === "admin"
+                    ? "Admin"
+                    : "Member",
+                groupWorkspace,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : "Direct message settings"
+        }
+        onClose={() => setShowOptions(false)}
+        compact
+        testID="conversation-options-sheet"
+        footer={
           <Pressable
-            style={{
-              position: "absolute",
-              top: 0,
-              right: 0,
-              bottom: 0,
-              left: 0,
-            }}
             onPress={() => setShowOptions(false)}
-          />
-          <View
-            style={{
-              backgroundColor: "#F8FAFC",
-              marginHorizontal: 10,
-              marginBottom: 28,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              overflow: "hidden",
-              maxHeight: "82%",
-            }}
+            style={alenioSheetStyles.cancelButton}
           >
-            <View
-              style={{ paddingTop: 10, paddingBottom: 4, alignItems: "center" }}
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: "#CBD5E1",
-                }}
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </Pressable>
+        }
+      >
+        {isGroup ? (
+          <>
+            <AlenioSheetOption
+              icon={<Users size={16} color="white" />}
+              title="Members"
+              subtitle={`View everyone in this group · ${groupParticipantCount}`}
+              onPress={() => openGroupManage("members")}
+              testID="manage-group-members"
+            />
+            {canManageGroupMembers ? (
+              <>
+                <AlenioSheetOption
+                  icon={<UserPlus size={16} color="white" />}
+                  iconColor="#7C3AED"
+                  tint="purple"
+                  title="Add members"
+                  subtitle="Invite people from your workspaces"
+                  onPress={() => openGroupManage("add")}
+                  testID="manage-group-add"
+                />
+                <AlenioSheetOption
+                  icon={<UserMinus size={16} color="white" />}
+                  tint="slate"
+                  title="Remove members"
+                  subtitle="Remove people from this group"
+                  onPress={() => openGroupManage("remove")}
+                  testID="manage-group-remove"
+                />
+                <AlenioSheetOption
+                  icon={<ImagePlus size={16} color="white" />}
+                  title={
+                    currentConversation?.image
+                      ? "Change group photo"
+                      : "Group photo"
+                  }
+                  subtitle={
+                    updateGroupPhotoMutation.isPending
+                      ? "Uploading…"
+                      : "Update the group image"
+                  }
+                  onPress={
+                    updateGroupPhotoMutation.isPending
+                      ? () => undefined
+                      : openGroupPhotoPicker
+                  }
+                  testID="manage-group-photo"
+                />
+              </>
+            ) : null}
+            {canManageGroupAdmins ? (
+              <AlenioSheetOption
+                icon={<Shield size={16} color="white" />}
+                iconColor="#7C3AED"
+                tint="purple"
+                title="Manage admins"
+                subtitle="Grant or revoke admin access"
+                onPress={() => openGroupManage("admins")}
+                testID="manage-group-admins"
               />
-            </View>
-
-            <ScrollView
-              bounces={false}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View
-                style={{
-                  paddingHorizontal: 16,
-                  paddingBottom: 14,
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 12,
+            ) : null}
+            {canDeleteGroup ? (
+              <AlenioSheetOption
+                icon={<Crown size={16} color="white" />}
+                tint="slate"
+                title="Transfer ownership"
+                subtitle="Make someone else the group owner"
+                onPress={() => openGroupManage("transfer")}
+                testID="manage-group-transfer"
+              />
+            ) : null}
+            {canLeaveGroup ? (
+              <AlenioSheetOption
+                icon={<LogOut size={16} color="white" />}
+                tint="slate"
+                title="Leave group"
+                subtitle="You will lose access to this conversation"
+                onPress={() => {
+                  setShowOptions(false);
+                  setTimeout(() => setShowLeaveConfirm(true), 300);
                 }}
-              >
-                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                  <Text style={PROFILE_UI.sectionLabel}>
-                    {isGroup ? "Manage group" : "Conversation"}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 17,
-                      fontWeight: "700",
-                      color: "#0F172A",
-                    }}
-                    numberOfLines={1}
-                  >
-                    {isGroup
-                      ? (currentConversation?.name ?? headerUser.name)
-                      : headerUser.name}
-                  </Text>
-                  {isGroup ? (
-                    <Text style={{ fontSize: 12, color: "#64748B" }}>
-                      {groupParticipantCount}{" "}
-                      {groupParticipantCount === 1 ? "member" : "members"}
-                      {" · "}
-                      {myGroupRole === "owner"
-                        ? "Owner"
-                        : myGroupRole === "admin"
-                          ? "Admin"
-                          : "Member"}
-                      {groupWorkspace ? ` · ${groupWorkspace}` : ""}
-                    </Text>
-                  ) : (
-                    <Text style={{ fontSize: 12, color: "#64748B" }}>
-                      Direct message settings
-                    </Text>
-                  )}
-                </View>
-                <Pressable
-                  onPress={() => setShowOptions(false)}
-                  hitSlop={8}
-                  style={({ pressed }) => ({
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: pressed ? "#E2E8F0" : "#FFFFFF",
-                    borderWidth: 1,
-                    borderColor: "#E2E8F0",
-                    marginTop: 2,
-                  })}
-                  accessibilityLabel="Close"
-                >
-                  <X size={16} color="#64748B" strokeWidth={2.2} />
-                </Pressable>
-              </View>
-
-              <View
-                style={{ paddingHorizontal: 12, paddingBottom: 16, gap: 12 }}
-              >
-                {isGroup ? (
-                  <>
-                    <View>
-                      <Text
-                        style={[
-                          PROFILE_UI.sectionLabel,
-                          { marginBottom: 6, paddingHorizontal: 2 },
-                        ]}
-                      >
-                        People
-                      </Text>
-                      <ProfileCard>
-                        <ProfileMenuRow
-                          icon={Users}
-                          title="Members"
-                          subtitle="View everyone in this group"
-                          trailing={
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                gap: 4,
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: "600",
-                                  color: "#64748B",
-                                }}
-                              >
-                                {groupParticipantCount}
-                              </Text>
-                              <ChevronRight size={16} color="#94A3B8" />
-                            </View>
-                          }
-                          showChevron={false}
-                          onPress={() => openGroupManage("members")}
-                        />
-                        {canManageGroupMembers ? (
-                          <>
-                            <ProfileDivider inset />
-                            <ProfileMenuRow
-                              icon={UserPlus}
-                              title="Add members"
-                              subtitle="Invite people from your workspaces"
-                              onPress={() => openGroupManage("add")}
-                            />
-                            <ProfileDivider inset />
-                            <ProfileMenuRow
-                              icon={UserMinus}
-                              title="Remove members"
-                              subtitle="Remove people from this group"
-                              onPress={() => openGroupManage("remove")}
-                            />
-                          </>
-                        ) : null}
-                      </ProfileCard>
-                    </View>
-
-                    {canManageGroupMembers ||
-                    canManageGroupAdmins ||
-                    canDeleteGroup ? (
-                      <View>
-                        <Text
-                          style={[
-                            PROFILE_UI.sectionLabel,
-                            { marginBottom: 6, paddingHorizontal: 2 },
-                          ]}
-                        >
-                          Administration
-                        </Text>
-                        <ProfileCard>
-                          {canManageGroupMembers ? (
-                            <ProfileMenuRow
-                              icon={ImagePlus}
-                              title={
-                                currentConversation?.image
-                                  ? "Change group photo"
-                                  : "Group photo"
-                              }
-                              subtitle={
-                                updateGroupPhotoMutation.isPending
-                                  ? "Uploading…"
-                                  : "Update the group image"
-                              }
-                              trailing={
-                                updateGroupPhotoMutation.isPending ? (
-                                  <ActivityIndicator
-                                    size="small"
-                                    color="#64748B"
-                                  />
-                                ) : undefined
-                              }
-                              showChevron={!updateGroupPhotoMutation.isPending}
-                              onPress={
-                                updateGroupPhotoMutation.isPending
-                                  ? undefined
-                                  : openGroupPhotoPicker
-                              }
-                            />
-                          ) : null}
-                          {canManageGroupMembers && canManageGroupAdmins ? (
-                            <ProfileDivider inset />
-                          ) : null}
-                          {canManageGroupAdmins ? (
-                            <ProfileMenuRow
-                              icon={Shield}
-                              title="Manage admins"
-                              subtitle="Grant or revoke admin access"
-                              onPress={() => openGroupManage("admins")}
-                            />
-                          ) : null}
-                          {canManageGroupAdmins && canDeleteGroup ? (
-                            <ProfileDivider inset />
-                          ) : null}
-                          {canDeleteGroup ? (
-                            <ProfileMenuRow
-                              icon={Crown}
-                              title="Transfer ownership"
-                              subtitle="Make someone else the group owner"
-                              onPress={() => openGroupManage("transfer")}
-                            />
-                          ) : null}
-                        </ProfileCard>
-                      </View>
-                    ) : null}
-
-                    {canDeleteGroup || canLeaveGroup ? (
-                      <View>
-                        <Text
-                          style={[
-                            PROFILE_UI.sectionLabel,
-                            { marginBottom: 6, paddingHorizontal: 2 },
-                          ]}
-                        >
-                          Danger zone
-                        </Text>
-                        <ProfileCard>
-                          {canLeaveGroup ? (
-                            <ProfileMenuRow
-                              icon={LogOut}
-                              title="Leave group"
-                              subtitle="You will lose access to this conversation"
-                              onPress={() => {
-                                setShowOptions(false);
-                                setTimeout(
-                                  () => setShowLeaveConfirm(true),
-                                  300,
-                                );
-                              }}
-                            />
-                          ) : null}
-                          {canLeaveGroup && canDeleteGroup ? (
-                            <ProfileDivider inset />
-                          ) : null}
-                          {canDeleteGroup ? (
-                            <ProfileMenuRow
-                              icon={Trash2}
-                              title="Delete group"
-                              subtitle="Permanently delete for everyone"
-                              destructive
-                              onPress={() => {
-                                setShowOptions(false);
-                                setTimeout(
-                                  () => setShowConvDeleteConfirm(true),
-                                  300,
-                                );
-                              }}
-                            />
-                          ) : null}
-                        </ProfileCard>
-                      </View>
-                    ) : null}
-                  </>
-                ) : (
-                  <View>
-                    <Text
-                      style={[
-                        PROFILE_UI.sectionLabel,
-                        { marginBottom: 6, paddingHorizontal: 2 },
-                      ]}
-                    >
-                      Danger zone
-                    </Text>
-                    <ProfileCard>
-                      <ProfileMenuRow
-                        icon={Trash2}
-                        title="Delete conversation"
-                        subtitle="Remove this chat for everyone"
-                        destructive
-                        onPress={() => {
-                          setShowOptions(false);
-                          setTimeout(() => setShowConvDeleteConfirm(true), 300);
-                        }}
-                      />
-                    </ProfileCard>
-                  </View>
-                )}
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+                testID="manage-group-leave"
+              />
+            ) : null}
+            {canDeleteGroup ? (
+              <AlenioSheetOption
+                icon={<Trash2 size={16} color="white" />}
+                destructive
+                title="Delete group"
+                subtitle="Permanently delete for everyone"
+                onPress={() => {
+                  setShowOptions(false);
+                  setTimeout(() => setShowConvDeleteConfirm(true), 300);
+                }}
+                testID="manage-group-delete"
+              />
+            ) : null}
+          </>
+        ) : (
+          <AlenioSheetOption
+            icon={<Trash2 size={16} color="white" />}
+            destructive
+            title="Delete conversation"
+            subtitle="Remove this chat for everyone"
+            onPress={() => {
+              setShowOptions(false);
+              setTimeout(() => setShowConvDeleteConfirm(true), 300);
+            }}
+            testID="manage-dm-delete"
+          />
+        )}
+      </AlenioBottomSheet>
 
       {isGroup ? (
         <GroupManageModals
@@ -2019,74 +1849,29 @@ export function DmThread({
         animationType="fade"
         onRequestClose={() => setShowLeaveConfirm(false)}
       >
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.4)",
-            alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 32,
-          }}
-          activeOpacity={1}
+        <Pressable
+          style={dmConfirmStyles.backdrop}
           onPress={() => setShowLeaveConfirm(false)}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={{
-              width: "100%",
-              backgroundColor: "white",
-              borderRadius: 16,
-              overflow: "hidden",
-            }}
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={dmConfirmStyles.card}
           >
-            <View
-              style={{
-                paddingHorizontal: 20,
-                paddingTop: 20,
-                paddingBottom: 16,
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 17,
-                  fontWeight: "700",
-                  color: "#0F172A",
-                  marginBottom: 4,
-                }}
-              >
-                {isLastGroupMember ? "Delete Group?" : "Leave Group?"}
-              </Text>
-              <Text
-                style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}
-              >
-                {isLastGroupMember
-                  ? "You are the last member. Leaving will permanently delete this group and all message history."
-                  : "You will stop receiving messages from this group. Other members can still chat."}
-              </Text>
-            </View>
-            <View
-              style={{
-                flexDirection: "row",
-                borderTopWidth: 1,
-                borderTopColor: "#F1F5F9",
-              }}
-            >
+            <Text style={dmConfirmStyles.title}>
+              {isLastGroupMember ? "Delete Group?" : "Leave Group?"}
+            </Text>
+            <Text style={dmConfirmStyles.copy}>
+              {isLastGroupMember
+                ? "You are the last member. Leaving will permanently delete this group and all message history."
+                : "You will stop receiving messages from this group. Other members can still chat."}
+            </Text>
+            <View style={dmConfirmStyles.actions}>
               <TouchableOpacity
                 onPress={() => setShowLeaveConfirm(false)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  borderRightWidth: 1,
-                  borderRightColor: "#F1F5F9",
-                }}
+                style={dmConfirmStyles.cancelBtn}
+                activeOpacity={0.85}
               >
-                <Text
-                  style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}
-                >
-                  Cancel
-                </Text>
+                <Text style={dmConfirmStyles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
@@ -2094,28 +1879,25 @@ export function DmThread({
                   leaveConversationMutation.mutate();
                 }}
                 disabled={leaveConversationMutation.isPending}
-                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
+                style={[
+                  dmConfirmStyles.deleteBtn,
+                  !isLastGroupMember
+                    ? { backgroundColor: "#F59E0B" }
+                    : null,
+                ]}
+                activeOpacity={0.9}
               >
                 {leaveConversationMutation.isPending ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={isLastGroupMember ? "#EF4444" : "#F59E0B"}
-                  />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: "700",
-                      color: isLastGroupMember ? "#EF4444" : "#F59E0B",
-                    }}
-                  >
+                  <Text style={dmConfirmStyles.deleteText}>
                     {isLastGroupMember ? "Delete Group" : "Leave"}
                   </Text>
                 )}
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Delete conversation confirmation */}
@@ -2125,97 +1907,45 @@ export function DmThread({
         animationType="fade"
         onRequestClose={() => setShowConvDeleteConfirm(false)}
       >
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.4)",
-            alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 32,
-          }}
-          activeOpacity={1}
+        <Pressable
+          style={dmConfirmStyles.backdrop}
           onPress={() => setShowConvDeleteConfirm(false)}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={{
-              width: "100%",
-              backgroundColor: "white",
-              borderRadius: 16,
-              overflow: "hidden",
-            }}
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={dmConfirmStyles.card}
           >
-            <View
-              style={{
-                paddingHorizontal: 20,
-                paddingTop: 20,
-                paddingBottom: 16,
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 17,
-                  fontWeight: "700",
-                  color: "#0F172A",
-                  marginBottom: 4,
-                }}
-              >
-                {isGroup ? "Delete Group?" : "Delete Conversation?"}
-              </Text>
-              <Text
-                style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}
-              >
-                {isGroup
-                  ? "This will permanently delete the group and all messages for everyone."
-                  : "This will permanently delete this conversation for both you and the other person."}
-              </Text>
-            </View>
-            <View
-              style={{
-                flexDirection: "row",
-                borderTopWidth: 1,
-                borderTopColor: "#F1F5F9",
-              }}
-            >
+            <Text style={dmConfirmStyles.title}>
+              {isGroup ? "Delete Group?" : "Delete Conversation?"}
+            </Text>
+            <Text style={dmConfirmStyles.copy}>
+              {isGroup
+                ? "This will permanently delete the group and all messages for everyone."
+                : "This will permanently delete this conversation for both you and the other person."}
+            </Text>
+            <View style={dmConfirmStyles.actions}>
               <TouchableOpacity
                 onPress={() => setShowConvDeleteConfirm(false)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  borderRightWidth: 1,
-                  borderRightColor: "#F1F5F9",
-                }}
+                style={dmConfirmStyles.cancelBtn}
+                activeOpacity={0.85}
               >
-                <Text
-                  style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}
-                >
-                  Cancel
-                </Text>
+                <Text style={dmConfirmStyles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => deleteConversationMutation.mutate()}
                 disabled={deleteConversationMutation.isPending}
-                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
+                style={dmConfirmStyles.deleteBtn}
+                activeOpacity={0.9}
               >
                 {deleteConversationMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#EF4444" />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: "700",
-                      color: "#EF4444",
-                    }}
-                  >
-                    Delete
-                  </Text>
+                  <Text style={dmConfirmStyles.deleteText}>Delete</Text>
                 )}
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <SafeKeyboardAvoidingView
@@ -2810,23 +2540,110 @@ export function DmThread({
   );
 }
 
+const dmConfirmStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 16,
+  },
+  title: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "700",
+    color: "#0F172A",
+    textAlign: "center",
+    letterSpacing: -0.2,
+  },
+  copy: {
+    marginTop: 6,
+    marginBottom: 18,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#64748B",
+    textAlign: "center",
+  },
+  actions: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 10,
+  },
+  cancelBtn: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 12,
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  deleteBtn: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EF4444",
+    paddingHorizontal: 12,
+  },
+  deleteText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+});
+
 /**
  * The pushed route. Notifications and deep links can arrive with nothing but a
  * conversation id, so every display param stays optional.
  */
 export default function DMChatScreen() {
-  const { conversationId, recipientName, recipientImage, isGroup } =
-    useLocalSearchParams<{
-      conversationId: string;
-      recipientName: string;
-      recipientImage: string;
-      isGroup: string;
-    }>();
+  const {
+    conversationId,
+    recipientId,
+    recipientName,
+    recipientImage,
+    isGroup,
+  } = useLocalSearchParams<{
+    conversationId?: string;
+    recipientId?: string;
+    recipientName?: string;
+    recipientImage?: string;
+    isGroup?: string;
+  }>();
+  const threadId =
+    typeof conversationId === "string" ? conversationId : undefined;
+  const draftRecipientId =
+    typeof recipientId === "string" ? recipientId : undefined;
   return (
     <DmThread
-      conversationId={conversationId}
-      recipientName={recipientName}
-      recipientImage={recipientImage}
+      conversationId={threadId}
+      recipientId={draftRecipientId}
+      recipientName={
+        typeof recipientName === "string" ? recipientName : undefined
+      }
+      recipientImage={
+        typeof recipientImage === "string" ? recipientImage : undefined
+      }
       isGroup={isGroup === "true"}
     />
   );

@@ -15,17 +15,13 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { videoCallHref } from "@/lib/meeting-navigation";
-import {
-  ArrowDown,
-  Check,
-  Clock,
-  MoreHorizontal,
-} from "lucide-react-native";
+import { ArrowDown, Check, Clock, Square } from "lucide-react-native";
 import { compareAgendaOrder } from "@/lib/calendar-month-view";
 import { instantHasPassed, scheduleTimeParts } from "@/lib/schedule-time";
 import type { CalendarEvent, HomeTodayItemType, Task, TeamMember } from "@/lib/types";
 import { CheckBurst } from "@/components/schedule/CheckBurst";
 import { ScheduleKindIcon } from "@/components/schedule/ScheduleKindIcon";
+import { TimelineRow } from "@/components/schedule/TimelineRow";
 import { TODAY_ITEM_PRESENTATION } from "@/lib/home-today-item";
 import { isReminderTask } from "@/lib/task-kind";
 import type { USFederalHoliday } from "@/lib/us-federal-holidays";
@@ -39,7 +35,6 @@ import { WS } from "./workspace-ui";
 import { CALENDAR_EVENT_COLORS } from "@/lib/calendar-event-colors";
 
 const SECTION_HORIZONTAL_PADDING = WS.pageGutter;
-const TIME_COL = 54;
 const CARD_GAP = 0;
 
 type EventAttendee = {
@@ -154,12 +149,14 @@ function DayListEventCard({
   row,
   nowMs,
   onToggleTask,
-  plainDayRows = false,
+  isFirst = false,
+  isLast = false,
 }: {
   row: EventRow;
   nowMs: number;
   onToggleTask?: (task: Task) => void;
-  plainDayRows?: boolean;
+  isFirst?: boolean;
+  isLast?: boolean;
 }) {
   const showMenu = row.kind !== "holiday" && Boolean(row.onLongPress);
   const isTask = row.kind === "task" && Boolean(row.task);
@@ -177,163 +174,128 @@ function DayListEventCard({
   const meetingTitle = event?.title ?? row.title;
   const itemKind = row.iconKind ?? (isTask ? "task" : "event");
   const itemPresentation = TODAY_ITEM_PRESENTATION[itemKind];
+  const isDone = row.isCompleted === true;
 
   const handleJoin = () => {
     router.push(videoCallHref(meetingId, meetingTitle));
   };
 
+  const timeMain = row.allDay ? "All day" : row.timeLabel;
+  const timeSub = row.allDay ? null : row.timeMeridiem;
+
+  const leading = isTask ? (
+    <Pressable
+      onPress={(pressEvent) => {
+        pressEvent.stopPropagation?.();
+        if (row.task && onToggleTask) onToggleTask(row.task);
+        else row.onPress?.();
+      }}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityState={{ checked: isDone }}
+      accessibilityLabel="Open task"
+      style={{
+        width: 28,
+        height: 28,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      testID={`day-task-toggle-${row.task!.id}`}
+    >
+      <CheckBurst checked={isDone}>
+        {isDone ? (
+          <View style={styles.checkboxOn}>
+            <Check size={12} color="#FFFFFF" strokeWidth={3} />
+          </View>
+        ) : (
+          <Square size={17} color="#8B95A5" strokeWidth={2.1} />
+        )}
+      </CheckBurst>
+    </Pressable>
+  ) : (
+    <View
+      style={[
+        styles.itemTypeIcon,
+        { backgroundColor: itemPresentation.surface },
+      ]}
+    >
+      <ScheduleKindIcon
+        kind={itemKind}
+        size={12}
+        color={itemPresentation.color}
+      />
+    </View>
+  );
+
+  const trailing = showJoin ? (
+    <AgendaRowJoinPill
+      meetingTitle={meetingTitle}
+      live={meetingStarted}
+      onPress={handleJoin}
+      testID={`day-event-join-${meetingId}`}
+    />
+  ) : null;
+
   return (
-    <View style={styles.card} testID={`day-event-card-${row.key}`}>
-      <View style={styles.cardMain}>
-        {plainDayRows ? null : (
-          <View
-            style={[
-              styles.accent,
-              {
-                backgroundColor:
-                  showJoin && meetingStarted ? "#22C55E" : row.accentColor,
-              },
-            ]}
-          />
-        )}
-        {plainDayRows && row.allDay ? null : (
-          <View style={styles.timeCol}>
-            <Text
-              style={row.allDay ? styles.timeMuted : styles.timeStart}
-              numberOfLines={1}
-            >
-              {row.timeLabel}
-            </Text>
-            {row.timeMeridiem ? (
-              <Text
-                style={styles.timeMuted}
-                numberOfLines={1}
-              >
-                {row.timeMeridiem}
-              </Text>
-            ) : null}
-          </View>
-        )}
-        <View style={styles.copy}>
-          <View style={styles.titleRow}>
-            <Pressable
-              onPress={row.onPress}
-              onLongPress={showMenu ? row.onLongPress : undefined}
-              delayLongPress={400}
-              style={styles.titlePress}
-            >
-              <View
-                style={[
-                  styles.itemTypeIcon,
-                  { backgroundColor: itemPresentation.surface },
-                ]}
-              >
-                <ScheduleKindIcon
-                  kind={itemKind}
-                  size={12}
-                  color={itemPresentation.color}
-                />
-              </View>
-              <Text
-                style={[styles.title, styles.titleFlex]}
-                numberOfLines={1}
-              >
-                {row.title}
-              </Text>
-            </Pressable>
-          </View>
-          {showJoin ? (
-            <Pressable
-              onPress={handleJoin}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel={
-                meetingStarted
-                  ? `Join active meeting ${meetingTitle}`
-                  : `Join ${meetingTitle}`
-              }
-            >
-              <Text
-                style={
-                  meetingStarted ? styles.joinActiveLine : styles.joinSoonLine
-                }
-                numberOfLines={1}
-              >
-                {meetingStarted ? "Live now" : "Starting soon"}
-              </Text>
-            </Pressable>
-          ) : row.detail ? (
-            <Text
-              style={[
-                styles.detail,
-                row.detailColor ? { color: row.detailColor } : null,
-              ]}
-              numberOfLines={1}
-            >
-              {row.detail}
-              {row.kind === "task" && row.overdue ? (
-                <Text style={styles.overdue}> · Overdue</Text>
-              ) : null}
+    <TimelineRow
+      timeMain={timeMain}
+      timeSub={timeSub}
+      leading={leading}
+      trailing={trailing}
+      isFirst={isFirst}
+      isLast={isLast}
+      onPress={row.onPress}
+      onLongPress={showMenu ? row.onLongPress : undefined}
+      testID={`day-event-card-${row.key}`}
+    >
+      <Text
+        style={[
+          styles.title,
+          isDone
+            ? { color: colors.textMuted, textDecorationLine: "line-through" }
+            : null,
+        ]}
+        numberOfLines={2}
+      >
+        {row.title}
+      </Text>
+      {showJoin ? (
+        <Pressable
+          onPress={handleJoin}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityLabel={
+            meetingStarted
+              ? `Join active meeting ${meetingTitle}`
+              : `Join ${meetingTitle}`
+          }
+        >
+          <Text
+            style={
+              meetingStarted ? styles.joinActiveLine : styles.joinSoonLine
+            }
+            numberOfLines={1}
+          >
+            {meetingStarted ? "Live now" : "Starting soon"}
+          </Text>
+        </Pressable>
+      ) : row.detail || (row.kind === "task" && row.overdue) ? (
+        <Text
+          style={[
+            styles.detail,
+            row.detailColor ? { color: row.detailColor } : null,
+          ]}
+          numberOfLines={1}
+        >
+          {row.detail}
+          {row.kind === "task" && row.overdue ? (
+            <Text style={styles.overdue}>
+              {row.detail ? " · " : ""}Overdue
             </Text>
           ) : null}
-        </View>
-      </View>
-      <View style={styles.rowActions}>
-        {isTask ? (
-          <Pressable
-            onPress={(pressEvent) => {
-              pressEvent.stopPropagation?.();
-              if (row.task && onToggleTask) onToggleTask(row.task);
-            }}
-            hitSlop={8}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: row.isCompleted === true }}
-            accessibilityLabel={
-              row.isCompleted ? "Mark task incomplete" : "Mark task complete"
-            }
-            style={styles.taskCheck}
-            testID={`day-task-toggle-${row.task!.id}`}
-          >
-            <CheckBurst checked={row.isCompleted === true}>
-              {row.isCompleted ? (
-                <View style={styles.checkboxOn}>
-                  <Check size={11} color="#FFFFFF" strokeWidth={3} />
-                </View>
-              ) : (
-                <View style={styles.checkboxOff} />
-              )}
-            </CheckBurst>
-          </Pressable>
-        ) : null}
-        {showJoin ? (
-          <AgendaRowJoinPill
-            meetingTitle={meetingTitle}
-            live={meetingStarted}
-            onPress={handleJoin}
-            testID={`day-event-join-${meetingId}`}
-          />
-        ) : null}
-        <View style={showJoin ? styles.moreTrail : undefined}>
-          {showMenu ? (
-            <Pressable
-              onPress={() => row.onLongPress?.()}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="More actions"
-              style={styles.more}
-            >
-              <MoreHorizontal
-                size={18}
-                color={colors.textMuted}
-                strokeWidth={2.2}
-              />
-            </Pressable>
-          ) : (
-            <View style={styles.moreSpacer} />
-          )}
-        </View>
-      </View>
-    </View>
+        </Text>
+      ) : null}
+    </TimelineRow>
   );
 }
 
@@ -517,7 +479,7 @@ function buildEventRows(
   const taskRows: EventRow[] = dayTasks.map((task) => {
     const isReminder = isReminderTask(task);
     const isCompleted = task.status === "done";
-    const kindLabel = isReminder ? "Reminder" : "Task";
+    const kindLabel = "Task";
     const time = scheduleTimeParts({
       at: task.dueDate,
       taskLike: true,
@@ -575,7 +537,7 @@ export function EventsSection({
   members = [],
   selectedDayIso,
   variant = "carousel",
-  plainDayRows = false,
+  plainDayRows: _plainDayRows = false,
   embedded = false,
   fillRemaining = false,
   scrollEnabled = true,
@@ -618,7 +580,7 @@ export function EventsSection({
   );
   const eventCount = dayHolidays.length + dayEvents.length;
   const taskCount = variant === "dayList" ? dayTasks.length : 0;
-  const estimatedListContentHeight = rows.length * 50 + listPaddingBottom;
+  const estimatedListContentHeight = rows.length * 44 + listPaddingBottom;
   const effectiveListContentHeight = Math.max(
     listContentHeight,
     estimatedListContentHeight,
@@ -783,7 +745,7 @@ export function EventsSection({
                 flexGrow: fillRemaining ? 1 : undefined,
               }}
             >
-              {rows.map((row) => (
+              {rows.map((row, index) => (
                 <View
                   key={row.key}
                   onLayout={(event) => {
@@ -795,7 +757,8 @@ export function EventsSection({
                     row={row}
                     nowMs={nowMs}
                     onToggleTask={onToggleTask}
-                    plainDayRows={plainDayRows}
+                    isFirst={index === 0}
+                    isLast={index === rows.length - 1}
                   />
                 </View>
               ))}
@@ -899,107 +862,13 @@ export function EventsSection({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 48,
-    paddingVertical: 8,
-    overflow: "visible",
-    zIndex: 1,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderStrong,
-    backgroundColor: colors.surface,
-  },
-  cardMain: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    overflow: "visible",
-  },
-  rowActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexShrink: 0,
-    paddingLeft: 8,
-    zIndex: 2,
-  },
-  moreTrail: {
-    width: 52,
-    alignItems: "flex-end",
-    justifyContent: "center",
-  },
-  accent: {
-    width: 3,
-    alignSelf: "stretch",
-    borderRadius: 1,
-    marginRight: 8,
-  },
-  timeCol: {
-    width: TIME_COL,
-    paddingRight: 8,
-    flexShrink: 0,
-    justifyContent: "center",
-  },
-  checkbox: {
-    width: TIME_COL,
-    height: 36,
-    alignItems: "flex-start",
-    justifyContent: "center",
-    paddingRight: 8,
-  },
-  checkboxOff: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
-  },
   checkboxOn: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    backgroundColor: CALENDAR_EVENT_COLORS.task,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  timeStart: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontWeight: "700",
-    color: colors.textPrimary,
-  },
-  timeMuted: {
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: "600",
-    color: colors.textMuted,
-  },
-  iconWrap: {
     width: 18,
+    height: 18,
+    borderRadius: 5,
+    backgroundColor: "#16A34A",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 6,
-    flexShrink: 0,
-  },
-  copy: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 6,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    minWidth: 0,
-    zIndex: 4,
-  },
-  titlePress: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
   },
   itemTypeIcon: {
     width: 24,
@@ -1009,29 +878,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  taskCheck: {
-    width: 28,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  titleIcon: {
-    marginRight: 5,
-  },
   title: {
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: "600",
+    fontWeight: "700",
     color: colors.textPrimary,
-  },
-  titleFlex: {
-    flex: 1,
-    minWidth: 0,
   },
   detail: {
     marginTop: 1,
     fontSize: 11,
-    lineHeight: 15,
+    lineHeight: 14,
     fontWeight: "400",
     color: colors.textSecondary,
   },
@@ -1042,46 +898,15 @@ const styles = StyleSheet.create({
   joinActiveLine: {
     marginTop: 1,
     fontSize: 11,
-    lineHeight: 15,
+    lineHeight: 14,
     fontWeight: "700",
     color: "#16A34A",
   },
   joinSoonLine: {
     marginTop: 1,
     fontSize: 11,
-    lineHeight: 15,
+    lineHeight: 14,
     fontWeight: "700",
     color: "#6d28d9",
-  },
-  join: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    width: 72,
-    height: 32,
-    borderRadius: radii.full,
-    backgroundColor: "#6d28d9",
-    marginRight: 4,
-    flexShrink: 0,
-  },
-  joinPressed: {
-    opacity: 0.88,
-  },
-  joinLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-    color: "#FFFFFF",
-  },
-  more: {
-    width: 28,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  moreSpacer: {
-    width: 8,
   },
 });

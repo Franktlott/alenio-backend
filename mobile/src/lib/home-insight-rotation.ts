@@ -1,12 +1,15 @@
 import type { ImageSourcePropType } from "react-native";
+import type { HomeInsightApiCard } from "./home-insight-api";
 import { weeklyRotationIndex } from "./home-insight-week";
 
 export type HomeInsightDestination =
   | { type: "recognition" }
-  | { type: "seneca"; prompt: string };
+  | { type: "seneca"; prompt: string }
+  | { type: "discover"; slug: string };
 
 export type HomeInsightCard = {
   id: string;
+  slug?: string;
   title: string;
   body: string;
   actionLabel: string;
@@ -20,6 +23,52 @@ export type HomeInsightCard = {
   buttonColors: readonly [string, string];
   destination: HomeInsightDestination;
 };
+
+const BUNDLED_IMAGES: Record<string, ImageSourcePropType> = {
+  recognition: require("@/assets/leadership-week-recognition.jpg"),
+  "psychological-safety": require("@/assets/leadership-week-psychological-safety.jpg"),
+  "priority-clarity": require("@/assets/leadership-week-priority-clarity.jpg"),
+  coaching: require("@/assets/leadership-week-coaching.jpg"),
+  delegation: require("@/assets/leadership-week-delegation.jpg"),
+  accountability: require("@/assets/leadership-week-accountability.jpg"),
+  belonging: require("@/assets/leadership-week-belonging.jpg"),
+  "customer-perspective": require("@/assets/leadership-week-customer-perspective.jpg"),
+  "leading-change": require("@/assets/leadership-week-leading-change.jpg"),
+  "sustainable-pace": require("@/assets/leadership-week-sustainable-pace.jpg"),
+  "healthy-conflict": require("@/assets/leadership-week-healthy-conflict.jpg"),
+  "future-leaders": require("@/assets/leadership-week-future-leaders.jpg"),
+};
+
+function resolveImage(slug: string, imageUrl: string | null): ImageSourcePropType {
+  if (imageUrl && /^https:\/\//i.test(imageUrl)) return { uri: imageUrl };
+  return BUNDLED_IMAGES[slug] ?? BUNDLED_IMAGES.recognition!;
+}
+
+export function mapApiHomeInsight(card: HomeInsightApiCard): HomeInsightCard {
+  const destination: HomeInsightDestination =
+    card.destination.type === "recognition"
+      ? { type: "recognition" }
+      : card.destination.type === "discover"
+        ? { type: "discover", slug: card.destination.slug }
+        : { type: "seneca", prompt: card.destination.prompt };
+
+  return {
+    id: card.id,
+    slug: card.slug,
+    title: card.title,
+    body: card.body,
+    actionLabel: card.actionLabel,
+    accessibilityLabel: card.accessibilityLabel || card.actionLabel,
+    image: resolveImage(card.slug, card.imageUrl),
+    surfaceColor: card.surfaceColor,
+    fadeColors: card.fadeColors,
+    borderColor: card.borderColor,
+    titleColor: card.titleColor,
+    bodyColor: card.bodyColor,
+    buttonColors: card.buttonColors,
+    destination,
+  };
+}
 
 export const HOME_INSIGHT_CARDS: readonly HomeInsightCard[] = [
   {
@@ -248,10 +297,14 @@ export const HOME_INSIGHT_CARDS: readonly HomeInsightCard[] = [
   },
 ] as const;
 
-export function homeInsightIndexForDate(date: Date): number {
-  return weeklyRotationIndex(date, HOME_INSIGHT_CARDS.length);
+export function homeInsightIndexForDate(date: Date, deckLength = HOME_INSIGHT_CARDS.length): number {
+  return weeklyRotationIndex(date, deckLength);
 }
 
-export function homeInsightForDate(date = new Date()): HomeInsightCard {
-  return HOME_INSIGHT_CARDS[homeInsightIndexForDate(date)]!;
+export function homeInsightForDate(
+  date = new Date(),
+  deck: readonly HomeInsightCard[] = HOME_INSIGHT_CARDS,
+): HomeInsightCard {
+  const cards = deck.length > 0 ? deck : HOME_INSIGHT_CARDS;
+  return cards[homeInsightIndexForDate(date, cards.length)]!;
 }

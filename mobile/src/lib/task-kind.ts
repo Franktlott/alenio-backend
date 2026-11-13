@@ -4,10 +4,15 @@ import { isLeaderRole } from "@/lib/member-identity";
 export type TaskCreationPresentation = {
   kind: TaskKind;
   canChooseKind: boolean;
-  noun: "Task" | "Reminder";
-  newTitle: "New Task" | "New Reminder";
-  createLabel: "Create Task" | "Create Reminder";
-  titlePlaceholder: "Task title..." | "Reminder title...";
+  /** Always "Task" in the UI — private items stay kind=reminder under the hood. */
+  noun: "Task";
+  newTitle: "New Task";
+  createLabel: "Create Task";
+  titlePlaceholder: "Task title...";
+  /** Shown when the task is private to the viewer. */
+  privacyHint: string | null;
+  audienceLabel: "Team" | "Just for me";
+  audienceHint: string;
 };
 
 export function parseTaskKind(
@@ -30,15 +35,20 @@ export function resolveTaskCreationPresentation(
       : canChooseKind
         ? (requestedKind ?? "workspace_task")
         : "reminder";
-  const reminder = kind === "reminder";
+  const privateTask = kind === "reminder";
 
   return {
     kind,
     canChooseKind,
-    noun: reminder ? "Reminder" : "Task",
-    newTitle: reminder ? "New Reminder" : "New Task",
-    createLabel: reminder ? "Create Reminder" : "Create Task",
-    titlePlaceholder: reminder ? "Reminder title..." : "Task title...",
+    noun: "Task",
+    newTitle: "New Task",
+    createLabel: "Create Task",
+    titlePlaceholder: "Task title...",
+    privacyHint: privateTask ? "Only you can see this" : null,
+    audienceLabel: privateTask ? "Just for me" : "Team",
+    audienceHint: privateTask
+      ? "Private to you"
+      : "Assigned, with a due date",
   };
 }
 
@@ -48,7 +58,7 @@ export function isReminderTask(task: Pick<Task, "kind">): boolean {
 
 /**
  * Owners can complete any workspace task. Warn first when it is not theirs,
- * including a task with no assignee. Reminders and reopening stay quiet.
+ * including a task with no assignee. Private tasks and reopening stay quiet.
  */
 export function ownerCompletingUnassignedTask(
   role: string | null | undefined,
@@ -69,7 +79,7 @@ export function workspaceTasksOnly(tasks: Task[]): Task[] {
   return tasks.filter((task) => !isReminderTask(task));
 }
 
-/** Add the viewer's private reminders to a workspace task list without duplicating rows. */
+/** Add the viewer's private tasks to a workspace task list without duplicating rows. */
 export function mergeViewerReminders(tasks: Task[], reminders: Task[]): Task[] {
   const seen = new Set(tasks.map((task) => task.id));
   const extras = reminders.filter((task) => isReminderTask(task) && !seen.has(task.id));

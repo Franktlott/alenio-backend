@@ -933,7 +933,10 @@ export function DiscoverEditorPage() {
 
             {step === "details" ? (
               <>
-                <Section title="Placement" hint="Where this article shows up in Discover.">
+                <Section
+                  title="Placement"
+                  hint="Homepage feature is global. Category feature is exclusive — only one article per category."
+                >
                   <Switch
                     label="Featured on homepage"
                     checked={isFeatured}

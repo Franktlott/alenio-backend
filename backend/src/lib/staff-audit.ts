@@ -4,7 +4,7 @@ export type StaffAuditEntry = {
   actorId: string;
   actorEmail: string | null;
   action: string;
-  targetType: "user" | "team" | "organization" | "article" | "category" | "seneca" | "notification" | "pricing";
+  targetType: "user" | "team" | "organization" | "article" | "category" | "seneca" | "home_insight" | "notification" | "pricing";
   targetId?: string | null;
   summary: string;
 };

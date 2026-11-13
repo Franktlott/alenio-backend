@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Image,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -21,12 +20,10 @@ import {
   ArrowLeft,
   Ban,
   Building2,
-  Calendar,
   ChevronRight,
   Check,
   Clock,
   FileText,
-  Globe2,
   Layers,
   MapPin,
   MessageSquare,
@@ -48,15 +45,17 @@ import { resolveUserImageUrl } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { SharedWorkspacesSection } from "@/components/profile/SharedWorkspacesSection";
 import { MutualConnectionsSheet } from "@/components/profile/MutualConnectionsSheet";
-import { ProfilePhotosSection } from "@/components/profile/ProfilePhotosSection";
+import { ProfileActivitySection } from "@/components/people/ProfileActivitySection";
 import { formatTeamRole } from "@/components/WorkspaceTeamUI";
 import type {
   ConnectionRequestResponse,
   ConnectionStatus,
+  Conversation,
   PublicPersonProfile,
   PublicProfileWorkspace,
   Team,
 } from "@/lib/types";
+import { existingDirectConversation } from "@/lib/existing-direct-conversation";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
@@ -67,6 +66,11 @@ import {
   manageableProfileWorkspaces,
   resolveProfileWorkspaceId,
 } from "@/lib/profile-workspace-context";
+import {
+  profileHeaderSource,
+} from "@/lib/profile-header";
+import { compressedHeaderHeight, headerBannerHeight } from "@/lib/profile-header-frame";
+import { ME_QUERY_KEY, type MeUser } from "@/lib/auth/me-query";
 import { CONTENT_MAX_WIDTH, useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { useTeamStore } from "@/lib/state/team-store";
 import {
@@ -174,6 +178,43 @@ export default function PersonScreen() {
     enabled: userId.length > 0,
     refetchOnMount: "always",
   });
+  const cachedMe = queryClient.getQueryData<MeUser>(ME_QUERY_KEY);
+  const pendingHeader = person
+    ? person.profileHeaderImage
+    : cachedMe?.id === userId && "profileHeaderImage" in cachedMe
+      ? cachedMe.profileHeaderImage ?? null
+      : undefined;
+  const headerImage =
+    pendingHeader == null ? pendingHeader : pendingHeader.trim() || null;
+  const showCustomHeader = typeof headerImage === "string";
+  // Default mountain whenever there isn’t a custom photo (including while loading).
+  const showMountainHeader = !showCustomHeader;
+  /**
+   * Custom headers stay near the crop aspect so the member’s framing holds.
+   * Default mountain can use a slightly taller band; both respect window height.
+   */
+  const bannerOpts = {
+    windowHeight: adaptive.height,
+    topInset: insets.top,
+  };
+  const customBannerHeight = showCustomHeader
+    ? headerBannerHeight(adaptive.width, bannerOpts)
+    : 0;
+  const narrowCoverHeight =
+    twoColumn || showCustomHeader
+      ? 0
+      : Math.min(
+          compressedHeaderHeight(
+            adaptive.width,
+            16 / 9,
+            insets.top + 48,
+          ),
+          headerBannerHeight(adaptive.width, bannerOpts),
+        );
+  const coverHeight =
+    customBannerHeight ||
+    narrowCoverHeight ||
+    headerBannerHeight(adaptive.width, bannerOpts);
   const { data: viewerTeams = [] } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
@@ -332,34 +373,51 @@ export default function PersonScreen() {
     onError: () => toast({ title: "Could not unblock", preset: "error" }),
   });
 
-  const messageMutation = useMutation({
-    mutationFn: () =>
-      api.post<{
-        id: string;
-        recipient: { name: string; image?: string | null } | null;
-      }>("/api/dms/find-or-create", { recipientId: userId }),
-    onSuccess: (conversation) => {
-      queryClient.invalidateQueries({ queryKey: ["dms"] });
+  const [openingMessage, setOpeningMessage] = useState(false);
+  const openMessage = async () => {
+    if (!userId || openingMessage) return;
+    setOpeningMessage(true);
+    try {
+      const list = await queryClient.fetchQuery({
+        queryKey: ["dms"],
+        queryFn: () => api.get<Conversation[]>("/api/dms"),
+      });
+      const currentUserId = queryClient.getQueryData<MeUser>(ME_QUERY_KEY)?.id;
+      const existing =
+        currentUserId
+          ? existingDirectConversation(list, userId, currentUserId)
+          : null;
+      if (existing) {
+        router.push({
+          pathname: "/dm-chat",
+          params: {
+            conversationId: existing.id,
+            recipientName: person?.name ?? "Direct Message",
+            recipientImage: resolveUserImageUrl(person?.image) ?? "",
+            isGroup: "false",
+          },
+        });
+        return;
+      }
       router.push({
         pathname: "/dm-chat",
         params: {
-          conversationId: conversation.id,
-          recipientName:
-            conversation.recipient?.name ?? person?.name ?? "Direct Message",
-          recipientImage:
-            resolveUserImageUrl(conversation.recipient?.image) ?? "",
+          recipientId: userId,
+          recipientName: person?.name ?? "Direct Message",
+          recipientImage: resolveUserImageUrl(person?.image) ?? "",
           isGroup: "false",
         },
       });
-    },
-    onError: (err: unknown) => {
+    } catch (err: unknown) {
       toast({
         title:
-          err instanceof Error ? err.message : "Couldn't start conversation",
+          err instanceof Error ? err.message : "Couldn't open message",
         preset: "error",
       });
-    },
-  });
+    } finally {
+      setOpeningMessage(false);
+    }
+  };
   const workplaceMembershipMutation = useMutation({
     mutationFn: ({
       teamId,
@@ -417,7 +475,7 @@ export default function PersonScreen() {
     );
   };
 
-  const busy = connectionAction.isPending || messageMutation.isPending;
+  const busy = connectionAction.isPending || openingMessage;
   /** Every shared workspace this viewer can manage them in, not just the active one. */
   const manageableWorkspaces = useMemo(
     () =>
@@ -439,26 +497,46 @@ export default function PersonScreen() {
 
   return (
     <View style={styles.screen} testID="person-screen">
+      <View style={[styles.cover, { height: coverHeight }]}>
+        {showCustomHeader ? (
+          <Image
+            source={profileHeaderSource(headerImage)}
+            style={
+              coverHeight > 0
+                ? [styles.coverFill, { height: coverHeight }]
+                : styles.coverFill
+            }
+            resizeMode="cover"
+          />
+        ) : showMountainHeader ? (
+          narrowCoverHeight > 0 ? (
+            <Image
+              source={profileHeaderSource(null)}
+              style={[styles.coverFill, { height: narrowCoverHeight }]}
+              resizeMode="contain"
+            />
+          ) : (
+            <View pointerEvents="none" style={styles.coverImage}>
+              <Image
+                source={profileHeaderSource(null)}
+                style={styles.coverImagePhoto}
+                resizeMode="cover"
+              />
+            </View>
+          )
+        ) : null}
+      </View>
+      {/**
+       * Chrome sits above the sheet so Back stays tappable, but outside the
+       * cover stacking context so the avatar can overlap the banner.
+       */}
       <View
+        pointerEvents="box-none"
         style={[
-          styles.cover,
-          twoColumn ? styles.coverCompact : null,
-          { paddingTop: insets.top + 4 },
+          styles.coverChrome,
+          { height: coverHeight, paddingTop: insets.top + 4 },
         ]}
       >
-        <Image
-          source={require("@/assets/alenio-welcome-mountain-ridge-v2.jpg")}
-          style={styles.coverImage}
-          resizeMode="cover"
-        />
-        <LinearGradient
-          colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.72)", PAGE_BG]}
-          locations={[0, 0.55, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={twoColumn ? styles.coverFadeCompact : styles.coverFade}
-          pointerEvents="none"
-        />
         <View style={styles.header}>
           <Pressable
             onPress={() => router.back()}
@@ -470,7 +548,20 @@ export default function PersonScreen() {
           >
             <ArrowLeft size={20} color="#111A2B" strokeWidth={2.25} />
           </Pressable>
-          <View style={styles.headerRight} />
+          <View style={styles.headerRight}>
+            {isSelf ? (
+              <Pressable
+                onPress={() => router.push("/edit-profile")}
+                hitSlop={8}
+                style={styles.headerButton}
+                accessibilityRole="button"
+                accessibilityLabel="Edit profile"
+                testID="person-edit-profile"
+              >
+                <Pencil size={18} color="#111A2B" strokeWidth={2.2} />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </View>
 
@@ -502,7 +593,9 @@ export default function PersonScreen() {
             blocked: person.isBlockedByMe || person.isBlockedByThem,
             connectionStatus: person.connectionStatus,
             busy,
-            onMessage: () => messageMutation.mutate(),
+            onMessage: () => {
+              void openMessage();
+            },
             onEdit: () => router.push("/edit-profile"),
             onMore: () => setMenuOpen(true),
             onCancelRequest: () => setConnectionConfirmation("cancel"),
@@ -572,19 +665,32 @@ export default function PersonScreen() {
                     styles.identityColumn,
                     { width: identityColumnWidth },
                   ]}
-                  contentContainerStyle={{ paddingBottom: scrollPadBottom }}
+                  contentContainerStyle={{
+                    paddingTop: 48,
+                    paddingBottom: scrollPadBottom,
+                  }}
                   showsVerticalScrollIndicator={false}
                 >
                   <ProfileIdentityCard person={person} actions={actionProps} />
+                  <ProfileAboutSection person={person} />
                   {blockedNote}
                 </ScrollView>
                 <ScrollView
                   style={styles.detailColumn}
-                  contentContainerStyle={{ paddingBottom: scrollPadBottom }}
+                  contentContainerStyle={{
+                    paddingBottom: scrollPadBottom,
+                    flexGrow: 1,
+                    alignSelf: "stretch",
+                  }}
                   showsVerticalScrollIndicator={false}
                 >
                   {relationshipSection}
-                  <PersonalOverviewContent person={person} showAbout={false} />
+                  <PersonalOverviewContent
+                    person={person}
+                    showAbout={false}
+                    showProfileAbout={false}
+                    showHighlights={false}
+                  />
                 </ScrollView>
               </View>
             );
@@ -595,34 +701,43 @@ export default function PersonScreen() {
               key="person-single-column"
               style={[styles.profileScroll, styles.phoneScroll]}
               contentContainerStyle={[
-                styles.overviewContent,
                 styles.centredColumn,
                 { paddingBottom: scrollPadBottom },
               ]}
               showsVerticalScrollIndicator={false}
             >
-              <PhoneIdentity person={person} actions={actionProps} />
-              {blockedNote}
-              {relationshipSection}
-              <ProfileStatCards
-                person={person}
-                onOpenConnections={() =>
-                  router.push({
-                    pathname: "/(app)/team",
-                    params: { tab: "connections" },
-                  })
-                }
-                onOpenMutual={() => setMutualOpen(true)}
-                onOpenWorkspaces={() =>
-                  setWorkspaceSheetSignal((current) => current + 1)
-                }
-              />
-              <PersonalOverviewContent
-                person={person}
-                showAbout={false}
-                showHighlights={false}
-                workspaceSheetSignal={workspaceSheetSignal}
-              />
+              {/**
+               * Transparent spacer lets the avatar sit on the cover; the white
+               * body below is opaque so scrolled text never floats on the banner.
+               */}
+              <View style={styles.phoneSpacer} />
+              <View style={styles.phoneBody}>
+                <PhoneIdentity
+                  person={person}
+                  actions={actionProps}
+                  onOpenConnections={() => {
+                    if (person.isSelf) {
+                      router.push({
+                        pathname: "/(app)/team",
+                        params: { tab: "connections" },
+                      });
+                      return;
+                    }
+                    setMutualOpen(true);
+                  }}
+                  onOpenWorkspaces={() =>
+                    setWorkspaceSheetSignal((current) => current + 1)
+                  }
+                />
+                {blockedNote}
+                {relationshipSection}
+                <PersonalOverviewContent
+                  person={person}
+                  showAbout={false}
+                  showHighlights={false}
+                  workspaceSheetSignal={workspaceSheetSignal}
+                />
+              </View>
             </ScrollView>
           );
         })()
@@ -1144,18 +1259,7 @@ function PhoneActionRow({
           accessibilityLabel="Share profile"
           testID="person-share-button"
         >
-          <Share2 size={18} color="#111A2B" strokeWidth={2.1} />
-        </Pressable>
-        <Pressable
-          onPress={props.onEdit}
-          disabled={props.busy}
-          style={styles.phonePill}
-          accessibilityRole="button"
-          accessibilityLabel="Edit profile"
-          testID="person-quick-action-edit profile"
-        >
-          <Pencil size={15} color="#FFFFFF" strokeWidth={2.2} />
-          <Text style={styles.phonePillText}>Edit profile</Text>
+          <Share2 size={16} color="#111A2B" strokeWidth={2.1} />
         </Pressable>
       </View>
     );
@@ -1185,7 +1289,7 @@ function PhoneActionRow({
           accessibilityLabel={messageBeside.label}
           testID={`person-quick-action-${messageBeside.label.toLowerCase()}`}
         >
-          <MessageSquare size={18} color={BRAND} strokeWidth={2.1} />
+          <MessageSquare size={16} color={BRAND} strokeWidth={2.1} />
         </Pressable>
       ) : null}
       {primary ? (
@@ -1211,7 +1315,7 @@ function PhoneActionRow({
           accessibilityLabel="More"
           testID="person-quick-action-more"
         >
-          <MoreHorizontal size={18} color="#111A2B" strokeWidth={2.1} />
+          <MoreHorizontal size={16} color="#111A2B" strokeWidth={2.1} />
         </Pressable>
       ) : null}
     </View>
@@ -1221,14 +1325,23 @@ function PhoneActionRow({
 function PhoneIdentity({
   person,
   actions,
+  onOpenConnections,
+  onOpenWorkspaces,
 }: {
   person: PublicPersonProfile;
   actions: ProfileActionsProps;
+  onOpenConnections: () => void;
+  onOpenWorkspaces: () => void;
 }) {
   const location = person.profileLocation?.trim() ?? "";
-  const title = person.profileTitle?.trim() ?? "";
-  const bio = person.profileBio?.trim() ?? "";
-  const website = person.profileWebsite?.trim() ?? "";
+  const connectionCount = person.stats?.connections ?? 0;
+  const connectionLabel =
+    connectionCount === 1 ? "1 connection" : `${connectionCount} connections`;
+  const workspaceCount = person.stats?.workspaces ?? 0;
+  const workspaceLabel =
+    workspaceCount === 1 ? "1 workspace" : `${workspaceCount} workspaces`;
+  const canOpenWorkspaces = person.sharedWorkspaces.length > 0;
+  const role = formatCurrentRole(person.profileTitle, person.profileOrganization);
   const share = () => {
     const name = person.name ?? "Alenio member";
     const handle = person.username ? ` (@${person.username})` : "";
@@ -1236,166 +1349,87 @@ function PhoneIdentity({
   };
 
   return (
-    <View>
-      <View style={styles.phoneSpacer} />
-      <View style={styles.phoneCard}>
-        <View style={styles.phoneAvatarWrap}>
-          <UserAvatar
-            user={{
-              name: person.name,
-              image: person.image,
-              isWorkplaceConnected: person.isWorkplaceConnected,
-            }}
-            size={84}
-            radius={42}
-            backgroundColor="#6366F1"
-            textColor="#FFFFFF"
-            fontSize={30}
-            workplaceConnectedInteractive
-          />
-        </View>
-        <View style={styles.phoneIdentityRow}>
-          <View style={styles.phoneIdentityCopy}>
-            <View style={styles.phoneNameRow}>
-              <Text style={styles.phoneName} numberOfLines={2}>
-                {person.name ?? "Alenio member"}
-              </Text>
-              {person.emailVerified ? (
-                <View style={styles.phoneVerified}>
-                  <Check size={11} color="#FFFFFF" strokeWidth={3} />
-                </View>
-              ) : null}
-            </View>
-            {title ? (
-              <Text style={styles.phoneTitle} numberOfLines={2}>
-                {title}
-              </Text>
-            ) : null}
-            {person.username || location ? (
-              <Text style={styles.phoneMeta} numberOfLines={1}>
-                {person.username ? (
-                  <Text style={styles.phoneHandle}>@{person.username}</Text>
-                ) : null}
-                {person.username && location ? (
-                  <Text style={styles.phoneMetaDot}> · </Text>
-                ) : null}
-                {location ? <Text>{location}</Text> : null}
-              </Text>
-            ) : null}
-          </View>
-          <PhoneActionRow {...actions} onShare={share} />
-        </View>
-        {bio ? <Text style={styles.phoneBio}>{bio}</Text> : null}
-        {website || person.memberSince ? (
-          <View style={styles.phoneLinks}>
-            {website ? (
-              <Pressable
-                onPress={() => void Linking.openURL(website)}
-                style={styles.phoneLink}
-                accessibilityRole="link"
-              >
-                <Globe2 size={13} color={BRAND} strokeWidth={2.2} />
-                <Text style={styles.phoneLinkText} numberOfLines={1}>
-                  {formatWebsiteLabel(website)}
-                </Text>
-              </Pressable>
-            ) : null}
-            {website && person.memberSince ? (
-              <Text style={styles.phoneMetaDot}>·</Text>
-            ) : null}
-            {person.memberSince ? (
-              <View style={styles.phoneLink}>
-                <Calendar size={13} color="#98A2B3" strokeWidth={2.2} />
-                <Text style={styles.phoneJoined}>
-                  Joined {formatMemberSince(person.memberSince)}
-                </Text>
+    <View style={styles.phoneCard}>
+      <View style={styles.phoneAvatarWrap}>
+        <UserAvatar
+          user={{
+            name: person.name,
+            image: person.image,
+            isWorkplaceConnected: person.isWorkplaceConnected,
+          }}
+          size={72}
+          radius={36}
+          backgroundColor="#6366F1"
+          textColor="#FFFFFF"
+          fontSize={26}
+          workplaceConnectedInteractive
+        />
+      </View>
+      <View style={styles.phoneIdentityRow}>
+        <View style={styles.phoneIdentityCopy}>
+          <View style={styles.phoneNameRow}>
+            <Text style={styles.phoneName} numberOfLines={1}>
+              {person.name ?? "Alenio member"}
+            </Text>
+            {person.emailVerified ? (
+              <View style={styles.phoneVerified}>
+                <Check size={11} color="#FFFFFF" strokeWidth={3} />
               </View>
             ) : null}
           </View>
+        </View>
+        <PhoneActionRow {...actions} onShare={share} />
+      </View>
+      {role ? (
+        <Text style={styles.phoneTitle} numberOfLines={1}>
+          {role}
+        </Text>
+      ) : null}
+      {person.username || person.memberSince ? (
+        <Text style={styles.phoneMeta} numberOfLines={1}>
+          {person.username ? (
+            <Text style={styles.phoneHandle}>@{person.username}</Text>
+          ) : null}
+          {person.username && person.memberSince ? " · " : null}
+          {person.memberSince
+            ? `Joined ${formatMemberSince(person.memberSince)}`
+            : null}
+        </Text>
+      ) : null}
+      <View style={styles.phoneFacts}>
+        {location ? (
+          <View style={styles.phoneFact}>
+            <MapPin size={14} color="#98A2B3" strokeWidth={2.2} />
+            <Text style={styles.phoneFactText} numberOfLines={1}>
+              {location}
+            </Text>
+          </View>
         ) : null}
+        {location ? <Text style={styles.phoneFactDot}>·</Text> : null}
+        <Pressable
+          onPress={onOpenConnections}
+          style={styles.phoneFact}
+          accessibilityRole="button"
+          accessibilityLabel={connectionLabel}
+          testID="profile-stat-connections"
+        >
+          <Users size={14} color="#98A2B3" strokeWidth={2.2} />
+          <Text style={styles.phoneFactText}>{connectionLabel}</Text>
+        </Pressable>
+        <Text style={styles.phoneFactDot}>·</Text>
+        <Pressable
+          onPress={canOpenWorkspaces ? onOpenWorkspaces : undefined}
+          disabled={!canOpenWorkspaces}
+          style={styles.phoneFact}
+          accessibilityRole={canOpenWorkspaces ? "button" : undefined}
+          accessibilityLabel={workspaceLabel}
+          testID="profile-stat-workspaces"
+        >
+          <Layers size={14} color="#98A2B3" strokeWidth={2.2} />
+          <Text style={styles.phoneFactText}>{workspaceLabel}</Text>
+        </Pressable>
       </View>
     </View>
-  );
-}
-
-function ProfileStatCards({
-  person,
-  onOpenConnections,
-  onOpenMutual,
-  onOpenWorkspaces,
-}: {
-  person: PublicPersonProfile;
-  onOpenConnections: () => void;
-  onOpenMutual: () => void;
-  onOpenWorkspaces: () => void;
-}) {
-  const mutual = person.stats?.mutualConnections ?? 0;
-  return (
-    <View style={styles.statRow}>
-      <StatCard
-        icon={Users}
-        value={String(person.stats?.connections ?? 0)}
-        label="Connections"
-        hint={!person.isSelf && mutual > 0 ? `${mutual} mutual` : undefined}
-        onPress={person.isSelf ? onOpenConnections : onOpenMutual}
-        testID="profile-stat-connections"
-      />
-      <StatCard
-        icon={Layers}
-        value={String(person.stats?.workspaces ?? 0)}
-        label="Shared workspaces"
-        onPress={person.sharedWorkspaces.length > 0 ? onOpenWorkspaces : undefined}
-        testID="profile-stat-workspaces"
-      />
-    </View>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  value,
-  label,
-  hint,
-  onPress,
-  testID,
-}: {
-  icon: typeof Users;
-  value: string;
-  label: string;
-  hint?: string;
-  onPress?: () => void;
-  testID: string;
-}) {
-  const body = (
-    <>
-      <View style={styles.statTop}>
-        <Icon size={16} color={BRAND} strokeWidth={2.2} />
-        {onPress ? <ChevronRight size={16} color="#B7B1E6" strokeWidth={2.2} /> : null}
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      {hint ? <Text style={styles.statHint}>{hint}</Text> : null}
-    </>
-  );
-  if (!onPress) {
-    return (
-      <View style={styles.statCard} testID={testID}>
-        {body}
-      </View>
-    );
-  }
-  return (
-    <Pressable
-      onPress={onPress}
-      style={styles.statCard}
-      accessibilityRole="button"
-      accessibilityLabel={`${value} ${label}`}
-      testID={testID}
-    >
-      {body}
-    </Pressable>
   );
 }
 
@@ -1433,20 +1467,12 @@ function profileActions({
   connectionStatus,
   busy,
   onMessage,
-  onEdit,
   onMore,
   onCancelRequest,
   onRequestConnection,
 }: ProfileActionsProps): ProfileAction[] {
   const actions: ProfileAction[] = isSelf
-    ? [
-        {
-          label: "Edit profile",
-          icon: Pencil,
-          onPress: onEdit,
-          disabled: busy,
-        },
-      ]
+    ? []
     : [
         {
           label: blocked ? "Blocked" : "Message",
@@ -1505,27 +1531,30 @@ function ProfileIdentityCard({
   person: PublicPersonProfile;
   actions: ProfileActionsProps;
 }) {
+  const role = formatCurrentRole(person.profileTitle, person.profileOrganization);
   return (
     <View style={styles.identityCard} testID="person-identity-card">
-      <UserAvatar
-        user={{
-          name: person.name,
-          image: person.image,
-          isWorkplaceConnected: person.isWorkplaceConnected,
-        }}
-        size={104}
-        radius={52}
-        backgroundColor="#6366F1"
-        textColor="#FFFFFF"
-        fontSize={36}
-        workplaceConnectedInteractive
-      />
+      <View style={styles.identityAvatarWrap}>
+        <UserAvatar
+          user={{
+            name: person.name,
+            image: person.image,
+            isWorkplaceConnected: person.isWorkplaceConnected,
+          }}
+          size={96}
+          radius={48}
+          backgroundColor="#6366F1"
+          textColor="#FFFFFF"
+          fontSize={34}
+          workplaceConnectedInteractive
+        />
+      </View>
       <Text style={styles.identityName} numberOfLines={2}>
         {person.name ?? "Alenio member"}
       </Text>
-      {person.profileTitle?.trim() ? (
-        <Text style={styles.identityTitle} numberOfLines={2}>
-          {person.profileTitle.trim()}
+      {role ? (
+        <Text style={styles.identityTitle} numberOfLines={1}>
+          {role}
         </Text>
       ) : null}
       {person.username ? (
@@ -1554,56 +1583,77 @@ function ProfileIdentityCard({
 
 function StackedActions(props: ProfileActionsProps) {
   const actions = profileActions(props);
+  if (actions.length === 0) return null;
+  const [primary, ...rest] = actions;
+  const PrimaryIcon = primary?.icon;
 
   return (
     <View style={styles.stackedActions}>
-      {actions.map((action, index) => {
-        const Icon = action.icon;
-        /**
-         * One fill per row. Message is what the page is for, so it keeps it and
-         * an emphasized action such as Connect takes a tint instead — two solid
-         * buttons side by side would leave neither reading as the main one.
-         */
-        const primary = index === 0;
-        const ink = action.connected
-          ? "#168A55"
-          : primary
-            ? "#FFFFFF"
-            : action.emphasized
-              ? BRAND
-              : "#39465C";
-        return (
-          <Pressable
-            key={action.label}
-            onPress={action.onPress}
-            disabled={action.disabled}
-            style={[
-              styles.stackedAction,
-              action.connected
-                ? styles.stackedActionConnected
-                : primary
-                  ? styles.stackedActionPrimary
-                  : action.emphasized
-                    ? styles.stackedActionTinted
-                    : styles.stackedActionPlain,
-              action.disabled ? styles.stackedActionDisabled : null,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={action.label}
-            testID={`person-stacked-action-${action.label.toLowerCase()}`}
+      {primary && PrimaryIcon ? (
+        <Pressable
+          onPress={primary.onPress}
+          disabled={primary.disabled}
+          style={[
+            styles.stackedPrimary,
+            primary.disabled ? styles.stackedActionDisabled : null,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={primary.label}
+          testID={`person-stacked-action-${primary.label.toLowerCase()}`}
+        >
+          <LinearGradient
+            colors={["#5B7CFF", BRAND]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.stackedPrimaryFill}
           >
-            <Icon size={17} color={ink} strokeWidth={2.2} />
-            <Text
-              style={[styles.stackedActionLabel, { color: ink }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.85}
-            >
-              {action.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+            <PrimaryIcon size={16} color="#FFFFFF" strokeWidth={2.3} />
+            <Text style={styles.stackedPrimaryLabel}>{primary.label}</Text>
+          </LinearGradient>
+        </Pressable>
+      ) : null}
+      {rest.length > 0 ? (
+        <View style={styles.stackedSecondaryRow}>
+          {rest.map((action) => {
+            const Icon = action.icon;
+            const ink = action.connected
+              ? "#0F8A5A"
+              : action.emphasized
+                ? BRAND
+                : "#344054";
+            const moreOnly = action.label === "More";
+            return (
+              <Pressable
+                key={action.label}
+                onPress={action.onPress}
+                disabled={action.disabled}
+                style={[
+                  moreOnly ? styles.stackedMore : styles.stackedSecondary,
+                  action.connected
+                    ? styles.stackedActionConnected
+                    : action.emphasized
+                      ? styles.stackedActionTinted
+                      : styles.stackedActionPlain,
+                  action.disabled ? styles.stackedActionDisabled : null,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                testID={`person-stacked-action-${action.label.toLowerCase()}`}
+              >
+                <Icon size={moreOnly ? 18 : 15} color={ink} strokeWidth={2.2} />
+                {moreOnly ? null : (
+                  <Text
+                    style={[styles.stackedSecondaryLabel, { color: ink }]}
+                    numberOfLines={1}
+                  >
+                    {action.label}
+                  </Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1633,28 +1683,6 @@ function AboutDetailsCard({
             </Text>
           </View>
         </View>
-        {person.profileLocation ? (
-          <View style={styles.infoRow}>
-            <View style={styles.infoIcon}>
-              <MapPin size={16} color="#718097" />
-            </View>
-            <Text style={styles.infoPrimary}>{person.profileLocation}</Text>
-          </View>
-        ) : null}
-        {person.profileWebsite ? (
-          <Pressable
-            onPress={() => void Linking.openURL(person.profileWebsite!)}
-            style={styles.infoRow}
-            accessibilityRole="link"
-          >
-            <View style={styles.infoIcon}>
-              <Globe2 size={16} color={BRAND} />
-            </View>
-            <Text style={styles.infoLink} numberOfLines={1}>
-              {formatWebsiteLabel(person.profileWebsite)}
-            </Text>
-          </Pressable>
-        ) : null}
         <View style={styles.infoRow}>
           <View style={styles.infoIcon}>
             <FileText size={16} color="#718097" strokeWidth={2} />
@@ -1678,16 +1706,12 @@ function profileFirstName(person: PublicPersonProfile): string {
 
 function ProfileAboutSection({ person }: { person: PublicPersonProfile }) {
   const bio = person.profileBio?.trim() ?? "";
-  const website = person.profileWebsite?.trim() ?? "";
-  const location = person.profileLocation?.trim() ?? "";
-  const hasDetails = Boolean(bio || website || location);
-  if (!hasDetails && !person.isSelf) return null;
   const showAddBio = person.isSelf && !bio;
 
   return (
     <View style={styles.aboutSection} testID="profile-about-section">
       <View style={styles.aboutHeader}>
-        <UserRound size={16} color="#111A2B" strokeWidth={2.2} />
+        <UserRound size={14} color="#111A2B" strokeWidth={2.2} />
         <Text style={styles.aboutHeading}>About {profileFirstName(person)}</Text>
       </View>
       <View style={styles.aboutCard}>
@@ -1703,25 +1727,8 @@ function ProfileAboutSection({ person }: { person: PublicPersonProfile }) {
             <Text style={styles.aboutAddText}>Add bio</Text>
           </Pressable>
         ) : null}
-        {bio || showAddBio ? website || location ? <View style={styles.aboutDivider} /> : null : null}
-        {website ? (
-          <Pressable
-            onPress={() => void Linking.openURL(website)}
-            style={styles.aboutRow}
-            accessibilityRole="link"
-            accessibilityLabel={formatWebsiteLabel(website)}
-          >
-            <Globe2 size={15} color={BRAND} strokeWidth={2.2} />
-            <Text style={styles.aboutLink} numberOfLines={1}>
-              {formatWebsiteLabel(website)}
-            </Text>
-          </Pressable>
-        ) : null}
-        {location ? (
-          <View style={styles.aboutRow}>
-            <MapPin size={15} color="#98A2B3" strokeWidth={2.2} />
-            <Text style={styles.aboutDetail}>{location}</Text>
-          </View>
+        {!bio && !showAddBio ? (
+          <Text style={styles.aboutEmpty}>No about yet</Text>
         ) : null}
       </View>
     </View>
@@ -1730,23 +1737,30 @@ function ProfileAboutSection({ person }: { person: PublicPersonProfile }) {
 
 function PersonalOverviewContent({
   person,
-  showHighlights = true,
+  showHighlights = false,
   showAbout = true,
+  showProfileAbout = true,
   workspaceSheetSignal = 0,
 }: {
   person: PublicPersonProfile;
   showHighlights?: boolean;
   /** False in the wide layout, where About lives in the identity column. */
   showAbout?: boolean;
-  /** Incremented by the phone stat card to open the workspace list. */
+  /** The phone-style About block. Wide layout places it under the profile. */
+  showProfileAbout?: boolean;
+  /** Incremented to open the workspace list. */
   workspaceSheetSignal?: number;
 }) {
   return (
     <>
       {showAbout ? <AboutDetailsCard person={person} /> : null}
-      <ProfilePhotosSection photos={person.photos ?? []} />
       {showHighlights ? <HighlightsCard person={person} /> : null}
-      {showAbout ? null : <ProfileAboutSection person={person} />}
+      {showProfileAbout ? <ProfileAboutSection person={person} /> : null}
+      <ProfileActivitySection
+        personId={person.id}
+        personName={person.name ?? ""}
+        isSelf={person.isSelf}
+      />
       <SharedWorkspacesSection
         sheetOnly
         workspaces={person.sharedWorkspaces}
@@ -2081,6 +2095,16 @@ function connectionStatusLabel(status: ConnectionStatus): string {
   return "Not connected";
 }
 
+function formatCurrentRole(
+  title?: string | null,
+  employer?: string | null,
+): string {
+  const role = title?.trim() ?? "";
+  const company = employer?.trim() ?? "";
+  if (role && company) return `${role} at ${company}`;
+  return role || company;
+}
+
 function formatMemberSince(iso?: string): string {
   if (!iso) return "—";
   const date = new Date(iso);
@@ -2088,112 +2112,125 @@ function formatMemberSince(iso?: string): string {
   return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-function formatWebsiteLabel(value: string): string {
-  try {
-    const url = new URL(value);
-    return `${url.hostname}${url.pathname === "/" ? "" : url.pathname}`.replace(
-      /\/$/,
-      "",
-    );
-  } catch {
-    return value.replace(/^https?:\/\//i, "").replace(/\/$/, "");
-  }
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: PAGE_BG },
   cover: {
-    paddingBottom: 78,
     overflow: "hidden",
     backgroundColor: "#E7E4F8",
+    zIndex: 1,
   },
-  coverCompact: { paddingBottom: 16 },
+  /**
+   * Sibling above the banner so Back stays tappable without trapping the
+   * avatar under the cover's stacking context.
+   */
+  coverChrome: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 3,
+    elevation: 4,
+    justifyContent: "flex-start",
+  },
+  coverFill: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: "100%",
+    height: "100%",
+  },
   coverImage: {
     position: "absolute",
     width: "155%",
     aspectRatio: 16 / 9,
     right: -16,
-    bottom: -8,
-  },
-  coverFade: {
-    position: "absolute",
-    left: 0,
-    right: 0,
     bottom: 0,
-    height: 96,
   },
-  coverFadeCompact: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 28,
+  coverImagePhoto: {
+    width: "100%",
+    height: "100%",
   },
-  phoneScroll: { marginTop: -58, backgroundColor: "transparent" },
-  phoneSpacer: { height: 50 },
-  phoneCard: { paddingTop: 8 },
+  /**
+   * Pull the sheet up over the banner. Spacer keeps the avatar pull-up inside
+   * the ScrollView; phoneBody is solid white so scrolled text never sits on
+   * the cover.
+   */
+  phoneScroll: { marginTop: -38, backgroundColor: "transparent", zIndex: 2 },
+  phoneSpacer: { height: 38 },
+  phoneBody: {
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    backgroundColor: "#FFFFFF",
+  },
+  phoneCard: { paddingTop: 0 },
   phoneAvatarWrap: {
     alignSelf: "flex-start",
-    marginTop: -46,
-    padding: 3,
-    borderRadius: 48,
+    zIndex: 2,
+    elevation: 4,
+    marginTop: -38,
+    marginLeft: 2,
+    padding: 2,
+    borderRadius: 40,
     backgroundColor: "#FFFFFF",
   },
   phoneIdentityRow: {
-    marginTop: 12,
+    marginTop: 8,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
+    alignItems: "center",
+    gap: 10,
   },
   phoneIdentityCopy: { flex: 1, minWidth: 0 },
-  phoneNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  phoneNameRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   phoneName: {
     flexShrink: 1,
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: 22,
+    lineHeight: 26,
     fontWeight: "800",
-    letterSpacing: -0.6,
+    letterSpacing: -0.4,
     color: "#111A2B",
   },
   phoneVerified: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: BRAND,
   },
   phoneTitle: {
-    marginTop: 2,
-    fontSize: 14,
-    lineHeight: 18,
+    marginTop: 1,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: "600",
     color: "#667085",
   },
-  phoneMeta: { marginTop: 4, fontSize: 13, lineHeight: 18, color: "#667085" },
+  phoneMeta: { marginTop: 2, fontSize: 12, lineHeight: 16, color: "#667085" },
   phoneHandle: { fontWeight: "700", color: BRAND },
-  phoneMetaDot: { color: "#98A2B3" },
-  phoneBio: {
-    marginTop: 10,
-    fontSize: 15,
-    lineHeight: 21,
-    color: "#1F2937",
-  },
-  phoneLinks: {
-    marginTop: 8,
+  phoneFacts: {
+    marginTop: 4,
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 5,
   },
-  phoneLink: { flexDirection: "row", alignItems: "center", gap: 5, maxWidth: "70%" },
-  phoneLinkText: { fontSize: 13, lineHeight: 18, fontWeight: "700", color: BRAND },
-  phoneJoined: { fontSize: 13, lineHeight: 18, color: "#667085" },
-  phoneActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  phoneFact: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    maxWidth: "100%",
+    flexShrink: 1,
+  },
+  phoneFactText: { fontSize: 12, lineHeight: 16, color: "#667085" },
+  phoneFactDot: { fontSize: 12, lineHeight: 16, color: "#98A2B3" },
+  phoneActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   phoneIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+    width: 34,
+    height: 34,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
@@ -2201,77 +2238,42 @@ const styles = StyleSheet.create({
     borderColor: "#E6E4F0",
   },
   phonePill: {
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: BRAND,
+  },
+  phonePillText: { fontSize: 13, lineHeight: 16, fontWeight: "700", color: "#FFFFFF" },
+  phoneActionDisabled: { opacity: 0.5 },
+  aboutSection: { marginTop: 12 },
+  aboutHeader: {
+    marginBottom: 6,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: BRAND,
-  },
-  phonePillText: { fontSize: 14, lineHeight: 18, fontWeight: "700", color: "#FFFFFF" },
-  phoneActionDisabled: { opacity: 0.5 },
-  statRow: { marginTop: 16, flexDirection: "row", gap: 10 },
-  statCard: {
-    flex: 1,
-    minHeight: 92,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 18,
-    backgroundColor: "#F3F0FF",
-  },
-  statTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  statValue: {
-    marginTop: 8,
-    fontSize: 22,
-    lineHeight: 26,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    color: "#111A2B",
-  },
-  statLabel: { marginTop: 1, fontSize: 13, lineHeight: 17, color: "#667085" },
-  statHint: { marginTop: 2, fontSize: 12, lineHeight: 16, color: "#7C3AED" },
-  aboutSection: { marginTop: 18 },
-  aboutHeader: {
-    marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
   },
   aboutHeading: {
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: "800",
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
     color: "#111A2B",
   },
   aboutCard: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 18,
-    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#E4DFF8",
     backgroundColor: "#FFFFFF",
   },
-  aboutBio: { fontSize: 15, lineHeight: 21, color: "#1F2937" },
-  aboutAdd: { alignSelf: "flex-start", paddingVertical: 2 },
-  aboutAddText: { fontSize: 14, lineHeight: 18, fontWeight: "700", color: BRAND },
-  aboutDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 12,
-    backgroundColor: "#E4DFF8",
-  },
-  aboutRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 4,
-  },
-  aboutLink: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: "700", color: BRAND },
+  aboutBio: { fontSize: 13, lineHeight: 18, color: "#1F2937" },
+  aboutEmpty: { fontSize: 13, lineHeight: 17, color: "#667085" },
+  aboutAdd: { alignSelf: "flex-start", paddingVertical: 1 },
+  aboutAddText: { fontSize: 13, lineHeight: 16, fontWeight: "700", color: BRAND },
   aboutDetail: { flex: 1, fontSize: 14, lineHeight: 18, color: "#344054" },
   blockedExplanation: {
     marginTop: -2,
@@ -2307,7 +2309,7 @@ const styles = StyleSheet.create({
   },
   splitBody: {
     flexDirection: "row",
-    paddingTop: 14,
+    paddingTop: 0,
     gap: PROFILE_COLUMN_GAP,
   },
   identityColumn: {
@@ -2321,15 +2323,23 @@ const styles = StyleSheet.create({
   identityCard: {
     alignItems: "center",
     paddingHorizontal: 18,
-    paddingTop: 20,
+    paddingTop: 0,
     paddingBottom: 6,
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#E3E7EE",
     backgroundColor: "#FFFFFF",
   },
+  identityAvatarWrap: {
+    zIndex: 2,
+    elevation: 4,
+    marginTop: -48,
+    padding: 3,
+    borderRadius: 54,
+    backgroundColor: "#FFFFFF",
+  },
   identityName: {
-    marginTop: 14,
+    marginTop: 12,
     fontSize: 21,
     lineHeight: 26,
     fontWeight: "800",
@@ -2375,50 +2385,80 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     color: BRAND,
   },
-  /** Three across, which is also how the actions read on a phone. */
   stackedActions: {
     width: "100%",
-    marginTop: 16,
-    flexDirection: "row",
-    gap: 8,
+    marginTop: 18,
+    gap: 10,
   },
-  stackedAction: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 58,
+  stackedPrimary: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#2F4FD0",
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  stackedPrimaryFill: {
+    minHeight: 46,
+    paddingHorizontal: 16,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    /** Icon over label, so a narrow column never truncates "Connected". */
-    gap: 5,
-    paddingHorizontal: 4,
-    borderRadius: 13,
+    gap: 8,
+  },
+  stackedPrimaryLabel: {
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    color: "#FFFFFF",
+  },
+  stackedSecondaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  stackedSecondary: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 42,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  stackedActionPrimary: {
-    backgroundColor: BRAND,
-    borderColor: BRAND,
+  stackedMore: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   stackedActionConnected: {
-    backgroundColor: "#ECFDF5",
-    borderColor: "#CFF4E3",
+    backgroundColor: "#F3FBF7",
+    borderColor: "#D7F0E4",
   },
   stackedActionTinted: {
-    backgroundColor: "#EEF2FF",
-    borderColor: "#DDE4FF",
+    backgroundColor: "#F4F6FF",
+    borderColor: "#E0E6FF",
   },
   stackedActionPlain: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E6E9F1",
+    backgroundColor: "#FAFBFD",
+    borderColor: "#E8ECF3",
   },
   stackedActionDisabled: {
     opacity: 0.55,
   },
-  stackedActionLabel: {
-    fontSize: 12,
-    lineHeight: 15,
+  stackedSecondaryLabel: {
+    fontSize: 13,
+    lineHeight: 16,
     fontWeight: "700",
     letterSpacing: -0.1,
-    textAlign: "center",
   },
   identityDivider: {
     width: "100%",
@@ -2600,7 +2640,9 @@ const styles = StyleSheet.create({
   profileSheet: {
     flex: 1,
     minHeight: 0,
-    marginTop: -22,
+    marginTop: -48,
+    zIndex: 2,
+    elevation: 2,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     backgroundColor: "#FFFFFF",

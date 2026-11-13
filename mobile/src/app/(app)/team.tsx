@@ -43,7 +43,15 @@ export default function TeamScreen() {
   const { access } = useWorkspaceAccess(activeTeamId);
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const routeParams = useLocalSearchParams<{ openInvite?: string }>();
+  const routeParams = useLocalSearchParams<{
+    openInvite?: string;
+    tab?: string;
+    findPeople?: string;
+  }>();
+  const initialNetworkTab =
+    routeParams.tab === "connections" || routeParams.tab === "updates"
+      ? routeParams.tab
+      : undefined;
 
   const [addConnectionOpen, setAddConnectionOpen] = useState(false);
   const [connectionSearch, setConnectionSearch] = useState("");
@@ -169,6 +177,14 @@ export default function TeamScreen() {
     ]),
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (routeParams.findPeople !== "1") return;
+      openConnectionSearch("all");
+      router.setParams({ findPeople: undefined });
+    }, [routeParams.findPeople]),
+  );
+
   const inviteMemberMutation = useMutation({
     mutationFn: ({ emails, role }: { emails: string[]; role: WorkspaceInviteRole }) =>
       Promise.all(
@@ -262,6 +278,7 @@ export default function TeamScreen() {
       title="My Network"
       leftAction={<AlenioHeaderBrand tone="dark" />}
       band
+      sheetColor="#FFFFFF"
       rightAction={
         <Pressable
           onPress={() => openConnectionSearch("all")}
@@ -285,6 +302,7 @@ export default function TeamScreen() {
     >
       <View style={{ flex: 1, minHeight: 0 }}>
         <ZeroWorkspaceTeamHome
+          initialTab={initialNetworkTab}
           onAddConnection={openConnectionSearch}
           searchQuery={connectionSearch}
           onSearchChange={setConnectionSearch}

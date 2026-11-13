@@ -54,12 +54,12 @@ export function useTabBarClearance(extra = 16): number {
 }
 
 /** Outer FAB frame (Seneca image includes transparent padding). */
-export const SENECA_FAB_SIZE = 48;
+export const SENECA_FAB_SIZE = 43;
 /**
  * Visible disc diameter for Seneca’s asset (~80% of the PNG).
  * Use this for sibling FABs (e.g. Celebrate +) so they match visually.
  */
-export const SENECA_FAB_VISIBLE_SIZE = 40;
+export const SENECA_FAB_VISIBLE_SIZE = 36;
 export const SENECA_FAB_RIGHT_INSET = 16;
 
 /** Workspace lists: clear the tab bar and contextual Add FAB. */

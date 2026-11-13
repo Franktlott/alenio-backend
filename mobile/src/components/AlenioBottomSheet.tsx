@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X } from "lucide-react-native";
+import { ChevronDown, X } from "lucide-react-native";
 import { fitsFormSheet } from "@/lib/adaptive-layout";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
@@ -41,6 +41,8 @@ type Props = {
   bodyMaxHeight?: number;
   /** Show vertical scroll indicator (useful for tall forms). */
   showScrollIndicator?: boolean;
+  /** Circle with a down arrow while more of the sheet is below the fold. */
+  showMoreIndicator?: boolean;
   /** When false, body does not scroll (content should fit). Default true. */
   scrollEnabled?: boolean;
   /** Optional pull-to-refresh control for scrollable sheet content. */
@@ -78,6 +80,7 @@ function SheetContent({
   bodyHeightRatio,
   bodyMaxHeight: bodyMaxHeightOverride,
   showScrollIndicator = false,
+  showMoreIndicator = false,
   scrollEnabled = true,
   refreshControl,
   overlay,
@@ -100,6 +103,22 @@ function SheetContent({
       180,
       Math.min(Math.round(windowH * ratio), Math.round(windowH - reservedChrome)),
     );
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollMetrics = useRef({ layout: 0, content: 0, offset: 0 });
+  const [moreBelow, setMoreBelow] = useState(false);
+  const updateMoreBelow = () => {
+    const { layout, content, offset } = scrollMetrics.current;
+    const next =
+      layout > 0 && content > layout + 24 && offset + layout < content - 24;
+    setMoreBelow((current) => (current === next ? current : next));
+  };
+  const scrollToMore = () => {
+    const { offset, layout } = scrollMetrics.current;
+    scrollRef.current?.scrollTo({
+      y: offset + Math.max(140, layout * 0.75),
+      animated: true,
+    });
+  };
 
   return (
     <View
@@ -150,24 +169,52 @@ function SheetContent({
             ) : null}
           </View>
           {scrollEnabled ? (
-            <ScrollView
-              style={[styles.bodyScroll, { maxHeight: bodyMaxHeight }]}
-              contentContainerStyle={[
-                styles.bodyContent,
-                compact ? styles.bodyContentCompact : null,
-                styles.bodyContentGrow,
-              ]}
-              showsVerticalScrollIndicator={showScrollIndicator}
-              indicatorStyle="black"
-              keyboardShouldPersistTaps="handled"
-              bounces={showScrollIndicator || !!refreshControl}
-              alwaysBounceVertical={showScrollIndicator || !!refreshControl}
-              nestedScrollEnabled
-              scrollEventThrottle={16}
-              refreshControl={refreshControl}
-            >
-              {children}
-            </ScrollView>
+            <View style={[styles.bodyWrap, { maxHeight: bodyMaxHeight }]}>
+              <ScrollView
+                ref={scrollRef}
+                style={[styles.bodyScroll, { maxHeight: bodyMaxHeight }]}
+                contentContainerStyle={[
+                  styles.bodyContent,
+                  compact ? styles.bodyContentCompact : null,
+                  styles.bodyContentGrow,
+                ]}
+                showsVerticalScrollIndicator={showScrollIndicator}
+                indicatorStyle="black"
+                keyboardShouldPersistTaps="handled"
+                bounces={showScrollIndicator || !!refreshControl}
+                alwaysBounceVertical={showScrollIndicator || !!refreshControl}
+                nestedScrollEnabled
+                scrollEventThrottle={16}
+                refreshControl={refreshControl}
+                onLayout={(event) => {
+                  scrollMetrics.current.layout = event.nativeEvent.layout.height;
+                  updateMoreBelow();
+                }}
+                onContentSizeChange={(_width, height) => {
+                  scrollMetrics.current.content = height;
+                  updateMoreBelow();
+                }}
+                onScroll={(event) => {
+                  scrollMetrics.current.offset = event.nativeEvent.contentOffset.y;
+                  updateMoreBelow();
+                }}
+              >
+                {children}
+              </ScrollView>
+              {showMoreIndicator && moreBelow ? (
+                <View pointerEvents="box-none" style={styles.moreWrap}>
+                  <Pressable
+                    onPress={scrollToMore}
+                    style={styles.moreButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="More settings"
+                    testID="alenio-sheet-more"
+                  >
+                    <ChevronDown size={18} color="#172033" strokeWidth={2.4} />
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
           ) : (
             <View
               style={[
@@ -524,6 +571,33 @@ const styles = StyleSheet.create({
   bodyScroll: {
     flexGrow: 0,
     flexShrink: 1,
+  },
+  bodyWrap: {
+    position: "relative",
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  moreWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 6,
+    alignItems: "center",
+  },
+  moreButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E6E1F5",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 4,
   },
   bodyContent: {
     gap: 8,

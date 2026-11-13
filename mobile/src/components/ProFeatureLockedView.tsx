@@ -3,7 +3,12 @@ import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { CalendarDays, ListChecks, Lock, Users } from "lucide-react-native";
 import { router } from "expo-router";
-import { PAYWALL_BODY, PAYWALL_TITLE } from "@/lib/plan-access-copy";
+import {
+  PAYWALL_BODY,
+  PAYWALL_TITLE,
+  workspacePlanHref,
+} from "@/lib/plan-access-copy";
+import { useTeamStore } from "@/lib/state/team-store";
 
 type Props = {
   title?: string;
@@ -11,6 +16,7 @@ type Props = {
   testID?: string;
   variant?: "default" | "workspace";
   ctaLabel?: string;
+  teamId?: string | null;
 };
 
 export function ProFeatureLockedView({
@@ -19,7 +25,11 @@ export function ProFeatureLockedView({
   testID = "pro-feature-locked",
   variant = "default",
   ctaLabel = "View plan details",
+  teamId,
 }: Props) {
+  const activeTeamId = useTeamStore((state) => state.activeTeamId);
+  const openPlan = () =>
+    router.push(workspacePlanHref(teamId ?? activeTeamId));
   if (variant === "workspace") {
     const features = [
       {
@@ -140,7 +150,7 @@ export function ProFeatureLockedView({
           </View>
 
           <TouchableOpacity
-            onPress={() => router.push("/account-hub")}
+            onPress={openPlan}
             testID={`${testID}-cta`}
             style={{ width: "100%", marginTop: 12, borderRadius: 12, overflow: "hidden" }}
           >
@@ -161,7 +171,7 @@ export function ProFeatureLockedView({
               <Text style={{ color: "rgba(255,255,255,0.88)", fontSize: 14 }}>→</Text>
             </LinearGradient>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push("/account-hub")} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+          <TouchableOpacity onPress={openPlan} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
             <Text style={{ color: "#5B4EF5", fontSize: 12, fontWeight: "600" }}>View plan details</Text>
           </TouchableOpacity>
         </View>
@@ -216,7 +226,7 @@ export function ProFeatureLockedView({
         {body}
       </Text>
       <TouchableOpacity
-        onPress={() => router.push("/account-hub")}
+        onPress={openPlan}
         testID={`${testID}-cta`}
         style={{
           borderRadius: 12,

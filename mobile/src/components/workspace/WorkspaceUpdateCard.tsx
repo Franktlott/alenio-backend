@@ -1,11 +1,8 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Heart, MessageCircle } from "lucide-react-native";
 import type { ActivityReactions } from "@/components/activity/types";
-import { FeedActionButton } from "@/components/workspace/FeedActionButton";
-import { ReactionFacepile } from "@/components/workspace/ReactionFacepile";
+import { FeedEngagementRow } from "@/components/workspace/FeedEngagementRow";
 import { WorkspaceFeedCardShell } from "@/components/workspace/WorkspaceFeedCardShell";
-import { feedReaction, feedReactionLabel } from "@/lib/feed-reactions";
 
 type Props = {
   author: { name: string; image?: string | null };
@@ -15,13 +12,13 @@ type Props = {
   headline: string;
   body?: string | null;
   reactionCount: number;
-  /** Everyone who reacted, for the facepile and its sheet. */
+  /** Everyone who reacted, for chips and the who-reacted sheet. */
   reactions?: ActivityReactions;
-  /** Emoji the signed-in person left, so the button can wear it. */
-  myReaction?: string | null;
+  currentUserId?: string;
   /** Opens the sheet listing everyone who reacted. */
   onPressReactions?: () => void;
   onPressLike?: () => void;
+  onToggleReaction?: (emoji: string) => void;
   onMore?: () => void;
   onLongPress?: () => void;
   onPressComment?: () => void;
@@ -40,20 +37,23 @@ export function WorkspaceUpdateCard({
   timestamp,
   headline,
   body,
-  reactionCount,
   reactions,
-  myReaction,
+  currentUserId,
   onPressReactions,
   onPressLike,
+  onToggleReaction,
   onMore,
   onLongPress,
   onPressComment,
+  commentCount = 0,
   picker,
   avatarResetKey,
   children,
   testID,
 }: Props) {
-  const meta = [authorMeta, timestamp].filter(Boolean).join(" · ");
+  const meta = [authorMeta?.trim() || null, timestamp]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <WorkspaceFeedCardShell
@@ -72,44 +72,16 @@ export function WorkspaceUpdateCard({
       footer={
         <View style={styles.footer}>
           {picker}
-          <View style={styles.actions}>
-            {onPressLike ? (
-            <FeedActionButton
-              Icon={Heart}
-              glyph={myReaction}
-              activeColor={feedReaction(myReaction)?.color}
-              // The facepile carries the count, so the button stays an icon.
-              label=""
-              active={!!myReaction}
-              filled
-              onPress={onPressLike}
-              accessibilityLabel={
-                myReaction
-                  ? `Your reaction: ${feedReactionLabel(myReaction)}. Change or remove it.`
-                  : "React to this update"
-              }
-              testID={testID ? `${testID}-react` : undefined}
-            />
-            ) : null}
-            {onPressComment ? (
-              <FeedActionButton
-                Icon={MessageCircle}
-                label=""
-                onPress={onPressComment}
-                accessibilityLabel="Comment on this update"
-                testID={testID ? `${testID}-comment` : undefined}
-              />
-            ) : null}
-            {onPressReactions && reactionCount > 0 ? (
-              <View style={styles.summary}>
-                <ReactionFacepile
-                  reactions={reactions ?? {}}
-                  onPress={onPressReactions}
-                  testID={testID ? `${testID}-reaction-facepile` : undefined}
-                />
-              </View>
-            ) : null}
-          </View>
+          <FeedEngagementRow
+            reactions={reactions ?? {}}
+            currentUserId={currentUserId}
+            onToggleReaction={onToggleReaction}
+            onOpenPicker={onPressLike}
+            onPressReactions={onPressReactions}
+            onPressComment={onPressComment}
+            commentCount={commentCount}
+            testID={testID ? `${testID}-engage` : undefined}
+          />
         </View>
       }
     >
@@ -144,12 +116,5 @@ const styles = StyleSheet.create({
   },
   footer: {
     gap: 2,
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  summary: {
-    marginLeft: "auto",
   },
 });

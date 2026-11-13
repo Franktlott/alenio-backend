@@ -19,13 +19,6 @@ import {
 } from "../../lib/seneca-chat-api";
 import "./seneca-page.css";
 
-export const SENECA_STARTERS = [
-  "Help me set a goal for this month",
-  "Prep me for a hard conversation",
-  "How can I give better feedback?",
-  "Help me build a better habit",
-];
-
 function usingLabel(context: SenecaResolvedContext | null | undefined): string | null {
   if (!context) return null;
   return context.type === "personal" ? "Using Personal" : `Using ${context.name}`;
@@ -93,7 +86,12 @@ function ProposalNote({ icon, title, detail }: { icon: ReactNode; title: string;
   );
 }
 
-export function SenecaPage() {
+type SenecaPageProps = {
+  /** Compact single-column chat for the floating assistant panel. */
+  embedded?: boolean;
+};
+
+export function SenecaPage({ embedded = false }: SenecaPageProps) {
   const { me } = useEnterpriseShell();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -265,76 +263,132 @@ export function SenecaPage() {
   const empty = messages.length === 0 && !loadingThread;
 
   return (
-    <div className="sx-page" data-testid="seneca-page">
-      <aside className="sx-history" aria-label="Seneca chats">
-        <button type="button" className="sx-new" onClick={() => openConversation(null)} data-testid="seneca-new-chat">
-          <Plus size={16} strokeWidth={2.4} />
-          New chat
-        </button>
-        <h2 className="sx-history-label">Recent</h2>
-        {history.isLoading ? <p className="sx-history-empty">Loading…</p> : null}
-        {!history.isLoading && conversations.length === 0 ? (
-          <p className="sx-history-empty">Your chats with Seneca show up here.</p>
-        ) : null}
-        <ul className="sx-history-list">
-          {conversations.map((c) => (
-            <li key={c.id} className={c.id === conversationId ? "is-active" : undefined}>
-              <button type="button" className="sx-history-item" onClick={() => openConversation(c.id)}>
-                <MessageSquare size={15} strokeWidth={2.2} />
-                <span className="sx-history-copy">
-                  <span className="sx-history-title">{c.title || "New chat"}</span>
-                  <span className="sx-history-when">{senecaWhenLabel(c.updatedAt)}</span>
-                </span>
-              </button>
-              {confirmDeleteId === c.id ? (
-                <span className="sx-history-confirm">
-                  <button type="button" onClick={() => remove.mutate(c.id)} disabled={remove.isPending}>
-                    Delete
-                  </button>
-                  <button type="button" onClick={() => setConfirmDeleteId(null)}>
-                    Keep
-                  </button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="sx-history-delete"
-                  aria-label={`Delete ${c.title || "chat"}`}
-                  onClick={() => setConfirmDeleteId(c.id)}
-                >
-                  <Trash2 size={14} strokeWidth={2.2} />
+    <div
+      className={`sx-page${embedded ? " sx-page--panel" : ""}`}
+      data-testid={embedded ? "seneca-page-panel" : "seneca-page"}
+    >
+      {!embedded ? (
+        <aside className="sx-history" aria-label="Seneca chats">
+          <button type="button" className="sx-new" onClick={() => openConversation(null)} data-testid="seneca-new-chat">
+            <Plus size={16} strokeWidth={2.4} />
+            New chat
+          </button>
+          <h2 className="sx-history-label">Recent</h2>
+          {history.isLoading ? <p className="sx-history-empty">Loading…</p> : null}
+          {!history.isLoading && conversations.length === 0 ? (
+            <p className="sx-history-empty">Your chats with Seneca show up here.</p>
+          ) : null}
+          <ul className="sx-history-list">
+            {conversations.map((c) => (
+              <li key={c.id} className={c.id === conversationId ? "is-active" : undefined}>
+                <button type="button" className="sx-history-item" onClick={() => openConversation(c.id)}>
+                  <MessageSquare size={15} strokeWidth={2.2} />
+                  <span className="sx-history-copy">
+                    <span className="sx-history-title">{c.title || "New chat"}</span>
+                    <span className="sx-history-when">{senecaWhenLabel(c.updatedAt)}</span>
+                  </span>
                 </button>
-              )}
-            </li>
-          ))}
-        </ul>
-        <p className="sx-history-foot">Chats are kept for 7 days after your last message.</p>
-      </aside>
+                {confirmDeleteId === c.id ? (
+                  <span className="sx-history-confirm">
+                    <button type="button" onClick={() => remove.mutate(c.id)} disabled={remove.isPending}>
+                      Delete
+                    </button>
+                    <button type="button" onClick={() => setConfirmDeleteId(null)}>
+                      Keep
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="sx-history-delete"
+                    aria-label={`Delete ${c.title || "chat"}`}
+                    onClick={() => setConfirmDeleteId(c.id)}
+                  >
+                    <Trash2 size={14} strokeWidth={2.2} />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="sx-history-foot">Chats are kept for 7 days after your last message.</p>
+        </aside>
+      ) : null}
 
       <section className="sx-chat" aria-label="Chat with Seneca">
-        <header className="sx-chat-head">
-          <img src="/seneca-icon.png" alt="" className="sx-chat-mark" />
-          <div className="sx-chat-head-copy">
-            <h1>{current?.title || (empty ? "Seneca" : "New chat")}</h1>
-            <p>{usingLabel(lastContext) ?? "Your personal growth coach"}</p>
-          </div>
-        </header>
+        {!embedded ? (
+          <header className="sx-chat-head">
+            <img src="/seneca-icon.png" alt="" className="sx-chat-mark" />
+            <div className="sx-chat-head-copy">
+              <h1>{current?.title || (empty ? "Seneca" : "New chat")}</h1>
+              <p>{usingLabel(lastContext) ?? "Your personal growth coach"}</p>
+            </div>
+          </header>
+        ) : empty && conversations.length > 0 ? null : (
+          <header className="sx-chat-head sx-chat-head--panel">
+            <div className="sx-chat-head-copy">
+              <h1>{current?.title || (empty ? "New chat" : "Chat")}</h1>
+              <p>{usingLabel(lastContext) ?? "Your personal growth coach"}</p>
+            </div>
+          </header>
+        )}
 
         <div className="sx-thread" ref={threadRef} data-testid="seneca-thread">
           {loadingThread ? <EnterprisePageLoading label="Loading chat" /> : null}
 
-          {empty ? (
+          {empty && embedded && conversations.length > 0 ? (
+            <div className="sx-home-saved" data-testid="seneca-home-saved">
+              <div className="sx-home-saved-head">
+                <h2>Welcome back, {firstName}</h2>
+                <p>Continue a saved chat, or ask Seneca anything below.</p>
+              </div>
+              <div className="sx-recent sx-recent--primary" aria-label="Saved chats">
+                <h3 className="sx-recent-label">Recent chats</h3>
+                <ul className="sx-recent-list">
+                  {conversations.slice(0, 8).map((c) => (
+                    <li key={c.id} className="sx-recent-row">
+                      <button type="button" className="sx-recent-item" onClick={() => openConversation(c.id)}>
+                        <MessageSquare size={14} strokeWidth={2.2} />
+                        <span className="sx-recent-copy">
+                          <span className="sx-recent-title">{c.title || "New chat"}</span>
+                          <span className="sx-recent-when">{senecaWhenLabel(c.updatedAt)}</span>
+                        </span>
+                      </button>
+                      {confirmDeleteId === c.id ? (
+                        <span className="sx-recent-confirm">
+                          <button
+                            type="button"
+                            onClick={() => remove.mutate(c.id)}
+                            disabled={remove.isPending}
+                          >
+                            Delete
+                          </button>
+                          <button type="button" onClick={() => setConfirmDeleteId(null)}>
+                            Keep
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="sx-recent-delete"
+                          aria-label={`Delete ${c.title || "chat"}`}
+                          onClick={() => setConfirmDeleteId(c.id)}
+                        >
+                          <Trash2 size={14} strokeWidth={2.2} />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="sx-recent-foot">Chats are kept for 7 days after your last message.</p>
+              </div>
+            </div>
+          ) : null}
+
+          {empty && !(embedded && conversations.length > 0) ? (
             <div className="sx-welcome">
               <img src="/seneca-icon.png" alt="" className="sx-welcome-mark" />
               <h2>What's on your mind, {firstName}?</h2>
               <p>Talk through a decision, prepare for a hard conversation, or set a goal. Seneca keeps it private to you.</p>
-              <div className="sx-starters">
-                {SENECA_STARTERS.map((starter) => (
-                  <button key={starter} type="button" onClick={() => void send(starter)} disabled={thinking}>
-                    {starter}
-                  </button>
-                ))}
-              </div>
             </div>
           ) : null}
 

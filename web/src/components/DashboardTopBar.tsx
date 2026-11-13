@@ -3,8 +3,6 @@ import { Link } from "react-router-dom";
 import type { WebMeUser } from "../lib/api";
 import { JoinRequestBell } from "./JoinRequestBell";
 import { VideoMeetingTopBarJoin } from "./VideoMeetingTopBarJoin";
-import { SenecaTopBarButton } from "./seneca/SenecaTopBarButton";
-
 export type TopBarWorkspaceCallout = {
   kind: "read_only";
   canChoosePlan: boolean;
@@ -68,7 +66,6 @@ export function DashboardTopBar({
       <div className="enterprise-topbar-actions">
         {!isGo ? <VideoMeetingTopBarJoin selectedTeamId={selectedTeamId} user={user} /> : null}
         {actionsPrefix}
-        {!isGo ? <SenecaTopBarButton /> : null}
         <JoinRequestBell />
       </div>
     </header>

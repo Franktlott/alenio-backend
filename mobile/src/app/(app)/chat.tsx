@@ -29,7 +29,11 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { DmThread } from "@/app/dm-chat";
-import { PANE_GAP, useAdaptiveLayout } from "@/lib/adaptive-layout";
+import {
+  MASTER_PANE_WIDTH,
+  PANE_GAP,
+  useAdaptiveLayout,
+} from "@/lib/adaptive-layout";
 import { AlenioHeaderBrand } from "@/components/AlenioHeaderBrand";
 import { HeaderAddButton } from "@/components/HeaderAddButton";
 import {
@@ -37,19 +41,14 @@ import {
   AlenioSheetOption,
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
-import { elevation, palette, typography } from "@/theme";
+import { palette, typography } from "@/theme";
 import { useTabBarClearanceFn } from "@/lib/tab-bar";
 
 const PINNED_DMS_KEY = "pinned_dms";
 const MAX_DM_PINS = 5;
 
-const AVATAR = 50;
+const AVATAR = 44;
 const PINNED_CIRCLE = 54;
-/**
- * The inbox pane in a split layout. Matches the members roster in Workspace so
- * the two master/detail screens line up on the same device.
- */
-const INBOX_PANE_WIDTH = 340;
 /** The search dock CurvedTabLayout draws, which the split layout draws itself. */
 const SEARCH_DOCK_HEIGHT = 40;
 const SEARCH_DOCK_TOP = 12;
@@ -359,6 +358,7 @@ export default function ChatScreen() {
   const adaptive = useAdaptiveLayout();
   /** Wide and landscape-shaped: room for the inbox and a conversation at once. */
   const splitChat = adaptive.isSplit;
+  const inboxPaneWidth = MASTER_PANE_WIDTH;
   const [openConversationId, setOpenConversationId] = useState<string | null>(
     null,
   );
@@ -752,41 +752,29 @@ export default function ChatScreen() {
     const isOpen = conv.id === openConversationId;
 
     return (
-      <View
+      <Pressable
         key={conv.id}
+        testID={`dm-card-${conv.id}`}
+        onPress={() => openDm(conv)}
+        onLongPress={() => togglePin(conv.id)}
+        delayLongPress={350}
         style={[
-          styles.dmCard,
-          isOpen ? styles.dmCardOpen : null,
-          isLast ? styles.dmCardLast : null,
+          styles.dmRow,
+          isOpen ? styles.dmRowOpen : null,
+          isLast ? styles.dmRowLast : null,
         ]}
       >
         {/**
-         * The accent bar keeps its width when unselected so rows never shift
-         * sideways as the open conversation changes.
+         * Accent stays the same width when unselected so open rows never
+         * shift sideways — same pattern as the Members list.
          */}
         <View
-          style={{
-            width: 3,
-            borderTopRightRadius: 3,
-            borderBottomRightRadius: 3,
-            backgroundColor: isOpen ? "#6d28d9" : "transparent",
-          }}
+          style={[
+            styles.dmRowAccent,
+            !isOpen ? styles.dmRowAccentHidden : null,
+          ]}
         />
-        <Pressable
-          testID={`dm-card-${conv.id}`}
-          onPress={() => openDm(conv)}
-          onLongPress={() => togglePin(conv.id)}
-          delayLongPress={350}
-          style={styles.dmCardPress}
-        >
-          <View
-            style={{
-              flex: 1,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 13,
-            }}
-          >
+        <View style={styles.dmRowMain}>
           {isGroup ? (
             resolveUserImageUrl(conv.image) ? (
               <Image
@@ -846,15 +834,14 @@ export default function ChatScreen() {
           )}
 
           <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text
                 style={{
-                  fontSize: 15,
-                  lineHeight: 20,
-                  fontWeight: unreadCount > 0 ? "700" : "600",
-                  color: "#0F172A",
+                  fontSize: 14,
+                  lineHeight: 18,
+                  fontWeight: unreadCount > 0 ? "800" : "700",
+                  color: "#20283C",
                   flex: 1,
-                  letterSpacing: -0.2,
                 }}
                 numberOfLines={1}
               >
@@ -862,7 +849,7 @@ export default function ChatScreen() {
               </Text>
               <Text
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: unreadCount > 0 ? "700" : "500",
                   color: unreadCount > 0 ? "#5B45FF" : "#98A2B3",
                   marginLeft: 8,
@@ -872,13 +859,13 @@ export default function ChatScreen() {
                 {timeStr}
               </Text>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
               <Text
                 style={{
                   fontSize: 12,
-                  lineHeight: 16,
+                  lineHeight: 15,
                   fontWeight: unreadCount > 0 ? "600" : "400",
-                  color: unreadCount > 0 ? "#475467" : "#7E899A",
+                  color: unreadCount > 0 ? "#475467" : "#8490A4",
                   flex: 1,
                 }}
                 numberOfLines={1}
@@ -904,9 +891,8 @@ export default function ChatScreen() {
               ) : null}
             </View>
           </View>
-          </View>
-        </Pressable>
-      </View>
+        </View>
+      </Pressable>
     );
   };
 
@@ -988,6 +974,7 @@ export default function ChatScreen() {
       title="Chat"
       leftAction={<AlenioHeaderBrand tone="dark" />}
       band
+      sheetColor="#FFFFFF"
       testID="chat-screen"
       headerTestID="chat-header"
       /**
@@ -1059,7 +1046,12 @@ export default function ChatScreen() {
         ]}
       >
       <View
-        style={[styles.chatColumns, splitChat ? styles.inboxPane : null]}
+        style={[
+          styles.chatColumns,
+          splitChat
+            ? [styles.inboxPane, { width: inboxPaneWidth }]
+            : null,
+        ]}
         testID={splitChat ? "chat-inbox-pane" : undefined}
       >
           {splitChat ? (
@@ -1125,8 +1117,8 @@ export default function ChatScreen() {
               }
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
-                paddingTop: 4,
-                paddingHorizontal: 12,
+                paddingTop: 2,
+                paddingHorizontal: 6,
                 paddingBottom:
                   conversations.length === 0
                     ? tabClearance(8)
@@ -1281,38 +1273,54 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
-  dmCard: {
-    ...elevation.card,
-    height: 76,
-    marginBottom: 10,
-    borderRadius: 18,
+  dmRow: {
+    minHeight: 62,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     flexDirection: "row",
-    shadowOpacity: 0.08,
+    alignItems: "center",
+    gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#F2F4F7",
+    backgroundColor: "#FFFFFF",
   },
-  dmCardOpen: {
-    borderColor: "rgba(109, 40, 217, 0.22)",
-    backgroundColor: "#FAF8FF",
+  dmRowOpen: {
+    backgroundColor: "#EEF2FF",
+    borderBottomColor: "transparent",
+    borderRadius: 10,
   },
-  dmCardLast: {
-    marginBottom: 4,
+  dmRowLast: {
+    borderBottomWidth: 0,
   },
-  dmCardPress: {
+  dmRowAccent: {
+    width: 3,
+    alignSelf: "stretch",
+    marginVertical: 6,
+    borderRadius: 2,
+    backgroundColor: "#6d28d9",
+  },
+  dmRowAccentHidden: {
+    backgroundColor: "transparent",
+  },
+  dmRowMain: {
     flex: 1,
     minWidth: 0,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
   },
   chatColumns: {
     flex: 1,
     minHeight: 0,
     flexDirection: "column",
-    backgroundColor: palette.page,
+    backgroundColor: "#FFFFFF",
   },
   inboxPane: {
     flex: 0,
-    width: INBOX_PANE_WIDTH,
+    // Width is the compact master column.
+    backgroundColor: "#F7F8FA",
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: "#E9EDF3",
+    borderRightColor: "#E7EAF0",
   },
   /** The dock CurvedTabLayout would have drawn, moved inside the pane. */
   inboxSearchDock: {

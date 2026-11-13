@@ -36,6 +36,39 @@ export function parseYoutubeVideoId(value: string): string | null {
 export function youtubeEmbedUrl(videoId: string): string | null {
   const id = parseYoutubeVideoId(videoId);
   return id
-    ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}`
+    ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?playsinline=1&rel=0`
     : null;
+}
+
+/** YouTube Error 153: embeds need a real page origin/referrer. WebViews don't send one when loading the embed URL alone. */
+export const YOUTUBE_EMBED_BASE_URL = "https://alenio.com";
+
+export function youtubeEmbedHtml(videoId: string, title = "YouTube video"): string | null {
+  const src = youtubeEmbedUrl(videoId);
+  if (!src) return null;
+  const safeTitle = title
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/"/g, "&quot;");
+  return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #0f172a; overflow: hidden; }
+      iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    </style>
+  </head>
+  <body>
+    <iframe
+      src="${src}"
+      title="${safeTitle}"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      allowfullscreen
+      referrerpolicy="strict-origin-when-cross-origin"
+    ></iframe>
+  </body>
+</html>`;
 }

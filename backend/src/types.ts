@@ -537,6 +537,17 @@ export type HomeTodayItemType =
   | "holiday"
   | "external";
 
+export type HomeTodayAssignee = {
+  id: string;
+  userId: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    image?: string | null;
+  };
+};
+
 export type HomeTodayItem = {
   id: string;
   type: HomeTodayItemType;
@@ -551,6 +562,8 @@ export type HomeTodayItem = {
   done?: boolean;
   /** A task carried in from an earlier day, still unfinished. */
   overdue?: boolean;
+  /** Present for tasks/reminders so preview sheets can render without a second fetch. */
+  assignees?: HomeTodayAssignee[];
 };
 
 export type HomeUpcomingResponse = {
@@ -679,3 +692,7 @@ export type {
   DiscoverCategoryJson as DiscoverCategory,
 } from "./lib/discover-serialize";
 export type { DiscoverDoc } from "./lib/discover-document";
+export type {
+  HomeInsightCardJson as HomeInsightCard,
+  HomeInsightDestinationJson as HomeInsightDestination,
+} from "./lib/home-insight-serialize";

@@ -33,7 +33,6 @@ import {
 import {
   applyReactionToggle,
   formatFeedTimestamp,
-  myReactionEmoji,
   totalReactionCount,
   workspaceUpdateBody,
   workspaceUpdateHeadline,
@@ -327,7 +326,11 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
             onPressReact={
               canWrite ? () => setShowPicker((open) => !open) : undefined
             }
+            onToggleReaction={
+              canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+            }
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
+            commentCount={item.commentCount ?? 0}
             picker={picker}
           />
         ) : item.type === "member_joined" ? (
@@ -337,7 +340,11 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
             onPressReact={
               canWrite ? () => setShowPicker((open) => !open) : undefined
             }
+            onToggleReaction={
+              canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+            }
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
+            commentCount={item.commentCount ?? 0}
             picker={picker}
           />
         ) : item.type === "task_milestone" ? (
@@ -347,7 +354,11 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
             onPressReact={
               canWrite ? () => setShowPicker((open) => !open) : undefined
             }
+            onToggleReaction={
+              canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+            }
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
+            commentCount={item.commentCount ?? 0}
             picker={picker}
           />
         ) : item.type === "post" ? (
@@ -357,7 +368,11 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
             onPressReact={
               canWrite ? () => setShowPicker((open) => !open) : undefined
             }
+            onToggleReaction={
+              canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+            }
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
+            commentCount={item.commentCount ?? 0}
             picker={picker}
           />
         ) : (
@@ -367,15 +382,19 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
             headline={workspaceUpdateHeadline(item)}
             body={workspaceUpdateBody(item)}
             reactionCount={totalReactionCount(item.reactions)}
-            myReaction={myReactionEmoji(item.reactions, currentUserId)}
+            currentUserId={currentUserId}
             reactions={item.reactions ?? {}}
             onPressReactions={() => setReactionsFor({ kind: "activity" })}
             onPressLike={
               canWrite ? () => setShowPicker((open) => !open) : undefined
             }
+            onToggleReaction={
+              canWrite ? (emoji) => reactionMutation.mutate(emoji) : undefined
+            }
             onLongPress={
               canWrite ? () => setShowPicker((open) => !open) : undefined
             }
+            commentCount={item.commentCount ?? 0}
             picker={picker}
           />
         )}

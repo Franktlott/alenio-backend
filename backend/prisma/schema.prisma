@@ -145,6 +145,7 @@ model User {
   discoverArticlesCreated           DiscoverArticle[]               @relation("DiscoverArticleCreatedBy")
   discoverArticlesUpdated           DiscoverArticle[]               @relation("DiscoverArticleUpdatedBy")
   discoverArticlesLastPublished     DiscoverArticle[]               @relation("DiscoverArticleLastPublishedBy")
+  homeInsightCardsUpdated           HomeInsightCard[]               @relation("HomeInsightCardUpdatedBy")
 }
 
 /**
@@ -2586,4 +2587,50 @@ model PlayExternalReport {
 
   @@index([status, createdAt])
   @@index([stripePaymentIntentId])
+}
+
+/// Weekly Home Insight card. Platform admins manage the deck without an app release.
+model HomeInsightCard {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  title              String
+  body               String
+  actionLabel        String
+  accessibilityLabel String   @default("")
+  imageUrl           String?
+  imageAlt           String?
+  surfaceColor       String   @default("#F7F1FF")
+  fadeColors         Json
+  borderColor        String   @default("#E6D8FF")
+  titleColor         String   @default("#17172B")
+  bodyColor          String   @default("#69677B")
+  buttonColors       Json
+  /// recognition | seneca | discover
+  destinationType    String   @default("seneca")
+  senecaPrompt       String   @default("")
+  discoverArticleId  String?
+  discoverSlug       String?
+  displayOrder       Int      @default(0)
+  isActive           Boolean  @default(true)
+  updatedById        String?
+  updatedBy          User?    @relation("HomeInsightCardUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([isActive, displayOrder])
+}
+
+/// Singleton schedule for which Home Insight card is live.
+model HomeInsightSettings {
+  id           String   @id @default("default")
+  /// automatic | manual
+  mode         String   @default("automatic")
+  /// daily | weekly — used when mode is automatic
+  cadence      String   @default("weekly")
+  /// Shown when mode is manual (must be an active card)
+  pinnedCardId String?
+  /// Rotation epoch (UTC). Weekly uses Monday of this instant; daily uses the UTC day.
+  epochAt      DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  updatedById  String?
 }

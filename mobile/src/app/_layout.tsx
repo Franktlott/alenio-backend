@@ -414,8 +414,9 @@ function RootLayoutNav() {
           <Stack.Screen
             name="workspace-settings"
             options={{
+              presentation: "transparentModal",
+              animation: "fade",
               headerShown: false,
-              animation: "slide_from_right",
             }}
           />
           <Stack.Screen
@@ -547,10 +548,71 @@ function RootLayoutNav() {
               headerShown: false,
             }}
           />
-          <Stack.Screen name="notifications" />
+          <Stack.Screen
+            name="notifications"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="timezone"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="message-privacy"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="blocked-people"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="security"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
           <Stack.Screen name="get-started" />
-          <Stack.Screen name="username" />
-          <Stack.Screen name="change-email" />
+          <Stack.Screen
+            name="username"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="edit-profile"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="change-email"
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
           <Stack.Screen name="person" />
           <Stack.Screen name="workspace-activity" />
           <Stack.Screen
@@ -562,11 +624,7 @@ function RootLayoutNav() {
           />
         </Stack.Protected>
         <Stack.Protected guard={!hasBackendSession}>
-          {/**
-           * One screen for all seven pages: they share the (auth) layout so the
-           * hero panel survives navigation between them instead of sliding out
-           * with the page.
-           */}
+          {/** Welcome, sign-in, and sign-up share the (auth) stack. */}
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
         </Stack.Protected>
