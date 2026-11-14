@@ -27,6 +27,10 @@ import {
   type DiscoverArticleSummary,
   type DiscoverCategory,
 } from "@/lib/discover";
+import {
+  discoverCardImageSource,
+  discoverTopicPhotoSource,
+} from "@/lib/discover-topic-photos";
 import { palette } from "@/theme";
 
 const PURPLE = palette.violet;
@@ -44,43 +48,8 @@ const CATEGORY_COLOR: Record<string, string> = {
   "help-article": "#6366F1",
 };
 
-/** Editorial photography topic tiles. Prefer these over article covers. */
-const TOPIC_PHOTO: Record<string, number> = {
-  reflection: require("@/assets/discover-topics/discover-topic-reflection-editorial.jpg"),
-  growth: require("@/assets/discover-topics/discover-topic-growth-editorial.jpg"),
-  leadership: require("@/assets/discover-topics/discover-topic-leadership-editorial.jpg"),
-  communication: require("@/assets/discover-topics/discover-topic-communication-editorial.jpg"),
-  connection: require("@/assets/discover-topics/discover-topic-connection-editorial.jpg"),
-  wellbeing: require("@/assets/discover-topics/discover-topic-wellbeing-editorial.jpg"),
-  "well-being": require("@/assets/discover-topics/discover-topic-wellbeing-editorial.jpg"),
-  productivity: require("@/assets/discover-topics/discover-topic-productivity-editorial.jpg"),
-  "help-article": require("@/assets/discover-topics/discover-topic-help-article-editorial.jpg"),
-  help: require("@/assets/discover-topics/discover-topic-help-article-editorial.jpg"),
-  "help article": require("@/assets/discover-topics/discover-topic-help-article-editorial.jpg"),
-  change: require("@/assets/discover-topics/discover-topic-leadership-editorial.jpg"),
-  teamwork: require("@/assets/discover-topics/discover-topic-connection-editorial.jpg"),
-};
-
-const TOPIC_PHOTO_FALLBACK = require("@/assets/discover-topics/discover-topic-reflection-editorial.jpg");
-
 function topicPhotoSource(category: DiscoverCategory): number {
-  const slug = category.slug.trim().toLowerCase();
-  const nameKey = category.name.trim().toLowerCase();
-  const compact = `${slug} ${nameKey}`.replace(/[^a-z0-9]+/g, " ");
-  const direct =
-    TOPIC_PHOTO[slug] ??
-    TOPIC_PHOTO[nameKey] ??
-    TOPIC_PHOTO[nameKey.replace(/\s+/g, "-")];
-  if (direct) return direct;
-  if (/\bhelp\b/.test(compact)) return TOPIC_PHOTO["help-article"];
-  if (/\breflect/.test(compact)) return TOPIC_PHOTO.reflection;
-  if (/\bgrowth\b|\blearn/.test(compact)) return TOPIC_PHOTO.growth;
-  if (/\blead/.test(compact)) return TOPIC_PHOTO.leadership;
-  if (/\bcommunicat|\bmessage/.test(compact)) return TOPIC_PHOTO.communication;
-  if (/\bconnect|\bteam/.test(compact)) return TOPIC_PHOTO.connection;
-  if (/\bwell.?being|\bwellness|\bhealth/.test(compact)) return TOPIC_PHOTO.wellbeing;
-  if (/\bproductiv|\bfocus/.test(compact)) return TOPIC_PHOTO.productivity;
-  return TOPIC_PHOTO_FALLBACK;
+  return discoverTopicPhotoSource(category);
 }
 
 function publishedTime(article: DiscoverArticleSummary): number {
@@ -109,6 +78,7 @@ function openArticle(slug: string) {
 
 function ArticleRow({ article }: { article: DiscoverArticleSummary }) {
   const color = CATEGORY_COLOR[article.category?.slug ?? ""] ?? PURPLE;
+  const [coverFailed, setCoverFailed] = useState(false);
   return (
     <Pressable
       onPress={() => openArticle(article.slug)}
@@ -117,15 +87,16 @@ function ArticleRow({ article }: { article: DiscoverArticleSummary }) {
       accessibilityLabel={article.title}
       testID={`discover-row-${article.slug}`}
     >
-      {article.coverImageUrl ? (
-        <Image
-          source={{ uri: article.coverImageUrl }}
-          style={styles.thumb}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={styles.thumb} />
-      )}
+      <Image
+        source={discoverCardImageSource(
+          article.coverImageUrl,
+          article.category,
+          { coverFailed },
+        )}
+        style={styles.thumb}
+        resizeMode="cover"
+        onError={() => setCoverFailed(true)}
+      />
       <View style={styles.copy}>
         {article.category ? (
           <Text style={[styles.kicker, { color }]}>
@@ -224,9 +195,10 @@ function FeaturedCarousel({
   const article = articles[Math.min(index, count - 1)]!;
   const categoryName = article.category?.name?.toUpperCase();
 
-  const coverSource = article.coverImageUrl
-    ? { uri: article.coverImageUrl }
-    : undefined;
+  const coverSource = discoverCardImageSource(
+    article.coverImageUrl,
+    article.category,
+  );
 
   return (
     <View style={styles.featuredBlock} testID="discover-featured-carousel">

@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { TextSelection } from "@tiptap/pm/state";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { uploadChatMedia } from "../../lib/api";
+import { uploadDiscoverMedia } from "../../lib/api";
 import {
   DEFAULT_CALLOUT,
   DEFAULT_CARDS,
@@ -132,7 +132,7 @@ export function DiscoverRichText({ value, onChange }: Props) {
     setUploading(true);
     setUploadError(null);
     try {
-      const uploaded = await uploadChatMedia(file);
+      const uploaded = await uploadDiscoverMedia(file);
       const alt = window.prompt("Describe this image for people who cannot see it", "") ?? "";
       editor.chain().focus().setImage({ src: uploaded.url, alt }).run();
     } catch (error) {

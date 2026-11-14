@@ -17,7 +17,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
-import { uploadChatMedia } from "../../lib/api";
+import { uploadDiscoverMedia } from "../../lib/api";
 import { staffCan } from "../../lib/staff-access";
 import {
   createDiscoverArticle,
@@ -488,7 +488,7 @@ export function DiscoverEditorPage() {
     setCoverBusy(true);
     setError(null);
     try {
-      const uploaded = await uploadChatMedia(file);
+      const uploaded = await uploadDiscoverMedia(file);
       setCoverImageUrl(uploaded.url);
       if (original && original !== coverOriginal) setCoverOriginal(original);
       touch();

@@ -67,9 +67,10 @@ import {
   resolveProfileWorkspaceId,
 } from "@/lib/profile-workspace-context";
 import {
+  profileDefaultHeaderSource,
   profileHeaderSource,
 } from "@/lib/profile-header";
-import { compressedHeaderHeight, headerBannerHeight } from "@/lib/profile-header-frame";
+import { headerBannerHeight } from "@/lib/profile-header-frame";
 import { ME_QUERY_KEY, type MeUser } from "@/lib/auth/me-query";
 import { CONTENT_MAX_WIDTH, useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -190,31 +191,16 @@ export default function PersonScreen() {
   // Default mountain whenever there isn’t a custom photo (including while loading).
   const showMountainHeader = !showCustomHeader;
   /**
-   * Custom headers stay near the crop aspect so the member’s framing holds.
-   * Default mountain can use a slightly taller band; both respect window height.
+   * Same band math for custom and default. Defaults pick a phone or wide
+   * mountain asset so the banner fills without letterboxing.
    */
   const bannerOpts = {
     windowHeight: adaptive.height,
     topInset: insets.top,
   };
-  const customBannerHeight = showCustomHeader
-    ? headerBannerHeight(adaptive.width, bannerOpts)
-    : 0;
-  const narrowCoverHeight =
-    twoColumn || showCustomHeader
-      ? 0
-      : Math.min(
-          compressedHeaderHeight(
-            adaptive.width,
-            16 / 9,
-            insets.top + 48,
-          ),
-          headerBannerHeight(adaptive.width, bannerOpts),
-        );
-  const coverHeight =
-    customBannerHeight ||
-    narrowCoverHeight ||
-    headerBannerHeight(adaptive.width, bannerOpts);
+  const useWideDefaultHeader =
+    twoColumn || adaptive.width / Math.max(adaptive.height, 1) >= 1.2;
+  const coverHeight = headerBannerHeight(adaptive.width, bannerOpts);
   const { data: viewerTeams = [] } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
@@ -501,29 +487,15 @@ export default function PersonScreen() {
         {showCustomHeader ? (
           <Image
             source={profileHeaderSource(headerImage)}
-            style={
-              coverHeight > 0
-                ? [styles.coverFill, { height: coverHeight }]
-                : styles.coverFill
-            }
+            style={[styles.coverFill, { height: coverHeight }]}
             resizeMode="cover"
           />
         ) : showMountainHeader ? (
-          narrowCoverHeight > 0 ? (
-            <Image
-              source={profileHeaderSource(null)}
-              style={[styles.coverFill, { height: narrowCoverHeight }]}
-              resizeMode="contain"
-            />
-          ) : (
-            <View pointerEvents="none" style={styles.coverImage}>
-              <Image
-                source={profileHeaderSource(null)}
-                style={styles.coverImagePhoto}
-                resizeMode="cover"
-              />
-            </View>
-          )
+          <Image
+            source={profileDefaultHeaderSource({ wide: useWideDefaultHeader })}
+            style={[styles.coverFill, { height: coverHeight }]}
+            resizeMode="cover"
+          />
         ) : null}
       </View>
       {/**
@@ -2138,17 +2110,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    width: "100%",
-    height: "100%",
-  },
-  coverImage: {
-    position: "absolute",
-    width: "155%",
-    aspectRatio: 16 / 9,
-    right: -16,
-    bottom: 0,
-  },
-  coverImagePhoto: {
     width: "100%",
     height: "100%",
   },

@@ -1119,10 +1119,7 @@ export default function ChatScreen() {
               contentContainerStyle={{
                 paddingTop: 2,
                 paddingHorizontal: 6,
-                paddingBottom:
-                  conversations.length === 0
-                    ? tabClearance(8)
-                    : tabClearance(44),
+                paddingBottom: tabClearance(8),
                 flexGrow: 1,
               }}
               refreshControl={
@@ -1134,6 +1131,18 @@ export default function ChatScreen() {
               }
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
+              ListFooterComponent={
+                !conversationsLoading &&
+                !conversationsError &&
+                conversations.length > 0 ? (
+                  <View style={styles.pinHint} testID="chat-pin-hint">
+                    <Pin size={12} color="#94A3B8" strokeWidth={2} />
+                    <Text style={styles.pinHintText}>
+                      Press and hold a conversation to pin it. Pin up to 5.
+                    </Text>
+                  </View>
+                ) : null
+              }
               ListEmptyComponent={
                 conversationsLoading ? (
                   <View
@@ -1240,22 +1249,6 @@ export default function ChatScreen() {
               }
               testID="chat-conversation-list"
             />
-            {!conversationsLoading &&
-            !conversationsError &&
-            conversations.length > 0 ? (
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.pinHint,
-                  { bottom: tabClearance(10) },
-                ]}
-              >
-                <Pin size={12} color="#94A3B8" strokeWidth={2} />
-                <Text style={styles.pinHintText}>
-                  Press and hold a conversation to pin it. Pin up to 5.
-                </Text>
-              </View>
-            ) : null}
           </View>
         </View>
         {splitChat ? (
@@ -1450,16 +1443,16 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   pinHint: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    paddingHorizontal: 24,
+    marginTop: 10,
+    marginBottom: 4,
+    paddingHorizontal: 18,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
   },
   pinHintText: {
+    flexShrink: 1,
     fontSize: 10,
     lineHeight: 14,
     color: "#94A3B8",

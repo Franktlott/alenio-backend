@@ -22,12 +22,32 @@ export type HeaderPhotoPick = {
   height: number;
 };
 
-const DEFAULT_PROFILE_HEADER = require("@/assets/alenio-welcome-mountain-ridge-v2.jpg");
+/** Phone / portrait banner — ~2.2:1 so small screens fill edge to edge. */
+const DEFAULT_PROFILE_HEADER_PHONE = require("@/assets/alenio-profile-header-phone.jpg");
+/** Wide / landscape banner — ~3:1 so large screens fill without letterboxing. */
+const DEFAULT_PROFILE_HEADER_WIDE = require("@/assets/alenio-profile-header-wide.jpg");
 
-/** Custom cover when one is saved, otherwise the mountain everyone starts with. */
-export function profileHeaderSource(url?: string | null): ImageSourcePropType {
+export type ProfileHeaderSourceOptions = {
+  /** Prefer the wide default mountain (tablets, two-column, landscape). */
+  wide?: boolean;
+};
+
+/** Default mountain sized for the screen — no runtime resize gymnastics. */
+export function profileDefaultHeaderSource(
+  options?: ProfileHeaderSourceOptions,
+): ImageSourcePropType {
+  return options?.wide
+    ? DEFAULT_PROFILE_HEADER_WIDE
+    : DEFAULT_PROFILE_HEADER_PHONE;
+}
+
+/** Custom cover when one is saved, otherwise the sized default mountain. */
+export function profileHeaderSource(
+  url?: string | null,
+  options?: ProfileHeaderSourceOptions,
+): ImageSourcePropType {
   const trimmed = url?.trim();
-  return trimmed ? { uri: trimmed } : DEFAULT_PROFILE_HEADER;
+  return trimmed ? { uri: trimmed } : profileDefaultHeaderSource(options);
 }
 
 /** Pick the full photo. Framing happens afterward when it is not already header-shaped. */

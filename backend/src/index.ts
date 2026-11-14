@@ -111,7 +111,7 @@ import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-sch
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { ensureAccountTypeSchema } from "./lib/ensure-account-type-schema";
 import { ensureStaffRolesSchema } from "./lib/ensure-staff-roles-schema";
-import { staffAccessFields } from "./lib/staff-roles";
+import { effectiveStaffRole, roleHasAbility, staffAccessFields } from "./lib/staff-roles";
 import { ensureDiscoverSchema } from "./lib/ensure-discover-schema";
 import { ensureHomeInsightSchema } from "./lib/ensure-home-insight-schema";
 import { ensurePushCampaignSchema } from "./lib/ensure-push-campaign-schema";
@@ -878,13 +878,21 @@ const ALERT_SOUND_MIME_TYPES = new Set([
   "audio/webm",
 ]);
 
-type UploadPurpose = "profile" | "team" | "go_alert_sound" | "generic";
+type UploadPurpose =
+  | "profile"
+  | "team"
+  | "go_alert_sound"
+  | "discover"
+  | "home_insight"
+  | "generic";
 
 function parseUploadPurpose(purposeRaw: string): UploadPurpose {
   if (
     purposeRaw === "profile" ||
     purposeRaw === "team" ||
-    purposeRaw === "go_alert_sound"
+    purposeRaw === "go_alert_sound" ||
+    purposeRaw === "discover" ||
+    purposeRaw === "home_insight"
   ) {
     return purposeRaw;
   }
@@ -1210,6 +1218,44 @@ async function handleFileUpload(
         data: { image: uploaded.url },
       });
       await deleteReplacedStorageObject(row?.image, uploaded.url);
+      return c.json({ data: uploaded });
+    }
+
+    // Discover / Home Insight media lives under content/… so orphan cleanup never
+    // mistakes it for leftover chat uploads. Staff with content.edit only.
+    if (purpose === "discover" || purpose === "home_insight") {
+      const staffRow = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { accountType: true, staffRole: true },
+      });
+      const staffRole = effectiveStaffRole(staffRow);
+      if (!staffRole || !roleHasAbility(staffRole, "content.edit")) {
+        return c.json(
+          {
+            error: {
+              message: "Only content editors can upload Discover or Home Insight media",
+              code: "FORBIDDEN",
+            },
+          },
+          403,
+        );
+      }
+      if (!file.type.startsWith("image/")) {
+        return c.json(
+          {
+            error: {
+              message: "Upload an image file",
+              code: "VALIDATION_ERROR",
+            },
+          },
+          400,
+        );
+      }
+      const uploaded = await uploadFileToFirebaseStorage({
+        userId: user.id,
+        file,
+        slot: purpose,
+      });
       return c.json({ data: uploaded });
     }
 

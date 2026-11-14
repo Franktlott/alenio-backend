@@ -439,7 +439,11 @@ export type UploadSlot =
   | "go_alert_sound"
   | "go_walk_photo"
   | "seneca_image"
-  | "check_in_audio";
+  | "check_in_audio"
+  /** Discover covers + in-article images. Outside users/.../uploads/ so orphan cleanup never sweeps them. */
+  | "discover"
+  /** Home Insight card photos. Same durable content namespace as Discover. */
+  | "home_insight";
 
 export async function uploadFileToFirebaseStorage(params: {
   userId: string;
@@ -487,6 +491,11 @@ export async function uploadFileToFirebaseStorage(params: {
     // Top-level prefix so a bucket lifecycle rule can target check-in audio as
     // a backstop; a rule cannot wildcard the team id in the middle of a path.
     storagePath = `check-in-audio/${teamId!.trim()}/${Date.now()}-${objectId}-${safeName}`;
+  } else if (slot === "discover") {
+    // Platform content — not under users/.../uploads/, so daily orphan cleanup never deletes it.
+    storagePath = `content/discover/${Date.now()}-${objectId}-${safeName}`;
+  } else if (slot === "home_insight") {
+    storagePath = `content/home-insights/${Date.now()}-${objectId}-${safeName}`;
   } else {
     storagePath = `users/${userId}/uploads/${Date.now()}-${objectId}-${safeName}`;
   }
@@ -589,7 +598,7 @@ export type UserUploadObject = {
 
 /**
  * Lists objects under users/.../uploads/ across configured buckets.
- * Used by orphan cleanup — never includes profile/team/go slots.
+ * Used by orphan cleanup — never includes profile/team/go/content slots.
  */
 export async function listUserUploadObjects(): Promise<UserUploadObject[]> {
   if (!hasFirebaseStorageConfig()) return [];

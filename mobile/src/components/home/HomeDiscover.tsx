@@ -5,6 +5,7 @@ import { ChevronRight, Sparkles } from "lucide-react-native";
 import { router } from "expo-router";
 import { AppText, Button, buttonInk, PanelHeader, tintInk } from "@/components/ui";
 import { fetchHomeDiscoverArticles, type DiscoverArticleSummary } from "@/lib/discover";
+import { discoverCardImageSource } from "@/lib/discover-topic-photos";
 import { elevation, palette } from "@/theme";
 
 const PURPLE = palette.violet;
@@ -43,6 +44,14 @@ function DiscoverCard({
 }) {
   const slug = article.category?.slug ?? "";
   const labelColor = CATEGORY_COLOR[slug] ?? PURPLE;
+  const [coverFailed, setCoverFailed] = useState(false);
+  const imageSource = discoverCardImageSource(
+    article.coverImageUrl,
+    article.category,
+    { coverFailed },
+  );
+  /** Lock the frame so portrait topic photos cannot stretch the card. */
+  const imageHeight = Math.max(72, Math.round(width / 2));
   return (
     <Pressable
       onPress={() => openArticle(article.slug)}
@@ -51,16 +60,15 @@ function DiscoverCard({
       accessibilityLabel={article.title}
       testID={`home-discover-${article.slug}`}
     >
-      {article.coverImageUrl ? (
+      <View style={[styles.imageFrame, { height: imageHeight }]}>
         <Image
-          source={{ uri: article.coverImageUrl }}
+          source={imageSource}
           style={styles.image}
           resizeMode="cover"
           accessibilityIgnoresInvertColors
+          onError={() => setCoverFailed(true)}
         />
-      ) : (
-        <View style={styles.imageFallback} />
-      )}
+      </View>
       <View style={styles.copy}>
         <Text style={styles.kicker} numberOfLines={1}>
           {article.category ? (
@@ -117,8 +125,8 @@ export function HomeDiscover({ wide }: { wide: boolean }) {
         action={
           <Button
             variant="link"
-            label="Discover all"
-            accessibilityLabel="Discover all Explore articles"
+            label="Explore all"
+            accessibilityLabel="Explore all articles"
             onPress={() => router.push("/discover")}
             iconRight={<ChevronRight size={14} color={buttonInk("link")} strokeWidth={2.4} />}
           />
@@ -156,34 +164,36 @@ const styles = StyleSheet.create({
   },
   scrollerWrap: {
     position: "relative",
-    justifyContent: "center",
+    justifyContent: "flex-start",
   },
   scroller: {
     flexGrow: 0,
+    flexShrink: 0,
   },
   row: {
     flexDirection: "row",
-    alignItems: "stretch",
+    alignItems: "flex-start",
     gap: CARD_GAP,
   },
   card: {
     flexGrow: 0,
     flexShrink: 0,
+    alignSelf: "flex-start",
     borderRadius: 14,
     backgroundColor: "#FFFFFF",
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#EDE9FE",
   },
-  image: {
+  imageFrame: {
     width: "100%",
-    aspectRatio: 2,
+    overflow: "hidden",
     backgroundColor: "#EDE9FE",
   },
-  imageFallback: {
+  image: {
+    ...StyleSheet.absoluteFillObject,
     width: "100%",
-    aspectRatio: 2,
-    backgroundColor: "#EDE9FE",
+    height: "100%",
   },
   copy: {
     paddingHorizontal: 10,

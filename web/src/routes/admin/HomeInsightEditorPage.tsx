@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ContentSectionTabs } from "../../components/admin/ContentSectionTabs";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
-import { uploadChatMedia } from "../../lib/api";
+import { uploadHomeInsightMedia } from "../../lib/api";
 import { fetchDiscoverArticles } from "../../lib/discover-api";
 import {
   createHomeInsight,
@@ -205,7 +205,7 @@ export function HomeInsightEditorPage() {
     setUploading(true);
     setError(null);
     try {
-      const uploaded = await uploadChatMedia(file);
+      const uploaded = await uploadHomeInsightMedia(file);
       set("imageUrl", uploaded.url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");

@@ -1380,6 +1380,16 @@ export async function uploadChatMedia(file: File): Promise<ChatUploadResult> {
   return uploadMediaFile(file);
 }
 
+/** Discover covers / in-article images — durable `content/discover/` Storage path. */
+export async function uploadDiscoverMedia(file: File): Promise<ChatUploadResult> {
+  return uploadMediaFile(file, "discover");
+}
+
+/** Home Insight card photos — durable `content/home-insights/` Storage path. */
+export async function uploadHomeInsightMedia(file: File): Promise<ChatUploadResult> {
+  return uploadMediaFile(file, "home_insight");
+}
+
 /** Upload a custom workplace alert sound for a workspace. */
 export async function uploadGoAlertSound(teamId: string, file: File): Promise<ChatUploadResult> {
   assertProductionApiConfigured();
@@ -1420,12 +1430,16 @@ export async function uploadGoAlertSound(teamId: string, file: File): Promise<Ch
   return json.data;
 }
 
-async function uploadMediaFile(file: File): Promise<ChatUploadResult> {
+async function uploadMediaFile(
+  file: File,
+  purpose?: "discover" | "home_insight",
+): Promise<ChatUploadResult> {
   assertProductionApiConfigured();
   const baseUrl = apiBaseUrl();
   async function doUpload(token: string | null) {
     const formData = new FormData();
     formData.append("file", file);
+    if (purpose) formData.append("purpose", purpose);
     const h = new Headers();
     if (token) h.set("Authorization", `Bearer ${token}`);
     try {

@@ -67,6 +67,8 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
     senecaMessages,
     profilePhotos,
     networkPosts,
+    discoverArticles,
+    homeInsightCards,
   ] = await Promise.all([
     prisma.message.findMany({
       where: { mediaUrl: { not: null } },
@@ -122,6 +124,19 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
       where: { teamId: null, type: "network_post", metadata: { not: null } },
       select: { metadata: true },
     }),
+    // Legacy Discover covers may still live under users/.../uploads/. New uploads use
+    // content/discover/ (outside this sweep). Keep old paths referenced until re-uploaded.
+    prisma.discoverArticle
+      .findMany({
+        select: { coverImageUrl: true, content: true, pendingDraft: true },
+      })
+      .catch(() => [] as Array<{ coverImageUrl: string | null; content: unknown; pendingDraft: unknown }>),
+    prisma.homeInsightCard
+      .findMany({
+        where: { imageUrl: { not: null } },
+        select: { imageUrl: true },
+      })
+      .catch(() => [] as Array<{ imageUrl: string | null }>),
   ]);
 
   for (const row of messages) addUrl(paths, row.mediaUrl);
@@ -159,6 +174,12 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
       // Malformed legacy metadata cannot safely reference a storage object.
     }
   }
+  for (const row of discoverArticles) {
+    addUrl(paths, row.coverImageUrl);
+    collectUploadObjectPathsFromValue(row.content, paths);
+    collectUploadObjectPathsFromValue(row.pendingDraft, paths);
+  }
+  for (const row of homeInsightCards) addUrl(paths, row.imageUrl);
 
   return paths;
 }
@@ -173,7 +194,8 @@ export type OrphanUploadCleanupResult = {
 
 /**
  * Deletes unreferenced user upload objects older than the grace period.
- * Only paths under users/.../uploads/ are considered. Profile/team/Go slots are never touched.
+ * Only paths under users/.../uploads/ are considered. Profile/team/Go/Discover/
+ * Home Insight content slots are never touched.
  */
 export async function cleanupOrphanUserUploads(options?: {
   olderThanDays?: number;

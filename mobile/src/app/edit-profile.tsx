@@ -245,7 +245,9 @@ export default function EditProfileScreen() {
           >
             {headerPreviewWidth > 0 ? (
               <Image
-                source={profileHeaderSource(profile?.profileHeaderImage)}
+                source={profileHeaderSource(profile?.profileHeaderImage, {
+                  wide: window.width / Math.max(window.height, 1) >= 1.2,
+                })}
                 style={{ width: headerPreviewWidth, height: headerPreviewHeight }}
                 resizeMode="cover"
               />
