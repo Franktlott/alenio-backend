@@ -22,12 +22,9 @@ export function liveTranscriptionAvailable(): boolean {
   return senecaAvailable();
 }
 
+/** GA Realtime live-transcription model (not the retired beta realtime=v1 path). */
 export function liveTranscriptionModel(): string {
-  return (
-    env.OPENAI_REALTIME_TRANSCRIBE_MODEL?.trim() ||
-    env.OPENAI_TRANSCRIBE_MODEL ||
-    "gpt-4o-mini-transcribe"
-  );
+  return env.OPENAI_REALTIME_TRANSCRIBE_MODEL?.trim() || "gpt-live-transcribe";
 }
 
 export function createLiveTranscriptionTicket(params: {
@@ -84,6 +81,9 @@ type OpenAiRealtimeEvent = {
  * Proxies PCM16 audio from the Alenio client to OpenAI Realtime transcription
  * and returns interim/final events. Never logs audio or transcript bodies.
  */
+/** gpt-live-transcribe has no server VAD — commit on this cadence for finals. */
+const COMMIT_INTERVAL_MS = 2000;
+
 export class CheckInLiveTranscriptionSession {
   private openai: WebSocket | null = null;
   private closed = false;
@@ -91,6 +91,8 @@ export class CheckInLiveTranscriptionSession {
   private interimByItem = new Map<string, { text: string; startMs: number }>();
   private startedAtMs = Date.now();
   private sequence = 0;
+  private commitTimer: ReturnType<typeof setInterval> | null = null;
+  private hasUncommittedAudio = false;
 
   constructor(
     private readonly recordingId: string,
@@ -120,11 +122,11 @@ export class CheckInLiveTranscriptionSession {
     this.send({ type: "status", status: "connecting" });
     this.startedAtMs = Date.now();
 
+    // GA Realtime endpoint — do not send OpenAI-Beta: realtime=v1 (retired).
     const url = `wss://api.openai.com/v1/realtime?intent=transcription`;
     const socket = new WebSocket(url, {
       headers: {
         Authorization: `Bearer ${key}`,
-        "OpenAI-Beta": "realtime=v1",
       },
     });
     this.openai = socket;
@@ -148,14 +150,14 @@ export class CheckInLiveTranscriptionSession {
                 transcription: {
                   model: liveTranscriptionModel(),
                 },
-                turn_detection: {
-                  type: "server_vad",
-                },
+                // Required null for gpt-live-transcribe; finals come from commit.
+                turn_detection: null,
               },
             },
           },
         }),
       );
+      this.startCommitLoop();
       this.send({ type: "status", status: "active" });
     });
 
@@ -173,6 +175,7 @@ export class CheckInLiveTranscriptionSession {
     });
 
     socket.addEventListener("close", () => {
+      this.stopCommitLoop();
       if (this.closed) return;
       this.closed = true;
       this.send({ type: "status", status: "closed" });
@@ -181,6 +184,9 @@ export class CheckInLiveTranscriptionSession {
 
   setPaused(paused: boolean) {
     this.paused = paused;
+    if (paused) {
+      void this.commit();
+    }
     this.send({ type: "status", status: paused ? "paused" : "active" });
   }
 
@@ -197,15 +203,20 @@ export class CheckInLiveTranscriptionSession {
         audio: data,
       }),
     );
+    this.hasUncommittedAudio = true;
   }
 
   async commit() {
     if (this.closed || !this.openai || this.openai.readyState !== WebSocket.OPEN) return;
+    if (!this.hasUncommittedAudio) return;
     this.openai.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+    this.hasUncommittedAudio = false;
   }
 
   close() {
     this.closed = true;
+    this.stopCommitLoop();
+    void this.commit();
     try {
       this.openai?.close();
     } catch {
@@ -213,6 +224,21 @@ export class CheckInLiveTranscriptionSession {
     }
     this.openai = null;
     this.send({ type: "status", status: "closed" });
+  }
+
+  private startCommitLoop() {
+    this.stopCommitLoop();
+    this.commitTimer = setInterval(() => {
+      if (this.closed || this.paused) return;
+      void this.commit();
+    }, COMMIT_INTERVAL_MS);
+  }
+
+  private stopCommitLoop() {
+    if (this.commitTimer) {
+      clearInterval(this.commitTimer);
+      this.commitTimer = null;
+    }
   }
 
   private elapsedMs(): number {
