@@ -73,6 +73,7 @@ import {
 } from "@/components/CreateDevelopmentGoalModal";
 import { invalidateDevelopmentCaches } from "@/lib/invalidate-development-caches";
 import { GoalEmptyState } from "@/components/development/GoalEmptyState";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 type Props = {
   teamId: string;
@@ -1756,6 +1757,7 @@ export function DevelopmentPlanTab({
         visible
         animationType="slide"
         presentationStyle="fullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => setPreviewGoal(null)}
       >
         <View

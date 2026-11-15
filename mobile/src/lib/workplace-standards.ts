@@ -111,7 +111,7 @@ export const STANDARDS_BADGE_LEGEND: ReadonlyArray<{
   {
     variant: "no_check_in",
     label: NO_INITIAL_CHECK_IN_LABEL,
-    description: "No published check-in on record yet (or none using the required template).",
+    description: "No published check-in on record yet.",
   },
   {
     variant: "overdue_check_in",

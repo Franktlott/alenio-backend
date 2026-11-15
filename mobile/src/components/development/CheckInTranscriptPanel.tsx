@@ -13,7 +13,9 @@ import { FileAudio, X } from "lucide-react-native";
 import {
   fetchCheckInRecordingForMeeting,
   type CheckInRecording,
+  type CheckInTranscriptSegment,
 } from "@/lib/check-in-recordings-api";
+import { formatClockMs } from "@/lib/live-check-in-transcript";
 import { CheckInAudioSection } from "./CheckInAudioSection";
 
 /**
@@ -37,6 +39,7 @@ export function CheckInTranscriptPanel({
   const insets = useSafeAreaInsets();
   const [recording, setRecording] = useState<CheckInRecording | null>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
+  const [segments, setSegments] = useState<CheckInTranscriptSegment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -49,6 +52,7 @@ export function CheckInTranscriptPanel({
         if (cancelled) return;
         setRecording(loaded);
         setTranscript(loaded.transcript?.trim() || "");
+        setSegments(loaded.transcriptSegments ?? []);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -64,6 +68,9 @@ export function CheckInTranscriptPanel({
     };
   }, [teamId, memberUserId, meetingId]);
 
+  const hasSegments = segments.length > 0;
+  const hasPlain = Boolean(transcript);
+
   return (
     <View style={StyleSheet.absoluteFill}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close transcript" />
@@ -76,8 +83,8 @@ export function CheckInTranscriptPanel({
             <FileAudio size={15} color="#5B3FF0" strokeWidth={2.3} />
           </View>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>Conversation transcript</Text>
-            <Text style={styles.subtitle}>Only you can see this.</Text>
+            <Text style={styles.title}>Transcript</Text>
+            <Text style={styles.subtitle}>Only leaders on this check-in can see this.</Text>
           </View>
           <Pressable
             onPress={onClose}
@@ -112,7 +119,25 @@ export function CheckInTranscriptPanel({
           <View style={styles.state}>
             <Text style={styles.stateText}>{error}</Text>
           </View>
-        ) : transcript ? (
+        ) : hasSegments ? (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {segments.map((segment) => (
+              <View key={segment.id} style={styles.segment}>
+                <Text style={styles.segmentTime}>
+                  {formatClockMs(segment.startMs)}
+                  {segment.speakerLabel ? ` — ${segment.speakerLabel}` : ""}
+                </Text>
+                <Text style={styles.body} selectable>
+                  {segment.text}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        ) : hasPlain ? (
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
@@ -176,7 +201,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   scroll: { flexGrow: 0 },
-  scrollContent: { paddingHorizontal: 18, paddingBottom: 8 },
+  scrollContent: { paddingHorizontal: 18, paddingBottom: 8, gap: 12 },
+  segment: { gap: 3 },
+  segmentTime: { fontSize: 11, fontWeight: "700", color: "#94A3B8" },
   body: { fontSize: 13, lineHeight: 20, color: "#334155" },
   state: { paddingHorizontal: 18, paddingVertical: 26, alignItems: "center" },
   stateText: {

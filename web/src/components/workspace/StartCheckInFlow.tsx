@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   ChevronLeft,
@@ -8,11 +8,9 @@ import {
   ClipboardList,
   FileAudio,
   Loader2,
-  MessageCircle,
   Mic,
   Pause,
   Play,
-  Plus,
   ShieldCheck,
   Sparkles,
   Square,
@@ -21,40 +19,51 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
-  addLibraryCheckInTemplate,
   cancelCheckInRecording,
   createCheckIn,
-  createCheckInTemplate,
   fetchCheckInRecording,
   fetchCheckIns,
-  fetchCheckInTemplateLibrary,
-  fetchCheckInTemplates,
   finishCheckInRecording,
   isLeaderFillableField,
   startCheckInRecording,
   updateCheckIn,
   type CheckIn,
   type CheckInField,
-  type CheckInTemplate,
 } from "../../lib/member-development-api";
+import { findLeaderCommentsField } from "../../lib/check-in-leader-comments";
 import { CheckInTranscriptDrawer } from "./CheckInTranscriptDrawer";
 import { browserCanRecord, formatClock, MAX_RECORDING_SEC, WebCheckInRecorder } from "../../lib/web-check-in-recorder";
+import {
+  formatTranscriptClock,
+  WebLiveTranscription,
+  type LiveTranscriptLine,
+  type LiveTranscriptionStatus,
+} from "../../lib/web-live-transcription";
 import "../../routes/discover/discover-categories-drawer.css";
 
 export const checkInKeys = {
   checkIns: (teamId: string, userId: string) => ["workspace", "member", teamId, userId, "check-ins"] as const,
   active: (teamId: string, userId: string) => ["workspace", "member", teamId, userId, "recordings"] as const,
-  templates: (teamId: string) => ["workspace", "check-in-templates", teamId] as const,
 };
 
-const OPEN_CHECK_IN_TITLE = "Open check-in";
+const OPEN_CHECK_IN_TITLE = "Check-in";
+const OPEN_TITLE_MAX = 60;
+
+/** Every new check-in is the same write-up: one recap plus optional leader notes. */
+const RECAP_FIELD: CheckInField = { id: "open-recap", label: "What we talked about", type: "long_text", order: 0, required: false };
+const NOTES_FIELD: CheckInField = {
+  id: "open-leader-notes",
+  label: "Leader notes",
+  type: "manager_notes",
+  order: 1,
+  required: false,
+  helpText: "Optional. What was agreed, coaching notes, and next steps.",
+};
+const NEW_CHECK_IN_FIELDS: CheckInField[] = [RECAP_FIELD, NOTES_FIELD];
 const CAP_WARNING_SEC = 5 * 60;
 const LEVEL_BARS = 24;
 
 type View =
-  | "mode"
-  | "pick"
-  | "setup"
   | "capture"
   | "fill"
   | "consent"
@@ -66,22 +75,14 @@ function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
-function questionsFor(template: CheckInTemplate | null): string[] {
-  if (!template) return [];
-  return [...template.fields]
-    .sort((a, b) => a.order - b.order)
-    .filter((f) => f.type !== "section" && f.type !== "manager_notes" && isLeaderFillableField(f))
-    .map((f) => f.label);
-}
-
 function fillableFields(fields: CheckInField[]): CheckInField[] {
   return [...fields].sort((a, b) => a.order - b.order).filter((f) => f.type === "section" || isLeaderFillableField(f));
 }
 
 /**
- * Start a check-in the way the mobile app does: pick a style (guided or open),
- * then for guided pick a template and how to capture it. Recording hands the
- * audio to Seneca, which writes up a draft to review before publishing.
+ * Start a check-in the way the mobile app does: record with Seneca or type the
+ * fixed write-up (title, what we talked about, leader notes). Recording hands
+ * the audio to Seneca, which writes up a draft to review before publishing.
  */
 export function StartCheckInFlow({
   open,
@@ -103,17 +104,14 @@ export function StartCheckInFlow({
   const firstName = memberName.trim().split(/\s+/)[0] || memberName;
   const canRecord = useMemo(() => browserCanRecord(), []);
 
-  const [view, setView] = useState<View>("mode");
-  const [template, setTemplate] = useState<CheckInTemplate | null>(null);
+  const [view, setView] = useState<View>("capture");
   const [editing, setEditing] = useState<CheckIn | null>(null);
   const [responses, setResponses] = useState<Record<string, string | number>>({});
   const [openTitle, setOpenTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [setupBack, setSetupBack] = useState<View>("pick");
   const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   /* recording */
-  const [recordTemplate, setRecordTemplate] = useState<CheckInTemplate | null>(null);
   const [starting, setStarting] = useState(false);
   const [paused, setPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -122,19 +120,15 @@ export function StartCheckInFlow({
   const [stage, setStage] = useState<"saving" | "writing">("saving");
   const [recordingId, setRecordingId] = useState<string | null>(null);
   const recorderRef = useRef<WebCheckInRecorder | null>(null);
+  const liveRef = useRef<WebLiveTranscription | null>(null);
   const elapsedRef = useRef(0);
-
-  const templates = useQuery({
-    queryKey: checkInKeys.templates(teamId),
-    queryFn: () => fetchCheckInTemplates(teamId),
-    enabled: open && Boolean(teamId),
-    staleTime: 60_000,
-  });
-  const list = templates.data ?? [];
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [transcriptLines, setTranscriptLines] = useState<LiveTranscriptLine[]>([]);
+  const [liveStatus, setLiveStatus] = useState<LiveTranscriptionStatus>("idle");
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   const loadDraft = useCallback((meeting: CheckIn) => {
     setEditing(meeting);
-    setTemplate(null);
     setResponses({ ...(meeting.responses ?? {}) });
     setOpenTitle(meeting.templateId ? "" : meeting.templateTitle);
     setError(null);
@@ -145,25 +139,35 @@ export function StartCheckInFlow({
     if (!open) return;
     setError(null);
     setTranscriptOpen(false);
-    setTemplate(null);
-    setRecordTemplate(null);
     setRecordingId(null);
     setElapsed(0);
     elapsedRef.current = 0;
     setPaused(false);
     setUploads({ pending: 0, failed: 0 });
+    setShowTranscript(false);
+    setTranscriptLines([]);
+    setLiveStatus("idle");
+    setLiveError(null);
+    liveRef.current?.stop();
+    liveRef.current = null;
     if (resume) {
       loadDraft(resume);
     } else {
       setEditing(null);
       setResponses({});
       setOpenTitle("");
-      setView(canRecord ? "mode" : "pick");
+      setView(canRecord ? "capture" : "fill");
     }
   }, [open, resume, canRecord, loadDraft]);
 
   /* Clean up a live microphone if the drawer unmounts mid-recording. */
-  useEffect(() => () => recorderRef.current?.discard(), []);
+  useEffect(
+    () => () => {
+      liveRef.current?.stop();
+      recorderRef.current?.discard();
+    },
+    [],
+  );
 
   /* Clock, level meter and the 90 minute cap while recording. */
   useEffect(() => {
@@ -226,16 +230,31 @@ export function StartCheckInFlow({
     let stream: MediaStream | null = null;
     try {
       stream = await WebCheckInRecorder.requestMicrophone();
-      const created = await startCheckInRecording(teamId, userId, recordTemplate?.id ?? null);
+      const created = await startCheckInRecording(teamId, userId, null);
       setRecordingId(created.id);
       const recorder = new WebCheckInRecorder({ teamId, memberUserId: userId, recordingId: created.id }, (pending, failed) =>
         setUploads({ pending, failed }),
       );
       recorderRef.current = recorder;
       recorder.start(stream);
+      const live = new WebLiveTranscription(
+        { teamId, memberUserId: userId, recordingId: created.id },
+        {
+          onLines: setTranscriptLines,
+          onStatus: (status, message) => {
+            setLiveStatus(status);
+            if (status === "error" && message) setLiveError(message);
+            if (status === "active") setLiveError(null);
+          },
+        },
+      );
+      liveRef.current = live;
+      void live.start(stream);
       elapsedRef.current = 0;
       setElapsed(0);
       setPaused(false);
+      setShowTranscript(false);
+      setTranscriptLines([]);
       setView("recording");
     } catch (err) {
       stream?.getTracks().forEach((track) => track.stop());
@@ -252,6 +271,9 @@ export function StartCheckInFlow({
     setView("processing");
     setStage("saving");
     try {
+      liveRef.current?.commit();
+      liveRef.current?.stop();
+      liveRef.current = null;
       await recorder.stop();
       recorderRef.current = null;
       await finishCheckInRecording(teamId, userId, recordingId, elapsedRef.current);
@@ -268,6 +290,8 @@ export function StartCheckInFlow({
   }, [view, paused, elapsed, finishRecording]);
 
   const discardRecording = () => {
+    liveRef.current?.stop();
+    liveRef.current = null;
     recorderRef.current?.discard();
     recorderRef.current = null;
     if (recordingId) void cancelCheckInRecording(teamId, userId, recordingId).catch(() => undefined);
@@ -293,8 +317,8 @@ export function StartCheckInFlow({
   }, [open, requestClose, transcriptOpen]);
 
   const fields = useMemo(
-    () => fillableFields(editing?.templateFields ?? template?.fields ?? []),
-    [editing, template],
+    () => (editing ? fillableFields(editing.templateFields ?? []) : NEW_CHECK_IN_FIELDS),
+    [editing],
   );
 
   const save = useMutation({
@@ -316,11 +340,23 @@ export function StartCheckInFlow({
         return updateCheckIn(teamId, userId, editing.id, {
           responses: clean,
           status,
-          ...(isOpen ? { templateTitle: openTitle.trim().slice(0, 60) || OPEN_CHECK_IN_TITLE } : {}),
+          ...(isOpen ? { templateTitle: openTitle.trim().slice(0, OPEN_TITLE_MAX) || OPEN_CHECK_IN_TITLE } : {}),
         });
       }
-      if (!template) throw new Error("Pick a template first.");
-      return createCheckIn(teamId, userId, { templateId: template.id, responses: clean, status });
+      const recap = clean[RECAP_FIELD.id];
+      const notes = clean[NOTES_FIELD.id];
+      if (status === "published" && !recap && !notes) throw new Error("Add what you talked about first.");
+      const base: Record<string, string | number> = recap !== undefined ? { [RECAP_FIELD.id]: recap } : {};
+      // Leader notes live in a field the server names, so save them in a second step.
+      const created = await createCheckIn(teamId, userId, {
+        responses: base,
+        status: notes !== undefined ? "draft" : status,
+        templateTitle: openTitle.trim().slice(0, OPEN_TITLE_MAX) || OPEN_CHECK_IN_TITLE,
+      });
+      if (notes === undefined) return created;
+      const leaderField = findLeaderCommentsField(created.templateFields ?? []);
+      if (!leaderField) return created;
+      return updateCheckIn(teamId, userId, created.id, { responses: { ...base, [leaderField.id]: notes }, status });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: checkInKeys.checkIns(teamId, userId) });
@@ -331,37 +367,19 @@ export function StartCheckInFlow({
 
   if (!open) return null;
 
-  const chooseTemplate = (t: CheckInTemplate) => {
-    setTemplate(t);
-    setResponses({});
-    setError(null);
-    setView(canRecord ? "capture" : "fill");
-  };
-
-  const onTemplateReady = (created: CheckInTemplate) => {
-    qc.setQueryData<CheckInTemplate[]>(checkInKeys.templates(teamId), (prev) => [
-      created,
-      ...(prev ?? []).filter((t) => t.id !== created.id),
-    ]);
-    void qc.invalidateQueries({ queryKey: checkInKeys.templates(teamId) });
-    chooseTemplate(created);
-  };
-
   const header = (() => {
-    if (view === "setup") return { title: "New check-in template", sub: "Pick a ready-made template or build your own." };
     if (view === "fill") {
       return editing
         ? { title: editing.templateTitle, sub: `Check-in with ${firstName} · Review before publishing.` }
-        : { title: template?.title ?? "Check-in", sub: `Check-in with ${firstName} · Publishing shares it with them.` };
+        : { title: OPEN_CHECK_IN_TITLE, sub: `Check-in with ${firstName} · Publishing shares it with them.` };
     }
     if (view === "consent" || view === "recording" || view === "processing") {
-      return { title: recordTemplate ? recordTemplate.title : OPEN_CHECK_IN_TITLE, sub: `With ${memberName}` };
+      return { title: OPEN_CHECK_IN_TITLE, sub: `With ${memberName}` };
     }
     return { title: "Start a check-in", sub: `With ${memberName}` };
   })();
 
   const secondsLeft = MAX_RECORDING_SEC - elapsed <= CAP_WARNING_SEC ? Math.max(0, MAX_RECORDING_SEC - elapsed) : null;
-  const recordQuestions = questionsFor(recordTemplate);
 
   return createPortal(
     <div className="dcat-layer" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
@@ -379,126 +397,12 @@ export function StartCheckInFlow({
           </button>
         </header>
 
-        {view === "mode" ? (
-          <div className="ci-body">
-            <div className="ci-scroll">
-              <div className="ci-intro">
-                <h3>Choose a check-in style</h3>
-                <p>Either way, Alenio writes it up for you to review.</p>
-              </div>
-              <StyleChoice
-                testId="guided-check-in-mode"
-                tone="purple"
-                icon={<ClipboardList size={20} strokeWidth={2.2} />}
-                title="Guided check-in"
-                recommended
-                description="Use a template to guide a focused, structured conversation."
-                chips={["Consistent questions", "Track progress"]}
-                onClick={() => setView("pick")}
-              />
-              <StyleChoice
-                testId="open-check-in-mode"
-                tone="blue"
-                icon={<MessageCircle size={20} strokeWidth={2.2} />}
-                title="Open check-in"
-                description="Have a flexible conversation without a predefined template."
-                chips={["Flexible format", "Capture takeaways"]}
-                onClick={() => {
-                  setRecordTemplate(null);
-                  setView("consent");
-                }}
-              />
-            </div>
-            <SenecaFooter />
-          </div>
-        ) : null}
-
-        {view === "pick" ? (
+        {view === "capture" ? (
           <div className="ci-body">
             <div className="ci-scroll">
               <StepHead
-                step={1}
-                title="Choose check-in template"
-                sub="Select the type of conversation you'd like to have."
-                onBack={canRecord ? () => setView("mode") : undefined}
-              />
-              {templates.isLoading ? (
-                <p className="wm-muted">Loading templates…</p>
-              ) : list.length === 0 ? (
-                <div className="dm-empty ci-empty">
-                  <ClipboardList size={28} />
-                  <h3>No check-in templates yet</h3>
-                  <p>Create one to guide your conversations. Your whole workspace can use it.</p>
-                  <button
-                    type="button"
-                    className="nw-btn nw-btn--primary wm-empty-cta"
-                    onClick={() => {
-                      setSetupBack("pick");
-                      setView("setup");
-                    }}
-                    data-testid="wm-new-template"
-                  >
-                    <Plus size={15} strokeWidth={2.4} />
-                    Create a template
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <ul className="ci-templates" data-testid="ci-templates">
-                    {list.map((t) => {
-                      const count = questionsFor(t).length;
-                      return (
-                        <li key={t.id}>
-                          <button type="button" className="ci-template" onClick={() => chooseTemplate(t)} data-testid={`ci-template-${t.id}`}>
-                            <span className="ci-template-icon">
-                              <ClipboardList size={16} strokeWidth={2.2} />
-                            </span>
-                            <span className="ci-template-copy">
-                              <strong>{t.title}</strong>
-                              {t.description ? <small>{t.description}</small> : null}
-                              <em>
-                                {count} question{count === 1 ? "" : "s"}
-                              </em>
-                            </span>
-                            <ChevronRight size={16} strokeWidth={2.3} />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <button
-                    type="button"
-                    className="nw-btn ci-new-template"
-                    onClick={() => {
-                      setSetupBack("pick");
-                      setView("setup");
-                    }}
-                    data-testid="wm-new-template"
-                  >
-                    <Plus size={14} strokeWidth={2.4} />
-                    New template
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        ) : null}
-
-        {view === "setup" ? (
-          <TemplateSetup teamId={teamId} existing={list} onReady={onTemplateReady} onCancel={() => setView(setupBack)} />
-        ) : null}
-
-        {view === "capture" && template ? (
-          <div className="ci-body">
-            <div className="ci-scroll">
-              <StepHead
-                step={2}
                 title="Select a capture method"
-                sub={`${template.title} · Both methods produce the same structured record for ${firstName}.`}
-                onBack={() => {
-                  setTemplate(null);
-                  setView("pick");
-                }}
+                sub={`Both methods produce the same write-up for ${firstName}.`}
               />
               <CaptureCard
                 testId="capture-record-method"
@@ -506,25 +410,23 @@ export function StartCheckInFlow({
                 icon={<Mic size={20} strokeWidth={2.2} />}
                 title="Record with Seneca"
                 recommended
-                description="Hold the conversation and let Seneca complete the form."
-                points={["Responses drafted from the transcript", "Review and approve every answer before it is saved"]}
+                description="Hold the conversation and let Seneca write it up."
+                points={["Drafted from the transcript", "Review and approve everything before it is saved"]}
                 action="Record with Seneca"
-                onClick={() => {
-                  setRecordTemplate(template);
-                  setView("consent");
-                }}
+                onClick={() => setView("consent")}
               />
               <CaptureCard
                 testId="capture-form-method"
                 tone="blue"
                 icon={<ClipboardList size={20} strokeWidth={2.2} />}
-                title="Complete the form"
-                description="Enter each response yourself as the conversation happens."
-                points={["Full control over the wording of every answer", "Suited to documenting as you go"]}
-                action="Complete the form"
+                title="Type it up"
+                description="Write the title, what you talked about and your notes yourself."
+                points={["Full control over the wording", "Suited to documenting as you go"]}
+                action="Type it up"
                 onClick={() => setView("fill")}
               />
             </div>
+            <SenecaFooter />
           </div>
         ) : null}
 
@@ -533,12 +435,8 @@ export function StartCheckInFlow({
             <div className="ci-scroll">
               <StepHead
                 title="Record this check-in"
-                sub={
-                  recordTemplate
-                    ? `Have a natural conversation with ${firstName}. Alenio will listen and fill in ${recordTemplate.title} for you to review before saving.`
-                    : `Have a natural conversation with ${firstName}. Alenio will listen and create a structured summary with key takeaways for you to review before saving.`
-                }
-                onBack={() => setView(recordTemplate ? "capture" : "mode")}
+                sub={`Have a natural conversation with ${firstName}. Alenio will listen and create a write-up with key takeaways for you to review before saving.`}
+                onBack={() => setView("capture")}
               />
               <div className="ci-consent">
                 <div className="ci-consent-head">
@@ -615,34 +513,62 @@ export function StartCheckInFlow({
                 ) : null}
               </div>
 
-              <div className="ci-questions">
-                {recordQuestions.length === 0 ? (
-                  <>
-                    <h4>No set questions</h4>
-                    <p>Talk through whatever matters. Alenio works out the questions you covered once you finish.</p>
-                  </>
-                ) : (
-                  <>
-                    <h4>What to cover</h4>
-                    <ol>
-                      {recordQuestions.map((q, i) => (
-                        <li key={`${i}-${q}`}>
-                          <b>{i + 1}</b>
-                          <span>{q}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </>
-                )}
-              </div>
+              {showTranscript ? (
+                <div className="ci-questions ci-live-transcript">
+                  <div className="ci-live-transcript-head">
+                    <h4>Live transcript</h4>
+                    {liveStatus === "active" || liveStatus === "paused" ? (
+                      <span className="ci-live-transcript-pill">
+                        {liveStatus === "paused" ? "Paused" : "Transcribing live"}
+                      </span>
+                    ) : null}
+                  </div>
+                  {liveError ? <p className="ci-upload-warn">{liveError}</p> : null}
+                  {transcriptLines.length === 0 ? (
+                    <p>Recognized speech will appear here as you talk.</p>
+                  ) : (
+                    transcriptLines.map((line) => (
+                      <div key={line.id} className="ci-live-transcript-row">
+                        <div className="ci-transcript-time">
+                          {formatTranscriptClock(line.startMs)}
+                          {line.speakerLabel ? ` — ${line.speakerLabel}` : ""}
+                        </div>
+                        <p className={line.interim ? "is-interim" : undefined}>{line.text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="ci-questions">
+                  <h4>Just talk</h4>
+                  <p>Talk through whatever matters. Alenio writes up what you covered once you finish.</p>
+                </div>
+              )}
+              <button
+                type="button"
+                className="ci-discard"
+                onClick={() => setShowTranscript((value) => !value)}
+              >
+                {showTranscript ? "Hide Transcript" : "Show Live Transcript"}
+              </button>
+              {!showTranscript &&
+              (liveStatus === "active" || liveStatus === "connecting" || liveStatus === "paused") ? (
+                <p className="ci-upload-note">Transcribing in background</p>
+              ) : null}
+              {!showTranscript && liveError ? <p className="ci-upload-warn">{liveError}</p> : null}
             </div>
             <div className="ci-controls">
               <button
                 type="button"
                 className="ci-control"
                 onClick={() => {
-                  if (paused) recorderRef.current?.resume();
-                  else recorderRef.current?.pause();
+                  if (paused) {
+                    recorderRef.current?.resume();
+                    liveRef.current?.resume();
+                  } else {
+                    recorderRef.current?.pause();
+                    liveRef.current?.pause();
+                  }
                   setPaused(!paused);
                 }}
               >
@@ -653,12 +579,12 @@ export function StartCheckInFlow({
                 type="button"
                 className="ci-control ci-control--stop"
                 onClick={() => {
-                  if (window.confirm("Finish and write up this check-in?")) void finishRecording();
+                  if (window.confirm("End this check-in and write it up?")) void finishRecording();
                 }}
                 data-testid="stop-check-in-recording"
               >
                 <Square size={14} strokeWidth={2.8} fill="currentColor" />
-                Finish
+                End Check-In
               </button>
             </div>
             <button
@@ -667,7 +593,7 @@ export function StartCheckInFlow({
               onClick={() => {
                 if (!window.confirm("Discard this recording? Nothing will be saved.")) return;
                 discardRecording();
-                setView(recordTemplate ? "capture" : "mode");
+                setView("capture");
               }}
             >
               Discard recording
@@ -710,7 +636,7 @@ export function StartCheckInFlow({
                 className="nw-btn"
                 onClick={() => {
                   setError(null);
-                  setView(canRecord ? "mode" : "pick");
+                  setView(canRecord ? "capture" : "fill");
                 }}
               >
                 Start over
@@ -731,10 +657,10 @@ export function StartCheckInFlow({
               save.mutate("published");
             }}
           >
-            {!editing ? (
-              <button type="button" className="ci-back-link" onClick={() => setView(canRecord ? "capture" : "pick")}>
+            {!editing && canRecord ? (
+              <button type="button" className="ci-back-link" onClick={() => setView("capture")}>
                 <ChevronLeft size={14} strokeWidth={2.4} />
-                {canRecord ? "Capture method" : "Templates"}
+                Capture method
               </button>
             ) : null}
             {editing?.captureMode === "recorded" ? (
@@ -752,13 +678,12 @@ export function StartCheckInFlow({
                 </div>
               </div>
             ) : null}
-            {editing && !editing.templateId ? (
+            {!editing || !editing.templateId ? (
               <label className="dcat-field">
                 <span>Title</span>
-                <input value={openTitle} onChange={(e) => setOpenTitle(e.target.value)} maxLength={60} placeholder={OPEN_CHECK_IN_TITLE} />
+                <input value={openTitle} onChange={(e) => setOpenTitle(e.target.value)} maxLength={OPEN_TITLE_MAX} placeholder={OPEN_CHECK_IN_TITLE} />
               </label>
             ) : null}
-            {!editing && template?.description ? <p className="wm-muted">{template.description}</p> : null}
 
             {fields.map((f) => (
               <FieldInput key={f.id} field={f} value={responses[f.id]} onChange={(v) => setResponses((prev) => ({ ...prev, [f.id]: v }))} />
@@ -810,50 +735,6 @@ function StepHead({ step, title, sub, onBack }: { step?: number; title: string; 
         <p>{sub}</p>
       </div>
     </div>
-  );
-}
-
-function StyleChoice({
-  testId,
-  tone,
-  icon,
-  title,
-  recommended,
-  description,
-  chips,
-  onClick,
-}: {
-  testId: string;
-  tone: "purple" | "blue";
-  icon: ReactNode;
-  title: string;
-  recommended?: boolean;
-  description: string;
-  chips: string[];
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" className={`ci-choice ci-choice--${tone}`} onClick={onClick} data-testid={testId}>
-      <span className="ci-choice-top">
-        <span className="ci-choice-icon">{icon}</span>
-        <span className="ci-choice-copy">
-          <span className="ci-choice-title">
-            <strong>{title}</strong>
-            {recommended ? <em>Recommended</em> : null}
-          </span>
-          <small>{description}</small>
-        </span>
-        <ChevronRight size={18} strokeWidth={2.3} className="ci-choice-chev" />
-      </span>
-      <span className="ci-chips">
-        {chips.map((chip) => (
-          <span key={chip}>
-            <Check size={12} strokeWidth={2.6} />
-            {chip}
-          </span>
-        ))}
-      </span>
-    </button>
   );
 }
 
@@ -922,207 +803,6 @@ function SenecaFooter() {
         <path d="M0 58 C90 44 170 66 250 52 C310 42 340 54 360 50 L360 90 L0 90 Z" fill="#E9E2FF" />
       </svg>
     </footer>
-  );
-}
-
-type DraftQuestion = { key: string; label: string; type: "short_text" | "long_text" | "rating" | "yes_no"; required: boolean };
-
-const QUESTION_TYPES: { id: DraftQuestion["type"]; label: string }[] = [
-  { id: "long_text", label: "Written answer" },
-  { id: "short_text", label: "Short answer" },
-  { id: "rating", label: "Rating 1–5" },
-  { id: "yes_no", label: "Yes / No" },
-];
-
-function newQuestion(label = ""): DraftQuestion {
-  return { key: crypto.randomUUID(), label, type: "long_text", required: false };
-}
-
-/** Add a ready-made template from the Alenio library, or build a custom one. */
-function TemplateSetup({
-  teamId,
-  existing,
-  onReady,
-  onCancel,
-}: {
-  teamId: string;
-  existing: CheckInTemplate[];
-  onReady: (template: CheckInTemplate) => void;
-  onCancel?: () => void;
-}) {
-  const [mode, setMode] = useState<"library" | "custom">("library");
-  const [error, setError] = useState<string | null>(null);
-  const library = useQuery({
-    queryKey: ["check-in-template-library"],
-    queryFn: fetchCheckInTemplateLibrary,
-    staleTime: 10 * 60_000,
-  });
-  const addLibrary = useMutation({
-    mutationFn: (key: string) => addLibraryCheckInTemplate(teamId, key),
-    onSuccess: onReady,
-    onError: (err) => setError(errorMessage(err, "Couldn't add that template.")),
-  });
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [questions, setQuestions] = useState<DraftQuestion[]>(() => [
-    newQuestion("What's going well?"),
-    newQuestion("What's getting in the way?"),
-  ]);
-  const createCustom = useMutation({
-    mutationFn: () => {
-      const filled = questions.filter((q) => q.label.trim());
-      if (filled.length === 0) throw new Error("Add at least one question.");
-      const fields: CheckInField[] = [
-        { id: crypto.randomUUID(), label: "Check-in", type: "section", order: 0, required: false },
-        ...filled.map((q, i) => ({
-          id: crypto.randomUUID(),
-          label: q.label.trim(),
-          type: q.type,
-          order: i + 1,
-          required: q.required,
-          ...(q.type === "rating" ? { ratingMax: 5 } : {}),
-        })),
-      ];
-      return createCheckInTemplate(teamId, { title: title.trim(), description: description.trim() || null, fields });
-    },
-    onSuccess: onReady,
-    onError: (err) => setError(errorMessage(err, "Couldn't save the template.")),
-  });
-
-  const added = new Set(existing.map((t) => t.libraryKey).filter(Boolean));
-  const update = (key: string, patch: Partial<DraftQuestion>) =>
-    setQuestions((prev) => prev.map((q) => (q.key === key ? { ...q, ...patch } : q)));
-
-  return (
-    <div className="dcat-form wm-form" data-testid="wm-template-setup">
-      <div className="wm-rate-pick wm-mode" role="tablist" aria-label="Template source">
-        <button type="button" role="tab" aria-selected={mode === "library"} className={mode === "library" ? "is-on" : ""} onClick={() => setMode("library")} data-testid="wm-tpl-library">
-          Ready-made
-        </button>
-        <button type="button" role="tab" aria-selected={mode === "custom"} className={mode === "custom" ? "is-on" : ""} onClick={() => setMode("custom")} data-testid="wm-tpl-custom">
-          Build your own
-        </button>
-      </div>
-
-      {mode === "library" ? (
-        library.isLoading ? (
-          <p className="wm-muted">Loading templates…</p>
-        ) : library.isError ? (
-          <p className="nw-error">Couldn't load the template library.</p>
-        ) : (
-          <ul className="wm-lib">
-            {(library.data ?? []).map((t) => {
-              const questionCount = t.fields.filter((f) => f.type !== "section" && f.type !== "manager_notes").length;
-              const isAdded = added.has(t.key);
-              return (
-                <li key={t.key} className="wm-lib-item" data-testid={`wm-lib-${t.key}`}>
-                  <div>
-                    <strong>{t.title}</strong>
-                    {t.description ? <p>{t.description}</p> : null}
-                    <small>
-                      {questionCount} question{questionCount === 1 ? "" : "s"}
-                    </small>
-                  </div>
-                  {isAdded ? (
-                    <span className="wm-pill">Added</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="nw-btn nw-btn--soft"
-                      disabled={addLibrary.isPending}
-                      onClick={() => {
-                        setError(null);
-                        addLibrary.mutate(t.key);
-                      }}
-                    >
-                      {addLibrary.isPending && addLibrary.variables === t.key ? "Adding…" : "Use"}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )
-      ) : (
-        <form
-          className="wm-tpl-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!title.trim()) return;
-            setError(null);
-            createCustom.mutate();
-          }}
-        >
-          <label className="dcat-field">
-            <span>Template name</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Weekly check-in" maxLength={120} required data-testid="wm-tpl-title" />
-          </label>
-          <label className="dcat-field">
-            <span>Description (optional)</span>
-            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What this check-in is for" maxLength={500} />
-          </label>
-          <div className="dcat-field">
-            <span>Questions</span>
-            <ol className="wm-questions">
-              {questions.map((q, i) => (
-                <li key={q.key} className="wm-question" data-testid={`wm-tpl-q-${i}`}>
-                  <div className="wm-question-top">
-                    <b>{i + 1}</b>
-                    <input value={q.label} onChange={(e) => update(q.key, { label: e.target.value })} placeholder="Ask a question" maxLength={200} />
-                    {questions.length > 1 ? (
-                      <button type="button" className="nw-icon-btn" aria-label="Remove question" onClick={() => setQuestions((prev) => prev.filter((x) => x.key !== q.key))}>
-                        <X size={14} strokeWidth={2.2} />
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="wm-question-opts">
-                    <select value={q.type} onChange={(e) => update(q.key, { type: e.target.value as DraftQuestion["type"] })} aria-label="Answer type">
-                      {QUESTION_TYPES.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="wm-required">
-                      <input type="checkbox" checked={q.required} onChange={(e) => update(q.key, { required: e.target.checked })} />
-                      Required
-                    </label>
-                  </div>
-                </li>
-              ))}
-            </ol>
-            {questions.length < 30 ? (
-              <button type="button" className="nw-btn wm-add-step" onClick={() => setQuestions((prev) => [...prev, newQuestion()])}>
-                <Plus size={14} strokeWidth={2.4} />
-                Add question
-              </button>
-            ) : null}
-            <small className="wm-help">A "Leader comments" section is added at the end automatically.</small>
-          </div>
-          {error ? <p className="nw-error">{error}</p> : null}
-          <div className="dcat-form-actions wm-form-actions">
-            {onCancel ? (
-              <button type="button" className="dcat-btn" onClick={onCancel}>
-                Back
-              </button>
-            ) : null}
-            <button type="submit" className="dcat-btn dcat-btn--primary" disabled={createCustom.isPending || !title.trim()} data-testid="wm-tpl-save">
-              {createCustom.isPending ? "Saving…" : "Save template"}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {mode === "library" && error ? <p className="nw-error">{error}</p> : null}
-      {mode === "library" && onCancel ? (
-        <div className="dcat-form-actions">
-          <button type="button" className="dcat-btn" onClick={onCancel}>
-            Back
-          </button>
-        </div>
-      ) : null}
-    </div>
   );
 }
 

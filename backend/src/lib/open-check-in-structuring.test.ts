@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   normalizeOpenCheckIn,
+  openCheckInFields,
   openCheckInRecapField,
+  OPEN_CHECK_IN_LEADER_NOTES_ID,
   OPEN_CHECK_IN_MAX_ITEMS,
   OPEN_CHECK_IN_RECAP_FIELD_ID,
   OPEN_CHECK_IN_TITLE,
@@ -66,5 +68,17 @@ describe("openCheckInRecapField", () => {
     expect(field.type).toBe("long_text");
     expect(field.required).toBe(false);
     expect(field.order).toBe(0);
+  });
+});
+
+describe("openCheckInFields", () => {
+  test("uses stable ids for recap and leader notes", () => {
+    const fields = openCheckInFields();
+    expect(fields.map((field) => field.id)).toEqual([
+      OPEN_CHECK_IN_RECAP_FIELD_ID,
+      "open-leader-section",
+      OPEN_CHECK_IN_LEADER_NOTES_ID,
+    ]);
+    expect(OPEN_CHECK_IN_TITLE).toBe("Check-in");
   });
 });

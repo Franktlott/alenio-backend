@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "burnt";
 import { ChevronDown } from "lucide-react-native";
 import {
@@ -18,7 +18,6 @@ import {
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { api } from "@/lib/api/api";
-import { fetchOneOnOneTemplates } from "@/lib/member-profile-api";
 import {
   formatCheckInFrequencySummary,
   type CheckInFrequencyUnit,
@@ -192,29 +191,14 @@ export function WorkplaceStandardsSheet({
     setError(null);
   }, [visible, initialStandards]);
 
-  const { data: templates = [], isLoading: templatesLoading } = useQuery({
-    queryKey: ["one-on-one-templates", teamId],
-    queryFn: () => fetchOneOnOneTemplates(teamId),
-    enabled: visible && !!teamId,
-  });
-
-  const templateOptions = useMemo<DropdownOption<string | null>[]>(
-    () => [
-      { value: null, label: "Any template" },
-      ...templates.map((t) => ({ value: t.id, label: t.title })),
-    ],
-    [templates],
-  );
-
-  const selectedTemplateTitle = useMemo(() => {
-    if (!draft.requiredCheckInTemplateId) return null;
-    return templates.find((t) => t.id === draft.requiredCheckInTemplateId)?.title ?? null;
-  }, [draft.requiredCheckInTemplateId, templates]);
-
   const saveMutation = useMutation({
     mutationFn: async (standards: WorkplaceStandards) => {
       const result = await api.patch<{ workplaceStandards?: WorkplaceStandards }>(`/api/teams/${teamId}`, {
-        workplaceStandards: { ...standards, checkInGracePeriodDays: 0 },
+        workplaceStandards: {
+          ...standards,
+          requiredCheckInTemplateId: null,
+          checkInGracePeriodDays: 0,
+        },
       });
       return result.workplaceStandards ?? standards;
     },
@@ -316,22 +300,6 @@ export function WorkplaceStandardsSheet({
                   />
                 </View>
               </View>
-
-              <View>
-                <Text style={[alenioSheetStyles.fieldLabel, { marginBottom: 4, fontSize: 11 }]}>Required template</Text>
-                {templatesLoading ? (
-                  <ActivityIndicator color="#4361EE" style={{ marginVertical: 4 }} />
-                ) : (
-                  <CompactDropdown
-                    value={draft.requiredCheckInTemplateId}
-                    options={templateOptions}
-                    onChange={(requiredCheckInTemplateId) =>
-                      setDraft((prev) => ({ ...prev, requiredCheckInTemplateId }))
-                    }
-                    testID="workplace-standards-template"
-                  />
-                )}
-              </View>
             </View>
           ) : null}
         </AlenioSheetCard>
@@ -392,8 +360,6 @@ export function WorkplaceStandardsSheet({
             Check-in {formatCheckInFrequencySummary(draft).toLowerCase()}
             {" · "}
             Goals {draft.goalsRequired ? draft.minimumActiveGoals : "not required"}
-            {" · "}
-            {selectedTemplateTitle ?? "Any template"}
           </Text>
         </View>
       </ScrollView>

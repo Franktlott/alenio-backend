@@ -13,7 +13,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   ChevronRight,
-  ClipboardList,
   Clock3,
   CreditCard,
   ExternalLink,
@@ -110,7 +109,7 @@ export default function WorkspaceSettingsScreen() {
   const [billingUrl, setBillingUrl] = useState<string | null>(null);
   const [nameEditorOpen, setNameEditorOpen] = useState(false);
   const [paidFeatureCallout, setPaidFeatureCallout] = useState<
-    "standards" | "templates" | null
+    "standards" | null
   >(null);
 
   const { data: teams = [] } = useQuery({
@@ -420,17 +419,13 @@ export default function WorkspaceSettingsScreen() {
               <Lock size={24} color={tintInk("lavender")} strokeWidth={2.2} />
             </IconTile>
             <AppText variant="sectionTitle" style={{ textAlign: "center" }}>
-              {paidFeatureCallout === "standards"
-                ? "Unlock Development Standards"
-                : "Unlock Check-in Templates"}
+              Unlock Development Standards
             </AppText>
             <AppText
               variant="supporting"
               style={{ marginTop: 7, textAlign: "center", maxWidth: 310 }}
             >
-              {paidFeatureCallout === "standards"
-                ? "Set shared development expectations and track progress across your workspace."
-                : "Create reusable templates for consistent, meaningful team check-ins."}
+              Set shared development expectations and track progress across your workspace.
             </AppText>
           </View>
           <Button
@@ -678,49 +673,6 @@ export default function WorkspaceSettingsScreen() {
                   }
                   style={isOwner ? undefined : styles.rowDisabled}
                   testID="workspace-settings-standards"
-                />
-                <AlenioListRow
-                  leading={
-                    <IconTile tint="lavender">
-                      <ClipboardList
-                        size={16}
-                        color={
-                          hasPaidWorkspaceFeatures
-                            ? tintInk("lavender")
-                            : palette.inkMuted
-                        }
-                        strokeWidth={2.1}
-                      />
-                    </IconTile>
-                  }
-                  title="Check-in templates"
-                  subtitle="Create and manage check-in templates"
-                  onPress={
-                    !isLeader
-                      ? undefined
-                      : () => {
-                          if (!hasPaidWorkspaceFeatures) {
-                            setPaidFeatureCallout("templates");
-                            return;
-                          }
-                          router.push({
-                            pathname: "/check-in-templates",
-                            params: { teamId },
-                          });
-                        }
-                  }
-                  chevron={isLeader && hasPaidWorkspaceFeatures}
-                  trailing={
-                    !hasPaidWorkspaceFeatures ? (
-                      <Lock
-                        size={15}
-                        color={palette.inkMuted}
-                        strokeWidth={2.2}
-                      />
-                    ) : undefined
-                  }
-                  style={isLeader ? undefined : styles.rowDisabled}
-                  testID="workspace-settings-check-in-templates"
                 />
               </AlenioList>
             </View>

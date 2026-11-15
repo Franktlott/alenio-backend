@@ -7,18 +7,15 @@ import {
   Modal,
   Platform,
   Switch,
-  ScrollView,
   StyleSheet,
-  useWindowDimensions,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { SafeKeyboardAwareScrollView as KeyboardAwareScrollView } from "@/lib/safe-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   X,
   Calendar,
   ChevronRight,
-  ClipboardList,
   Clock,
   UserRound,
   Video,
@@ -31,7 +28,6 @@ import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { invalidateDevelopmentCaches } from "@/lib/invalidate-development-caches";
 import { isLeaderRole, memberMatchesUserId } from "@/lib/member-identity";
 import type { Team } from "@/lib/types";
-import { fetchOneOnOneTemplates, type OneOnOneTemplate } from "@/lib/member-profile-api";
 import {
   ONE_ON_ONE_DEFAULT_DURATION_MINUTES,
   ONE_ON_ONE_DURATION_OPTIONS,
@@ -70,13 +66,11 @@ export default function PlanOneOnOneScreen() {
   const {
     teamId,
     memberUserId: initialMemberUserId,
-    templateId: initialTemplateId,
     myRole,
     eventId,
   } = useLocalSearchParams<{
     teamId: string;
     memberUserId?: string;
-    templateId?: string;
     myRole?: string;
     eventId?: string;
   }>();
@@ -139,9 +133,6 @@ export default function PlanOneOnOneScreen() {
   const [selectedMemberUserId, setSelectedMemberUserId] = useState(
     existingEvent?.oneOnOneMemberUserId ?? initialMemberUserId ?? "",
   );
-  const [selectedTemplateId, setSelectedTemplateId] = useState(
-    existingEvent?.oneOnOneTemplateId ?? initialTemplateId ?? "",
-  );
   const [eventStart, setEventStart] = useState<Date>(defaultStart);
   const [durationMinutes, setDurationMinutes] = useState(() => {
     if (existingEvent?.startDate && existingEvent.endDate) {
@@ -155,14 +146,7 @@ export default function PlanOneOnOneScreen() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
-  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  const { data: templates = [], isLoading: templatesLoading } = useQuery({
-    queryKey: ["one-on-one-templates", teamId],
-    queryFn: () => fetchOneOnOneTemplates(teamId),
-    enabled: !!teamId && isOwnerOrLeader,
-  });
 
   const memberOptions = useMemo(() => {
     return (team?.members ?? [])
@@ -177,7 +161,6 @@ export default function PlanOneOnOneScreen() {
   }, [currentUserId, team?.members]);
 
   const selectedMember = memberOptions.find((member) => member.userId === selectedMemberUserId) ?? null;
-  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? null;
   const eventEnd = oneOnOneEndFromDuration(eventStart, durationMinutes);
 
   const createMutation = useMutation({
@@ -221,7 +204,6 @@ export default function PlanOneOnOneScreen() {
       isHidden: true,
       isOneOnOne: true,
       oneOnOneMemberUserId: selectedMemberUserId,
-      oneOnOneTemplateId: selectedTemplateId || undefined,
       isVideoMeeting: isVideoMeeting,
       reminderMinutes: ONE_ON_ONE_REMINDER_MINUTES,
       assigneeIds: [selectedMemberUserId],
@@ -435,37 +417,6 @@ export default function PlanOneOnOneScreen() {
 
         <View style={styles.section}>
           <View style={styles.labelRow}>
-            <ClipboardList size={12} color="#6D4AFF" strokeWidth={2.2} />
-            <Text style={styles.label}>Check-in template</Text>
-          </View>
-          <Pressable
-            onPress={() => setShowTemplatePicker(true)}
-            style={styles.field}
-            testID="plan-one-on-one-template-picker"
-          >
-            <View style={styles.fieldIcon}>
-              <ClipboardList size={17} color="#6656D9" strokeWidth={2} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                style={[
-                  styles.fieldText,
-                  !selectedTemplate ? styles.fieldPlaceholder : null,
-                ]}
-                numberOfLines={1}
-              >
-              {templatesLoading
-                ? "Loading templates…"
-                : selectedTemplate?.title ?? "Choose later at check-in"}
-              </Text>
-              <Text style={styles.fieldCaption}>Optional</Text>
-            </View>
-            <ChevronRight size={16} color="#A3ACBA" strokeWidth={2.1} />
-          </Pressable>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.labelRow}>
             <Video size={12} color="#6D4AFF" strokeWidth={2.2} />
             <Text style={styles.label}>Video meeting</Text>
           </View>
@@ -498,17 +449,6 @@ export default function PlanOneOnOneScreen() {
         onSelect={(userId) => {
           setSelectedMemberUserId(userId);
           setShowMemberPicker(false);
-        }}
-      />
-
-      <TemplatePickerModal
-        visible={showTemplatePicker}
-        templates={templates}
-        selectedTemplateId={selectedTemplateId}
-        onClose={() => setShowTemplatePicker(false)}
-        onSelect={(templateId) => {
-          setSelectedTemplateId(templateId);
-          setShowTemplatePicker(false);
         }}
       />
 
@@ -917,88 +857,5 @@ function MemberPickerModal({
         })
       )}
     </AlenioBottomSheet>
-  );
-}
-
-function TemplatePickerModal({
-  visible,
-  templates,
-  selectedTemplateId,
-  onClose,
-  onSelect,
-}: {
-  visible: boolean;
-  templates: OneOnOneTemplate[];
-  selectedTemplateId: string;
-  onClose: () => void;
-  onSelect: (templateId: string) => void;
-}) {
-  const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const sheetMaxHeight = Math.round(windowHeight * 0.7);
-  const listMaxHeight = Math.max(220, sheetMaxHeight - 64 - Math.max(insets.bottom, 12));
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} onPress={onClose}>
-        <Pressable onPress={(e) => e.stopPropagation?.()}>
-          <View
-            style={{
-              backgroundColor: "white",
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              maxHeight: sheetMaxHeight,
-              paddingBottom: Math.max(insets.bottom, 12),
-            }}
-          >
-            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Check-in template</Text>
-            </View>
-            <ScrollView
-              style={{ maxHeight: listMaxHeight }}
-              contentContainerStyle={{ paddingBottom: 8 }}
-              showsVerticalScrollIndicator
-              bounces
-              keyboardShouldPersistTaps="handled"
-            >
-              <Pressable
-                onPress={() => onSelect("")}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  borderBottomWidth: 1,
-                  borderBottomColor: "#F8FAFC",
-                  backgroundColor: !selectedTemplateId ? "#F5F3FF" : "white",
-                }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: !selectedTemplateId ? "700" : "500", color: "#0F172A" }}>
-                  Choose later at check-in
-                </Text>
-              </Pressable>
-              {templates.map((template) => {
-                const active = template.id === selectedTemplateId;
-                return (
-                  <Pressable
-                    key={template.id}
-                    onPress={() => onSelect(template.id)}
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      borderBottomWidth: 1,
-                      borderBottomColor: "#F8FAFC",
-                      backgroundColor: active ? "#F5F3FF" : "white",
-                    }}
-                  >
-                    <Text style={{ fontSize: 15, fontWeight: active ? "700" : "500", color: "#0F172A" }}>
-                      {template.title}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
   );
 }

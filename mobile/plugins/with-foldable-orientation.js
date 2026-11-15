@@ -45,11 +45,47 @@ const APP_DELEGATE_BODY = `
     min(size.width, size.height) >= ${MARKER}Threshold
   }
 
-  /// Portrait on a phone-sized display, free rotation once it is big enough.
-  /// The scene's coordinate space is preferred over window.bounds, which can
-  /// still be the folded size during the update that announces the unfold.
+  private static var alenioHingeOpen = false
+  private static var alenioHingeKnown = false
+  private static var alenioHingeAttached = false
+  private static var alenioHingeObserver: AlenioHingeObserver?
+
+  static var alenioHingeIsOpen: Bool { alenioHingeOpen }
+  static var alenioHingeIsKnownClosed: Bool { alenioHingeKnown && !alenioHingeOpen }
+
+  static func alenioAttachHinge(to view: UIView?) {
+    guard let view, !alenioHingeAttached else { return }
+    alenioHingeAttached = true
+    let observer = AlenioHingeObserver()
+    observer.start(on: view) { status, _ in
+      guard status != "unknown" else { return }
+      let open = status == "fullyOpen" || status == "partiallyOpen"
+      let wasOpen = alenioHingeOpen
+      let wasKnown = alenioHingeKnown
+      alenioHingeKnown = true
+      alenioHingeOpen = open
+      if open != wasOpen || !wasKnown {
+        DispatchQueue.main.async {
+          view.window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+          if !open, #available(iOS 16.0, *), let scene = view.window?.windowScene {
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { error in
+              NSLog("[orientation] fold-closed snap failed: %@", error.localizedDescription)
+            }
+          }
+        }
+      }
+    }
+    alenioHingeObserver = observer
+  }
+
+  /// Portrait when closed / phone-sized; .all when open or big enough.
+  /// Prefer hinge over window size so a stale wide size after folding cannot
+  /// leave a black void on the cover display.
   static func ${MARKER}(for window: UIWindow?) -> UIInterfaceOrientationMask {
     alenioStartOrientationUpdates()
+    alenioAttachHinge(to: window)
+    if alenioHingeOpen { return .all }
+    if alenioHingeIsKnownClosed { return .portrait }
     let size = window?.windowScene?.coordinateSpace.bounds.size ?? window?.bounds.size
     guard let size, size.width > 0, size.height > 0 else {
       return .portrait
@@ -89,10 +125,12 @@ const APP_DELEGATE_BODY = `
 
 const SCENE_DELEGATE_BODY = `
   /// Folding changes the window size without turning the device, so UIKit has
-  /// no reason to re-ask on its own. When the display shrinks below the
-  /// rotation threshold, pull the interface back to portrait. When it opens up
-  /// while the phone is already on its side, turn to match — asking for "all"
-  /// only permits landscape, and the screen stays portrait until the next turn.
+  /// no reason to re-ask on its own. When the display opens up while the phone
+  /// is already on its side, turn to match — asking for "all" only permits
+  /// landscape, and the screen stays portrait until the next turn.
+  ///
+  /// When folding closed, snap to portrait so the cover fills. Never do that
+  /// while the hinge is open — that pins the app to one leaf.
   func windowScene(
     _ windowScene: UIWindowScene,
     didUpdate previousCoordinateSpace: UICoordinateSpace,
@@ -102,6 +140,7 @@ const SCENE_DELEGATE_BODY = `
     guard let window else { return }
     guard #available(iOS 16.0, *) else { return }
 
+    AppDelegate.alenioAttachHinge(to: window)
     window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
 
     let openedUp = !AppDelegate.alenioRotates(size: previousCoordinateSpace.bounds.size)
@@ -120,10 +159,17 @@ const SCENE_DELEGATE_BODY = `
       return
     }
 
+    if AppDelegate.alenioHingeIsOpen { return }
+
     let mask = AppDelegate.${MARKER}(for: window)
     let current = windowScene.effectiveGeometry.interfaceOrientation
     if !AppDelegate.alenioMask(mask, allows: current) {
-      windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+      DispatchQueue.main.async {
+        window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
+          NSLog("[orientation] fold-closed catch-up failed: %@", error.localizedDescription)
+        }
+      }
     }
   }
 `;

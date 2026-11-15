@@ -266,7 +266,6 @@ export default function TasksScreen() {
     createGoal: linkedCreateGoal,
     startCheckIn: linkedStartCheckIn,
     checkInId: linkedCheckInId,
-    templateId: linkedTemplateId,
     plannedEventId: linkedPlannedEventId,
     checkInLaunchId: linkedCheckInLaunchId,
   } = useLocalSearchParams<{
@@ -279,7 +278,6 @@ export default function TasksScreen() {
     createGoal?: string;
     startCheckIn?: string;
     checkInId?: string;
-    templateId?: string;
     plannedEventId?: string;
     checkInLaunchId?: string;
   }>();
@@ -307,7 +305,6 @@ export default function TasksScreen() {
     /** Set by links that ask to land straight in a goal or check-in. */
     createGoal?: boolean;
     startCheckInToken?: number;
-    templateId?: string | null;
     plannedEventId?: string | null;
     checkInId?: string | null;
   } | null>(null);
@@ -1743,7 +1740,6 @@ export default function TasksScreen() {
       linkedCreateGoal,
       linkedStartCheckIn,
       linkedCheckInId,
-      linkedTemplateId,
       linkedPlannedEventId,
       linkedCheckInLaunchId,
     ].join(":");
@@ -1761,7 +1757,6 @@ export default function TasksScreen() {
       createGoal: linkedCreateGoal === "1" || linkedCreateGoal === "true",
       // Any non-zero value opens the check-in; the link is only applied once.
       startCheckInToken: wantsCheckIn ? Date.now() : 0,
-      templateId: linkedTemplateId,
       plannedEventId: linkedPlannedEventId,
       checkInId: linkedCheckInId,
     });
@@ -1776,7 +1771,6 @@ export default function TasksScreen() {
     linkedPlannedEventId,
     linkedStartCheckIn,
     linkedTeamId,
-    linkedTemplateId,
     summaryMemberUserId,
     teams,
     switchWorkspace,
@@ -2201,7 +2195,6 @@ export default function TasksScreen() {
         planOneOnOneHref(activeTeamId, {
           eventId: ev.id,
           ...(member ? { memberUserId: member.userId } : {}),
-          templateId: ev.oneOnOneTemplateId ?? undefined,
           startDate: ev.startDate,
           ...(currentRole ? { myRole: currentRole } : {}),
         }),
@@ -2700,7 +2693,6 @@ export default function TasksScreen() {
           )
         }
         startCheckInToken={developmentFocus.startCheckInToken ?? 0}
-        preferredTemplateId={developmentFocus.templateId ?? null}
         plannedEventId={developmentFocus.plannedEventId ?? null}
         initialCheckInId={developmentFocus.checkInId ?? null}
       />
@@ -3079,7 +3071,6 @@ export default function TasksScreen() {
                         planOneOnOneHref(activeTeamId, {
                           eventId: ev.id,
                           ...(member ? { memberUserId: member.userId } : {}),
-                          templateId: ev.oneOnOneTemplateId ?? undefined,
                           startDate: ev.startDate,
                           ...(currentRole ? { myRole: currentRole } : {}),
                         }),

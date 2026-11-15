@@ -17,8 +17,6 @@ import {
   Dimensions,
   PanResponder,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Path } from "react-native-svg";
 import { toast } from "burnt";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,25 +25,19 @@ import {
   Plus,
   X,
   ChevronLeft,
-  ClipboardList,
   ChevronRight,
-  MessageCircle,
   FileAudio,
   CircleAlert,
-  Mic,
   Sparkles,
   MoreVertical,
   Check,
   CalendarCheck,
   Calendar,
-  Clock,
-  Users,
   Trash2,
   Printer,
   Download,
   Pencil,
   MoreHorizontal,
-  LayoutTemplate,
   Video,
   FileText,
   LogOut,
@@ -80,7 +72,6 @@ import {
   createOneOnOneMeeting,
   deleteOneOnOneMeeting,
   fetchOneOnOneMeetings,
-  fetchOneOnOneTemplates,
   fetchPlannedOneOnOnes,
   updateOneOnOneMeeting,
   type OneOnOneMeeting,
@@ -89,7 +80,6 @@ import {
   type OneOnOneFollowUpTaskInput,
 } from "@/lib/member-profile-api";
 import {
-  appendLeaderCommentsIfMissing,
   findLeaderCommentsField,
   isLeaderCommentsEmpty,
   LEADER_COMMENTS_NUDGE_COPY,
@@ -97,7 +87,12 @@ import {
 } from "@/lib/check-in-leader-comments";
 import { validateCheckInResponses } from "@/lib/validate-check-in-responses";
 import { meetingNumberFor, downloadOneOnOneMeetingPdf, printOneOnOneMeeting } from "@/lib/one-on-one-print";
-import { checkInQuestionLabels } from "@/lib/meeting-check-in-tool";
+import {
+  OPEN_CHECK_IN_TITLE,
+  OPEN_CHECK_IN_TITLE_MAX,
+  openCheckInForm,
+  openCheckInTitleForSave,
+} from "@/lib/open-check-in";
 import { oneOnOneDisplayDate, oneOnOneDisplayDateMs } from "@/lib/one-on-one-dates";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
@@ -114,8 +109,8 @@ import {
   oneOnOneMeetingStatusColors,
   oneOnOneMeetingStatusLabel,
 } from "@/lib/one-on-one-status";
-import { canManageWorkspace } from "@/lib/workspace-management";
 import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 type Props = {
   teamId: string;
@@ -128,9 +123,8 @@ type Props = {
   canModify: boolean;
   isSelf?: boolean;
   myRole?: string | null;
-  /** Increment to open the template picker (safe across tab remounts). */
+  /** Increment to start a new check-in (safe across tab remounts). */
   startCheckInToken?: number;
-  preferredTemplateId?: string | null;
   plannedEventId?: string | null;
   initialMeetingId?: string | null;
   onFlowActiveChange?: (active: boolean) => void;
@@ -184,20 +178,7 @@ function CheckInListContainer({
   return <View style={{ gap: 10 }}>{children}</View>;
 }
 
-type OneOneView = "list" | "mode" | "pick" | "capture" | "fill";
-
-/** Title for a recording with no template, until Seneca names it. */
-const OPEN_CHECK_IN_TITLE = "Open check-in";
-const OPEN_CHECK_IN_TITLE_MAX = 60;
-
-function openCheckInTitleForSave(title: string): string {
-  const trimmed = title.trim().slice(0, OPEN_CHECK_IN_TITLE_MAX);
-  return trimmed || OPEN_CHECK_IN_TITLE;
-}
-
-function questionLabelsForTemplate(template: OneOnOneTemplate | null | undefined): string[] {
-  return checkInQuestionLabels(template?.fields ?? []);
-}
+type OneOneView = "list" | "fill";
 
 type CheckInActionMenu =
   | { kind: "planned"; event: PlannedOneOnOneEvent }
@@ -336,27 +317,6 @@ function dueDateInputToDate(value: string): Date {
   return Number.isFinite(parsed.getTime()) ? parsed : new Date();
 }
 
-const TEMPLATE_CARD_ACCENTS = [
-  { color: "#7C3AED", bg: "#F3E8FF" },
-  { color: "#2563EB", bg: "#DBEAFE" },
-  { color: "#16A34A", bg: "#DCFCE7" },
-  { color: "#EA580C", bg: "#FFEDD5" },
-] as const;
-
-function estimateTemplateDuration(template: OneOnOneTemplate): string {
-  const title = template.title.toLowerCase();
-  if (title.includes("quarter") || title.includes("annual") || title.includes("review")) {
-    return "30-45 min";
-  }
-  if (title.includes("custom")) return "Custom time";
-  const fieldCount = template.fields.filter(
-    (f) => f.type !== "section" && f.type !== "associate_notes",
-  ).length;
-  if (fieldCount <= 5) return "15-20 min";
-  if (fieldCount <= 9) return "20-30 min";
-  return "30-45 min";
-}
-
 function groupFields(fields: OneOnOneTemplateField[]) {
   const sorted = [...fields].sort((a, b) => a.order - b.order);
   const groups: { section: OneOnOneTemplateField; fields: OneOnOneTemplateField[] }[] = [];
@@ -392,7 +352,6 @@ export function OneOnOneHistoryTab({
   isSelf = false,
   myRole = null,
   startCheckInToken = 0,
-  preferredTemplateId = null,
   plannedEventId = null,
   initialMeetingId = null,
   onFlowActiveChange,
@@ -414,21 +373,16 @@ export function OneOnOneHistoryTab({
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const canViewUpcoming = canCreate || isSelf;
-  const canManageTemplates = canManageWorkspace(myRole);
   const [view, setView] = useState<OneOneView>("list");
   const [meetings, setMeetings] = useState<OneOnOneMeeting[]>([]);
   const [visibleCheckInCount, setVisibleCheckInCount] = useState(
     CHECK_IN_HISTORY_PAGE_SIZE,
   );
-  const [templates, setTemplates] = useState<OneOnOneTemplate[]>([]);
   const [upcomingListOpen, setUpcomingListOpen] = useState(false);
   const [historySheetOpen, setHistorySheetOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<OneOnOneTemplate | null>(null);
   const [editingMeeting, setEditingMeeting] = useState<OneOnOneMeeting | null>(null);
-  const [recordingTemplate, setRecordingTemplate] = useState<OneOnOneTemplate | null>(null);
-  /** Chosen template awaiting a capture method, before the form is built. */
-  const [captureTemplate, setCaptureTemplate] = useState<OneOnOneTemplate | null>(null);
-  /** An open check-in records with no template, so there is none to hold here. */
+  /** New check-ins record with no template; Seneca structures the write-up. */
   const [openRecording, setOpenRecording] = useState(false);
   const [transcriptMeetingId, setTranscriptMeetingId] = useState<string | null>(null);
   /** A recording handed off to the backend, watched so its draft opens itself. */
@@ -464,7 +418,6 @@ export function OneOnOneHistoryTab({
   const [checkInActionDeleteConfirm, setCheckInActionDeleteConfirm] = useState(false);
   const [deletingCheckInActionId, setDeletingCheckInActionId] = useState<string | null>(null);
   const [loadingMeetings, setLoadingMeetings] = useState(false);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
   const [printingPdf, setPrintingPdf] = useState(false);
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
@@ -479,7 +432,7 @@ export function OneOnOneHistoryTab({
   const [endMeetingPromptOpen, setEndMeetingPromptOpen] = useState(false);
   const [videoCheckInSubmitted, setVideoCheckInSubmitted] = useState(false);
   const [endAfterPublish, setEndAfterPublish] = useState(false);
-  const [videoCallActive, setVideoCallActive] = useState(false);
+  const [, setVideoCallActive] = useState(false);
   const [highlightLeaderFieldId, setHighlightLeaderFieldId] = useState<string | null>(null);
   const [highlightRequiredFieldId, setHighlightRequiredFieldId] = useState<string | null>(null);
   const fillScrollRef = useRef<ScrollView>(null);
@@ -648,12 +601,6 @@ export function OneOnOneHistoryTab({
     void refetchPlannedOneOnOnes();
   }, [teamId, memberUserId, canViewUpcoming, refetchPlannedOneOnOnes]);
 
-  const { data: templateCatalog = [] } = useQuery({
-    queryKey: ["one-on-one-templates", teamId],
-    queryFn: () => fetchOneOnOneTemplates(teamId),
-    enabled: !!teamId && canCreate,
-  });
-
   // Recordings the backend is still writing up. Polled only while something is
   // actually in flight so an idle profile is not making requests on a timer.
   const { data: activeRecordings = [], refetch: refetchActiveRecordings } = useQuery({
@@ -665,17 +612,6 @@ export function OneOnOneHistoryTab({
         ? 2500
         : false,
   });
-
-  const templateTitleById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const template of templateCatalog) {
-      map.set(template.id, template.title);
-    }
-    for (const template of templates) {
-      map.set(template.id, template.title);
-    }
-    return map;
-  }, [templateCatalog, templates]);
 
   const todayStart = useMemo(() => {
     const d = new Date();
@@ -1026,43 +962,21 @@ export function OneOnOneHistoryTab({
     setVideoCheckInSubmitted(false);
     setEndAfterPublish(false);
     setErr(null);
-    setTemplates([]);
     setLinkedPlannedEventId(null);
     lastStartCheckInTokenRef.current = 0;
   }, [memberUserId, teamId]);
 
-  const startCreate = async () => {
-    setErr(null);
-    setEditingMeeting(null);
-    setLinkedPlannedEventId(null);
-    setLoadingTemplates(true);
-    // Only offer the choice where recording is possible; otherwise an open
-    // check-in cannot happen and the templates are the only way through.
-    setView(senecaCaptureAvailable ? "mode" : "pick");
-    try {
-      const list = templateCatalog.length > 0 ? templateCatalog : await fetchOneOnOneTemplates(teamId);
-      setTemplates(list);
-      if (list.length === 0) {
-        setErr("No check-in templates yet.");
-      }
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not load templates.");
-    } finally {
-      setLoadingTemplates(false);
-    }
-  };
-
-  const pickTemplate = (template: OneOnOneTemplate) => {
+  /** Opens the fixed write-up (title, what we talked about, leader notes) for a new check-in. */
+  const openNewCheckInForm = () => {
     setAiDraftFieldIds(new Set());
-    const fields = appendLeaderCommentsIfMissing(template.fields);
-    const withLeaderComments = { ...template, fields };
-    setSelectedTemplate(withLeaderComments);
+    openCheckInTitleRef.current = "";
+    const form = openCheckInForm(teamId);
+    setSelectedTemplate(form);
     setEditingMeeting(null);
     const initial: Record<string, string | number> = {};
-    for (const field of fields) {
+    for (const field of form.fields) {
       if (field.type === "section") continue;
-      if (field.type === "rating") initial[field.id] = 0;
-      else initial[field.id] = "";
+      initial[field.id] = "";
     }
     setResponses(initial);
     setFollowUpDrafts([]);
@@ -1074,19 +988,28 @@ export function OneOnOneHistoryTab({
     setView("fill");
   };
 
-  /**
-   * Selecting a template asks how the conversation will be captured, rather
-   * than dropping straight into the form. Where recording is impossible there
-   * is only one answer, so the question is skipped.
-   */
-  const chooseTemplate = (template: OneOnOneTemplate) => {
-    if (!senecaCaptureAvailable || !canCreate) {
-      pickTemplate(template);
+  /** Hands the conversation to Seneca: call write-up, live notes, or the recording sheet. */
+  const startSenecaCapture = () => {
+    if (callWriteUpAvailable) {
+      void writeUpFromCall();
       return;
     }
+    if (liveNotesAvailable) {
+      if (!callTranscriptActive) requestLiveNotes();
+      return;
+    }
+    setOpenRecording(true);
+  };
+
+  const startCreate = () => {
     setErr(null);
-    setCaptureTemplate(template);
-    setView("capture");
+    setEditingMeeting(null);
+    setLinkedPlannedEventId(null);
+    if (senecaCaptureAvailable) {
+      startSenecaCapture();
+      return;
+    }
+    openNewCheckInForm();
   };
 
   const closeCheckInActionMenu = () => {
@@ -1144,10 +1067,7 @@ export function OneOnOneHistoryTab({
   };
 
   const renderPlannedOneOnOneRow = ({ item: event }: { item: PlannedOneOnOneEvent }) => {
-    const templateTitle = event.oneOnOneTemplateId
-      ? templateTitleById.get(event.oneOnOneTemplateId) ?? null
-      : null;
-    const title = templateTitle ?? "Check-in";
+    const title = "Check-in";
     const schedulerName = event.createdBy?.name?.trim() || managerName || "Your manager";
     const memberSubtitle = isSelf && !canCreate
       ? `With ${schedulerName} · ${formatCompactScheduledOneOnOneWhen(event)}`
@@ -1260,31 +1180,19 @@ export function OneOnOneHistoryTab({
     if (plannedEventId) {
       setLinkedPlannedEventId(plannedEventId);
     }
-    void (async () => {
-      setErr(null);
-      setEditingMeeting(null);
-      setLoadingTemplates(true);
-      setView(preferredTemplateId ? "pick" : senecaCaptureAvailable ? "mode" : "pick");
-      try {
-        const list = templateCatalog.length > 0 ? templateCatalog : await fetchOneOnOneTemplates(teamId);
-        setTemplates(list);
-        if (list.length === 0) {
-          setErr("No check-in templates yet.");
-          return;
-        }
-        const preferred = preferredTemplateId
-          ? list.find((template) => template.id === preferredTemplateId) ?? null
-          : null;
-        if (preferred) {
-          pickTemplate(preferred);
-        }
-      } catch (e) {
-        setErr(e instanceof Error ? e.message : "Could not load templates.");
-      } finally {
-        setLoadingTemplates(false);
-      }
-    })();
-  }, [startCheckInToken, canCreate, preferredTemplateId, plannedEventId, teamId]);
+    setErr(null);
+    setEditingMeeting(null);
+    // A scheduled video call has the call open behind the form, so it goes
+    // straight to writing up rather than recording the device microphone.
+    const plannedVideoEvent = plannedEventId
+      ? upcomingPlanned.find((event) => event.id === plannedEventId)?.isVideoMeeting
+      : false;
+    if (senecaCaptureAvailable && !plannedVideoEvent) {
+      startSenecaCapture();
+      return;
+    }
+    openNewCheckInForm();
+  }, [startCheckInToken, canCreate, plannedEventId, teamId]);
 
   const startEdit = (meeting: OneOnOneMeeting) => {
     setPreviewMeeting(null);
@@ -1369,7 +1277,7 @@ export function OneOnOneHistoryTab({
    * existing poll opens as soon as it lands. Live notes stop here: the
    * conversation being written up is the one that just happened.
    */
-  const writeUpFromCall = async (template: OneOnOneTemplate | null) => {
+  const writeUpFromCall = async () => {
     const transcript = callTranscript?.trim();
     if (!transcript || callWriteUpBusy) return;
     setCallWriteUpBusy(true);
@@ -1377,7 +1285,7 @@ export function OneOnOneHistoryTab({
     onStopCallTranscript?.();
     try {
       const recording = await createCheckInFromTranscript(teamId, memberUserId, {
-        templateId: template?.id ?? null,
+        templateId: null,
         transcript,
       });
       setProcessingRecordingId(recording.id);
@@ -1397,20 +1305,18 @@ export function OneOnOneHistoryTab({
    * Closes this modal first so the call's consent sheet can appear, then asks
    * the video call to start Daily transcription for this person and form.
    */
-  const requestLiveNotes = (template: OneOnOneTemplate | null) => {
-    setCaptureTemplate(null);
+  const requestLiveNotes = () => {
     setOpenRecording(false);
     setView("list");
     onStartLiveNotes?.({
-      templateId: template?.id ?? null,
-      templateTitle: template?.title ?? OPEN_CHECK_IN_TITLE,
-      questions: questionLabelsForTemplate(template),
+      templateId: null,
+      templateTitle: OPEN_CHECK_IN_TITLE,
+      questions: [],
     });
   };
 
   /** Opens the draft Alenio built from a recording, flagging what it filled in. */
   const openRecordedDraft = async (meetingId: string) => {
-    setRecordingTemplate(null);
     try {
       const list = await fetchOneOnOneMeetings(teamId, memberUserId);
       setMeetings(list);
@@ -1551,7 +1457,7 @@ export function OneOnOneHistoryTab({
         followUpTasks,
         requestAssociateFeedback,
         status: "published" as const,
-        ...(editingMeeting && editingMeeting.templateId == null
+        ...(!editingMeeting || editingMeeting.templateId == null
           ? {
               templateTitle: openCheckInTitleForSave(
                 openCheckInTitleRef.current || selectedTemplate.title,
@@ -1569,10 +1475,7 @@ export function OneOnOneHistoryTab({
             editingMeeting.id,
             payload,
           )
-        : await createOneOnOneMeeting(teamId, memberUserId, {
-          templateId: selectedTemplate.id,
-          ...payload,
-        });
+        : await createOneOnOneMeeting(teamId, memberUserId, payload);
       await loadMeetings();
       if (activePlannedVideoEvent || meetingToolMode) {
         editingMeetingRef.current = savedMeeting;
@@ -1649,7 +1552,7 @@ export function OneOnOneHistoryTab({
         // Kept with the draft so putting it down and coming back does not
         // throw away the follow-ups. They become tasks only on publish.
         followUpTasks: buildFollowUpPayload(currentMeeting),
-        ...(currentMeeting && currentMeeting.templateId == null
+        ...(!currentMeeting || currentMeeting.templateId == null
           ? {
               templateTitle: openCheckInTitleForSave(
                 openCheckInTitleRef.current || selectedTemplate.title,
@@ -1669,10 +1572,7 @@ export function OneOnOneHistoryTab({
             currentMeeting.id,
             payload,
           )
-        : await createOneOnOneMeeting(teamId, memberUserId, {
-          templateId: selectedTemplate.id,
-          ...payload,
-        });
+        : await createOneOnOneMeeting(teamId, memberUserId, payload);
       if (!silent || endMeetingAfterSave) await loadMeetings();
       if ((activePlannedVideoEvent || meetingToolMode) && !endMeetingAfterSave) {
         editingMeetingRef.current = savedMeeting;
@@ -1751,26 +1651,6 @@ export function OneOnOneHistoryTab({
     setEndMeetingPromptOpen(true);
   };
 
-  const requestEndBeforeTemplateSelection = () => {
-    Keyboard.dismiss();
-    if (!videoCallActive) {
-      finishVideoMeeting();
-      return;
-    }
-    Alert.alert(
-      "Leave the active video call?",
-      "You're active in a call, but no check-in template has been selected. Ending now will leave the video call.",
-      [
-        { text: "Stay in video", style: "cancel" },
-        {
-          text: "Leave video",
-          style: "destructive",
-          onPress: finishVideoMeeting,
-        },
-      ],
-    );
-  };
-
   const checkInExportOptions = (meeting: OneOnOneMeeting) => ({
     meeting,
     memberName,
@@ -1822,7 +1702,7 @@ export function OneOnOneHistoryTab({
       setEditingMeeting(null);
       setSelectedTemplate(null);
     } else {
-      setView("pick");
+      setView("list");
       setSelectedTemplate(null);
     }
     setFollowUpDrafts([]);
@@ -1835,47 +1715,6 @@ export function OneOnOneHistoryTab({
     setVideoCallActive(false);
     setHighlightRequiredFieldId(null);
     setLinkedPlannedEventId(null);
-  };
-
-  const returnToVideoTemplatePicker = () => {
-    Keyboard.dismiss();
-    setSelectedTemplate(null);
-    setEditingMeeting(null);
-    setResponses({});
-    setFollowUpDrafts([]);
-    setFollowUpEditorDraft(null);
-    setShowFollowUpDueDatePicker(false);
-    setPrepAcknowledged(false);
-    setErr(null);
-    setLeaderCommentsNudgeOpen(false);
-    setFeedbackPromptOpen(false);
-    setVideoCheckInSubmitted(false);
-    setEndAfterPublish(false);
-    setHighlightRequiredFieldId(null);
-    setHighlightLeaderFieldId(null);
-    setView("pick");
-  };
-
-  const requestVideoTemplateChange = () => {
-    const hasEnteredResponses = Object.values(responses).some((value) =>
-      typeof value === "number" ? value > 0 : value.trim().length > 0,
-    );
-    if (!hasEnteredResponses && followUpDrafts.length === 0) {
-      returnToVideoTemplatePicker();
-      return;
-    }
-    Alert.alert(
-      "Change check-in template?",
-      "Your current responses and unsaved follow-up tasks will be cleared. The video call will stay connected.",
-      [
-        { text: "Keep this template", style: "cancel" },
-        {
-          text: "Change template",
-          style: "destructive",
-          onPress: returnToVideoTemplatePicker,
-        },
-      ],
-    );
   };
 
   const renderFieldInput = (field: OneOnOneTemplateField) => {
@@ -2269,7 +2108,7 @@ export function OneOnOneHistoryTab({
             <Pressable
               onPress={
                 activePlannedVideoEvent
-                  ? requestVideoTemplateChange
+                  ? requestEndVideoMeeting
                   : meetingToolMode
                     ? closeMeetingToolForm
                     : exitFill
@@ -2519,7 +2358,7 @@ export function OneOnOneHistoryTab({
                 </Pressable>
               </View>
             ) : null}
-            {editingMeeting && editingMeeting.templateId == null ? (
+            {!editingMeeting || editingMeeting.templateId == null ? (
               <View
                 style={{
                   borderWidth: 1,
@@ -3054,737 +2893,6 @@ export function OneOnOneHistoryTab({
     );
   };
 
-  const renderModeCard = (options: {
-    testID: string;
-    icon: React.ReactNode;
-    accent: string;
-    tileColors: [string, string];
-    tileBorder: string;
-    surface: string;
-    border: string;
-    shadow: string;
-    title: string;
-    description: string;
-    points: string[];
-    action: string;
-    recommended?: boolean;
-    onPress: () => void;
-  }) => (
-    <Pressable
-      onPress={options.onPress}
-      style={({ pressed }) => ({
-        borderRadius: 18,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: options.border,
-        backgroundColor: options.surface,
-        overflow: "hidden",
-        shadowColor: options.shadow,
-        shadowOpacity: pressed ? 0.04 : 0.1,
-        shadowRadius: 14,
-        shadowOffset: { width: 0, height: 5 },
-        elevation: pressed ? 1 : 3,
-        transform: [{ scale: pressed ? 0.995 : 1 }],
-      })}
-      accessibilityRole="button"
-      accessibilityLabel={options.action}
-      testID={options.testID}
-    >
-      <View style={{ flexDirection: "row", gap: 12, padding: 15, alignItems: "flex-start" }}>
-        <LinearGradient
-          colors={options.tileColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 14,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: options.tileBorder,
-          }}
-        >
-          {options.icon}
-        </LinearGradient>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          {options.recommended ? (
-            <View
-              style={{
-                alignSelf: "flex-start",
-                marginBottom: 5,
-                paddingHorizontal: 7,
-                paddingVertical: 3,
-                borderRadius: 6,
-                backgroundColor: "#EDE7FF",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 8,
-                  fontWeight: "800",
-                  letterSpacing: 0.7,
-                  color: options.accent,
-                }}
-              >
-                RECOMMENDED
-              </Text>
-            </View>
-          ) : null}
-          <Text
-            style={{
-              fontSize: 16.5,
-              lineHeight: 21,
-              fontWeight: "800",
-              letterSpacing: -0.4,
-              color: "#0F172A",
-            }}
-          >
-            {options.title}
-          </Text>
-          <Text
-            style={{
-              marginTop: 2,
-              fontSize: 12,
-              lineHeight: 16,
-              color: "#5A6478",
-            }}
-          >
-            {options.description}
-          </Text>
-          <View style={{ marginTop: 9, gap: 6 }}>
-            {options.points.map((point) => (
-              <View
-                key={point}
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <View
-                  style={{
-                    width: 4,
-                    height: 4,
-                    borderRadius: 2,
-                    backgroundColor: options.accent,
-                    opacity: 0.45,
-                  }}
-                />
-                <Text style={{ flex: 1, fontSize: 11.5, lineHeight: 15, color: "#7A8496" }}>
-                  {point}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-        <ChevronRight
-          size={19}
-          color={options.recommended ? options.accent : "#94A3B8"}
-          strokeWidth={2.3}
-          style={{ alignSelf: "center" }}
-        />
-      </View>
-    </Pressable>
-  );
-
-  const renderStyleChoice = (options: {
-    testID: string;
-    icon: React.ReactNode;
-    iconBackground: string;
-    accent: string;
-    chipBackground: string;
-    border: string;
-    title: string;
-    description: string;
-    chips: string[];
-    recommended?: boolean;
-    action: string;
-    onPress: () => void;
-  }) => (
-    <Pressable
-      onPress={options.onPress}
-      style={{
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: options.border,
-        backgroundColor: "#FFFFFF",
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={options.action}
-      testID={options.testID}
-    >
-      <View style={{ padding: 14, gap: 12 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 14,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: options.iconBackground,
-            }}
-          >
-            {options.icon}
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text
-                style={{
-                  flexShrink: 1,
-                  fontSize: 16,
-                  lineHeight: 20,
-                  fontWeight: "800",
-                  letterSpacing: -0.3,
-                  color: "#121826",
-                }}
-                numberOfLines={1}
-              >
-                {options.title}
-              </Text>
-              {options.recommended ? (
-                <View
-                  style={{
-                    paddingHorizontal: 8,
-                    paddingVertical: 3,
-                    borderRadius: 999,
-                    backgroundColor: "#F3EEFF",
-                  }}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#6D4AFF" }}>
-                    Recommended
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-            <Text
-              style={{
-                marginTop: 3,
-                fontSize: 13,
-                lineHeight: 18,
-                color: "#667085",
-              }}
-            >
-              {options.description}
-            </Text>
-          </View>
-          <ChevronRight size={18} color={options.accent} strokeWidth={2.3} />
-        </View>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {options.chips.map((chip) => (
-            <View
-              key={chip}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 5,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 999,
-                backgroundColor: options.chipBackground,
-              }}
-            >
-              <Check size={12} color={options.accent} strokeWidth={2.6} />
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#3F4658" }}>
-                {chip}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    </Pressable>
-  );
-
-  const renderModeView = () => {
-    const openDescription = callWriteUpAvailable
-      ? "Write this conversation up from what you both just said."
-      : liveNotesAvailable
-        ? callTranscriptActive
-          ? "Live notes are already following this call."
-          : "Seneca listens on this call and organizes the takeaways."
-        : "Have a flexible conversation without a predefined template.";
-    const openChips = callWriteUpAvailable
-      ? ["From this call", "Review before saving"]
-      : liveNotesAvailable
-        ? ["On this call", "Review before saving"]
-        : ["Flexible format", "Capture takeaways"];
-    return (
-      <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-      <ScrollView
-        style={{ flex: 1, backgroundColor: "#FFFFFF" }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 12 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={{ gap: 4, marginBottom: 4 }}>
-          <Text style={{ fontSize: 22, lineHeight: 27, fontWeight: "800", letterSpacing: -0.5, color: "#121826" }}>
-            Choose a check-in style
-          </Text>
-          <Text style={{ fontSize: 14, lineHeight: 19, color: "#7B8794" }}>
-            Either way, Alenio writes it up for you to review.
-          </Text>
-        </View>
-
-        {renderStyleChoice({
-          testID: "guided-check-in-mode",
-          icon: <ClipboardList size={20} color="#6D4AFF" strokeWidth={2.2} />,
-          iconBackground: "#F3EEFF",
-          accent: "#6D4AFF",
-          chipBackground: "#F6F3FF",
-          border: "#DDD6FE",
-          title: "Guided check-in",
-          description: "Use a template to guide a focused, structured conversation.",
-          chips: ["Consistent questions", "Track progress"],
-          recommended: true,
-          action: "Choose guided check-in",
-          onPress: () => setView("pick"),
-        })}
-
-        {renderStyleChoice({
-          testID: "open-check-in-mode",
-          icon: <MessageCircle size={20} color="#3B82F6" strokeWidth={2.2} />,
-          iconBackground: "#EAF3FF",
-          accent: "#3B82F6",
-          chipBackground: "#F3F7FC",
-          border: "#E4EAF2",
-          title: "Open check-in",
-          description: openDescription,
-          chips: openChips,
-          action: callWriteUpAvailable
-            ? "Write up this conversation"
-            : liveNotesAvailable
-              ? callTranscriptActive
-                ? "Live notes are on"
-                : "Start live notes"
-              : "Choose open check-in",
-          onPress: () => {
-            if (callWriteUpAvailable) {
-              void writeUpFromCall(null);
-              return;
-            }
-            if (liveNotesAvailable) {
-              if (callTranscriptActive) {
-                setView("list");
-                return;
-              }
-              requestLiveNotes(null);
-              return;
-            }
-            setOpenRecording(true);
-          },
-        })}
-      </ScrollView>
-      <View style={{ backgroundColor: "#FFFFFF" }}>
-        <View
-          style={{
-            paddingHorizontal: 22,
-            paddingTop: 8,
-            paddingBottom: 14,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <Sparkles size={18} color="#6D4AFF" strokeWidth={2.2} />
-          <View
-            style={{
-              width: 2,
-              height: 38,
-              borderRadius: 1,
-              backgroundColor: "#DDD6FE",
-            }}
-          />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: "800", color: "#17142B" }}>
-              Seneca helps with both
-            </Text>
-            <Text style={{ marginTop: 2, fontSize: 13, lineHeight: 18, color: "#667085" }}>
-              Review and refine your check-in summary before saving.
-            </Text>
-          </View>
-        </View>
-        <View
-          style={{ height: 78 + Math.max(insets.bottom, 18) }}
-          pointerEvents="none"
-        >
-          <Svg
-            width="100%"
-            height="100%"
-            viewBox="0 0 360 90"
-            preserveAspectRatio="none"
-          >
-            <Path
-              d="M0 34 C80 12 150 22 210 38 C280 56 320 24 360 32 L360 90 L0 90 Z"
-              fill="#F4F0FF"
-            />
-            <Path
-              d="M0 58 C90 44 170 66 250 52 C310 42 340 54 360 50 L360 90 L0 90 Z"
-              fill="#E9E2FF"
-            />
-          </Svg>
-        </View>
-      </View>
-      </View>
-    );
-  };
-
-  /**
-   * How the selected template gets filled in: by hand, or from a recording.
-   * Both land on the same review form, which is what the copy promises.
-   */
-  const renderCaptureView = () => {
-    const template = captureTemplate;
-    if (!template) return null;
-    const firstName = memberName.trim().split(/\s+/)[0] || memberName;
-    return (
-      <ScrollView
-        style={{ flex: 1, backgroundColor: "#FFFFFF" }}
-        contentContainerStyle={{ paddingHorizontal: 14, paddingTop: 8, paddingBottom: 26, gap: 13 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 9 }}>
-          <Pressable
-            onPress={() => {
-              setCaptureTemplate(null);
-              setView("pick");
-            }}
-            hitSlop={8}
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              backgroundColor: "#EEF2FF",
-              alignItems: "center",
-              justifyContent: "center",
-              marginTop: 1,
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Back to templates"
-            testID="capture-back-button"
-          >
-            <ChevronLeft size={18} color="#4361EE" />
-          </Pressable>
-          <View
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: 10,
-              backgroundColor: "#EEF2FF",
-              alignItems: "center",
-              justifyContent: "center",
-              marginTop: 6,
-            }}
-          >
-            <Text style={{ fontSize: 10, fontWeight: "800", color: "#4F46E5" }}>2</Text>
-          </View>
-          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-            <Text style={{ fontSize: 21, lineHeight: 26, fontWeight: "800", letterSpacing: -0.6, color: "#0F172A" }}>
-              Select a capture method
-            </Text>
-            <Text style={{ fontSize: 12.5, lineHeight: 17, color: "#64748B" }}>
-              {`${template.title} · Both methods produce the same structured record for ${firstName}.`}
-            </Text>
-          </View>
-        </View>
-
-        {callWriteUpAvailable
-          ? renderModeCard({
-              testID: "capture-call-write-up-method",
-              icon: <Sparkles size={20} color="#6D4AFF" strokeWidth={2.2} />,
-              accent: "#6D4AFF",
-              tileColors: ["#F1ECFF", "#E2D9FF"],
-              tileBorder: "#E4DBFF",
-              surface: "#F9F7FF",
-              border: "#E6E0FB",
-              shadow: "#4B3BA8",
-              title: "Write up this call",
-              description: `Let Seneca fill the form in from your conversation with ${firstName}.`,
-              points: [
-                "Answers drafted from what you both said",
-                "Review and approve every answer before it is saved",
-              ],
-              action: callWriteUpBusy ? "Writing it up\u2026" : "Write up this call",
-              recommended: true,
-              onPress: () => void writeUpFromCall(template),
-            })
-          : liveNotesAvailable
-            ? renderModeCard({
-                testID: "capture-live-notes-method",
-                icon: <Sparkles size={20} color="#6D4AFF" strokeWidth={2.2} />,
-                accent: "#6D4AFF",
-                tileColors: ["#F1ECFF", "#E2D9FF"],
-                tileBorder: "#E4DBFF",
-                surface: "#F9F7FF",
-                border: "#E6E0FB",
-                shadow: "#4B3BA8",
-                title: callTranscriptActive ? "Live notes are on" : "Live notes",
-                description: callTranscriptActive
-                  ? `Questions stay on the call while you talk with ${firstName}.`
-                  : `Seneca listens on this call and fills in ${template.title}.`,
-                points: [
-                  "You will see the questions while you talk",
-                  "Review and approve every answer before it is saved",
-                ],
-                action: callTranscriptActive ? "Back to the call" : "Start live notes",
-                recommended: true,
-                onPress: () => {
-                  if (callTranscriptActive) {
-                    setCaptureTemplate(null);
-                    setView("list");
-                    return;
-                  }
-                  requestLiveNotes(template);
-                },
-              })
-          : micRecordingAvailable
-            ? renderModeCard({
-                testID: "capture-record-method",
-                icon: <Mic size={20} color="#6D4AFF" strokeWidth={2.2} />,
-                accent: "#6D4AFF",
-                tileColors: ["#F1ECFF", "#E2D9FF"],
-                tileBorder: "#E4DBFF",
-                surface: "#F9F7FF",
-                border: "#E6E0FB",
-                shadow: "#4B3BA8",
-                title: "Record with Seneca",
-                description: "Hold the conversation and let Seneca complete the form.",
-                points: [
-                  "Responses drafted from the transcript",
-                  "Review and approve every answer before it is saved",
-                ],
-                action: "Record with Seneca",
-                recommended: true,
-                // The chosen template stays put, so backing out of the recording
-                // sheet returns here rather than to a blank screen.
-                onPress: () => setRecordingTemplate(template),
-              })
-            : null}
-
-        {renderModeCard({
-          testID: "capture-form-method",
-          icon: <ClipboardList size={20} color="#2F80ED" strokeWidth={2.2} />,
-          accent: "#2F80ED",
-          tileColors: ["#EAF3FF", "#D9E9FF"],
-          tileBorder: "#D8E7FB",
-          surface: "#FFFFFF",
-          border: "#E7ECF3",
-          shadow: "#0F172A",
-          title: "Complete the form",
-          description: "Enter each response yourself as the conversation happens.",
-          points: [
-            "Full control over the wording of every answer",
-            "Suited to documenting as you go",
-          ],
-          action: "Complete the form",
-          onPress: () => {
-            setCaptureTemplate(null);
-            pickTemplate(template);
-          },
-        })}
-      </ScrollView>
-    );
-  };
-
-  const renderPickView = () => (
-    <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 4, backgroundColor: "#FFFFFF" }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        {!activePlannedVideoEvent ? (
-          <Pressable
-            onPress={() => setView(senecaCaptureAvailable ? "mode" : "list")}
-            hitSlop={8}
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              backgroundColor: "#EEF2FF",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ChevronLeft size={18} color="#4361EE" />
-          </Pressable>
-        ) : null}
-        <View
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 10,
-            backgroundColor: "#EEF2FF",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ fontSize: 10, fontWeight: "800", color: "#4F46E5" }}>1</Text>
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }}>Choose check-in template</Text>
-          <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
-            Select the type of conversation you'd like to have.
-          </Text>
-        </View>
-        {activePlannedVideoEvent ? (
-          <Pressable
-            onPress={requestEndBeforeTemplateSelection}
-            hitSlop={6}
-            style={{
-              minHeight: 28,
-              paddingHorizontal: 10,
-              borderRadius: 9,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#FFF1F2",
-              borderWidth: 1,
-              borderColor: "#FECDD3",
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="End video meeting"
-          >
-            <Text style={{ fontSize: 10, fontWeight: "800", color: "#BE123C" }}>
-              End
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-      {loadingTemplates ? (
-        <ActivityIndicator color="#4361EE" style={{ marginVertical: 24 }} />
-      ) : templates.length === 0 ? (
-        <View
-          style={{
-            flexGrow: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 20,
-            paddingBottom: 24,
-          }}
-          testID="check-in-template-picker-empty"
-        >
-          <View
-            style={{
-              width: 54,
-              height: 54,
-              borderRadius: 27,
-              backgroundColor: "#EEF2FF",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 12,
-            }}
-          >
-            <CalendarCheck size={25} color="#4361EE" />
-          </View>
-          <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A", textAlign: "center" }}>
-            No check-in templates yet
-          </Text>
-          <Text
-            style={{
-              marginTop: 7,
-              maxWidth: 300,
-              fontSize: 13,
-              lineHeight: 19,
-              color: "#64748B",
-              textAlign: "center",
-            }}
-          >
-            {canManageTemplates
-              ? "Create a reusable conversation for leaders in this workspace."
-              : "Ask your workspace owner to create a check-in template, then it will appear here."}
-          </Text>
-          {canManageTemplates ? (
-            <Pressable
-              onPress={() => {
-                closeCheckInFlow();
-                router.push({
-                  pathname: "/check-in-templates",
-                  params: { teamId },
-                });
-              }}
-              style={{
-                marginTop: 16,
-                minWidth: 190,
-                paddingHorizontal: 18,
-                paddingVertical: 12,
-                borderRadius: 12,
-                alignItems: "center",
-                backgroundColor: "#4361EE",
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Manage check-in templates"
-              testID="manage-check-in-templates"
-            >
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFFFFF" }}>
-                Manage templates
-              </Text>
-            </Pressable>
-          ) : null}
-          {err && err !== "No check-in templates yet." ? (
-            <Text style={{ marginTop: 10, fontSize: 11, color: "#DC2626", textAlign: "center" }}>
-              {err}
-            </Text>
-          ) : null}
-        </View>
-      ) : (
-        <View style={{ width: "100%", gap: 8, paddingBottom: 12 }}>
-          {templates.map((t, index) => {
-            const accent = TEMPLATE_CARD_ACCENTS[index % TEMPLATE_CARD_ACCENTS.length]!;
-            const duration = estimateTemplateDuration(t);
-            return (
-              <Pressable
-                key={t.id}
-                onPress={() => chooseTemplate(t)}
-                style={({ pressed }) => ({
-                  width: "100%",
-                  backgroundColor: pressed ? "#F8FAFF" : "#FFFFFF",
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: "#E0E7FF",
-                  shadowColor: "#0F172A",
-                  shadowOpacity: 0.03,
-                  shadowRadius: 5,
-                  shadowOffset: { width: 0, height: 1 },
-                  elevation: 1,
-                })}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", padding: 10, gap: 10 }}>
-                  <View
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 10,
-                      backgroundColor: accent.bg,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <CalendarCheck size={17} color={accent.color} strokeWidth={2.2} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
-                      {t.title}
-                    </Text>
-                    {t.description ? (
-                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2, lineHeight: 15 }} numberOfLines={2}>
-                        {t.description}
-                      </Text>
-                    ) : null}
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 5 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                        <Clock size={10} color="#94A3B8" />
-                        <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>{duration}</Text>
-                      </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3, flexShrink: 1 }}>
-                        <Users size={10} color="#94A3B8" />
-                        <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }} numberOfLines={1}>
-                          Manager + Associate
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  <ChevronRight size={17} color={accent.color} strokeWidth={2.2} />
-                </View>
-              </Pressable>
-            );
-          })}
-
-        </View>
-      )}
-    </View>
-  );
-
   const renderCheckInActionMenuModal = () => {
     if (!checkInActionMenu) return null;
     if (
@@ -3797,12 +2905,7 @@ export function OneOnOneHistoryTab({
     }
 
     const isPlanned = checkInActionMenu.kind === "planned";
-    const title = isPlanned
-      ? checkInActionMenu.event.oneOnOneTemplateId
-        ? templateTitleById.get(checkInActionMenu.event.oneOnOneTemplateId) ??
-          "Check-in"
-        : "Check-in"
-      : checkInActionMenu.meeting.templateTitle;
+    const title = isPlanned ? "Check-in" : checkInActionMenu.meeting.templateTitle;
     const whenLabel = isPlanned
       ? formatScheduledOneOnOneWhen(checkInActionMenu.event)
       : formatMeetingDate(oneOnOneDisplayDate(checkInActionMenu.meeting));
@@ -3991,7 +3094,6 @@ export function OneOnOneHistoryTab({
                         planOneOnOneHref(teamId, {
                           eventId: event.id,
                           memberUserId,
-                          templateId: event.oneOnOneTemplateId ?? undefined,
                           startDate: event.startDate,
                           ...(myRole ? { myRole } : {}),
                         }),
@@ -4358,32 +3460,24 @@ export function OneOnOneHistoryTab({
     );
   };
 
-  // Section headings and the leader's own notes field are not things to ask
-  // about, so they stay off the prompt list shown while recording.
-  const recordingQuestions = useMemo(
-    () => questionLabelsForTemplate(recordingTemplate),
-    [recordingTemplate],
-  );
-
   const renderRecordingSheet = () => {
-    if (!recordingTemplate && !openRecording) return null;
+    if (!openRecording) return null;
     return (
       <CheckInRecordingSheet
         visible
         teamId={teamId}
         memberUserId={memberUserId}
         memberName={memberName}
-        templateId={recordingTemplate?.id ?? null}
-        templateTitle={recordingTemplate?.title ?? OPEN_CHECK_IN_TITLE}
-        questions={recordingTemplate ? recordingQuestions : []}
-        onClose={() => {
-          setRecordingTemplate(null);
+        templateId={null}
+        templateTitle={OPEN_CHECK_IN_TITLE}
+        questions={[]}
+        onClose={() => setOpenRecording(false)}
+        onWriteManually={() => {
           setOpenRecording(false);
+          openNewCheckInForm();
         }}
         onProcessingStarted={(recordingId) => {
-          setRecordingTemplate(null);
           setOpenRecording(false);
-          setCaptureTemplate(null);
           setProcessingRecordingId(recordingId);
           // Back to the list, where the locked row shows the write-up landing.
           setView("list");
@@ -4396,7 +3490,6 @@ export function OneOnOneHistoryTab({
   const closeCheckInFlow = () => {
     setView("list");
     setOpenRecording(false);
-    setCaptureTemplate(null);
     setSelectedTemplate(null);
     setEditingMeeting(null);
     setResponses({});
@@ -4412,69 +3505,6 @@ export function OneOnOneHistoryTab({
     setHighlightLeaderFieldId(null);
     setLinkedPlannedEventId(null);
   };
-
-  const renderVideoTemplatePicker = () => (
-    <View style={{ flex: 1, overflow: "hidden", backgroundColor: "#0A0F1E" }}>
-      <Animated.View
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          left: 0,
-          height: videoSheetTop,
-          overflow: "hidden",
-          backgroundColor: "#0A0F1E",
-        }}
-      >
-        <EmbeddedVideoCall
-          roomId={activePlannedVideoEvent!.id}
-          roomName={activePlannedVideoEvent!.title}
-          presentation="background"
-          onCallActiveChange={setVideoCallActive}
-        />
-      </Animated.View>
-      <Animated.View
-        style={{
-          position: "absolute",
-          top: videoSheetTop,
-          right: 0,
-          bottom: 0,
-          left: 0,
-          overflow: "hidden",
-          borderTopLeftRadius: 22,
-          borderTopRightRadius: 22,
-          backgroundColor: "#FFFFFF",
-          shadowColor: "#000000",
-          shadowOpacity: 0.18,
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: -5 },
-          elevation: 16,
-        }}
-      >
-        <View
-          {...videoSheetPanResponder.panHandlers}
-          style={{
-            height: 24,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#FFFFFF",
-          }}
-          accessibilityLabel="Drag to resize template list"
-        >
-          <View
-            style={{
-              width: 40,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: "#C9CED8",
-            }}
-          />
-        </View>
-        {renderPickView()}
-        {renderRecordingSheet()}
-      </Animated.View>
-    </View>
-  );
 
   const renderCheckInFlowModal = () => {
     const meetingToolFill = meetingToolMode && view === "fill";
@@ -4495,9 +3525,7 @@ export function OneOnOneHistoryTab({
         transcriptMeetingId
           ? () => setTranscriptMeetingId(null)
           : activePlannedVideoEvent
-          ? view === "fill"
-            ? requestVideoTemplateChange
-            : requestEndBeforeTemplateSelection
+          ? requestEndVideoMeeting
           : meetingToolMode && view === "fill"
             ? closeMeetingToolForm
             : closeCheckInFlow
@@ -4629,20 +3657,9 @@ export function OneOnOneHistoryTab({
             }}
           />
         ) : null}
-        <View style={{ flex: 1 }}>
-          {view === "mode"
-            ? renderModeView()
-            : view === "capture"
-              ? renderCaptureView()
-              : view === "pick"
-                ? activePlannedVideoEvent
-                  ? renderVideoTemplatePicker()
-                  : renderPickView()
-                : renderFillView()}
-        </View>
+        <View style={{ flex: 1 }}>{renderFillView()}</View>
         {/* iOS will not present these over an already-visible modal, so they
             have to live inside the check-in flow modal too. */}
-        {renderRecordingSheet()}
         {renderTranscriptPanel()}
         {renderPublishModals()}
       </View>
@@ -4663,6 +3680,7 @@ export function OneOnOneHistoryTab({
       }}
     >
       {renderCheckInFlowModal()}
+      {renderRecordingSheet()}
       <AlenioBottomSheet
         visible={upcomingListOpen}
         title="Upcoming check-ins"
@@ -4768,36 +3786,6 @@ export function OneOnOneHistoryTab({
           ) : null}
           {canCreate ? (
           <>
-          {canManageTemplates ? (
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: "/check-in-templates",
-                  params: { teamId },
-                })
-              }
-              hitSlop={8}
-              style={{
-                minHeight: 28,
-                paddingHorizontal: 8,
-                borderRadius: 9,
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: "#E2E5EA",
-                backgroundColor: "#FFFFFF",
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Manage check-in templates"
-              testID="manage-check-in-templates-button"
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <LayoutTemplate size={13} color="#172033" strokeWidth={2.2} />
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#172033" }}>
-                  Templates
-                </Text>
-              </View>
-            </Pressable>
-          ) : null}
           <Pressable
             onPress={() => void startCreate()}
             hitSlop={8}
@@ -4933,6 +3921,7 @@ export function OneOnOneHistoryTab({
         visible={!!previewMeeting}
         animationType="slide"
         presentationStyle="fullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => {
           if (transcriptMeetingId) {
             setTranscriptMeetingId(null);

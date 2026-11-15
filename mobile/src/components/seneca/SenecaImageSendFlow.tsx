@@ -24,6 +24,7 @@ import { ApiError } from "@/lib/api/api";
 import type { SenecaGeneratedImage } from "@/lib/seneca-api";
 import type { Conversation } from "@/lib/types";
 import { useSession } from "@/lib/auth/use-session";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 type Props = {
   visible: boolean;
@@ -131,6 +132,7 @@ export function SenecaImageSendFlow({
         visible={Boolean(visible && selectedConversation !== null)}
         animationType="slide"
         presentationStyle="fullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => {
           if (!sendMutation.isPending) setSelectedConversation(null);
         }}

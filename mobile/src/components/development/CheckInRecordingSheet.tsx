@@ -25,6 +25,8 @@ import {
   X,
 } from "lucide-react-native";
 import { useStatusClusterInset } from "@/lib/adaptive-layout";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
+import { OPEN_CHECK_IN_TITLE } from "@/lib/open-check-in";
 
 import {
   CHECK_IN_RECORDING_OPTIONS,
@@ -48,6 +50,19 @@ import {
   finishCheckInRecording,
   startCheckInRecording,
 } from "@/lib/check-in-recordings-api";
+import {
+  applyLiveTranscriptEvent,
+  formatClockMs,
+  type LiveTranscriptLine,
+} from "@/lib/live-check-in-transcript";
+import {
+  LiveTranscriptionClient,
+  type LiveTranscriptionStatus,
+} from "@/lib/live-transcription-client";
+import {
+  LIVE_PCM_RECORDING_OPTIONS,
+  LivePcmStreamer,
+} from "@/lib/live-pcm-streamer";
 
 type Step = "consent" | "recording" | "processing" | "error";
 
@@ -79,6 +94,8 @@ type SheetProps = {
   /** Questions on the template, shown while talking so the leader can cover them. */
   questions: string[];
   onClose: () => void;
+  /** Offered on the consent step so a check-in can still be typed instead of recorded. */
+  onWriteManually?: () => void;
   /**
    * Called once the audio is safely uploaded and the write-up has been kicked
    * off. The check-ins list takes it from here so the leader is not left
@@ -106,6 +123,7 @@ function RecordingUnavailable({
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
+      supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
       onRequestClose={onClose}
     >
       <View
@@ -160,6 +178,7 @@ function RecordingFlow({
   templateTitle,
   questions,
   onClose,
+  onWriteManually,
   onProcessingStarted,
   audio,
 }: SheetProps & { audio: ExpoAudioApi }) {
@@ -173,26 +192,48 @@ function RecordingFlow({
   const [stage, setStage] = useState<RecordingProcessingStage>("uploading");
 
   const recorder = audio.useAudioRecorder(CHECK_IN_RECORDING_OPTIONS);
+  const liveRecorder = audio.useAudioRecorder(LIVE_PCM_RECORDING_OPTIONS);
   const recorderState = audio.useAudioRecorderState(recorder, 250);
   const sessionRef = useRef<CheckInSegmentRecorder | null>(null);
+  const liveClientRef = useRef<LiveTranscriptionClient | null>(null);
+  const livePcmRef = useRef<LivePcmStreamer | null>(null);
   const recordingIdRef = useRef<string | null>(null);
+  const transcriptScrollRef = useRef<ScrollView | null>(null);
+  const stickToBottomRef = useRef(true);
   const [elapsedSec, setElapsedSec] = useState(0);
   const elapsedRef = useRef(0);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [transcriptLines, setTranscriptLines] = useState<LiveTranscriptLine[]>([]);
+  const [liveStatus, setLiveStatus] = useState<LiveTranscriptionStatus>("idle");
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   const firstName = memberName.trim().split(/\s+/)[0] || memberName;
   const level = meteringToLevel(recorderState.metering);
 
+  const stopLiveTranscription = useCallback(async () => {
+    liveClientRef.current?.stop();
+    liveClientRef.current = null;
+    await livePcmRef.current?.stop().catch(() => undefined);
+    livePcmRef.current = null;
+  }, []);
+
   const reset = useCallback(() => {
+    void stopLiveTranscription();
     sessionRef.current = null;
     recordingIdRef.current = null;
+    stickToBottomRef.current = true;
     setElapsedSec(0);
     setSegments([]);
     setPaused(false);
     setStarting(false);
     setError(null);
     setStage("uploading");
+    setShowTranscript(false);
+    setTranscriptLines([]);
+    setLiveStatus("idle");
+    setLiveError(null);
     setStep("consent");
-  }, []);
+  }, [stopLiveTranscription]);
 
   useEffect(() => {
     if (!visible) reset();
@@ -246,6 +287,42 @@ function RecordingFlow({
       );
       sessionRef.current = session;
       await session.start();
+
+      // Live STT is best-effort: retention recording already started above.
+      const liveClient = new LiveTranscriptionClient(
+        { teamId, memberUserId, recordingId: created.id },
+        {
+          onEvent: (event) => {
+            setTranscriptLines((current) => applyLiveTranscriptEvent(current, event));
+          },
+          onStatus: (status, message) => {
+            setLiveStatus(status);
+            if (status === "error" && message) setLiveError(message);
+            if (status === "active") setLiveError(null);
+          },
+        },
+      );
+      liveClientRef.current = liveClient;
+      void liveClient.start().then(async () => {
+        if (liveClient.getStatus() === "error") return;
+        const streamer = new LivePcmStreamer(
+          liveRecorder,
+          (pcm) => liveClient.sendPcmBase64(pcm),
+          (message) => {
+            setLiveStatus("error");
+            setLiveError(message);
+          },
+        );
+        livePcmRef.current = streamer;
+        const ok = await streamer.start();
+        if (!ok) {
+          setLiveStatus("error");
+          setLiveError(
+            "Live transcript could not share the microphone. Recording continues.",
+          );
+        }
+      });
+
       setStep("recording");
     } catch (err) {
       setError(recordingErrorMessage(err));
@@ -253,7 +330,7 @@ function RecordingFlow({
     } finally {
       setStarting(false);
     }
-  }, [starting, teamId, memberUserId, templateId, recorder]);
+  }, [starting, teamId, memberUserId, templateId, recorder, liveRecorder]);
 
   const stopAndProcess = useCallback(async () => {
     const session = sessionRef.current;
@@ -263,6 +340,8 @@ function RecordingFlow({
     setStage("uploading");
     const total = elapsedRef.current;
     try {
+      liveClientRef.current?.commit();
+      await stopLiveTranscription();
       // Uploading the final segment is the only part worth waiting on; the
       // transcript and draft are built server-side.
       await session.stop();
@@ -276,7 +355,7 @@ function RecordingFlow({
       setError(recordingErrorMessage(err));
       setStep("error");
     }
-  }, [teamId, memberUserId, onProcessingStarted]);
+  }, [teamId, memberUserId, onProcessingStarted, stopLiveTranscription]);
 
   // Stop automatically rather than letting a forgotten recording run all day.
   useEffect(() => {
@@ -296,10 +375,14 @@ function RecordingFlow({
     if (!session) return;
     if (paused) {
       session.resume();
+      liveClientRef.current?.resume();
+      livePcmRef.current?.resume();
       setPaused(false);
       return;
     }
     session.pause();
+    liveClientRef.current?.pause();
+    livePcmRef.current?.pause();
     setPaused(true);
   };
 
@@ -308,13 +391,21 @@ function RecordingFlow({
     const recordingId = recordingIdRef.current;
     sessionRef.current = null;
     recordingIdRef.current = null;
+    await stopLiveTranscription();
     if (session) await session.abort().catch(() => undefined);
     await releaseAudioSession().catch(() => undefined);
     if (recordingId) {
       await cancelCheckInRecording(teamId, memberUserId, recordingId).catch(() => undefined);
     }
     onClose();
-  }, [teamId, memberUserId, onClose]);
+  }, [teamId, memberUserId, onClose, stopLiveTranscription]);
+
+  useEffect(() => {
+    if (!showTranscript || !stickToBottomRef.current) return;
+    requestAnimationFrame(() => {
+      transcriptScrollRef.current?.scrollToEnd({ animated: true });
+    });
+  }, [transcriptLines, showTranscript]);
 
   /**
    * Asks before throwing away a conversation, but stays out of the way when
@@ -360,6 +451,7 @@ function RecordingFlow({
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
+      supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
       onRequestClose={() => {
         // Closing mid-processing would cancel a write-up already handed over.
         if (step === "processing") return;
@@ -380,7 +472,11 @@ function RecordingFlow({
             </Pressable>
           ) : null}
           <Text style={[styles.headerTitle, step === "consent" ? styles.headerTitleCentered : null]} numberOfLines={1}>
-            {step === "consent" && !templateId ? "Open check-in" : templateTitle}
+            {step === "recording" || step === "processing"
+              ? `Check-in with ${firstName}`
+              : step === "consent" && !templateId
+                ? OPEN_CHECK_IN_TITLE
+                : templateTitle}
           </Text>
           {step !== "recording" && step !== "processing" ? (
             <Pressable
@@ -421,13 +517,14 @@ function RecordingFlow({
                   <View style={styles.consentCopy}>
                     <Text style={styles.consentTitle}>Tell {firstName} first</Text>
                     <Text style={styles.consentBody}>
-                      Let {firstName} know the conversation is being recorded and that they can ask you to stop at any time. The audio is deleted as soon as it is written up.
+                      Let {firstName} know the conversation is being recorded and transcribed, and that they can ask you to stop at any time. Audio is kept for up to seven days or until you publish; the transcript stays with the check-in.
                     </Text>
                   </View>
                 </View>
                 <View style={styles.chips}>
                   {[
-                    "Audio deleted after write-up",
+                    "Live transcription while you talk",
+                    "Audio kept up to 7 days",
                     "Only you can see the write-up",
                     "Nothing is saved until you publish",
                   ].map((chip) => (
@@ -457,6 +554,19 @@ function RecordingFlow({
                 </View>
               )}
             </Pressable>
+
+            {onWriteManually ? (
+              <Pressable
+                onPress={onWriteManually}
+                hitSlop={8}
+                style={styles.manualLink}
+                accessibilityRole="button"
+                accessibilityLabel="Write the check-in yourself instead"
+                testID="write-check-in-manually"
+              >
+                <Text style={styles.manualLinkLabel}>Write it up yourself instead</Text>
+              </Pressable>
+            ) : null}
 
             <View style={styles.senecaFooter}>
               <View style={styles.senecaRow}>
@@ -540,7 +650,65 @@ function RecordingFlow({
               ) : null}
             </View>
 
-            {questions.length === 0 && !templateId ? (
+            {showTranscript ? (
+              <View style={styles.transcriptCard}>
+                <View style={styles.transcriptHeader}>
+                  <Text style={styles.transcriptTitle}>Live transcript</Text>
+                  {liveStatus === "active" || liveStatus === "paused" ? (
+                    <View style={styles.transcribingPill}>
+                      <Text style={styles.transcribingPillText}>
+                        {liveStatus === "paused" ? "Paused" : "Transcribing live"}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                {liveError ? (
+                  <Text style={styles.transcriptError}>{liveError}</Text>
+                ) : null}
+                <ScrollView
+                  ref={transcriptScrollRef}
+                  style={styles.transcriptScroll}
+                  contentContainerStyle={styles.transcriptList}
+                  showsVerticalScrollIndicator={false}
+                  onScrollBeginDrag={() => {
+                    stickToBottomRef.current = false;
+                  }}
+                  onScroll={(event) => {
+                    const { layoutMeasurement, contentOffset, contentSize } =
+                      event.nativeEvent;
+                    const distance =
+                      contentSize.height -
+                      layoutMeasurement.height -
+                      contentOffset.y;
+                    if (distance < 48) stickToBottomRef.current = true;
+                  }}
+                  scrollEventThrottle={16}
+                >
+                  {transcriptLines.length === 0 ? (
+                    <Text style={styles.transcriptEmpty}>
+                      Recognized speech will appear here as you talk.
+                    </Text>
+                  ) : (
+                    transcriptLines.map((line) => (
+                      <View key={line.id} style={styles.transcriptRow}>
+                        <Text style={styles.transcriptTime}>
+                          {formatClockMs(line.startMs)}
+                          {line.speakerLabel ? ` — ${line.speakerLabel}` : ""}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.transcriptText,
+                            line.interim ? styles.transcriptInterim : null,
+                          ]}
+                        >
+                          {line.text}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+            ) : questions.length === 0 && !templateId ? (
               <View style={styles.questionsCard}>
                 <Text style={styles.questionsTitle}>No set questions</Text>
                 <Text style={styles.openHint}>
@@ -548,9 +716,7 @@ function RecordingFlow({
                   you covered once you finish.
                 </Text>
               </View>
-            ) : null}
-
-            {questions.length > 0 ? (
+            ) : questions.length > 0 ? (
               <View style={styles.questionsCard}>
                 <Text style={styles.questionsTitle}>What to cover</Text>
                 <ScrollView
@@ -565,6 +731,30 @@ function RecordingFlow({
                   ))}
                 </ScrollView>
               </View>
+            ) : null}
+
+            <Pressable
+              onPress={() => setShowTranscript((value) => !value)}
+              style={styles.transcriptToggle}
+              accessibilityRole="button"
+              accessibilityLabel={
+                showTranscript ? "Hide transcript" : "Show live transcript"
+              }
+            >
+              <Text style={styles.transcriptToggleLabel}>
+                {showTranscript ? "Hide Transcript" : "Show Live Transcript"}
+              </Text>
+            </Pressable>
+            {!showTranscript &&
+            (liveStatus === "active" ||
+              liveStatus === "connecting" ||
+              liveStatus === "paused") ? (
+              <Text style={styles.transcriptBackgroundNote}>
+                Transcribing in background
+              </Text>
+            ) : null}
+            {!showTranscript && liveError ? (
+              <Text style={styles.transcriptError}>{liveError}</Text>
             ) : null}
 
             <View style={styles.controls}>
@@ -586,11 +776,11 @@ function RecordingFlow({
                 onPress={confirmFinish}
                 style={styles.stopControl}
                 accessibilityRole="button"
-                accessibilityLabel="Finish recording and write up the check-in"
+                accessibilityLabel="End check-in and write it up"
                 testID="stop-check-in-recording"
               >
                 <Square size={16} color="#FFFFFF" strokeWidth={2.8} fill="#FFFFFF" />
-                <Text style={styles.stopLabel}>Finish</Text>
+                <Text style={styles.stopLabel}>End Check-In</Text>
               </Pressable>
             </View>
 
@@ -726,6 +916,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#1B2430",
   },
   startButtonRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  manualLink: { alignSelf: "center", paddingVertical: 10 },
+  manualLinkLabel: { fontSize: 13, fontWeight: "700", color: "#5B3FF0" },
   senecaFooter: { marginTop: 8 },
   senecaRow: {
     paddingTop: 8,
@@ -758,6 +950,82 @@ const styles = StyleSheet.create({
   // Sized to its content rather than flex:1 so the question list gets the
   // leftover height instead of the clock being centred in an empty screen.
   liveWrap: { alignItems: "center", justifyContent: "center", gap: 8, paddingTop: 6 },
+  transcriptCard: {
+    flex: 1,
+    minHeight: 120,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#EDE9FE",
+    backgroundColor: "#FAFAFF",
+    gap: 8,
+  },
+  transcriptHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  transcriptTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#172033",
+  },
+  transcribingPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "#EDE9FE",
+  },
+  transcribingPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#5B3FF0",
+  },
+  transcriptScroll: { flex: 1 },
+  transcriptList: { gap: 10, paddingBottom: 4 },
+  transcriptRow: { gap: 2 },
+  transcriptTime: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94A3B8",
+  },
+  transcriptText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#172033",
+  },
+  transcriptInterim: {
+    fontStyle: "italic",
+    color: "#7C6BCF",
+  },
+  transcriptEmpty: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#94A3B8",
+  },
+  transcriptError: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#B45309",
+    textAlign: "center",
+  },
+  transcriptToggle: {
+    alignSelf: "center",
+    paddingVertical: 4,
+  },
+  transcriptToggleLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#5B3FF0",
+  },
+  transcriptBackgroundNote: {
+    alignSelf: "center",
+    marginTop: -8,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
   questionsCard: {
     flex: 1,
     minHeight: 90,

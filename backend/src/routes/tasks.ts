@@ -834,9 +834,7 @@ tasksRouter.get("/member-stats", async (c) => {
   };
 
   const lastOneOnOneByMember: Record<string, Date> = {};
-  const requiredTemplateId = workplaceStandards.requiredCheckInTemplateId;
   for (const meeting of oneOnOnes) {
-    if (requiredTemplateId && meeting.templateId !== requiredTemplateId) continue;
     if (!lastOneOnOneByMember[meeting.memberUserId]) {
       const publishedAt = oneOnOnePublishedAt(meeting);
       if (publishedAt) lastOneOnOneByMember[meeting.memberUserId] = publishedAt;

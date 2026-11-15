@@ -6,6 +6,7 @@ export type RealtimeSocket = {
 };
 
 export type RealtimeSocketData = {
+  kind?: "realtime";
   userId: string;
   channels: Set<string>;
 };

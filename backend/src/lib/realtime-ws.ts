@@ -118,6 +118,7 @@ export async function handleRealtimeUpgrade(
 
   const upgraded = server.upgrade(req, {
     data: {
+      kind: "realtime",
       userId: session.user.id,
       channels: new Set<string>(),
     } satisfies RealtimeSocketData,

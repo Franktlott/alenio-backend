@@ -31,6 +31,15 @@ import {
   writeUpTranscript,
 } from "../lib/check-in-recording-service";
 import { OPEN_CHECK_IN_TITLE } from "../lib/open-check-in-structuring";
+import {
+  createLiveTranscriptionTicket,
+  liveTranscriptionAvailable,
+} from "../lib/check-in-live-transcription";
+import {
+  listTranscriptSegments,
+  upsertFinalTranscriptSegment,
+} from "../lib/check-in-transcript-segments";
+import { env } from "../env";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -66,6 +75,15 @@ const fromTranscriptSchema = z.object({
 
 const finishSchema = z.object({
   durationSec: z.number().int().min(0).max(RECORDING_MAX_DURATION_SEC).optional(),
+});
+
+const transcriptSegmentSchema = z.object({
+  providerEventId: z.string().min(1).max(120).optional(),
+  sequence: z.number().int().min(0).max(50_000).optional(),
+  startMs: z.number().int().min(0).max(RECORDING_MAX_DURATION_SEC * 1000),
+  endMs: z.number().int().min(0).max(RECORDING_MAX_DURATION_SEC * 1000).nullish(),
+  text: z.string().min(1).max(8_000),
+  speakerLabel: z.string().min(1).max(120).nullish(),
 });
 
 async function getMembership(
@@ -109,12 +127,14 @@ function serializeRecording(
     createdAt: Date;
   },
   viewerUserId?: string,
+  transcriptSegments?: Awaited<ReturnType<typeof listTranscriptSegments>>,
 ) {
   return {
     id: recording.id,
     status: recording.status,
     durationSec: recording.durationSec,
     transcript: recording.transcript,
+    transcriptSegments: transcriptSegments ?? undefined,
     error: recording.error,
     meetingId: recording.meetingId,
     templateId: recording.templateId,
@@ -540,7 +560,99 @@ checkInRecordingsRouter.get(
     }
     // The transcript is readable by any leader here, but canPlayAudio narrows
     // the recording itself to whoever made it.
-    return c.json({ data: serializeRecording(recording, user.id) });
+    const transcriptSegments = await listTranscriptSegments(recording.id);
+    return c.json({
+      data: serializeRecording(recording, user.id, transcriptSegments),
+    });
+  },
+);
+
+// POST .../check-in-recordings/:id/live-transcription/session
+// Issues a short-lived WS ticket. The OpenAI key never leaves the server.
+checkInRecordingsRouter.post(
+  "/:memberUserId/check-in-recordings/:recordingId/live-transcription/session",
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+    const recordingId = c.req.param("recordingId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership || !canManageCheckIns(membership.role)) {
+      return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
+    }
+    if (!liveTranscriptionAvailable()) {
+      return c.json(
+        {
+          error: {
+            message: "Live transcription is not available right now.",
+            code: "SENECA_UNAVAILABLE",
+          },
+        },
+        503,
+      );
+    }
+
+    const recording = await loadOwnedRecording(recordingId, teamId, memberUserId, user.id);
+    if (!recording || recording.status !== "recording") {
+      return c.json({ error: { message: "Recording not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    const { ticket, expiresAt } = createLiveTranscriptionTicket({
+      recordingId,
+      teamId,
+      memberUserId,
+      userId: user.id,
+    });
+
+    const backendUrl = (env.BACKEND_URL || "").replace(/\/$/, "");
+    const wsBase = backendUrl.replace(/^http/, "ws");
+    return c.json({
+      data: {
+        ticket,
+        expiresAt,
+        wsUrl: `${wsBase}/api/check-in-transcription?ticket=${encodeURIComponent(ticket)}`,
+        sampleRate: 24000,
+      },
+    });
+  },
+);
+
+// POST .../check-in-recordings/:id/transcript-segments
+// Idempotent HTTP upsert for finals when the WS persist path missed one.
+checkInRecordingsRouter.post(
+  "/:memberUserId/check-in-recordings/:recordingId/transcript-segments",
+  zValidator("json", transcriptSegmentSchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+    const recordingId = c.req.param("recordingId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership || !canManageCheckIns(membership.role)) {
+      return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
+    }
+
+    const recording = await loadOwnedRecording(recordingId, teamId, memberUserId, user.id);
+    if (!recording) {
+      return c.json({ error: { message: "Recording not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    const body = c.req.valid("json");
+    try {
+      const segment = await upsertFinalTranscriptSegment(recordingId, {
+        providerEventId: body.providerEventId,
+        sequence: body.sequence,
+        startMs: body.startMs,
+        endMs: body.endMs,
+        text: body.text,
+        speakerLabel: body.speakerLabel,
+      });
+      return c.json({ data: segment }, 201);
+    } catch (err) {
+      return prismaRouteError(c, err, "[check-in-recordings] transcript segment upsert failed");
+    }
   },
 );
 
@@ -562,7 +674,10 @@ checkInRecordingsRouter.get(
     if (!recording) {
       return c.json({ error: { message: "Recording not found", code: "NOT_FOUND" } }, 404);
     }
-    return c.json({ data: serializeRecording(recording, user.id) });
+    const transcriptSegments = await listTranscriptSegments(recording.id);
+    return c.json({
+      data: serializeRecording(recording, user.id, transcriptSegments),
+    });
   },
 );
 

@@ -30,7 +30,6 @@ export function buildRegularMemberMeetingPayload(
 
 export function buildScheduledCheckInPayload(
   input: RegularMemberMeetingInput & {
-    templateId?: string | null;
     isVideoMeeting?: boolean;
   },
 ) {
@@ -48,7 +47,6 @@ export function buildScheduledCheckInPayload(
     isHidden: true,
     isOneOnOne: true,
     oneOnOneMemberUserId: input.memberUserId,
-    oneOnOneTemplateId: input.templateId || undefined,
     isVideoMeeting: input.isVideoMeeting ?? true,
     reminderMinutes: [15],
     assigneeIds: [input.memberUserId],

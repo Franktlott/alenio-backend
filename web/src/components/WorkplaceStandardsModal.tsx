@@ -1,13 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  fetchOneOnOneTemplates,
-  patchWebTeamWorkplaceStandards,
-  type OneOnOneTemplate,
-} from "../lib/api";
+import { useEffect, useState } from "react";
+import { patchWebTeamWorkplaceStandards } from "../lib/api";
 import {
   DEFAULT_WORKPLACE_STANDARDS,
   formatCheckInFrequencySummary,
-  formatRequiredTemplateSummary,
   type CheckInFrequencyUnit,
   type WorkplaceStandards,
 } from "../lib/workplace-standards";
@@ -16,9 +11,8 @@ type Props = {
   teamId: string;
   open: boolean;
   initialStandards: WorkplaceStandards;
-  initialTemplateTitle?: string | null;
   onClose: () => void;
-  onSaved: (standards: WorkplaceStandards, templateTitle: string | null) => void;
+  onSaved: (standards: WorkplaceStandards) => void;
 };
 
 const FREQUENCY_UNITS: { value: CheckInFrequencyUnit; label: string }[] = [
@@ -35,8 +29,6 @@ export function WorkplaceStandardsModal({
   onSaved,
 }: Props) {
   const [draft, setDraft] = useState<WorkplaceStandards>(initialStandards);
-  const [templates, setTemplates] = useState<OneOnOneTemplate[]>([]);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -46,28 +38,6 @@ export function WorkplaceStandardsModal({
     setErr(null);
   }, [open, initialStandards]);
 
-  const loadTemplates = useCallback(async () => {
-    setLoading(true);
-    try {
-      const rows = await fetchOneOnOneTemplates(teamId);
-      setTemplates(rows);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not load templates.");
-    } finally {
-      setLoading(false);
-    }
-  }, [teamId]);
-
-  useEffect(() => {
-    if (!open) return;
-    void loadTemplates();
-  }, [open, loadTemplates]);
-
-  const selectedTemplateTitle = useMemo(() => {
-    if (!draft.requiredCheckInTemplateId) return null;
-    return templates.find((t) => t.id === draft.requiredCheckInTemplateId)?.title ?? null;
-  }, [draft.requiredCheckInTemplateId, templates]);
-
   const onSave = async () => {
     setSaving(true);
     setErr(null);
@@ -75,11 +45,9 @@ export function WorkplaceStandardsModal({
       const saved = await patchWebTeamWorkplaceStandards(teamId, {
         ...draft,
         checkInGracePeriodDays: 0,
+        requiredCheckInTemplateId: null,
       });
-      const title = saved.requiredCheckInTemplateId
-        ? templates.find((t) => t.id === saved.requiredCheckInTemplateId)?.title ?? null
-        : null;
-      onSaved(saved, title);
+      onSaved(saved);
       onClose();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save workplace standards.");
@@ -164,27 +132,6 @@ export function WorkplaceStandardsModal({
                     </select>
                   </div>
                 </label>
-
-                <label className="enterprise-workplace-standards-field enterprise-workplace-standards-field--full">
-                  <span className="enterprise-workplace-standards-label">Required template</span>
-                  <select
-                    value={draft.requiredCheckInTemplateId ?? ""}
-                    disabled={loading}
-                    onChange={(e) =>
-                      setDraft((prev) => ({
-                        ...prev,
-                        requiredCheckInTemplateId: e.target.value || null,
-                      }))
-                    }
-                  >
-                    <option value="">Any template</option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
             ) : null}
           </section>
@@ -236,10 +183,6 @@ export function WorkplaceStandardsModal({
               <li>
                 <span>Goals</span>
                 <strong>{draft.goalsRequired ? draft.minimumActiveGoals : "Not required"}</strong>
-              </li>
-              <li>
-                <span>Template</span>
-                <strong>{formatRequiredTemplateSummary(selectedTemplateTitle)}</strong>
               </li>
             </ul>
           </aside>

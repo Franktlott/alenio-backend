@@ -6,7 +6,6 @@ export type CreatePlannedCheckInInput = {
   memberName: string;
   startDate: Date;
   durationMinutes: number;
-  templateId?: string | null;
   isVideoMeeting?: boolean;
 };
 

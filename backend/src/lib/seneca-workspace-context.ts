@@ -347,13 +347,11 @@ export async function buildSenecaWorkspaceContext(
 
   const lastCheckInByUser = new Map<string, Date>();
   const latestMeetingByUser = new Map<string, (typeof lastMeetings)[number]>();
-  const requiredTemplateId = workplaceStandards.requiredCheckInTemplateId;
   for (const meeting of lastMeetings) {
     if (!memberUserIds.has(meeting.memberUserId)) continue;
     if (!latestMeetingByUser.has(meeting.memberUserId)) {
       latestMeetingByUser.set(meeting.memberUserId, meeting);
     }
-    if (requiredTemplateId && meeting.templateId !== requiredTemplateId) continue;
     if (!lastCheckInByUser.has(meeting.memberUserId)) {
       const publishedAt = oneOnOnePublishedAt(meeting);
       if (publishedAt) lastCheckInByUser.set(meeting.memberUserId, publishedAt);

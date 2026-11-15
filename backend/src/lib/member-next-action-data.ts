@@ -77,7 +77,7 @@ export async function loadMemberNextActionFacts(
   const standards = parseWorkplaceStandards(
     currentMembership.team.workplaceStandards,
   );
-  const requiredTemplateId = standards.requiredCheckInTemplateId;
+  // requiredCheckInTemplateId is ignored — any published check-in counts.
   const timeZone = resolveTimeZone(
     currentMembership.user.timezone ?? targetMembership.user.timezone,
   );
@@ -87,14 +87,12 @@ export async function loadMemberNextActionFacts(
     futureCheckInEvents,
     activeDevelopmentGoals,
     activeAssignedTasks,
-    requiredTemplate,
   ] = await Promise.all([
     db.oneOnOneMeeting.findMany({
       where: {
         teamId,
         memberUserId,
         status: "published",
-        ...(requiredTemplateId ? { templateId: requiredTemplateId } : {}),
       },
       select: { id: true, publishedAt: true, createdAt: true },
     }),
@@ -122,12 +120,6 @@ export async function loadMemberNextActionFacts(
       },
       select: { id: true, dueDate: true },
     }),
-    requiredTemplateId
-      ? db.oneOnOneTemplate.findFirst({
-          where: { id: requiredTemplateId, teamId },
-          select: { id: true },
-        })
-      : Promise.resolve(null),
   ]);
 
   const completedCheckIns = completedCheckInRows
@@ -146,9 +138,7 @@ export async function loadMemberNextActionFacts(
     teamId,
     memberUserId,
     timeZone,
-    checkInActionsAvailable:
-      standards.checkInRequired &&
-      (!requiredTemplateId || requiredTemplate?.id === requiredTemplateId),
+    checkInActionsAvailable: standards.checkInRequired,
     developmentGoalActionsAvailable: standards.goalsRequired,
     canScheduleCheckIn: canManageCheckIns(currentMembership.role),
     completedCheckIns,

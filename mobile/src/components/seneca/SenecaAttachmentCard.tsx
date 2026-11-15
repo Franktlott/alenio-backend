@@ -18,6 +18,7 @@ import {
 } from "lucide-react-native";
 import { toast } from "burnt";
 import type { SenecaAttachment } from "@/lib/seneca-api";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 function isSafeAttachmentUrl(url: string): boolean {
   return /^(https?:\/\/|file:\/\/)/i.test(url);
@@ -124,6 +125,7 @@ export function SenecaAttachmentCard({
         visible={previewOpen}
         animationType="fade"
         presentationStyle="fullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => setPreviewOpen(false)}
       >
         <View style={styles.preview} testID="seneca-user-attachment-preview">

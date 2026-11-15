@@ -12,12 +12,11 @@ type CheckInStandardsFilter = {
 /** Published check-ins that count toward workplace standards (matches member-stats API). */
 export function publishedCheckInsForStandards<T extends MeetingDateFields>(
   meetings: T[],
-  standards: CheckInStandardsFilter,
+  _standards: CheckInStandardsFilter,
 ): T[] {
-  const published = meetings.filter((meeting) => meeting.status !== "draft");
-  const requiredTemplateId = standards.requiredCheckInTemplateId;
-  if (!requiredTemplateId) return published;
-  return published.filter((meeting) => meeting.templateId === requiredTemplateId);
+  // Templates retired — any published check-in counts.
+  void _standards;
+  return meetings.filter((meeting) => meeting.status !== "draft");
 }
 
 export function latestPublishedCheckInForStandards<T extends MeetingDateFields>(

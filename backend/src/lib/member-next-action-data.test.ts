@@ -41,7 +41,7 @@ describe("member next-action access", () => {
 });
 
 describe("loadMemberNextActionFacts", () => {
-  test("loads required-template history and any future member check-in", async () => {
+  test("loads published check-in history and any future member check-in", async () => {
     const queries: Array<{ model: string; args: unknown }> = [];
     let membershipCall = 0;
     const db = {
@@ -133,17 +133,27 @@ describe("loadMemberNextActionFacts", () => {
       activeDevelopmentGoals: [{ id: "goal-1" }],
       activeAssignedTasks: [{ id: "task-1" }],
     });
+    // +7 calendar days from publishedAt, clock time preserved in member TZ.
     expect(facts.nextRequiredCheckInAt?.toISOString()).toBe(
-      "2026-08-09T03:59:59.999Z",
+      "2026-08-08T14:00:00.000Z",
     );
     expect(
       queries.find((query) => query.model === "oneOnOneMeeting")?.args,
     ).toMatchObject({
       where: {
         status: "published",
-        templateId: "template-required",
       },
     });
+    expect(
+      (
+        queries.find((query) => query.model === "oneOnOneMeeting")?.args as {
+          where?: Record<string, unknown>;
+        }
+      ).where,
+    ).not.toHaveProperty("templateId");
+    expect(queries.some((query) => query.model === "oneOnOneTemplate")).toBe(
+      false,
+    );
     expect(
       queries.find((query) => query.model === "calendarEvent")?.args,
     ).toMatchObject({

@@ -78,6 +78,7 @@ import {
 } from "@/lib/seneca-conversation-presentation";
 import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
 import { senecaFriendlyErrorMessage } from "@/lib/seneca-error-copy";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 const COLORS = {
   bg: "#FFFFFF",
@@ -1268,7 +1269,13 @@ export function SenecaAssistantSheet({ open, onClose }: Props) {
   const isSenecaHome = showHome && !historyOpen;
 
   return (
-    <Modal visible={open} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
+    <Modal
+      visible={open}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
+      onRequestClose={handleClose}
+    >
       <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
         <SafeKeyboardAvoidingView style={styles.flex}>
           <View style={styles.headerBar}>

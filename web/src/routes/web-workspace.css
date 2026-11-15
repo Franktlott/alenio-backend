@@ -2994,6 +2994,53 @@
   color: var(--dm-purple);
 }
 
+.ci-live-transcript-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ci-live-transcript-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #5b3ff0;
+  background: #ede9fe;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+.ci-live-transcript-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.ci-live-transcript-row p.is-interim {
+  font-style: italic;
+  color: #7c6bcf;
+}
+
+.ci-transcript-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ci-transcript-segment {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ci-transcript-time {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
 .ci-transcript-text {
   margin: 0;
   font-size: 14px;

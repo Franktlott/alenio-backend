@@ -233,7 +233,8 @@ export function createOneOnOneMeeting(
   teamId: string,
   memberUserId: string,
   input: {
-    templateId: string;
+    /** Omit for new check-ins; legacy guided meetings may still send one. */
+    templateId?: string | null;
     responses: Record<string, string | number>;
     followUpTasks?: OneOnOneFollowUpTaskInput[];
     requestAssociateFeedback?: boolean;
@@ -241,6 +242,7 @@ export function createOneOnOneMeeting(
     plannedCalendarEventId?: string;
     sourceVideoRoomId?: string | null;
     calendarEventId?: string | null;
+    templateTitle?: string;
   },
 ) {
   return api.post<OneOnOneMeeting>(`${enc(teamId, memberUserId)}/one-on-ones`, input);
@@ -271,8 +273,4 @@ export function deleteOneOnOneMeeting(teamId: string, memberUserId: string, meet
   return api.delete<{ deleted: boolean }>(
     `${enc(teamId, memberUserId)}/one-on-ones/${encodeURIComponent(meetingId)}`,
   );
-}
-
-export function fetchOneOnOneTemplates(teamId: string) {
-  return api.get<OneOnOneTemplate[]>(`${enc(teamId)}/one-on-one-templates`);
 }

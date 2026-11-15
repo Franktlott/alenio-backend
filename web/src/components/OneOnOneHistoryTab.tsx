@@ -114,7 +114,7 @@ function formatMeetingDate(iso: string): string {
   }
 }
 
-const OPEN_CHECK_IN_TITLE = "Open check-in";
+const OPEN_CHECK_IN_TITLE = "Check-in";
 const OPEN_CHECK_IN_TITLE_MAX = 60;
 
 function openCheckInTitleForSave(title: string): string {

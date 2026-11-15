@@ -13,7 +13,6 @@ export default function LegacyMemberProfileRedirect() {
     userId?: string;
     tab?: string;
     startCheckIn?: string;
-    templateId?: string;
     plannedEventId?: string;
     createGoal?: string;
     intent?: string;
@@ -54,9 +53,6 @@ export default function LegacyMemberProfileRedirect() {
                 : {}),
           ...(params.startCheckIn === "true" || params.startCheckIn === "1"
             ? { startCheckIn: "true" }
-            : {}),
-          ...(typeof params.templateId === "string"
-            ? { templateId: params.templateId }
             : {}),
           ...(typeof params.plannedEventId === "string"
             ? { plannedEventId: params.plannedEventId }

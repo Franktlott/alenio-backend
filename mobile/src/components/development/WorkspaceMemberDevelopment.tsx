@@ -23,7 +23,6 @@ type Props = {
   autoOpenCreateGoal?: boolean;
   onCreateGoalIntentHandled?: () => void;
   startCheckInToken?: number;
-  preferredTemplateId?: string | null;
   plannedEventId?: string | null;
   initialCheckInId?: string | null;
   onCheckInFlowActiveChange?: (active: boolean) => void;
@@ -47,7 +46,6 @@ export function WorkspaceMemberDevelopment({
   autoOpenCreateGoal = false,
   onCreateGoalIntentHandled,
   startCheckInToken = 0,
-  preferredTemplateId = null,
   plannedEventId = null,
   initialCheckInId = null,
   onCheckInFlowActiveChange,
@@ -203,7 +201,6 @@ export function WorkspaceMemberDevelopment({
             isSelf={isSelf}
             myRole={viewerRole}
             startCheckInToken={startCheckInToken}
-            preferredTemplateId={preferredTemplateId}
             plannedEventId={plannedEventId}
             initialMeetingId={initialCheckInId}
             onFlowActiveChange={onCheckInFlowActiveChange}

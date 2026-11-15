@@ -24,6 +24,7 @@ import {
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { SenecaImageSendFlow } from "./SenecaImageSendFlow";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 export function SenecaGeneratedImageCard({
   image,
@@ -136,6 +137,7 @@ export function SenecaGeneratedImageCard({
         visible={previewOpen}
         animationType="fade"
         presentationStyle="fullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => setPreviewOpen(false)}
       >
         <View style={styles.preview} testID="seneca-generated-image-preview">

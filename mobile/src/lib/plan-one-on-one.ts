@@ -56,14 +56,12 @@ export function oneOnOneEndFromDuration(start: Date, durationMinutes: number): D
 export function oneOnOneCheckInHref(
   teamId: string,
   memberUserId: string,
-  templateId?: string | null,
   plannedEventId?: string | null,
 ): Href {
   return workspaceDevelopmentHref(teamId, {
     memberUserId,
     section: "check-ins",
     startCheckIn: true,
-    templateId,
     plannedEventId,
     checkInLaunchId: `${Date.now()}`,
   });
@@ -74,7 +72,6 @@ export function planOneOnOneHref(
   options?: {
     memberUserId?: string;
     startDate?: string;
-    templateId?: string;
     myRole?: string;
     eventId?: string;
   },
@@ -85,7 +82,6 @@ export function planOneOnOneHref(
       teamId,
       ...(options?.memberUserId ? { memberUserId: options.memberUserId } : {}),
       ...(options?.startDate ? { startDate: options.startDate } : {}),
-      ...(options?.templateId ? { templateId: options.templateId } : {}),
       ...(options?.myRole ? { myRole: options.myRole } : {}),
       ...(options?.eventId ? { eventId: options.eventId } : {}),
     },

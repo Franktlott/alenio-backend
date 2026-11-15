@@ -118,7 +118,10 @@ export function createCheckIn(
   teamId: string,
   userId: string,
   input: {
-    templateId: string;
+    /** Omit for new check-ins; every new check-in is an open write-up. */
+    templateId?: string | null;
+    /** Optional title for the open write-up. */
+    templateTitle?: string;
     responses: Record<string, string | number>;
     status: "draft" | "published";
     requestAssociateFeedback?: boolean;
@@ -155,15 +158,33 @@ export type ActiveCheckInRecording = CheckInRecording & { templateTitle: string 
 
 export type CheckInAudioStatus = "pending" | "available" | "deleting" | "deleted" | "deletion_failed" | "none";
 
+export type CheckInTranscriptSegment = {
+  id: string;
+  sequence: number;
+  startMs: number;
+  endMs: number | null;
+  text: string;
+  speakerLabel: string | null;
+  providerEventId: string | null;
+};
+
 /** The recording behind a saved check-in, as shown in the transcript panel. */
 export type CheckInRecordingDetail = CheckInRecording & {
   transcript: string | null;
+  transcriptSegments?: CheckInTranscriptSegment[];
   source: "device_mic" | "video_call";
   audioStatus: CheckInAudioStatus;
   audioExpiresAt: string | null;
   audioRetained: boolean;
   audioDeleteReason: "published" | "expired" | "manual" | null;
   canPlayAudio: boolean;
+};
+
+export type LiveTranscriptionSession = {
+  ticket: string;
+  expiresAt: string;
+  wsUrl: string;
+  sampleRate: number;
 };
 
 export type CheckInAudioPart = { index: number; url: string; durationSec: number };
@@ -214,6 +235,36 @@ export function finishCheckInRecording(teamId: string, userId: string, recording
   return apiPostJson<{ data: CheckInRecording }>(
     `${recordings(teamId, userId)}/${encodeURIComponent(recordingId)}/finish`,
     { durationSec },
+  ).then((r) => r.data);
+}
+
+export function startLiveTranscriptionSession(
+  teamId: string,
+  userId: string,
+  recordingId: string,
+) {
+  return apiPostJson<{ data: LiveTranscriptionSession }>(
+    `${recordings(teamId, userId)}/${encodeURIComponent(recordingId)}/live-transcription/session`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function upsertCheckInTranscriptSegment(
+  teamId: string,
+  userId: string,
+  recordingId: string,
+  segment: {
+    providerEventId?: string;
+    sequence?: number;
+    startMs: number;
+    endMs?: number | null;
+    text: string;
+    speakerLabel?: string | null;
+  },
+) {
+  return apiPostJson<{ data: CheckInTranscriptSegment }>(
+    `${recordings(teamId, userId)}/${encodeURIComponent(recordingId)}/transcript-segments`,
+    segment,
   ).then((r) => r.data);
 }
 

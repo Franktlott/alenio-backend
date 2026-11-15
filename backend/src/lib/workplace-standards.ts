@@ -177,10 +177,8 @@ export function parseWorkplaceStandards(raw: string | null | undefined): Workpla
       ),
       checkInFrequencyUnit: unit,
       checkInGracePeriodDays: 0,
-      requiredCheckInTemplateId:
-        typeof parsed.requiredCheckInTemplateId === "string" && parsed.requiredCheckInTemplateId.trim()
-          ? parsed.requiredCheckInTemplateId.trim()
-          : null,
+      // Templates retired — any published check-in counts. Legacy stored ids are ignored.
+      requiredCheckInTemplateId: null,
       goalsRequired:
         typeof parsed.goalsRequired === "boolean"
           ? parsed.goalsRequired
@@ -241,11 +239,12 @@ export function parseWorkplaceStandardsPatch(
     current.minimumActiveGoals = Math.round(minGoals);
   }
 
-  if (input.requiredCheckInTemplateId === null) {
+  // Required-template setting is retired; always clear it on write.
+  if (
+    input.requiredCheckInTemplateId === null ||
+    typeof input.requiredCheckInTemplateId === "string"
+  ) {
     current.requiredCheckInTemplateId = null;
-  } else if (typeof input.requiredCheckInTemplateId === "string") {
-    const trimmed = input.requiredCheckInTemplateId.trim();
-    current.requiredCheckInTemplateId = trimmed || null;
   }
 
   return { ok: true, value: current };

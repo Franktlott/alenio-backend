@@ -28,11 +28,23 @@ export type CheckInAudioStatus =
 /** device_mic = recorded in person; video_call = transcribed live on a call. */
 export type CheckInRecordingSource = "device_mic" | "video_call";
 
+export type CheckInTranscriptSegment = {
+  id: string;
+  sequence: number;
+  startMs: number;
+  endMs: number | null;
+  text: string;
+  speakerLabel: string | null;
+  providerEventId: string | null;
+};
+
 export type CheckInRecording = {
   id: string;
   status: CheckInRecordingStatus;
   durationSec: number;
   transcript: string | null;
+  /** Finalized live-transcription lines when present. */
+  transcriptSegments?: CheckInTranscriptSegment[];
   error: string | null;
   meetingId: string | null;
   /** Null for an open check-in, which Seneca structures itself. */
@@ -48,6 +60,13 @@ export type CheckInRecording = {
   /** Whether this viewer may replay it. Only the person who recorded it can. */
   canPlayAudio: boolean;
   createdAt: string;
+};
+
+export type LiveTranscriptionSession = {
+  ticket: string;
+  expiresAt: string;
+  wsUrl: string;
+  sampleRate: number;
 };
 
 /**
@@ -199,5 +218,37 @@ export function cancelCheckInRecording(
   return api.post(
     `${recordingsPath(teamId, memberUserId)}/${encodeURIComponent(recordingId)}/cancel`,
     {},
+  );
+}
+
+/** Short-lived ticket for the live transcription WebSocket. */
+export function startLiveTranscriptionSession(
+  teamId: string,
+  memberUserId: string,
+  recordingId: string,
+): Promise<LiveTranscriptionSession> {
+  return api.post<LiveTranscriptionSession>(
+    `${recordingsPath(teamId, memberUserId)}/${encodeURIComponent(recordingId)}/live-transcription/session`,
+    {},
+  );
+}
+
+/** Idempotent HTTP upsert for a finalized live segment. */
+export function upsertCheckInTranscriptSegment(
+  teamId: string,
+  memberUserId: string,
+  recordingId: string,
+  segment: {
+    providerEventId?: string;
+    sequence?: number;
+    startMs: number;
+    endMs?: number | null;
+    text: string;
+    speakerLabel?: string | null;
+  },
+): Promise<CheckInTranscriptSegment> {
+  return api.post<CheckInTranscriptSegment>(
+    `${recordingsPath(teamId, memberUserId)}/${encodeURIComponent(recordingId)}/transcript-segments`,
+    segment,
   );
 }

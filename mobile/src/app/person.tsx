@@ -134,7 +134,6 @@ export default function PersonScreen() {
     teamId?: string;
     tab?: string;
     startCheckIn?: string;
-    templateId?: string;
     plannedEventId?: string;
     checkInId?: string;
     createGoal?: string;
@@ -271,7 +270,6 @@ export default function PersonScreen() {
       fallbackDevelopmentTeamId,
       requestedDevelopmentSection,
       params.checkInId,
-      params.templateId,
       params.plannedEventId,
       params.startCheckIn,
       params.createGoal,
@@ -290,7 +288,6 @@ export default function PersonScreen() {
         startCheckIn:
           params.startCheckIn === "true" || params.startCheckIn === "1",
         checkInId: params.checkInId ?? null,
-        templateId: params.templateId ?? null,
         plannedEventId: params.plannedEventId ?? null,
         checkInLaunchId: params.checkInLaunchId ?? null,
       }),
@@ -303,7 +300,6 @@ export default function PersonScreen() {
     params.intent,
     params.plannedEventId,
     params.startCheckIn,
-    params.templateId,
     requestedDevelopmentSection,
     userId,
   ]);

@@ -18,6 +18,10 @@ import {
 } from "../lib/one-on-one-feedback";
 import { appendLeaderCommentsFields } from "../lib/check-in-leader-comments";
 import { validateCheckInResponses as validateResponses } from "../lib/check-in-responses";
+import {
+  OPEN_CHECK_IN_TITLE,
+  openCheckInFields,
+} from "../lib/open-check-in-structuring";
 import { oneOnOnePublishedAt } from "../lib/one-on-one-meeting-dates";
 import { parseCalendarDueDate } from "../lib/recurrence-series";
 import { resolveTimeZone } from "../lib/timezone";
@@ -104,7 +108,8 @@ function parseFollowUpDrafts(
 }
 
 const createMeetingSchema = z.object({
-  templateId: z.string().min(1),
+  /** Legacy guided check-ins may still send this; new clients omit it. */
+  templateId: z.string().min(1).nullable().optional(),
   responses: z.record(z.string(), z.union([z.string(), z.number()])),
   followUpTasks: z.array(followUpTaskSchema).optional(),
   requestAssociateFeedback: z.boolean().optional(),
@@ -112,6 +117,8 @@ const createMeetingSchema = z.object({
   plannedCalendarEventId: z.string().min(1).optional(),
   sourceVideoRoomId: z.string().min(1).nullable().optional(),
   calendarEventId: z.string().min(1).nullable().optional(),
+  /** Typed open check-ins can set a title on create. */
+  templateTitle: z.string().trim().min(1).max(60).optional(),
 });
 
 const updateMeetingSchema = z.object({
@@ -861,20 +868,27 @@ oneOnOneMeetingsRouter.post(
 
     const body = c.req.valid("json");
     const isDraft = body.status === "draft";
-    const template = await prisma.oneOnOneTemplate.findFirst({
-      where: { id: body.templateId, teamId },
-    });
-    if (!template) {
-      return c.json({ error: { message: "Template not found", code: "NOT_FOUND" } }, 404);
-    }
+    const template =
+      body.templateId != null && body.templateId.trim()
+        ? await prisma.oneOnOneTemplate.findFirst({
+            where: { id: body.templateId.trim(), teamId },
+          })
+        : null;
 
-    const fields = appendLeaderCommentsFields(parseJsonArray(template.fields));
+    // New check-ins use the fixed open write-up. A missing legacy templateId
+    // falls through to open rather than blocking create.
+    const fields = template
+      ? appendLeaderCommentsFields(parseJsonArray(template.fields))
+      : (openCheckInFields() as ReturnType<typeof parseJsonArray>);
     const validationError = validateResponses(fields, body.responses, { draft: isDraft });
     if (validationError) {
       return c.json({ error: { message: validationError, code: "VALIDATION_ERROR" } }, 400);
     }
 
     const templateFieldsJson = JSON.stringify(fields);
+    const meetingTitle =
+      template?.title ??
+      (body.templateTitle?.trim() || OPEN_CHECK_IN_TITLE);
 
     const requestedFollowUps = body.followUpTasks ?? [];
     // A draft holds its follow-ups as data; only publishing creates tasks.
@@ -909,8 +923,8 @@ oneOnOneMeetingsRouter.post(
             memberUserId,
             sourceVideoRoomId: body.sourceVideoRoomId ?? null,
             calendarEventId: provenance.calendarEventId ?? null,
-            templateId: template.id,
-            templateTitle: template.title,
+            templateId: template?.id ?? null,
+            templateTitle: meetingTitle,
             templateFields: templateFieldsJson,
             responses: JSON.stringify(body.responses),
             status: isDraft ? "draft" : "published",

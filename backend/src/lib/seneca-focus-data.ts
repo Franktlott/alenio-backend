@@ -93,7 +93,6 @@ export async function loadSenecaFocusFacts(
   const latestCheckInByMember = new Map<string, Date>();
   for (const meeting of meetings) {
     if (!managedIds.has(meeting.memberUserId)) continue;
-    if (standards.requiredCheckInTemplateId && meeting.templateId !== standards.requiredCheckInTemplateId) continue;
     const candidate = meeting.publishedAt ?? meeting.createdAt;
     const current = latestCheckInByMember.get(meeting.memberUserId);
     if (!current || candidate > current) {

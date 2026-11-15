@@ -121,6 +121,11 @@ const envSchema = z.object({
     .string()
     .optional()
     .default("gpt-4o-mini-transcribe"),
+  /**
+   * OpenAI Realtime transcription model for live in-person check-in STT.
+   * Falls back to the batch transcribe model when unset.
+   */
+  OPENAI_REALTIME_TRANSCRIBE_MODEL: z.string().optional(),
   /** Maximum image generations allowed per user per UTC day. */
   SENECA_IMAGE_DAILY_LIMIT: z.string().optional().default("5"),
   /**

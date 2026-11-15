@@ -10,7 +10,6 @@ export function workspaceDevelopmentHref(
     createGoal?: boolean;
     startCheckIn?: boolean;
     checkInId?: string | null;
-    templateId?: string | null;
     plannedEventId?: string | null;
     checkInLaunchId?: string | null;
   },
@@ -41,7 +40,6 @@ export function workspaceDevelopmentHref(
       ...(options.createGoal ? { createGoal: "true" } : {}),
       ...(options.startCheckIn ? { startCheckIn: "true" } : {}),
       ...(options.checkInId ? { checkInId: options.checkInId } : {}),
-      ...(options.templateId ? { templateId: options.templateId } : {}),
       ...(options.plannedEventId
         ? { plannedEventId: options.plannedEventId }
         : {}),

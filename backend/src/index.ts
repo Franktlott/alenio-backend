@@ -2764,6 +2764,14 @@ void import("./lib/enterprise-org-access")
   });
 
 import { handleRealtimeUpgrade, realtimeWebsocket } from "./lib/realtime-ws";
+import {
+  checkInLiveTranscriptionWebsocket,
+  handleCheckInLiveTranscriptionUpgrade,
+  type CheckInLiveSocketData,
+} from "./lib/check-in-live-transcription-ws";
+import type { RealtimeSocketData } from "./lib/realtime-hub";
+
+type AppSocketData = RealtimeSocketData | CheckInLiveSocketData;
 
 const port = Number(process.env.PORT) || 3000;
 
@@ -2774,6 +2782,9 @@ console.log(
 );
 
 console.log("✅ Realtime messaging WebSocket enabled at /api/realtime");
+console.log(
+  "✅ Check-in live transcription WebSocket enabled at /api/check-in-transcription",
+);
 
 /** Mount Better Auth after boot so Railway /health is never blocked by auth package init. */
 void import("./lib/register-better-auth")
@@ -2794,17 +2805,39 @@ export default {
   async fetch(
     req: Request,
     server: {
-      upgrade: (
-        req: Request,
-        options: { data: import("./lib/realtime-hub").RealtimeSocketData },
-      ) => boolean;
+      upgrade: (req: Request, options: { data: AppSocketData }) => boolean;
     },
   ) {
     const url = new URL(req.url);
     if (url.pathname === "/api/realtime") {
-      return handleRealtimeUpgrade(req, server);
+      return handleRealtimeUpgrade(req, server as any);
+    }
+    if (url.pathname === "/api/check-in-transcription") {
+      return handleCheckInLiveTranscriptionUpgrade(req, server as any);
     }
     return app.fetch(req);
   },
-  websocket: realtimeWebsocket,
+  websocket: {
+    open(ws: import("bun").ServerWebSocket<AppSocketData>) {
+      if (ws.data && "kind" in ws.data && ws.data.kind === "check_in_live_transcription") {
+        checkInLiveTranscriptionWebsocket.open(ws as any);
+        return;
+      }
+      realtimeWebsocket.open(ws as any);
+    },
+    message(ws: import("bun").ServerWebSocket<AppSocketData>, message: string | Buffer) {
+      if (ws.data && "kind" in ws.data && ws.data.kind === "check_in_live_transcription") {
+        checkInLiveTranscriptionWebsocket.message(ws as any, message);
+        return;
+      }
+      void realtimeWebsocket.message(ws as any, message);
+    },
+    close(ws: import("bun").ServerWebSocket<AppSocketData>) {
+      if (ws.data && "kind" in ws.data && ws.data.kind === "check_in_live_transcription") {
+        checkInLiveTranscriptionWebsocket.close(ws as any);
+        return;
+      }
+      realtimeWebsocket.close(ws as any);
+    },
+  },
 };

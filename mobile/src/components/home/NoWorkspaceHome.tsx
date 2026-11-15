@@ -35,6 +35,11 @@ import { elevation, gradients, palette } from "@/theme";
 
 const PURPLE = palette.violet;
 
+/** Phone / half-column hero — ~2.2:1, same mountain + sparkle as the wide asset. */
+const HOME_HERO_MOUNTAIN_HALF = require("@/assets/alenio-home-hero-mountain-half.jpg");
+/** Wide / tablet hero — 16:9 of the same photo so cover never reframes the scene. */
+const HOME_HERO_MOUNTAIN_WIDE = require("@/assets/alenio-home-hero-mountain-wide.jpg");
+
 type Props = {
   connections: ConnectionsResponse | undefined;
   hasWorkspace: boolean;
@@ -270,7 +275,7 @@ export function NoWorkspaceHome({
     <View style={[styles.heroShadow, wide ? styles.heroShadowWide : null]}>
       <View style={[styles.hero, !wide ? styles.heroNarrow : styles.heroWide]}>
         <Image
-          source={require("@/assets/alenio-welcome-mountain-ridge-v2.jpg")}
+          source={wide ? HOME_HERO_MOUNTAIN_WIDE : HOME_HERO_MOUNTAIN_HALF}
           style={[styles.heroPhoto, !wide ? styles.heroPhotoNarrow : null]}
           resizeMode="cover"
           accessibilityIgnoresInvertColors

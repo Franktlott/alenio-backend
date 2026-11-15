@@ -22,6 +22,7 @@ import {
   headerCropRect,
   type HeaderCropRect,
 } from "@/lib/profile-header-frame";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 const BRAND = "#4361EE";
 
@@ -51,6 +52,7 @@ export function HeaderCropSheet({
       visible={photo != null}
       animationType="slide"
       presentationStyle="fullScreen"
+      supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
       statusBarTranslucent
       onRequestClose={busy ? undefined : onCancel}
     >

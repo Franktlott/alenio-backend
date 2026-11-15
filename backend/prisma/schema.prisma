@@ -1068,6 +1068,10 @@ model CheckInRecording {
   meeting      OneOnOneMeeting?          @relation(fields: [meetingId], references: [id], onDelete: SetNull)
   segments     CheckInRecordingSegment[]
   /**
+   * Finalized live-transcription lines (interim text is never stored).
+   */
+  transcriptSegments CheckInTranscriptSegment[]
+  /**
    * Audio lifecycle, kept apart from `status`, which tracks the write-up.
    * pending = still capturing; available = the creator can replay it;
    * deleting = access revoked while the objects go; deleted; deletion_failed
@@ -1116,6 +1120,37 @@ model CheckInRecordingSegment {
 
   @@unique([recordingId, index])
   @@index([status])
+}
+
+/**
+ * One finalized live-transcription utterance for a check-in recording.
+ * Interim (partial) recognition stays client-side only.
+ */
+model CheckInTranscriptSegment {
+  id              String           @id @default(cuid())
+  recordingId     String
+  recording       CheckInRecording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  /**
+   * Display / stitch order within the recording.
+   */
+  sequence        Int
+  startMs         Int              @default(0)
+  endMs           Int?
+  text            String
+  /**
+   * Only when the provider reliably identifies a speaker. Never invent labels.
+   */
+  speakerLabel    String?
+  /**
+   * Provider or client stable id for idempotent upserts on retries.
+   */
+  providerEventId String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([recordingId, sequence])
+  @@unique([recordingId, providerEventId])
+  @@index([recordingId, sequence])
 }
 
 model DevelopmentGoal {

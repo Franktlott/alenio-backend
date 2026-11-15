@@ -4,17 +4,15 @@ import {
   type AudioDeleteReason,
   type AudioStatus,
 } from "./check-in-audio-access";
-import { appendLeaderCommentsFields, findLeaderCommentsField } from "./check-in-leader-comments";
+import { findLeaderCommentsField } from "./check-in-leader-comments";
 import {
-  parseTemplateFields,
   validateCheckInResponses,
   type CheckInTemplateField,
 } from "./check-in-responses";
-import { mapTranscriptToTemplate } from "./check-in-transcript-mapping";
 import {
   OPEN_CHECK_IN_RECAP_FIELD_ID,
   OPEN_CHECK_IN_TITLE,
-  openCheckInRecapField,
+  openCheckInFields,
   structureOpenTranscript,
 } from "./open-check-in-structuring";
 import {
@@ -22,6 +20,7 @@ import {
   downloadStorageObject,
 } from "./firebase-storage";
 import { checkInAudioFormatForPath, transcribeAudio } from "./seneca-transcribe";
+import { preferLiveTranscriptForFinish } from "./check-in-live-transcription";
 
 /** A single segment is capped well under the model's limit; the app rolls files every 5 minutes. */
 export const RECORDING_SEGMENT_MAX_BYTES = 12 * 1024 * 1024;
@@ -201,6 +200,30 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     });
   }
 
+  // Prefer finalized live-transcription segments when they already cover enough
+  // speech. Fall back to batch segment STT so a dead live session still writes up.
+  const liveTranscript = await preferLiveTranscriptForFinish(
+    recordingId,
+    MIN_TRANSCRIPT_WORDS,
+  );
+  if (liveTranscript) {
+    if (recording.segments.length > 0) {
+      await startAudioRetention(recordingId);
+    }
+    await prisma.checkInRecording.update({
+      where: { id: recordingId },
+      data: { transcript: liveTranscript, status: "transcribing" },
+    });
+    return writeUpTranscript({
+      recordingId,
+      teamId: recording.teamId,
+      memberUserId: recording.memberUserId,
+      createdById: recording.createdById,
+      templateId: recording.templateId,
+      transcript: liveTranscript,
+    });
+  }
+
   // Finish means every segment is uploaded, so the retention window opens here
   // rather than after transcription. Writing it up can then take as long as it
   // needs, and a failed write-up still leaves the audio replayable for a retry.
@@ -267,20 +290,9 @@ export async function writeUpTranscript(params: {
     return { ok: false, message: NOT_ENOUGH_HEARD_MESSAGE };
   }
 
-  // An open check-in has no template: Seneca decides the questions from what
-  // was actually discussed, and the draft carries that structure instead.
-  const template = params.templateId
-    ? await prisma.oneOnOneTemplate.findFirst({
-        where: { id: params.templateId, teamId: params.teamId },
-      })
-    : null;
-  if (params.templateId && !template) {
-    await prisma.checkInRecording.update({
-      where: { id: recordingId },
-      data: { status: "failed", error: "That check-in template no longer exists." },
-    });
-    return { ok: false, message: "That check-in template no longer exists." };
-  }
+  // Templates are retired: every recording becomes the fixed open write-up.
+  // A leftover templateId from an old client is ignored.
+  void params.templateId;
 
   const member = await prisma.user.findUnique({
     where: { id: params.memberUserId },
@@ -288,54 +300,29 @@ export async function writeUpTranscript(params: {
   });
   const memberName = member?.name?.trim() || member?.email || "the team member";
 
-  let title = template?.title ?? OPEN_CHECK_IN_TITLE;
-  let fields: CheckInTemplateField[] = template
-    ? appendLeaderCommentsFields(parseTemplateFields(template.fields))
-    : [];
+  let title = OPEN_CHECK_IN_TITLE;
+  let fields: CheckInTemplateField[] = openCheckInFields() as CheckInTemplateField[];
   let responses: Record<string, string | number> = {};
   let unanswered: string[] = [];
   let modelFoundNothing = false;
   try {
-    if (template) {
-      const mapped = await mapTranscriptToTemplate({
-        transcript,
-        templateTitle: template.title,
-        fields,
-        memberName,
-      });
-      responses = mapped.responses;
-      unanswered = mapped.unanswered;
-      modelFoundNothing = Object.keys(responses).length === 0;
-    } else {
-      const structured = await structureOpenTranscript({ transcript, memberName });
-      title = structured.title;
-      fields = appendLeaderCommentsFields([
-        openCheckInRecapField() as CheckInTemplateField,
-      ]);
-      responses = structured.recap
-        ? { [OPEN_CHECK_IN_RECAP_FIELD_ID]: structured.recap }
-        : {};
-      // The summary is the leader's own section, the same as a guided check-in.
-      const leaderField = findLeaderCommentsField(fields);
-      if (leaderField && structured.summary) {
-        responses[leaderField.id] = structured.summary;
-      }
-      // A summary with no topics behind it has nothing in the transcript to stand on.
-      modelFoundNothing = !structured.recap;
+    const structured = await structureOpenTranscript({ transcript, memberName });
+    title = structured.title;
+    fields = openCheckInFields() as CheckInTemplateField[];
+    responses = structured.recap
+      ? { [OPEN_CHECK_IN_RECAP_FIELD_ID]: structured.recap }
+      : {};
+    const leaderField = findLeaderCommentsField(fields);
+    if (leaderField && structured.summary) {
+      responses[leaderField.id] = structured.summary;
     }
+    modelFoundNothing = !structured.recap;
   } catch (err) {
     console.error("[check-in-recordings] mapping failed", err);
     // Fall back to handing the leader the raw transcript rather than nothing.
-    if (template) {
-      const leaderField = findLeaderCommentsField(fields);
-      responses = leaderField ? { [leaderField.id]: transcript } : {};
-    } else {
-      title = OPEN_CHECK_IN_TITLE;
-      fields = appendLeaderCommentsFields([
-        openCheckInRecapField() as CheckInTemplateField,
-      ]);
-      responses = { [OPEN_CHECK_IN_RECAP_FIELD_ID]: transcript };
-    }
+    title = OPEN_CHECK_IN_TITLE;
+    fields = openCheckInFields() as CheckInTemplateField[];
+    responses = { [OPEN_CHECK_IN_RECAP_FIELD_ID]: transcript };
     unanswered = fields
       .filter((field) => field.type !== "section" && field.type !== "associate_notes")
       .map((field) => field.label);
@@ -358,7 +345,7 @@ export async function writeUpTranscript(params: {
     data: {
       teamId: params.teamId,
       memberUserId: params.memberUserId,
-      templateId: template?.id ?? null,
+      templateId: null,
       templateTitle: title,
       templateFields: JSON.stringify(fields),
       responses: JSON.stringify(responses),

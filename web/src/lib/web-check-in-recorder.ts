@@ -101,6 +101,11 @@ export class WebCheckInRecorder {
     }, 1000);
   }
 
+  /** Shared mic stream for live transcription PCM (do not stop tracks yourself). */
+  getStream(): MediaStream | null {
+    return this.stream;
+  }
+
   /** 0..1 loudness of the microphone right now. */
   level(): number {
     if (!this.analyser || !this.levelBuffer || this.paused) return 0;

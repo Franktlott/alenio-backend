@@ -2,7 +2,6 @@ import React from "react";
 import { Image, StyleSheet, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Defs, Pattern, RadialGradient, Rect, Stop } from "react-native-svg";
-import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { gradients, palette } from "@/theme";
 
 type Props = {
@@ -17,14 +16,11 @@ type Props = {
  * violet and cyan glows and dot grid, and the dusk peak from the auth pages.
  * Absolutely positioned, so it goes in a layout's backdrop slot.
  *
- * On the Duo, the band stops before the status column so purple does not sit
- * under the system cluster. Content clears that column separately.
+ * Paints edge-to-edge on Duo (including under the status column) so the
+ * mountain reaches the glass; tab content clears that column itself.
  */
 export function AppHeaderBand({ height, pageColor = palette.page }: Props) {
   const { width } = useWindowDimensions();
-  const { iconRailEdge, iconRailWidth } = useAdaptiveLayout();
-  const clearLeft = iconRailEdge === "left" ? iconRailWidth : 0;
-  const clearRight = iconRailEdge === "right" ? iconRailWidth : 0;
   /**
    * The peak sits at about 80% across and a third of the way down the photo.
    * Sizing from both edges keeps it framed at the right of the band on a phone
@@ -39,16 +35,7 @@ export function AppHeaderBand({ height, pageColor = palette.page }: Props) {
       pointerEvents="none"
       style={[StyleSheet.absoluteFill, { backgroundColor: pageColor }]}
     >
-      <View
-        style={[
-          styles.band,
-          {
-            height,
-            left: clearLeft,
-            right: clearRight,
-          },
-        ]}
-      >
+      <View style={[styles.band, { height }]}>
         <LinearGradient
           colors={[...gradients.band]}
           locations={[0, 0.55, 1]}

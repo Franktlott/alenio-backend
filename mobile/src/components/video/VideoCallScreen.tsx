@@ -763,7 +763,7 @@ export default function VideoCallScreen() {
       templateTitle:
         session?.templateTitle ??
         writeUpPayloadRef.current?.templateTitle ??
-        "Open check-in",
+        "Check-in",
     };
   };
 

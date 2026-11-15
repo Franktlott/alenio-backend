@@ -51,6 +51,12 @@ export function CheckInTranscriptDrawer({
   if (!meetingId) return null;
   const data = recording.data;
   const transcript = data?.transcript?.trim() ?? "";
+  const segments = data?.transcriptSegments ?? [];
+
+  function formatMs(ms: number): string {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  }
 
   return createPortal(
     <div className="dcat-layer ci-transcript-layer" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -60,8 +66,8 @@ export function CheckInTranscriptDrawer({
             <FileAudio size={17} strokeWidth={2.3} />
           </span>
           <div className="dcat-head-copy">
-            <h2>Conversation transcript</h2>
-            <p>{title ? `${title} · Only you can see this.` : "Only you can see this."}</p>
+            <h2>Transcript</h2>
+            <p>{title ? `${title} · Leaders only.` : "Leaders on this check-in only."}</p>
           </div>
           <button type="button" className="dcat-close" aria-label="Close" onClick={onClose}>
             <X size={18} strokeWidth={2.2} />
@@ -82,7 +88,41 @@ export function CheckInTranscriptDrawer({
           ) : data ? (
             <>
               <AudioSection teamId={teamId} userId={userId} recording={data} />
-              {transcript ? (
+              {segments.length > 0 ? (
+                <section className="ci-transcript">
+                  <div className="ci-transcript-head">
+                    <h4>{data.source === "video_call" ? "From the video call" : "From your recording"}</h4>
+                    <button
+                      type="button"
+                      className="wm-link-btn"
+                      onClick={() => {
+                        const text = segments
+                          .map((segment) => {
+                            const stamp = formatMs(segment.startMs);
+                            const who = segment.speakerLabel ? ` — ${segment.speakerLabel}` : "";
+                            return `${stamp}${who}\n${segment.text}`;
+                          })
+                          .join("\n\n");
+                        void navigator.clipboard?.writeText(text).then(() => setCopied(true));
+                      }}
+                    >
+                      <Copy size={12} strokeWidth={2.4} />
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                  <div className="ci-transcript-segments" data-testid="check-in-transcript-text">
+                    {segments.map((segment) => (
+                      <div key={segment.id} className="ci-transcript-segment">
+                        <div className="ci-transcript-time">
+                          {formatMs(segment.startMs)}
+                          {segment.speakerLabel ? ` — ${segment.speakerLabel}` : ""}
+                        </div>
+                        <p className="ci-transcript-text">{segment.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : transcript ? (
                 <section className="ci-transcript">
                   <div className="ci-transcript-head">
                     <h4>{data.source === "video_call" ? "From the video call" : "From your recording"}</h4>

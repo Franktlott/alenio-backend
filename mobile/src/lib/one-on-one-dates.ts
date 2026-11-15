@@ -5,26 +5,17 @@ type MeetingDateFields = {
   templateId?: string | null;
 };
 
-type CheckInStandardsFilter = {
-  requiredCheckInTemplateId?: string | null;
-};
-
 /** Published check-ins that count toward workplace standards (matches member-stats API). */
 export function publishedCheckInsForStandards<T extends MeetingDateFields>(
   meetings: T[],
-  standards: CheckInStandardsFilter,
 ): T[] {
-  const published = meetings.filter((meeting) => meeting.status !== "draft");
-  const requiredTemplateId = standards.requiredCheckInTemplateId;
-  if (!requiredTemplateId) return published;
-  return published.filter((meeting) => meeting.templateId === requiredTemplateId);
+  return meetings.filter((meeting) => meeting.status !== "draft");
 }
 
 export function latestPublishedCheckInForStandards<T extends MeetingDateFields>(
   meetings: T[],
-  standards: CheckInStandardsFilter,
 ): T | null {
-  const eligible = publishedCheckInsForStandards(meetings, standards);
+  const eligible = publishedCheckInsForStandards(meetings);
   if (eligible.length === 0) return null;
   return [...eligible].sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))[0] ?? null;
 }

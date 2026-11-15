@@ -70,9 +70,6 @@ export async function calculateCurrentTeamHealth(teamId: string, now = new Date(
           teamId,
           memberUserId: { in: memberUserIds },
           status: "published",
-          ...(standards.requiredCheckInTemplateId
-            ? { templateId: standards.requiredCheckInTemplateId }
-            : {}),
         },
         select: { memberUserId: true, publishedAt: true, createdAt: true },
       }),

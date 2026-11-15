@@ -73,7 +73,6 @@ const keys = {
   planned: (teamId: string, userId: string) => ["workspace", "member", teamId, userId, "planned"] as const,
   goals: (teamId: string, userId: string) => ["workspace", "member", teamId, userId, "goals"] as const,
   recordings: (teamId: string, userId: string) => ["workspace", "member", teamId, userId, "recordings"] as const,
-  templates: (teamId: string) => ["workspace", "check-in-templates", teamId] as const,
 };
 
 function roleLabel(role: string): string {

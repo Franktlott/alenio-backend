@@ -170,7 +170,7 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
   const { meeting, memberName, managerName, meetingNumber, introText } = options;
   const intro =
     introText?.trim() ||
-    "This check-in template is designed to help managers and team members have meaningful conversations, align on priorities, and support ongoing growth and development.";
+    "This check-in is designed to help managers and team members have meaningful conversations, align on priorities, and support ongoing growth and development.";
   const sectionsHtml = renderSections(meeting.templateFields, meeting.responses) + renderAssociateFeedbackHtml(meeting);
   const followUpTasksHtml = renderFollowUpTasksHtml(meeting.followUpTasks ?? []);
   const dateStr = formatPrintDate(oneOnOneDisplayDate(meeting));
