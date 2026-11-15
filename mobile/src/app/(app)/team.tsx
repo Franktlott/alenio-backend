@@ -199,7 +199,7 @@ export default function TeamScreen() {
       void queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
       void queryClient.invalidateQueries({ queryKey: ["teams"] });
       void queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
-      void queryClient.invalidateQueries({ queryKey: ["team-momentum", activeTeamId] });
+      void queryClient.invalidateQueries({ queryKey: ["team-stars", activeTeamId] });
       if (results.length > 1) {
         toast({ title: `${results.length} members invited`, preset: "done" });
       } else if (results[0]?.added && results[0].user) {

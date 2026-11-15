@@ -113,11 +113,10 @@ function personalMomentumMetric(input: SnapshotPagesInput): SnapshotMetric {
   const metric = countMetric(
     {
       key: "momentum",
-      label: "Momentum",
-      accessibilityLabel: "Your current on-time task streak",
+      label: "Stars",
+      accessibilityLabel: "Your current star count",
       icon: "streak",
-      // Gold marks momentum everywhere, matching the milestone card in Updates.
-      iconColor: "#B7791F",
+      iconColor: "#C9A227",
       onPress: input.onPressMomentum,
     },
     input.momentumCount,
@@ -131,12 +130,12 @@ function personalMomentumMetric(input: SnapshotPagesInput): SnapshotMetric {
   if (input.momentumCount === 0) {
     return {
       ...metric,
-      secondary: { text: "Ready to build", tone: "neutral" },
+      secondary: { text: "Ready to fill stars", tone: "neutral" },
     };
   }
   return {
     ...metric,
-    secondary: { text: "Current task streak", tone: "good" },
+    secondary: { text: "Current stars", tone: "good" },
   };
 }
 
@@ -208,11 +207,10 @@ function buildManagerPages(input: SnapshotPagesInput): SnapshotPage[] {
   const momentum = countMetric(
     {
       key: "momentum",
-      label: "Momentum",
-      accessibilityLabel: "Members with an active on-time task streak",
+      label: "Stars",
+      accessibilityLabel: "Members with stars",
       icon: "streak",
-      // Gold marks momentum everywhere, matching the milestone card in Updates.
-      iconColor: "#B7791F",
+      iconColor: "#C9A227",
       onPress: input.onPressMomentum,
     },
     input.momentumCount,
@@ -227,7 +225,7 @@ function buildManagerPages(input: SnapshotPagesInput): SnapshotPage[] {
         development,
         {
           ...momentum,
-          secondary: { text: "Active task streaks", tone: "neutral" },
+          secondary: { text: "Members with stars", tone: "neutral" },
         },
       ],
     },

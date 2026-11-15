@@ -202,7 +202,7 @@ function RecordingFlow({
   const stickToBottomRef = useRef(true);
   const [elapsedSec, setElapsedSec] = useState(0);
   const elapsedRef = useRef(0);
-  const [showTranscript, setShowTranscript] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(true);
   const [transcriptLines, setTranscriptLines] = useState<LiveTranscriptLine[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveTranscriptionStatus>("idle");
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -228,7 +228,7 @@ function RecordingFlow({
     setStarting(false);
     setError(null);
     setStage("uploading");
-    setShowTranscript(false);
+    setShowTranscript(true);
     setTranscriptLines([]);
     setLiveStatus("idle");
     setLiveError(null);
@@ -400,12 +400,17 @@ function RecordingFlow({
     onClose();
   }, [teamId, memberUserId, onClose, stopLiveTranscription]);
 
-  useEffect(() => {
-    if (!showTranscript || !stickToBottomRef.current) return;
+  const scrollTranscriptToEnd = useCallback((animated = true) => {
+    if (!stickToBottomRef.current) return;
     requestAnimationFrame(() => {
-      transcriptScrollRef.current?.scrollToEnd({ animated: true });
+      transcriptScrollRef.current?.scrollToEnd({ animated });
     });
-  }, [transcriptLines, showTranscript]);
+  }, []);
+
+  useEffect(() => {
+    if (!showTranscript) return;
+    scrollTranscriptToEnd(true);
+  }, [transcriptLines, showTranscript, scrollTranscriptToEnd]);
 
   /**
    * Asks before throwing away a conversation, but stays out of the way when
@@ -670,6 +675,8 @@ function RecordingFlow({
                   style={styles.transcriptScroll}
                   contentContainerStyle={styles.transcriptList}
                   showsVerticalScrollIndicator={false}
+                  onContentSizeChange={() => scrollTranscriptToEnd(true)}
+                  onLayout={() => scrollTranscriptToEnd(false)}
                   onScrollBeginDrag={() => {
                     stickToBottomRef.current = false;
                   }}
@@ -734,7 +741,13 @@ function RecordingFlow({
             ) : null}
 
             <Pressable
-              onPress={() => setShowTranscript((value) => !value)}
+              onPress={() => {
+                setShowTranscript((value) => {
+                  const next = !value;
+                  if (next) stickToBottomRef.current = true;
+                  return next;
+                });
+              }}
               style={styles.transcriptToggle}
               accessibilityRole="button"
               accessibilityLabel={

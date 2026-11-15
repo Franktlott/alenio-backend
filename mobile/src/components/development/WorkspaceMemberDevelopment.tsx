@@ -29,8 +29,8 @@ type Props = {
 };
 
 const SECTIONS: { key: WorkspaceDevelopmentSection; label: string }[] = [
-  { key: "goals", label: "Goals" },
   { key: "check-ins", label: "Check-ins" },
+  { key: "goals", label: "Goals" },
 ];
 
 export function WorkspaceMemberDevelopment({

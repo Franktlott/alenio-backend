@@ -1,5 +1,9 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { projectMomentum, type MomentumProjection } from "./momentum-projection";
+import {
+  isStarsMilestone,
+  projectMomentum,
+  type MomentumProjection,
+} from "./momentum-projection";
 
 type MomentumDb = Prisma.TransactionClient;
 
@@ -26,7 +30,8 @@ export function eligibleMomentumUserIds(input: {
   assignedUserIds: readonly string[];
   subtaskCompletionUserIds: readonly (readonly string[])[];
 }): string[] {
-  if (!input.dueAt) return [];
+  // Stars: assigned workspace completions count even without a due date.
+  void input.dueAt;
   const assigned = [...new Set(input.assignedUserIds)];
   if (!input.isJoint) {
     return assigned.includes(input.actorUserId) ? [input.actorUserId] : [];
@@ -43,10 +48,6 @@ export function eligibleMomentumUserIds(input: {
     if (contributed) credited.add(userId);
   }
   return assigned.filter((userId) => credited.has(userId));
-}
-
-function isMilestone(value: number): boolean {
-  return value === 5 || value === 10 || value === 15 || (value >= 20 && value % 10 === 0);
 }
 
 async function refreshProjections(
@@ -90,27 +91,40 @@ async function refreshProjections(
     projections[userId] = projection;
 
     const changed = changedUserIds.has(userId);
-    const hasLateHistory = userCredits.some((credit) => !credit.onTime);
+    // Keep the all-time high even if stars drop after an uncomplete.
+    const personalBestStreak = Math.max(
+      member.personalBestStreak,
+      projection.personalBestStreak,
+    );
     const crossedExistingBest =
       changed &&
       member.personalBestStreak > 0 &&
       projection.currentStreak > member.personalBestStreak &&
-      hasLateHistory &&
       !member.personalBestCelebrated;
-    const personalBestCelebrated =
-      projection.currentStreak === 0
-        ? false
-        : crossedExistingBest
-          ? true
-          : member.personalBestCelebrated;
+    const personalBestCelebrated = crossedExistingBest
+      ? true
+      : member.personalBestCelebrated;
 
     await db.teamMember.update({
       where: { userId_teamId: { userId, teamId } },
-      data: { ...projection, personalBestCelebrated },
+      data: {
+        currentStreak: projection.currentStreak,
+        personalBestStreak,
+        momentumRunStartedAt: projection.momentumRunStartedAt,
+        momentumLastQualifiedAt: projection.momentumLastQualifiedAt,
+        personalBestCelebrated,
+      },
     });
 
+    projections[userId] = {
+      ...projection,
+      personalBestStreak,
+    };
+
     if (userId === actorUserId && changed) {
-      if (isMilestone(projection.currentStreak)) milestoneCount = projection.currentStreak;
+      if (isStarsMilestone(projection.currentStreak)) {
+        milestoneCount = projection.currentStreak;
+      }
       if (crossedExistingBest) personalBestCount = projection.currentStreak;
     }
   }
@@ -184,6 +198,9 @@ export async function applyMomentumCompletion(
       creditIds.push(prior.id);
       continue;
     }
+    const dueAt = task.dueDate ?? input.completedAt;
+    // Stars ignore late vs on-time; keep the column for historical rows.
+    const onTime = task.dueDate ? input.completedAt <= task.dueDate : true;
     const credit = await db.momentumCompletionCredit.upsert({
       where: {
         teamId_sourceTaskId_creditedUserId: {
@@ -199,17 +216,17 @@ export async function applyMomentumCompletion(
         creditedTeamMemberId: memberIdByUserId.get(userId),
         sourceTaskTitle: task.title,
         sourceTaskIncognito: task.incognito,
-        dueAt: task.dueDate!,
+        dueAt,
         completedAt: input.completedAt,
-        onTime: input.completedAt <= task.dueDate!,
+        onTime,
       },
       update: {
         creditedTeamMemberId: memberIdByUserId.get(userId),
         sourceTaskTitle: task.title,
         sourceTaskIncognito: task.incognito,
-        dueAt: task.dueDate!,
+        dueAt,
         completedAt: input.completedAt,
-        onTime: input.completedAt <= task.dueDate!,
+        onTime,
         revokedAt: null,
         revocationReason: null,
       },

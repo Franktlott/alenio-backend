@@ -21,6 +21,22 @@ describe("workspaceDevelopmentHref", () => {
     });
   });
 
+  test("defaults to check-ins when opening a member", () => {
+    expect(
+      workspaceDevelopmentHref("team-1", {
+        memberUserId: "member-1",
+      }),
+    ).toEqual({
+      pathname: "/(app)/execute",
+      params: {
+        teamId: "team-1",
+        mode: "development",
+        memberUserId: "member-1",
+        developmentSection: "check-ins",
+      },
+    });
+  });
+
   test("preserves scheduled check-in launch context", () => {
     expect(
       workspaceDevelopmentHref("team-1", {

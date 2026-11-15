@@ -104,7 +104,7 @@ export function SenecaCreateTaskCard({ teamId, role, proposal, onSaved, onDismis
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const duePart = dueDate ? ` due ${formatDueDate(dueDate)}` : "";
       const summary = isReminder
-        ? `Done — created your private task: "${title.trim()}"${duePart}. It won’t affect Team Momentum.`
+        ? `Done — created your private task: "${title.trim()}"${duePart}. It won’t fill Stars.`
         : hasMultipleAssignees && !isJoint
           ? `Done — created ${assigneeCount} separate tasks for ${assigneeLabel}: "${title.trim()}"${duePart}.`
           : hasMultipleAssignees && isJoint
@@ -182,7 +182,7 @@ export function SenecaCreateTaskCard({ teamId, role, proposal, onSaved, onDismis
           </View>
           <View style={styles.privateNoteCopy}>
             <Text style={styles.privateNoteTitle}>Private to you</Text>
-            <Text style={styles.privateNoteText}>Hidden from your team · Excluded from Momentum</Text>
+            <Text style={styles.privateNoteText}>Hidden from your team · Excluded from Stars</Text>
           </View>
         </View>
       ) : null}

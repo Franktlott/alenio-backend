@@ -356,6 +356,7 @@ export type SenecaContextsResponse = {
   data: SenecaContextOption[];
 };
 
+/** @deprecated Stars no longer use momentum bands. */
 export type TeamMomentumBand = "strong" | "building" | "ready_to_rebuild";
 
 export type TeamMomentumNotEnoughActivityReason = "no_qualifying_completions";
@@ -367,8 +368,14 @@ export type TeamMomentumMemberSummary = {
   email: string;
   image: string | null;
   role: string;
+  /** Active star count (eligible assigned completions). */
   currentStreak: number;
+  currentStars: number;
   personalBestStreak: number;
+  personalBestStars: number;
+  nextMilestone: number;
+  remainingToMilestone: number;
+  needsNudge: boolean;
   momentumRunStartedAt: string | null;
   momentumLastQualifiedAt: string | null;
   completedThisMonth: number;
@@ -414,6 +421,12 @@ export type TeamMomentumLeaderSummary = {
   activeWindowDays: 30;
   activeCount: number;
   eligibleCount: number;
+  /** Flat roster sorted for coaching: needs nudge first, then fewest stars. */
+  roster: TeamMomentumMemberSummary[];
+  needsNudgeCount: number;
+  /**
+   * @deprecated Empty band groups kept briefly for older clients.
+   */
   groups: {
     strong: TeamMomentumGroupedMember[];
     building: TeamMomentumGroupedMember[];
@@ -425,7 +438,7 @@ export type TeamMomentumLeaderSummary = {
   };
   dashboard: TeamMomentumDashboardStats;
   /**
-   * Owners and team leaders see overdue counts and the task that reset a run.
+   * Owners and team leaders see overdue counts.
    * Every other member sees the crew rhythm without those coaching details.
    */
   coachingVisible: boolean;
@@ -493,6 +506,10 @@ export type TeamMomentumMemberDetail = {
   active: boolean;
   band: TeamMomentumBand | null;
   notEnoughActivityReason: TeamMomentumNotEnoughActivityReason | null;
+  nextMilestone: number;
+  remainingToMilestone: number;
+  filledInSegment: number;
+  segmentSize: number;
   currentRun: TeamMomentumCurrentRunEvidence;
   latestStreakBreakingLateCompletion: TeamMomentumStreakBreakingLateCompletion | null;
   activeTasks: TeamMomentumActiveTaskSummary[];

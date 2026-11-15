@@ -168,7 +168,7 @@ export function CreateTaskPage() {
         title={`Create ${noun}`}
         subtitle={
           isReminder
-            ? "This reminder is private to you and does not affect workspace activity or Momentum."
+            ? "This reminder is private to you and does not affect workspace activity or Stars."
             : "Assign teammates, choose a priority and due date, and add subtasks."
         }
       />

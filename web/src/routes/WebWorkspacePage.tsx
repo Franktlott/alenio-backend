@@ -38,7 +38,7 @@ const SECTION_SUBTITLE: Record<WorkspaceSection, string> = {
   tasks: "Assign, track and finish the work that keeps the day running.",
   calendar: "Events, shifts and meetings for everyone in the workspace.",
   members: "Everyone on the team, in one place.",
-  momentum: "Celebrate on-time work and spot who could use a hand.",
+  momentum: "Fill stars with assigned tasks and spot who could use a nudge.",
 };
 
 /** Workspace pages: a section menu beside the rail, then Overview (feed + calendar) or one section. */

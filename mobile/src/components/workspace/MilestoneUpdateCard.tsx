@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Flame } from "lucide-react-native";
+import { Star } from "lucide-react-native";
 import type { ActivityFeedItem } from "@/components/activity/types";
 import { FeedEngagementRow } from "@/components/workspace/FeedEngagementRow";
 import { FeedEventPill } from "@/components/workspace/FeedEventPill";
@@ -28,7 +28,7 @@ type Props = {
   testID?: string;
 };
 
-/** A momentum milestone: the Alenio flame, the streak, and what comes next. */
+/** A Stars milestone: gold star, the count, and what comes next. */
 export function MilestoneUpdateCard({
   item,
   currentUserId,
@@ -57,7 +57,7 @@ export function MilestoneUpdateCard({
       identity={
         <Text style={styles.identity} numberOfLines={2}>
           <Text style={styles.name}>{name}</Text>
-          <Text style={styles.action}> hit a momentum milestone</Text>
+          <Text style={styles.action}> hit a Stars milestone</Text>
         </Text>
       }
       footer={
@@ -77,13 +77,13 @@ export function MilestoneUpdateCard({
       }
     >
       <FeedEventPill
-        Icon={Flame}
-        label="MOMENTUM"
+        Icon={Star}
+        label="STARS"
         color={GOLD}
         testID={`${cardTestID}-pill`}
       />
       <Text style={styles.title} numberOfLines={1}>
-        {streak > 0 ? `${streak} tasks completed` : "On-time streak"}
+        {streak > 0 ? `${streak} stars` : "Stars milestone"}
       </Text>
       <Text
         style={styles.subtitle}

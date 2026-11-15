@@ -24,7 +24,7 @@ export function invalidateDevelopmentCaches(
     queryKey: ["planned-one-on-ones", teamId],
   });
   // Leader summaries sitting above the member list.
-  void queryClient.invalidateQueries({ queryKey: ["team-momentum", teamId] });
+  void queryClient.invalidateQueries({ queryKey: ["team-stars", teamId] });
   void queryClient.invalidateQueries({
     queryKey: ["team-health-history", teamId],
   });

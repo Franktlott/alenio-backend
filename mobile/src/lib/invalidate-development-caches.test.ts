@@ -26,7 +26,7 @@ describe("invalidateDevelopmentCaches", () => {
     expect(keys).toContainEqual(["calendar-events", "team-1"]);
     expect(keys).toContainEqual(["planned-one-on-ones", "team-1"]);
     // Leader summaries above the list.
-    expect(keys).toContainEqual(["team-momentum", "team-1"]);
+    expect(keys).toContainEqual(["team-stars", "team-1"]);
     expect(keys).toContainEqual(["team-health-history", "team-1"]);
     expect(keys).toContainEqual(["member-next-action", "team-1", "user-1"]);
   });

@@ -16,7 +16,7 @@ export function workspaceDevelopmentHref(
 ): Href {
   const section =
     options?.section ??
-    (options?.startCheckIn || options?.checkInId ? "check-ins" : "goals");
+    (options?.createGoal ? "goals" : "check-ins");
 
   if (!options?.memberUserId) {
     return {

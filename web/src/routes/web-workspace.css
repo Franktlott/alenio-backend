@@ -3002,6 +3002,12 @@
   margin-bottom: 8px;
 }
 
+.ci-live-transcript-scroll {
+  max-height: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .ci-live-transcript-pill {
   font-size: 11px;
   font-weight: 700;

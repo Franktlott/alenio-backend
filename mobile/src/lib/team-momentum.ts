@@ -1,3 +1,8 @@
+import {
+  nextStarsMilestone,
+  starsMilestoneSegment,
+} from "@/lib/stars";
+
 export type TeamMomentumBand = "strong" | "building" | "ready_to_rebuild";
 export type TeamMomentumNotEnoughActivityReason = "no_qualifying_completions";
 
@@ -9,7 +14,12 @@ export type TeamMomentumMemberSummary = {
   image: string | null;
   role: string;
   currentStreak: number;
+  currentStars?: number;
   personalBestStreak: number;
+  personalBestStars?: number;
+  nextMilestone?: number;
+  remainingToMilestone?: number;
+  needsNudge?: boolean;
   momentumRunStartedAt: string | null;
   momentumLastQualifiedAt: string | null;
   completedThisMonth: number;
@@ -50,6 +60,8 @@ export type TeamMomentumLeaderSummary = {
   activeWindowDays: 30;
   activeCount: number;
   eligibleCount: number;
+  roster?: TeamMomentumMemberSummary[];
+  needsNudgeCount?: number;
   groups: {
     strong: TeamMomentumGroupedMember[];
     building: TeamMomentumGroupedMember[];
@@ -59,12 +71,7 @@ export type TeamMomentumLeaderSummary = {
     count: number;
     members: TeamMomentumNotEnoughActivityMember[];
   };
-  /** Absent until the summary API that carries the chart is deployed. */
   dashboard?: TeamMomentumDashboardStats;
-  /**
-   * Absent on the summary from before members could open this page.
-   * False hides overdue counts and the task that reset someone else's run.
-   */
   coachingVisible?: boolean;
 };
 
@@ -111,6 +118,10 @@ export type TeamMomentumMemberDetail = {
   active: boolean;
   band: TeamMomentumBand | null;
   notEnoughActivityReason: TeamMomentumNotEnoughActivityReason | null;
+  nextMilestone?: number;
+  remainingToMilestone?: number;
+  filledInSegment?: number;
+  segmentSize?: number;
   currentRun: {
     startedAt: string | null;
     lastQualifiedAt: string | null;
@@ -131,12 +142,12 @@ export type TeamMomentumAccessState =
   | null;
 
 export const teamMomentumSummaryQueryKey = (teamId: string) =>
-  ["team-momentum", teamId, "summary"] as const;
+  ["team-stars", teamId, "summary"] as const;
 
 export const teamMomentumMemberDetailQueryKey = (
   teamId: string,
   memberUserId: string,
-) => ["team-momentum", teamId, "member", memberUserId] as const;
+) => ["team-stars", teamId, "member", memberUserId] as const;
 
 export function teamMomentumAccessState(
   error: unknown,
@@ -156,180 +167,72 @@ export function teamMomentumAccessState(
   return "unavailable";
 }
 
-function isStaleRun(
-  member: TeamMomentumMemberSummary,
-  generatedAt: string,
-  activeWindowDays: number,
-): boolean {
-  if (member.currentStreak <= 0) return true;
-  if (!member.momentumLastQualifiedAt) return true;
-  const generatedTime = new Date(generatedAt).getTime();
-  const qualifiedTime = new Date(member.momentumLastQualifiedAt).getTime();
-  if (!Number.isFinite(generatedTime) || !Number.isFinite(qualifiedTime))
-    return true;
-  return qualifiedTime < generatedTime - activeWindowDays * 24 * 60 * 60 * 1000;
+export function memberStars(member: TeamMomentumMemberSummary): number {
+  return member.currentStars ?? member.currentStreak ?? 0;
 }
 
-export function effectiveTeamMomentumBand(
-  member: TeamMomentumMemberSummary,
-  serverBand: TeamMomentumBand | null,
-  generatedAt: string,
-  activeWindowDays: number,
-): TeamMomentumBand | null {
-  if (
-    (serverBand === "strong" || serverBand === "building") &&
-    isStaleRun(member, generatedAt, activeWindowDays)
-  ) {
-    return "ready_to_rebuild";
-  }
-  return serverBand;
-}
-
-export function presentTeamMomentumSummary(summary: TeamMomentumLeaderSummary) {
-  const strong: TeamMomentumGroupedMember[] = [];
-  const building: TeamMomentumGroupedMember[] = [];
-  const readyToRebuild: TeamMomentumGroupedMember[] = [];
-  const rows = [
-    ...summary.groups.strong,
-    ...summary.groups.building,
-    ...summary.groups.readyToRebuild,
-  ];
-
-  for (const member of rows) {
-    const band =
-      effectiveTeamMomentumBand(
-        member,
-        member.band,
-        summary.generatedAt,
-        summary.activeWindowDays,
-      ) ?? "ready_to_rebuild";
-    const row = { ...member, band };
-    if (band === "strong") strong.push(row);
-    else if (band === "building") building.push(row);
-    else readyToRebuild.push(row);
-  }
-
+export function memberStarPath(member: TeamMomentumMemberSummary) {
+  const stars = memberStars(member);
+  const segment = starsMilestoneSegment(stars);
   return {
-    activeCount: strong.length + building.length,
-    strong,
-    building,
-    readyToRebuild,
-    notEnoughActivity: summary.notEnoughActivity.members,
+    ...segment,
+    nextMilestone: member.nextMilestone ?? segment.nextMilestone,
+    remainingToMilestone:
+      member.remainingToMilestone ?? segment.remainingToMilestone,
   };
 }
 
-/** Consecutive on-time completions that earn the strong band. */
-export const MOMENTUM_STRONG_STREAK = 3;
+/** Prefer API roster; fall back to flattening legacy band groups. */
+export function teamStarsRoster(
+  summary: TeamMomentumLeaderSummary,
+): TeamMomentumMemberSummary[] {
+  if (summary.roster?.length) return summary.roster;
+  return [
+    ...summary.groups.strong,
+    ...summary.groups.building,
+    ...summary.groups.readyToRebuild,
+    ...summary.notEnoughActivity.members,
+  ].sort((left, right) => {
+    const leftStars = memberStars(left);
+    const rightStars = memberStars(right);
+    const leftNudge = left.needsNudge ?? leftStars === 0;
+    const rightNudge = right.needsNudge ?? rightStars === 0;
+    if (leftNudge !== rightNudge) return leftNudge ? -1 : 1;
+    if (leftStars !== rightStars) return leftStars - rightStars;
+    return left.name.localeCompare(right.name);
+  });
+}
 
-export type TeamMomentumRosterState =
-  | "strong"
-  | "building"
-  | "ready_to_rebuild"
-  | "not_enough_activity";
+/** @deprecated Prefer teamStarsRoster */
+export function presentTeamMomentumSummary(summary: TeamMomentumLeaderSummary) {
+  const roster = teamStarsRoster(summary);
+  return {
+    activeCount: summary.activeCount,
+    strong: [] as TeamMomentumGroupedMember[],
+    building: [] as TeamMomentumGroupedMember[],
+    readyToRebuild: [] as TeamMomentumGroupedMember[],
+    notEnoughActivity: roster.filter((row) => memberStars(row) === 0),
+    roster,
+  };
+}
 
-export type TeamMomentumRosterRow = {
-  member: TeamMomentumGroupedMember | TeamMomentumNotEnoughActivityMember;
-  state: TeamMomentumRosterState;
-};
-
-/**
- * One roster instead of four banded sections. Ordering runs best to weakest so
- * the list reads as a roster rather than a ranking of who is failing; whoever
- * actually needs the leader is raised by {@link teamMomentumAttention} instead.
- */
 export function teamMomentumRoster(
   presentation: ReturnType<typeof presentTeamMomentumSummary>,
-): TeamMomentumRosterRow[] {
-  return [
-    ...presentation.strong.map((member) => ({
-      member,
-      state: "strong" as const,
-    })),
-    ...presentation.building.map((member) => ({
-      member,
-      state: "building" as const,
-    })),
-    ...presentation.readyToRebuild.map((member) => ({
-      member,
-      state: "ready_to_rebuild" as const,
-    })),
-    ...presentation.notEnoughActivity.map((member) => ({
-      member,
-      state: "not_enough_activity" as const,
-    })),
-  ];
+) {
+  return (presentation.roster ?? []).map((member) => ({
+    member,
+    state:
+      memberStars(member) === 0
+        ? ("not_enough_activity" as const)
+        : ("building" as const),
+  }));
 }
 
-export type TeamMomentumAttentionKind = "overdue" | "no_completions" | "stalled";
-
-export type TeamMomentumAttention = {
-  member: TeamMomentumGroupedMember | TeamMomentumNotEnoughActivityMember;
-  kind: TeamMomentumAttentionKind;
-  headline: string;
-  detail: string;
-  actionLabel: string;
-};
-
-function firstName(member: TeamMomentumMemberSummary): string {
-  const name = member.name?.trim();
-  if (name) return name.split(/\s+/)[0]!;
-  return member.email?.trim() || "This member";
-}
-
-/**
- * The single member worth acting on, most urgent first: work already late,
- * then nobody-has-started, then a streak that lapsed.
- *
- * The summary carries no count of open tasks, so nothing here claims a member
- * has none assigned — only that nothing has counted yet.
- */
-export function teamMomentumAttention(
-  rows: TeamMomentumRosterRow[],
-): TeamMomentumAttention | null {
-  const overdue = rows
-    .filter((row) => row.member.overdueTaskCount > 0)
-    .sort(
-      (a, b) =>
-        b.member.overdueTaskCount - a.member.overdueTaskCount ||
-        firstName(a.member).localeCompare(firstName(b.member)),
-    )[0];
-  if (overdue) {
-    const count = overdue.member.overdueTaskCount;
-    return {
-      member: overdue.member,
-      kind: "overdue",
-      headline: `${firstName(overdue.member)} has ${count} overdue ${
-        count === 1 ? "task" : "tasks"
-      }`,
-      detail: "A late completion breaks a task streak",
-      actionLabel: "View overdue",
-    };
-  }
-
-  const unstarted = rows.find((row) => row.state === "not_enough_activity");
-  if (unstarted) {
-    return {
-      member: unstarted.member,
-      kind: "no_completions",
-      headline: `${firstName(unstarted.member)} hasn’t completed a task yet`,
-      detail: "Nothing has counted toward a task streak so far",
-      actionLabel: "Assign a task",
-    };
-  }
-
-  const stalled = rows.find((row) => row.state === "ready_to_rebuild");
-  if (stalled) {
-    return {
-      member: stalled.member,
-      kind: "stalled",
-      headline: `${firstName(stalled.member)} lost their task streak`,
-      detail: `Their best of ${stalled.member.personalBestStreak} is still saved`,
-      actionLabel: "View details",
-    };
-  }
-
+export function effectiveTeamMomentumBand(): TeamMomentumBand | null {
   return null;
 }
+
+export const MOMENTUM_STRONG_STREAK = 3;
 
 export function momentumTaskTitle(
   item: { title: string | null; incognito: boolean },
@@ -339,3 +242,5 @@ export function momentumTaskTitle(
   if (!sourceTaskAvailable) return item.title?.trim() || "Deleted task";
   return item.title?.trim() || "Untitled task";
 }
+
+export { nextStarsMilestone, starsMilestoneSegment };

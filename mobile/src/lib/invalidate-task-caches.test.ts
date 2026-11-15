@@ -4,7 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { applyTeamTaskUpdatedEvent, invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 
 describe("invalidateTaskCaches", () => {
-  test("invalidates canonical workspace Momentum alongside task mutations", () => {
+  test("invalidates canonical workspace Stars alongside task mutations", () => {
     const keys: unknown[] = [];
     const queryClient = {
       invalidateQueries: ({ queryKey }: { queryKey: unknown }) => {
@@ -15,7 +15,7 @@ describe("invalidateTaskCaches", () => {
 
     invalidateTaskCaches(queryClient, "team-1");
 
-    expect(keys).toContainEqual(["team-momentum", "team-1"]);
+    expect(keys).toContainEqual(["team-stars", "team-1"]);
     expect(keys).toContainEqual(["tasks", "team-1"]);
     expect(keys).toContainEqual(["member-stats", "team-1"]);
   });
@@ -37,7 +37,7 @@ describe("invalidateTaskCaches", () => {
     expect(keys).toContainEqual(["tasks", "team-1"]);
   });
 
-  test("does not invalidate an empty workspace Momentum key", () => {
+  test("does not invalidate an empty workspace Stars key", () => {
     const keys: unknown[] = [];
     const queryClient = {
       invalidateQueries: ({ queryKey }: { queryKey: unknown }) => {
@@ -48,8 +48,8 @@ describe("invalidateTaskCaches", () => {
 
     invalidateTaskCaches(queryClient, null);
 
-    expect(keys).not.toContainEqual(["team-momentum", null]);
-    expect(keys).not.toContainEqual(["team-momentum", ""]);
+    expect(keys).not.toContainEqual(["team-stars", null]);
+    expect(keys).not.toContainEqual(["team-stars", ""]);
     expect(keys).toContainEqual(["tasks"]);
   });
 });

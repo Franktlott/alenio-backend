@@ -1,20 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import {
-  effectiveTeamMomentumBand,
+  memberStarPath,
+  memberStars,
   momentumTaskTitle,
-  presentTeamMomentumSummary,
   teamMomentumAccessState,
-  teamMomentumAttention,
-  teamMomentumRoster,
-  type TeamMomentumGroupedMember,
+  teamStarsRoster,
   type TeamMomentumLeaderSummary,
+  type TeamMomentumMemberSummary,
 } from "@/lib/team-momentum";
 
 function member(
   userId: string,
-  band: TeamMomentumGroupedMember["band"],
-  lastQualifiedAt: string | null,
-): TeamMomentumGroupedMember {
+  stars: number,
+): TeamMomentumMemberSummary {
   return {
     teamMemberId: `membership-${userId}`,
     userId,
@@ -22,83 +20,58 @@ function member(
     email: `${userId}@example.com`,
     image: null,
     role: "member",
-    currentStreak: band === "strong" ? 3 : band === "building" ? 1 : 0,
-    personalBestStreak: 4,
+    currentStreak: stars,
+    currentStars: stars,
+    personalBestStreak: Math.max(stars, 1),
+    personalBestStars: Math.max(stars, 1),
+    nextMilestone: stars < 5 ? 5 : stars < 10 ? 10 : 15,
+    remainingToMilestone: stars < 5 ? 5 - stars : stars < 10 ? 10 - stars : 15 - stars,
+    needsNudge: stars === 0,
     momentumRunStartedAt: "2026-08-01T12:00:00.000Z",
-    momentumLastQualifiedAt: lastQualifiedAt,
-    completedThisMonth: 3,
+    momentumLastQualifiedAt: stars > 0 ? "2026-08-26T12:00:00.000Z" : null,
+    completedThisMonth: stars,
     overdueTaskCount: 0,
-    band,
   };
 }
 
-function summary(): TeamMomentumLeaderSummary {
+function summary(roster: TeamMomentumMemberSummary[]): TeamMomentumLeaderSummary {
   return {
     teamId: "team-1",
     generatedAt: "2026-08-27T12:00:00.000Z",
     activeWindowDays: 30,
-    activeCount: 2,
-    eligibleCount: 4,
-    groups: {
-      strong: [member("current-strong", "strong", "2026-08-26T12:00:00.000Z")],
-      building: [
-        member("stale-building", "building", "2026-07-01T12:00:00.000Z"),
-      ],
-      readyToRebuild: [
-        member("ready", "ready_to_rebuild", "2026-06-01T12:00:00.000Z"),
-      ],
-    },
+    activeCount: roster.filter((row) => memberStars(row) > 0).length,
+    eligibleCount: roster.length,
+    roster,
+    needsNudgeCount: roster.filter((row) => row.needsNudge).length,
+    groups: { strong: [], building: [], readyToRebuild: [] },
     notEnoughActivity: {
-      count: 1,
-      members: [
-        {
-          ...member("new", "ready_to_rebuild", null),
-          reason: "no_qualifying_completions",
-        },
-      ],
+      count: roster.filter((row) => memberStars(row) === 0).length,
+      members: roster
+        .filter((row) => memberStars(row) === 0)
+        .map((row) => ({ ...row, reason: "no_qualifying_completions" as const })),
     },
   };
 }
 
-describe("canonical team momentum presentation", () => {
-  test("moves a stale earned run to Ready to rebuild", () => {
-    const model = presentTeamMomentumSummary(summary());
-
-    expect(model.activeCount).toBe(1);
-    expect(model.strong.map((row) => row.userId)).toEqual(["current-strong"]);
-    expect(model.building).toEqual([]);
-    expect(model.readyToRebuild.map((row) => row.userId)).toEqual([
-      "stale-building",
-      "ready",
-    ]);
-    expect(model.notEnoughActivity.map((row) => row.userId)).toEqual(["new"]);
+describe("Stars presentation", () => {
+  test("prefers API roster order for coaching", () => {
+    const rows = teamStarsRoster(
+      summary([member("zero", 0), member("few", 2), member("more", 7)]),
+    );
+    expect(rows.map((row) => row.userId)).toEqual(["zero", "few", "more"]);
   });
 
-  test("treats missing and invalid qualification timestamps as stale", () => {
-    const missing = member("missing", "strong", null);
-    const invalid = member("invalid", "building", "not-a-date");
-
-    expect(
-      effectiveTeamMomentumBand(missing, "strong", summary().generatedAt, 30),
-    ).toBe("ready_to_rebuild");
-    expect(
-      effectiveTeamMomentumBand(invalid, "building", summary().generatedAt, 30),
-    ).toBe("ready_to_rebuild");
+  test("computes the hollow-to-filled segment", () => {
+    expect(memberStarPath(member("alex", 7))).toMatchObject({
+      currentStars: 7,
+      nextMilestone: 10,
+      filledInSegment: 2,
+      segmentSize: 5,
+      remainingToMilestone: 3,
+    });
   });
 
-  test("uses private and deleted task copy without leaking titles", () => {
-    expect(momentumTaskTitle({ title: null, incognito: true })).toBe(
-      "Private task",
-    );
-    expect(momentumTaskTitle({ title: "Secret", incognito: true }, false)).toBe(
-      "Private task",
-    );
-    expect(momentumTaskTitle({ title: null, incognito: false }, false)).toBe(
-      "Deleted task",
-    );
-  });
-
-  test("maps canonical 403 codes to distinct access states", () => {
+  test("maps access codes for plan and leader gates", () => {
     expect(
       teamMomentumAccessState({
         status: 403,
@@ -111,106 +84,11 @@ describe("canonical team momentum presentation", () => {
         body: { error: { code: "TEAM_MOMENTUM_PLAN_REQUIRED" } },
       }),
     ).toBe("plan_required");
-    expect(teamMomentumAccessState(new Error("offline"))).toBe("unavailable");
-  });
-});
-
-describe("team momentum roster", () => {
-  test("flattens every band into one list, strongest first", () => {
-    const rows = teamMomentumRoster(presentTeamMomentumSummary(summary()));
-
-    expect(rows.map((row) => [row.member.userId, row.state])).toEqual([
-      ["current-strong", "strong"],
-      ["stale-building", "ready_to_rebuild"],
-      ["ready", "ready_to_rebuild"],
-      ["new", "not_enough_activity"],
-    ]);
-  });
-});
-
-describe("team momentum attention", () => {
-  function rowsWith(
-    overrides: Partial<TeamMomentumGroupedMember>[],
-  ): ReturnType<typeof teamMomentumRoster> {
-    const base = summary();
-    base.groups.strong = overrides.map((override, index) => ({
-      ...member(`m${index}`, "strong", base.generatedAt),
-      ...override,
-    }));
-    base.groups.building = [];
-    base.groups.readyToRebuild = [];
-    base.notEnoughActivity = { count: 0, members: [] };
-    return teamMomentumRoster(presentTeamMomentumSummary(base));
-  }
-
-  test("overdue work outranks everything else", () => {
-    const attention = teamMomentumAttention(
-      teamMomentumRoster(
-        presentTeamMomentumSummary({
-          ...summary(),
-          groups: {
-            ...summary().groups,
-            strong: [
-              {
-                ...member("late", "strong", summary().generatedAt),
-                name: "Dana Reed",
-                overdueTaskCount: 2,
-              },
-            ],
-          },
-        }),
-      ),
-    );
-
-    expect(attention).toMatchObject({
-      kind: "overdue",
-      headline: "Dana has 2 overdue tasks",
-      actionLabel: "View overdue",
-    });
   });
 
-  test("picks the largest overdue pile", () => {
-    const attention = teamMomentumAttention(
-      rowsWith([
-        { name: "Ann Lee", overdueTaskCount: 1 },
-        { name: "Bo Diaz", overdueTaskCount: 5 },
-      ]),
-    );
-
-    expect(attention?.member.name).toBe("Bo Diaz");
-  });
-
-  test("falls back to a member who has never completed anything", () => {
-    const base = summary();
-    base.groups.strong = [];
-    base.groups.building = [];
-    base.groups.readyToRebuild = [];
-    const attention = teamMomentumAttention(
-      teamMomentumRoster(presentTeamMomentumSummary(base)),
-    );
-
-    expect(attention).toMatchObject({
-      kind: "no_completions",
-      actionLabel: "Assign a task",
-    });
-    // Never claims tasks are unassigned; the summary cannot know that.
-    expect(attention?.headline).toBe("new hasn’t completed a task yet");
-  });
-
-  test("falls back to a lapsed streak, quoting the saved personal best", () => {
-    const base = summary();
-    base.groups.strong = [];
-    base.groups.building = [];
-    base.notEnoughActivity = { count: 0, members: [] };
-    const attention = teamMomentumAttention(
-      teamMomentumRoster(presentTeamMomentumSummary(base)),
-    );
-
-    expect(attention).toMatchObject({ kind: "stalled" });
-    expect(attention?.detail).toBe("Their best of 4 is still saved");
-  });
-
-  test("says nothing when every member is on track", () => {
-    expect(teamMomentumAttention(rowsWith([{ name: "Ann Lee" }]))).toBeNull();
+  test("momentumTaskTitle respects privacy and deleted sources", () => {
+    expect(momentumTaskTitle({ title: "Secret", incognito: true })).toBe("Private task");
+    expect(momentumTaskTitle({ title: "Gone", incognito: false }, false)).toBe("Gone");
+    expect(momentumTaskTitle({ title: null, incognito: false }, false)).toBe("Deleted task");
   });
 });

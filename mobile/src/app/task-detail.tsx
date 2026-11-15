@@ -1391,7 +1391,7 @@ export function TaskDetail({
             </Text>
             <Text style={{ fontSize: 10, color: "#CBD2DE" }}>•</Text>
             <Text style={{ fontSize: 11, color: "#718096" }}>
-              Not included in Momentum
+              Not included in Stars
             </Text>
           </View>
         ) : null}
@@ -3272,7 +3272,7 @@ export function TaskDetail({
                   style={completionMomentStyles.brandLogo}
                 />
                 <Text style={completionMomentStyles.brandText}>
-                  ALENIO MOMENTUM
+                  ALENIO STARS
                 </Text>
               </View>
               <Sparkles

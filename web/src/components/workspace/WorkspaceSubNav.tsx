@@ -5,7 +5,7 @@ import {
   CheckSquare,
   ChevronDown,
   LayoutGrid,
-  TrendingUp,
+  Star,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -23,7 +23,7 @@ export const WORKSPACE_SECTION_PATH: Record<WorkspaceSection, string> = {
   tasks: "/workspace/tasks",
   calendar: "/workspace/calendar",
   members: "/workspace/members",
-  momentum: "/workspace/momentum",
+  momentum: "/workspace/stars",
 };
 
 const ITEMS: Array<{ id: WorkspaceSection; label: string; icon: ReactNode }> = [
@@ -31,7 +31,7 @@ const ITEMS: Array<{ id: WorkspaceSection; label: string; icon: ReactNode }> = [
   { id: "tasks", label: "Tasks", icon: <CheckSquare size={18} strokeWidth={2} /> },
   { id: "calendar", label: "Calendar", icon: <CalendarDays size={18} strokeWidth={2} /> },
   { id: "members", label: "Members", icon: <Users size={18} strokeWidth={2} /> },
-  { id: "momentum", label: "Momentum", icon: <TrendingUp size={18} strokeWidth={2} /> },
+  { id: "momentum", label: "Stars", icon: <Star size={18} strokeWidth={2} /> },
 ];
 
 export function workspaceRoleLabel(role: string): string {

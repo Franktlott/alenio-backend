@@ -863,11 +863,25 @@
   text-overflow: ellipsis;
 }
 
-/* Momentum */
+/* Stars (formerly Momentum) */
 .ws-momentum {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.ws-stars-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ws-stars-row--nudge {
+  border-color: #f6e7c1 !important;
+  background: #fffbf2 !important;
 }
 
 .ws-stat-row {

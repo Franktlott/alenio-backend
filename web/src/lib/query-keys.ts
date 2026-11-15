@@ -6,7 +6,7 @@ export const queryKeys = {
   teamSubscription: (teamId: string) => ["team", "subscription", teamId] as const,
   teamDetail: (teamId: string) => ["team", "detail", teamId] as const,
   teamTasks: (teamId: string) => ["team", "tasks", teamId] as const,
-  teamMomentum: (teamId: string) => ["team", "momentum", teamId] as const,
+  teamMomentum: (teamId: string) => ["team", "stars", teamId] as const,
   chatTopics: (teamId: string) => ["chat", "topics", teamId] as const,
   chatConversations: ["chat", "conversations"] as const,
   chatThread: (mode: "dm" | "team", threadId: string) => ["chat", "thread", mode, threadId] as const,

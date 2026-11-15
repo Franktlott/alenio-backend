@@ -103,14 +103,20 @@ describe("Team Momentum summary", () => {
       overdueAssignments: [{ userId: "member-1" }, { userId: "member-1" }],
     });
 
-    expect(result.activeCount).toBe(1);
+    expect(result.activeCount).toBe(2);
     expect(result.eligibleCount).toBe(3);
-    expect(result.groups.strong[0]).toMatchObject({
-      userId: "member-1",
+    expect(result.roster.map((item) => item.userId)).toEqual([
+      "member-3",
+      "member-2",
+      "member-1",
+    ]);
+    expect(result.roster.find((item) => item.userId === "member-1")).toMatchObject({
+      currentStars: 3,
       completedThisMonth: 1,
       overdueTaskCount: 2,
+      needsNudge: false,
     });
-    expect(result.groups.readyToRebuild.map((item) => item.userId)).toEqual(["member-2"]);
+    expect(result.needsNudgeCount).toBe(1);
     expect(result.notEnoughActivity.members.map((item) => item.userId)).toEqual(["member-3"]);
     expect(result.dashboard.onTimeCompletions).toBe(1);
     expect(result.dashboard.onTimeChangePercent).toBeNull();
@@ -237,8 +243,8 @@ describe("Team Momentum summary", () => {
 
     const result = await getTeamMomentumSummary("team-1", "leader-1", now, db);
     expect(calls.sort()).toEqual(["assignments", "credits", "members", "tasks"]);
-    expect(result.groups.strong[0]?.completedThisMonth).toBe(1);
-    expect(result.groups.strong[0]?.overdueTaskCount).toBe(1);
+    expect(result.roster[0]?.completedThisMonth).toBe(1);
+    expect(result.roster[0]?.overdueTaskCount).toBe(1);
     expect(result.coachingVisible).toBe(true);
   });
 
@@ -297,7 +303,7 @@ describe("Team Momentum summary", () => {
     const result = await getTeamMomentumSummary("team-1", "member-1", now, db);
     expect(calls).not.toContain("assignments");
     expect(result.coachingVisible).toBe(false);
-    expect(result.groups.strong[0]).toMatchObject({
+    expect(result.roster[0]).toMatchObject({
       overdueTaskCount: 0,
       latestLateTaskTitle: null,
       latestLateTaskIncognito: false,
@@ -381,7 +387,7 @@ describe("Team Momentum member detail", () => {
     });
 
     expect(detail.currentRun).toMatchObject({
-      totalCount: 2,
+      totalCount: 4,
       returnedCount: 1,
       truncated: true,
     });
@@ -389,7 +395,8 @@ describe("Team Momentum member detail", () => {
       title: null,
       sourceTaskAvailable: false,
     });
-    expect(detail.latestStreakBreakingLateCompletion?.streakBeforeBreak).toBe(1);
+    expect(detail.latestStreakBreakingLateCompletion).toBeNull();
+    expect(detail.nextMilestone).toBe(5);
     expect(detail.activeTasks[0]?.title).toBeNull();
     expect(detail.overdueTasks[0]?.title).toBe("Follow up");
   });

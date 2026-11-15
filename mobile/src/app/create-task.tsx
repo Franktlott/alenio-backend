@@ -523,7 +523,7 @@ export default function CreateTaskScreen() {
       toast({
         title: "Task created",
         message: isReminder
-          ? "Only you can see it. It won’t affect Team Momentum."
+          ? "Only you can see it. It won’t fill Stars."
           : "Your workspace task is ready.",
         preset: "done",
       });
@@ -856,7 +856,7 @@ export default function CreateTaskScreen() {
                   Private to you
                 </Text>
                 <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 17, color: "#64748B" }}>
-                  Hidden from your team · Excluded from Momentum
+                  Hidden from your team · Excluded from Stars
                 </Text>
               </View>
             </View>

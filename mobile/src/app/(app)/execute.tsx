@@ -534,7 +534,7 @@ export default function TasksScreen() {
         );
         ignoreCancel(
           queryClient.invalidateQueries({
-            queryKey: ["team-momentum", activeTeamId],
+            queryKey: ["team-stars", activeTeamId],
           }),
         );
         ignoreCancel(
@@ -1013,7 +1013,7 @@ export default function TasksScreen() {
   const { data: teamMomentumSummary } = useQuery({
     queryKey: teamMomentumSummaryQueryKey(activeTeamId ?? ""),
     queryFn: () =>
-      api.get<TeamMomentumLeaderSummary>(`/api/teams/${activeTeamId}/momentum`),
+      api.get<TeamMomentumLeaderSummary>(`/api/teams/${activeTeamId}/stars`),
     enabled: !!activeTeamId && isCalendarManager,
   });
   const { data: healthHistoryResponse } = useQuery({
@@ -1804,7 +1804,7 @@ export default function TasksScreen() {
       if (!currentUserId) return;
       if (developmentFocus?.userId === currentUserId) return;
       if (splitMembers) {
-        setDevelopmentFocus({ userId: currentUserId, section: "goals" });
+        setDevelopmentFocus({ userId: currentUserId, section: "check-ins" });
       } else if (developmentFocus) {
         setDevelopmentFocus(null);
       }
@@ -1812,7 +1812,7 @@ export default function TasksScreen() {
     }
     if (!splitMembers) return;
     if (developmentFocus || !topRosterUserId) return;
-    setDevelopmentFocus({ userId: topRosterUserId, section: "goals" });
+    setDevelopmentFocus({ userId: topRosterUserId, section: "check-ins" });
   }, [
     currentUserId,
     developmentFocus,
@@ -2658,7 +2658,7 @@ export default function TasksScreen() {
       lockOtherMembers={!isOwnerOrLeader}
       onMemberPress={(member) => {
         if (!isOwnerOrLeader && member.userId !== currentUserId) return;
-        setDevelopmentFocus({ userId: member.userId, section: "goals" });
+        setDevelopmentFocus({ userId: member.userId, section: "check-ins" });
       }}
       onManageMember={canManageRoster ? setManageMember : undefined}
       onInvite={canManageRoster ? () => setInviteOpen(true) : undefined}

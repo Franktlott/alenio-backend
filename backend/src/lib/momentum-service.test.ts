@@ -32,7 +32,7 @@ describe("Momentum credit eligibility", () => {
     ).toEqual([]);
   });
 
-  test("tasks without due dates never earn credit", () => {
+  test("tasks without due dates still earn Stars credit", () => {
     expect(
       eligibleMomentumUserIds({
         dueAt: null,
@@ -41,7 +41,7 @@ describe("Momentum credit eligibility", () => {
         assignedUserIds: ["member"],
         subtaskCompletionUserIds: [],
       }),
-    ).toEqual([]);
+    ).toEqual(["member"]);
   });
 
   test("joint tasks credit assignees who completed any subtask", () => {
@@ -347,14 +347,14 @@ describe("Momentum service lifecycle", () => {
       taskId: "task-1",
       revokedAt: recalledAt,
     });
+    expect(recalled.creditIds).toEqual(first.creditIds);
+    expect(store.credits[0]?.revokedAt).toEqual(recalledAt);
+
     const recompleted = await applyMomentumCompletion(store.db, {
       taskId: "task-1",
       actorUserId: "user-1",
       completedAt: recompletedAt,
     });
-
-    expect(recalled.creditIds).toEqual(first.creditIds);
-    expect(store.members[0]?.currentStreak).toBe(0);
     expect(recompleted.creditIds).toEqual(first.creditIds);
     expect(store.credits).toHaveLength(1);
     expect(store.credits[0]).toMatchObject({
@@ -364,12 +364,12 @@ describe("Momentum service lifecycle", () => {
       revocationReason: null,
     });
     expect(store.members[0]).toMatchObject({
-      currentStreak: 0,
-      personalBestStreak: 0,
+      currentStreak: 1,
+      personalBestStreak: 1,
     });
   });
 
-  test("a completion after the due time on the same day is late", async () => {
+  test("a late completion still fills a star", async () => {
     const dueDate = new Date("2026-08-27T15:00:00.000Z");
     const completedAt = new Date("2026-08-27T16:30:00.000Z");
     const store = momentumDb({
@@ -384,7 +384,7 @@ describe("Momentum service lifecycle", () => {
     });
 
     expect(store.credits[0]).toMatchObject({ onTime: false });
-    expect(store.members[0]?.currentStreak).toBe(0);
+    expect(store.members[0]?.currentStreak).toBe(1);
   });
 
   test("re-applying an active completion is idempotent", async () => {
@@ -416,13 +416,12 @@ describe("Momentum service lifecycle", () => {
     });
   });
 
-  test("first best and ties are quiet, while a post-break new best celebrates once", async () => {
+  test("first star is quiet; beating a prior personal best celebrates once", async () => {
     const store = momentumDb({
       tasks: [
         task("first", new Date("2026-08-02T13:00:00.000Z")),
-        task("break", new Date("2026-08-03T11:00:00.000Z")),
-        task("tie", new Date("2026-08-04T13:00:00.000Z")),
-        task("new-best", new Date("2026-08-05T13:00:00.000Z")),
+        task("second", new Date("2026-08-03T13:00:00.000Z")),
+        task("third", new Date("2026-08-04T13:00:00.000Z")),
       ],
       members: [member()],
     });
@@ -434,12 +433,11 @@ describe("Momentum service lifecycle", () => {
       });
 
     expect((await complete("first", "2026-08-02T12:00:00.000Z")).personalBestCount).toBeNull();
-    expect((await complete("break", "2026-08-03T12:00:00.000Z")).personalBestCount).toBeNull();
-    expect((await complete("tie", "2026-08-04T12:00:00.000Z")).personalBestCount).toBeNull();
-    expect((await complete("new-best", "2026-08-05T12:00:00.000Z")).personalBestCount).toBe(2);
+    expect((await complete("second", "2026-08-03T12:00:00.000Z")).personalBestCount).toBe(2);
+    expect((await complete("third", "2026-08-04T12:00:00.000Z")).personalBestCount).toBeNull();
     expect(store.members[0]).toMatchObject({
-      currentStreak: 2,
-      personalBestStreak: 2,
+      currentStreak: 3,
+      personalBestStreak: 3,
       personalBestCelebrated: true,
     });
   });

@@ -1760,7 +1760,12 @@ export type TeamMomentumMember = {
   image: string | null;
   role: string;
   currentStreak: number;
+  currentStars?: number;
   personalBestStreak: number;
+  personalBestStars?: number;
+  nextMilestone?: number;
+  remainingToMilestone?: number;
+  needsNudge?: boolean;
   momentumRunStartedAt: string | null;
   momentumLastQualifiedAt: string | null;
   completedThisMonth: number;
@@ -1775,6 +1780,8 @@ export type TeamMomentumSummary = {
   activeWindowDays: number;
   activeCount: number;
   eligibleCount: number;
+  roster?: TeamMomentumMember[];
+  needsNudgeCount?: number;
   groups: {
     strong: (TeamMomentumMember & { band: TeamMomentumBand })[];
     building: (TeamMomentumMember & { band: TeamMomentumBand })[];
@@ -1796,7 +1803,7 @@ export type TeamMomentumSummary = {
 };
 
 export function fetchTeamMomentum(teamId: string) {
-  return apiRequest<{ data: TeamMomentumSummary }>(`/api/teams/${encodeURIComponent(teamId)}/momentum`).then((r) => r.data);
+  return apiRequest<{ data: TeamMomentumSummary }>(`/api/teams/${encodeURIComponent(teamId)}/stars`).then((r) => r.data);
 }
 
 export function updateWebTeamEvent(

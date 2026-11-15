@@ -1,22 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp } from "lucide-react";
+import { Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { fetchTeamMomentum, type TeamMomentumMember } from "../../lib/api";
 import { queryKeys } from "../../lib/query-keys";
 import { UserAvatar } from "../UserAvatar";
 
-const GROUPS = [
-  { key: "strong", label: "Strong momentum", hint: "On-time streaks going strong" },
-  { key: "building", label: "Building", hint: "Picking up steam" },
-  { key: "readyToRebuild", label: "Ready to rebuild", hint: "A fresh run starts with the next on-time task" },
-] as const;
-
-function weekLabel(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function memberStars(member: TeamMomentumMember): number {
+  return member.currentStars ?? member.currentStreak ?? 0;
 }
 
-/** Team momentum: on-time completions this month and who is on a streak. */
+function starsRoster(data: Awaited<ReturnType<typeof fetchTeamMomentum>>): TeamMomentumMember[] {
+  if (data.roster?.length) return data.roster;
+  return [
+    ...data.groups.strong,
+    ...data.groups.building,
+    ...data.groups.readyToRebuild,
+    ...data.notEnoughActivity.members,
+  ];
+}
+
+/** Team Stars: hollow→filled personal progress and a simple leader roster. */
 export function WorkspaceMomentumPanel({
   teamId,
   hasTeamFeatures,
@@ -39,12 +42,12 @@ export function WorkspaceMomentumPanel({
 
   if (locked) {
     return (
-      <section className="dm-card ws-panel ws-panel--center" data-testid="ws-momentum-locked">
+      <section className="dm-card ws-panel ws-panel--center" data-testid="ws-stars-locked">
         <span className="ws-none-icon">
-          <TrendingUp size={22} strokeWidth={2} />
+          <Star size={22} strokeWidth={2} />
         </span>
-        <h2>Momentum comes with Pro and Operations</h2>
-        <p>See who finishes on time, who is on a streak, and where the team needs a hand.</p>
+        <h2>Stars comes with Pro and Operations</h2>
+        <p>See who is filling stars and who could use a nudge.</p>
         {canManageBilling ? (
           <Link to="/billing" className="ws-panel-btn">
             See plans
@@ -57,107 +60,67 @@ export function WorkspaceMomentumPanel({
   }
 
   const data = q.data;
-  const stats = data?.dashboard;
-  const maxWeek = Math.max(1, ...(stats?.weeks.map((w) => w.total) ?? [1]));
+  const rows = data ? starsRoster(data) : [];
+  const needsNudge = data?.needsNudgeCount ?? rows.filter((m) => (m.needsNudge ?? memberStars(m) === 0)).length;
 
   return (
-    <div className="ws-momentum" data-testid="ws-momentum">
+    <div className="ws-momentum" data-testid="ws-stars">
       <section className="dm-card ws-panel">
         <header className="ws-panel-head">
           <div>
-            <h2>Momentum</h2>
-            <p>On-time task completions this month and who's on a streak.</p>
+            <h2>Stars</h2>
+            <p>Assigned task completions fill stars. Milestones at 5, 10, 15, then every 10.</p>
           </div>
         </header>
         {q.isError ? (
           <p className="ws-panel-empty" role="alert">
-            {q.error instanceof Error ? q.error.message : "Could not load Momentum."}
+            {q.error instanceof Error ? q.error.message : "Could not load Stars."}
           </p>
         ) : (
-          <>
-            <div className="ws-stat-row">
-              <div className="ws-stat">
-                <span className="ws-stat-label">On time this month</span>
-                <strong>{stats ? stats.onTimeCompletions : "—"}</strong>
-                {stats?.onTimeChangePercent != null ? (
-                  <small className={stats.onTimeChangePercent >= 0 ? "up" : "down"}>
-                    {stats.onTimeChangePercent >= 0 ? "+" : ""}
-                    {Math.round(stats.onTimeChangePercent)}% vs last month
-                  </small>
-                ) : (
-                  <small>{stats ? `${stats.previousOnTimeCompletions} last month` : "\u00a0"}</small>
-                )}
-              </div>
-              <div className="ws-stat">
-                <span className="ws-stat-label">Active members</span>
-                <strong>{data ? data.activeCount : "—"}</strong>
-                <small>{data ? `of ${data.eligibleCount} in the last 30 days` : "\u00a0"}</small>
-              </div>
-              <div className="ws-stat">
-                <span className="ws-stat-label">Due soon</span>
-                <strong>{stats ? stats.taskStatus.dueSoon : "—"}</strong>
-                <small>{stats ? `${stats.taskStatus.onTime} on track` : "\u00a0"}</small>
-              </div>
-              {data?.coachingVisible ? (
-                <div className="ws-stat">
-                  <span className="ws-stat-label">Overdue</span>
-                  <strong className={stats && stats.taskStatus.overdue > 0 ? "warn" : ""}>{stats?.taskStatus.overdue ?? 0}</strong>
-                  <small>Open tasks past due</small>
-                </div>
-              ) : null}
+          <div className="ws-stat-row">
+            <div className="ws-stat">
+              <span className="ws-stat-label">Members with stars</span>
+              <strong>{data ? data.activeCount : "—"}</strong>
+              <small>{data ? `of ${data.eligibleCount}` : "\u00a0"}</small>
             </div>
-            {stats && stats.weeks.length > 0 ? (
-              <div className="ws-weeks" aria-label="On-time completions by week">
-                {stats.weeks.map((w) => (
-                  <div key={w.start} className="ws-week" title={`${w.onTime} of ${w.total} on time`}>
-                    <div className="ws-week-bar">
-                      <span className="ws-week-total" style={{ height: `${(w.total / maxWeek) * 100}%` }} />
-                      <span className="ws-week-on" style={{ height: `${(w.onTime / maxWeek) * 100}%` }} />
-                    </div>
-                    <span className="ws-week-label">{weekLabel(w.start)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </>
+            <div className="ws-stat">
+              <span className="ws-stat-label">Need a nudge</span>
+              <strong>{data ? needsNudge : "—"}</strong>
+              <small>Zero stars so far</small>
+            </div>
+          </div>
         )}
       </section>
 
       {data ? (
-        <div className="ws-band-grid">
-          {GROUPS.map((g) => (
-            <section key={g.key} className={`dm-card ws-band ws-band--${g.key}`} data-testid={`ws-band-${g.key}`}>
-              <header>
-                <h3>
-                  {g.label} <span className="ws-members-count">{data.groups[g.key].length}</span>
-                </h3>
-                <p>{g.hint}</p>
-              </header>
-              {data.groups[g.key].length === 0 ? (
-                <p className="ws-band-empty">No one here right now.</p>
-              ) : (
-                <ul>
-                  {data.groups[g.key].map((m) => (
-                    <MomentumRow key={m.userId} member={m} coaching={data.coachingVisible} onOpen={onOpenMember} />
-                  ))}
-                </ul>
-              )}
-            </section>
-          ))}
-        </div>
-      ) : null}
-
-      {data && data.notEnoughActivity.count > 0 ? (
-        <p className="ws-panel-note">
-          {data.notEnoughActivity.count} {data.notEnoughActivity.count === 1 ? "member hasn't" : "members haven't"} finished a
-          task on time yet.
-        </p>
+        <section className="dm-card ws-panel" data-testid="ws-stars-roster">
+          <header className="ws-panel-head">
+            <div>
+              <h2>Team</h2>
+              <p>Sorted so people who need a nudge show up first.</p>
+            </div>
+          </header>
+          {rows.length === 0 ? (
+            <p className="ws-panel-empty">No team members yet.</p>
+          ) : (
+            <ul className="ws-stars-list">
+              {rows.map((m) => (
+                <StarsRow
+                  key={m.userId}
+                  member={m}
+                  coaching={data.coachingVisible}
+                  onOpen={onOpenMember}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
       ) : null}
     </div>
   );
 }
 
-function MomentumRow({
+function StarsRow({
   member,
   coaching,
   onOpen,
@@ -166,20 +129,31 @@ function MomentumRow({
   coaching: boolean;
   onOpen: (userId: string) => void;
 }) {
+  const stars = memberStars(member);
+  const remaining = member.remainingToMilestone;
+  const needsNudge = member.needsNudge ?? stars === 0;
   return (
     <li>
-      <button type="button" className="ws-band-row" onClick={() => onOpen(member.userId)}>
+      <button
+        type="button"
+        className={`ws-band-row${needsNudge ? " ws-stars-row--nudge" : ""}`}
+        onClick={() => onOpen(member.userId)}
+      >
         <UserAvatar user={member} className="ws-task-avatar" imgClassName="nw-avatar-img" alt="" />
         <span className="ws-band-row-copy">
           <span className="ws-band-row-name">{member.name || member.email}</span>
           <span className="ws-band-row-sub">
-            {member.completedThisMonth} done this month
+            {needsNudge
+              ? "0 stars · get started"
+              : remaining != null
+                ? `${remaining} to milestone`
+                : `${member.completedThisMonth} done this month`}
             {coaching && member.overdueTaskCount > 0 ? ` · ${member.overdueTaskCount} overdue` : ""}
           </span>
         </span>
-        <span className="ws-band-streak" title={`Best: ${member.personalBestStreak}`}>
-          {member.currentStreak}
-          <small>streak</small>
+        <span className="ws-band-streak" title={`Best: ${member.personalBestStars ?? member.personalBestStreak}`}>
+          {stars}
+          <small>stars</small>
         </span>
       </button>
     </li>

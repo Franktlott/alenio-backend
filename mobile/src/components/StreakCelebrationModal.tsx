@@ -1,5 +1,5 @@
 import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { Flame, Sparkles, Trophy } from "lucide-react-native";
+import { Sparkles, Star, Trophy } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
 type Props = {
@@ -17,7 +17,7 @@ export function StreakCelebrationModal({
   personalBest = false,
   onClose,
 }: Props) {
-  const Icon = personalBest ? Flame : Trophy;
+  const Icon = personalBest ? Star : Trophy;
 
   return (
     <Modal
@@ -51,7 +51,7 @@ export function StreakCelebrationModal({
                 source={require("@/assets/alenio-icon.png")}
                 style={styles.logo}
               />
-              <Text style={styles.brandText}>ALENIO MOMENTUM</Text>
+              <Text style={styles.brandText}>ALENIO STARS</Text>
             </View>
 
             <Sparkles
@@ -78,22 +78,22 @@ export function StreakCelebrationModal({
               {personalBest ? "NEW PERSONAL BEST" : "MILESTONE REACHED"}
             </Text>
             <Text style={styles.count}>{count}</Text>
-            <Text style={styles.countLabel}>ON-TIME TASK STREAK</Text>
+            <Text style={styles.countLabel}>STARS</Text>
           </LinearGradient>
 
           <View style={styles.body}>
             <Text style={styles.title}>
-              {personalBest ? "A new best." : "Consistency pays off."}
+              {personalBest ? "A new best." : "Milestone reached."}
             </Text>
             <Text style={styles.message}>
               {personalBest
-                ? `${userName} reached a new personal best of ${count} tasks in a row.`
-                : `${userName} completed ${count} qualifying tasks on time.`}
+                ? `${userName} reached a new personal best of ${count} stars.`
+                : `${userName} filled ${count} stars by completing assigned tasks.`}
             </Text>
             <View style={styles.divider} />
             <View style={styles.supportRow}>
-              <Flame size={15} color="#6D55E7" fill="#6D55E7" />
-              <Text style={styles.support}>Keep building the momentum</Text>
+              <Star size={15} color="#C9A227" fill="#C9A227" />
+              <Text style={styles.support}>Keep filling stars</Text>
             </View>
             <Pressable
               onPress={onClose}

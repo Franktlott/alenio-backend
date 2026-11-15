@@ -169,7 +169,7 @@ export const CELEBRATION_CARD_THEMES: Record<CelebrationTypeKey, CelebrationThem
     Icon: Flame,
     label: "On Fire",
     tag: "On a Roll",
-    blurb: "Momentum that deserves a shout",
+    blurb: "Stars that deserve a shout",
     emoji: "🔥",
     accent: "#FDBA74",
     accentSoft: "#FED7AA",

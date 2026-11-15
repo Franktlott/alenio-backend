@@ -8,7 +8,7 @@ import type { PersonalRecognition } from "@/lib/types";
 
 /**
  * Posts, recognition, milestones, and new members on the Feed tab.
- * Individual task completions stay out of the feed. Momentum still records them.
+ * Individual task completions stay out of the feed. Stars still records them.
  */
 export const WORKSPACE_UPDATE_TYPES = [
   "post",
@@ -42,7 +42,7 @@ export function joinedMemberName(item: ActivityFeedItem): string {
   return fromMetadata || item.actor?.name?.trim() || "A new teammate";
 }
 
-/** Momentum celebrates 5, 10 and 15, then every tenth on-time completion. */
+/** Stars celebrates 5, 10 and 15, then every tenth assigned completion. */
 const MILESTONE_STEPS = [5, 10, 15] as const;
 
 export function milestoneStreakCount(count: number | null | undefined): number {

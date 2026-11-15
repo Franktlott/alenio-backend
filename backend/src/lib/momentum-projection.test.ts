@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { projectMomentum, type MomentumOutcome } from "./momentum-projection";
+import {
+  isStarsMilestone,
+  nextStarsMilestone,
+  previousStarsMilestone,
+  projectMomentum,
+  starsMilestoneSegment,
+  type MomentumOutcome,
+} from "./momentum-projection";
 
 const at = (day: number) => new Date(`2026-08-${String(day).padStart(2, "0")}T12:00:00.000Z`);
 const outcome = (day: number, onTime: boolean, id = String(day)): MomentumOutcome => ({
@@ -8,58 +15,30 @@ const outcome = (day: number, onTime: boolean, id = String(day)): MomentumOutcom
   onTime,
 });
 
-describe("projectMomentum", () => {
-  test("projects the newest on-time run and maximum historical run", () => {
+describe("projectMomentum (Stars)", () => {
+  test("counts every credit including late completions", () => {
     const projection = projectMomentum([
       outcome(1, true),
       outcome(2, true),
       outcome(3, false),
       outcome(4, true),
-      outcome(5, true),
-      outcome(6, true),
-      outcome(7, false),
-      outcome(8, true),
-      outcome(9, true),
     ]);
 
     expect(projection).toEqual({
-      currentStreak: 2,
-      personalBestStreak: 3,
-      momentumRunStartedAt: at(8),
-      momentumLastQualifiedAt: at(9),
+      currentStreak: 4,
+      personalBestStreak: 4,
+      momentumRunStartedAt: at(1),
+      momentumLastQualifiedAt: at(4),
     });
   });
 
-  test("a newest late completion breaks current streak but preserves latest qualifying metadata", () => {
+  test("a newest late completion still counts as a star", () => {
     expect(projectMomentum([outcome(1, true), outcome(20, true), outcome(27, false)])).toEqual({
-      currentStreak: 0,
-      personalBestStreak: 2,
-      momentumRunStartedAt: null,
-      momentumLastQualifiedAt: at(20),
+      currentStreak: 3,
+      personalBestStreak: 3,
+      momentumRunStartedAt: at(1),
+      momentumLastQualifiedAt: at(27),
     });
-  });
-
-  test("elapsed time does not break a streak", () => {
-    const projection = projectMomentum([
-      { id: "old", completedAt: new Date("2024-01-01T00:00:00.000Z"), onTime: true },
-      { id: "new", completedAt: new Date("2026-08-27T00:00:00.000Z"), onTime: true },
-    ]);
-
-    expect(projection.currentStreak).toBe(2);
-    expect(projection.personalBestStreak).toBe(2);
-  });
-
-  test("recomputes personal best when recalled evidence is removed", () => {
-    const history = [
-      outcome(1, true),
-      outcome(2, true),
-      outcome(3, true),
-      outcome(4, false),
-      outcome(5, true),
-    ];
-
-    expect(projectMomentum(history).personalBestStreak).toBe(3);
-    expect(projectMomentum(history.filter((item) => item.id !== "2")).personalBestStreak).toBe(2);
   });
 
   test("returns an empty projection without evidence", () => {
@@ -69,5 +48,30 @@ describe("projectMomentum", () => {
       momentumRunStartedAt: null,
       momentumLastQualifiedAt: null,
     });
+  });
+});
+
+describe("stars milestones", () => {
+  test("next milestone thresholds", () => {
+    expect(nextStarsMilestone(0)).toBe(5);
+    expect(nextStarsMilestone(4)).toBe(5);
+    expect(nextStarsMilestone(5)).toBe(10);
+    expect(nextStarsMilestone(9)).toBe(10);
+    expect(nextStarsMilestone(15)).toBe(20);
+    expect(nextStarsMilestone(21)).toBe(30);
+  });
+
+  test("segment for hollow to filled path", () => {
+    expect(starsMilestoneSegment(7)).toEqual({
+      currentStars: 7,
+      nextMilestone: 10,
+      previousMilestone: 5,
+      filledInSegment: 2,
+      segmentSize: 5,
+      remainingToMilestone: 3,
+    });
+    expect(previousStarsMilestone(0)).toBe(0);
+    expect(isStarsMilestone(5)).toBe(true);
+    expect(isStarsMilestone(7)).toBe(false);
   });
 });

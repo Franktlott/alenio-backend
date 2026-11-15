@@ -199,7 +199,8 @@ export default function App() {
           <Route path="/workspace/tasks" element={<WebWorkspacePage section="tasks" />} />
           <Route path="/workspace/calendar" element={<WebWorkspacePage section="calendar" />} />
           <Route path="/workspace/members" element={<WebWorkspacePage section="members" />} />
-          <Route path="/workspace/momentum" element={<WebWorkspacePage section="momentum" />} />
+          <Route path="/workspace/stars" element={<WebWorkspacePage section="momentum" />} />
+          <Route path="/workspace/momentum" element={<Navigate to="/workspace/stars" replace />} />
           <Route path="/workspace/members/:userId" element={<WebWorkspaceMemberPage />} />
           <Route path="/network" element={<WebNetworkPage />} />
           <Route path="/people/:userId" element={<PersonProfilePage />} />

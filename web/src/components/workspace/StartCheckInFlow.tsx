@@ -122,10 +122,12 @@ export function StartCheckInFlow({
   const recorderRef = useRef<WebCheckInRecorder | null>(null);
   const liveRef = useRef<WebLiveTranscription | null>(null);
   const elapsedRef = useRef(0);
-  const [showTranscript, setShowTranscript] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(true);
   const [transcriptLines, setTranscriptLines] = useState<LiveTranscriptLine[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveTranscriptionStatus>("idle");
   const [liveError, setLiveError] = useState<string | null>(null);
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
+  const stickTranscriptToBottomRef = useRef(true);
 
   const loadDraft = useCallback((meeting: CheckIn) => {
     setEditing(meeting);
@@ -144,7 +146,8 @@ export function StartCheckInFlow({
     elapsedRef.current = 0;
     setPaused(false);
     setUploads({ pending: 0, failed: 0 });
-    setShowTranscript(false);
+    setShowTranscript(true);
+    stickTranscriptToBottomRef.current = true;
     setTranscriptLines([]);
     setLiveStatus("idle");
     setLiveError(null);
@@ -168,6 +171,13 @@ export function StartCheckInFlow({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!showTranscript || !stickTranscriptToBottomRef.current) return;
+    const node = transcriptScrollRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [transcriptLines, showTranscript]);
 
   /* Clock, level meter and the 90 minute cap while recording. */
   useEffect(() => {
@@ -253,7 +263,8 @@ export function StartCheckInFlow({
       elapsedRef.current = 0;
       setElapsed(0);
       setPaused(false);
-      setShowTranscript(false);
+      setShowTranscript(true);
+      stickTranscriptToBottomRef.current = true;
       setTranscriptLines([]);
       setView("recording");
     } catch (err) {
@@ -524,19 +535,30 @@ export function StartCheckInFlow({
                     ) : null}
                   </div>
                   {liveError ? <p className="ci-upload-warn">{liveError}</p> : null}
-                  {transcriptLines.length === 0 ? (
-                    <p>Recognized speech will appear here as you talk.</p>
-                  ) : (
-                    transcriptLines.map((line) => (
-                      <div key={line.id} className="ci-live-transcript-row">
-                        <div className="ci-transcript-time">
-                          {formatTranscriptClock(line.startMs)}
-                          {line.speakerLabel ? ` — ${line.speakerLabel}` : ""}
+                  <div
+                    ref={transcriptScrollRef}
+                    className="ci-live-transcript-scroll"
+                    onScroll={(event) => {
+                      const node = event.currentTarget;
+                      const distance =
+                        node.scrollHeight - node.clientHeight - node.scrollTop;
+                      stickTranscriptToBottomRef.current = distance < 48;
+                    }}
+                  >
+                    {transcriptLines.length === 0 ? (
+                      <p>Recognized speech will appear here as you talk.</p>
+                    ) : (
+                      transcriptLines.map((line) => (
+                        <div key={line.id} className="ci-live-transcript-row">
+                          <div className="ci-transcript-time">
+                            {formatTranscriptClock(line.startMs)}
+                            {line.speakerLabel ? ` — ${line.speakerLabel}` : ""}
+                          </div>
+                          <p className={line.interim ? "is-interim" : undefined}>{line.text}</p>
                         </div>
-                        <p className={line.interim ? "is-interim" : undefined}>{line.text}</p>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="ci-questions">
@@ -547,7 +569,13 @@ export function StartCheckInFlow({
               <button
                 type="button"
                 className="ci-discard"
-                onClick={() => setShowTranscript((value) => !value)}
+                onClick={() => {
+                  setShowTranscript((value) => {
+                    const next = !value;
+                    if (next) stickTranscriptToBottomRef.current = true;
+                    return next;
+                  });
+                }}
               >
                 {showTranscript ? "Hide Transcript" : "Show Live Transcript"}
               </button>

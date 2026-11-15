@@ -115,23 +115,23 @@ describe("buildSnapshotPages", () => {
     );
   });
 
-  test("momentum shows active task streaks and opens leader detail", () => {
+  test("stars shows members with stars and opens leader detail", () => {
     const momentum = metric(buildSnapshotPages(input()), "momentum");
     expect(momentum).toMatchObject({
-      label: "Momentum",
+      label: "Stars",
       value: "6",
       numericValue: 6,
-      secondary: { text: "Active task streaks", tone: "neutral" },
+      secondary: { text: "Members with stars", tone: "neutral" },
     });
     expect(typeof momentum.onPress).toBe("function");
   });
 
-  test("member momentum shows the current task streak and development shows a member count", () => {
+  test("member stars shows the current count and development shows a member count", () => {
     expect(metric(buildSnapshotPages(input({ isManager: false, momentumCount: 4 })), "momentum"))
       .toMatchObject({
         value: "4",
         numericValue: 4,
-        secondary: { text: "Current task streak", tone: "good" },
+        secondary: { text: "Current stars", tone: "good" },
       });
     expect(metric(buildSnapshotPages(input({ goalsOnTrackPct: 80 })), "development"))
       .toMatchObject({ value: "3", numericValue: 3 });
@@ -200,14 +200,14 @@ describe("buildSnapshotPages", () => {
     expect(typeof development.onPress).toBe("function");
   });
 
-  test("member momentum is labelled and ready to build at zero", () => {
+  test("member stars is labelled and ready to fill at zero", () => {
     const zeroPages = buildSnapshotPages(input({ isManager: false, momentumCount: 0 }));
     expect(metric(zeroPages, "momentum").secondary).toEqual({
-      text: "Ready to build",
+      text: "Ready to fill stars",
       tone: "neutral",
     });
     const pages = buildSnapshotPages(input({ isManager: false }));
-    expect(metric(pages, "momentum").label).toBe("Momentum");
+    expect(metric(pages, "momentum").label).toBe("Stars");
     expect(typeof metric(pages, "momentum").onPress).toBe("function");
   });
 

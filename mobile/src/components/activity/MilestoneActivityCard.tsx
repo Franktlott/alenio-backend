@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Flame, Trophy } from "lucide-react-native";
+import { Star, Trophy } from "lucide-react-native";
 import { UserAvatar } from "@/components/UserAvatar";
 import type { ActivityFeedItem } from "./types";
 import { formatRelativeTime } from "./types";
@@ -22,7 +22,7 @@ export function MilestoneActivityCard({
   const count =
     item.metadata.count ?? (item.type === "task_milestone" ? 10 : 0);
   const isPersonalBest = item.type === "personal_best";
-  const Icon = isPersonalBest ? Flame : Trophy;
+  const Icon = isPersonalBest ? Star : Trophy;
 
   return (
     <View style={styles.outer}>
@@ -53,7 +53,7 @@ export function MilestoneActivityCard({
           <View style={styles.copy}>
             <View style={styles.labelRow}>
               <Text style={styles.label}>
-                {isPersonalBest ? "MOMENTUM BEST" : "MOMENTUM MILESTONE"}
+                {isPersonalBest ? "STARS BEST" : "STARS MILESTONE"}
               </Text>
               <Text style={styles.time}>
                 {formatRelativeTime(item.timestamp)}

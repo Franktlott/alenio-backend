@@ -2526,6 +2526,7 @@ app.route("/api/teams/:teamId/seneca/focus", senecaFocusRouter);
 app.route("/api/teams/:teamId/seneca-studio", senecaStudioRouter as any);
 app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/teams/:teamId/health-history", teamHealthHistoryRouter);
+app.route("/api/teams/:teamId/stars", teamMomentumRouter);
 app.route("/api/teams/:teamId/momentum", teamMomentumRouter);
 app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);

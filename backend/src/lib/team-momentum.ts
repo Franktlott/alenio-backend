@@ -2,16 +2,15 @@ import type { PrismaClient } from "@prisma/client";
 import { prisma } from "../prisma";
 import type {
   TeamMomentumActiveTaskSummary,
-  TeamMomentumBand,
   TeamMomentumCompletionEvidence,
   TeamMomentumDashboardStats,
   TeamMomentumLeaderSummary,
   TeamMomentumMemberDetail,
   TeamMomentumMemberSummary,
   TeamMomentumOverdueTaskSummary,
-  TeamMomentumStreakBreakingLateCompletion,
   TeamMomentumTaskSummary,
 } from "../types";
+import { starsMilestoneSegment } from "./momentum-projection";
 import { calendarDayFromInstant, instantFromCalendarDateAndTime, resolveTimeZone } from "./timezone";
 import type { WorkspaceAccessState } from "./workspace-access";
 import { getWorkspaceAccess } from "./workspace-access";
@@ -106,7 +105,7 @@ export function assertTeamMomentumAccess(
     throw new TeamMomentumAccessError(
       403,
       TEAM_MOMENTUM_PLAN_REQUIRED,
-      "Team Momentum requires an active trial or paid Team plan.",
+      "Stars requires an active trial or paid Team plan.",
     );
   }
 }
@@ -125,25 +124,15 @@ export function calendarMonthRange(now: Date, rawTimeZone?: string | null) {
   };
 }
 
-function isActiveMember(member: MemberRow, now: Date): boolean {
-  return (
-    member.currentStreak > 0 &&
-    member.momentumLastQualifiedAt !== null &&
-    member.momentumLastQualifiedAt.getTime() >= now.getTime() - ACTIVE_WINDOW_DAYS * DAY_MS
-  );
-}
-
-function memberBand(member: MemberRow, now: Date): TeamMomentumBand | null {
-  if (!isActiveMember(member, now)) return null;
-  return member.currentStreak >= 3 ? "strong" : "building";
-}
-
 function toMemberSummary(
   member: MemberRow,
   completedThisMonth: number,
   overdueTaskCount: number,
   late: { title: string | null; incognito: boolean } | undefined,
 ): TeamMomentumMemberSummary {
+  const currentStars = member.currentStreak;
+  const personalBestStars = Math.max(member.personalBestStreak, currentStars);
+  const segment = starsMilestoneSegment(currentStars);
   return {
     teamMemberId: member.id,
     userId: member.userId,
@@ -151,8 +140,13 @@ function toMemberSummary(
     email: member.user.email,
     image: member.user.image,
     role: member.role,
-    currentStreak: member.currentStreak,
-    personalBestStreak: member.personalBestStreak,
+    currentStreak: currentStars,
+    currentStars,
+    personalBestStreak: personalBestStars,
+    personalBestStars,
+    nextMilestone: segment.nextMilestone,
+    remainingToMilestone: segment.remainingToMilestone,
+    needsNudge: currentStars === 0,
     momentumRunStartedAt: member.momentumRunStartedAt?.toISOString() ?? null,
     momentumLastQualifiedAt: member.momentumLastQualifiedAt?.toISOString() ?? null,
     completedThisMonth,
@@ -259,7 +253,6 @@ export function buildTeamMomentumSummary(input: {
   const historyUserIds = new Set(input.credits.map((credit) => credit.creditedUserId));
   const monthCounts = new Map<string, number>();
   for (const credit of input.credits) {
-    if (credit.onTime === false) continue;
     if (credit.completedAt >= input.monthStart && credit.completedAt < input.monthEnd) {
       monthCounts.set(credit.creditedUserId, (monthCounts.get(credit.creditedUserId) ?? 0) + 1);
     }
@@ -281,44 +274,51 @@ export function buildTeamMomentumSummary(input: {
     overdueCounts.set(assignment.userId, (overdueCounts.get(assignment.userId) ?? 0) + 1);
   }
 
-  const strong: TeamMomentumLeaderSummary["groups"]["strong"] = [];
-  const building: TeamMomentumLeaderSummary["groups"]["building"] = [];
-  const readyToRebuild: TeamMomentumLeaderSummary["groups"]["readyToRebuild"] = [];
   const notEnoughActivity: TeamMomentumLeaderSummary["notEnoughActivity"]["members"] = [];
 
   const members = input.members
     .filter((item) => item.role !== "owner")
+    .map((member) =>
+      toMemberSummary(
+        member,
+        monthCounts.get(member.userId) ?? 0,
+        overdueCounts.get(member.userId) ?? 0,
+        lateByUser.get(member.userId),
+      ),
+    )
     .sort((left, right) => {
-      const nameOrder = left.user.name.localeCompare(right.user.name, undefined, {
+      // Needs nudge first, then fewest stars, then name.
+      if (left.needsNudge !== right.needsNudge) {
+        return left.needsNudge ? -1 : 1;
+      }
+      if (left.currentStars !== right.currentStars) {
+        return left.currentStars - right.currentStars;
+      }
+      const nameOrder = left.name.localeCompare(right.name, undefined, {
         sensitivity: "base",
       });
-      return nameOrder || left.user.email.localeCompare(right.user.email) ||
+      return nameOrder || left.email.localeCompare(right.email) ||
         left.userId.localeCompare(right.userId);
     });
-  for (const member of members) {
-    const summary = toMemberSummary(
-      member,
-      monthCounts.get(member.userId) ?? 0,
-      overdueCounts.get(member.userId) ?? 0,
-      lateByUser.get(member.userId),
-    );
-    if (!historyUserIds.has(member.userId)) {
+
+  for (const summary of members) {
+    if (!historyUserIds.has(summary.userId) || summary.currentStars === 0) {
       notEnoughActivity.push({ ...summary, reason: "no_qualifying_completions" });
-      continue;
     }
-    const band = memberBand(member, input.now);
-    if (band === "strong") strong.push({ ...summary, band });
-    else if (band === "building") building.push({ ...summary, band });
-    else readyToRebuild.push({ ...summary, band: "ready_to_rebuild" });
   }
+
+  const withStars = members.filter((row) => row.currentStars > 0).length;
+  const needsNudgeCount = members.filter((row) => row.needsNudge).length;
 
   return {
     teamId: input.teamId,
     generatedAt: input.now.toISOString(),
     activeWindowDays: ACTIVE_WINDOW_DAYS,
-    activeCount: strong.length + building.length,
-    eligibleCount: strong.length + building.length + readyToRebuild.length + notEnoughActivity.length,
-    groups: { strong, building, readyToRebuild },
+    activeCount: withStars,
+    eligibleCount: members.length,
+    roster: members,
+    needsNudgeCount,
+    groups: { strong: [], building: [], readyToRebuild: [] },
     notEnoughActivity: { count: notEnoughActivity.length, members: notEnoughActivity },
     coachingVisible: true,
     dashboard: buildMomentumDashboard({
@@ -351,10 +351,11 @@ export function presentMomentumSummaryForViewer(
   return {
     ...summary,
     coachingVisible: false,
+    roster: summary.roster.map(withoutCoachingDetails),
     groups: {
-      strong: summary.groups.strong.map(withoutCoachingDetails),
-      building: summary.groups.building.map(withoutCoachingDetails),
-      readyToRebuild: summary.groups.readyToRebuild.map(withoutCoachingDetails),
+      strong: [],
+      building: [],
+      readyToRebuild: [],
     },
     notEnoughActivity: {
       ...summary.notEnoughActivity,
@@ -416,24 +417,8 @@ export function buildTeamMomentumMemberDetail(input: {
   currentRunLimit: number;
 }): TeamMomentumMemberDetail {
   const ordered = [...input.credits].sort(newestFirst);
-  const currentRunCredits: CreditRow[] = [];
-  for (const credit of ordered) {
-    if (!credit.onTime) break;
-    currentRunCredits.push(credit);
-  }
-
-  let streak = 0;
-  let latestLate:
-    | { credit: CreditRow; streakBeforeBreak: number }
-    | undefined;
-  for (const credit of [...ordered].reverse()) {
-    if (credit.onTime) {
-      streak += 1;
-    } else {
-      latestLate = { credit, streakBeforeBreak: streak };
-      streak = 0;
-    }
-  }
+  // Stars: every credit counts — show newest completions, not an on-time-only run.
+  const currentRunCredits = ordered;
 
   const overdueTasks: TeamMomentumOverdueTaskSummary[] = [];
   const activeTasks: TeamMomentumActiveTaskSummary[] = [];
@@ -459,27 +444,24 @@ export function buildTeamMomentumMemberDetail(input: {
     input.member,
     completedThisMonth,
     overdueTasks.length,
-    latestLate
-      ? {
-          title: latestLate.credit.sourceTaskIncognito
-            ? null
-            : latestLate.credit.sourceTaskTitle,
-          incognito: latestLate.credit.sourceTaskIncognito,
-        }
-      : undefined,
+    undefined,
   );
-  const band = memberBand(input.member, input.now);
   const hasHistory = ordered.length > 0;
   const returnedRun = currentRunCredits.slice(0, input.currentRunLimit);
+  const segment = starsMilestoneSegment(member.currentStars);
 
   return {
     teamId: input.teamId,
     generatedAt: input.now.toISOString(),
     activeWindowDays: ACTIVE_WINDOW_DAYS,
     member,
-    active: band !== null,
-    band: band ?? (hasHistory ? "ready_to_rebuild" : null),
+    active: member.currentStars > 0,
+    band: null,
     notEnoughActivityReason: hasHistory ? null : "no_qualifying_completions",
+    nextMilestone: segment.nextMilestone,
+    remainingToMilestone: segment.remainingToMilestone,
+    filledInSegment: segment.filledInSegment,
+    segmentSize: segment.segmentSize,
     currentRun: {
       startedAt: input.member.momentumRunStartedAt?.toISOString() ?? null,
       lastQualifiedAt: input.member.momentumLastQualifiedAt?.toISOString() ?? null,
@@ -490,13 +472,7 @@ export function buildTeamMomentumMemberDetail(input: {
         completionEvidence(credit, input.availableTaskIds),
       ),
     },
-    latestStreakBreakingLateCompletion: latestLate
-      ? ({
-          ...completionEvidence(latestLate.credit, input.availableTaskIds),
-          onTime: false,
-          streakBeforeBreak: latestLate.streakBeforeBreak,
-        } satisfies TeamMomentumStreakBreakingLateCompletion)
-      : null,
+    latestStreakBreakingLateCompletion: null,
     activeTasks,
     overdueTasks,
   };
