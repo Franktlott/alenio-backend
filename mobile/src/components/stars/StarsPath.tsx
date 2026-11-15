@@ -38,14 +38,17 @@ export function StarsPath({
         {Array.from({ length: segmentSize }, (_, index) => {
           const filled = index < filledInSegment;
           return (
-            <Star
+            <View
               key={index}
-              size={28}
-              color={filled ? STARS_GOLD : "#CBD5E1"}
-              fill={filled ? STARS_GOLD : "transparent"}
-              strokeWidth={filled ? 0 : 1.8}
               testID={`${testID}-star-${index}-${filled ? "filled" : "hollow"}`}
-            />
+            >
+              <Star
+                size={28}
+                color={filled ? STARS_GOLD : "#CBD5E1"}
+                fill={filled ? STARS_GOLD : "transparent"}
+                strokeWidth={1.8}
+              />
+            </View>
           );
         })}
       </View>

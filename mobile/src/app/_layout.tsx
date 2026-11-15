@@ -410,6 +410,13 @@ function RootLayoutNav() {
             }
           />
           <Stack.Screen name="member-profile" />
+          <Stack.Screen
+            name="team-momentum"
+            options={{
+              headerShown: false,
+              animation: "slide_from_right",
+            }}
+          />
           <Stack.Screen name="workspace" />
           <Stack.Screen
             name="workspace-settings"

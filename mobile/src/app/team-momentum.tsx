@@ -20,7 +20,7 @@ import {
 } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api/api";
+import { ApiError, api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { StarsPath } from "@/components/stars/StarsPath";
 import { StarsTeamRoster } from "@/components/stars/StarsTeamRoster";
@@ -43,6 +43,35 @@ import {
 } from "@/components/AlenioBottomSheet";
 import { isLeaderRole } from "@/lib/member-identity";
 import { colors, space } from "@/theme";
+
+async function fetchStarsSummary(teamId: string) {
+  try {
+    return await api.get<TeamMomentumLeaderSummary>(
+      `/api/teams/${teamId}/stars`,
+    );
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return api.get<TeamMomentumLeaderSummary>(
+        `/api/teams/${teamId}/momentum`,
+      );
+    }
+    throw error;
+  }
+}
+
+async function fetchStarsMemberDetail(teamId: string, memberUserId: string) {
+  const path = `/api/teams/${teamId}/stars/members/${encodeURIComponent(memberUserId)}?currentRunLimit=50`;
+  try {
+    return await api.get<TeamMomentumMemberDetail>(path);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return api.get<TeamMomentumMemberDetail>(
+        `/api/teams/${teamId}/momentum/members/${encodeURIComponent(memberUserId)}?currentRunLimit=50`,
+      );
+    }
+    throw error;
+  }
+}
 
 function BrandedState({
   kind,
@@ -100,11 +129,10 @@ export default function TeamStarsScreen() {
     typeof params.memberUserId === "string" ? params.memberUserId : "";
   const { data: session } = useSession();
   const currentUserId = session?.user?.id ?? "";
-  const [mode, setMode] = useState<"team" | "mine">(
-    memberUserId ? "mine" : "mine",
-  );
+  const [mode, setMode] = useState<"team" | "mine">("mine");
   const openedPersonalFallback = useRef(false);
-  const { data: teams } = useQuery({
+  const defaultedLeaderTab = useRef(false);
+  const { data: teams, isLoading: teamsLoading } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<Array<{ id: string; role?: string }>>("/api/teams"),
     enabled: !!teamId,
@@ -118,8 +146,7 @@ export default function TeamStarsScreen() {
 
   const summaryQuery = useQuery({
     queryKey: teamMomentumSummaryQueryKey(teamId),
-    queryFn: () =>
-      api.get<TeamMomentumLeaderSummary>(`/api/teams/${teamId}/stars`),
+    queryFn: () => fetchStarsSummary(teamId),
     enabled: !!teamId && mode === "team" && canSeeTeam,
   });
 
@@ -130,10 +157,7 @@ export default function TeamStarsScreen() {
 
   const detailQuery = useQuery({
     queryKey: teamMomentumMemberDetailQueryKey(teamId, detailMemberUserId),
-    queryFn: () =>
-      api.get<TeamMomentumMemberDetail>(
-        `/api/teams/${teamId}/stars/members/${encodeURIComponent(detailMemberUserId)}?currentRunLimit=50`,
-      ),
+    queryFn: () => fetchStarsMemberDetail(teamId, detailMemberUserId),
     enabled: !!teamId && !!detailMemberUserId,
   });
 
@@ -144,14 +168,13 @@ export default function TeamStarsScreen() {
     [summaryQuery.data],
   );
 
-  const mineErrorCode =
-    detailQuery.error &&
-    typeof detailQuery.error === "object" &&
-    "body" in detailQuery.error
-      ? (detailQuery.error as { body?: { error?: { code?: string } } }).body
-          ?.error?.code
-      : undefined;
-  const ownerExcluded = mode === "mine" && mineErrorCode === "MEMBER_NOT_FOUND";
+  // Leaders land on Team; everyone else stays on My Stars.
+  useEffect(() => {
+    if (defaultedLeaderTab.current || teamsLoading) return;
+    if (!canSeeTeam) return;
+    defaultedLeaderTab.current = true;
+    if (!memberUserId) setMode("team");
+  }, [canSeeTeam, teamsLoading, memberUserId]);
 
   useEffect(() => {
     if (!canSeeTeam && mode === "team") setMode("mine");
@@ -187,7 +210,8 @@ export default function TeamStarsScreen() {
     : null;
 
   return (
-    <AppPageBackground>
+    <View style={styles.root}>
+      <AppPageBackground />
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top - 8, 0) }]}>
           <Pressable
@@ -260,20 +284,28 @@ export default function TeamStarsScreen() {
           testID="team-stars-screen"
         >
           {mode === "mine" ? (
-            ownerExcluded ? (
-              <View style={styles.ownerNote} testID="team-stars-owner-note">
-                <Text style={styles.ownerNoteTitle}>Owners aren’t on the star path</Text>
-                <Text style={styles.stateBody}>
-                  Stars follow members and leaders. Owners are not included in a personal star count.
-                </Text>
-              </View>
+            !detailMemberUserId || (detailQuery.isLoading && !detail) ? (
+              <ActivityIndicator color={STARS_GOLD} style={{ marginTop: 40 }} />
             ) : personalAccessState ? (
               <BrandedState
                 kind={personalAccessState}
                 onRetry={() => void detailQuery.refetch()}
               />
-            ) : detailQuery.isLoading && !detail ? (
-              <ActivityIndicator color={STARS_GOLD} style={{ marginTop: 40 }} />
+            ) : detailQuery.isError ? (
+              <View style={styles.centerState} testID="my-stars-error">
+                <Text style={styles.stateTitle}>Couldn’t load your stars</Text>
+                <Text style={styles.stateBody}>
+                  {detailQuery.error instanceof Error
+                    ? detailQuery.error.message
+                    : "Something went wrong. Pull to retry."}
+                </Text>
+                <Pressable
+                  onPress={() => void detailQuery.refetch()}
+                  style={styles.retryButton}
+                >
+                  <Text style={styles.retryLabel}>Try again</Text>
+                </Pressable>
+              </View>
             ) : detail && path ? (
               <View testID="my-stars-page">
                 <StarsPath
@@ -288,10 +320,10 @@ export default function TeamStarsScreen() {
                 </Text>
               </View>
             ) : (
-              <View style={styles.centerState}>
-                <Text style={styles.stateTitle}>No stars yet</Text>
-                <Text style={styles.stateBody}>
-                  Complete an assigned workspace task to fill your first star.
+              <View style={styles.centerState} testID="my-stars-page">
+                <StarsPath currentStars={0} />
+                <Text style={styles.footerNote}>
+                  Assigned workspace tasks fill a star. Private tasks do not.
                 </Text>
               </View>
             )
@@ -354,11 +386,12 @@ export default function TeamStarsScreen() {
           ) : null}
         </AlenioBottomSheet>
       </SafeAreaView>
-    </AppPageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   safe: { flex: 1 },
   header: {
     flexDirection: "row",

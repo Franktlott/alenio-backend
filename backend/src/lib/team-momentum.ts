@@ -542,7 +542,7 @@ async function authorizeMemberDetail(
     throw new TeamMomentumAccessError(
       403,
       TEAM_MOMENTUM_PLAN_REQUIRED,
-      "Momentum requires an active trial or paid Team plan.",
+      "Stars requires an active trial or paid Team plan.",
     );
   }
   return membership;
@@ -642,11 +642,12 @@ export async function getTeamMomentumMemberDetail(
     where: { userId_teamId: { userId: memberUserId, teamId } },
     select: memberSelect,
   });
-  if (!member || member.role === "owner") {
+  // Stars personal path is available to every workspace member, including owners.
+  if (!member) {
     throw new TeamMomentumAccessError(
       404,
       "MEMBER_NOT_FOUND",
-      "Active non-owner team member not found.",
+      "Active team member not found.",
     );
   }
 

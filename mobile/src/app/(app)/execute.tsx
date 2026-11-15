@@ -1013,7 +1013,20 @@ export default function TasksScreen() {
   const { data: teamMomentumSummary } = useQuery({
     queryKey: teamMomentumSummaryQueryKey(activeTeamId ?? ""),
     queryFn: () =>
-      api.get<TeamMomentumLeaderSummary>(`/api/teams/${activeTeamId}/stars`),
+      api
+        .get<TeamMomentumLeaderSummary>(`/api/teams/${activeTeamId}/stars`)
+        .catch(async (error) => {
+          const status =
+            error && typeof error === "object" && "status" in error
+              ? (error as { status?: number }).status
+              : undefined;
+          if (status === 404) {
+            return api.get<TeamMomentumLeaderSummary>(
+              `/api/teams/${activeTeamId}/momentum`,
+            );
+          }
+          throw error;
+        }),
     enabled: !!activeTeamId && isCalendarManager,
   });
   const { data: healthHistoryResponse } = useQuery({
