@@ -62,17 +62,50 @@ function applyEvent(
   const finals = cleaned.filter((line) => !line.interim);
   const last = finals[finals.length - 1];
   if (last && last.text === text) return finals;
-  return [
-    ...finals,
-    {
-      id: event.id,
-      text,
-      startMs: event.startMs,
-      endMs: event.endMs,
-      speakerLabel: event.speakerLabel,
-      interim: false,
-    },
-  ];
+  const next = {
+    id: event.id,
+    text,
+    startMs: event.startMs,
+    endMs: event.endMs,
+    speakerLabel: event.speakerLabel,
+    interim: false as const,
+  };
+  if (last && shouldMergeFinals(last, next)) {
+    return [
+      ...finals.slice(0, -1),
+      {
+        ...last,
+        id: next.id,
+        text: joinFragments(last.text, next.text),
+        endMs: next.endMs ?? last.endMs,
+        speakerLabel: last.speakerLabel ?? next.speakerLabel,
+      },
+    ];
+  }
+  return [...finals, next];
+}
+
+function shouldMergeFinals(
+  previous: LiveTranscriptLine,
+  next: LiveTranscriptLine,
+): boolean {
+  const prev = previous.text.trim();
+  if (!prev || !next.text.trim()) return false;
+  if (previous.speakerLabel && next.speakerLabel && previous.speakerLabel !== next.speakerLabel) {
+    return false;
+  }
+  if (/[.!?…]["')\]]?\s*$/.test(prev)) return false;
+  const gapMs = next.startMs - (previous.endMs ?? previous.startMs);
+  return gapMs <= 2500;
+}
+
+function joinFragments(previous: string, next: string): string {
+  const left = previous.trim();
+  const right = next.trim();
+  if (!left) return right;
+  if (!right) return left;
+  if (/[A-Za-z]$/.test(left) && /^[a-z]/.test(right)) return `${left}${right}`;
+  return `${left} ${right}`.replace(/\s+/g, " ").trim();
 }
 
 function floatTo16BitPcmBase64(input: Float32Array): string | null {

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   applyLiveTranscriptEvent,
   formatClockMs,
+  joinTranscriptFragments,
   liveTranscriptWordCount,
 } from "./live-check-in-transcript";
 
@@ -55,5 +56,29 @@ describe("live check-in transcript", () => {
     });
     expect(lines).toHaveLength(1);
     expect(liveTranscriptWordCount(lines)).toBe(2);
+  });
+
+  test("merges mid-sentence finals instead of chopping them", () => {
+    let lines = applyLiveTranscriptEvent([], {
+      event: "final",
+      id: "1",
+      text: "Way for us to really under",
+      startMs: 7000,
+      endMs: 9000,
+      speakerLabel: null,
+    });
+    lines = applyLiveTranscriptEvent(lines, {
+      event: "final",
+      id: "2",
+      text: "stand how this is working.",
+      startMs: 9000,
+      endMs: 11000,
+      speakerLabel: null,
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.text).toBe("Way for us to really understand how this is working.");
+    expect(joinTranscriptFragments("really under", "stand how")).toBe(
+      "really understand how",
+    );
   });
 });

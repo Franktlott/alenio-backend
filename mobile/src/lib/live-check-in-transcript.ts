@@ -75,7 +75,49 @@ export function applyLiveTranscriptEvent(
   if (last && !last.interim && last.text === finalLine.text) {
     return withoutAnyInterim;
   }
+  // Merge when a commit landed mid-sentence (no terminal punctuation yet).
+  if (last && !last.interim && shouldMergeTranscriptFinals(last, finalLine)) {
+    const merged: LiveTranscriptLine = {
+      ...last,
+      id: finalLine.id,
+      text: joinTranscriptFragments(last.text, finalLine.text),
+      endMs: finalLine.endMs ?? last.endMs,
+      speakerLabel: last.speakerLabel ?? finalLine.speakerLabel,
+    };
+    return [...withoutAnyInterim.slice(0, -1), merged];
+  }
   return [...withoutAnyInterim, finalLine];
+}
+
+/** True when the previous final looks unfinished and the next continues it. */
+export function shouldMergeTranscriptFinals(
+  previous: Pick<LiveTranscriptLine, "text" | "endMs" | "startMs" | "speakerLabel">,
+  next: Pick<LiveTranscriptLine, "text" | "endMs" | "startMs" | "speakerLabel">,
+): boolean {
+  const prev = previous.text.trim();
+  const incoming = next.text.trim();
+  if (!prev || !incoming) return false;
+  if (previous.speakerLabel && next.speakerLabel && previous.speakerLabel !== next.speakerLabel) {
+    return false;
+  }
+  if (/[.!?…]["')\]]?\s*$/.test(prev)) return false;
+  const gapMs =
+    next.startMs - (previous.endMs ?? previous.startMs);
+  if (gapMs > 2500) return false;
+  return true;
+}
+
+export function joinTranscriptFragments(previous: string, next: string): string {
+  const left = previous.trim();
+  const right = next.trim();
+  if (!left) return right;
+  if (!right) return left;
+  // Avoid "under How" vs "understand" — prefer a space unless the previous
+  // fragment looks mid-word (ends with a letter and next is lowercase).
+  if (/[A-Za-z]$/.test(left) && /^[a-z]/.test(right)) {
+    return `${left}${right}`;
+  }
+  return `${left} ${right}`.replace(/\s+/g, " ").trim();
 }
 
 export function liveTranscriptWordCount(lines: LiveTranscriptLine[]): number {

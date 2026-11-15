@@ -7,7 +7,7 @@ and browser recordings.
 ## Provider and transport
 
 - **Provider:** OpenAI GA Realtime transcription at `wss://api.openai.com/v1/realtime?intent=transcription` (same `OPENAI_API_KEY` as batch STT). Do not use the retired `OpenAI-Beta: realtime=v1` header.
-- **Model:** `OPENAI_REALTIME_TRANSCRIBE_MODEL` (default `gpt-live-transcribe`). Turn detection is null; the proxy commits the input buffer every ~2s for finals.
+- **Model:** `OPENAI_REALTIME_TRANSCRIBE_MODEL` (default `gpt-live-transcribe`). Turn detection is null; the proxy commits after ~900ms of silence (or 12s max utterance) so sentences are not chopped every two seconds.
 - **Keys:** Never sent to the client. The app requests a short-lived ticket, then
   connects to Alenio at `/api/check-in-transcription?ticket=…`. The backend
   proxies PCM16 audio to OpenAI and returns interim/final events.
