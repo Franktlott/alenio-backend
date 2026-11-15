@@ -91,6 +91,20 @@ const SILENCE_BEFORE_COMMIT_MS = 900;
 const MAX_UTTERANCE_MS = 12_000;
 const VAD_TICK_MS = 200;
 
+/**
+ * Join streaming transcription deltas without eating word spaces.
+ * OpenAI often sends a leading space on each new word; trimming each delta
+ * jammed words together in the purple interim line.
+ */
+export function appendTranscriptionDelta(prior: string, delta: string): string {
+  if (!delta) return prior;
+  if (!prior) return delta.replace(/\s+/g, " ").trim();
+  const needsSpace =
+    !/\s$/.test(prior) && !/^\s/.test(delta) && /[\w)]$/.test(prior) && /^[\w(]/.test(delta);
+  const joined = needsSpace ? `${prior} ${delta}` : `${prior}${delta}`;
+  return joined.replace(/\s+/g, " ").trim();
+}
+
 /** RMS of little-endian PCM16 base64. */
 export function pcm16Base64Rms(base64: string): number {
   try {
@@ -324,10 +338,11 @@ export class CheckInLiveTranscriptionSession {
       type === "input_audio_transcription.delta"
     ) {
       const id = parsed.item_id || parsed.event_id || `interim-${Date.now()}`;
-      const delta = (parsed.delta ?? parsed.transcript ?? "").trim();
-      if (!delta) return;
+      const delta = parsed.delta ?? parsed.transcript ?? "";
+      if (!delta.trim()) return;
       const prior = this.interimByItem.get(id);
-      const text = `${prior?.text ?? ""}${delta}`.replace(/\s+/g, " ").trim();
+      const text = appendTranscriptionDelta(prior?.text ?? "", delta);
+      if (!text) return;
       const startMs = prior?.startMs ?? this.elapsedMs();
       this.interimByItem.set(id, { text, startMs });
       this.send({

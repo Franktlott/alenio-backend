@@ -1,6 +1,25 @@
 import { describe, expect, test } from "bun:test";
 
-import { pcm16Base64Rms } from "./check-in-live-transcription";
+import {
+  appendTranscriptionDelta,
+  pcm16Base64Rms,
+} from "./check-in-live-transcription";
+
+describe("appendTranscriptionDelta", () => {
+  test("keeps leading spaces that separate words", () => {
+    expect(appendTranscriptionDelta("And", " she")).toBe("And she");
+    expect(
+      appendTranscriptionDelta("And she", " used to reside"),
+    ).toBe("And she used to reside");
+  });
+
+  test("inserts a space when deltas arrive as bare words", () => {
+    expect(appendTranscriptionDelta("And", "she")).toBe("And she");
+    expect(
+      appendTranscriptionDelta("And she used to reside", "therein"),
+    ).toBe("And she used to reside therein");
+  });
+});
 
 describe("pcm16Base64Rms", () => {
   test("returns 0 for silence", () => {
