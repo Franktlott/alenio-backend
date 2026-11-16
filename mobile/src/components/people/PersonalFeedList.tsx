@@ -83,8 +83,13 @@ function headlineFor(item: PersonalFeedItem): string | null {
 }
 
 function openFeedItem(item: PersonalFeedItem) {
-  // Alenio platform posts stay on the Feed card (reactions/comments APIs are live).
-  if (isAlenioItem(item)) return;
+  if (isAlenioItem(item)) {
+    router.push({
+      pathname: "/alenio-post-detail",
+      params: { activityId: item.id },
+    });
+    return;
+  }
   if (isNetworkItem(item)) {
     router.push({
       pathname: "/network-update-detail",

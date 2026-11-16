@@ -696,6 +696,25 @@ export type NetworkUpdateComment = {
   reactions: ActivityReactionSummary;
 };
 
+export type AdminFeedComment = {
+  id: string;
+  body: string;
+  createdAt: string;
+  parentId: string | null;
+  author: { id: string; name: string; image: string | null };
+  canDelete: boolean;
+  reactions: ActivityReactionSummary;
+};
+
+export type CreateAdminFeedCommentRequest = {
+  body: string;
+  parentId?: string;
+};
+
+export type ReactToAdminFeedCommentRequest = {
+  emoji: string;
+};
+
 export type CreateNetworkUpdateRequest = {
   body?: string;
   imageUrl?: string;

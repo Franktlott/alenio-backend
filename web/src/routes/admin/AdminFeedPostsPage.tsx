@@ -1,13 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Lock, LockOpen, Megaphone, Trash2, X } from "lucide-react";
+import {
+  ImagePlus,
+  Lock,
+  LockOpen,
+  Megaphone,
+  MessageCircle,
+  Reply,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useRef, useState } from "react";
 import { ContentSectionTabs } from "../../components/admin/ContentSectionTabs";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
+import { UserAvatar } from "../../components/UserAvatar";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import {
+  createAdminFeedPostComment,
   createAdminFeedPost,
+  deleteAdminFeedPostComment,
   deleteAdminFeedPost,
+  fetchAdminFeedPostComments,
   fetchAdminFeedPosts,
+  reactToAdminFeedPostComment,
+  type AdminFeedComment,
+  type AdminFeedPost,
   updateAdminFeedPostComments,
 } from "../../lib/admin-feed-posts-api";
 import { uploadFeedPostMedia } from "../../lib/api";
@@ -16,6 +33,7 @@ import "../discover/discover-manage.css";
 import "./admin-feed-posts.css";
 
 const QUERY_KEY = ["admin-feed-posts"] as const;
+const COMMENT_REACTIONS = ["👍", "❤️", "🎉"] as const;
 
 function postBody(metadata: Record<string, unknown> | null): string {
   const body = metadata?.body;
@@ -50,6 +68,207 @@ function readImageSize(file: File): Promise<{ width: number; height: number } | 
   });
 }
 
+function AdminFeedPostComments({
+  item,
+  canEdit,
+  currentUserId,
+}: {
+  item: AdminFeedPost;
+  canEdit: boolean;
+  currentUserId: string;
+}) {
+  const queryClient = useQueryClient();
+  const commentsKey = [...QUERY_KEY, item.id, "comments"] as const;
+  const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<AdminFeedComment | null>(null);
+
+  const comments = useQuery({
+    queryKey: commentsKey,
+    queryFn: () => fetchAdminFeedPostComments(item.id),
+  });
+
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: commentsKey }),
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+    ]);
+  };
+
+  const add = useMutation({
+    mutationFn: ({
+      body,
+      parentId,
+    }: {
+      body: string;
+      parentId?: string;
+    }) => createAdminFeedPostComment(item.id, body, parentId),
+    onSuccess: async () => {
+      setDraft("");
+      setReplyTo(null);
+      await refresh();
+    },
+  });
+
+  const react = useMutation({
+    mutationFn: ({
+      commentId,
+      emoji,
+    }: {
+      commentId: string;
+      emoji: string;
+    }) => reactToAdminFeedPostComment(item.id, commentId, emoji),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: commentsKey });
+    },
+  });
+
+  const removeComment = useMutation({
+    mutationFn: (commentId: string) =>
+      deleteAdminFeedPostComment(item.id, commentId),
+    onSuccess: refresh,
+  });
+
+  const onSend = () => {
+    const body = draft.trim();
+    if (!body || add.isPending || item.commentsLocked) return;
+    add.mutate({ body, parentId: replyTo?.id });
+  };
+
+  const rows = comments.data ?? [];
+  const actionError = add.error ?? react.error ?? removeComment.error;
+
+  return (
+    <div className="afp-comments" data-testid={`admin-feed-post-comments-panel-${item.id}`}>
+      {comments.isLoading ? <p className="afp-comments-state">Loading comments…</p> : null}
+      {comments.error ? (
+        <p className="discover-error">
+          {comments.error instanceof Error ? comments.error.message : "Couldn’t load comments."}
+        </p>
+      ) : null}
+      {!comments.isLoading && !comments.error && rows.length === 0 ? (
+        <p className="afp-comments-state">No comments yet.</p>
+      ) : null}
+
+      {rows.length > 0 ? (
+        <div className="afp-comment-list">
+          {rows.map((comment) => (
+            <article
+              key={comment.id}
+              className={`afp-comment${comment.parentId ? " afp-comment--reply" : ""}`}
+            >
+              <UserAvatar
+                user={comment.author}
+                className="afp-comment-avatar"
+                imgClassName="afp-comment-avatar-img"
+                alt=""
+              />
+              <div className="afp-comment-main">
+                <div className="afp-comment-bubble">
+                  <div className="afp-comment-head">
+                    <strong>{comment.author.name || "Member"}</strong>
+                    <span>{formatWhen(comment.createdAt)}</span>
+                  </div>
+                  <p>{comment.body}</p>
+                </div>
+                {canEdit ? (
+                  <div className="afp-comment-actions">
+                    {COMMENT_REACTIONS.map((emoji) => {
+                      const summary = comment.reactions[emoji];
+                      const active = summary?.userIds.includes(currentUserId) ?? false;
+                      return (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className={active ? "is-active" : ""}
+                          aria-label={`React ${emoji}`}
+                          disabled={react.isPending}
+                          onClick={() => react.mutate({ commentId: comment.id, emoji })}
+                        >
+                          {emoji}
+                          {summary?.count ? <span>{summary.count}</span> : null}
+                        </button>
+                      );
+                    })}
+                    {!item.commentsLocked ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplyTo(comment);
+                          setDraft("");
+                        }}
+                      >
+                        <Reply size={13} />
+                        Reply
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="is-destructive"
+                      disabled={removeComment.isPending}
+                      onClick={() => {
+                        if (window.confirm("Remove this comment and its replies?")) {
+                          removeComment.mutate(comment.id);
+                        }
+                      }}
+                    >
+                      <Trash2 size={13} />
+                      Remove
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
+      {actionError ? (
+        <p className="discover-error">
+          {actionError instanceof Error ? actionError.message : "Couldn’t update comments."}
+        </p>
+      ) : null}
+
+      {item.commentsLocked ? (
+        <div className="afp-comments-locked">
+          <Lock size={15} />
+          Comments are locked. Existing comments can still be reviewed, reacted to, or removed.
+        </div>
+      ) : canEdit ? (
+        <div className="afp-comment-composer">
+          {replyTo ? (
+            <div className="afp-replying">
+              <span>Replying to {replyTo.author.name || "Member"}</span>
+              <button type="button" aria-label="Cancel reply" onClick={() => setReplyTo(null)}>
+                <X size={13} />
+              </button>
+            </div>
+          ) : null}
+          <div className="afp-comment-compose-row">
+            <textarea
+              rows={2}
+              maxLength={1000}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={replyTo ? "Write a reply…" : "Join the conversation…"}
+              data-testid={`admin-feed-post-comment-input-${item.id}`}
+            />
+            <button
+              type="button"
+              disabled={!draft.trim() || add.isPending}
+              onClick={onSend}
+              aria-label={replyTo ? "Post reply" : "Post comment"}
+              data-testid={`admin-feed-post-comment-send-${item.id}`}
+            >
+              <Send size={15} />
+              {add.isPending ? "Posting…" : replyTo ? "Reply" : "Comment"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AdminFeedPostsPage() {
   const queryClient = useQueryClient();
   const { me } = useEnterpriseShell();
@@ -65,6 +284,7 @@ export function AdminFeedPostsPage() {
   const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSaved, setFormSaved] = useState<string | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   const { data: items = [], isLoading, error } = useQuery({
     queryKey: QUERY_KEY,
@@ -156,7 +376,7 @@ export function AdminFeedPostsPage() {
 
   if (!me || !canView) {
     return (
-      <div className="dm-page">
+      <div className="dm-page afp-page">
         <p className="discover-error" style={{ margin: 24 }}>
           You don’t have access to Content.
         </p>
@@ -170,7 +390,7 @@ export function AdminFeedPostsPage() {
     (draft.trim().length > 0 || imageUrl.trim().length > 0);
 
   return (
-    <div className="dm-page" data-testid="admin-feed-posts-page">
+    <div className="dm-page afp-page" data-testid="admin-feed-posts-page">
       <header className="dm-header">
         <div>
           <p className="dm-kicker">Content</p>
@@ -314,6 +534,22 @@ export function AdminFeedPostsPage() {
                       {" · "}
                       {item.commentsLocked ? "Comments locked" : "Comments open"}
                     </p>
+                    <button
+                      type="button"
+                      className="afp-review-comments"
+                      aria-expanded={reviewingId === item.id}
+                      onClick={() =>
+                        setReviewingId((current) => (current === item.id ? null : item.id))
+                      }
+                      data-testid={`admin-feed-post-review-comments-${item.id}`}
+                    >
+                      <MessageCircle size={14} strokeWidth={2.2} />
+                      {reviewingId === item.id
+                        ? "Close conversation"
+                        : item.commentCount > 0
+                          ? `Review ${item.commentCount} comment${item.commentCount === 1 ? "" : "s"}`
+                          : "Open conversation"}
+                    </button>
                   </div>
                   {canEdit ? (
                     <div className="afp-item-actions">
@@ -352,6 +588,13 @@ export function AdminFeedPostsPage() {
                         <Trash2 size={15} strokeWidth={2.2} />
                       </button>
                     </div>
+                  ) : null}
+                  {reviewingId === item.id ? (
+                    <AdminFeedPostComments
+                      item={item}
+                      canEdit={canEdit}
+                      currentUserId={me.id}
+                    />
                   ) : null}
                 </li>
               );

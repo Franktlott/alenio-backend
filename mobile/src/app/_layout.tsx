@@ -501,6 +501,10 @@ function RootLayoutNav() {
             options={{ animation: "slide_from_right" }}
           />
           <Stack.Screen
+            name="alenio-post-detail"
+            options={{ headerShown: false, animation: "slide_from_right" }}
+          />
+          <Stack.Screen
             name="create-post"
             options={{ animation: "slide_from_bottom" }}
           />
