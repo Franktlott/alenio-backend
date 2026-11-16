@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -15,7 +16,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
-import { Building2, Megaphone, Newspaper, Users } from "lucide-react-native";
+import { Building2, Newspaper, Users } from "lucide-react-native";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import {
@@ -103,12 +104,9 @@ function openFeedItem(item: PersonalFeedItem) {
 }
 
 function SourceBadge({ item }: { item: PersonalFeedItem }) {
-  const Icon =
-    item.source === "alenio"
-      ? Megaphone
-      : item.source === "network"
-        ? Users
-        : Building2;
+  // Alenio posts use the brand mark as the avatar — no source chip.
+  if (item.source === "alenio") return null;
+  const Icon = item.source === "network" ? Users : Building2;
   return (
     <View style={styles.badge} testID={`personal-feed-badge-${item.id}`}>
       <Icon size={11} color={colors.textMuted} strokeWidth={2} />
@@ -157,18 +155,27 @@ function FeedCard({
       testID={`personal-feed-card-${item.id}`}
     >
       <View style={styles.cardTop}>
-        <UserAvatar
-          user={{
-            name: author,
-            image: item.user?.image ?? null,
-          }}
-          size={36}
-          radius={18}
-          backgroundColor="#EFE9FF"
-          textColor="#6d28d9"
-          fontSize={13}
-          workplaceConnected={false}
-        />
+        {isAlenioItem(item) ? (
+          <Image
+            source={require("@/assets/alenio-icon.png")}
+            style={styles.alenioMark}
+            resizeMode="contain"
+            accessibilityLabel="Alenio"
+          />
+        ) : (
+          <UserAvatar
+            user={{
+              name: author,
+              image: item.user?.image ?? null,
+            }}
+            size={36}
+            radius={18}
+            backgroundColor="#EFE9FF"
+            textColor="#6d28d9"
+            fontSize={13}
+            workplaceConnected={false}
+          />
+        )}
         <View style={styles.cardMeta}>
           <Text style={styles.author} numberOfLines={1}>
             {author}
@@ -473,6 +480,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  alenioMark: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
   },
   cardMeta: {
     flex: 1,

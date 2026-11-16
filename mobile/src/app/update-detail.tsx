@@ -2,11 +2,25 @@ import { Pressable, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { UpdateDetailScreen } from "@/components/workspace/UpdateDetailScreen";
 
+function firstParam(
+  value: string | string[] | undefined,
+): string | undefined {
+  if (typeof value === "string" && value.length > 0) return value;
+  if (Array.isArray(value) && typeof value[0] === "string" && value[0]) {
+    return value[0];
+  }
+  return undefined;
+}
+
 export default function UpdateDetailRoute() {
-  const { teamId, activityId } = useLocalSearchParams<{
-    teamId?: string;
-    activityId?: string;
+  const params = useLocalSearchParams<{
+    teamId?: string | string[];
+    activityId?: string | string[];
+    id?: string | string[];
   }>();
+  const teamId = firstParam(params.teamId);
+  const activityId =
+    firstParam(params.activityId) ?? firstParam(params.id);
 
   if (!teamId || !activityId) {
     return (
@@ -24,7 +38,7 @@ export default function UpdateDetailRoute() {
           That update is no longer available.
         </Text>
         <Pressable
-          onPress={() => router.replace("/(app)/execute")}
+          onPress={() => router.replace("/(app)/team")}
           testID="update-detail-missing-back"
           style={{
             borderRadius: 12,
@@ -34,7 +48,7 @@ export default function UpdateDetailRoute() {
           }}
         >
           <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>
-            Back to workspace
+            Back to Feed
           </Text>
         </Pressable>
       </View>

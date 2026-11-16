@@ -884,6 +884,118 @@
   background: #fffbf2 !important;
 }
 
+.ws-stars-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ws-stars-journey {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ws-stars-journey-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #ece9f5;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.ws-stars-journey-row--active {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+}
+
+.ws-stars-journey-row--locked {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.ws-stars-journey-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fffbeb;
+  color: #c9a227;
+}
+
+.ws-stars-journey-row--locked .ws-stars-journey-icon {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+.ws-stars-journey-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ws-stars-journey-copy strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: #120a2e;
+}
+
+.ws-stars-journey-row--locked .ws-stars-journey-copy strong {
+  color: #94a3b8;
+}
+
+.ws-stars-journey-copy small {
+  font-size: 12px;
+  color: #6b6789;
+}
+
+.ws-stars-journey-bar {
+  display: block;
+  margin-top: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #e9e5ff;
+  overflow: hidden;
+}
+
+.ws-stars-journey-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #6d28d9;
+}
+
+.ws-stars-journey-meta {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6d28d9;
+  white-space: nowrap;
+}
+
+.ws-stars-journey-row--completed .ws-stars-journey-meta {
+  color: #15803d;
+}
+
+.ws-stars-journey-row--locked .ws-stars-journey-meta {
+  color: #94a3b8;
+}
+
 .ws-stat-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,8 +13,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { Images, X } from "lucide-react-native";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Building2,
+  Check,
+  ChevronDown,
+  Images,
+  Users,
+  X,
+} from "lucide-react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { pickMedia, type PickedFile } from "@/lib/file-picker";
 import { uploadFile } from "@/lib/upload";
@@ -22,8 +29,23 @@ import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { useMobileAuthReady, useSession } from "@/lib/auth/use-session";
 import { UserAvatar } from "@/components/UserAvatar";
 import { PostMediaAttachment } from "@/components/PostMediaAttachment";
+import {
+  AlenioBottomSheet,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
 import { useStatusClusterInset } from "@/lib/adaptive-layout";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
+import {
+  buildPostAudienceOptions,
+  postAudienceFromParams,
+  postAudienceKey,
+  postDestinationConfirmCopy,
+  postDestinationSummary,
+  resolvePostAudience,
+  type PostAudience,
+} from "@/lib/post-audience";
+import type { ConnectionsResponse, Team } from "@/lib/types";
+import { colors } from "@/theme";
 
 const BODY_MAX = 2000;
 
@@ -31,29 +53,90 @@ export default function CreatePostScreen() {
   const { teamId, scope, attach, draft } = useLocalSearchParams<{
     teamId?: string;
     scope?: "network";
-    /** Set when the caller opened the media picker directly. */
     attach?: string;
-    /** Opening line from a starter prompt, so the box is never blank. */
     draft?: string;
   }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const { data: authReady } = useMobileAuthReady();
   const me = authReady?.me ?? session?.user;
-  const isNetworkPost = scope === "network";
-  const { access } = useWorkspaceAccess(isNetworkPost ? null : teamId);
-  const workspaceWritable = isNetworkPost || access.canWrite;
+
+  const teamsQuery = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    staleTime: 60_000,
+  });
+  const connectionsQuery = useQuery({
+    queryKey: ["connections"],
+    queryFn: () => api.get<ConnectionsResponse>("/api/connections"),
+    staleTime: 60_000,
+  });
+
+  const teams = teamsQuery.data ?? [];
+  const networkCount = connectionsQuery.data?.accepted.length ?? null;
+  const initialAudience = useMemo(() => {
+    const fromParams = postAudienceFromParams({ scope, teamId });
+    if (fromParams?.kind === "workspace" && fromParams.teamId) {
+      const team = teams.find((item) => item.id === fromParams.teamId);
+      return {
+        ...fromParams,
+        teamName: team?.name ?? fromParams.teamName,
+      };
+    }
+    if (fromParams) return fromParams;
+    if (teams[0]) {
+      return {
+        kind: "workspace" as const,
+        teamId: teams[0].id,
+        teamName: teams[0].name,
+      };
+    }
+    return { kind: "network" as const };
+  }, [scope, teamId, teams]);
+
+  const [audience, setAudience] = useState<PostAudience>(initialAudience);
+  const [audienceReady, setAudienceReady] = useState(false);
+  useEffect(() => {
+    if (audienceReady) return;
+    if (teamsQuery.isLoading && !teamsQuery.data) return;
+    setAudience(initialAudience);
+    setAudienceReady(true);
+  }, [audienceReady, initialAudience, teamsQuery.data, teamsQuery.isLoading]);
+
+  const selectedTeamId =
+    audience.kind === "workspace" ? audience.teamId ?? null : null;
+  const { access } = useWorkspaceAccess(selectedTeamId);
+  const workspaceWritable =
+    audience.kind === "network" || access.canWrite !== false;
 
   const [body, setBody] = useState(draft ?? "");
   const [media, setMedia] = useState<PickedFile | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(
     null,
   );
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const options = useMemo(
+    () =>
+      buildPostAudienceOptions({
+        teams: teams.map((team) => ({ id: team.id, name: team.name })),
+        networkConnectionCount: networkCount,
+      }),
+    [teams, networkCount],
+  );
+
+  const destination = postDestinationSummary(audience, networkCount);
+  const confirmCopy = postDestinationConfirmCopy(audience, networkCount);
 
   const postMutation = useMutation({
     mutationFn: async () => {
-      if (!isNetworkPost && !teamId) throw new Error("No workspace selected");
-      if (!workspaceWritable) throw new Error("This workspace is read-only.");
+      if (audience.kind === "workspace" && !audience.teamId) {
+        throw new Error("Choose a workspace");
+      }
+      if (audience.kind === "workspace" && !workspaceWritable) {
+        throw new Error("This workspace is read-only.");
+      }
       let imageUrl: string | undefined;
       let imageWidth: number | undefined;
       let imageHeight: number | undefined;
@@ -76,32 +159,42 @@ export default function CreatePostScreen() {
         }
       }
 
+      const payload = {
+        body: body.trim() || undefined,
+        imageUrl,
+        imageWidth,
+        imageHeight,
+        mediaType: imageUrl ? mediaType : undefined,
+      };
+
+      if (audience.kind === "network") {
+        return api.post("/api/network-updates", payload);
+      }
       return api.post(
-        isNetworkPost
-          ? "/api/network-updates"
-          : `/api/teams/${teamId}/activity/posts`,
-        {
-          body: body.trim() || undefined,
-          imageUrl,
-          imageWidth,
-          imageHeight,
-          mediaType: imageUrl ? mediaType : undefined,
-        },
+        `/api/teams/${audience.teamId}/activity/posts`,
+        payload,
       );
     },
     onSuccess: async () => {
-      if (isNetworkPost) {
-        await queryClient.invalidateQueries({ queryKey: ["network-updates"] });
+      setConfirmOpen(false);
+      const invalidations = [
+        queryClient.invalidateQueries({ queryKey: ["personal-feed"] }),
+      ];
+      if (audience.kind === "network") {
+        invalidations.push(
+          queryClient.invalidateQueries({ queryKey: ["network-updates"] }),
+        );
       } else {
-        await Promise.all([
+        invalidations.push(
           queryClient.invalidateQueries({
-            queryKey: ["team-activity", teamId],
+            queryKey: ["team-activity", audience.teamId],
           }),
           queryClient.invalidateQueries({
             queryKey: ["personal-recognitions"],
           }),
-        ]);
+        );
       }
+      await Promise.all(invalidations);
       router.back();
     },
     onError: (error) => {
@@ -133,7 +226,6 @@ export default function CreatePostScreen() {
     }
   };
 
-  /** Opens the picker once, so returning from it does not reopen it. */
   const mediaRequested = useRef(false);
   useEffect(() => {
     if (attach !== "1" || mediaRequested.current) return;
@@ -142,7 +234,11 @@ export default function CreatePostScreen() {
   }, [attach]);
 
   const canPost =
-    workspaceWritable && (!!body.trim() || !!media) && !postMutation.isPending;
+    workspaceWritable &&
+    audienceReady &&
+    (audience.kind === "network" || !!audience.teamId) &&
+    (!!body.trim() || !!media) &&
+    !postMutation.isPending;
   const cluster = useStatusClusterInset({ fullScreen: true });
 
   return (
@@ -166,21 +262,17 @@ export default function CreatePostScreen() {
         <Text style={styles.navTitle}>New post</Text>
         <Pressable
           onPress={() => {
-            if (!workspaceWritable) return;
-            postMutation.mutate();
+            if (!canPost) return;
+            setConfirmOpen(true);
           }}
           disabled={!canPost}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Share post"
+          accessibilityLabel="Review post destination"
           testID="create-post-submit"
           style={[styles.postBtn, canPost ? null : styles.postBtnDisabled]}
         >
-          {postMutation.isPending ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <Text style={styles.postBtnText}>Post</Text>
-          )}
+          <Text style={styles.postBtnText}>Post</Text>
         </Pressable>
       </View>
 
@@ -203,14 +295,38 @@ export default function CreatePostScreen() {
               fontSize={15}
               workplaceConnected={false}
             />
-            <Text style={styles.authorName} numberOfLines={1}>
-              {me?.name ?? "You"}
-            </Text>
+            <View style={styles.authorMeta}>
+              <Text style={styles.authorName} numberOfLines={1}>
+                {me?.name ?? "You"}
+              </Text>
+              <Pressable
+                onPress={() => setPickerOpen(true)}
+                style={styles.destinationChip}
+                accessibilityRole="button"
+                accessibilityLabel={`Posting to ${destination.title}. Change audience`}
+                testID="create-post-audience-chip"
+              >
+                {audience.kind === "network" ? (
+                  <Users size={13} color={colors.brand} strokeWidth={2.2} />
+                ) : (
+                  <Building2 size={13} color={colors.brand} strokeWidth={2.2} />
+                )}
+                <Text style={styles.destinationChipText} numberOfLines={1}>
+                  {destination.title}
+                </Text>
+                <ChevronDown size={14} color={colors.brand} strokeWidth={2.2} />
+              </Pressable>
+            </View>
           </View>
+
+          <Text style={styles.destinationHint} testID="create-post-audience-hint">
+            Posting to {destination.title}
+            {destination.detail ? ` · ${destination.detail}` : ""}
+          </Text>
 
           <TextInput
             placeholder={
-              isNetworkPost
+              audience.kind === "network"
                 ? "Share an update with your network"
                 : "Share an update with your workspace"
             }
@@ -268,6 +384,100 @@ export default function CreatePostScreen() {
           </Pressable>
         </View>
       </SafeKeyboardAvoidingView>
+
+      <AlenioBottomSheet
+        visible={pickerOpen}
+        title="Who should see this?"
+        subtitle="Choose where this post goes"
+        onClose={() => setPickerOpen(false)}
+        compact
+        scrollEnabled
+        testID="create-post-audience-sheet"
+      >
+        {options.map((option) => {
+          const selected = postAudienceKey(audience) === option.key;
+          return (
+            <Pressable
+              key={option.key}
+              onPress={() => {
+                setAudience(resolvePostAudience(option, teams));
+                setPickerOpen(false);
+              }}
+              style={[styles.optionRow, selected ? styles.optionRowSelected : null]}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              testID={`create-post-audience-${option.key}`}
+            >
+              <View style={styles.optionIcon}>
+                {option.kind === "network" ? (
+                  <Users size={16} color={colors.brand} strokeWidth={2.2} />
+                ) : (
+                  <Building2 size={16} color={colors.brand} strokeWidth={2.2} />
+                )}
+              </View>
+              <View style={styles.optionCopy}>
+                <Text style={styles.optionTitle}>{option.title}</Text>
+                <Text style={styles.optionSub}>{option.subtitle}</Text>
+              </View>
+              {selected ? (
+                <Check size={18} color={colors.brand} strokeWidth={2.4} />
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </AlenioBottomSheet>
+
+      <AlenioBottomSheet
+        visible={confirmOpen}
+        title={confirmCopy.title}
+        subtitle={confirmCopy.body}
+        onClose={
+          postMutation.isPending ? () => undefined : () => setConfirmOpen(false)
+        }
+        compact
+        scrollEnabled={false}
+        testID="create-post-confirm-sheet"
+        footer={
+          <>
+            <Pressable
+              onPress={() => postMutation.mutate()}
+              disabled={postMutation.isPending}
+              style={[
+                alenioSheetStyles.primaryButton,
+                postMutation.isPending
+                  ? alenioSheetStyles.primaryButtonDisabled
+                  : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Confirm and post"
+              testID="create-post-confirm"
+            >
+              {postMutation.isPending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={alenioSheetStyles.primaryButtonText}>
+                  Post to {destination.title}
+                </Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => setConfirmOpen(false)}
+              disabled={postMutation.isPending}
+              style={alenioSheetStyles.cancelButton}
+              accessibilityRole="button"
+              testID="create-post-confirm-cancel"
+            >
+              <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          </>
+        }
+      >
+        <View style={styles.confirmCard}>
+          <Text style={styles.confirmLabel}>Destination</Text>
+          <Text style={styles.confirmTitle}>{destination.title}</Text>
+          <Text style={styles.confirmDetail}>{destination.detail}</Text>
+        </View>
+      </AlenioBottomSheet>
     </SafeAreaView>
   );
 }
@@ -310,7 +520,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: "#4361EE",
+    backgroundColor: colors.brand,
   },
   postBtnDisabled: {
     opacity: 0.4,
@@ -328,13 +538,40 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 10,
+    marginBottom: 8,
+  },
+  authorMeta: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
   },
   authorName: {
-    flex: 1,
     fontSize: 15,
     fontWeight: "600",
     color: "#0F172A",
+  },
+  destinationChip: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    maxWidth: "100%",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#EFE9FF",
+  },
+  destinationChipText: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.brand,
+  },
+  destinationHint: {
+    marginBottom: 10,
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#64748B",
   },
   input: {
     minHeight: 120,
@@ -373,5 +610,67 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 12,
     backgroundColor: "#F3F6FF",
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    marginBottom: 8,
+  },
+  optionRowSelected: {
+    borderColor: "#C4B5FD",
+    backgroundColor: "#F5F3FF",
+  },
+  optionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EFE9FF",
+  },
+  optionCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  optionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  optionSub: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  confirmCard: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    gap: 4,
+  },
+  confirmLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94A3B8",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  confirmTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  confirmDetail: {
+    fontSize: 13,
+    color: "#64748B",
   },
 });

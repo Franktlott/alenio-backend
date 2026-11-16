@@ -110,6 +110,18 @@ export type TeamMomentumOverdueTaskSummary = TeamMomentumTaskSummary & {
   overdueSince: string;
 };
 
+export type StarsJourneyStatus = "completed" | "active" | "locked";
+
+export type StarsJourneyStep = {
+  id: string;
+  threshold: number;
+  title: string;
+  iconKey: "star" | "bolt" | "mountain" | "trophy";
+  status: StarsJourneyStatus;
+  progressCurrent: number;
+  progressTarget: number;
+};
+
 export type TeamMomentumMemberDetail = {
   teamId: string;
   generatedAt: string;
@@ -122,6 +134,8 @@ export type TeamMomentumMemberDetail = {
   remainingToMilestone?: number;
   filledInSegment?: number;
   segmentSize?: number;
+  dayStreak?: number;
+  journey?: StarsJourneyStep[];
   currentRun: {
     startedAt: string | null;
     lastQualifiedAt: string | null;

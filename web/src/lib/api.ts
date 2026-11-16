@@ -155,8 +155,12 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
       } catch (e) {
         throw mapNetworkError(e);
       }
-    } else {
+    }
+    if (res.status === 401) {
       clearAccessToken();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("alenio:session-expired"));
+      }
     }
   }
 
@@ -1413,6 +1417,11 @@ export async function uploadHomeInsightMedia(file: File): Promise<ChatUploadResu
   return uploadMediaFile(file, "home_insight");
 }
 
+/** Alenio feed post photos — durable `content/feed-posts/` Storage path. */
+export async function uploadFeedPostMedia(file: File): Promise<ChatUploadResult> {
+  return uploadMediaFile(file, "feed_post");
+}
+
 /** Upload a custom workplace alert sound for a workspace. */
 export async function uploadGoAlertSound(teamId: string, file: File): Promise<ChatUploadResult> {
   assertProductionApiConfigured();
@@ -1455,7 +1464,7 @@ export async function uploadGoAlertSound(teamId: string, file: File): Promise<Ch
 
 async function uploadMediaFile(
   file: File,
-  purpose?: "discover" | "home_insight",
+  purpose?: "discover" | "home_insight" | "feed_post",
 ): Promise<ChatUploadResult> {
   assertProductionApiConfigured();
   const baseUrl = apiBaseUrl();

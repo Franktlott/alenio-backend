@@ -42,32 +42,29 @@ export function joinedMemberName(item: ActivityFeedItem): string {
   return fromMetadata || item.actor?.name?.trim() || "A new teammate";
 }
 
-/** Stars celebrates 5, 10 and 15, then every tenth assigned completion. */
-const MILESTONE_STEPS = [5, 10, 15] as const;
+/** Stars celebrates 5, 10, 20, 50, then every +50 assigned completions. */
+const MILESTONE_STEPS = [5, 10, 20, 50] as const;
 
 export function milestoneStreakCount(count: number | null | undefined): number {
   return typeof count === "number" && count > 0 ? Math.floor(count) : 0;
 }
 
 /**
- * The next streak the backend will celebrate. Mirrors isMilestone() in
- * backend/src/lib/momentum-service.ts — keep the two in step.
+ * The next streak the backend will celebrate. Mirrors isStarsMilestone /
+ * nextStarsMilestone — keep the two in step.
  */
 export function nextMilestoneTarget(count: number | null | undefined): number {
   const streak = milestoneStreakCount(count);
   const step = MILESTONE_STEPS.find((value) => value > streak);
   if (step) return step;
-  return Math.floor(streak / 10) * 10 + 10;
+  return Math.floor(streak / 50) * 50 + 50;
 }
 
-/**
- * Milestone counts are a run of on-time completions, not a weekly total, so
- * the copy says "in a row" rather than "this week".
- */
+/** Milestone counts are total assigned completions that filled a star. */
 export function milestoneSubtitle(count: number | null | undefined): string {
   return milestoneStreakCount(count) === 0
-    ? "An on-time streak in progress."
-    : "All completed on time, in a row.";
+    ? "Stars from assigned workspace tasks."
+    : "Assigned workspace tasks completed.";
 }
 
 export function recognitionInvolvesWorkspaceMembers(

@@ -30,7 +30,6 @@ export function PostComposerRow({
     width >= FEED_WIDE_PADDING_BREAKPOINT
       ? FEED_CARD_WIDE_PADDING
       : FEED_CARD_PADDING;
-  const destination = audience === "network" ? "network" : "workspace";
   const rowTestID =
     audience === "network"
       ? "network-updates-compose"
@@ -51,12 +50,12 @@ export function PostComposerRow({
         <Pressable
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel={`Share an update with your ${destination}`}
+          accessibilityLabel="Share an update"
           testID={rowTestID}
           style={styles.field}
         >
           <Text style={styles.placeholder} numberOfLines={1}>
-            Share an update with your {destination}…
+            Share an update…
           </Text>
         </Pressable>
       </View>

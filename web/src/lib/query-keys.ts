@@ -7,6 +7,8 @@ export const queryKeys = {
   teamDetail: (teamId: string) => ["team", "detail", teamId] as const,
   teamTasks: (teamId: string) => ["team", "tasks", teamId] as const,
   teamMomentum: (teamId: string) => ["team", "stars", teamId] as const,
+  teamMomentumMember: (teamId: string, memberUserId: string) =>
+    ["team", "stars", teamId, "member", memberUserId] as const,
   chatTopics: (teamId: string) => ["chat", "topics", teamId] as const,
   chatConversations: ["chat", "conversations"] as const,
   chatThread: (mode: "dm" | "team", threadId: string) => ["chat", "thread", mode, threadId] as const,
@@ -15,6 +17,7 @@ export const queryKeys = {
   chatConnections: ["chat", "connections"] as const,
   networkConnections: ["network", "connections"] as const,
   networkSuggestions: ["network", "suggestions"] as const,
+  personalFeed: ["personal-feed"] as const,
   senecaConversations: ["seneca", "conversations"] as const,
   senecaConversation: (id: string) => ["seneca", "conversation", id] as const,
   upcomingVideoMeetings: ["upcoming-video-meetings"] as const,

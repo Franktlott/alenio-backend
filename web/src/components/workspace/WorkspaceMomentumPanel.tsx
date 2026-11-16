@@ -1,7 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Star } from "lucide-react";
+import { Flame, Lock, Star, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
-import { fetchTeamMomentum, type TeamMomentumMember } from "../../lib/api";
+import {
+  fetchTeamMomentum,
+  fetchTeamMomentumMemberDetail,
+  type StarsJourneyStep,
+  type TeamMomentumMember,
+} from "../../lib/api";
 import { queryKeys } from "../../lib/query-keys";
 import { UserAvatar } from "../UserAvatar";
 
@@ -19,14 +24,16 @@ function starsRoster(data: Awaited<ReturnType<typeof fetchTeamMomentum>>): TeamM
   ];
 }
 
-/** Team Stars: hollow→filled personal progress and a simple leader roster. */
+/** Team Stars: personal journey summary + simple leader roster. */
 export function WorkspaceMomentumPanel({
   teamId,
+  meId,
   hasTeamFeatures,
   canManageBilling,
   onOpenMember,
 }: {
   teamId: string;
+  meId?: string;
   hasTeamFeatures: boolean | undefined;
   canManageBilling: boolean;
   onOpenMember: (userId: string) => void;
@@ -36,6 +43,13 @@ export function WorkspaceMomentumPanel({
     queryKey: queryKeys.teamMomentum(teamId),
     queryFn: () => fetchTeamMomentum(teamId),
     enabled: !locked,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const mine = useQuery({
+    queryKey: queryKeys.teamMomentumMember(teamId, meId ?? ""),
+    queryFn: () => fetchTeamMomentumMemberDetail(teamId, meId!),
+    enabled: !locked && !!meId,
     staleTime: 60_000,
     retry: false,
   });
@@ -62,14 +76,60 @@ export function WorkspaceMomentumPanel({
   const data = q.data;
   const rows = data ? starsRoster(data) : [];
   const needsNudge = data?.needsNudgeCount ?? rows.filter((m) => (m.needsNudge ?? memberStars(m) === 0)).length;
+  const detail = mine.data;
+  const myStars = detail ? memberStars(detail.member) : null;
 
   return (
     <div className="ws-momentum" data-testid="ws-stars">
+      {detail ? (
+        <section className="dm-card ws-panel" data-testid="ws-stars-mine">
+          <header className="ws-panel-head">
+            <div>
+              <h2>Your Progress</h2>
+              <p>
+                {myStars === 1 ? "1 star" : `${myStars ?? 0} stars`} toward{" "}
+                {detail.journey.find((step) => step.status === "active")?.title ??
+                  `milestone ${detail.nextMilestone}`}
+                {detail.dayStreak > 0 ? ` · ${detail.dayStreak}-day streak` : ""}
+              </p>
+            </div>
+            {detail.dayStreak > 0 ? (
+              <span className="ws-stars-streak" title="Calendar day streak">
+                <Flame size={14} strokeWidth={2} />
+                {detail.dayStreak}-day streak
+              </span>
+            ) : null}
+          </header>
+          <div className="ws-stat-row">
+            <div className="ws-stat">
+              <span className="ws-stat-label">Stars</span>
+              <strong>{myStars}</strong>
+              <small>{detail.remainingToMilestone} to next milestone</small>
+            </div>
+            <div className="ws-stat">
+              <span className="ws-stat-label">Next</span>
+              <strong>{detail.nextMilestone}</strong>
+              <small>
+                {detail.journey.find((step) => step.status === "active")?.title ?? "Keep going"}
+              </small>
+            </div>
+          </div>
+          <ul className="ws-stars-journey" data-testid="ws-stars-journey">
+            {detail.journey.map((step) => (
+              <JourneyRow key={step.id} step={step} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="dm-card ws-panel">
         <header className="ws-panel-head">
           <div>
             <h2>Stars</h2>
-            <p>Assigned task completions fill stars. Milestones at 5, 10, 15, then every 10.</p>
+            <p>
+              Assigned task completions fill stars. Journey milestones at 5, 10, 20, 50, then every
+              50.
+            </p>
           </div>
         </header>
         {q.isError ? (
@@ -117,6 +177,44 @@ export function WorkspaceMomentumPanel({
         </section>
       ) : null}
     </div>
+  );
+}
+
+function JourneyRow({ step }: { step: StarsJourneyStep }) {
+  const ratio =
+    step.progressTarget > 0 ? Math.min(1, step.progressCurrent / step.progressTarget) : 0;
+  return (
+    <li className={`ws-stars-journey-row ws-stars-journey-row--${step.status}`}>
+      <span className="ws-stars-journey-icon" aria-hidden>
+        {step.status === "completed" ? (
+          <Star size={14} strokeWidth={0} fill="currentColor" />
+        ) : step.status === "locked" ? (
+          <Lock size={14} strokeWidth={2} />
+        ) : (
+          <Trophy size={14} strokeWidth={2} />
+        )}
+      </span>
+      <span className="ws-stars-journey-copy">
+        <strong>{step.title}</strong>
+        <small>
+          {step.status === "completed"
+            ? `${step.threshold} stars earned`
+            : `${step.threshold} stars`}
+        </small>
+        {step.status === "active" ? (
+          <span className="ws-stars-journey-bar" aria-hidden>
+            <span style={{ width: `${Math.max(8, ratio * 100)}%` }} />
+          </span>
+        ) : null}
+      </span>
+      <span className="ws-stars-journey-meta">
+        {step.status === "completed"
+          ? "Done"
+          : step.status === "active"
+            ? `${step.progressCurrent} / ${step.progressTarget}`
+            : "Locked"}
+      </span>
+    </li>
   );
 }
 

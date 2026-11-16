@@ -1119,7 +1119,7 @@ export default function ChatScreen() {
               contentContainerStyle={{
                 paddingTop: 2,
                 paddingHorizontal: 6,
-                paddingBottom: tabClearance(8),
+                paddingBottom: 8,
                 flexGrow: 1,
               }}
               refreshControl={
@@ -1131,18 +1131,6 @@ export default function ChatScreen() {
               }
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
-              ListFooterComponent={
-                !conversationsLoading &&
-                !conversationsError &&
-                conversations.length > 0 ? (
-                  <View style={styles.pinHint} testID="chat-pin-hint">
-                    <Pin size={12} color="#94A3B8" strokeWidth={2} />
-                    <Text style={styles.pinHintText}>
-                      Press and hold a conversation to pin it. Pin up to 5.
-                    </Text>
-                  </View>
-                ) : null
-              }
               ListEmptyComponent={
                 conversationsLoading ? (
                   <View
@@ -1249,6 +1237,22 @@ export default function ChatScreen() {
               }
               testID="chat-conversation-list"
             />
+            {!conversationsLoading &&
+            !conversationsError &&
+            conversations.length > 0 ? (
+              <View
+                style={[
+                  styles.pinHintBar,
+                  { paddingBottom: Math.max(tabClearance(10), 10) },
+                ]}
+                testID="chat-pin-hint"
+              >
+                <Pin size={12} color="#94A3B8" strokeWidth={2} />
+                <Text style={styles.pinHintText}>
+                  Press and hold a conversation to pin it. Pin up to 5.
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
         {splitChat ? (
@@ -1442,14 +1446,17 @@ const styles = StyleSheet.create({
     color: "#8995A8",
     textAlign: "center",
   },
-  pinHint: {
-    marginTop: 10,
-    marginBottom: 4,
-    paddingHorizontal: 18,
+  pinHintBar: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
+    paddingTop: 10,
+    paddingHorizontal: 18,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E8ECF0",
   },
   pinHintText: {
     flexShrink: 1,

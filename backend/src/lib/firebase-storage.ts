@@ -443,7 +443,9 @@ export type UploadSlot =
   /** Discover covers + in-article images. Outside users/.../uploads/ so orphan cleanup never sweeps them. */
   | "discover"
   /** Home Insight card photos. Same durable content namespace as Discover. */
-  | "home_insight";
+  | "home_insight"
+  /** Alenio feed post photos. Same durable content namespace as Discover. */
+  | "feed_post";
 
 export async function uploadFileToFirebaseStorage(params: {
   userId: string;
@@ -496,6 +498,8 @@ export async function uploadFileToFirebaseStorage(params: {
     storagePath = `content/discover/${Date.now()}-${objectId}-${safeName}`;
   } else if (slot === "home_insight") {
     storagePath = `content/home-insights/${Date.now()}-${objectId}-${safeName}`;
+  } else if (slot === "feed_post") {
+    storagePath = `content/feed-posts/${Date.now()}-${objectId}-${safeName}`;
   } else {
     storagePath = `users/${userId}/uploads/${Date.now()}-${objectId}-${safeName}`;
   }

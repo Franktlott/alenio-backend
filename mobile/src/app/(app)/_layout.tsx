@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { CheckSquare, House, Users, MessageCircle } from "lucide-react-native";
+import { CheckSquare, House, MessageCircle, Newspaper } from "lucide-react-native";
 import {
   View,
   Text,
@@ -37,7 +37,6 @@ import type { CalendarEvent, ConnectionsResponse, Conversation, Team, Task } fro
 import MeetingBanner from "@/components/MeetingBanner";
 import { ProfileSheet } from "@/components/profile/ProfileSheet";
 import { SenecaAssistantSheet } from "@/components/seneca/SenecaAssistantSheet";
-import { ConnectionsIcon } from "@/components/ConnectionsIcon";
 import { GradientTabIcon } from "@/components/GradientTabIcon";
 import { AppReleaseGate } from "@/components/AppReleaseGate";
 import { resolveActiveTeamId } from "@/lib/no-workspace-routing";
@@ -54,7 +53,7 @@ const ALL_TABS = [
   { name: "home", label: "Home", Icon: House },
   { name: "chat", label: "Chat", Icon: MessageCircle },
   { name: "execute", label: "Workspace", Icon: CheckSquare },
-  { name: "team", label: "My Network", Icon: Users },
+  { name: "team", label: "Feed", Icon: Newspaper },
 ] as const;
 
 /**
@@ -76,7 +75,7 @@ function NavigationRail({
 }) {
   const edgeInset = edge === "left" ? insets.left : insets.right;
   const items = descriptors.map((descriptor) => {
-    const { route, tab, isFocused, isTeamTab, badge } = descriptor;
+    const { route, tab, isFocused, badge } = descriptor;
     const { Icon, label, name } = tab;
     return (
       <Pressable
@@ -95,20 +94,12 @@ function NavigationRail({
           ]}
         >
           <View style={tabBarStyles.iconWrap}>
-            {isTeamTab ? (
-              <ConnectionsIcon
-                size={TAB_BAR_ICON_SIZE}
-                color={TAB_BAR_INACTIVE_COLOR}
-                active={isFocused}
-              />
-            ) : (
-              <GradientTabIcon
-                Icon={Icon}
-                size={TAB_BAR_ICON_SIZE}
-                active={isFocused}
-                inactiveColor={TAB_BAR_INACTIVE_COLOR}
-              />
-            )}
+            <GradientTabIcon
+              Icon={Icon}
+              size={TAB_BAR_ICON_SIZE}
+              active={isFocused}
+              inactiveColor={TAB_BAR_INACTIVE_COLOR}
+            />
             {badge ? (
               <View style={tabBarStyles.badge}>
                 <Text style={tabBarStyles.badgeText}>
@@ -161,7 +152,71 @@ function NavigationRail({
   );
 }
 
-/** Floating Seneca control — bottom-right, clear of the tab bar / side rail. */
+/**
+ * Closed Duo: the five destinations sit under the clock, icons only. The
+ * workspace switcher stays in the page, so both bars are on screen together.
+ */
+function DuoIconRail({
+  descriptors,
+  onTabPress,
+  edge,
+  width,
+  bottomInset,
+}: {
+  descriptors: any[];
+  onTabPress: (route: any, isFocused: boolean) => void;
+  edge: "left" | "right";
+  width: number;
+  bottomInset: number;
+}) {
+  const iconFor = (descriptor: any) => {
+    const { route, tab, isFocused, badge } = descriptor;
+    const { Icon, label, name } = tab;
+    return (
+      <Pressable
+        key={route.key}
+        onPress={() => onTabPress(route, isFocused)}
+        style={iconRailStyles.item}
+        testID={`tab-${name}`}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isFocused }}
+        accessibilityLabel={label}
+      >
+        <View style={[iconRailStyles.disc, isFocused ? iconRailStyles.discActive : null]}>
+          <GradientTabIcon
+            Icon={Icon}
+            size={22}
+            active={isFocused}
+            inactiveColor={TAB_BAR_INACTIVE_COLOR}
+          />
+          {badge ? (
+            <View style={tabBarStyles.badge}>
+              <Text style={tabBarStyles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
+            </View>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  };
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[
+        iconRailStyles.rail,
+        edge === "left" ? { left: 0 } : { right: 0 },
+        { width, paddingBottom: bottomInset + 16 },
+      ]}
+      testID="duo-icon-rail"
+    >
+      <View style={iconRailStyles.dock} testID="duo-icon-dock">
+        {descriptors.map(iconFor)}
+      </View>
+    </View>
+  );
+}
+
+/** Floating Seneca control — tucked just above the tab bar / side rail. */
 function SenecaFab({
   open,
   onPress,
@@ -195,78 +250,6 @@ function SenecaFab({
         />
       </View>
     </Pressable>
-  );
-}
-
-/**
- * Closed Duo: the five destinations sit under the clock, icons only. The
- * workspace switcher stays in the page, so both bars are on screen together.
- */
-function DuoIconRail({
-  descriptors,
-  onTabPress,
-  edge,
-  width,
-  bottomInset,
-}: {
-  descriptors: any[];
-  onTabPress: (route: any, isFocused: boolean) => void;
-  edge: "left" | "right";
-  width: number;
-  bottomInset: number;
-}) {
-  const iconFor = (descriptor: any) => {
-    const { route, tab, isFocused, isTeamTab, badge } = descriptor;
-    const { Icon, label, name } = tab;
-    return (
-      <Pressable
-        key={route.key}
-        onPress={() => onTabPress(route, isFocused)}
-        style={iconRailStyles.item}
-        testID={`tab-${name}`}
-        accessibilityRole="button"
-        accessibilityState={{ selected: isFocused }}
-        accessibilityLabel={label}
-      >
-        <View style={[iconRailStyles.disc, isFocused ? iconRailStyles.discActive : null]}>
-          {isTeamTab ? (
-            <ConnectionsIcon
-              size={22}
-              color={TAB_BAR_INACTIVE_COLOR}
-              active={isFocused}
-            />
-          ) : (
-            <GradientTabIcon
-              Icon={Icon}
-              size={22}
-              active={isFocused}
-              inactiveColor={TAB_BAR_INACTIVE_COLOR}
-            />
-          )}
-          {badge ? (
-            <View style={tabBarStyles.badge}>
-              <Text style={tabBarStyles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
-            </View>
-          ) : null}
-        </View>
-      </Pressable>
-    );
-  };
-
-  return (
-    <View
-      pointerEvents="box-none"
-      style={[
-        iconRailStyles.rail,
-        edge === "left" ? { left: 0 } : { right: 0 },
-        { width, paddingBottom: bottomInset + 16 },
-      ]}
-      testID="duo-icon-rail"
-    >
-      <View style={iconRailStyles.dock} testID="duo-icon-dock">
-        {descriptors.map(iconFor)}
-      </View>
-    </View>
   );
 }
 
@@ -489,12 +472,6 @@ function FixedTabBar({ state, navigation }: any) {
     navigation.navigate(route.name);
   };
 
-  const toggleSeneca = () => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (senecaOpen) closeSeneca();
-    else openSeneca();
-  };
-
   const tabDescriptors = visibleRoutes
     .map((route: any) => {
       const tab = ALL_TABS.find((t) => t.name === route.name);
@@ -524,11 +501,15 @@ function FixedTabBar({ state, navigation }: any) {
     .filter(Boolean);
 
   const sideRail = showRail || iconRailEdge != null;
-  /** Clears Chat’s composer; same height on every tab. */
-  const fabLift = 72;
+  const toggleSeneca = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (senecaOpen) closeSeneca();
+    else openSeneca();
+  };
+  // Sit just above the nav — no extra lift into the content.
   const fabBottom = sideRail
-    ? Math.max(insets.bottom, 8) + 20 + fabLift
-    : TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 12 + fabLift;
+    ? Math.max(insets.bottom, 8) + 16
+    : TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
   const fabRight =
     iconRailEdge === "right"
       ? iconRailWidth + SENECA_FAB_RIGHT_INSET
@@ -577,7 +558,7 @@ function FixedTabBar({ state, navigation }: any) {
   }
 
   const tabs = tabDescriptors.map((descriptor: any) => {
-    const { route, tab, isFocused, isTeamTab, badge } = descriptor;
+    const { route, tab, isFocused, badge } = descriptor;
     const { Icon, label, name } = tab;
 
     return (
@@ -591,20 +572,12 @@ function FixedTabBar({ state, navigation }: any) {
         accessibilityLabel={label}
       >
         <View style={tabBarStyles.iconWrap}>
-          {isTeamTab ? (
-            <ConnectionsIcon
-              size={TAB_BAR_ICON_SIZE}
-              color={TAB_BAR_INACTIVE_COLOR}
-              active={isFocused}
-            />
-          ) : (
-            <GradientTabIcon
-              Icon={Icon}
-              size={TAB_BAR_ICON_SIZE}
-              active={isFocused}
-              inactiveColor={TAB_BAR_INACTIVE_COLOR}
-            />
-          )}
+          <GradientTabIcon
+            Icon={Icon}
+            size={TAB_BAR_ICON_SIZE}
+            active={isFocused}
+            inactiveColor={TAB_BAR_INACTIVE_COLOR}
+          />
           {badge ? (
             <View style={tabBarStyles.badge}>
               <Text style={tabBarStyles.badgeText}>{badge > 99 ? "99+" : badge}</Text>

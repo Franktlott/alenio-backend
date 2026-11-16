@@ -123,7 +123,7 @@ function NetworkPreview() {
       <View style={styles.tabs}>
         <Text style={[styles.tab, styles.tabOn]}>Feed</Text>
         <Text style={styles.tab}>Explore</Text>
-        <Text style={styles.tab}>My Network</Text>
+        <Text style={styles.tab}>People</Text>
       </View>
       <View style={styles.post}>
         <View style={[styles.avatar, { backgroundColor: "#fce7f3" }]}>

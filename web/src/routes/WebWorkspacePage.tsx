@@ -6,7 +6,6 @@ import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { UserAvatar } from "../components/UserAvatar";
 import { WorkspaceCreateJoinModals } from "../components/WorkspaceCreateJoinModals";
 import { WorkspaceCalendar } from "../components/workspace/WorkspaceCalendar";
-import { WorkspaceFeed } from "../components/workspace/WorkspaceFeed";
 import { WorkspaceMembersPanel, sortMembers } from "../components/workspace/WorkspaceMembersPanel";
 import { WorkspaceMomentumPanel } from "../components/workspace/WorkspaceMomentumPanel";
 import { WorkspaceSubNav, workspaceRoleLabel, type WorkspaceSection } from "../components/workspace/WorkspaceSubNav";
@@ -34,7 +33,7 @@ import "./web-workspace-sections.css";
 const MANAGER_ROLES = new Set(["owner", "team_leader"]);
 
 const SECTION_SUBTITLE: Record<WorkspaceSection, string> = {
-  overview: "Updates, recognition and what's coming up for your workspace.",
+  overview: "What's coming up for your workspace, and who is on the team.",
   tasks: "Assign, track and finish the work that keeps the day running.",
   calendar: "Events, shifts and meetings for everyone in the workspace.",
   members: "Everyone on the team, in one place.",
@@ -114,7 +113,6 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
   if (!me) return null;
   if (!team) return <NoWorkspaceState />;
 
-  const meUser = { id: me.id, name: me.name, email: me.email, image: me.image };
   const myRole = detail.data?.myRole ?? team.role;
   const canModerate = MANAGER_ROLES.has(myRole);
   const openMember = (userId: string) => {
@@ -168,19 +166,11 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
         ) : null}
 
         {section === "overview" ? (
-          <div className="ws-grid">
+          <div className="ws-grid ws-grid--overview">
             <main className="nw-col ws-col--main">
-              <WorkspaceFeed
-                teamId={team.id}
-                teamName={team.name}
-                me={meUser}
-                canModerate={canModerate}
-                onOpenPerson={openPerson}
-              />
-            </main>
-
-            <div className="nw-col ws-col--cal">
               <WorkspaceCalendar teamId={team.id} meId={me.id} canManage={canModerate} tasks={tasks.data} />
+            </main>
+            <div className="nw-col ws-col--cal">
               <MembersStrip
                 members={detail.data?.members ?? []}
                 total={detail.data?._count?.members ?? team._count.members}
@@ -227,6 +217,7 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
             ) : (
               <WorkspaceMomentumPanel
                 teamId={team.id}
+                meId={me.id}
                 hasTeamFeatures={team.hasTeamFeatures}
                 canManageBilling={myRole === "owner"}
                 onOpenMember={openMember}
@@ -395,7 +386,7 @@ function NoWorkspaceState() {
         <div className="dm-hero-fade" aria-hidden />
         <div className="dm-hero-copy">
           <h1>Workspace</h1>
-          <p>Updates, recognition and milestones from the people you work with.</p>
+          <p>Tasks, schedules, and the people you work with — in one place.</p>
         </div>
       </header>
 
@@ -403,7 +394,7 @@ function NoWorkspaceState() {
         <header className="ws-none-head">
           <h2 id="ws-none-title">You're not in a workspace yet</h2>
           <p>
-            A workspace is where your team shares updates, recognizes each other and runs the day. Start your own or join
+            A workspace is where your team runs the day — tasks, schedules, and development. Start your own or join
             your team.
           </p>
           {info ? (

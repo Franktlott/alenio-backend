@@ -1,9 +1,9 @@
 import { Pressable, Text, View, StyleSheet } from "react-native";
-import { Star } from "lucide-react-native";
+import { ChevronRight, Star } from "lucide-react-native";
 import { UserAvatar } from "@/components/UserAvatar";
 import { memberStarPath, memberStars } from "@/lib/team-momentum";
 import type { TeamMomentumMemberSummary } from "@/lib/team-momentum";
-import { STARS_GOLD } from "@/lib/stars";
+import { STARS_GOLD, STARS_PURPLE, starsJourneyTitle } from "@/lib/stars";
 
 type Props = {
   rows: TeamMomentumMemberSummary[];
@@ -36,6 +36,10 @@ export function StarsTeamRoster({
         const path = memberStarPath(member);
         const needsNudge = member.needsNudge ?? stars === 0;
         const openable = canOpenMember?.(member.userId) ?? true;
+        const nextTitle = starsJourneyTitle(path.nextMilestone);
+        const progressRatio =
+          path.segmentSize > 0 ? path.filledInSegment / path.segmentSize : 0;
+
         return (
           <Pressable
             key={member.userId}
@@ -46,31 +50,74 @@ export function StarsTeamRoster({
             accessibilityLabel={`${member.name}, ${stars} stars`}
             testID={`stars-team-row-${member.userId}`}
           >
-            <UserAvatar
-              user={{
-                name: member.name,
-                email: member.email,
-                image: member.image,
-              }}
-              size={36}
-              radius={18}
-              backgroundColor="#F1F5F9"
-              textColor="#334155"
-              fontSize={12}
-            />
-            <View style={styles.meta}>
-              <Text style={styles.name} numberOfLines={1}>
-                {member.name}
-              </Text>
+            <View
+              style={[
+                styles.avatarWrap,
+                needsNudge ? styles.avatarWrapNudge : null,
+              ]}
+            >
+              <UserAvatar
+                user={{
+                  name: member.name,
+                  email: member.email,
+                  image: member.image,
+                }}
+                size={40}
+                radius={12}
+                backgroundColor={needsNudge ? "#EEF2FF" : "#F5F3FF"}
+                textColor="#4338CA"
+                fontSize={13}
+              />
+            </View>
+
+            <View style={styles.copy}>
+              <View style={styles.titleRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {member.name}
+                </Text>
+                {needsNudge ? (
+                  <View style={styles.nudgeBadge}>
+                    <Text style={styles.nudgeBadgeText}>Nudge</Text>
+                  </View>
+                ) : null}
+              </View>
               <Text style={styles.sub} numberOfLines={1}>
                 {needsNudge
                   ? "0 stars · get started"
-                  : `${path.remainingToMilestone} to milestone`}
+                  : `${path.remainingToMilestone} more to ${nextTitle}`}
               </Text>
+              {!needsNudge ? (
+                <View style={styles.progressBlock}>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${Math.max(8, Math.min(100, progressRatio * 100))}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.progressLabel}>
+                    {stars} / {path.nextMilestone}
+                  </Text>
+                </View>
+              ) : null}
             </View>
-            <View style={styles.chip}>
-              <Star size={14} color={STARS_GOLD} fill={STARS_GOLD} strokeWidth={0} />
-              <Text style={styles.chipText}>{stars}</Text>
+
+            <View style={styles.trailing}>
+              <View style={styles.starMeta}>
+                <Star
+                  size={15}
+                  color={STARS_GOLD}
+                  fill={STARS_GOLD}
+                  strokeWidth={0}
+                />
+                <Text style={styles.starCount}>{stars}</Text>
+              </View>
+              {openable ? (
+                <ChevronRight size={20} color="#94A3B8" strokeWidth={2.2} />
+              ) : null}
             </View>
           </Pressable>
         );
@@ -85,55 +132,109 @@ export function StarsTeamRoster({
 }
 
 const styles = StyleSheet.create({
-  list: { gap: 8 },
+  list: { gap: 10 },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
   },
   rowNudge: {
-    borderColor: "#F6E7C1",
-    backgroundColor: "#FFFBF2",
+    borderColor: "#C4B5FD",
+    backgroundColor: "#F5F3FF",
   },
-  meta: { flex: 1, minWidth: 0, gap: 2 },
+  avatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F5F3FF",
+  },
+  avatarWrapNudge: {
+    backgroundColor: "#EEF2FF",
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   name: {
-    fontSize: 14,
-    fontWeight: "700",
+    flexShrink: 1,
+    fontSize: 16,
+    fontWeight: "800",
     color: "#0F172A",
   },
+  nudgeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "#EDE9FE",
+  },
+  nudgeBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: STARS_PURPLE,
+  },
   sub: {
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 17,
     color: "#64748B",
   },
-  chip: {
+  progressBlock: {
+    marginTop: 6,
+    gap: 4,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: "#E9E5FF",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: STARS_PURPLE,
+  },
+  progressLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: STARS_PURPLE,
+  },
+  trailing: {
+    alignItems: "center",
+    gap: 8,
+  },
+  starMeta: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: "#FFF8E7",
   },
-  chipText: {
-    fontSize: 13,
+  starCount: {
+    fontSize: 15,
     fontWeight: "800",
-    color: "#92400E",
+    color: "#0F172A",
   },
   hint: {
     marginTop: 4,
     fontSize: 12,
+    lineHeight: 16,
     color: "#94A3B8",
     textAlign: "center",
   },
   empty: {
     padding: 20,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",

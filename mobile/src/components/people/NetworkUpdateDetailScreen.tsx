@@ -92,7 +92,7 @@ export function NetworkUpdateDetailScreen({
         >
           <ChevronLeft size={22} color="#182238" strokeWidth={2.3} />
         </Pressable>
-        <Text style={styles.headerTitle}>Update</Text>
+        <Text style={styles.headerTitle}>Post</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -107,7 +107,7 @@ export function NetworkUpdateDetailScreen({
             It may have been removed or is no longer shared with you.
           </Text>
           <Pressable onPress={() => router.back()} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Back to My Network</Text>
+            <Text style={styles.primaryButtonText}>Back to Feed</Text>
           </Pressable>
         </View>
       ) : (

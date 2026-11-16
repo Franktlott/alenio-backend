@@ -2,8 +2,24 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { NetworkUpdateDetailScreen } from "@/components/people/NetworkUpdateDetailScreen";
 
+function firstParam(
+  value: string | string[] | undefined,
+): string | undefined {
+  if (typeof value === "string" && value.length > 0) return value;
+  if (Array.isArray(value) && typeof value[0] === "string" && value[0]) {
+    return value[0];
+  }
+  return undefined;
+}
+
 export default function NetworkUpdateDetailRoute() {
-  const { activityId } = useLocalSearchParams<{ activityId?: string }>();
+  const params = useLocalSearchParams<{
+    activityId?: string | string[];
+    /** Older callers / mistaken Feed tap used `id`. */
+    id?: string | string[];
+  }>();
+  const activityId =
+    firstParam(params.activityId) ?? firstParam(params.id);
 
   if (!activityId) {
     return (
@@ -13,7 +29,7 @@ export default function NetworkUpdateDetailRoute() {
           onPress={() => router.replace("/(app)/team")}
           style={styles.button}
         >
-          <Text style={styles.buttonText}>Back to My Network</Text>
+          <Text style={styles.buttonText}>Back to Feed</Text>
         </Pressable>
       </View>
     );

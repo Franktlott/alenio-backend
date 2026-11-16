@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout, type AdminNavAccess, type EnterpriseNavId } from "../components/EnterpriseLayout";
 import { abilityForAdminPath, firstAdminPath, isStaff, staffCan } from "../lib/staff-access";
@@ -437,10 +437,24 @@ export function EnterpriseShellLayout() {
   );
 
   if (shellLoadErr) {
+    const looksUnauthorized = /unauthorized|unauthenticated|session/i.test(
+      shellLoadErr,
+    );
+    if (looksUnauthorized) {
+      return <Navigate to="/login?reason=session" replace />;
+    }
     return (
       <div className="enterprise-app enterprise-app-simple">
         <main className="enterprise-content" style={{ padding: 24 }}>
           <p className="enterprise-muted">{shellLoadErr}</p>
+          <button
+            type="button"
+            className="enterprise-button"
+            style={{ marginTop: 16 }}
+            onClick={() => navigate("/login", { replace: true })}
+          >
+            Back to sign in
+          </button>
         </main>
       </div>
     );

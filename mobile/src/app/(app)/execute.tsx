@@ -145,7 +145,6 @@ import { teamInviteErrorMessage } from "@/lib/team-invite-errors";
 import type { WorkspaceInviteRole } from "@/lib/workspace-members";
 import { WorkspaceMemberDevelopment } from "@/components/development/WorkspaceMemberDevelopment";
 import { MemberTasksEmptyState } from "@/components/workspace/MemberTasksEmptyState";
-import { WorkspaceUpdatesFeed } from "@/components/workspace/WorkspaceUpdatesFeed";
 import { TaskDetail } from "@/app/task-detail";
 import { UserAvatar } from "@/components/UserAvatar";
 import {
@@ -2668,9 +2667,15 @@ export default function TasksScreen() {
       memberStats={memberStatsPayload?.stats}
       standards={summaryStandards}
       selectedUserId={splitMembers ? (developmentFocus?.userId ?? null) : null}
-      lockOtherMembers={!isOwnerOrLeader}
+      lockOtherMembers={false}
       onMemberPress={(member) => {
-        if (!isOwnerOrLeader && member.userId !== currentUserId) return;
+        if (!isOwnerOrLeader && member.userId !== currentUserId) {
+          router.push({
+            pathname: "/person",
+            params: { userId: member.userId },
+          });
+          return;
+        }
         setDevelopmentFocus({ userId: member.userId, section: "check-ins" });
       }}
       onManageMember={canManageRoster ? setManageMember : undefined}
@@ -5082,23 +5087,6 @@ export default function TasksScreen() {
                   </ScrollView>
                 )}
               </View>
-            </View>
-          ) : workspaceMode === "updates" ? (
-            <View
-              style={{
-                flex: 1,
-                minHeight: 0,
-                paddingBottom: workspacePageBottom,
-              }}
-              testID="workspace-updates-page"
-            >
-              <WorkspaceUpdatesFeed
-                teamId={activeTeamId}
-                canManageWorkspace={isOwnerOrLeader}
-                onInvite={
-                  canManageRoster ? () => setInviteOpen(true) : undefined
-                }
-              />
             </View>
           ) : showMemberTasksEmpty ? (
             <View

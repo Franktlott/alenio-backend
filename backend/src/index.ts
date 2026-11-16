@@ -889,6 +889,7 @@ type UploadPurpose =
   | "go_alert_sound"
   | "discover"
   | "home_insight"
+  | "feed_post"
   | "generic";
 
 function parseUploadPurpose(purposeRaw: string): UploadPurpose {
@@ -897,7 +898,8 @@ function parseUploadPurpose(purposeRaw: string): UploadPurpose {
     purposeRaw === "team" ||
     purposeRaw === "go_alert_sound" ||
     purposeRaw === "discover" ||
-    purposeRaw === "home_insight"
+    purposeRaw === "home_insight" ||
+    purposeRaw === "feed_post"
   ) {
     return purposeRaw;
   }
@@ -1226,9 +1228,13 @@ async function handleFileUpload(
       return c.json({ data: uploaded });
     }
 
-    // Discover / Home Insight media lives under content/… so orphan cleanup never
-    // mistakes it for leftover chat uploads. Staff with content.edit only.
-    if (purpose === "discover" || purpose === "home_insight") {
+    // Discover / Home Insight / Feed post media lives under content/… so orphan
+    // cleanup never mistakes it for leftover chat uploads. Staff with content.edit only.
+    if (
+      purpose === "discover" ||
+      purpose === "home_insight" ||
+      purpose === "feed_post"
+    ) {
       const staffRow = await prisma.user.findUnique({
         where: { id: user.id },
         select: { accountType: true, staffRole: true },
@@ -1238,7 +1244,7 @@ async function handleFileUpload(
         return c.json(
           {
             error: {
-              message: "Only content editors can upload Discover or Home Insight media",
+              message: "Only content editors can upload platform content media",
               code: "FORBIDDEN",
             },
           },

@@ -75,7 +75,7 @@ function NetworkPhone() {
         <div className="lp-seg">
           <span className="is-on">Feed</span>
           <span>Explore</span>
-          <span>My Network</span>
+          <span>People</span>
         </div>
         <article className="lp-post">
           <header>

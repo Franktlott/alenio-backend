@@ -49,9 +49,11 @@ export default function TeamScreen() {
     findPeople?: string;
   }>();
   const initialNetworkTab =
-    routeParams.tab === "connections" || routeParams.tab === "updates"
-      ? routeParams.tab
-      : undefined;
+    routeParams.tab === "connections"
+      ? "connections"
+      : routeParams.tab === "feed" || routeParams.tab === "updates"
+        ? "feed"
+        : undefined;
 
   const [addConnectionOpen, setAddConnectionOpen] = useState(false);
   const [connectionSearch, setConnectionSearch] = useState("");
@@ -275,7 +277,7 @@ export default function TeamScreen() {
   return (
     <CurvedTabLayout
       topInset={insets.top}
-      title="My Network"
+      title="Feed"
       leftAction={<AlenioHeaderBrand tone="dark" />}
       band
       sheetColor="#FFFFFF"

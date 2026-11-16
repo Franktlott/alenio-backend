@@ -22,7 +22,6 @@ import { RowMenu } from "../components/admin/RowMenu";
 import { openDmWith } from "../components/chat/ChatDock";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { AddConnectionDrawer } from "../components/network/AddConnectionDrawer";
-import { NetworkFeed } from "../components/network/NetworkFeed";
 import { PersonRow } from "../components/network/PersonRow";
 import { UserAvatar } from "../components/UserAvatar";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
@@ -32,10 +31,12 @@ import {
   dismissConnectionSuggestion,
   fetchConnectionSuggestions,
   fetchConnections,
+  fetchPersonalFeed,
   removeConnection,
   requestConnection,
   type AcceptedConnectionEntry,
   type ConnectionSuggestionRow,
+  type PersonalFeedItem,
 } from "../lib/api";
 import { queryKeys } from "../lib/query-keys";
 import "./discover/discover-manage.css";
@@ -106,6 +107,12 @@ export function WebNetworkPage() {
     enabled: Boolean(me),
     staleTime: 60_000,
   });
+  const personalFeed = useQuery({
+    queryKey: queryKeys.personalFeed,
+    queryFn: () => fetchPersonalFeed(20),
+    enabled: Boolean(me) && tab === "feed",
+    staleTime: 30_000,
+  });
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.networkConnections });
@@ -125,7 +132,6 @@ export function WebNetworkPage() {
   if (me === undefined) return <EnterprisePageLoading label="Loading your network" />;
   if (!me) return null;
 
-  const meUser = { id: me.id, name: me.name, email: me.email, image: me.image };
 
   return (
     <div className="dm-page nw-page" data-testid="web-network">
@@ -213,7 +219,13 @@ export function WebNetworkPage() {
             />
           </aside>
           <main className="nw-col nw-col--main">
-            <NetworkFeed me={meUser} onOpenPerson={openPerson} />
+            <PersonalFeedPanel
+              loading={personalFeed.isLoading}
+              error={personalFeed.isError}
+              items={personalFeed.data?.items ?? []}
+              onRetry={() => void personalFeed.refetch()}
+              onFindPeople={() => setTab("suggestions")}
+            />
           </main>
           <aside className="nw-col nw-col--right">
             <section className="dm-card dm-panel" aria-label="People you may know">
@@ -652,6 +664,84 @@ function ConnectionsTab({
             Remove connection
           </button>
         </RowMenu>
+      ) : null}
+    </section>
+  );
+}
+
+function feedHeadline(item: PersonalFeedItem): string {
+  const body = typeof item.metadata?.body === "string" ? item.metadata.body.trim() : "";
+  if (item.type === "network_post" || item.type === "post") {
+    return body || "Shared an update";
+  }
+  if (item.type === "celebration") {
+    const target =
+      typeof item.metadata?.targetName === "string" ? item.metadata.targetName : "a teammate";
+    return `Recognized ${target}`;
+  }
+  if (item.type === "task_milestone") {
+    const count = item.metadata?.count;
+    return typeof count === "number" ? `Hit ${count} stars` : "Hit a Stars milestone";
+  }
+  if (item.type === "member_joined") return "Joined the workspace";
+  return "Workspace update";
+}
+
+function PersonalFeedPanel({
+  loading,
+  error,
+  items,
+  onRetry,
+  onFindPeople,
+}: {
+  loading: boolean;
+  error: boolean;
+  items: PersonalFeedItem[];
+  onRetry: () => void;
+  onFindPeople: () => void;
+}) {
+  return (
+    <section className="dm-card dm-panel" data-testid="personal-feed-panel" aria-label="Your Feed">
+      <div className="dm-panel-head">
+        <Rss size={15} strokeWidth={2.2} />
+        <h3>Your Feed</h3>
+      </div>
+      {loading ? <p className="dm-panel-empty">Loading your feed…</p> : null}
+      {error && !loading ? (
+        <p className="dm-panel-empty" role="alert">
+          Couldn’t load your feed.{" "}
+          <button type="button" className="dm-panel-link nw-panel-link" onClick={onRetry}>
+            Try again
+          </button>
+        </p>
+      ) : null}
+      {!loading && !error && items.length === 0 ? (
+        <>
+          <p className="dm-panel-empty">
+            One place for updates from your workspaces, your network, and Alenio.
+          </p>
+          <div className="nw-feed-sources">
+            <span>Workspaces</span>
+            <span>Network</span>
+            <span>Alenio</span>
+          </div>
+          <button type="button" className="dm-panel-link nw-panel-link" onClick={onFindPeople}>
+            Find people <ArrowRight size={13} strokeWidth={2.4} />
+          </button>
+        </>
+      ) : null}
+      {!loading && items.length > 0 ? (
+        <ul className="nw-personal-feed-list">
+          {items.map((item) => (
+            <li key={item.id} className="nw-personal-feed-item">
+              <div className="nw-personal-feed-meta">
+                <strong>{item.user?.name?.trim() || "Someone"}</strong>
+                <span className="nw-personal-feed-badge">{item.sourceLabel}</span>
+              </div>
+              <p>{feedHeadline(item)}</p>
+            </li>
+          ))}
+        </ul>
       ) : null}
     </section>
   );

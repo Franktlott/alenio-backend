@@ -73,12 +73,24 @@ export function SessionIdleGuard() {
   const sessionEndDeadlineRef = useRef(0);
   const idleNotifiedRef = useRef(false);
   const baseTitleRef = useRef(typeof document !== "undefined" ? stripSessionTitlePrefix(document.title) : "Alenio");
+  /** Bump when the access token is cleared so AuthGate re-reads storage. */
+  const [, setSessionEpoch] = useState(0);
 
   const [warningOpen, setWarningOpen] = useState(false);
   const [countdownSec, setCountdownSec] = useState(WARNING_SECONDS);
 
   const hasSession = isSessionTokenUsable(getAccessToken());
   const guardActive = hasSession && !isPublicPath(location.pathname);
+
+  useEffect(() => {
+    const onExpired = () => {
+      setSessionEpoch((n) => n + 1);
+      if (isPublicPath(window.location.pathname)) return;
+      navigate("/login?reason=session", { replace: true });
+    };
+    window.addEventListener("alenio:session-expired", onExpired);
+    return () => window.removeEventListener("alenio:session-expired", onExpired);
+  }, [navigate]);
 
   const restoreTitle = useCallback(() => {
     document.title = baseTitleRef.current;

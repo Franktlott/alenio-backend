@@ -198,8 +198,12 @@ export async function refreshSessionTokens(): Promise<boolean> {
         },
       });
       const next =
-        setAccessTokenFromAuthData(forced?.data ?? null) ?? setAccessTokenFromAuthData(forced ?? null);
-      return !!next || isSessionTokenUsable(bearer);
+        setAccessTokenFromAuthData(forced?.data ?? null) ??
+        setAccessTokenFromAuthData(forced ?? null);
+      const data = (forced as { data?: unknown })?.data ?? forced;
+      // A leftover opaque bearer is not proof the session still works — only a
+      // live Better Auth payload (or a rotated token) counts as recovery.
+      return !!next || authPayloadHasUser(data);
     } catch {
       return false;
     }

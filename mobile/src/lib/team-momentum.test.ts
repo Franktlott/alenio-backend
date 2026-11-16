@@ -24,8 +24,17 @@ function member(
     currentStars: stars,
     personalBestStreak: Math.max(stars, 1),
     personalBestStars: Math.max(stars, 1),
-    nextMilestone: stars < 5 ? 5 : stars < 10 ? 10 : 15,
-    remainingToMilestone: stars < 5 ? 5 - stars : stars < 10 ? 10 - stars : 15 - stars,
+    nextMilestone: stars < 5 ? 5 : stars < 10 ? 10 : stars < 20 ? 20 : stars < 50 ? 50 : Math.floor(stars / 50) * 50 + 50,
+    remainingToMilestone:
+      stars < 5
+        ? 5 - stars
+        : stars < 10
+          ? 10 - stars
+          : stars < 20
+            ? 20 - stars
+            : stars < 50
+              ? 50 - stars
+              : Math.floor(stars / 50) * 50 + 50 - stars,
     needsNudge: stars === 0,
     momentumRunStartedAt: "2026-08-01T12:00:00.000Z",
     momentumLastQualifiedAt: stars > 0 ? "2026-08-26T12:00:00.000Z" : null,

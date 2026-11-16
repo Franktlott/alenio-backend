@@ -446,7 +446,7 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
           style={[styles.navTitle, embedded ? styles.navTitleCompact : null]}
           numberOfLines={1}
         >
-          Update
+          Post
         </Text>
         <View style={styles.headerSpacer} />
       </View>

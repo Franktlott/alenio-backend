@@ -22,12 +22,11 @@ import {
   Clock,
   MessageCircle,
   MoreHorizontal,
-  Newspaper,
   Search,
   SlidersHorizontal,
   X,
   Users,
-  type LucideIcon,
+  Newspaper,
 } from "lucide-react-native";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
@@ -42,7 +41,8 @@ import {
 import { ConnectRequestConfirmationSheet } from "@/components/ConnectRequestConfirmationSheet";
 import { DismissSuggestionConfirmationSheet } from "@/components/DismissSuggestionConfirmationSheet";
 import { SuggestionPersonCard } from "@/components/people/SuggestionPersonCard";
-import { NetworkUpdatesFeed } from "@/components/people/NetworkUpdatesFeed";
+import { PersonalFeedList } from "@/components/people/PersonalFeedList";
+import { SegmentedControl } from "@/components/ui";
 import {
   connectionRequestOutcome,
   type ConnectionRequestOutcome,
@@ -60,12 +60,13 @@ import type {
 } from "@/lib/types";
 import type { AddConnectionEntryMode } from "@/components/people/AddConnectionSheet";
 import {
-  MASTER_PANE_WIDTH,
-  PANE_GAP,
+  CONTENT_MAX_WIDTH,
   useAdaptiveLayout,
+  useStatusClusterInset,
 } from "@/lib/adaptive-layout";
 import { useTabBarClearanceFn } from "@/lib/tab-bar";
 import { colors, elevation, typography } from "@/theme";
+import { WS } from "@/components/workspace/workspace-ui";
 import {
   CONNECTION_DIRECTORY_SORT_LABELS,
   connectionIndexLetter,
@@ -79,7 +80,7 @@ const BRAND = colors.brand;
 const GRID_GAP = 10;
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-type NetworkTab = "updates" | "connections";
+type NetworkTab = "feed" | "connections";
 
 /** Phone stays one column. Tablets get two. Wide screens get three. */
 function networkColumns(width: number) {
@@ -146,7 +147,7 @@ export function ZeroWorkspaceTeamHome({
   const [requestOutcomes, setRequestOutcomes] = useState<
     Record<string, ConnectionRequestOutcome>
   >({});
-  const [tab, setTab] = useState<NetworkTab>(initialTab ?? "updates");
+  const [tab, setTab] = useState<NetworkTab>(initialTab ?? "feed");
   const [paneWidth, setPaneWidth] = useState(0);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [menuConnection, setMenuConnection] =
@@ -429,14 +430,11 @@ export function ZeroWorkspaceTeamHome({
     );
   };
 
-  const adaptive = useAdaptiveLayout();
-  /**
-   * Open foldable / tablet: People directory beside the Updates feed.
-   * Closed cover or phone: one column with Updates | People tabs.
-   */
-  const splitNetwork = adaptive.isSplit;
-  const peoplePaneWidth = MASTER_PANE_WIDTH;
+  // Feed | People tabs on every width — Feed is the product of this tab;
+  // People is browse, not a permanent side column.
   const { width: windowWidth } = useWindowDimensions();
+  const { columnWidth: adaptiveColumnWidth } = useAdaptiveLayout();
+  const statusCluster = useStatusClusterInset();
   const directoryActive = normalizedSearch.length > 0 || hasActiveFilters;
   const activeTab = tab;
   const layoutWidth = paneWidth || Math.max(0, windowWidth - 32);
@@ -558,47 +556,40 @@ export function ZeroWorkspaceTeamHome({
     </View>
   );
 
-  const updatesFeed = (
-    <View style={styles.listFrame} testID="network-updates-pane">
-      <NetworkUpdatesFeed onFindPeople={() => onAddConnection("all")} />
+  const personalFeed = (
+    <View style={styles.listFrame} testID="personal-feed-pane">
+      <PersonalFeedList onFindPeople={() => onAddConnection("all")} />
     </View>
   );
 
   return (
     <View style={styles.screen} testID="zero-workspace-team-home">
-      {splitNetwork ? (
-        <View
-          style={[
-            styles.splitRow,
-            {
-              // Same edge padding as Chat's split body so both screens line up.
-              paddingLeft: adaptive.contentPadLeft,
-              paddingRight: adaptive.contentPadRight,
-            },
+      <View
+        style={[
+          styles.networkHeader,
+          {
+            // Match WorkspaceViewToggle: same column width + page gutters.
+            alignSelf: "center",
+            width: "100%",
+            maxWidth: Math.min(adaptiveColumnWidth, CONTENT_MAX_WIDTH),
+            paddingLeft: WS.pageGutter + statusCluster.left,
+            paddingRight: WS.pageGutter + statusCluster.right,
+          },
+        ]}
+      >
+        <SegmentedControl
+          options={[
+            { key: "feed", label: "Feed", Icon: Newspaper },
+            { key: "connections", label: "People", Icon: Users },
           ]}
-          testID="network-split"
-        >
-          <View style={[styles.peoplePane, { width: peoplePaneWidth }]}>
-            <View style={styles.splitPeopleHeader}>{peopleSearchRow}</View>
-            {peopleDirectory}
-          </View>
-          <View style={[styles.updatesPane, { paddingLeft: PANE_GAP }]}>
-            <View style={styles.splitUpdatesHeader}>
-              <Newspaper size={13} color={BRAND} strokeWidth={2.4} />
-              <Text style={styles.splitUpdatesTitle}>Updates</Text>
-            </View>
-            {updatesFeed}
-          </View>
-        </View>
-      ) : (
-        <>
-          <View style={styles.networkHeader}>
-            <NetworkTabs tab={activeTab} onChange={setTab} />
-            {activeTab === "connections" ? peopleSearchRow : null}
-          </View>
-          {activeTab === "updates" ? updatesFeed : peopleDirectory}
-        </>
-      )}
+          value={activeTab}
+          onChange={setTab}
+          testID="feed-view-toggle"
+          testIDPrefix="network-tab"
+        />
+        {activeTab === "connections" ? peopleSearchRow : null}
+      </View>
+      {activeTab === "feed" ? personalFeed : peopleDirectory}
       <ConnectRequestConfirmationSheet
         person={suggestionToConnect}
         pending={connectMutation.isPending}
@@ -699,52 +690,6 @@ export function ZeroWorkspaceTeamHome({
           <Text style={styles.menuLabel}>Message</Text>
         </Pressable>
       </AlenioBottomSheet>
-    </View>
-  );
-}
-
-function NetworkTabs({
-  tab,
-  onChange,
-}: {
-  tab: NetworkTab;
-  onChange: (tab: NetworkTab) => void;
-}) {
-  const tabs: { id: NetworkTab; label: string; Icon: LucideIcon }[] = [
-    { id: "updates", label: "Updates", Icon: Newspaper },
-    { id: "connections", label: "People", Icon: Users },
-  ];
-  return (
-    <View style={styles.tabs} accessibilityRole="tablist">
-      {tabs.map((item) => {
-        const selected = tab === item.id;
-        return (
-          <Pressable
-            key={item.id}
-            onPress={() => onChange(item.id)}
-            style={[styles.tab, selected ? styles.tabSelected : null]}
-            accessibilityRole="tab"
-            accessibilityState={{ selected }}
-            accessibilityLabel={item.label}
-            testID={`network-tab-${item.id}`}
-          >
-            <item.Icon
-              size={13}
-              color={selected ? "#FFFFFF" : colors.textMuted}
-              strokeWidth={selected ? 2.4 : 2.1}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                selected ? styles.tabLabelSelected : null,
-              ]}
-              numberOfLines={1}
-            >
-              {item.label}
-            </Text>
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
@@ -1551,45 +1496,6 @@ function InlineState({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, minHeight: 0, backgroundColor: "#FFFFFF" },
-  splitRow: {
-    flex: 1,
-    minHeight: 0,
-    flexDirection: "row",
-    alignItems: "stretch",
-  },
-  peoplePane: {
-    flexShrink: 0,
-    minHeight: 0,
-    // Matches Chat's split inbox pane.
-    backgroundColor: "#F7F8FA",
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: "#E7EAF0",
-  },
-  updatesPane: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    backgroundColor: "#FFFFFF",
-  },
-  splitPeopleHeader: {
-    paddingTop: 12,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  splitUpdatesHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingTop: 14,
-    paddingBottom: 4,
-    paddingHorizontal: 4,
-  },
-  splitUpdatesTitle: {
-    fontSize: 13,
-    lineHeight: 16,
-    fontWeight: "700",
-    color: "#344054",
-  },
   scroller: { flex: 1, minHeight: 0 },
   listFrame: { flex: 1, minHeight: 0 },
   page: { paddingHorizontal: 16, paddingTop: 4 },
@@ -1640,8 +1546,8 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   networkHeader: {
-    paddingTop: 12,
-    paddingHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 6,
     gap: 10,
   },
   connectionSearchRow: {

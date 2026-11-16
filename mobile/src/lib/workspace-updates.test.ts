@@ -85,26 +85,27 @@ describe("joinedMemberName", () => {
 });
 
 describe("milestoneSubtitle", () => {
-  test("describes the streak rather than a weekly total", () => {
-    expect(milestoneSubtitle(10)).toBe("All completed on time, in a row.");
+  test("describes assigned-task stars rather than a weekly total", () => {
+    expect(milestoneSubtitle(10)).toBe("Assigned workspace tasks completed.");
   });
 
   test("stays sensible when the count is missing", () => {
-    expect(milestoneSubtitle(undefined)).toBe("An on-time streak in progress.");
+    expect(milestoneSubtitle(undefined)).toBe("Stars from assigned workspace tasks.");
   });
 });
 
 describe("nextMilestoneTarget", () => {
-  test("follows the momentum thresholds of 5, 10 and 15", () => {
+  test("follows the Stars thresholds of 5, 10, 20, 50", () => {
     expect(nextMilestoneTarget(0)).toBe(5);
     expect(nextMilestoneTarget(5)).toBe(10);
-    expect(nextMilestoneTarget(10)).toBe(15);
+    expect(nextMilestoneTarget(10)).toBe(20);
+    expect(nextMilestoneTarget(20)).toBe(50);
   });
 
-  test("moves in tens once the streak passes 15", () => {
-    expect(nextMilestoneTarget(15)).toBe(20);
-    expect(nextMilestoneTarget(20)).toBe(30);
-    expect(nextMilestoneTarget(34)).toBe(40);
+  test("moves in fifties once the journey passes 50", () => {
+    expect(nextMilestoneTarget(50)).toBe(100);
+    expect(nextMilestoneTarget(75)).toBe(100);
+    expect(nextMilestoneTarget(100)).toBe(150);
   });
 });
 

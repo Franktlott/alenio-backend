@@ -103,7 +103,7 @@ type Props = {
   /** Sidebar + page label for `/team` — "Profile" for regular members. */
   teamNavLabel?: string;
   /**
-   * No workspace yet — Settings, Sign out, My Network, plus Admin / enterprise org nav when applicable.
+   * No workspace yet — Settings, Sign out, Feed, plus Admin / enterprise org nav when applicable.
    * Hides Workspace / Billing.
    * Alenio Go stays off until an Operations workspace (or enterprise org membership).
    */
@@ -150,6 +150,27 @@ function IconUsers() {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function IconFeed() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+      <path d="M18 14h-8" />
+      <path d="M15 18h-5" />
+      <path d="M10 6h8v4h-8V6Z" />
     </svg>
   );
 }
@@ -626,7 +647,7 @@ export function EnterpriseLayout({
         <nav className="enterprise-nav" aria-label="Product">
           <NavItem to="/home" navId="home" activeNav={activeNav} icon={<IconHome />} label="Home" />
           <NavItem to="/workspace" navId="workspace" activeNav={activeNav} icon={<IconTasks />} label="Workspace" />
-          <NavItem to="/network" navId="network" activeNav={activeNav} icon={<IconUsers />} label="Network" />
+          <NavItem to="/network" navId="network" activeNav={activeNav} icon={<IconFeed />} label="Feed" />
           <NavItem to="/discover" navId="discover" activeNav={activeNav} icon={<IconSparkles />} label="Discover" />
           {location.pathname.startsWith("/go") && showGoNav && !setupNavMode ? (
             <NavItem

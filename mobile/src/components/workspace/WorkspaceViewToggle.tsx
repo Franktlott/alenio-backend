@@ -2,7 +2,6 @@ import { View } from "react-native";
 import {
   CalendarDays,
   ListChecks,
-  Megaphone,
   Users,
 } from "lucide-react-native";
 import { SegmentedControl, type SegmentOption } from "@/components/ui";
@@ -14,7 +13,6 @@ import {
 import { WS } from "./workspace-ui";
 
 export type WorkspaceViewMode =
-  | "updates"
   | "calendar"
   | "tasks"
   | "development";
@@ -35,7 +33,6 @@ export function WorkspaceViewToggle({
   const { columnWidth } = useAdaptiveLayout();
   const cluster = useStatusClusterInset();
   const options: SegmentOption<WorkspaceViewMode>[] = [
-    { key: "updates", label: "Feed", Icon: Megaphone },
     { key: "calendar", label: "Calendar", Icon: CalendarDays, badge: calendarBadge },
     { key: "tasks", label: "Tasks", Icon: ListChecks, badge: tasksBadge },
     // The roster was always a workspace mode; it just had no tab of its own.
