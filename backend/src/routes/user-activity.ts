@@ -19,6 +19,8 @@ import {
   sentRecognitionDeleteUntil,
 } from "../lib/recognition-delete-policy";
 
+const SELF_AUDIENCE = { audienceKind: "self", audienceTeamId: null } as const;
+
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
@@ -241,6 +243,7 @@ userActivityRouter.post(
         teamId: null,
         userId: user.id,
         type: "celebration",
+        ...SELF_AUDIENCE,
         metadata: JSON.stringify({
           targetUserId: target.id,
           targetName: target.name,

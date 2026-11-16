@@ -397,6 +397,13 @@ describe("Team Momentum member detail", () => {
     });
     expect(detail.latestStreakBreakingLateCompletion).toBeNull();
     expect(detail.nextMilestone).toBe(5);
+    expect(detail.dayStreak).toBe(0);
+    expect(detail.journey[0]).toMatchObject({
+      title: "Getting Started",
+      status: "active",
+      progressCurrent: 3,
+      progressTarget: 5,
+    });
     expect(detail.activeTasks[0]?.title).toBeNull();
     expect(detail.overdueTasks[0]?.title).toBe("Follow up");
   });

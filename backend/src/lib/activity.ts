@@ -1,3 +1,4 @@
+import { workspaceAudienceFields } from "./activity-audience";
 import { prisma } from "../prisma";
 
 const GROUPABLE_TYPES = ["task_assigned", "calendar_event_added"] as const;
@@ -20,6 +21,7 @@ export async function logActivity(params: {
         teamId: params.teamId,
         userId: params.userId ?? null,
         type: params.type,
+        ...workspaceAudienceFields(params.teamId),
         metadata: params.metadata ? JSON.stringify(params.metadata) : null,
       },
     });
@@ -82,6 +84,7 @@ export async function logActivity(params: {
         teamId: params.teamId,
         userId: params.userId ?? null,
         type: params.type,
+        ...workspaceAudienceFields(params.teamId),
         metadata: params.metadata ? JSON.stringify(params.metadata) : null,
       },
     });

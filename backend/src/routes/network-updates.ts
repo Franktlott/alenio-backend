@@ -9,6 +9,7 @@ import {
   isValidReactionEmoji,
   visibleNetworkAuthorCutoffs,
 } from "../lib/network-updates-policy";
+import { networkAudienceFields } from "../lib/activity-audience";
 import { buildConnectionPairKey } from "../lib/messaging-permission";
 import { isBlockedEitherDirection } from "../lib/relationship-blocks";
 import { authGuard } from "../middleware/auth-guard";
@@ -343,6 +344,7 @@ networkUpdatesRouter.post(
         teamId: null,
         userId: user.id,
         type: NETWORK_POST_TYPE,
+        ...networkAudienceFields(),
         metadata: JSON.stringify({
           body: body || null,
           imageUrl: imageUrl ?? null,

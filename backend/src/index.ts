@@ -57,6 +57,7 @@ import { mobileBillingRouter } from "./routes/mobile-billing";
 import { activityRouter } from "./routes/activity";
 import { userActivityRouter } from "./routes/user-activity";
 import { networkUpdatesRouter } from "./routes/network-updates";
+import { feedRouter } from "./routes/feed";
 import { organizationsRouter, ssoPublicRouter } from "./routes/organizations";
 import { orgGoRouter } from "./routes/org-go";
 import { scimRouter } from "./routes/scim";
@@ -163,6 +164,7 @@ import { ensureTaskKindSchema } from "./lib/ensure-task-kind-schema";
 import { ensureTaskNotesSchema } from "./lib/ensure-task-notes-schema";
 import { ensureActivityCommentsSchema } from "./lib/ensure-activity-comments-schema";
 import { ensureNetworkUpdateHidesSchema } from "./lib/ensure-network-update-hides-schema";
+import { ensureActivityAudienceSchema } from "./lib/ensure-activity-audience-schema";
 import { ensureTeamHealthSnapshotSchema } from "./lib/ensure-team-health-snapshot-schema";
 import { ensureSenecaTeamBriefSchema } from "./lib/ensure-seneca-team-brief-schema";
 import { ensureWalksSchema } from "./lib/ensure-walks-schema";
@@ -246,7 +248,9 @@ const startupSchemaReady = Promise.all([
   // Profile galleries are read on every public profile view.
   ensureProfilePhotosSchema(prisma),
   // Relaxes TeamActivity.teamId so account-level activity can be written.
-  ensureAccountActivitySchema(prisma).then(() => ensureNetworkUpdateHidesSchema(prisma)),
+  ensureAccountActivitySchema(prisma)
+    .then(() => ensureNetworkUpdateHidesSchema(prisma))
+    .then(() => ensureActivityAudienceSchema(prisma)),
   ensureTeamHealthSnapshotSchema(prisma),
   ensureSenecaTeamBriefSchema(prisma),
   ensureOrganizationSchema(prisma),
@@ -2549,6 +2553,7 @@ app.route("/api/teams", calendarRouter);
 app.route("/api/teams", activityRouter);
 app.route("/api/activity", userActivityRouter);
 app.route("/api/network-updates", networkUpdatesRouter);
+app.route("/api/feed", feedRouter);
 app.route("/api/organizations", organizationsRouter);
 app.route("/api/organizations", orgGoRouter);
 app.route("/api/sso", ssoPublicRouter);

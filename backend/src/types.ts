@@ -498,6 +498,18 @@ export type TeamMomentumMemberDetailRequest = {
   currentRunLimit?: number;
 };
 
+export type StarsJourneyStatus = "completed" | "active" | "locked";
+
+export type StarsJourneyStep = {
+  id: string;
+  threshold: number;
+  title: string;
+  iconKey: "star" | "bolt" | "mountain" | "trophy";
+  status: StarsJourneyStatus;
+  progressCurrent: number;
+  progressTarget: number;
+};
+
 export type TeamMomentumMemberDetail = {
   teamId: string;
   generatedAt: string;
@@ -510,6 +522,9 @@ export type TeamMomentumMemberDetail = {
   remainingToMilestone: number;
   filledInSegment: number;
   segmentSize: number;
+  /** Consecutive local calendar days with ≥1 star-earning completion. */
+  dayStreak: number;
+  journey: StarsJourneyStep[];
   currentRun: TeamMomentumCurrentRunEvidence;
   latestStreakBreakingLateCompletion: TeamMomentumStreakBreakingLateCompletion | null;
   activeTasks: TeamMomentumActiveTaskSummary[];

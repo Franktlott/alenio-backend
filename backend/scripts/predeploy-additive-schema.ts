@@ -3,6 +3,7 @@
  * because a schema diff against Neon has been failing these deploys.
  */
 import { PrismaClient } from "@prisma/client";
+import { ensureActivityAudienceSchema } from "../src/lib/ensure-activity-audience-schema";
 import { ensureNetworkUpdateHidesSchema } from "../src/lib/ensure-network-update-hides-schema";
 
 const raw = process.env.DATABASE_URL;
@@ -41,6 +42,12 @@ try {
     throw new Error(networkUpdateHides.error);
   }
   console.log("predeploy-additive-schema: NetworkUpdateHide ready");
+
+  const activityAudience = await ensureActivityAudienceSchema(prisma);
+  if (!activityAudience.ok) {
+    throw new Error(activityAudience.error);
+  }
+  console.log("predeploy-additive-schema: TeamActivity audience ready");
 } catch (err) {
   console.error(
     "predeploy-additive-schema: patch failed, continuing deploy for startup fallback:",

@@ -10,7 +10,11 @@ import type {
   TeamMomentumOverdueTaskSummary,
   TeamMomentumTaskSummary,
 } from "../types";
-import { starsMilestoneSegment } from "./momentum-projection";
+import {
+  buildStarsJourney,
+  computeStarsDayStreak,
+  starsMilestoneSegment,
+} from "./momentum-projection";
 import { calendarDayFromInstant, instantFromCalendarDateAndTime, resolveTimeZone } from "./timezone";
 import type { WorkspaceAccessState } from "./workspace-access";
 import { getWorkspaceAccess } from "./workspace-access";
@@ -415,10 +419,12 @@ export function buildTeamMomentumMemberDetail(input: {
   tasks: TaskRow[];
   availableTaskIds: ReadonlySet<string>;
   currentRunLimit: number;
+  timeZone?: string | null;
 }): TeamMomentumMemberDetail {
   const ordered = [...input.credits].sort(newestFirst);
   // Stars: every credit counts — show newest completions, not an on-time-only run.
   const currentRunCredits = ordered;
+  const timeZone = resolveTimeZone(input.timeZone);
 
   const overdueTasks: TeamMomentumOverdueTaskSummary[] = [];
   const activeTasks: TeamMomentumActiveTaskSummary[] = [];
@@ -449,6 +455,12 @@ export function buildTeamMomentumMemberDetail(input: {
   const hasHistory = ordered.length > 0;
   const returnedRun = currentRunCredits.slice(0, input.currentRunLimit);
   const segment = starsMilestoneSegment(member.currentStars);
+  const todayLocalDay = calendarDayFromInstant(input.now, timeZone);
+  const completionDays = ordered.map((credit) =>
+    calendarDayFromInstant(credit.completedAt, timeZone),
+  );
+  const dayStreak = computeStarsDayStreak(completionDays, todayLocalDay);
+  const journey = buildStarsJourney(member.currentStars);
 
   return {
     teamId: input.teamId,
@@ -462,6 +474,8 @@ export function buildTeamMomentumMemberDetail(input: {
     remainingToMilestone: segment.remainingToMilestone,
     filledInSegment: segment.filledInSegment,
     segmentSize: segment.segmentSize,
+    dayStreak,
+    journey,
     currentRun: {
       startedAt: input.member.momentumRunStartedAt?.toISOString() ?? null,
       lastQualifiedAt: input.member.momentumLastQualifiedAt?.toISOString() ?? null,
@@ -651,7 +665,8 @@ export async function getTeamMomentumMemberDetail(
     );
   }
 
-  const month = calendarMonthRange(now, await getWorkspaceTimeZone(db, teamId));
+  const timeZone = await getWorkspaceTimeZone(db, teamId);
+  const month = calendarMonthRange(now, timeZone);
   const [credits, tasks] = await Promise.all([
     db.momentumCompletionCredit.findMany({
       where: { teamId, creditedUserId: memberUserId, revokedAt: null },
@@ -694,5 +709,6 @@ export async function getTeamMomentumMemberDetail(
     tasks,
     availableTaskIds: new Set(availableTasks.map((task) => task.id)),
     currentRunLimit,
+    timeZone,
   });
 }

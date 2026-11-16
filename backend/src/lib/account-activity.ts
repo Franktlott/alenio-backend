@@ -1,5 +1,7 @@
 import { prisma } from "../prisma";
 
+const SELF_AUDIENCE = { audienceKind: "self", audienceTeamId: null } as const;
+
 /**
  * Account-level activity types, kept deliberately few. Declines, removals,
  * blocks and profile views are intentionally never logged.
@@ -37,6 +39,7 @@ export async function recordAccountActivity(input: AccountActivityInput): Promis
         teamId: null,
         userId: input.userId,
         type: input.type,
+        ...SELF_AUDIENCE,
         metadata: JSON.stringify({ content: input.content, ...(input.metadata ?? {}) }),
       },
     });

@@ -2026,6 +2026,15 @@ model TeamActivity {
   user      User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
   type      String
   metadata  String?
+  /**
+   * Explicit post audience: network | workspace | self.
+   * Null only for legacy rows until backfill; new posts always set this.
+   */
+  audienceKind   String?
+  /**
+   * Workspace destination when audienceKind = workspace (usually matches teamId).
+   */
+  audienceTeamId String?
   createdAt DateTime               @default(now())
   reactions TeamActivityReaction[]
   comments  TeamActivityComment[]
@@ -2033,6 +2042,8 @@ model TeamActivity {
 
   @@index([teamId, createdAt])
   @@index([userId, createdAt])
+  @@index([audienceKind, createdAt])
+  @@index([audienceTeamId, createdAt])
 }
 
 model NetworkUpdateHide {

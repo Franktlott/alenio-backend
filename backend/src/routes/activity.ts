@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { workspaceAudienceFields } from "../lib/activity-audience";
 import { canModerateWorkspaceContent } from "../lib/workspace-role-policy";
 import {
   activityVisibleToTeam,
@@ -364,6 +365,7 @@ activityRouter.post(
         teamId,
         userId: user.id,
         type: "celebration",
+        ...workspaceAudienceFields(teamId),
         metadata: JSON.stringify({
           targetUserId,
           targetName: targetMember.user.name,
@@ -421,6 +423,7 @@ activityRouter.post(
         teamId,
         userId: user.id,
         type: "post",
+        ...workspaceAudienceFields(teamId),
         metadata: JSON.stringify({
           body: body?.trim() || null,
           imageUrl: imageUrl ?? null,

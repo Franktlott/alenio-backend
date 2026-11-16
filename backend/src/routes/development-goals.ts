@@ -23,6 +23,7 @@ import {
   canCompleteDevelopmentGoalSteps,
   canManageAssignedDevelopmentGoals,
 } from "../lib/workspace-role-policy";
+import { workspaceAudienceFields } from "../lib/activity-audience";
 import {
   canCloseDevelopmentGoal,
   developmentGoalProgress,
@@ -574,6 +575,7 @@ developmentGoalsRouter.patch(
                   teamId,
                   userId: memberUserId,
                   type: "development_goal_completed",
+                  ...workspaceAudienceFields(teamId),
                   metadata: JSON.stringify({
                     goalId,
                     targetUserId: memberUserId,
