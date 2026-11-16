@@ -2068,6 +2068,8 @@ model TeamActivityComment {
   activityId String
   userId     String
   body       String
+  /** True when platform staff replies through the Alenio content console. */
+  isAlenio   Boolean                       @default(false)
   /**
    * Set when this comment replies to another. Threads stay one level deep:
    * a reply always points at a top-level comment.

@@ -93,6 +93,7 @@ function serializeAdminFeedComment(
     body: string;
     createdAt: Date;
     parentId: string | null;
+    isAlenio: boolean;
     user: { id: string; name: string; image: string | null };
     reactions: Array<{
       emoji: string;
@@ -106,7 +107,9 @@ function serializeAdminFeedComment(
     body: comment.body,
     createdAt: comment.createdAt.toISOString(),
     parentId: comment.parentId,
-    author: comment.user,
+    author: comment.isAlenio
+      ? { id: "alenio", name: "Alenio", image: null }
+      : comment.user,
     canDelete: true,
     reactions: comment.reactions.reduce<AdminFeedComment["reactions"]>(
       (result, reaction) => {
@@ -329,6 +332,7 @@ adminFeedPostsRouter.post("/:activityId/comments", async (c) => {
       userId: user.id,
       body: parsed.data.body,
       parentId: resolvedParentId,
+      isAlenio: true,
     },
     include: commentInclude,
   });

@@ -134,7 +134,9 @@ feedRouter.get("/:activityId/comments", async (c) => {
       body: comment.body,
       createdAt: comment.createdAt.toISOString(),
       parentId: comment.parentId,
-      author: comment.user,
+      author: comment.isAlenio
+        ? { id: "alenio", name: "Alenio", image: null }
+        : comment.user,
       canDelete: comment.userId === user.id,
       reactions: comment.reactions.reduce(
         (
@@ -213,7 +215,9 @@ feedRouter.post(
           body: comment.body,
           createdAt: comment.createdAt.toISOString(),
           parentId: comment.parentId,
-          author: comment.user,
+          author: comment.isAlenio
+            ? { id: "alenio", name: "Alenio", image: null }
+            : comment.user,
           canDelete: true,
           reactions: {},
         },

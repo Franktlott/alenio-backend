@@ -55,6 +55,11 @@ export async function ensureActivityCommentsSchema(
     `);
 
     await prisma.$executeRawUnsafe(`
+      ALTER TABLE public."TeamActivityComment"
+        ADD COLUMN IF NOT EXISTS "isAlenio" BOOLEAN NOT NULL DEFAULT false;
+    `);
+
+    await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "TeamActivityComment_parentId_createdAt_idx"
         ON public."TeamActivityComment"("parentId", "createdAt");
     `);
