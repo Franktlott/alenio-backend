@@ -690,10 +690,10 @@ export function EnterpriseLayout({
                 />
               ) : null}
               {adminNav?.content ?? true ? (
-                <NavItem to="/admin/discover" navId="content" activeNav={activeNav} icon={<IconPen />} label="Content" />
+                <NavItem to="/admin/discover" navId="content" activeNav={activeNav} icon={<IconPen />} label="Content Manager" />
               ) : null}
               {adminNav?.seneca ?? true ? (
-                <NavItem to="/admin/seneca" navId="adminSeneca" activeNav={activeNav} icon={<IconSeneca />} label="Seneca" />
+                <NavItem to="/admin/seneca" navId="adminSeneca" activeNav={activeNav} icon={<IconSeneca />} label="Seneca Studio" />
               ) : null}
               {adminNav?.notifications ?? true ? (
                 <NavItem

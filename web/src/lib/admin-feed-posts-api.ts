@@ -1,5 +1,10 @@
 import { apiDeleteJson, apiGetJson, apiPatchJson, apiPostJson } from "./api";
 
+export type AlenioPostAudience =
+  | "all"
+  | "workspace_members"
+  | "non_workspace_members";
+
 export type AdminFeedPost = {
   id: string;
   source: "alenio" | "network" | "workspace";
@@ -10,6 +15,7 @@ export type AdminFeedPost = {
   user: { id: string; name: string; image: string | null } | null;
   commentCount: number;
   commentsLocked: boolean;
+  alenioAudience: AlenioPostAudience;
 };
 
 export type AdminFeedPostInput = {
@@ -19,6 +25,7 @@ export type AdminFeedPostInput = {
   imageHeight?: number;
   mediaType?: "image" | "video";
   commentsLocked?: boolean;
+  audience?: AlenioPostAudience;
 };
 
 export type AdminFeedCommentReactions = Record<

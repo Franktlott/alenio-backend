@@ -14,7 +14,8 @@ export async function ensureActivityAudienceSchema(
     await prisma.$executeRawUnsafe(`
       ALTER TABLE public."TeamActivity"
         ADD COLUMN IF NOT EXISTS "audienceKind" TEXT,
-        ADD COLUMN IF NOT EXISTS "audienceTeamId" TEXT;
+        ADD COLUMN IF NOT EXISTS "audienceTeamId" TEXT,
+        ADD COLUMN IF NOT EXISTS "alenioAudience" TEXT;
     `);
 
     await prisma.$executeRawUnsafe(`
@@ -25,6 +26,11 @@ export async function ensureActivityAudienceSchema(
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "TeamActivity_audienceTeamId_createdAt_idx"
         ON public."TeamActivity"("audienceTeamId", "createdAt");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "TeamActivity_alenioAudience_createdAt_idx"
+        ON public."TeamActivity"("alenioAudience", "createdAt");
     `);
 
     // Legacy network posts.
@@ -48,6 +54,14 @@ export async function ensureActivityAudienceSchema(
       UPDATE public."TeamActivity"
       SET "audienceKind" = 'self', "audienceTeamId" = NULL
       WHERE "audienceKind" IS NULL;
+    `);
+
+    // Existing platform posts remain visible to every signed-in user.
+    await prisma.$executeRawUnsafe(`
+      UPDATE public."TeamActivity"
+      SET "alenioAudience" = 'all'
+      WHERE "type" = 'alenio_post'
+        AND "alenioAudience" IS NULL;
     `);
 
     console.log("[startup] TeamActivity audience columns ensured");

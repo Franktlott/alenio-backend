@@ -621,6 +621,11 @@ export type PersonalFeedItem = {
   reactions: NetworkUpdateReactions;
   commentCount: number;
   commentsLocked: boolean;
+  alenioAudience:
+    | "all"
+    | "workspace_members"
+    | "non_workspace_members"
+    | null;
   canDelete: boolean;
 };
 

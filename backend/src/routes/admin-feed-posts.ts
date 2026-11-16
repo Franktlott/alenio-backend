@@ -5,6 +5,7 @@ import { alenioAudienceFields } from "../lib/activity-audience";
 import { isHttpsUrl } from "../lib/discover-document";
 import { isValidReactionEmoji } from "../lib/network-updates-policy";
 import {
+  ALENIO_POST_AUDIENCES,
   ALENIO_POST_TYPE,
   personalFeedActivityInclude,
   serializePersonalFeedItem,
@@ -49,6 +50,7 @@ const createBody = z
     imageHeight: z.number().int().min(1).max(IMAGE_DIMENSION_MAX).optional(),
     mediaType: z.enum(["image", "video"]).optional(),
     commentsLocked: z.boolean().optional(),
+    audience: z.enum(ALENIO_POST_AUDIENCES).optional(),
   })
   .superRefine((value, context) => {
     const body = value.body?.trim() ?? "";
@@ -239,6 +241,7 @@ adminFeedPostsRouter.post("/", async (c) => {
       userId: user.id,
       type: ALENIO_POST_TYPE,
       ...alenioAudienceFields(),
+      alenioAudience: parsed.data.audience ?? "all",
       commentsLocked: parsed.data.commentsLocked ?? false,
       metadata: JSON.stringify({
         body: body || null,

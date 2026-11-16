@@ -2036,6 +2036,11 @@ model TeamActivity {
    */
   audienceTeamId String?
   /**
+   * Platform-post target: all | workspace_members | non_workspace_members.
+   * Null is treated as all for legacy Alenio posts.
+   */
+  alenioAudience String?
+  /**
    * Prevents new comments and replies while keeping existing comments visible.
    * Currently managed for platform Alenio posts.
    */
@@ -2049,6 +2054,7 @@ model TeamActivity {
   @@index([userId, createdAt])
   @@index([audienceKind, createdAt])
   @@index([audienceTeamId, createdAt])
+  @@index([alenioAudience, createdAt])
 }
 
 model NetworkUpdateHide {

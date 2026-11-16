@@ -1292,6 +1292,11 @@ export type PersonalFeedItem = {
   user: { id: string; name: string; image: string | null } | null;
   commentCount: number;
   commentsLocked: boolean;
+  alenioAudience:
+    | "all"
+    | "workspace_members"
+    | "non_workspace_members"
+    | null;
 };
 
 export type PersonalFeedResponse = {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  alenioAudienceVisibilityWhere,
   decodePersonalFeedCursor,
   encodePersonalFeedCursor,
   networkAudienceVisibilityWhere,
@@ -80,6 +81,7 @@ describe("serializePersonalFeedItem", () => {
         type: "alenio_post",
         audienceKind: "alenio",
         audienceTeamId: null,
+        alenioAudience: "workspace_members",
         commentsLocked: true,
         metadata: JSON.stringify({ body: "Hello everyone" }),
         createdAt: new Date("2026-11-15T12:00:00.000Z"),
@@ -96,6 +98,7 @@ describe("serializePersonalFeedItem", () => {
       sourceLabel: "Alenio",
       canDelete: false,
       commentsLocked: true,
+      alenioAudience: "workspace_members",
       user: { id: "alenio", name: "Alenio", image: null },
     });
   });
@@ -138,6 +141,26 @@ describe("audience visibility where", () => {
     expect(where.OR[0]).toMatchObject({
       audienceKind: "workspace",
       audienceTeamId: { in: ["t1", "t2"] },
+    });
+  });
+
+  test("Alenio clause targets the viewer's membership segment", () => {
+    const memberWhere = alenioAudienceVisibilityWhere(true);
+    expect(memberWhere.AND[1]).toEqual({
+      OR: [
+        { alenioAudience: null },
+        { alenioAudience: "all" },
+        { alenioAudience: "workspace_members" },
+      ],
+    });
+
+    const nonMemberWhere = alenioAudienceVisibilityWhere(false);
+    expect(nonMemberWhere.AND[1]).toEqual({
+      OR: [
+        { alenioAudience: null },
+        { alenioAudience: "all" },
+        { alenioAudience: "non_workspace_members" },
+      ],
     });
   });
 });

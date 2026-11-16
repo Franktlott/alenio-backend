@@ -23,6 +23,7 @@ import {
   fetchAdminFeedPostComments,
   fetchAdminFeedPosts,
   reactToAdminFeedPostComment,
+  type AlenioPostAudience,
   type AdminFeedComment,
   type AdminFeedPost,
   updateAdminFeedPostComments,
@@ -34,6 +35,12 @@ import "./admin-feed-posts.css";
 
 const QUERY_KEY = ["admin-feed-posts"] as const;
 const COMMENT_REACTIONS = ["👍", "❤️", "🎉"] as const;
+
+const AUDIENCE_LABELS: Record<AlenioPostAudience, string> = {
+  all: "All users",
+  workspace_members: "Workspace members",
+  non_workspace_members: "Non-workspace members",
+};
 
 function postBody(metadata: Record<string, unknown> | null): string {
   const body = metadata?.body;
@@ -290,6 +297,7 @@ export function AdminFeedPostsPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [imageWidth, setImageWidth] = useState<number | null>(null);
   const [imageHeight, setImageHeight] = useState<number | null>(null);
+  const [audience, setAudience] = useState<AlenioPostAudience>("all");
   const [draftCommentsLocked, setDraftCommentsLocked] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -343,9 +351,11 @@ export function AdminFeedPostsPage() {
         imageHeight: imageHeight ?? undefined,
         mediaType: imageUrl.trim() ? "image" : undefined,
         commentsLocked: draftCommentsLocked,
+        audience,
       }),
     onSuccess: async () => {
       setDraft("");
+      setAudience("all");
       setDraftCommentsLocked(false);
       clearPhoto();
       setFormError(null);
@@ -406,7 +416,7 @@ export function AdminFeedPostsPage() {
           <p className="dm-kicker">Content</p>
           <h1>Alenio feed</h1>
           <p className="dm-sub">
-            Publish a post that appears in every member’s personal Feed as Alenio.
+            Publish platform updates to the right Alenio audience.
           </p>
         </div>
       </header>
@@ -417,8 +427,32 @@ export function AdminFeedPostsPage() {
         <section className="afp-composer" aria-label="Compose Alenio post">
           <div className="afp-composer-title">
             <Megaphone size={16} strokeWidth={2.2} />
-            <span>New post to all members</span>
+            <span>New Alenio post</span>
           </div>
+          <label className="afp-label" htmlFor="afp-audience">
+            Audience
+          </label>
+          <select
+            id="afp-audience"
+            className="afp-audience-select"
+            value={audience}
+            onChange={(event) =>
+              setAudience(event.target.value as AlenioPostAudience)
+            }
+            disabled={publish.isPending}
+            data-testid="admin-feed-post-audience"
+          >
+            <option value="all">All users</option>
+            <option value="workspace_members">Workspace members</option>
+            <option value="non_workspace_members">Non-workspace members</option>
+          </select>
+          <p className="afp-audience-hint">
+            {audience === "all"
+              ? "Everyone with an Alenio account will receive this post."
+              : audience === "workspace_members"
+                ? "Only people who belong to at least one workspace will receive this post."
+                : "Only people who do not belong to a workspace will receive this post."}
+          </p>
           <label className="afp-label" htmlFor="afp-body">
             Message
           </label>
@@ -429,7 +463,7 @@ export function AdminFeedPostsPage() {
             maxLength={2000}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Share an update with everyone on Alenio…"
+            placeholder="Share an update from Alenio…"
             data-testid="admin-feed-post-body"
           />
 
@@ -540,6 +574,8 @@ export function AdminFeedPostsPage() {
                       <img className="afp-item-thumb" src={image} alt="" />
                     ) : null}
                     <p className="afp-item-meta">
+                      {AUDIENCE_LABELS[item.alenioAudience ?? "all"]}
+                      {" · "}
                       {item.commentCount} comment{item.commentCount === 1 ? "" : "s"}
                       {" · "}
                       {item.commentsLocked ? "Comments locked" : "Comments open"}
@@ -589,7 +625,7 @@ export function AdminFeedPostsPage() {
                         aria-label="Delete post"
                         disabled={remove.isPending}
                         onClick={() => {
-                          if (window.confirm("Remove this Alenio post from everyone’s Feed?")) {
+                          if (window.confirm("Remove this Alenio post from its audience’s Feed?")) {
                             remove.mutate(item.id);
                           }
                         }}

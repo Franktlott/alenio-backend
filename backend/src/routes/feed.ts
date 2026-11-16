@@ -4,7 +4,7 @@ import { z } from "zod";
 import { auth } from "../auth";
 import { isValidReactionEmoji } from "../lib/network-updates-policy";
 import {
-  ALENIO_POST_TYPE,
+  alenioAudienceVisibilityWhere,
   decodePersonalFeedCursor,
   getPersonalFeedPage,
   personalFeedActivityInclude,
@@ -39,12 +39,15 @@ const createCommentSchema = z.object({
   parentId: z.string().min(1).optional(),
 });
 
-async function loadAlenioPost(activityId: string) {
+async function loadVisibleAlenioPost(activityId: string, viewerId: string) {
+  const membership = await prisma.teamMember.findFirst({
+    where: { userId: viewerId },
+    select: { id: true },
+  });
   return prisma.teamActivity.findFirst({
     where: {
       id: activityId,
-      type: ALENIO_POST_TYPE,
-      OR: [{ audienceKind: "alenio" }, { audienceKind: null, teamId: null }],
+      ...alenioAudienceVisibilityWhere(Boolean(membership)),
     },
     include: personalFeedActivityInclude,
   });
@@ -71,7 +74,7 @@ feedRouter.get("/", zValidator("query", feedQuerySchema), async (c) => {
 
 feedRouter.get("/:activityId", async (c) => {
   const user = c.get("user")!;
-  const activity = await loadAlenioPost(c.req.param("activityId"));
+  const activity = await loadVisibleAlenioPost(c.req.param("activityId"), user.id);
   if (!activity) {
     return c.json(
       { error: { message: "Alenio post not found", code: "NOT_FOUND" } },
@@ -86,7 +89,10 @@ feedRouter.post(
   zValidator("json", reactionSchema),
   async (c) => {
     const user = c.get("user")!;
-    const activity = await loadAlenioPost(c.req.param("activityId"));
+    const activity = await loadVisibleAlenioPost(
+      c.req.param("activityId"),
+      user.id,
+    );
     if (!activity) {
       return c.json(
         { error: { message: "Alenio post not found", code: "NOT_FOUND" } },
@@ -112,7 +118,7 @@ feedRouter.post(
 
 feedRouter.get("/:activityId/comments", async (c) => {
   const user = c.get("user")!;
-  const activity = await loadAlenioPost(c.req.param("activityId"));
+  const activity = await loadVisibleAlenioPost(c.req.param("activityId"), user.id);
   if (!activity) {
     return c.json(
       { error: { message: "Alenio post not found", code: "NOT_FOUND" } },
@@ -165,7 +171,10 @@ feedRouter.post(
   zValidator("json", createCommentSchema),
   async (c) => {
     const user = c.get("user")!;
-    const activity = await loadAlenioPost(c.req.param("activityId"));
+    const activity = await loadVisibleAlenioPost(
+      c.req.param("activityId"),
+      user.id,
+    );
     if (!activity) {
       return c.json(
         { error: { message: "Alenio post not found", code: "NOT_FOUND" } },

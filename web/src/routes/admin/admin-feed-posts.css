@@ -54,6 +54,26 @@
   line-height: 1.45;
 }
 
+.afp-audience-select {
+  width: min(100%, 360px);
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #ddd6fe;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1e293b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.afp-audience-hint {
+  margin: 6px 0 14px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .afp-lock-option {
   display: flex;
   align-items: flex-start;

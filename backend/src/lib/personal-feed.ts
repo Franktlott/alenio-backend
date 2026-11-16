@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import type { AlenioPostAudience } from "../types";
 import {
   activitySourceFromAudience,
   inferActivityAudience,
@@ -18,6 +19,11 @@ export const PERSONAL_FEED_TYPES = [
 export const PERSONAL_FEED_DAYS = 30;
 export const NETWORK_POST_TYPE = "network_post";
 export const ALENIO_POST_TYPE = "alenio_post";
+export const ALENIO_POST_AUDIENCES = [
+  "all",
+  "workspace_members",
+  "non_workspace_members",
+] as const satisfies readonly AlenioPostAudience[];
 
 export type PersonalFeedSource = "network" | "workspace" | "alenio";
 
@@ -41,6 +47,7 @@ export type PersonalFeedItem = {
   >;
   commentCount: number;
   commentsLocked: boolean;
+  alenioAudience: AlenioPostAudience | null;
   canDelete: boolean;
 };
 
@@ -149,12 +156,38 @@ export function workspaceAudienceVisibilityWhere(teamIds: string[]) {
   };
 }
 
-/** Prisma where fragment: platform Alenio posts visible to every signed-in member. */
-export function alenioAudienceVisibilityWhere() {
+/** Normalizes legacy or invalid platform-post targets to the safe legacy default. */
+export function normalizeAlenioPostAudience(
+  value: string | null | undefined,
+): AlenioPostAudience {
+  return ALENIO_POST_AUDIENCES.includes(value as AlenioPostAudience)
+    ? (value as AlenioPostAudience)
+    : "all";
+}
+
+/** Prisma where fragment: platform Alenio posts visible to this viewer segment. */
+export function alenioAudienceVisibilityWhere(
+  hasWorkspaceMembership: boolean,
+) {
   return {
-    OR: [
-      { audienceKind: "alenio", type: ALENIO_POST_TYPE },
-      { audienceKind: null, teamId: null, type: ALENIO_POST_TYPE },
+    AND: [
+      {
+        OR: [
+          { audienceKind: "alenio", type: ALENIO_POST_TYPE },
+          { audienceKind: null, teamId: null, type: ALENIO_POST_TYPE },
+        ],
+      },
+      {
+        OR: [
+          { alenioAudience: null },
+          { alenioAudience: "all" },
+          {
+            alenioAudience: hasWorkspaceMembership
+              ? "workspace_members"
+              : "non_workspace_members",
+          },
+        ],
+      },
     ],
   };
 }
@@ -169,6 +202,7 @@ export function serializePersonalFeedItem(
     userId: string | null;
     audienceKind?: string | null;
     audienceTeamId?: string | null;
+    alenioAudience?: string | null;
     commentsLocked?: boolean;
     user: { id: string; name: string; image: string | null } | null;
     reactions: ReactionRow[];
@@ -203,6 +237,9 @@ export function serializePersonalFeedItem(
     reactions: mapFeedReactions(activity.reactions),
     commentCount: activity._count.comments,
     commentsLocked: activity.commentsLocked ?? false,
+    alenioAudience: isAlenio
+      ? normalizeAlenioPostAudience(activity.alenioAudience)
+      : null,
     // Platform posts are removed from Admin, not by members in the feed.
     canDelete: isAlenio ? false : activity.userId === viewerId,
   };
@@ -252,6 +289,7 @@ export async function getPersonalFeedPage(
     loadVisibleNetworkAuthorCutoffs(db, viewerId),
   ]);
   const teamIds = memberships.map((row) => row.teamId);
+  const hasWorkspaceMembership = teamIds.length > 0;
   const cursorDate = options.cursor
     ? new Date(options.cursor.createdAt)
     : null;
@@ -286,7 +324,7 @@ export async function getPersonalFeedPage(
         {
           OR: [
             networkAudienceVisibilityWhere(networkVisibility),
-            alenioAudienceVisibilityWhere(),
+            alenioAudienceVisibilityWhere(hasWorkspaceMembership),
             ...(teamIds.length
               ? [workspaceAudienceVisibilityWhere(teamIds)]
               : []),

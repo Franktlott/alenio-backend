@@ -706,6 +706,21 @@ export type AdminFeedComment = {
   reactions: ActivityReactionSummary;
 };
 
+export type AlenioPostAudience =
+  | "all"
+  | "workspace_members"
+  | "non_workspace_members";
+
+export type CreateAdminFeedPostRequest = {
+  body?: string;
+  imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  mediaType?: "image" | "video";
+  commentsLocked?: boolean;
+  audience?: AlenioPostAudience;
+};
+
 export type CreateAdminFeedCommentRequest = {
   body: string;
   parentId?: string;

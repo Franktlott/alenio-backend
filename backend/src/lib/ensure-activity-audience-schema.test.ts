@@ -15,7 +15,14 @@ describe("ensureActivityAudienceSchema", () => {
     expect(await ensureActivityAudienceSchema(prisma)).toEqual({ ok: true });
     expect(await ensureActivityAudienceSchema(prisma)).toEqual({ ok: true });
     expect(calls.some((sql) => sql.includes("audienceKind"))).toBe(true);
-    expect(calls.some((sql) => sql.includes("UPDATE"))).toBe(true);
+    expect(calls.some((sql) => sql.includes("alenioAudience"))).toBe(true);
+    expect(
+      calls.some(
+        (sql) =>
+          sql.includes("SET \"alenioAudience\" = 'all'") &&
+          sql.includes("\"type\" = 'alenio_post'"),
+      ),
+    ).toBe(true);
   });
 
   test("returns error on failure", async () => {
