@@ -1,5 +1,5 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { Trash2 } from "lucide-react-native";
+import { CornerDownRight, Trash2 } from "lucide-react-native";
 import { UserAvatar } from "@/components/UserAvatar";
 import type { ActivityComment } from "@/lib/activity-comments";
 import { isPendingComment } from "@/lib/activity-comments";
@@ -21,6 +21,8 @@ type Props = {
   picker?: React.ReactNode;
   /** Replies sit indented under their parent. */
   inset?: boolean;
+  /** Parent author shown above a nested reply so its relationship is explicit. */
+  replyToName?: string | null;
   /** Denser type and spacing, for the thread pane beside the feed. */
   compact?: boolean;
   /** The parent already provides the horizontal page inset. */
@@ -37,6 +39,7 @@ export function UpdateCommentRow({
   onPressReactions,
   picker,
   inset = false,
+  replyToName,
   compact = false,
   contained = false,
 }: Props) {
@@ -68,6 +71,13 @@ export function UpdateCommentRow({
       ]}
       testID={`update-comment-${comment.id}`}
     >
+      {inset ? (
+        <View
+          style={styles.replyConnector}
+          accessible={false}
+          pointerEvents="none"
+        />
+      ) : null}
       {comment.author.id === "alenio" ? (
         <Image
           source={require("@/assets/alenio-icon.png")}
@@ -88,6 +98,14 @@ export function UpdateCommentRow({
         />
       )}
       <View style={styles.main}>
+        {inset ? (
+          <View style={styles.replyContext}>
+            <CornerDownRight size={12} color="#7C6FD1" strokeWidth={2.2} />
+            <Text style={styles.replyContextText} numberOfLines={1}>
+              Reply to {replyToName?.trim() || "this comment"}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.bubble}>
           <View style={styles.header}>
             <Text
@@ -175,6 +193,7 @@ export function UpdateCommentRow({
 
 const styles = StyleSheet.create({
   row: {
+    position: "relative",
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
@@ -197,12 +216,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   rowInsetContained: {
-    paddingLeft: 30,
+    paddingLeft: 38,
     paddingRight: 0,
   },
   rowInsetCompactContained: {
-    paddingLeft: 26,
+    paddingLeft: 34,
     paddingRight: 0,
+  },
+  replyConnector: {
+    position: "absolute",
+    left: 16,
+    top: -2,
+    width: 16,
+    height: 28,
+    borderLeftWidth: 1.5,
+    borderBottomWidth: 1.5,
+    borderColor: "#D8D3F5",
+    borderBottomLeftRadius: 9,
+  },
+  replyContext: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 4,
+    paddingLeft: 2,
+  },
+  replyContextText: {
+    flexShrink: 1,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "700",
+    color: "#7C6FD1",
   },
   nameCompact: {
     fontSize: 12,

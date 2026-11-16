@@ -71,8 +71,12 @@ export function AlenioPostDetailScreen({
   const rows = useMemo(
     () =>
       buildCommentThreads(comments.data ?? []).flatMap((thread) => [
-        { comment: thread.comment, inset: false },
-        ...thread.replies.map((reply) => ({ comment: reply, inset: true })),
+        { comment: thread.comment, inset: false, replyToName: null },
+        ...thread.replies.map((reply) => ({
+          comment: reply,
+          inset: true,
+          replyToName: thread.comment.author.name,
+        })),
       ]),
     [comments.data],
   );
@@ -231,6 +235,7 @@ export function AlenioPostDetailScreen({
                 comment={row.comment}
                 currentUserId={currentUserId}
                 inset={row.inset}
+                replyToName={row.replyToName}
                 contained
               />
             )}

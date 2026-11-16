@@ -131,8 +131,12 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
   const rows = useMemo(
     () =>
       buildCommentThreads(comments).flatMap((thread) => [
-        { comment: thread.comment, inset: false },
-        ...thread.replies.map((reply) => ({ comment: reply, inset: true })),
+        { comment: thread.comment, inset: false, replyToName: null },
+        ...thread.replies.map((reply) => ({
+          comment: reply,
+          inset: true,
+          replyToName: thread.comment.author.name,
+        })),
       ]),
     [comments],
   );
@@ -482,6 +486,7 @@ export function UpdateDetailScreen({ teamId, activityId, onClose }: Props) {
                 comment={row.comment}
                 currentUserId={currentUserId}
                 inset={row.inset}
+                replyToName={row.replyToName}
                 compact={embedded}
                 contained
                 onDelete={canWrite ? confirmDelete : undefined}
