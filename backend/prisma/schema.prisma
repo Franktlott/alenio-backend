@@ -2035,6 +2035,11 @@ model TeamActivity {
    * Workspace destination when audienceKind = workspace (usually matches teamId).
    */
   audienceTeamId String?
+  /**
+   * Prevents new comments and replies while keeping existing comments visible.
+   * Currently managed for platform Alenio posts.
+   */
+  commentsLocked Boolean                @default(false)
   createdAt DateTime               @default(now())
   reactions TeamActivityReaction[]
   comments  TeamActivityComment[]

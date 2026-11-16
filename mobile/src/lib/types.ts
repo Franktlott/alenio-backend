@@ -620,6 +620,7 @@ export type PersonalFeedItem = {
   user: { id: string; name: string; image: string | null } | null;
   reactions: NetworkUpdateReactions;
   commentCount: number;
+  commentsLocked: boolean;
   canDelete: boolean;
 };
 

@@ -1,4 +1,4 @@
-import { apiDeleteJson, apiGetJson, apiPostJson } from "./api";
+import { apiDeleteJson, apiGetJson, apiPatchJson, apiPostJson } from "./api";
 
 export type AdminFeedPost = {
   id: string;
@@ -9,6 +9,7 @@ export type AdminFeedPost = {
   metadata: Record<string, unknown> | null;
   user: { id: string; name: string; image: string | null } | null;
   commentCount: number;
+  commentsLocked: boolean;
 };
 
 export type AdminFeedPostInput = {
@@ -17,6 +18,7 @@ export type AdminFeedPostInput = {
   imageWidth?: number;
   imageHeight?: number;
   mediaType?: "image" | "video";
+  commentsLocked?: boolean;
 };
 
 export async function fetchAdminFeedPosts(): Promise<AdminFeedPost[]> {
@@ -38,4 +40,14 @@ export async function deleteAdminFeedPost(activityId: string): Promise<void> {
   await apiDeleteJson<{ data: { ok: true } }>(
     `/api/admin/feed-posts/${encodeURIComponent(activityId)}`,
   );
+}
+
+export async function updateAdminFeedPostComments(
+  activityId: string,
+  commentsLocked: boolean,
+): Promise<AdminFeedPost> {
+  return apiPatchJson<{ data: AdminFeedPost }>(
+    `/api/admin/feed-posts/${encodeURIComponent(activityId)}`,
+    { commentsLocked },
+  ).then((response) => response.data);
 }

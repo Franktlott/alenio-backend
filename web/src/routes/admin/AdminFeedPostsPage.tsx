@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Megaphone, Trash2, X } from "lucide-react";
+import { ImagePlus, Lock, LockOpen, Megaphone, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { ContentSectionTabs } from "../../components/admin/ContentSectionTabs";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
@@ -8,6 +8,7 @@ import {
   createAdminFeedPost,
   deleteAdminFeedPost,
   fetchAdminFeedPosts,
+  updateAdminFeedPostComments,
 } from "../../lib/admin-feed-posts-api";
 import { uploadFeedPostMedia } from "../../lib/api";
 import { staffCan } from "../../lib/staff-access";
@@ -60,6 +61,7 @@ export function AdminFeedPostsPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [imageWidth, setImageWidth] = useState<number | null>(null);
   const [imageHeight, setImageHeight] = useState<number | null>(null);
+  const [draftCommentsLocked, setDraftCommentsLocked] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSaved, setFormSaved] = useState<string | null>(null);
@@ -110,9 +112,11 @@ export function AdminFeedPostsPage() {
         imageWidth: imageWidth ?? undefined,
         imageHeight: imageHeight ?? undefined,
         mediaType: imageUrl.trim() ? "image" : undefined,
+        commentsLocked: draftCommentsLocked,
       }),
     onSuccess: async () => {
       setDraft("");
+      setDraftCommentsLocked(false);
       clearPhoto();
       setFormError(null);
       setFormSaved(
@@ -128,6 +132,19 @@ export function AdminFeedPostsPage() {
 
   const remove = useMutation({
     mutationFn: deleteAdminFeedPost,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+
+  const updateComments = useMutation({
+    mutationFn: ({
+      activityId,
+      commentsLocked,
+    }: {
+      activityId: string;
+      commentsLocked: boolean;
+    }) => updateAdminFeedPostComments(activityId, commentsLocked),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEY });
     },
@@ -185,6 +202,20 @@ export function AdminFeedPostsPage() {
             placeholder="Share an update with everyone on Alenio…"
             data-testid="admin-feed-post-body"
           />
+
+          <label className="afp-lock-option">
+            <input
+              type="checkbox"
+              checked={draftCommentsLocked}
+              onChange={(event) => setDraftCommentsLocked(event.target.checked)}
+              disabled={publish.isPending}
+              data-testid="admin-feed-post-comments-locked"
+            />
+            <span>
+              <strong>Lock comments</strong>
+              <small>Members can read existing comments but cannot add new ones.</small>
+            </span>
+          </label>
 
           <span className="afp-label">
             Photo <span className="afp-optional">(optional)</span>
@@ -280,23 +311,47 @@ export function AdminFeedPostsPage() {
                     ) : null}
                     <p className="afp-item-meta">
                       {item.commentCount} comment{item.commentCount === 1 ? "" : "s"}
+                      {" · "}
+                      {item.commentsLocked ? "Comments locked" : "Comments open"}
                     </p>
                   </div>
                   {canEdit ? (
-                    <button
-                      type="button"
-                      className="afp-delete"
-                      aria-label="Delete post"
-                      disabled={remove.isPending}
-                      onClick={() => {
-                        if (window.confirm("Remove this Alenio post from everyone’s Feed?")) {
-                          remove.mutate(item.id);
+                    <div className="afp-item-actions">
+                      <button
+                        type="button"
+                        className={`afp-lock-toggle${item.commentsLocked ? " is-locked" : ""}`}
+                        aria-label={item.commentsLocked ? "Unlock comments" : "Lock comments"}
+                        disabled={updateComments.isPending}
+                        onClick={() =>
+                          updateComments.mutate({
+                            activityId: item.id,
+                            commentsLocked: !item.commentsLocked,
+                          })
                         }
-                      }}
-                      data-testid={`admin-feed-post-delete-${item.id}`}
-                    >
-                      <Trash2 size={15} strokeWidth={2.2} />
-                    </button>
+                        data-testid={`admin-feed-post-comments-${item.id}`}
+                      >
+                        {item.commentsLocked ? (
+                          <Lock size={15} strokeWidth={2.2} />
+                        ) : (
+                          <LockOpen size={15} strokeWidth={2.2} />
+                        )}
+                        {item.commentsLocked ? "Unlock" : "Lock"}
+                      </button>
+                      <button
+                        type="button"
+                        className="afp-delete"
+                        aria-label="Delete post"
+                        disabled={remove.isPending}
+                        onClick={() => {
+                          if (window.confirm("Remove this Alenio post from everyone’s Feed?")) {
+                            remove.mutate(item.id);
+                          }
+                        }}
+                        data-testid={`admin-feed-post-delete-${item.id}`}
+                      >
+                        <Trash2 size={15} strokeWidth={2.2} />
+                      </button>
+                    </div>
                   ) : null}
                 </li>
               );

@@ -170,6 +170,17 @@ feedRouter.post(
         404,
       );
     }
+    if (activity.commentsLocked) {
+      return c.json(
+        {
+          error: {
+            message: "Comments are locked for this post",
+            code: "COMMENTS_LOCKED",
+          },
+        },
+        403,
+      );
+    }
     const { body, parentId } = c.req.valid("json");
     if (parentId) {
       const parent = await prisma.teamActivityComment.findFirst({

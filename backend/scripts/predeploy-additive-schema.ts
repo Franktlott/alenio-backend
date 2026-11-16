@@ -4,6 +4,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { ensureActivityAudienceSchema } from "../src/lib/ensure-activity-audience-schema";
+import { ensureActivityCommentsSchema } from "../src/lib/ensure-activity-comments-schema";
 import { ensureNetworkUpdateHidesSchema } from "../src/lib/ensure-network-update-hides-schema";
 
 const raw = process.env.DATABASE_URL;
@@ -48,6 +49,12 @@ try {
     throw new Error(activityAudience.error);
   }
   console.log("predeploy-additive-schema: TeamActivity audience ready");
+
+  const activityComments = await ensureActivityCommentsSchema(prisma);
+  if (!activityComments.ok) {
+    throw new Error(activityComments.error);
+  }
+  console.log("predeploy-additive-schema: activity comments and lock state ready");
 } catch (err) {
   console.error(
     "predeploy-additive-schema: patch failed, continuing deploy for startup fallback:",

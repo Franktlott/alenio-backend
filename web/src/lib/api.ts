@@ -1291,6 +1291,7 @@ export type PersonalFeedItem = {
   metadata: Record<string, unknown> | null;
   user: { id: string; name: string; image: string | null } | null;
   commentCount: number;
+  commentsLocked: boolean;
 };
 
 export type PersonalFeedResponse = {

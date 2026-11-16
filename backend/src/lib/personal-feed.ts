@@ -40,6 +40,7 @@ export type PersonalFeedItem = {
     { count: number; userIds: string[]; users: { id: string; name: string }[] }
   >;
   commentCount: number;
+  commentsLocked: boolean;
   canDelete: boolean;
 };
 
@@ -168,6 +169,7 @@ export function serializePersonalFeedItem(
     userId: string | null;
     audienceKind?: string | null;
     audienceTeamId?: string | null;
+    commentsLocked?: boolean;
     user: { id: string; name: string; image: string | null } | null;
     reactions: ReactionRow[];
     _count: { comments: number };
@@ -200,6 +202,7 @@ export function serializePersonalFeedItem(
       : activity.user,
     reactions: mapFeedReactions(activity.reactions),
     commentCount: activity._count.comments,
+    commentsLocked: activity.commentsLocked ?? false,
     // Platform posts are removed from Admin, not by members in the feed.
     canDelete: isAlenio ? false : activity.userId === viewerId,
   };

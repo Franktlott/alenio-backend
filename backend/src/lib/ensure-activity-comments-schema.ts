@@ -10,6 +10,11 @@ export async function ensureActivityCommentsSchema(
 ): Promise<EnsureActivityCommentsResult> {
   try {
     await prisma.$executeRawUnsafe(`
+      ALTER TABLE public."TeamActivity"
+        ADD COLUMN IF NOT EXISTS "commentsLocked" BOOLEAN NOT NULL DEFAULT false;
+    `);
+
+    await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS public."TeamActivityComment" (
         "id" TEXT NOT NULL,
         "activityId" TEXT NOT NULL,

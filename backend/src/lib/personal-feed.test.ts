@@ -80,6 +80,7 @@ describe("serializePersonalFeedItem", () => {
         type: "alenio_post",
         audienceKind: "alenio",
         audienceTeamId: null,
+        commentsLocked: true,
         metadata: JSON.stringify({ body: "Hello everyone" }),
         createdAt: new Date("2026-11-15T12:00:00.000Z"),
         userId: "staff1",
@@ -94,6 +95,7 @@ describe("serializePersonalFeedItem", () => {
       source: "alenio",
       sourceLabel: "Alenio",
       canDelete: false,
+      commentsLocked: true,
       user: { id: "alenio", name: "Alenio", image: null },
     });
   });

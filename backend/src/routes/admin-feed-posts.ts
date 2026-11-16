@@ -45,6 +45,7 @@ const createBody = z
     imageWidth: z.number().int().min(1).max(IMAGE_DIMENSION_MAX).optional(),
     imageHeight: z.number().int().min(1).max(IMAGE_DIMENSION_MAX).optional(),
     mediaType: z.enum(["image", "video"]).optional(),
+    commentsLocked: z.boolean().optional(),
   })
   .superRefine((value, context) => {
     const body = value.body?.trim() ?? "";
@@ -64,6 +65,10 @@ const createBody = z
       });
     }
   });
+
+const updateCommentsBody = z.object({
+  commentsLocked: z.boolean(),
+});
 
 function bad(
   c: { json: (body: unknown, status?: number) => Response },
@@ -91,6 +96,13 @@ function describeFeedPostChange(method: string, path: string) {
   }
   if (method === "POST") {
     return { action: "feed_post.create", summary: "Published an Alenio feed post" };
+  }
+  if (method === "PATCH") {
+    return {
+      action: "feed_post.comments.update",
+      summary: "Changed comments on an Alenio feed post",
+      targetId: id,
+    };
   }
   return { action: "feed_post.view", summary: "Viewed Alenio feed posts" };
 }
@@ -132,6 +144,7 @@ adminFeedPostsRouter.post("/", async (c) => {
       userId: user.id,
       type: ALENIO_POST_TYPE,
       ...alenioAudienceFields(),
+      commentsLocked: parsed.data.commentsLocked ?? false,
       metadata: JSON.stringify({
         body: body || null,
         imageUrl,
@@ -148,6 +161,30 @@ adminFeedPostsRouter.post("/", async (c) => {
     { data: serializePersonalFeedItem(created, user.id) },
     201,
   );
+});
+
+adminFeedPostsRouter.patch("/:activityId", async (c) => {
+  const activityId = c.req.param("activityId");
+  const parsed = updateCommentsBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return bad(c, zodMessage(parsed.error));
+
+  const existing = await prisma.teamActivity.findFirst({
+    where: {
+      id: activityId,
+      type: ALENIO_POST_TYPE,
+      OR: [{ audienceKind: "alenio" }, { audienceKind: null, teamId: null }],
+    },
+    select: { id: true },
+  });
+  if (!existing) return bad(c, "Alenio post not found.", 404);
+
+  const updated = await prisma.teamActivity.update({
+    where: { id: existing.id },
+    data: { commentsLocked: parsed.data.commentsLocked },
+    include: personalFeedActivityInclude,
+  });
+  const user = c.get("user")!;
+  return c.json({ data: serializePersonalFeedItem(updated, user.id) });
 });
 
 adminFeedPostsRouter.delete("/:activityId", async (c) => {
