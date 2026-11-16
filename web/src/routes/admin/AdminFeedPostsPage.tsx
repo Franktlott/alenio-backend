@@ -156,12 +156,22 @@ function AdminFeedPostComments({
               key={comment.id}
               className={`afp-comment${comment.parentId ? " afp-comment--reply" : ""}`}
             >
-              <UserAvatar
-                user={comment.author}
-                className="afp-comment-avatar"
-                imgClassName="afp-comment-avatar-img"
-                alt=""
-              />
+              {comment.author.id === "alenio" ? (
+                <span className="afp-comment-avatar" aria-label="Alenio">
+                  <img
+                    src="/icon.png"
+                    alt=""
+                    className="afp-comment-avatar-img"
+                  />
+                </span>
+              ) : (
+                <UserAvatar
+                  user={comment.author}
+                  className="afp-comment-avatar"
+                  imgClassName="afp-comment-avatar-img"
+                  alt=""
+                />
+              )}
               <div className="afp-comment-main">
                 <div className="afp-comment-bubble">
                   <div className="afp-comment-head">

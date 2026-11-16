@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 import { UserAvatar } from "@/components/UserAvatar";
 import type { ActivityComment } from "@/lib/activity-comments";
@@ -68,15 +68,25 @@ export function UpdateCommentRow({
       ]}
       testID={`update-comment-${comment.id}`}
     >
-      <UserAvatar
-        user={{ name, image: comment.author.image }}
-        size={size}
-        radius={size / 2}
-        backgroundColor="#EFE9FF"
-        textColor="#6d28d9"
-        fontSize={compact ? (inset ? 10 : 11.5) : inset ? 11 : 13}
-        workplaceConnected={false}
-      />
+      {comment.author.id === "alenio" ? (
+        <Image
+          source={require("@/assets/alenio-icon.png")}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+          resizeMode="contain"
+          accessibilityLabel="Alenio"
+          testID={`update-comment-${comment.id}-alenio-avatar`}
+        />
+      ) : (
+        <UserAvatar
+          user={{ name, image: comment.author.image }}
+          size={size}
+          radius={size / 2}
+          backgroundColor="#EFE9FF"
+          textColor="#6d28d9"
+          fontSize={compact ? (inset ? 10 : 11.5) : inset ? 11 : 13}
+          workplaceConnected={false}
+        />
+      )}
       <View style={styles.main}>
         <View style={styles.bubble}>
           <View style={styles.header}>
