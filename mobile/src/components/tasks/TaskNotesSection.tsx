@@ -9,7 +9,11 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquareText, Pencil, Plus, Trash2 } from "lucide-react-native";
 import { toast } from "burnt";
-import { AlenioBottomSheet, alenioSheetStyles } from "@/components/AlenioBottomSheet";
+import {
+  AlenioBottomSheet,
+  AlenioSheetCard,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
 import {
   createTaskNote,
   deleteTaskNote,
@@ -19,7 +23,7 @@ import {
 } from "@/lib/task-notes-api";
 import type { TaskNote } from "@/lib/types";
 import { UserAvatar } from "@/components/UserAvatar";
-import { elevation, palette, tints } from "@/theme";
+import { colors, palette } from "@/theme";
 
 type Props = {
   teamId: string;
@@ -135,9 +139,9 @@ export function TaskNotesSection({
           <Text
             style={{
               fontSize: 11,
-              fontWeight: "800",
+              fontWeight: "700",
               color: palette.inkSecondary,
-              letterSpacing: 0.7,
+              letterSpacing: 0.5,
               textTransform: "uppercase",
             }}
           >
@@ -153,8 +157,8 @@ export function TaskNotesSection({
             testID="add-task-note-button"
             hitSlop={8}
           >
-            <Plus size={13} color={palette.violet} strokeWidth={2.5} />
-            <Text style={{ fontSize: 13, fontWeight: "700", color: palette.violet }}>
+            <Plus size={13} color={colors.brand} strokeWidth={2.5} />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.brand }}>
               Add note
             </Text>
           </Pressable>
@@ -162,18 +166,10 @@ export function TaskNotesSection({
       </View>
 
       {notesQuery.isLoading ? (
-        <View
-          style={[
-            elevation.card,
-            {
-              borderRadius: 16,
-              paddingVertical: 20,
-              alignItems: "center",
-            },
-          ]}
-          testID="task-notes-loading"
-        >
-          <ActivityIndicator size="small" color={palette.violet} />
+        <View testID="task-notes-loading">
+          <AlenioSheetCard tint="slate" style={{ paddingVertical: 20, alignItems: "center" }}>
+            <ActivityIndicator size="small" color={colors.brand} />
+          </AlenioSheetCard>
         </View>
       ) : notesQuery.isError ? (
         <Pressable
@@ -187,18 +183,8 @@ export function TaskNotesSection({
           </Text>
         </Pressable>
       ) : notes.length === 0 ? (
-        <View
-          style={[
-            elevation.card,
-            {
-              borderRadius: 16,
-              paddingHorizontal: 16,
-              paddingVertical: 18,
-              alignItems: "center",
-            },
-          ]}
-          testID="task-notes-empty"
-        >
+        <View testID="task-notes-empty">
+          <AlenioSheetCard tint="slate" style={{ alignItems: "center", paddingVertical: 18 }}>
           <View
             style={{
               width: 36,
@@ -207,31 +193,32 @@ export function TaskNotesSection({
               borderRadius: 11,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: tints.lavender.bg,
+              backgroundColor: colors.brandSoft,
             }}
           >
-            <MessageSquareText size={17} color={tints.lavender.fg} strokeWidth={2} />
+            <MessageSquareText size={17} color={colors.brand} strokeWidth={2} />
           </View>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: palette.ink }}>
-            No notes yet
-          </Text>
-          <Text
-            style={{
-              marginTop: 4,
-              fontSize: 12,
-              color: palette.inkMuted,
-              textAlign: "center",
-              lineHeight: 17,
-            }}
-          >
-            {canWrite
-              ? isReminder
-                ? "Add context or anything you want to remember."
-                : isJoint
-                  ? "Share an update with everyone assigned to this task."
-                  : "Add context, progress, or a handoff note."
-              : "No notes have been added."}
-          </Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: palette.ink }}>
+              No notes yet
+            </Text>
+            <Text
+              style={{
+                marginTop: 4,
+                fontSize: 12,
+                color: palette.inkMuted,
+                textAlign: "center",
+                lineHeight: 17,
+              }}
+            >
+              {canWrite
+                ? isReminder
+                  ? "Add context or anything you want to remember."
+                  : isJoint
+                    ? "Share an update with everyone assigned to this task."
+                    : "Add context, progress, or a handoff note."
+                : "No notes have been added."}
+            </Text>
+          </AlenioSheetCard>
         </View>
       ) : (
         <View style={{ gap: 8 }}>
@@ -239,54 +226,52 @@ export function TaskNotesSection({
             const canManage = canModerate || note.createdById === currentUserId;
             const name = authorName(note);
             return (
-              <View
-                key={note.id}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3"
-                testID={`task-note-${note.id}`}
-              >
-                <View className="mb-2 flex-row items-center" style={{ gap: 10 }}>
-                  <UserAvatar
-                    user={note.createdBy}
-                    size={28}
-                    radius={14}
-                    backgroundColor="#4F46E5"
-                    textColor="#FFFFFF"
-                    fontSize={11}
-                  />
-                  <View className="min-w-0 flex-1">
-                    <Text className="text-xs font-semibold text-slate-800" numberOfLines={1}>
-                      {name}
-                      {note.createdById === currentUserId ? " (you)" : ""}
-                    </Text>
-                    <Text className="text-[10px] text-slate-400">
-                      {formatNoteTime(note.createdAt)}
-                      {note.updatedAt !== note.createdAt ? " · edited" : ""}
-                    </Text>
-                  </View>
-                  {canManage ? (
-                    <View className="flex-row" style={{ gap: 4 }}>
-                      <Pressable
-                        onPress={() => openEdit(note)}
-                        className="h-7 w-7 items-center justify-center rounded-full bg-white"
-                        accessibilityRole="button"
-                        accessibilityLabel="Edit note"
-                        testID={`edit-task-note-${note.id}`}
-                      >
-                        <Pencil size={13} color="#64748B" />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => setDeleteTarget(note)}
-                        className="h-7 w-7 items-center justify-center rounded-full bg-white"
-                        accessibilityRole="button"
-                        accessibilityLabel="Delete note"
-                        testID={`delete-task-note-${note.id}`}
-                      >
-                        <Trash2 size={13} color="#EF4444" />
-                      </Pressable>
+              <View key={note.id} testID={`task-note-${note.id}`}>
+                <AlenioSheetCard tint="slate" compact>
+                  <View className="mb-2 flex-row items-center" style={{ gap: 10 }}>
+                    <UserAvatar
+                      user={note.createdBy}
+                      size={28}
+                      radius={14}
+                      backgroundColor="#4F46E5"
+                      textColor="#FFFFFF"
+                      fontSize={11}
+                    />
+                    <View className="min-w-0 flex-1">
+                      <Text className="text-xs font-semibold text-slate-800" numberOfLines={1}>
+                        {name}
+                        {note.createdById === currentUserId ? " (you)" : ""}
+                      </Text>
+                      <Text className="text-[10px] text-slate-400">
+                        {formatNoteTime(note.createdAt)}
+                        {note.updatedAt !== note.createdAt ? " · edited" : ""}
+                      </Text>
                     </View>
-                  ) : null}
-                </View>
-                <Text className="text-sm leading-5 text-slate-700">{note.body}</Text>
+                    {canManage ? (
+                      <View className="flex-row" style={{ gap: 4 }}>
+                        <Pressable
+                          onPress={() => openEdit(note)}
+                          className="h-7 w-7 items-center justify-center rounded-full bg-white"
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit note"
+                          testID={`edit-task-note-${note.id}`}
+                        >
+                          <Pencil size={13} color="#64748B" />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setDeleteTarget(note)}
+                          className="h-7 w-7 items-center justify-center rounded-full bg-white"
+                          accessibilityRole="button"
+                          accessibilityLabel="Delete note"
+                          testID={`delete-task-note-${note.id}`}
+                        >
+                          <Trash2 size={13} color="#EF4444" />
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text className="text-sm leading-5 text-slate-700">{note.body}</Text>
+                </AlenioSheetCard>
               </View>
             );
           })}

@@ -52,6 +52,8 @@ const PAGES: Array<{ prefix: string; ability: StaffAbility }> = [
   { prefix: "/admin/users", ability: "users.view" },
   { prefix: "/admin/workspaces", ability: "teams.view" },
   { prefix: "/admin/discover", ability: "content.view" },
+  { prefix: "/admin/home-insights", ability: "content.view" },
+  { prefix: "/admin/feed-posts", ability: "content.view" },
   { prefix: "/admin/seneca", ability: "seneca.view" },
   { prefix: "/admin/notifications", ability: "notifications.view" },
   { prefix: "/admin/activity", ability: "activity.view" },

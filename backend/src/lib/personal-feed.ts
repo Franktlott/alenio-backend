@@ -17,8 +17,9 @@ export const PERSONAL_FEED_TYPES = [
 
 export const PERSONAL_FEED_DAYS = 30;
 export const NETWORK_POST_TYPE = "network_post";
+export const ALENIO_POST_TYPE = "alenio_post";
 
-export type PersonalFeedSource = "network" | "workspace";
+export type PersonalFeedSource = "network" | "workspace" | "alenio";
 
 export type PersonalFeedCursor = {
   createdAt: string;
@@ -147,6 +148,16 @@ export function workspaceAudienceVisibilityWhere(teamIds: string[]) {
   };
 }
 
+/** Prisma where fragment: platform Alenio posts visible to every signed-in member. */
+export function alenioAudienceVisibilityWhere() {
+  return {
+    OR: [
+      { audienceKind: "alenio", type: ALENIO_POST_TYPE },
+      { audienceKind: null, teamId: null, type: ALENIO_POST_TYPE },
+    ],
+  };
+}
+
 export function serializePersonalFeedItem(
   activity: {
     id: string;
@@ -169,18 +180,28 @@ export function serializePersonalFeedItem(
     audience,
     activity.team?.name,
   );
+  const isAlenio = source === "alenio" || activity.type === ALENIO_POST_TYPE;
   return {
     id: activity.id,
     source,
     sourceLabel,
-    teamId: activity.teamId,
+    // Prefer the membership team, then explicit audience, then joined team row —
+    // detail routes need a teamId to open workspace threads.
+    teamId:
+      activity.teamId ??
+      audience.audienceTeamId ??
+      activity.team?.id ??
+      null,
     type: activity.type,
     createdAt: activity.createdAt.toISOString(),
     metadata: parseFeedMetadata(activity.metadata),
-    user: activity.user,
+    user: isAlenio
+      ? { id: "alenio", name: "Alenio", image: null }
+      : activity.user,
     reactions: mapFeedReactions(activity.reactions),
     commentCount: activity._count.comments,
-    canDelete: activity.userId === viewerId,
+    // Platform posts are removed from Admin, not by members in the feed.
+    canDelete: isAlenio ? false : activity.userId === viewerId,
   };
 }
 
@@ -262,6 +283,7 @@ export async function getPersonalFeedPage(
         {
           OR: [
             networkAudienceVisibilityWhere(networkVisibility),
+            alenioAudienceVisibilityWhere(),
             ...(teamIds.length
               ? [workspaceAudienceVisibilityWhere(teamIds)]
               : []),

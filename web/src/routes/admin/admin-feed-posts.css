@@ -1,0 +1,160 @@
+.afp-composer {
+  margin: 16px 32px 8px;
+  padding: 16px;
+  border: 1px solid var(--dm-line, #ece8f8);
+  border-radius: 16px;
+  background: #faf9ff;
+}
+
+.afp-composer-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #5b32d6;
+}
+
+.afp-label {
+  display: block;
+  margin: 10px 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.afp-optional {
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.afp-textarea,
+.afp-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.afp-textarea {
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.45;
+}
+
+.afp-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.afp-saved {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #15803d;
+}
+
+.afp-list {
+  margin: 8px 32px 32px;
+}
+
+.afp-list-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.afp-empty {
+  margin: 0;
+  padding: 20px;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.afp-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.afp-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid #eef2f7;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.afp-item-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.afp-item-when {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.afp-item-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #0f172a;
+  white-space: pre-wrap;
+}
+
+.afp-item-image {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6d28d9;
+  word-break: break-all;
+}
+
+.afp-item-meta {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.afp-delete {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #dc2626;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.afp-delete:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .afp-composer,
+  .afp-list {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+}

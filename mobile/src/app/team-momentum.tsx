@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -8,21 +9,22 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import {
-  ArrowLeft,
   CircleAlert,
   LockKeyhole,
   Star,
+  Users,
+  X,
 } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
-import { StarsPath } from "@/components/stars/StarsPath";
+import { StarsHeroCard } from "@/components/stars/StarsHeroCard";
+import { StarsJourneyList } from "@/components/stars/StarsJourneyList";
+import { StarsNextMilestoneRow } from "@/components/stars/StarsNextMilestoneRow";
+import { StarsTeamHeroCard } from "@/components/stars/StarsTeamHeroCard";
 import { StarsTeamRoster } from "@/components/stars/StarsTeamRoster";
 import {
   memberStarPath,
@@ -35,14 +37,25 @@ import {
   type TeamMomentumMemberDetail,
   type TeamMomentumMemberSummary,
 } from "@/lib/team-momentum";
-import { STARS_GOLD } from "@/lib/stars";
-import { AppPageBackground } from "@/components/AppPageBackground";
+import {
+  buildStarsJourney,
+  STARS_GOLD,
+  starsJourneyTitle,
+  starsMilestoneSegment,
+} from "@/lib/stars";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
 } from "@/components/AlenioBottomSheet";
+import { SegmentedControl } from "@/components/ui";
+import { WS } from "@/components/workspace/workspace-ui";
+import {
+  CONTENT_MAX_WIDTH,
+  useAdaptiveLayout,
+  useStatusClusterInset,
+} from "@/lib/adaptive-layout";
 import { isLeaderRole } from "@/lib/member-identity";
-import { colors, space } from "@/theme";
+import { colors, typography } from "@/theme";
 
 async function fetchStarsSummary(teamId: string) {
   try {
@@ -119,7 +132,6 @@ function BrandedState({
 }
 
 export default function TeamStarsScreen() {
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     teamId?: string;
     memberUserId?: string;
@@ -143,6 +155,17 @@ export default function TeamStarsScreen() {
     useState<TeamMomentumMemberSummary | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const journeyActiveY = useRef(0);
+  const { columnWidth } = useAdaptiveLayout();
+  const statusCluster = useStatusClusterInset();
+  const columnPad = {
+    alignSelf: "center" as const,
+    width: "100%" as const,
+    maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
+    paddingLeft: WS.pageGutter + statusCluster.left,
+    paddingRight: WS.pageGutter + statusCluster.right,
+  };
 
   const summaryQuery = useQuery({
     queryKey: teamMomentumSummaryQueryKey(teamId),
@@ -206,28 +229,37 @@ export default function TeamStarsScreen() {
         segmentSize: detail.segmentSize,
         nextMilestone: detail.nextMilestone,
         remainingToMilestone: detail.remainingToMilestone,
+        dayStreak: detail.dayStreak ?? 0,
+        journey: detail.journey?.length
+          ? detail.journey
+          : buildStarsJourney(memberStars(detail.member)),
       }
     : null;
+  const activeJourney = path?.journey.find((step) => step.status === "active");
+  const nextMilestoneTitle = activeJourney
+    ? activeJourney.title
+    : path
+      ? starsJourneyTitle(path.nextMilestone)
+      : "Getting Started";
+
+  const closeSheet = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(app)/execute");
+  };
 
   return (
     <View style={styles.root}>
-      <AppPageBackground />
-      <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={[styles.header, { paddingTop: Math.max(insets.top - 8, 0) }]}>
-          <Pressable
-            onPress={() => {
-              if (router.canGoBack()) router.back();
-              else router.replace("/(app)/execute");
-            }}
-            hitSlop={10}
-            style={styles.back}
-            testID="team-stars-back-button"
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-          >
-            <ArrowLeft size={20} color="#0F172A" strokeWidth={2.2} />
-          </Pressable>
-          <Text style={styles.title}>Stars</Text>
+      <SafeAreaView style={styles.safe} edges={["bottom"]}>
+        <View style={[styles.header, columnPad]}>
+          <Image
+            source={require("@/assets/alenio-icon.png")}
+            style={styles.brandIcon}
+            resizeMode="contain"
+            accessibilityLabel="Alenio"
+          />
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>Stars</Text>
+          </View>
           <Pressable
             onPress={() => setShowInfo(true)}
             hitSlop={10}
@@ -237,52 +269,42 @@ export default function TeamStarsScreen() {
           >
             <Text style={styles.infoHitLabel}>Info</Text>
           </Pressable>
+          <Pressable
+            onPress={closeSheet}
+            hitSlop={10}
+            style={styles.close}
+            testID="team-stars-close-button"
+            accessibilityRole="button"
+            accessibilityLabel="Close Stars"
+          >
+            <X size={18} color="#0F172A" strokeWidth={2.3} />
+          </Pressable>
         </View>
 
         {canSeeTeam ? (
-          <View style={styles.tabs} accessibilityRole="tablist">
-            <Pressable
-              onPress={() => setMode("mine")}
-              style={[styles.tab, mode === "mine" ? styles.tabActive : null]}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: mode === "mine" }}
-              testID="stars-tab-mine"
-            >
-              <Text
-                style={[
-                  styles.tabLabel,
-                  mode === "mine" ? styles.tabLabelActive : null,
-                ]}
-              >
-                My Stars
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setMode("team")}
-              style={[styles.tab, mode === "team" ? styles.tabActive : null]}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: mode === "team" }}
-              testID="stars-tab-team"
-            >
-              <Text
-                style={[
-                  styles.tabLabel,
-                  mode === "team" ? styles.tabLabelActive : null,
-                ]}
-              >
-                Team
-              </Text>
-            </Pressable>
+          <View style={[styles.tabsWrap, columnPad]}>
+            <SegmentedControl
+              options={[
+                { key: "mine", label: "My Stars", Icon: Star },
+                { key: "team", label: "Team", Icon: Users },
+              ]}
+              value={mode}
+              onChange={setMode}
+              testID="stars-view-toggle"
+              testIDPrefix="stars-tab"
+            />
           </View>
         ) : null}
 
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          ref={scrollRef}
+          contentContainerStyle={[styles.scroll, styles.scrollAlign]}
           refreshControl={
             <RefreshControl refreshing={isPullRefreshing} onRefresh={onRefresh} />
           }
           testID="team-stars-screen"
         >
+          <View style={[styles.scrollColumn, columnPad]}>
           {mode === "mine" ? (
             !detailMemberUserId || (detailQuery.isLoading && !detail) ? (
               <ActivityIndicator color={STARS_GOLD} style={{ marginTop: 40 }} />
@@ -307,21 +329,39 @@ export default function TeamStarsScreen() {
                 </Pressable>
               </View>
             ) : detail && path ? (
-              <View testID="my-stars-page">
-                <StarsPath
+              <View testID="my-stars-page" style={styles.mineStack}>
+                <StarsHeroCard
                   currentStars={path.currentStars}
-                  nextMilestone={path.nextMilestone}
+                  dayStreak={path.dayStreak}
                   filledInSegment={path.filledInSegment}
                   segmentSize={path.segmentSize}
-                  remainingToMilestone={path.remainingToMilestone}
                 />
+                <StarsNextMilestoneRow
+                  title={nextMilestoneTitle}
+                  remaining={path.remainingToMilestone}
+                  onPress={() => {
+                    scrollRef.current?.scrollTo({
+                      y: Math.max(0, journeyActiveY.current - 24),
+                      animated: true,
+                    });
+                  }}
+                />
+                <View
+                  onLayout={(event) => {
+                    journeyActiveY.current = event.nativeEvent.layout.y;
+                  }}
+                >
+                  <StarsJourneyList steps={path.journey} />
+                </View>
                 <Text style={styles.footerNote}>
                   Assigned workspace tasks fill a star. Private tasks do not.
                 </Text>
               </View>
             ) : (
-              <View style={styles.centerState} testID="my-stars-page">
-                <StarsPath currentStars={0} />
+              <View testID="my-stars-page" style={styles.mineStack}>
+                <StarsHeroCard currentStars={0} dayStreak={0} />
+                <StarsNextMilestoneRow title="Getting Started" remaining={5} />
+                <StarsJourneyList steps={buildStarsJourney(0)} />
                 <Text style={styles.footerNote}>
                   Assigned workspace tasks fill a star. Private tasks do not.
                 </Text>
@@ -335,13 +375,25 @@ export default function TeamStarsScreen() {
           ) : summaryQuery.isLoading && !summaryQuery.data ? (
             <ActivityIndicator color={STARS_GOLD} style={{ marginTop: 40 }} />
           ) : (
-            <View testID="team-stars-summary">
-              <Text style={styles.sectionTitle}>Team</Text>
-              <Text style={styles.sectionSub}>
-                {summaryQuery.data?.needsNudgeCount
-                  ? `${summaryQuery.data.needsNudgeCount} need a nudge`
-                  : "Who’s filling stars"}
-              </Text>
+            <View testID="team-stars-summary" style={styles.mineStack}>
+              <StarsTeamHeroCard
+                activeCount={summaryQuery.data?.activeCount ?? 0}
+                eligibleCount={
+                  summaryQuery.data?.eligibleCount ?? roster.length
+                }
+                needsNudgeCount={
+                  summaryQuery.data?.needsNudgeCount ??
+                  roster.filter((row) => memberStars(row) === 0).length
+                }
+              />
+              <View style={styles.teamHeader}>
+                <Text style={styles.journeyHeading}>Team</Text>
+                <Text style={styles.sectionSub}>
+                  {summaryQuery.data?.needsNudgeCount
+                    ? `${summaryQuery.data.needsNudgeCount} need a nudge`
+                    : "Who’s filling stars"}
+                </Text>
+              </View>
               <StarsTeamRoster
                 rows={roster}
                 coaching={summaryQuery.data?.coachingVisible !== false}
@@ -352,6 +404,7 @@ export default function TeamStarsScreen() {
               />
             </View>
           )}
+          </View>
         </ScrollView>
 
         <AlenioBottomSheet
@@ -362,9 +415,12 @@ export default function TeamStarsScreen() {
         >
           <AlenioSheetCard>
             <Text style={styles.infoBody}>
-              Complete an assigned workspace task and a hollow star fills in. Hit
-              milestones at 5, 10, 15, then every 10. Private reminders don’t count.
-              Due dates don’t reset your stars — only uncompleting a task can remove one.
+              Complete an assigned workspace task and a hollow star fills in.
+              Your journey hits Getting Started (5), Finding Your Rhythm (10),
+              Building Momentum (20), and Going Further (50), then continues every
+              50. Keep completing on consecutive calendar days to grow your day
+              streak — missing a day resets the streak, not your stars. Private
+              reminders don’t count. Only uncompleting a task can remove a star.
             </Text>
           </AlenioSheetCard>
         </AlenioBottomSheet>
@@ -377,11 +433,30 @@ export default function TeamStarsScreen() {
         >
           {selectedMember ? (
             <AlenioSheetCard>
-              <StarsPath
-                currentStars={memberStars(selectedMember)}
-                nextMilestone={selectedMember.nextMilestone}
-                remainingToMilestone={selectedMember.remainingToMilestone}
-              />
+              {(() => {
+                const stars = memberStars(selectedMember);
+                const segment = starsMilestoneSegment(stars);
+                const remaining =
+                  selectedMember.remainingToMilestone ??
+                  segment.remainingToMilestone;
+                const next =
+                  selectedMember.nextMilestone ?? segment.nextMilestone;
+                return (
+                  <View style={styles.memberSheet}>
+                    <StarsHeroCard
+                      currentStars={stars}
+                      dayStreak={0}
+                      filledInSegment={segment.filledInSegment}
+                      segmentSize={segment.segmentSize}
+                    />
+                    <StarsNextMilestoneRow
+                      title={starsJourneyTitle(next)}
+                      remaining={remaining}
+                    />
+                    <StarsJourneyList steps={buildStarsJourney(stars)} />
+                  </View>
+                );
+              })()}
             </AlenioSheetCard>
           ) : null}
         </AlenioBottomSheet>
@@ -391,30 +466,32 @@ export default function TeamStarsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
   safe: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: space.md,
+    paddingTop: 10,
     paddingBottom: 8,
     gap: 8,
   },
-  back: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+  brandIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+  },
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   title: {
-    flex: 1,
-    fontSize: 20,
+    ...typography.pageTitle,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: "800",
-    color: "#0F172A",
   },
   infoHit: { paddingHorizontal: 8, paddingVertical: 6 },
   infoHitLabel: {
@@ -422,36 +499,39 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.brand,
   },
-  tabs: {
-    flexDirection: "row",
-    marginHorizontal: space.md,
-    marginBottom: 8,
-    padding: 4,
-    borderRadius: 14,
-    backgroundColor: "#E2E8F0",
-    gap: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 11,
+  close: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F4F8",
   },
-  tabActive: {
-    backgroundColor: "#0F172A",
-  },
-  tabLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#475569",
-  },
-  tabLabelActive: {
-    color: "#FFFFFF",
+  tabsWrap: {
+    marginBottom: 10,
   },
   scroll: {
-    paddingHorizontal: space.md,
     paddingBottom: 40,
+  },
+  scrollAlign: {
+    alignItems: "center",
+  },
+  scrollColumn: {
     gap: 12,
+  },
+  mineStack: {
+    gap: 12,
+  },
+  memberSheet: {
+    gap: 12,
+  },
+  teamHeader: {
+    gap: 2,
+  },
+  journeyHeading: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0F172A",
   },
   sectionTitle: {
     fontSize: 16,
@@ -461,7 +541,6 @@ const styles = StyleSheet.create({
   sectionSub: {
     fontSize: 13,
     color: "#64748B",
-    marginBottom: 8,
   },
   footerNote: {
     marginTop: 16,

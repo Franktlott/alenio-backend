@@ -400,11 +400,9 @@ function RootLayoutNav() {
             options={
               taskDetailAsSheet
                 ? {
-                    presentation: "formSheet",
+                    presentation: "transparentModal",
+                    animation: "fade",
                     headerShown: false,
-                    // The whole task, including notes and completion, not a short peek.
-                    sheetAllowedDetents: [1],
-                    sheetGrabberVisible: true,
                   }
                 : undefined
             }
@@ -413,8 +411,10 @@ function RootLayoutNav() {
           <Stack.Screen
             name="team-momentum"
             options={{
+              presentation: "formSheet",
               headerShown: false,
-              animation: "slide_from_right",
+              sheetAllowedDetents: [0.92],
+              sheetGrabberVisible: true,
             }}
           />
           <Stack.Screen name="workspace" />

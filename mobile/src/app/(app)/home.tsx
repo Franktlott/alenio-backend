@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,19 +11,11 @@ import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
 import { setStatusBarStyle } from "expo-status-bar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  MessageCircle,
-  Trophy,
-  UserMinus,
-  UserPlus,
-} from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AlenioHeaderBrand } from "@/components/AlenioHeaderBrand";
 import { AppHeaderBand } from "@/components/AppHeaderBand";
-import { gradients, palette, tints } from "@/theme";
-import { PanelHeader, tintInk } from "@/components/ui";
-import { cardSurface } from "@/components/home/home-card-styles";
+import { gradients, palette } from "@/theme";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { HomeTodayCard } from "@/components/home/HomeTodayCard";
 import { NoWorkspaceHome } from "@/components/home/NoWorkspaceHome";
@@ -35,8 +26,6 @@ import {
   recentSenecaConversations,
 } from "@/lib/seneca-conversation-presentation";
 import { PANE_GAP, useAdaptiveLayout } from "@/lib/adaptive-layout";
-import { UserAvatar } from "@/components/UserAvatar";
-import { type ActivityApiEvent } from "@/components/activity/types";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { timeOfDayGreeting } from "@/lib/coaching-priorities";
@@ -59,7 +48,6 @@ import {
 } from "@/lib/timezone";
 import { getUSHolidays } from "@/lib/us-federal-holidays";
 import type {
-  ConnectionPerson,
   ConnectionsResponse,
   Conversation,
   HomeTodayResponse,
@@ -92,158 +80,8 @@ function GradientName({ children, style }: { children: string; style: object[] }
   );
 }
 
-/** How far back a waiting update can be. An unread message stays until it is read. */
-const RECENT_ACTIVITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-/** Enough to notice, short enough that Today stays on the screen. */
-const WAITING_ROW_LIMIT = 3;
-const WAITING_KINDS = new Set<HomeUpdate["kind"]>([
-  "message",
-  "mention",
-  "recognition",
-  "workspace_invite",
-]);
-
 /** The gap above the two columns, which is not theirs to fill. */
 const SPLIT_ROW_GAP = 16;
-
-
-type HomeUpdate = {
-  id: string;
-  kind:
-    | "message"
-    | "joined"
-    | "left"
-    | "recognition"
-    | "connection_sent"
-    | "connection_received"
-    | "connection_accepted"
-    | "workspace_invite"
-    | "mention";
-  title: string;
-  subtitle: string;
-  timestamp: string;
-  person: { id: string; name: string; image: string | null } | null;
-  conversation?: Conversation;
-  /** Where the row opens, for updates that are not a DM or a connection. */
-  target?:
-    | { kind: "person"; userId: string }
-    | { kind: "conversation"; conversationId: string }
-    | { kind: "chat" };
-};
-
-/**
- * The sentence the backend wrote when the event happened, which already names
- * the person. Older rows predate the separate actorName field, so this keeps
- * them from reading "Someone".
- */
-function recordedSentence(activity: ActivityApiEvent): string | null {
-  const content = activity.metadata?.content;
-  return typeof content === "string" && content.trim() ? content.trim() : null;
-}
-
-function HomeUpdateRow({
-  update,
-  index,
-}: {
-  update: HomeUpdate;
-  index: number;
-}) {
-  const UpdateIcon =
-    update.kind === "joined" || update.kind === "workspace_invite"
-      ? UserPlus
-      : update.kind === "left"
-        ? UserMinus
-        : update.kind === "connection_sent" ||
-            update.kind === "connection_received" ||
-            update.kind === "connection_accepted"
-          ? UserPlus
-        : update.kind === "recognition"
-          ? Trophy
-          : MessageCircle;
-  const canOpen =
-    update.kind === "recognition" ||
-    update.kind === "connection_sent" ||
-    update.kind === "connection_received" ||
-    !!update.target ||
-    (update.kind === "message" && !!update.conversation);
-
-  return (
-    <>
-      {index > 0 ? <View style={styles.listDivider} /> : null}
-      <Pressable
-        disabled={!canOpen}
-        onPress={() => {
-          if (update.kind === "recognition") {
-            router.push("/recognition-hub");
-            return;
-          }
-          if (
-            update.kind === "connection_sent" ||
-            update.kind === "connection_received"
-          ) {
-            router.push("/(app)/team");
-            return;
-          }
-          if (update.target) {
-            if (update.target.kind === "person") {
-              router.push({
-                pathname: "/person",
-                params: { userId: update.target.userId },
-              });
-            } else if (update.target.kind === "conversation") {
-              router.push({
-                pathname: "/dm-chat",
-                params: { conversationId: update.target.conversationId },
-              });
-            } else {
-              router.push("/(app)/chat");
-            }
-            return;
-          }
-          if (!update.conversation) return;
-          const conversation = update.conversation;
-          router.push({
-            pathname: "/dm-chat",
-            params: {
-              conversationId: conversation.id,
-              recipientName: conversation.isGroup
-                ? conversation.name || "Group chat"
-                : conversation.recipient?.name || "Direct Message",
-              recipientImage: conversation.isGroup
-                ? conversation.image || ""
-                : conversation.recipient?.image || "",
-              isGroup: String(conversation.isGroup),
-            },
-          });
-        }}
-        style={styles.happeningRow}
-        accessibilityRole={canOpen ? "button" : "text"}
-      >
-        {update.person ? (
-          <UserAvatar
-            user={update.person}
-            size={40}
-            radius={20}
-            backgroundColor={tints.lavender.bg}
-            resetKey={update.id}
-          />
-        ) : (
-          <View style={styles.happeningIcon}>
-            <UpdateIcon size={16} color={tints.lavender.fg} strokeWidth={2.2} />
-          </View>
-        )}
-        <View style={styles.happeningCopy}>
-          <Text style={styles.happeningRowTitle} numberOfLines={1}>
-            {update.title}
-          </Text>
-          <Text style={styles.happeningRowText} numberOfLines={1}>
-            {update.subtitle}
-          </Text>
-        </View>
-      </Pressable>
-    </>
-  );
-}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -413,7 +251,6 @@ export default function HomeScreen() {
       await Promise.all(
         [
           "home-today",
-          "account-activity",
           "connections",
           "teams",
           "dms",
@@ -450,308 +287,6 @@ export default function HomeScreen() {
       ...items,
     ];
   }, [todayData]);
-  const { data: accountActivity = [] } = useQuery({
-    queryKey: ["account-activity", currentUserId],
-    queryFn: () => api.get<ActivityApiEvent[]>("/api/activity"),
-    enabled: !!currentUserId,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
-  });
-  /**
-   * Events recorded before actorName and actorImage existed still carry the
-   * other person's id, so their current name and photo come from the network
-   * the Home screen has already loaded.
-   */
-  const connectionsByUserId = useMemo(() => {
-    const byId = new Map<string, ConnectionPerson>();
-    for (const entry of connections?.accepted ?? []) {
-      byId.set(entry.person.id, entry.person);
-    }
-    return byId;
-  }, [connections]);
-  const homeUpdates = useMemo(() => {
-    const updates: HomeUpdate[] = [];
-    const connectionRequestBuckets = new Map<
-      string,
-      {
-        direction: "sent" | "received";
-        count: number;
-        names: string[];
-        timestamp: string;
-        person: HomeUpdate["person"];
-      }
-    >();
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
-    for (const conversation of conversations) {
-      const message = conversation.lastMessage;
-      if (
-        !message ||
-        message.sender.id === currentUserId ||
-        getDmUnreadCount(dmUnreadCounts ?? {}, conversation.id) <= 0
-      ) {
-        continue;
-      }
-      const senderImage =
-        conversation.participants?.find(
-          (participant) => participant.id === message.sender.id,
-        )?.image ??
-        (conversation.recipient?.id === message.sender.id
-          ? conversation.recipient.image
-          : null) ??
-        null;
-      updates.push({
-        id: `message-${conversation.id}-${message.id}`,
-        kind: "message",
-        title: message.sender.name || "Someone",
-        subtitle: "Sent you a message",
-        timestamp: message.createdAt,
-        person: {
-          id: message.sender.id,
-          name: message.sender.name || "Someone",
-          image: senderImage,
-        },
-        conversation,
-      });
-    }
-
-    for (const activity of accountActivity) {
-      if (new Date(activity.createdAt).getTime() < sevenDaysAgo) {
-        continue;
-      }
-      if (
-        activity.type === "connection_request_sent" ||
-        activity.type === "connection_request_received"
-      ) {
-        const direction =
-          activity.type === "connection_request_sent" ? "sent" : "received";
-        const hourBucket = Math.floor(
-          new Date(activity.createdAt).getTime() / (60 * 60 * 1000),
-        );
-        const bucketKey = `${direction}-${hourBucket}`;
-        const actorUserId = activity.metadata?.actorUserId;
-        const known = actorUserId
-          ? connectionsByUserId.get(actorUserId)
-          : undefined;
-        const actorName =
-          activity.metadata?.actorName?.trim() ||
-          known?.name?.trim() ||
-          "Someone";
-        const existing = connectionRequestBuckets.get(bucketKey);
-        if (existing) {
-          existing.count += 1;
-          if (!existing.names.includes(actorName)) {
-            existing.names.push(actorName);
-          }
-        } else {
-          connectionRequestBuckets.set(bucketKey, {
-            direction,
-            count: 1,
-            names: [actorName],
-            timestamp: activity.createdAt,
-            person: {
-              id: actorUserId || activity.id,
-              name: actorName,
-              image: activity.metadata?.actorImage ?? known?.image ?? null,
-            },
-          });
-        }
-        continue;
-      }
-
-      const teamName = activity.team?.name || "a workspace";
-      if (
-        (activity.type === "member_joined" ||
-          activity.type === "member_removed") &&
-        activity.user?.id === currentUserId
-      ) {
-        const joined = activity.type === "member_joined";
-        updates.push({
-          id: `activity-${activity.id}`,
-          kind: joined ? "joined" : "left",
-          title: joined ? `You joined ${teamName}` : `You left ${teamName}`,
-          subtitle: joined
-            ? "Your workspace is ready"
-            : "Workspace membership ended",
-          timestamp: activity.createdAt,
-          person: activity.user,
-        });
-      } else if (activity.type === "connection_accepted") {
-        const actorUserId = activity.metadata?.actorUserId;
-        const known = actorUserId
-          ? connectionsByUserId.get(actorUserId)
-          : undefined;
-        const actorName =
-          activity.metadata?.actorName?.trim() || known?.name?.trim();
-        const actorImage =
-          activity.metadata?.actorImage ?? known?.image ?? null;
-        updates.push({
-          id: `activity-${activity.id}`,
-          kind: "connection_accepted",
-          title: actorName
-            ? `${actorName} connected with you`
-            : recordedSentence(activity) || "You have a new connection",
-          subtitle: actorUserId
-            ? "Tap to view their profile"
-            : "Connection accepted",
-          timestamp: activity.createdAt,
-          person: actorUserId
-            ? {
-                id: actorUserId,
-                name: actorName || "Connection",
-                image: actorImage,
-              }
-            : null,
-          target: actorUserId
-            ? { kind: "person", userId: actorUserId }
-            : undefined,
-        });
-      } else if (activity.type === "workspace_invitation_received") {
-        const inviterId = activity.metadata?.actorUserId;
-        const knownInviter = inviterId
-          ? connectionsByUserId.get(inviterId)
-          : undefined;
-        const actorName =
-          activity.metadata?.actorName?.trim() || knownInviter?.name?.trim();
-        const invitedTo = activity.metadata?.teamName?.trim() || "a workspace";
-        // Accepting happens through the emailed link, so this row only informs.
-        updates.push({
-          id: `activity-${activity.id}`,
-          kind: "workspace_invite",
-          title: actorName || "Someone",
-          subtitle: `Invited you to ${invitedTo}`,
-          timestamp: activity.createdAt,
-          person: inviterId
-            ? {
-                id: inviterId,
-                name: actorName || "Teammate",
-                image:
-                  activity.metadata?.actorImage ?? knownInviter?.image ?? null,
-              }
-            : null,
-        });
-      } else if (activity.type === "mention_in_conversation") {
-        const mentionerId = activity.metadata?.actorUserId;
-        const knownMentioner = mentionerId
-          ? connectionsByUserId.get(mentionerId)
-          : undefined;
-        const actorName =
-          activity.metadata?.actorName?.trim() || knownMentioner?.name?.trim();
-        const conversationId = activity.metadata?.conversationId;
-        updates.push({
-          id: `activity-${activity.id}`,
-          kind: "mention",
-          title: actorName || "Someone",
-          subtitle: "Mentioned you",
-          timestamp: activity.createdAt,
-          person: mentionerId
-            ? {
-                id: mentionerId,
-                name: actorName || "Teammate",
-                image:
-                  activity.metadata?.actorImage ?? knownMentioner?.image ?? null,
-              }
-            : null,
-          target: conversationId
-            ? { kind: "conversation", conversationId }
-            : { kind: "chat" },
-        });
-      } else if (
-        activity.type === "celebration" &&
-        activity.metadata?.targetUserId === currentUserId
-      ) {
-        updates.push({
-          id: `activity-${activity.id}`,
-          kind: "recognition",
-          title: activity.user?.name || "Someone",
-          subtitle: "Recognized you",
-          timestamp: activity.createdAt,
-          person: activity.user,
-        });
-      }
-    }
-
-    for (const [bucketKey, bucket] of connectionRequestBuckets) {
-      const multiple = bucket.count > 1;
-      const names =
-        bucket.names.length > 1
-          ? `${bucket.names[0]} and ${bucket.names.length - 1} other${
-              bucket.names.length > 2 ? "s" : ""
-            }`
-          : bucket.names[0] || "Someone";
-      updates.push({
-        id: `connection-request-${bucketKey}`,
-        kind:
-          bucket.direction === "sent"
-            ? "connection_sent"
-            : "connection_received",
-        title:
-          bucket.direction === "sent"
-            ? multiple
-              ? `${bucket.count} connection requests sent`
-              : `Connection request sent to ${names}`
-            : names,
-        subtitle:
-          bucket.direction === "sent"
-            ? multiple
-              ? names
-              : "Waiting for a response"
-            : multiple
-              ? "Sent you connection requests"
-              : "Sent you a connection request",
-        timestamp: bucket.timestamp,
-        person: bucket.person,
-      });
-    }
-
-    /** A day's worth only: Home reports what is new, not what has happened. */
-    const cutoff = Date.now() - RECENT_ACTIVITY_WINDOW_MS;
-
-    return updates
-      .filter((update) => WAITING_KINDS.has(update.kind))
-      .filter(
-        (update) =>
-          update.kind === "message" ||
-          new Date(update.timestamp).getTime() >= cutoff,
-      )
-      .sort(
-        (left, right) =>
-          new Date(right.timestamp).getTime() -
-          new Date(left.timestamp).getTime(),
-      )
-      .slice(0, WAITING_ROW_LIMIT);
-  }, [
-    accountActivity,
-    connectionsByUserId,
-    conversations,
-    currentUserId,
-    dmUnreadCounts,
-  ]);
-
-  const waitingUpdates =
-    !teamsPending && teams.length === 0
-      ? homeUpdates.filter((update) => update.kind !== "connection_received")
-      : homeUpdates;
-  const waitingBlock =
-    waitingUpdates.length > 0 ? (
-      <View style={styles.waitingCard} testID="home-waiting-list">
-        <PanelHeader
-          eyebrow="Waiting for you"
-          title={
-            waitingUpdates.length === 1
-              ? "1 new update"
-              : `${waitingUpdates.length} new updates`
-          }
-          tint="peach"
-          icon={<MessageCircle size={16} color={tintInk("peach")} strokeWidth={2.2} />}
-          style={{ marginBottom: 2 }}
-        />
-        {waitingUpdates.map((update, index) => (
-          <HomeUpdateRow key={update.id} update={update} index={index} />
-        ))}
-      </View>
-    ) : null;
-
   const unreadMessages = conversations.reduce(
     (total, conversation) =>
       total + Math.max(0, getDmUnreadCount(dmUnreadCounts ?? {}, conversation.id)),
@@ -927,7 +462,6 @@ export default function HomeScreen() {
               hasWorkspace={teams.length > 0}
               wide={splitHome}
               columnWidth={columnWidth}
-              waitingCard={waitingBlock}
               todayCard={
                 teams.length > 0 ? (
                   <HomeTodayCard
@@ -1073,12 +607,6 @@ const styles = StyleSheet.create({
   chipValue: {
     fontWeight: "800",
     color: "#FFFFFF",
-  },
-  waitingCard: {
-    ...cardSurface,
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 4,
   },
   getStartedCard: {
     marginTop: 12,
@@ -1257,12 +785,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#6d28d9",
   },
-  /** Clears the avatar, so the rule sits under the name. */
-  listDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 54,
-    backgroundColor: palette.rowDivider,
-  },
   todayInfoContent: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1317,37 +839,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: "700",
     color: "#6D5EF8",
-  },
-  happeningRow: {
-    minHeight: 64,
-    paddingVertical: 10,
-    paddingHorizontal: 2,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  happeningIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F2EEFF",
-  },
-  happeningCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  happeningRowTitle: {
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "700",
-    color: "#111A2B",
-  },
-  happeningRowText: {
-    marginTop: 2,
-    fontSize: 14,
-    lineHeight: 18,
-    color: "#667085",
   },
 });

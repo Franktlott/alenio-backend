@@ -25,6 +25,10 @@ const HomeInsightEditorPage = lazyPage(
   () => import("./routes/admin/HomeInsightEditorPage"),
   "HomeInsightEditorPage",
 );
+const AdminFeedPostsPage = lazyPage(
+  () => import("./routes/admin/AdminFeedPostsPage"),
+  "AdminFeedPostsPage",
+);
 const HelpCenterPage = lazyPage(() => import("./routes/HelpCenterPage"), "HelpCenterPage");
 const HelpArticlePage = lazyPage(() => import("./routes/HelpArticlePage"), "HelpArticlePage");
 const AdminPage = lazyPage(() => import("./routes/AdminPage"), "AdminPage");
@@ -229,6 +233,7 @@ export default function App() {
           <Route path="/admin/home-insights" element={<HomeInsightsListPage />} />
           <Route path="/admin/home-insights/new" element={<HomeInsightEditorPage />} />
           <Route path="/admin/home-insights/:insightId" element={<HomeInsightEditorPage />} />
+          <Route path="/admin/feed-posts" element={<AdminFeedPostsPage />} />
           <Route path="/settings" element={<ProfilePage />} />
           <Route path="/settings/ai" element={<SettingsAiHubPage />} />
           <Route path="/settings/ai/seneca-studio" element={<Navigate to="/admin/seneca" replace />} />

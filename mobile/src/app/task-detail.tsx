@@ -97,12 +97,11 @@ import {
 import { StreakCelebrationModal } from "@/components/StreakCelebrationModal";
 import {
   Badge,
-  Button,
   PriorityBadge,
   StatusBadge,
   type StatusKind,
 } from "@/components/ui";
-import { elevation, palette, tints } from "@/theme";
+import { colors, palette, tints } from "@/theme";
 
 function sameCalendarDay(a: Date | null, b: Date | null): boolean {
   if (!a && !b) return true;
@@ -959,190 +958,143 @@ export function TaskDetail({
     );
   }
 
-  return (
-    <SafeAreaView
-      edges={embedded ? [] : ["top"]}
-      testID="task-detail-screen"
-      style={{ flex: 1, backgroundColor: palette.page }}
-      onLayout={(event) => setPaneWidth(event.nativeEvent.layout.width)}
-    >
-      {/* Header */}
-      <View
-        style={{
-          paddingLeft:
-            COLUMN_PADDING +
-            columnGutter +
-            (iconRailEdge === "left" ? cameraPad : 0),
-          paddingRight:
-            COLUMN_PADDING +
-            columnGutter +
-            (iconRailEdge === "right" ? cameraPad : 0),
-          paddingTop: 8,
-          paddingBottom: 10,
-          flexDirection: "row",
-          alignItems: "center",
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: palette.cardBorder,
-          backgroundColor: palette.page,
-        }}
-      >
-        {isEditMode ? (
-          <TouchableOpacity
-            onPress={cancelEdit}
-            hitSlop={8}
-            style={{
-              minWidth: 64,
-              height: 36,
-              justifyContent: "center",
-            }}
-            testID="cancel-edit-button"
-            accessibilityLabel="Cancel editing"
-          >
-            <Text
-              style={{ color: "#64748B", fontSize: 16, fontWeight: "600" }}
-            >
-              Cancel
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            onPress={close}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#FFFFFF",
-              borderWidth: 1,
-              borderColor: palette.cardBorder,
-            }}
-            testID="back-button"
-            accessibilityLabel={embedded ? "Close task" : "Back"}
-          >
-            {/* A pane is dismissed, not navigated back from. */}
-            {embedded ? (
-              <X size={19} color={palette.ink} strokeWidth={2.4} />
-            ) : (
-              <ArrowLeft size={20} color={palette.ink} strokeWidth={2.2} />
-            )}
-          </TouchableOpacity>
-        )}
-        <Text
-          style={{
-            flex: 1,
-            marginHorizontal: 12,
-            color: palette.ink,
-            fontSize: 17,
-            fontWeight: "700",
-            letterSpacing: -0.2,
-            textAlign: "center",
-          }}
-          numberOfLines={1}
-        >
-          {isEditMode
-            ? "Edit task"
-            : showFocusedFeedbackTask
-              ? "Task details"
-              : task.title}
-        </Text>
-        <View
-          style={{
-            minWidth: 64,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "flex-end",
-          }}
-        >
-          {canEdit && isEditMode ? (
-            <TouchableOpacity
-              onPress={requestSaveEdit}
-              disabled={updateMutation.isPending}
-              hitSlop={8}
-              style={{
-                minHeight: 36,
-                justifyContent: "center",
-                alignItems: "flex-end",
-              }}
-              testID="save-edit-button"
-            >
-              {updateMutation.isPending ? (
-                <ActivityIndicator size="small" color={palette.violet} />
-              ) : (
-                <Text
-                  style={{
-                    color: palette.violet,
-                    fontSize: 16,
-                    fontWeight: "700",
-                  }}
-                >
-                  Save
-                </Text>
-              )}
-            </TouchableOpacity>
-          ) : null}
-          {canEdit && !isEditMode && !isFeedbackTask ? (
-            <TouchableOpacity
-              onPress={() => {
-                if (isReminder) {
-                  setShowReminderActions(true);
-                  return;
-                }
-                beginEdit();
-              }}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: tints.lavender.bg,
-              }}
-              testID={
-                isReminder ? "reminder-options-button" : "enter-edit-button"
-              }
-            >
-              {isReminder ? (
-                <MoreHorizontal
-                  size={20}
-                  color={tints.lavender.fg}
-                  strokeWidth={2.1}
-                />
-              ) : (
-                <Pencil size={17} color={tints.lavender.fg} strokeWidth={2.1} />
-              )}
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
+  const sheetTitle = isEditMode
+    ? "Edit task"
+    : showFocusedFeedbackTask
+      ? "Task details"
+      : task.title;
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-        style={{ flex: 1, backgroundColor: palette.page }}
-        contentContainerStyle={[
-          {
-            paddingHorizontal: COLUMN_PADDING + columnGutter,
-            backgroundColor: palette.page,
-            flexGrow: 1,
-          },
-          showFocusedFeedbackTask
-            ? isCompleted
-              ? { justifyContent: "center", paddingVertical: 32 }
-              : { paddingBottom: 32 }
-            : { paddingBottom: 24 },
-        ]}
+  const sheetSubtitle = (() => {
+    if (isEditMode) return "Make your changes, then save";
+    if (isReminder) return "Private reminder";
+    if (isCompleted) return "Completed";
+    if (displayedDueOverdue) return "Overdue";
+    if (task.priority === "urgent" || task.priority === "high") {
+      return `${task.priority.charAt(0).toUpperCase()}${task.priority.slice(1)} priority`;
+    }
+    if (displayedDueToday) return "Due today";
+    return undefined;
+  })();
+
+  const headerRight =
+    isEditMode ? (
+      <TouchableOpacity
+        onPress={cancelEdit}
+        hitSlop={8}
+        style={{ paddingHorizontal: 4, paddingVertical: 6 }}
+        testID="cancel-edit-button"
+        accessibilityLabel="Cancel editing"
       >
+        <Text style={{ color: "#64748B", fontSize: 14, fontWeight: "600" }}>
+          Cancel
+        </Text>
+      </TouchableOpacity>
+    ) : canEdit && !isFeedbackTask ? (
+      <TouchableOpacity
+        onPress={() => {
+          if (isReminder) {
+            setShowReminderActions(true);
+            return;
+          }
+          beginEdit();
+        }}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.brandSoft,
+        }}
+        testID={isReminder ? "reminder-options-button" : "enter-edit-button"}
+      >
+        {isReminder ? (
+          <MoreHorizontal
+            size={18}
+            color={colors.brand}
+            strokeWidth={2.1}
+          />
+        ) : (
+          <Pencil size={15} color={colors.brand} strokeWidth={2.1} />
+        )}
+      </TouchableOpacity>
+    ) : null;
+
+  const footerNode = !showFocusedFeedbackTask && isEditMode ? (
+    <View style={{ width: "100%", gap: 8 }}>
+      <TouchableOpacity
+        onPress={requestSaveEdit}
+        disabled={updateMutation.isPending}
+        style={[
+          alenioSheetStyles.primaryButton,
+          { backgroundColor: colors.brand },
+          updateMutation.isPending ? alenioSheetStyles.primaryButtonDisabled : null,
+        ]}
+        testID="save-edit-button"
+        accessibilityRole="button"
+      >
+        {updateMutation.isPending ? (
+          <ActivityIndicator color="#FFFFFF" />
+        ) : (
+          <Text style={alenioSheetStyles.primaryButtonText}>Save changes</Text>
+        )}
+      </TouchableOpacity>
+      {canDeleteTask ? (
+        <TouchableOpacity
+          onPress={requestDelete}
+          disabled={deleteMutation.isPending}
+          hitSlop={8}
+          style={alenioSheetStyles.cancelButton}
+          testID="delete-button"
+        >
+          {deleteMutation.isPending ? (
+            <ActivityIndicator size="small" color="#EF4444" />
+          ) : (
+            <Text style={[alenioSheetStyles.cancelButtonText, { color: "#EF4444" }]}>
+              Delete task
+            </Text>
+          )}
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  ) : !showFocusedFeedbackTask && canComplete && access.canWrite ? (
+    <TouchableOpacity
+      onPress={handleMarkComplete}
+      disabled={updateMutation.isPending}
+      style={[
+        alenioSheetStyles.primaryButton,
+        {
+          backgroundColor: colors.brand,
+          flexDirection: "row",
+          gap: 8,
+        },
+        updateMutation.isPending ? alenioSheetStyles.primaryButtonDisabled : null,
+      ]}
+      testID="mark-complete-button"
+      accessibilityRole="button"
+    >
+      {updateMutation.isPending ? (
+        <ActivityIndicator color="#FFFFFF" />
+      ) : (
+        <>
+          <Check size={17} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={alenioSheetStyles.primaryButtonText}>Mark complete</Text>
+        </>
+      )}
+    </TouchableOpacity>
+  ) : undefined;
+
+  const body = (
+    <>
         {!showFocusedFeedbackTask && isReminder ? (
           <Text
             style={{
               marginTop: 18,
               marginBottom: 7,
               fontSize: 10,
-              fontWeight: "800",
-              color: palette.violet,
-              letterSpacing: 0.55,
+              fontWeight: "700",
+              color: colors.brand,
+              letterSpacing: 0.45,
             }}
           >
             REMINDER
@@ -1160,7 +1112,7 @@ export function TaskDetail({
                 fontWeight: "700",
                 color: palette.ink,
                 borderBottomWidth: 1,
-                borderBottomColor: palette.violet,
+                borderBottomColor: colors.brand,
                 paddingBottom: 4,
               }}
               placeholder="Task title"
@@ -1397,280 +1349,223 @@ export function TaskDetail({
         ) : null}
 
         {!showFocusedFeedbackTask ? (
-          <View
-            style={[
-              elevation.card,
-              {
-                marginBottom: 14,
-                borderRadius: 18,
-                overflow: "hidden",
-                paddingVertical: 4,
-              },
-            ]}
-            testID="task-timeline-card"
-          >
-            <TouchableOpacity
-              disabled={!isEditMode}
-              onPress={() => setShowDatePicker(true)}
-              activeOpacity={isEditMode ? 0.65 : 1}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                gap: 10,
-              }}
-              testID="edit-due-date-button"
+          <View style={{ marginBottom: 14 }} testID="task-timeline-card">
+            <AlenioSheetCard
+              tint="slate"
+              style={{ gap: 0, paddingVertical: 4, paddingHorizontal: 0 }}
             >
-              <View
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 11,
-                  backgroundColor: displayedDueOverdue
-                    ? "#FEF2F2"
-                    : displayedDueToday
-                      ? tints.peach.bg
-                      : tints.lavender.bg,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+              <TouchableOpacity
+                disabled={!isEditMode}
+                onPress={() => setShowDatePicker(true)}
+                activeOpacity={isEditMode ? 0.65 : 1}
+                style={[
+                  alenioSheetStyles.optionRow,
+                  {
+                    paddingHorizontal: 12,
+                    paddingVertical: 12,
+                  },
+                ]}
+                testID="edit-due-date-button"
               >
-                <Clock3
-                  size={17}
-                  color={
-                    displayedDueOverdue
-                      ? "#EF4444"
-                      : displayedDueToday
-                        ? tints.peach.fg
-                        : tints.lavender.fg
-                  }
-                  strokeWidth={2.2}
-                />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
+                <View
                   style={{
-                    fontSize: 10,
-                    fontWeight: "800",
-                    color: palette.inkMuted,
-                    letterSpacing: 0.6,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 9,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.brandSoft,
                   }}
                 >
-                  DUE
-                </Text>
-                <Text
-                  style={{
-                    marginTop: 2,
-                    fontSize: 14,
-                    fontWeight: "700",
-                    color: displayedDueOverdue
-                      ? "#DC2626"
+                  <Clock3
+                    size={15}
+                    color={displayedDueOverdue ? colors.error : colors.brand}
+                    strokeWidth={2.1}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={[
+                      alenioSheetStyles.optionTitle,
+                      displayedDueOverdue ? { color: colors.error } : null,
+                    ]}
+                  >
+                    {displayedDueOverdue
+                      ? "Overdue"
                       : displayedDueToday
-                        ? tints.peach.fg
-                        : displayedDueDate
-                          ? palette.ink
-                          : palette.inkMuted,
-                  }}
-                  numberOfLines={1}
-                >
-                  {displayedDueOverdue
-                    ? "Overdue"
-                    : displayedDueToday
-                      ? "Today"
-                      : displayedDueLabel}
-                </Text>
-                {displayedDueOverdue && !displayedDueToday ? (
-                  <Text
-                    style={{ marginTop: 2, fontSize: 11, color: "#DC2626" }}
-                  >
-                    {displayedDueClock
-                      ? `${displayedDueLabel} · ${displayedDueClock}`
-                      : displayedDueLabel}
+                        ? "Due today"
+                        : "Due"}
                   </Text>
-                ) : displayedDueClock ? (
                   <Text
-                    style={{
-                      marginTop: 2,
-                      fontSize: 11,
-                      color: displayedDueOverdue
-                        ? "#DC2626"
-                        : palette.inkMuted,
-                    }}
+                    style={alenioSheetStyles.optionSubtitle}
+                    numberOfLines={2}
                   >
-                    {displayedDueClock}
+                    {displayedDueOverdue && !displayedDueToday
+                      ? displayedDueClock
+                        ? `${displayedDueLabel} · ${displayedDueClock}`
+                        : displayedDueLabel
+                      : displayedDueClock
+                        ? `${displayedDueLabel} · ${displayedDueClock}`
+                        : isReminder && !displayedDueDate
+                          ? "Anytime"
+                          : displayedDueLabel}
                   </Text>
-                ) : isReminder ? (
-                  <Text
-                    style={{
-                      marginTop: 2,
-                      fontSize: 11,
-                      color: palette.inkMuted,
-                    }}
-                  >
-                    Anytime
-                  </Text>
+                </View>
+                {isEditMode ? (
+                  <ChevronRight size={15} color={colors.textMuted} />
                 ) : null}
+              </TouchableOpacity>
+
+              <View
+                style={{
+                  height: StyleSheet.hairlineWidth,
+                  backgroundColor: palette.rowDivider,
+                  marginHorizontal: 12,
+                }}
+              />
+
+              <View
+                style={[
+                  alenioSheetStyles.optionRow,
+                  {
+                    paddingHorizontal: 12,
+                    paddingVertical: 12,
+                  },
+                ]}
+              >
+                <View
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 9,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.brandSoft,
+                  }}
+                >
+                  <CalendarDays
+                    size={15}
+                    color={colors.brand}
+                    strokeWidth={2.1}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={alenioSheetStyles.optionTitle}>Created</Text>
+                  <Text style={alenioSheetStyles.optionSubtitle} numberOfLines={1}>
+                    {new Date(task.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </Text>
+                </View>
               </View>
+
               {isEditMode ? (
-                <ChevronRight size={15} color={palette.lilac} />
-              ) : null}
-            </TouchableOpacity>
-
-            <View
-              style={{
-                height: StyleSheet.hairlineWidth,
-                backgroundColor: palette.rowDivider,
-                marginHorizontal: 14,
-              }}
-            />
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-                gap: 10,
-              }}
-            >
-              <View
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 11,
-                  backgroundColor: tints.lavender.bg,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <CalendarDays
-                  size={17}
-                  color={tints.lavender.fg}
-                  strokeWidth={2.2}
-                />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
+                <View
                   style={{
-                    fontSize: 10,
-                    fontWeight: "800",
-                    color: palette.inkMuted,
-                    letterSpacing: 0.6,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    borderTopColor: palette.rowDivider,
                   }}
                 >
-                  CREATED
-                </Text>
-                <Text
-                  style={{
-                    marginTop: 2,
-                    fontSize: 14,
-                    fontWeight: "700",
-                    color: palette.ink,
-                  }}
-                  numberOfLines={1}
-                >
-                  {new Date(task.createdAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </Text>
-              </View>
-            </View>
-
-            {isEditMode ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  borderTopWidth: StyleSheet.hairlineWidth,
-                  borderTopColor: palette.rowDivider,
-                }}
-              >
-                <TouchableOpacity
-                  onPress={() => {
-                    if (!dueHasTime) {
-                      setDueHasTime(true);
-                      setDraftDueDate((current) => suggestedDueClock(current ?? new Date()));
-                    }
-                    setShowTimePicker(true);
-                  }}
-                  style={{ flex: 1 }}
-                  testID="edit-due-time-button"
-                >
-                  <Text style={{ fontSize: 10, fontWeight: "600", color: "#94A3B8" }}>
-                    Due time
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 2,
-                      fontSize: 13,
-                      fontWeight: "700",
-                      color: dueHasTime ? "#0F172A" : "#94A3B8",
-                    }}
-                  >
-                    {dueHasTime && displayedDueClock ? displayedDueClock : "Add a time"}
-                  </Text>
-                </TouchableOpacity>
-                {dueHasTime ? (
                   <TouchableOpacity
                     onPress={() => {
-                      setDueHasTime(false);
-                      setShowTimePicker(false);
-                      setDraftDueDate((current) => {
-                        if (!current) return current;
-                        const next = new Date(current);
-                        next.setHours(23, 59, 59, 0);
-                        return next;
-                      });
+                      if (!dueHasTime) {
+                        setDueHasTime(true);
+                        setDraftDueDate((current) =>
+                          suggestedDueClock(current ?? new Date()),
+                        );
+                      }
+                      setShowTimePicker(true);
                     }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ flex: 1 }}
+                    testID="edit-due-time-button"
                   >
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#EF4444" }}>
-                      Clear
+                    <Text
+                      style={{ fontSize: 10, fontWeight: "600", color: "#94A3B8" }}
+                    >
+                      Due time
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 2,
+                        fontSize: 13,
+                        fontWeight: "700",
+                        color: dueHasTime ? "#0F172A" : "#94A3B8",
+                      }}
+                    >
+                      {dueHasTime && displayedDueClock
+                        ? displayedDueClock
+                        : "Add a time"}
                     </Text>
                   </TouchableOpacity>
-                ) : null}
-              </View>
-            ) : null}
+                  {dueHasTime ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setDueHasTime(false);
+                        setShowTimePicker(false);
+                        setDraftDueDate((current) => {
+                          if (!current) return current;
+                          const next = new Date(current);
+                          next.setHours(23, 59, 59, 0);
+                          return next;
+                        });
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "600",
+                          color: "#EF4444",
+                        }}
+                      >
+                        Clear
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ) : null}
 
-            {task.completedAt ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 7,
-                  paddingHorizontal: 14,
-                  paddingVertical: 9,
-                  borderTopWidth: StyleSheet.hairlineWidth,
-                  borderTopColor: palette.rowDivider,
-                  backgroundColor: tints.mint.bg,
-                }}
-              >
-                <CheckCircle2 size={14} color="#059669" strokeWidth={2.4} />
-                <Text
+              {task.completedAt ? (
+                <View
                   style={{
-                    flex: 1,
-                    fontSize: 11,
-                    fontWeight: "600",
-                    color: "#047857",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 7,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    borderTopColor: palette.rowDivider,
+                    backgroundColor: tints.mint.bg,
                   }}
                 >
-                  Completed{" "}
-                  {new Date(task.completedAt).toLocaleString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </Text>
-              </View>
-            ) : null}
+                  <CheckCircle2 size={14} color="#059669" strokeWidth={2.4} />
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontSize: 11,
+                      fontWeight: "600",
+                      color: "#047857",
+                    }}
+                  >
+                    Completed{" "}
+                    {new Date(task.completedAt).toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+                </View>
+              ) : null}
+            </AlenioSheetCard>
           </View>
         ) : null}
 
@@ -2235,9 +2130,9 @@ export function TaskDetail({
                     <Text
                       style={{
                         fontSize: 11,
-                        fontWeight: "800",
+                        fontWeight: "700",
                         color: palette.inkSecondary,
-                        letterSpacing: 0.7,
+                        letterSpacing: 0.5,
                         textTransform: "uppercase",
                       }}
                     >
@@ -2247,11 +2142,9 @@ export function TaskDetail({
                         : ""}
                     </Text>
                   </View>
-                  <View
-                    style={[
-                      elevation.card,
-                      { borderRadius: 16, paddingHorizontal: 8, paddingVertical: 4 },
-                    ]}
+                  <AlenioSheetCard
+                    tint="slate"
+                    style={{ paddingHorizontal: 8, paddingVertical: 4, gap: 0 }}
                   >
                   {subtasks.length > 0 && (
                     <View style={{ gap: 2 }}>
@@ -2402,22 +2295,22 @@ export function TaskDetail({
                         {createSubtaskMutation.isPending ? (
                           <ActivityIndicator
                             size="small"
-                            color={palette.violet}
+                            color={colors.brand}
                           />
                         ) : (
                           <Plus
                             size={18}
                             color={
                               newSubtaskTitle.trim()
-                                ? palette.violet
-                                : palette.lilac
+                                ? colors.brand
+                                : colors.textMuted
                             }
                           />
                         )}
                       </TouchableOpacity>
                     </View>
                   ) : null}
-                  </View>
+                  </AlenioSheetCard>
                 </View>
               );
             })()
@@ -2438,9 +2331,9 @@ export function TaskDetail({
               <Text
                 style={{
                   fontSize: 11,
-                  fontWeight: "800",
+                  fontWeight: "700",
                   color: palette.inkSecondary,
-                  letterSpacing: 0.7,
+                  letterSpacing: 0.5,
                   textTransform: "uppercase",
                 }}
               >
@@ -2459,7 +2352,7 @@ export function TaskDetail({
                     style={{
                       fontSize: 13,
                       fontWeight: "700",
-                      color: palette.violet,
+                      color: colors.brand,
                     }}
                   >
                     Manage
@@ -2468,13 +2361,13 @@ export function TaskDetail({
               ) : null}
             </View>
 
-            <View style={[elevation.card, { borderRadius: 16, padding: 12 }]}>
+            <AlenioSheetCard tint="slate">
               {task.isJoint && (task.assignments?.length ?? 0) > 1 ? (
                 <Text
                   style={{
                     fontSize: 12,
                     fontWeight: "600",
-                    color: palette.violet,
+                    color: colors.textSecondary,
                     marginBottom: 8,
                   }}
                   testID="joint-assignees-note"
@@ -2535,7 +2428,7 @@ export function TaskDetail({
                   No one assigned yet
                 </Text>
               )}
-            </View>
+            </AlenioSheetCard>
           </View>
         ) : null}
 
@@ -2554,7 +2447,17 @@ export function TaskDetail({
         {/* Recurring series chain */}
         {!showFocusedFeedbackTask && seriesId ? (
           <View className="mb-4" testID="recurring-series-chain">
-            <Text className="text-sm font-semibold text-slate-500 mb-1.5">
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: palette.inkSecondary,
+                letterSpacing: 0.5,
+                textTransform: "uppercase",
+                marginBottom: 8,
+                paddingHorizontal: 2,
+              }}
+            >
               Series
               {seriesTasks.length > 0
                 ? ` (${seriesCompletedCount}/${seriesTasks.length})`
@@ -2570,14 +2473,9 @@ export function TaskDetail({
                 No tasks in this series
               </Text>
             ) : (
-              <View
-                style={{
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                  overflow: "hidden",
-                  backgroundColor: "#F8FAFC",
-                }}
+              <AlenioSheetCard
+                tint="slate"
+                style={{ paddingHorizontal: 0, paddingVertical: 0, gap: 0, overflow: "hidden" }}
               >
                 {seriesPreviewTasks.map((item, index) =>
                   renderSeriesRow(item, index),
@@ -2607,92 +2505,17 @@ export function TaskDetail({
                     </Text>
                   </TouchableOpacity>
                 ) : null}
-              </View>
+              </AlenioSheetCard>
             )}
           </View>
         ) : null}
 
         <View style={{ height: 32 }} />
-      </ScrollView>
+    </>
+  );
 
-      {!showFocusedFeedbackTask && isEditMode ? (
-        <View
-          style={{
-            paddingHorizontal: COLUMN_PADDING + columnGutter,
-            paddingTop: 12,
-            paddingBottom: Math.max(insets.bottom, 16),
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: palette.cardBorder,
-            backgroundColor: palette.page,
-            gap: 10,
-          }}
-        >
-          <Button
-            variant="primary"
-            size="lg"
-            fullWidth
-            label="Save changes"
-            loading={updateMutation.isPending}
-            onPress={requestSaveEdit}
-            testID="save-edit-footer-button"
-          />
-          {canDeleteTask ? (
-            <TouchableOpacity
-              onPress={requestDelete}
-              disabled={deleteMutation.isPending}
-              hitSlop={8}
-              style={{
-                minHeight: 40,
-                alignItems: "center",
-                justifyContent: "center",
-                flexDirection: "row",
-                gap: 6,
-              }}
-              testID="delete-button"
-            >
-              {deleteMutation.isPending ? (
-                <ActivityIndicator size="small" color="#EF4444" />
-              ) : (
-                <>
-                  <Trash2 size={15} color="#EF4444" strokeWidth={2.2} />
-                  <Text
-                    style={{
-                      color: "#EF4444",
-                      fontSize: 14,
-                      fontWeight: "600",
-                    }}
-                  >
-                    Delete task
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      ) : !showFocusedFeedbackTask && canComplete && access.canWrite ? (
-        <View
-          style={{
-            paddingHorizontal: COLUMN_PADDING + columnGutter,
-            paddingTop: 12,
-            paddingBottom: Math.max(insets.bottom, 16),
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: palette.cardBorder,
-            backgroundColor: palette.page,
-          }}
-        >
-          <Button
-            variant="primary"
-            size="lg"
-            fullWidth
-            label="Mark complete"
-            loading={updateMutation.isPending}
-            icon={<Check size={17} color="#FFFFFF" strokeWidth={2.5} />}
-            onPress={handleMarkComplete}
-            testID="mark-complete-button"
-          />
-        </View>
-      ) : null}
-
+  const overlays = (
+    <>
       <AlenioBottomSheet
         visible={showReminderActions && isReminder}
         title="Task options"
@@ -2925,17 +2748,12 @@ export function TaskDetail({
               showsVerticalScrollIndicator
               testID="series-list-scroll"
             >
-              <View
-                style={{
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                  overflow: "hidden",
-                  backgroundColor: "#F8FAFC",
-                }}
+              <AlenioSheetCard
+                tint="slate"
+                style={{ paddingHorizontal: 0, paddingVertical: 0, gap: 0, overflow: "hidden" }}
               >
                 {seriesTasks.map((item, index) => renderSeriesRow(item, index))}
-              </View>
+              </AlenioSheetCard>
             </ScrollView>
           </View>
         </View>
@@ -3523,9 +3341,168 @@ export function TaskDetail({
           </TouchableOpacity>
         </AlenioSheetCard>
       </AlenioBottomSheet>
+    </>
+  );
+
+  if (!embedded) {
+    return (
+      <>
+        <View
+          testID="task-detail-screen"
+          style={{ flex: 1 }}
+          onLayout={(event) => setPaneWidth(event.nativeEvent.layout.width)}
+        >
+          <AlenioBottomSheet
+            asScreen
+            title={sheetTitle}
+            subtitle={sheetSubtitle}
+            onClose={close}
+            showCloseButton
+            showScrollIndicator
+            showMoreIndicator
+            bodyHeightRatio={0.82}
+            headerRight={headerRight}
+            footer={footerNode}
+            testID="task-detail-sheet"
+          >
+            {body}
+          </AlenioBottomSheet>
+        </View>
+        {overlays}
+      </>
+    );
+  }
+
+  return (
+    <SafeAreaView
+      edges={[]}
+      testID="task-detail-screen"
+      style={{ flex: 1, backgroundColor: "#FFFFFF" }}
+      onLayout={(event) => setPaneWidth(event.nativeEvent.layout.width)}
+    >
+      <View
+        style={{
+          paddingLeft:
+            COLUMN_PADDING +
+            columnGutter +
+            (iconRailEdge === "left" ? cameraPad : 0),
+          paddingRight:
+            COLUMN_PADDING +
+            columnGutter +
+            (iconRailEdge === "right" ? cameraPad : 0),
+          paddingTop: 8,
+          paddingBottom: 10,
+          flexDirection: "row",
+          alignItems: "center",
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: palette.cardBorder,
+          backgroundColor: "#FFFFFF",
+        }}
+      >
+        {isEditMode ? (
+          <TouchableOpacity
+            onPress={cancelEdit}
+            hitSlop={8}
+            style={{
+              minWidth: 64,
+              height: 36,
+              justifyContent: "center",
+            }}
+            testID="cancel-edit-button"
+            accessibilityLabel="Cancel editing"
+          >
+            <Text
+              style={{ color: "#64748B", fontSize: 16, fontWeight: "600" }}
+            >
+              Cancel
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={close}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#FFFFFF",
+              borderWidth: 1,
+              borderColor: palette.cardBorder,
+            }}
+            testID="back-button"
+            accessibilityLabel="Close task"
+          >
+            <X size={19} color={palette.ink} strokeWidth={2.4} />
+          </TouchableOpacity>
+        )}
+        <Text
+          style={{
+            flex: 1,
+            marginHorizontal: 12,
+            color: palette.ink,
+            fontSize: 17,
+            fontWeight: "700",
+            letterSpacing: -0.2,
+            textAlign: "center",
+          }}
+          numberOfLines={1}
+        >
+          {sheetTitle}
+        </Text>
+        <View
+          style={{
+            minWidth: 64,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "flex-end",
+          }}
+        >
+          {headerRight && !isEditMode ? headerRight : null}
+        </View>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        style={{ flex: 1, backgroundColor: "#FFFFFF" }}
+        contentContainerStyle={[
+          {
+            paddingHorizontal: COLUMN_PADDING + columnGutter,
+            backgroundColor: "#FFFFFF",
+            flexGrow: 1,
+          },
+          showFocusedFeedbackTask
+            ? isCompleted
+              ? { justifyContent: "center", paddingVertical: 32 }
+              : { paddingBottom: 32 }
+            : { paddingBottom: 24 },
+        ]}
+      >
+        {body}
+      </ScrollView>
+
+      {footerNode ? (
+        <View
+          style={{
+            paddingHorizontal: COLUMN_PADDING + columnGutter,
+            paddingTop: 12,
+            paddingBottom: Math.max(insets.bottom, 16),
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: palette.cardBorder,
+            backgroundColor: "#FFFFFF",
+          }}
+        >
+          {footerNode}
+        </View>
+      ) : null}
+
+      {overlays}
     </SafeAreaView>
   );
 }
+
 
 const completionMomentStyles = StyleSheet.create({
   backdrop: {

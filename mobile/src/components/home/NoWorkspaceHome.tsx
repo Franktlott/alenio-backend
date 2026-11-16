@@ -46,8 +46,6 @@ type Props = {
   wide: boolean;
   columnWidth: number;
   todayCard?: React.ReactNode;
-  /** Messages and mentions waiting on the user. Sits beside or under Today. */
-  waitingCard?: React.ReactNode;
   /** When null, the Insight card is held until Home has a resolved card. */
   insightTitle: string | null;
   insightBody: string;
@@ -56,7 +54,7 @@ type Props = {
   onInsight: () => void;
 };
 
-function openNetwork(tab: "updates" | "connections" = "updates") {
+function openNetwork(tab: "feed" | "connections" = "feed") {
   router.push({
     pathname: "/(app)/team",
     params: { tab },
@@ -69,7 +67,6 @@ export function NoWorkspaceHome({
   wide,
   columnWidth,
   todayCard,
-  waitingCard,
   insightTitle,
   insightBody,
   insightAction,
@@ -318,7 +315,7 @@ export function NoWorkspaceHome({
             <Pressable
               onPress={() =>
                 networkStarted
-                  ? openNetwork("updates")
+                  ? openNetwork("feed")
                   : setFindPeopleOpen(true)
               }
               style={[
@@ -390,7 +387,6 @@ export function NoWorkspaceHome({
           ) : (
             <View style={styles.todaySlot}>{todayCard}</View>
           )}
-          {waitingCard ? <View style={styles.belowPair}>{waitingCard}</View> : null}
           {networkSignal ? (
             <View style={styles.belowPair}>{networkSignal}</View>
           ) : null}
@@ -399,7 +395,6 @@ export function NoWorkspaceHome({
       ) : (
         <>
           {todayCard ? <View style={styles.todaySlot}>{todayCard}</View> : null}
-          {waitingCard ? <View style={styles.todaySlot}>{waitingCard}</View> : null}
 
           {wide && !hasWorkspace && showWelcomeHero ? (
             <>

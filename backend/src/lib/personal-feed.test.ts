@@ -72,6 +72,30 @@ describe("serializePersonalFeedItem", () => {
       canDelete: false,
       commentCount: 1,
     });
+
+    const alenio = serializePersonalFeedItem(
+      {
+        id: "3",
+        teamId: null,
+        type: "alenio_post",
+        audienceKind: "alenio",
+        audienceTeamId: null,
+        metadata: JSON.stringify({ body: "Hello everyone" }),
+        createdAt: new Date("2026-11-15T12:00:00.000Z"),
+        userId: "staff1",
+        user: { id: "staff1", name: "Staff", image: null },
+        reactions: [],
+        _count: { comments: 0 },
+        team: null,
+      },
+      "staff1",
+    );
+    expect(alenio).toMatchObject({
+      source: "alenio",
+      sourceLabel: "Alenio",
+      canDelete: false,
+      user: { id: "alenio", name: "Alenio", image: null },
+    });
   });
 
   test("falls back to legacy type/teamId when audience is null", () => {

@@ -606,3 +606,24 @@ export type NetworkUpdatesFeedResponse = {
 
 export type NetworkUpdateResponse = NetworkUpdate;
 export type NetworkUpdateCommentsResponse = NetworkUpdateComment[];
+
+export type PersonalFeedSource = "network" | "workspace" | "alenio";
+
+export type PersonalFeedItem = {
+  id: string;
+  source: PersonalFeedSource;
+  sourceLabel: string;
+  teamId: string | null;
+  type: string;
+  createdAt: string;
+  metadata: Record<string, unknown> | null;
+  user: { id: string; name: string; image: string | null } | null;
+  reactions: NetworkUpdateReactions;
+  commentCount: number;
+  canDelete: boolean;
+};
+
+export type PersonalFeedResponse = {
+  items: PersonalFeedItem[];
+  nextCursor: string | null;
+};

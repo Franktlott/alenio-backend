@@ -1,5 +1,5 @@
-/** Explicit audience for feed posts (Phase 3). */
-export type ActivityAudienceKind = "network" | "workspace" | "self";
+/** Explicit audience for feed posts (Phase 3+). */
+export type ActivityAudienceKind = "network" | "workspace" | "self" | "alenio";
 
 export type ActivityAudienceFields = {
   audienceKind: ActivityAudienceKind;
@@ -16,6 +16,11 @@ export function workspaceAudienceFields(teamId: string): ActivityAudienceFields 
   return { audienceKind: "workspace", audienceTeamId: teamId };
 }
 
+/** Platform posts from Admin → every member’s personal feed. */
+export function alenioAudienceFields(): ActivityAudienceFields {
+  return { audienceKind: "alenio", audienceTeamId: null };
+}
+
 /**
  * Infer audience from legacy type/teamId when columns are still null.
  * Used by feed queries and one-time backfill.
@@ -29,7 +34,8 @@ export function inferActivityAudience(activity: {
   if (
     activity.audienceKind === "network" ||
     activity.audienceKind === "workspace" ||
-    activity.audienceKind === "self"
+    activity.audienceKind === "self" ||
+    activity.audienceKind === "alenio"
   ) {
     return {
       audienceKind: activity.audienceKind,
@@ -38,6 +44,10 @@ export function inferActivityAudience(activity: {
           ? activity.audienceTeamId ?? activity.teamId
           : null,
     };
+  }
+
+  if (activity.type === "alenio_post") {
+    return { audienceKind: "alenio", audienceTeamId: null };
   }
 
   if (activity.type === "network_post" || (activity.teamId == null && activity.type === "post")) {
@@ -54,7 +64,10 @@ export function inferActivityAudience(activity: {
 export function activitySourceFromAudience(
   audience: ActivityAudienceFields,
   teamName?: string | null,
-): { source: "network" | "workspace"; sourceLabel: string } {
+): { source: "network" | "workspace" | "alenio"; sourceLabel: string } {
+  if (audience.audienceKind === "alenio") {
+    return { source: "alenio", sourceLabel: "Alenio" };
+  }
   if (audience.audienceKind === "network") {
     return { source: "network", sourceLabel: "Network" };
   }

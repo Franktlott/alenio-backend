@@ -1,8 +1,8 @@
-import { FileText, Sparkles } from "lucide-react";
+import { FileText, Megaphone, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-type Section = "discover" | "home-insights";
+type Section = "discover" | "home-insights" | "feed-posts";
 
 export function ContentSectionTabs({
   active,
@@ -31,6 +31,16 @@ export function ContentSectionTabs({
       >
         <Sparkles size={15} strokeWidth={2.2} />
         Home insights
+      </Link>
+      <Link
+        to="/admin/feed-posts"
+        className={`dm-tab${active === "feed-posts" ? " dm-tab--active" : ""}`}
+        aria-current={active === "feed-posts" ? "page" : undefined}
+        data-testid="dm-tab-feed-posts"
+        style={{ textDecoration: "none" }}
+      >
+        <Megaphone size={15} strokeWidth={2.2} />
+        Feed posts
       </Link>
       {extra}
     </nav>

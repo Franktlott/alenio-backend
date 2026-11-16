@@ -1277,6 +1277,29 @@ export function postPresenceHeartbeat() {
   return apiPostJson<{ data: { ok: true } }>("/api/presence/heartbeat", {});
 }
 
+export type PersonalFeedItem = {
+  id: string;
+  source: "network" | "workspace" | "alenio";
+  sourceLabel: string;
+  teamId: string | null;
+  type: string;
+  createdAt: string;
+  metadata: Record<string, unknown> | null;
+  user: { id: string; name: string; image: string | null } | null;
+  commentCount: number;
+};
+
+export type PersonalFeedResponse = {
+  items: PersonalFeedItem[];
+  nextCursor: string | null;
+};
+
+export function fetchPersonalFeed(limit = 20, cursor?: string | null) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return apiGetJson<{ data: PersonalFeedResponse }>(`/api/feed?${params}`).then((r) => r.data);
+}
+
 export function fetchConnections() {
   return apiGetJson<{ data: ConnectionsResponse }>("/api/connections").then((r) => r.data);
 }
@@ -1802,8 +1825,35 @@ export type TeamMomentumSummary = {
   coachingVisible: boolean;
 };
 
+export type StarsJourneyStep = {
+  id: string;
+  threshold: number;
+  title: string;
+  iconKey: "star" | "bolt" | "mountain" | "trophy";
+  status: "completed" | "active" | "locked";
+  progressCurrent: number;
+  progressTarget: number;
+};
+
+export type TeamMomentumMemberDetail = {
+  teamId: string;
+  generatedAt: string;
+  member: TeamMomentumMember;
+  nextMilestone: number;
+  remainingToMilestone: number;
+  filledInSegment: number;
+  segmentSize: number;
+  dayStreak: number;
+  journey: StarsJourneyStep[];
+};
+
 export function fetchTeamMomentum(teamId: string) {
   return apiRequest<{ data: TeamMomentumSummary }>(`/api/teams/${encodeURIComponent(teamId)}/stars`).then((r) => r.data);
+}
+
+export function fetchTeamMomentumMemberDetail(teamId: string, memberUserId: string) {
+  const path = `/api/teams/${encodeURIComponent(teamId)}/stars/members/${encodeURIComponent(memberUserId)}?currentRunLimit=20`;
+  return apiRequest<{ data: TeamMomentumMemberDetail }>(path).then((r) => r.data);
 }
 
 export function updateWebTeamEvent(
