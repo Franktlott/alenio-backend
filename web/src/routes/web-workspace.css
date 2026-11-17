@@ -182,6 +182,10 @@
   margin: 16px 32px 0;
 }
 
+.ws-grid--overview {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* Feed header filter */
 .ws-filter {
   display: inline-flex;
@@ -351,8 +355,7 @@
   gap: 8px;
 }
 
-/* Both columns share one screen-tall pane: the feed scrolls inside itself,
-   the calendar stretches to fill whatever the members card leaves. */
+/* Keep the overview calendar in one screen-tall pane. */
 .ws-page {
   height: 100%;
   padding-bottom: 16px;

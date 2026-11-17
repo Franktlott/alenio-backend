@@ -1,14 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Crown, KeyRound, Plus, UserPlus, Users } from "lucide-react";
+import { Building2, KeyRound, Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
-import { UserAvatar } from "../components/UserAvatar";
 import { WorkspaceCreateJoinModals } from "../components/WorkspaceCreateJoinModals";
 import { WorkspaceCalendar } from "../components/workspace/WorkspaceCalendar";
-import { WorkspaceMembersPanel, sortMembers } from "../components/workspace/WorkspaceMembersPanel";
+import { WorkspaceMembersPanel } from "../components/workspace/WorkspaceMembersPanel";
 import { WorkspaceMomentumPanel } from "../components/workspace/WorkspaceMomentumPanel";
-import { WorkspaceSubNav, workspaceRoleLabel, type WorkspaceSection } from "../components/workspace/WorkspaceSubNav";
+import { WorkspaceSubNav, type WorkspaceSection } from "../components/workspace/WorkspaceSubNav";
 import { WorkspaceTasksPanel, isAssignedTo, isOpenTask } from "../components/workspace/WorkspaceTasksPanel";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { AddMemberModal } from "../components/AddMemberModal";
@@ -19,7 +18,6 @@ import {
   fetchWebTeam,
   fetchWebTeamTasks,
   inviteMemberByEmail,
-  type WebTeamMemberRow,
   type WebTeamRow,
 } from "../lib/api";
 import { setPersistedEnterpriseTeamId } from "../lib/enterprise-selected-team";
@@ -33,7 +31,7 @@ import "./web-workspace-sections.css";
 const MANAGER_ROLES = new Set(["owner", "team_leader"]);
 
 const SECTION_SUBTITLE: Record<WorkspaceSection, string> = {
-  overview: "What's coming up for your workspace, and who is on the team.",
+  overview: "What's coming up for your workspace.",
   tasks: "Assign, track and finish the work that keeps the day running.",
   calendar: "Events, shifts and meetings for everyone in the workspace.",
   members: "Everyone on the team, in one place.",
@@ -170,16 +168,6 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
             <main className="nw-col ws-col--main">
               <WorkspaceCalendar teamId={team.id} meId={me.id} canManage={canModerate} tasks={tasks.data} />
             </main>
-            <div className="nw-col ws-col--cal">
-              <MembersStrip
-                members={detail.data?.members ?? []}
-                total={detail.data?._count?.members ?? team._count.members}
-                loading={detail.isLoading}
-                meId={me.id}
-                onOpenPerson={openMember}
-                onInvite={canInvite ? () => setInviteOpen(true) : undefined}
-              />
-            </div>
           </div>
         ) : (
           <main className="ws-section">
@@ -271,92 +259,6 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
 }
 
 /** Everyone in the workspace as profile circles; owners and leaders first. */
-function MembersStrip({
-  members,
-  total,
-  loading,
-  meId,
-  onOpenPerson,
-  onInvite,
-}: {
-  members: WebTeamMemberRow[];
-  total: number;
-  loading: boolean;
-  meId: string;
-  onOpenPerson: (userId: string) => void;
-  onInvite?: () => void;
-}) {
-  const sorted = useMemo(() => sortMembers(members), [members]);
-
-  return (
-    <section className="dm-card ws-members" aria-label="Members" data-testid="ws-members">
-      <div className="ws-members-head">
-        <h2>
-          <Users size={15} strokeWidth={2.2} />
-          Members
-          <span className="ws-members-count">{total}</span>
-        </h2>
-      </div>
-      <ul className="ws-members-row">
-        {onInvite ? (
-          <li className="ws-member">
-            <button type="button" className="ws-member-btn" onClick={onInvite} title="Invite people" data-testid="ws-members-invite">
-              <span className="ws-member-ring">
-                <span className="ws-member-avatar ws-member-avatar--invite">
-                  <UserPlus size={18} strokeWidth={2.2} />
-                </span>
-              </span>
-              <span className="ws-member-name">Invite</span>
-            </button>
-          </li>
-        ) : null}
-        {loading && members.length === 0
-          ? Array.from({ length: 6 }, (_, i) => (
-              <li key={i} className="ws-member ws-member--skeleton" aria-hidden>
-                <span className="ws-member-ring">
-                  <span className="ws-member-avatar" />
-                </span>
-                <span className="ws-member-name">&nbsp;</span>
-              </li>
-            ))
-          : sorted.map((m) => {
-              const name = m.user.name ?? m.user.email ?? "Member";
-              const lead = m.role === "owner" || m.role === "team_leader";
-              const isMe = m.userId === meId;
-              return (
-                <li key={m.id} className="ws-member">
-                  <button
-                    type="button"
-                    className={`ws-member-btn${lead ? " ws-member-btn--lead" : ""}`}
-                    onClick={() => onOpenPerson(m.userId)}
-                    title={`${name} · ${workspaceRoleLabel(m.role)}`}
-                    data-testid={`ws-member-${m.userId}`}
-                  >
-                    <span className="ws-member-ring">
-                      <UserAvatar user={m.user} className="ws-member-avatar" imgClassName="nw-avatar-img" alt="" />
-                      {lead ? (
-                        <span className="ws-member-badge" aria-label={workspaceRoleLabel(m.role)}>
-                          <Crown size={10} strokeWidth={2.6} />
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="ws-member-name">{isMe ? "You" : firstName(name)}</span>
-                  </button>
-                </li>
-              );
-            })}
-      </ul>
-    </section>
-  );
-}
-
-function firstName(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return "Member";
-  if (trimmed.includes("@")) return trimmed.split("@")[0] ?? trimmed;
-  return trimmed.split(/\s+/)[0] ?? trimmed;
-}
-
 /** Shown when the person isn't in any workspace yet. */
 function NoWorkspaceState() {
   const { setTeams, setSelectedTeamId, refreshMeAndTeams } = useEnterpriseShell();
