@@ -13,6 +13,7 @@ import {
   authErrorMessage,
   handleExistingEmailOnSignUp,
   isExistingEmailSignUpError,
+  messageLooksLikeExistingAccount,
   messageLooksLikeResumeSignUp,
 } from "../lib/signup-recovery";
 import { isSessionTokenExpired, isSessionTokenUsable } from "../lib/token";
@@ -112,17 +113,24 @@ export function SignUpPage() {
           window.location.href = dest;
           return;
         }
-        if (outcome.kind === "wrong-password") {
+        if (outcome.kind === "already-exists") {
           setError(
             "An account with this email already exists. Sign in with your password, or reset it if you forgot.",
           );
           return;
         }
+        // outcome.kind === "verify" already navigated to /verify
       } catch (recoveryErr) {
         const msg = authErrorMessage(recoveryErr) || formatAuthFlowError(recoveryErr);
-        if (isExistingEmailSignUpError(recoveryErr) || messageLooksLikeResumeSignUp(msg)) {
+        if (isEmailNotVerifiedError(recoveryErr) || messageLooksLikeResumeSignUp(msg)) {
           setPendingSignUp(emailNorm, password);
           await goToEmailVerification({ email: emailNorm, inviteToken, password });
+          return;
+        }
+        if (isExistingEmailSignUpError(recoveryErr) || messageLooksLikeExistingAccount(msg)) {
+          setError(
+            "An account with this email already exists. Sign in with your password, or reset it if you forgot.",
+          );
           return;
         }
         throw recoveryErr;
@@ -156,7 +164,11 @@ export function SignUpPage() {
         });
       } catch (signUpErr) {
         const signUpMsg = authErrorMessage(signUpErr) || formatAuthFlowError(signUpErr);
-        if (isExistingEmailSignUpError(signUpErr) || messageLooksLikeResumeSignUp(signUpMsg)) {
+        if (
+          isExistingEmailSignUpError(signUpErr) ||
+          messageLooksLikeResumeSignUp(signUpMsg) ||
+          messageLooksLikeExistingAccount(signUpMsg)
+        ) {
           await finishExistingEmailRecovery(
             isEmailNotVerifiedError(signUpErr) || messageLooksLikeResumeSignUp(signUpMsg),
           );
@@ -168,7 +180,11 @@ export function SignUpPage() {
       if (result.error) {
         const resultMsg =
           (typeof result.error.message === "string" ? result.error.message : authErrorMessage(result.error)) ?? "";
-        if (isExistingEmailSignUpError(result.error) || messageLooksLikeResumeSignUp(resultMsg)) {
+        if (
+          isExistingEmailSignUpError(result.error) ||
+          messageLooksLikeResumeSignUp(resultMsg) ||
+          messageLooksLikeExistingAccount(resultMsg)
+        ) {
           await finishExistingEmailRecovery(
             isEmailNotVerifiedError(result.error) || messageLooksLikeResumeSignUp(resultMsg),
           );
@@ -199,9 +215,15 @@ export function SignUpPage() {
       window.location.href = dest;
     } catch (err) {
       const msg = authErrorMessage(err) || formatAuthFlowError(err);
-      if (isExistingEmailSignUpError(err) || messageLooksLikeResumeSignUp(msg)) {
+      if (isEmailNotVerifiedError(err) || messageLooksLikeResumeSignUp(msg)) {
         setPendingSignUp(emailNorm, password);
         await goToEmailVerification({ email: emailNorm, inviteToken, password });
+        return;
+      }
+      if (isExistingEmailSignUpError(err) || messageLooksLikeExistingAccount(msg)) {
+        setError(
+          "An account with this email already exists. Sign in with your password, or reset it if you forgot.",
+        );
         return;
       }
       setError(msg);
