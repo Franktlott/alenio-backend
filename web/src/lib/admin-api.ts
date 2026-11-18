@@ -133,6 +133,8 @@ export type IncompleteSignupsResponse = {
     authUserCount: number | null;
     appUserCount: number | null;
     incompleteCount: number;
+    returnedCount?: number;
+    capped?: boolean;
   };
 };
 

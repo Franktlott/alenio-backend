@@ -182,6 +182,11 @@ export function AdminUsersPage() {
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
   };
+
+  const goToTab = (next: Tab) => {
+    setTab(next);
+    setPage(1);
+  };
   const mayEdit = staffCan(me, "users.edit");
   const mayCreate = staffCan(me, "users.create");
   const mayDelete = staffCan(me, "users.delete");
@@ -373,10 +378,7 @@ export function AdminUsersPage() {
             type="button"
             className={`dm-tab${tab === id ? " dm-tab--active" : ""}`}
             aria-current={tab === id ? "page" : undefined}
-            onClick={() => {
-              setTab(id);
-              setPage(1);
-            }}
+            onClick={() => goToTab(id)}
             data-testid={`au-tab-${id}`}
           >
             {label}
@@ -389,7 +391,12 @@ export function AdminUsersPage() {
       <div className="dm-grid">
         <div className="dm-main">
           <section className="dm-stats" aria-label="User summary">
-            <div className="dm-stat">
+            <button
+              type="button"
+              className={`dm-stat dm-stat--action${tab === "all" ? " dm-stat--active" : ""}`}
+              onClick={() => goToTab("all")}
+              aria-pressed={tab === "all"}
+            >
               <span className="dm-stat-icon">
                 <Users size={18} strokeWidth={2} />
               </span>
@@ -397,7 +404,7 @@ export function AdminUsersPage() {
                 <strong>{allQuery.data ? stats.total.toLocaleString() : "—"}</strong>
                 <span>Total users</span>
               </div>
-            </div>
+            </button>
             <div className="dm-stat">
               <span className="dm-stat-icon">
                 <CalendarPlus size={18} strokeWidth={2} />
@@ -407,7 +414,12 @@ export function AdminUsersPage() {
                 <span>New this week</span>
               </div>
             </div>
-            <div className="dm-stat">
+            <button
+              type="button"
+              className={`dm-stat dm-stat--action${tab === "in-workspace" ? " dm-stat--active" : ""}`}
+              onClick={() => goToTab("in-workspace")}
+              aria-pressed={tab === "in-workspace"}
+            >
               <span className="dm-stat-icon">
                 <Building2 size={18} strokeWidth={2} />
               </span>
@@ -415,8 +427,13 @@ export function AdminUsersPage() {
                 <strong>{allQuery.data ? stats.inWorkspace.toLocaleString() : "—"}</strong>
                 <span>In a workspace</span>
               </div>
-            </div>
-            <div className="dm-stat">
+            </button>
+            <button
+              type="button"
+              className={`dm-stat dm-stat--action${tab === "admins" ? " dm-stat--active" : ""}`}
+              onClick={() => goToTab("admins")}
+              aria-pressed={tab === "admins"}
+            >
               <span className="dm-stat-icon">
                 <ShieldCheck size={18} strokeWidth={2} />
               </span>
@@ -424,8 +441,14 @@ export function AdminUsersPage() {
                 <strong>{allQuery.data ? stats.admins.toLocaleString() : "—"}</strong>
                 <span>Staff</span>
               </div>
-            </div>
-            <div className="dm-stat">
+            </button>
+            <button
+              type="button"
+              className={`dm-stat dm-stat--action${tab === "incomplete" ? " dm-stat--active" : ""}`}
+              onClick={() => goToTab("incomplete")}
+              aria-pressed={tab === "incomplete"}
+              data-testid="au-stat-incomplete"
+            >
               <span className="dm-stat-icon">
                 <MailWarning size={18} strokeWidth={2} />
               </span>
@@ -435,7 +458,7 @@ export function AdminUsersPage() {
                 </strong>
                 <span>Incomplete signups</span>
               </div>
-            </div>
+            </button>
           </section>
 
           <section className="dm-card dm-articles al-ds" aria-label={showingIncomplete ? "Incomplete signups" : "Users"}>
@@ -474,6 +497,9 @@ export function AdminUsersPage() {
               <p className="au-incomplete-note">
                 Better Auth accounts: {incompleteMeta.authUserCount?.toLocaleString() ?? "—"} · Finished app users:{" "}
                 {incompleteMeta.appUserCount?.toLocaleString() ?? "—"}
+                {incompleteMeta.capped
+                  ? ` · Showing ${incompleteMeta.returnedCount?.toLocaleString() ?? incompleteRows.length.toLocaleString()} of ${incompleteMeta.incompleteCount.toLocaleString()}`
+                  : null}
               </p>
             ) : null}
 

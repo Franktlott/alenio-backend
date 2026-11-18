@@ -334,21 +334,32 @@ adminApiRouter.get("/users/incomplete-signups", requireAbility("users.view"), as
   };
 
   let rows: IncompleteRow[] = [];
+  let incompleteCount = 0;
   try {
-    rows = await prisma.$queryRaw<IncompleteRow[]>`
-      SELECT
-        a.id::text AS id,
-        a.email,
-        a.name,
-        a."emailVerified" AS "emailVerified",
-        a."createdAt" AS "createdAt",
-        (u.id IS NOT NULL) AS "hasAppUser"
-      FROM neon_auth."user" a
-      LEFT JOIN public."User" u ON u.id = a.id::text
-      WHERE a."emailVerified" = false OR u.id IS NULL
-      ORDER BY a."createdAt" DESC
-      LIMIT 500
-    `;
+    const [countRows, dataRows] = await Promise.all([
+      prisma.$queryRaw<Array<{ n: number }>>`
+        SELECT count(*)::int AS n
+        FROM neon_auth."user" a
+        LEFT JOIN public."User" u ON u.id = a.id::text
+        WHERE a."emailVerified" = false OR u.id IS NULL
+      `,
+      prisma.$queryRaw<IncompleteRow[]>`
+        SELECT
+          a.id::text AS id,
+          a.email,
+          a.name,
+          a."emailVerified" AS "emailVerified",
+          a."createdAt" AS "createdAt",
+          (u.id IS NOT NULL) AS "hasAppUser"
+        FROM neon_auth."user" a
+        LEFT JOIN public."User" u ON u.id = a.id::text
+        WHERE a."emailVerified" = false OR u.id IS NULL
+        ORDER BY a."createdAt" DESC
+        LIMIT 5000
+      `,
+    ]);
+    incompleteCount = countRows[0]?.n ?? dataRows.length;
+    rows = dataRows;
   } catch (err) {
     console.error("[admin] incomplete-signups query failed:", err);
     return c.json(
@@ -396,7 +407,9 @@ adminApiRouter.get("/users/incomplete-signups", requireAbility("users.view"), as
     meta: {
       authUserCount,
       appUserCount,
-      incompleteCount: rows.length,
+      incompleteCount,
+      returnedCount: filtered.length,
+      capped: incompleteCount > rows.length,
     },
   });
 });
