@@ -1,8 +1,8 @@
 import {
+  clearAccessToken,
   ensureWebSessionAndToken,
   getAuthClient,
   setAccessTokenFromAuthData,
-  syncBackendUser,
 } from "./auth-client";
 import {
   isEmailAlreadyRegisteredError,
@@ -44,8 +44,9 @@ async function sendToVerify(input: {
 /**
  * Resume or complete sign-up when Better Auth already has this email.
  * - Unverified → send/resume OTP verification
- * - Verified + correct password → sign in
- * - Verified + wrong/unknown password → tell them the account already exists
+ * - Verified (even with correct password) → tell them to use Sign in
+ *
+ * Create account must never silently log someone into an existing account.
  */
 export async function handleExistingEmailOnSignUp(input: {
   email: string;
@@ -65,14 +66,15 @@ export async function handleExistingEmailOnSignUp(input: {
     const user = (signIn.data as { user?: { emailVerified?: boolean } } | undefined)?.user;
 
     if (!signIn.error && user?.emailVerified === false) {
+      // Clear any session Better Auth may have created; they still need OTP.
+      clearAccessToken();
       return sendToVerify({ email, password: input.password, inviteToken: input.inviteToken });
     }
 
     if (!signIn.error && user) {
-      setAccessTokenFromAuthData(signIn ?? null);
-      setAccessTokenFromAuthData(signIn.data ?? null);
-      await syncBackendUser();
-      return { kind: "signed-in" };
+      // Password matched an existing verified account — do not auto-enter the app.
+      clearAccessToken();
+      return { kind: "already-exists" };
     }
 
     if (signIn.error) {
@@ -80,9 +82,6 @@ export async function handleExistingEmailOnSignUp(input: {
         return sendToVerify({ email, password: input.password, inviteToken: input.inviteToken });
       }
       // Wrong password, or account exists but we cannot sign in — do not send OTP.
-      if (isInvalidCredentialsError(signIn.error) || isEmailAlreadyRegisteredError(signIn.error)) {
-        return { kind: "already-exists" };
-      }
       return { kind: "already-exists" };
     }
   } catch (signInErr) {
