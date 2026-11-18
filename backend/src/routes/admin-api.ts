@@ -29,6 +29,7 @@ import type { Context } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { getAdminWeeklyUsage } from "../lib/admin-usage-weeks";
+import { deleteAuthUser } from "../lib/delete-auth-user";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -412,6 +413,164 @@ adminApiRouter.get("/users/incomplete-signups", requireAbility("users.view"), as
       capped: incompleteCount > rows.length,
     },
   });
+});
+
+type IncompleteAuthTarget = {
+  id: string;
+  email: string;
+  hasAppUser: boolean;
+};
+
+async function findIncompleteAuthTarget(id: string): Promise<IncompleteAuthTarget | null> {
+  const rows = await prisma.$queryRaw<IncompleteAuthTarget[]>`
+    SELECT
+      a.id::text AS id,
+      a.email,
+      (u.id IS NOT NULL) AS "hasAppUser"
+    FROM neon_auth."user" a
+    LEFT JOIN public."User" u ON u.id = a.id::text
+    WHERE a.id = CAST(${id} AS uuid)
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    email: row.email,
+    hasAppUser: Boolean(row.hasAppUser),
+  };
+}
+
+/** Delete one incomplete Better Auth signup (auth-only; refuses if an app user exists). */
+adminApiRouter.delete("/users/incomplete-signups/:id", requireAbility("users.delete"), async (c) => {
+  const { id } = c.req.param();
+  try {
+    const target = await findIncompleteAuthTarget(id);
+    if (!target) {
+      return c.json({ error: { message: "Incomplete signup not found.", code: "NOT_FOUND" } }, 404);
+    }
+    if (target.hasAppUser) {
+      return c.json(
+        {
+          error: {
+            message: "This auth account already has an Alenio app user. Delete it from Users instead.",
+            code: "HAS_APP_USER",
+          },
+        },
+        409,
+      );
+    }
+    await deleteAuthUser(target.id, target.email);
+    await audit(c, {
+      action: "user.delete",
+      targetType: "auth_user",
+      targetId: target.id,
+      summary: `Deleted incomplete signup ${target.email}`,
+    });
+    return c.json({ data: { deleted: true, id: target.id, email: target.email } });
+  } catch (err) {
+    console.error("[admin] delete incomplete signup failed:", id, err);
+    return c.json({ error: { message: "Could not delete incomplete signup.", code: "DELETE_FAILED" } }, 500);
+  }
+});
+
+/** Bulk-delete incomplete Better Auth signups by id. Skips any that already have an app user. */
+adminApiRouter.post(
+  "/users/incomplete-signups/delete",
+  requireAbility("users.delete"),
+  zValidator(
+    "json",
+    z.object({
+      ids: z.array(z.string().min(1)).min(1).max(500),
+    }),
+  ),
+  async (c) => {
+    const { ids } = c.req.valid("json");
+    const uniqueIds = [...new Set(ids)];
+    const deleted: Array<{ id: string; email: string }> = [];
+    const skipped: Array<{ id: string; code: string }> = [];
+
+    for (const id of uniqueIds) {
+      try {
+        const target = await findIncompleteAuthTarget(id);
+        if (!target) {
+          skipped.push({ id, code: "NOT_FOUND" });
+          continue;
+        }
+        if (target.hasAppUser) {
+          skipped.push({ id, code: "HAS_APP_USER" });
+          continue;
+        }
+        await deleteAuthUser(target.id, target.email);
+        deleted.push({ id: target.id, email: target.email });
+      } catch (err) {
+        console.error("[admin] bulk incomplete delete failed:", id, err);
+        skipped.push({ id, code: "DELETE_FAILED" });
+      }
+    }
+
+    if (deleted.length > 0) {
+      await audit(c, {
+        action: "user.delete",
+        targetType: "auth_user",
+        targetId: deleted.map((row) => row.id).join(","),
+        summary: `Deleted ${deleted.length} incomplete signup${deleted.length === 1 ? "" : "s"}`,
+      });
+    }
+
+    return c.json({
+      data: {
+        deletedCount: deleted.length,
+        skippedCount: skipped.length,
+        deleted,
+        skipped,
+      },
+    });
+  },
+);
+
+/** Clear every incomplete Better Auth signup that has no Alenio app user. */
+adminApiRouter.post("/users/incomplete-signups/clear", requireAbility("users.delete"), async (c) => {
+  try {
+    const targets = await prisma.$queryRaw<Array<{ id: string; email: string }>>`
+      SELECT a.id::text AS id, a.email
+      FROM neon_auth."user" a
+      LEFT JOIN public."User" u ON u.id = a.id::text
+      WHERE u.id IS NULL
+      ORDER BY a."createdAt" DESC
+      LIMIT 5000
+    `;
+
+    const deleted: Array<{ id: string; email: string }> = [];
+    for (const target of targets) {
+      try {
+        await deleteAuthUser(target.id, target.email);
+        deleted.push(target);
+      } catch (err) {
+        console.error("[admin] clear incomplete signup failed:", target.id, err);
+      }
+    }
+
+    if (deleted.length > 0) {
+      await audit(c, {
+        action: "user.delete",
+        targetType: "auth_user",
+        targetId: "incomplete-signups-clear",
+        summary: `Cleared ${deleted.length} incomplete signup${deleted.length === 1 ? "" : "s"}`,
+      });
+    }
+
+    return c.json({
+      data: {
+        deletedCount: deleted.length,
+        attemptedCount: targets.length,
+        capped: targets.length >= 5000,
+      },
+    });
+  } catch (err) {
+    console.error("[admin] clear incomplete signups failed:", err);
+    return c.json({ error: { message: "Could not clear incomplete signups.", code: "CLEAR_FAILED" } }, 500);
+  }
 });
 
 adminApiRouter.post(

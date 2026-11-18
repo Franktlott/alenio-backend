@@ -451,3 +451,106 @@
   background: #f3efff;
   box-shadow: 0 0 0 3px rgba(109, 85, 231, 0.12);
 }
+
+
+.au-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 20px 12px;
+  padding: 10px 12px;
+  border: 1px solid #e7e5f5;
+  border-radius: 14px;
+  background: #faf9ff;
+}
+
+.au-bulk-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.au-bulk-copy strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2430;
+}
+
+.au-bulk-msg {
+  color: #667085;
+  font-size: 12px;
+}
+
+.au-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.au-drawer-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  padding-right: 28px;
+}
+
+.au-drawer-title-row h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.au-review-block {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.au-review-block h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #344054;
+}
+
+.au-review-block p {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.au-review-dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.au-review-dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.au-review-dl dt {
+  color: #98a2b3;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.au-review-dl dd {
+  margin: 0;
+  color: #1f2430;
+  font-size: 13px;
+}
+
+.au-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  word-break: break-all;
+}

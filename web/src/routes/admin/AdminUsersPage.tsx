@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   CalendarPlus,
+  CheckSquare,
   ChevronRight,
   Eye,
   MailWarning,
@@ -17,6 +18,7 @@ import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { EnterprisePageLoading } from "../../components/EnterprisePageLoading";
 import {
   AlenioDataTable,
+  Button,
   EmptyState,
   Pagination,
   RowActions,
@@ -29,6 +31,9 @@ import {
 import { UserAvatar } from "../../components/UserAvatar";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import {
+  clearIncompleteSignups,
+  deleteIncompleteSignup,
+  deleteIncompleteSignups,
   fetchAdminUsers,
   fetchIncompleteSignups,
   formatAdminDate,
@@ -38,6 +43,7 @@ import {
 import { staffCan, staffRoleLabel } from "../../lib/staff-access";
 import "../discover/discover-manage.css";
 import "./admin-users.css";
+import { AdminIncompleteSignupDrawer } from "./AdminIncompleteSignupDrawer";
 import { AdminUserDrawer } from "./AdminUserDrawer";
 
 type Tab = "all" | "in-workspace" | "no-workspace" | "admins" | "incomplete";
@@ -77,6 +83,10 @@ export function AdminUsersPage() {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedIncompleteIds, setSelectedIncompleteIds] = useState<string[]>([]);
+  const [reviewSignupId, setReviewSignupId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const drawerUserId = searchParams.get("user");
   const drawerMode = searchParams.get("new") === "1" ? "new" : drawerUserId ? "view" : null;
   const openUser = (id: string, edit = false) => {
@@ -186,11 +196,85 @@ export function AdminUsersPage() {
   const goToTab = (next: Tab) => {
     setTab(next);
     setPage(1);
+    setSelectedIncompleteIds([]);
+    setReviewSignupId(null);
+    setBulkMessage(null);
   };
   const mayEdit = staffCan(me, "users.edit");
   const mayCreate = staffCan(me, "users.create");
   const mayDelete = staffCan(me, "users.delete");
   const mayManageStaff = staffCan(me, "staff.manage");
+  const reviewSignup = reviewSignupId ? incompleteRows.find((row) => row.id === reviewSignupId) ?? null : null;
+  const selectedIncompleteCount = selectedIncompleteIds.length;
+  const deletableIncompleteIds = incompleteVisible
+    .filter((row) => selectedIncompleteIds.includes(row.id) && !row.hasAppUser)
+    .map((row) => row.id);
+
+  const refreshIncomplete = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin", "users", "incomplete"] });
+  };
+
+  const selectAllIncompleteVisible = () => {
+    setSelectedIncompleteIds(incompleteVisible.map((row) => row.id));
+  };
+
+  const clearIncompleteSelection = () => {
+    setSelectedIncompleteIds([]);
+  };
+
+  const deleteSelectedIncomplete = async () => {
+    if (!mayDelete || deletableIncompleteIds.length === 0) return;
+    const skipped = selectedIncompleteCount - deletableIncompleteIds.length;
+    const ok = window.confirm(
+      `Delete ${deletableIncompleteIds.length.toLocaleString()} incomplete signup${deletableIncompleteIds.length === 1 ? "" : "s"}?` +
+        (skipped > 0 ? `\n\n${skipped.toLocaleString()} selected row(s) already have an Alenio app user and will be skipped.` : "") +
+        "\n\nThis cannot be undone.",
+    );
+    if (!ok) return;
+    setBulkBusy(true);
+    setBulkMessage(null);
+    try {
+      const result = await deleteIncompleteSignups(deletableIncompleteIds);
+      setSelectedIncompleteIds([]);
+      if (reviewSignupId && result.deleted.some((row) => row.id === reviewSignupId)) {
+        setReviewSignupId(null);
+      }
+      setBulkMessage(
+        `Deleted ${result.deletedCount.toLocaleString()} signup${result.deletedCount === 1 ? "" : "s"}` +
+          (result.skippedCount ? ` · skipped ${result.skippedCount.toLocaleString()}` : ""),
+      );
+      refreshIncomplete();
+    } catch (err) {
+      setBulkMessage(err instanceof Error ? err.message : "Could not delete selected signups.");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const clearAllIncomplete = async () => {
+    if (!mayDelete) return;
+    const count = incompleteMeta?.incompleteCount ?? incompleteVisible.filter((row) => !row.hasAppUser).length;
+    const ok = window.confirm(
+      `Clear all incomplete signups without an Alenio app user?\n\nAbout ${count.toLocaleString()} auth account(s) may be removed. This cannot be undone.`,
+    );
+    if (!ok) return;
+    setBulkBusy(true);
+    setBulkMessage(null);
+    try {
+      const result = await clearIncompleteSignups();
+      setSelectedIncompleteIds([]);
+      setReviewSignupId(null);
+      setBulkMessage(
+        `Cleared ${result.deletedCount.toLocaleString()} incomplete signup${result.deletedCount === 1 ? "" : "s"}` +
+          (result.capped ? " · more may remain — run Clear again" : ""),
+      );
+      refreshIncomplete();
+    } catch (err) {
+      setBulkMessage(err instanceof Error ? err.message : "Could not clear incomplete signups.");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   if (me === undefined) return <EnterprisePageLoading label="Loading users" />;
   if (me === null || !staffCan(me, "users.view")) return <Navigate to="/settings" replace />;
@@ -289,6 +373,47 @@ export function AdminUsersPage() {
       cell: (user) => <span className="al-cell-muted">{formatAdminDate(user.createdAt)}</span>,
     },
   ];
+
+  const incompleteActions = (row: IncompleteSignupRow): RowAction[] => {
+    const actions: RowAction[] = [
+      {
+        id: "review",
+        label: "Review",
+        icon: <Eye size={15} strokeWidth={2} />,
+        onSelect: () => setReviewSignupId(row.id),
+      },
+    ];
+    if (mayDelete && !row.hasAppUser) {
+      actions.push({
+        id: "delete",
+        label: "Delete",
+        icon: <Trash2 size={15} strokeWidth={2} />,
+        tone: "danger",
+        onSelect: () => {
+          void (async () => {
+            const ok = window.confirm(
+              `Delete incomplete signup for ${row.email}?\n\nThis cannot be undone.`,
+            );
+            if (!ok) return;
+            setBulkBusy(true);
+            setBulkMessage(null);
+            try {
+              await deleteIncompleteSignup(row.id);
+              setSelectedIncompleteIds((ids) => ids.filter((id) => id !== row.id));
+              if (reviewSignupId === row.id) setReviewSignupId(null);
+              setBulkMessage(`Deleted ${row.email}`);
+              refreshIncomplete();
+            } catch (err) {
+              setBulkMessage(err instanceof Error ? err.message : "Could not delete signup.");
+            } finally {
+              setBulkBusy(false);
+            }
+          })();
+        },
+      });
+    }
+    return actions;
+  };
 
   const incompleteColumns: AlenioColumn<IncompleteSignupRow>[] = [
     {
@@ -503,6 +628,61 @@ export function AdminUsersPage() {
               </p>
             ) : null}
 
+            {showingIncomplete && mayDelete ? (
+              <div className="au-bulk-bar" role="toolbar" aria-label="Incomplete signup actions">
+                <div className="au-bulk-copy">
+                  <strong>
+                    {selectedIncompleteCount > 0
+                      ? `${selectedIncompleteCount.toLocaleString()} selected`
+                      : `${activeCount.toLocaleString()} incomplete`}
+                  </strong>
+                  {bulkMessage ? <span className="au-bulk-msg">{bulkMessage}</span> : null}
+                </div>
+                <div className="au-bulk-actions">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={bulkBusy || incompleteVisible.length === 0}
+                    onClick={selectAllIncompleteVisible}
+                  >
+                    <CheckSquare size={14} strokeWidth={2} />
+                    Select all
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={bulkBusy || selectedIncompleteCount === 0}
+                    onClick={clearIncompleteSelection}
+                  >
+                    Clear selection
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={bulkBusy || deletableIncompleteIds.length === 0}
+                    onClick={() => void deleteSelectedIncomplete()}
+                    data-testid="au-incomplete-delete-selected"
+                  >
+                    <Trash2 size={14} strokeWidth={2} />
+                    {bulkBusy ? "Working…" : "Delete selected"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={bulkBusy || activeCount === 0}
+                    onClick={() => void clearAllIncomplete()}
+                    data-testid="au-incomplete-clear-all"
+                  >
+                    Clear all
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             {showingIncomplete ? (
               <AlenioDataTable
                 flush
@@ -510,10 +690,21 @@ export function AdminUsersPage() {
                 rows={incompletePageRows}
                 columns={incompleteColumns}
                 getRowId={(row) => row.id}
-                getRowLabel={(row) => row.email}
+                getRowLabel={(row) => `Review ${row.email}`}
                 getRowTestId={(row) => `au-incomplete-row-${row.id}`}
+                selectable={mayDelete}
+                selectedIds={selectedIncompleteIds}
+                onSelectionChange={setSelectedIncompleteIds}
+                onRowClick={(row) => setReviewSignupId(row.id)}
+                rowActions={(row) => (
+                  <RowActions
+                    actions={incompleteActions(row)}
+                    label={`Actions for ${row.email}`}
+                    testId={`au-incomplete-menu-${row.id}`}
+                  />
+                )}
                 loading={loading}
-                busy={loading && incompletePageRows.length > 0}
+                busy={(loading || bulkBusy) && incompletePageRows.length > 0}
                 loadingRows={6}
                 emptyState={
                   <EmptyState
@@ -634,6 +825,17 @@ export function AdminUsersPage() {
           void refresh();
         }}
         onCreated={(id) => openUser(id)}
+      />
+
+      <AdminIncompleteSignupDrawer
+        signup={reviewSignup}
+        onClose={() => setReviewSignupId(null)}
+        onDeleted={(id) => {
+          setReviewSignupId(null);
+          setSelectedIncompleteIds((ids) => ids.filter((value) => value !== id));
+          setBulkMessage("Deleted signup");
+          refreshIncomplete();
+        }}
       />
     </div>
   );

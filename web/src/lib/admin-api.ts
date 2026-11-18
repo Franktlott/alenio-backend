@@ -152,6 +152,41 @@ export async function fetchIncompleteSignups(q?: string): Promise<IncompleteSign
   };
 }
 
+export async function deleteIncompleteSignup(id: string): Promise<{ deleted: boolean; id: string; email: string }> {
+  const res = await apiDeleteJson<{ data: { deleted: boolean; id: string; email: string } }>(
+    `/api/admin/users/incomplete-signups/${encodeURIComponent(id)}`,
+  );
+  return res.data;
+}
+
+export async function deleteIncompleteSignups(ids: string[]): Promise<{
+  deletedCount: number;
+  skippedCount: number;
+  deleted: Array<{ id: string; email: string }>;
+  skipped: Array<{ id: string; code: string }>;
+}> {
+  const res = await apiPostJson<{
+    data: {
+      deletedCount: number;
+      skippedCount: number;
+      deleted: Array<{ id: string; email: string }>;
+      skipped: Array<{ id: string; code: string }>;
+    };
+  }>("/api/admin/users/incomplete-signups/delete", { ids });
+  return res.data;
+}
+
+export async function clearIncompleteSignups(): Promise<{
+  deletedCount: number;
+  attemptedCount: number;
+  capped: boolean;
+}> {
+  const res = await apiPostJson<{
+    data: { deletedCount: number; attemptedCount: number; capped: boolean };
+  }>("/api/admin/users/incomplete-signups/clear", {});
+  return res.data;
+}
+
 export async function fetchAdminUser(id: string): Promise<AdminUserDetail> {
   const res = await apiGetJson<{ data: AdminUserDetail }>(`/api/admin/users/${encodeURIComponent(id)}`);
   return normalizeCreatedAt(res.data);
