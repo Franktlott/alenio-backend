@@ -5,8 +5,14 @@
 import type { Context, Hono } from "hono";
 import { env } from "../env";
 import { isTrustedAuthCallbackUrl, isMobileAuthDeepLink } from "./auth-callback-trust";
-import { isAuthServerEnabled, loadAuthServer } from "./better-auth";
+import { isAuthServerEnabled, isTurnstileEnabled, loadAuthServer } from "./better-auth";
 import { setBetterAuthMounted } from "./better-auth-status";
+import {
+  honeypotFilled,
+  isDisposableEmail,
+  isSignupAuthPath,
+  normalizeSignupEmail,
+} from "./signup-abuse";
 import { webAuthCallbackUrl, webPublicBaseUrl } from "./web-public-url";
 
 /**
@@ -218,6 +224,16 @@ export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
     }
   });
 
+  /** Public: whether clients must solve Turnstile before signup / OTP send. */
+  app.get("/api/signup-protection", (c) => {
+    const enabled = isTurnstileEnabled();
+    return c.json({
+      captchaRequired: enabled,
+      provider: enabled ? "cloudflare-turnstile" : null,
+      siteKey: enabled ? env.TURNSTILE_SITE_KEY!.trim() : null,
+    });
+  });
+
   // Hono 4.6: `/api/auth/*` matches nested paths (sign-in/email, email-otp/...).
   // `/api/auth/**` does NOT match those routes in this Hono version (returns 404).
   app.on(["POST", "GET"], "/api/auth/*", async (c) => {
@@ -225,6 +241,33 @@ export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
       if (c.req.path.includes("/callback/") && !new URL(c.req.url).searchParams.get("state")) {
         console.error("[better-auth] OAuth callback missing state", c.req.path, c.req.url);
       }
+
+      if (c.req.method === "POST" && isSignupAuthPath(c.req.path)) {
+        const rawBody = await c.req.raw.clone().json().catch(() => null);
+        if (honeypotFilled(rawBody)) {
+          console.warn("[better-auth] honeypot tripped on", c.req.path);
+          return c.json(
+            { error: { message: "Unable to create account.", code: "SIGNUP_BLOCKED" } },
+            400,
+          );
+        }
+        const email =
+          rawBody && typeof rawBody === "object" && typeof (rawBody as { email?: unknown }).email === "string"
+            ? normalizeSignupEmail((rawBody as { email: string }).email)
+            : "";
+        if (email && isDisposableEmail(email)) {
+          return c.json(
+            {
+              error: {
+                message: "Please use a real work or personal email address.",
+                code: "DISPOSABLE_EMAIL",
+              },
+            },
+            400,
+          );
+        }
+      }
+
       const res = await authServer.handler(c.req.raw);
       const withToken = maybeAttachBearerTokenToOAuthRedirect(c.req.path, res);
       const loc = withToken.headers.get("Location") || "";

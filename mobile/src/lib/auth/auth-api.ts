@@ -51,12 +51,13 @@ function captureAuthToken(res: Response, data: unknown): string | null {
 export async function postAuthApi(
   path: string,
   body: Record<string, unknown>,
+  extraHeaders?: Record<string, string>,
 ): Promise<AuthApiResult> {
   const url = `${getBackendUrl()}/api/auth${path.startsWith("/") ? path : `/${path}`}`;
   try {
     const res = await safeFetch(url, {
       method: "POST",
-      headers: mobileAuthHeaders(),
+      headers: mobileAuthHeaders(extraHeaders),
       body: JSON.stringify(body),
       credentials: "omit",
     });
@@ -93,12 +94,21 @@ export async function signUpWithEmailPassword(input: {
   name: string;
   email: string;
   password: string;
+  captchaToken?: string | null;
 }) {
-  return postAuthApi("/sign-up/email", {
-    name: input.name,
-    email: input.email,
-    password: input.password,
-  });
+  return postAuthApi(
+    "/sign-up/email",
+    {
+      name: input.name,
+      email: input.email,
+      password: input.password,
+    },
+    input.captchaToken
+      ? {
+          "x-captcha-response": input.captchaToken,
+        }
+      : undefined,
+  );
 }
 
 export async function sendEmailVerificationOtp(email: string) {

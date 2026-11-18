@@ -2,7 +2,12 @@ import { Pool } from "pg";
 import { Resend } from "resend";
 import { env } from "../env";
 import { mobileTrustedOriginPatterns } from "./auth-callback-trust";
+import { isDisposableEmail } from "./signup-abuse";
 import { webAuthCallbackUrl, webPublicBaseUrl } from "./web-public-url";
+
+export function isTurnstileEnabled(): boolean {
+  return Boolean(env.TURNSTILE_SECRET_KEY?.trim() && env.TURNSTILE_SITE_KEY?.trim());
+}
 
 /**
  * Self-hosted Better Auth.
@@ -138,16 +143,20 @@ async function createAuthServer(): Promise<AuthServer | null> {
   }
 
   try {
-    const [{ betterAuth }, { bearer, emailOTP }] = await Promise.all([
+    const [{ betterAuth }, { APIError }, plugins] = await Promise.all([
       import("better-auth"),
+      import("better-auth/api"),
       import("better-auth/plugins"),
     ]);
+    const { bearer, emailOTP, captcha } = plugins;
 
     const pool = createAuthPool(env.DATABASE_URL);
 
     const microsoftClientId = env.MICROSOFT_CLIENT_ID?.trim() ?? "";
     const microsoftClientSecret = env.MICROSOFT_CLIENT_SECRET?.trim() ?? "";
     const microsoftEnabled = microsoftClientId.length > 0 && microsoftClientSecret.length > 0;
+    const turnstileSecret = env.TURNSTILE_SECRET_KEY?.trim() ?? "";
+    const turnstileEnabled = isTurnstileEnabled();
 
     const auth = betterAuth({
       appName: "Alenio",
@@ -205,11 +214,49 @@ async function createAuthServer(): Promise<AuthServer | null> {
             },
           }
         : {},
+      rateLimit: {
+        enabled: true,
+        window: 60,
+        max: 60,
+        customRules: {
+          "/sign-up/email": { window: 60, max: 3 },
+          "/sign-in/email": { window: 60, max: 10 },
+          "/email-otp/send-verification-otp": { window: 60, max: 3 },
+          "/forget-password/email-otp": { window: 60, max: 3 },
+          "/request-password-reset": { window: 60, max: 3 },
+        },
+      },
+      databaseHooks: {
+        user: {
+          create: {
+            before: async (user) => {
+              if (user.email && isDisposableEmail(String(user.email))) {
+                throw new APIError("BAD_REQUEST", {
+                  message: "Please use a real work or personal email address.",
+                  code: "DISPOSABLE_EMAIL",
+                });
+              }
+              return { data: user };
+            },
+          },
+        },
+      },
       onAPIError: {
         errorURL: webAuthCallbackUrl(),
       },
       plugins: [
         bearer(),
+        ...(turnstileEnabled
+          ? [
+              captcha({
+                provider: "cloudflare-turnstile",
+                secretKey: turnstileSecret,
+                // Signup is the bot vector (creates auth rows + Resend OTP).
+                // OTP resend / password reset stay rate-limited without captcha UX on every screen.
+                endpoints: ["/sign-up/email"],
+              }),
+            ]
+          : []),
         emailOTP({
           overrideDefaultEmailVerification: true,
           sendVerificationOnSignUp: true,
@@ -266,6 +313,10 @@ async function createAuthServer(): Promise<AuthServer | null> {
         }),
       ],
     });
+
+    console.log(
+      `[better-auth] signup protection: rate-limit=on disposable-email=on turnstile=${turnstileEnabled ? "on" : "off"}`,
+    );
 
     return {
       handler: (request: Request) => auth.handler(request),

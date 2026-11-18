@@ -23,6 +23,7 @@ import { goToEmailVerification } from "../lib/verify-redirect";
 import { setPendingSignUp } from "../lib/pending-signup";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 import { signInWithMicrosoft } from "../lib/microsoft-auth";
+import { fetchSignupProtection, TurnstileCaptcha } from "../components/TurnstileCaptcha";
 
 export function SignUpPage() {
   const [params] = useSearchParams();
@@ -36,6 +37,10 @@ export function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const [microsoftLoading, setMicrosoftLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const [honeypot, setHoneypot] = useState("");
 
   useEffect(() => {
     const t = getAccessToken();
@@ -51,6 +56,12 @@ export function SignUpPage() {
   useEffect(() => {
     if (enterpriseInviteToken) setPendingEnterpriseInviteToken(enterpriseInviteToken);
   }, [enterpriseInviteToken]);
+
+  useEffect(() => {
+    void fetchSignupProtection().then((protection) => {
+      setCaptchaRequired(protection.captchaRequired);
+    });
+  }, []);
 
   useEffect(() => {
     if (emailFromInvite) setEmail(emailFromInvite);
@@ -123,6 +134,15 @@ export function SignUpPage() {
       }
     };
 
+    if (honeypot.trim()) {
+      setError("Unable to create account.");
+      return;
+    }
+    if (captchaRequired && !captchaToken) {
+      setError("Please complete the security check.");
+      return;
+    }
+
     setLoading(true);
     try {
       let result: Awaited<ReturnType<ReturnType<typeof getAuthClient>["signUp"]["email"]>>;
@@ -131,6 +151,13 @@ export function SignUpPage() {
           name: nameTrim,
           email: emailNorm,
           password,
+          fetchOptions: captchaToken
+            ? {
+                headers: {
+                  "x-captcha-response": captchaToken,
+                },
+              }
+            : undefined,
         });
       } catch (signUpErr) {
         const signUpMsg = authErrorMessage(signUpErr) || formatAuthFlowError(signUpErr);
@@ -183,6 +210,8 @@ export function SignUpPage() {
         return;
       }
       setError(msg);
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setLoading(false);
     }
@@ -287,6 +316,19 @@ export function SignUpPage() {
               onChange={(e) => setPassword(e.target.value)}
               data-testid="sign-up-password"
             />
+            <div className="auth-hp" aria-hidden="true">
+              <label htmlFor="su-website">Company website</label>
+              <input
+                id="su-website"
+                name="website"
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+              />
+            </div>
+            <TurnstileCaptcha resetKey={captchaReset} onToken={setCaptchaToken} />
             {error ? (
               <p className="auth-error" data-testid="sign-up-error">
                 {error}
@@ -303,7 +345,12 @@ export function SignUpPage() {
                 ) : null}
               </p>
             ) : null}
-            <button type="submit" className="auth-btn-primary" disabled={loading || microsoftLoading} data-testid="sign-up-submit">
+            <button
+              type="submit"
+              className="auth-btn-primary"
+              disabled={loading || microsoftLoading || (captchaRequired && !captchaToken)}
+              data-testid="sign-up-submit"
+            >
               {loading ? "Creating…" : "Create account"}
             </button>
           </form>

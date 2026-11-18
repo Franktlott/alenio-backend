@@ -143,6 +143,12 @@ const envSchema = z.object({
   MICROSOFT_CALENDAR_CLIENT_SECRET: z.string().optional(),
   /** 32+ char secret for encrypting OAuth refresh tokens at rest. */
   CALENDAR_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  /**
+   * Cloudflare Turnstile (signup bot protection).
+   * When both are set, Better Auth requires a valid captcha on signup / OTP send.
+   */
+  TURNSTILE_SECRET_KEY: z.string().optional(),
+  TURNSTILE_SITE_KEY: z.string().optional(),
 });
 
 /**

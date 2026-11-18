@@ -54808,3 +54808,20 @@ a.go-mod-btn {
   margin-top: 0.85rem;
 }
 
+
+
+/* Bot honeypot — hidden from real users */
+.auth-hp {
+  position: absolute !important;
+  left: -10000px !important;
+  top: auto !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+}
+
+.auth-turnstile {
+  margin: 12px 0 4px;
+  display: flex;
+  justify-content: flex-start;
+}

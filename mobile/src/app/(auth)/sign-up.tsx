@@ -65,6 +65,10 @@ import {
   AuthScreen,
   authGoBack,
 } from "@/components/auth/AuthScreen";
+import {
+  fetchSignupProtection,
+  TurnstileCaptcha,
+} from "@/components/auth/TurnstileCaptcha";
 
 export default function SignUp() {
   const params = useLocalSearchParams<{
@@ -90,6 +94,9 @@ export default function SignUp() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaReset, setCaptchaReset] = useState(0);
   const queryClient = useQueryClient();
   const { activeIndex, allDone, exiting, runWithAuth } =
     useAuthLoadingSequence();
@@ -101,6 +108,12 @@ export default function SignUp() {
   useEffect(() => {
     if (inviteToken) setPendingTeamInviteToken(inviteToken);
   }, [inviteToken]);
+
+  useEffect(() => {
+    void fetchSignupProtection().then((protection) => {
+      setCaptchaRequired(protection.captchaRequired);
+    });
+  }, []);
 
   const handleSignUp = async () => {
     if (loading || microsoftLoading) return;
@@ -132,6 +145,10 @@ export default function SignUp() {
       setError("Passwords do not match");
       return;
     }
+    if (captchaRequired && !captchaToken) {
+      setError("Please complete the security check");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -142,6 +159,7 @@ export default function SignUp() {
         name: name.trim(),
         email: emailNorm,
         password,
+        captchaToken,
       });
       console.warn("[alenio-auth] sign-up result", {
         ok: result.ok,
@@ -207,6 +225,8 @@ export default function SignUp() {
         setError(
           result.error.message ?? "Failed to create account. Please try again.",
         );
+        setCaptchaToken(null);
+        setCaptchaReset((n) => n + 1);
         return;
       }
 
@@ -237,6 +257,8 @@ export default function SignUp() {
     } catch (err) {
       console.warn("[sign-up]", err);
       setError(formatAuthFlowError(err));
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setLoading(false);
     }
@@ -466,11 +488,13 @@ export default function SignUp() {
           </AuthMessage>
         ) : null}
 
+        <TurnstileCaptcha resetKey={captchaReset} onToken={setCaptchaToken} />
+
         <AuthPrimaryButton
           label="Create account"
           loading={loading}
           onPress={handleSignUp}
-          disabled={loading || microsoftLoading}
+          disabled={loading || microsoftLoading || (captchaRequired && !captchaToken)}
           testID="create-account-button"
         />
 
