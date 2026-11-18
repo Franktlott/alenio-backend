@@ -4,6 +4,7 @@ import {
   CalendarPlus,
   ChevronRight,
   Eye,
+  MailWarning,
   Pencil,
   Plus,
   ShieldCheck,
@@ -29,15 +30,17 @@ import { UserAvatar } from "../../components/UserAvatar";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import {
   fetchAdminUsers,
+  fetchIncompleteSignups,
   formatAdminDate,
   type AdminUserRow,
+  type IncompleteSignupRow,
 } from "../../lib/admin-api";
 import { staffCan, staffRoleLabel } from "../../lib/staff-access";
 import "../discover/discover-manage.css";
 import "./admin-users.css";
 import { AdminUserDrawer } from "./AdminUserDrawer";
 
-type Tab = "all" | "in-workspace" | "no-workspace" | "admins";
+type Tab = "all" | "in-workspace" | "no-workspace" | "admins" | "incomplete";
 type Sort = "newest" | "name" | "workspaces";
 
 const PAGE_SIZE = 10;
@@ -48,13 +51,21 @@ const TABS: Array<[Tab, string]> = [
   ["in-workspace", "In a workspace"],
   ["no-workspace", "No workspace"],
   ["admins", "Staff"],
+  ["incomplete", "Incomplete signups"],
 ];
 
 function matchesTab(user: AdminUserRow, tab: Tab): boolean {
+  if (tab === "incomplete") return false;
   if (tab === "in-workspace") return user._count.teamMembers > 0;
   if (tab === "no-workspace") return user._count.teamMembers === 0;
   if (tab === "admins") return user.isAdmin;
   return true;
+}
+
+function incompleteStatusLabel(row: IncompleteSignupRow): string {
+  if (row.status === "awaiting_verification") return "Awaiting verification";
+  if (row.status === "verified_not_synced") return "Verified, not synced";
+  return "Synced";
 }
 
 export function AdminUsersPage() {
@@ -109,8 +120,16 @@ export function AdminUsersPage() {
     enabled: staffCan(me, "users.view"),
     staleTime: 30_000,
   });
+  const incompleteQuery = useQuery({
+    queryKey: ["admin", "users", "incomplete", query],
+    queryFn: () => fetchIncompleteSignups(query || undefined),
+    enabled: staffCan(me, "users.view"),
+    staleTime: 30_000,
+  });
 
   const all = allQuery.data ?? [];
+  const incompleteRows = incompleteQuery.data?.data ?? [];
+  const incompleteMeta = incompleteQuery.data?.meta;
   const stats = useMemo(() => {
     const now = Date.now();
     const week = all.filter((u) => now - Date.parse(u.createdAt) < 7 * DAY).length;
@@ -144,11 +163,25 @@ export function AdminUsersPage() {
     return list;
   }, [usersQuery.data, tab, sort]);
 
-  const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const incompleteVisible = useMemo(() => {
+    const list = [...incompleteRows];
+    list.sort((a, b) => {
+      if (sort === "name") return a.name.localeCompare(b.name);
+      return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+    });
+    return list;
+  }, [incompleteRows, sort]);
+
+  const showingIncomplete = tab === "incomplete";
+  const activeCount = showingIncomplete ? incompleteVisible.length : visible.length;
+  const pages = Math.max(1, Math.ceil(activeCount / PAGE_SIZE));
   const safePage = Math.min(page, pages);
   const rows = visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const incompletePageRows = incompleteVisible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+  };
   const mayEdit = staffCan(me, "users.edit");
   const mayCreate = staffCan(me, "users.create");
   const mayDelete = staffCan(me, "users.delete");
@@ -252,8 +285,66 @@ export function AdminUsersPage() {
     },
   ];
 
-  const loading = usersQuery.isLoading;
-  const error = usersQuery.error instanceof Error ? usersQuery.error.message : usersQuery.isError ? "Could not load users." : null;
+  const incompleteColumns: AlenioColumn<IncompleteSignupRow>[] = [
+    {
+      id: "user",
+      header: "Signup",
+      primary: true,
+      cell: (row) => (
+        <span className="al-cell-entity">
+          <span className="au-avatar au-avatar--blank" aria-hidden>
+            {(row.name || row.email).slice(0, 1).toUpperCase()}
+          </span>
+          <span className="al-cell-copy">
+            <span className="al-cell-title">
+              <span className="al-cell-title-text">{row.name || "Unnamed"}</span>
+            </span>
+            <span className="al-cell-sub">{row.email}</span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      width: "180px",
+      cell: (row) => (
+        <StatusIndicator tone={row.emailVerified ? "accent" : "warning"}>
+          {incompleteStatusLabel(row)}
+        </StatusIndicator>
+      ),
+    },
+    {
+      id: "app",
+      header: "App user",
+      width: "120px",
+      cell: (row) =>
+        row.hasAppUser ? (
+          <span className="al-cell-muted">Yes</span>
+        ) : (
+          <span className="al-cell-muted">No</span>
+        ),
+    },
+    {
+      id: "started",
+      header: "Started",
+      width: "120px",
+      cell: (row) => <span className="al-cell-muted">{formatAdminDate(row.createdAt)}</span>,
+    },
+  ];
+
+  const loading = showingIncomplete ? incompleteQuery.isLoading : usersQuery.isLoading;
+  const error = showingIncomplete
+    ? incompleteQuery.error instanceof Error
+      ? incompleteQuery.error.message
+      : incompleteQuery.isError
+        ? "Could not load incomplete signups."
+        : null
+    : usersQuery.error instanceof Error
+      ? usersQuery.error.message
+      : usersQuery.isError
+        ? "Could not load users."
+        : null;
 
   return (
     <div className="dm-page au-page" data-testid="admin-users">
@@ -267,7 +358,11 @@ export function AdminUsersPage() {
             <span>Users</span>
           </nav>
           <h1>User Management</h1>
-          <p>Everyone with an Alenio account, across every workspace.</p>
+          <p>
+            {showingIncomplete
+              ? "Better Auth accounts that started signup and may have received email, but never finished becoming Alenio users."
+              : "Everyone with an Alenio account, across every workspace."}
+          </p>
         </div>
       </header>
 
@@ -330,12 +425,24 @@ export function AdminUsersPage() {
                 <span>Staff</span>
               </div>
             </div>
+            <div className="dm-stat">
+              <span className="dm-stat-icon">
+                <MailWarning size={18} strokeWidth={2} />
+              </span>
+              <div>
+                <strong>
+                  {incompleteMeta ? incompleteMeta.incompleteCount.toLocaleString() : incompleteQuery.isLoading ? "—" : "0"}
+                </strong>
+                <span>Incomplete signups</span>
+              </div>
+            </div>
           </section>
 
-          <section className="dm-card dm-articles al-ds" aria-label="Users">
+          <section className="dm-card dm-articles al-ds" aria-label={showingIncomplete ? "Incomplete signups" : "Users"}>
             <header className="al-table-head">
               <h2 className="al-panel-title">
-                Users <span className="al-seg-count">{visible.length.toLocaleString()}</span>
+                {showingIncomplete ? "Incomplete signups" : "Users"}{" "}
+                <span className="al-seg-count">{activeCount.toLocaleString()}</span>
               </h2>
               <div className="al-toolbar">
                 <SearchField
@@ -345,12 +452,12 @@ export function AdminUsersPage() {
                     setQ(value);
                   }}
                   placeholder="Search name or email"
-                  label="Search users"
+                  label={showingIncomplete ? "Search incomplete signups" : "Search users"}
                   data-testid="au-search"
                 />
                 <Select
-                  value={sort}
-                  aria-label="Sort users"
+                  value={sort === "workspaces" && showingIncomplete ? "newest" : sort}
+                  aria-label={showingIncomplete ? "Sort incomplete signups" : "Sort users"}
                   onChange={(event) => {
                     setPage(1);
                     setSort(event.target.value as Sort);
@@ -358,40 +465,73 @@ export function AdminUsersPage() {
                 >
                   <option value="newest">Newest first</option>
                   <option value="name">Name A–Z</option>
-                  <option value="workspaces">Most workspaces</option>
+                  {showingIncomplete ? null : <option value="workspaces">Most workspaces</option>}
                 </Select>
               </div>
             </header>
 
-            <AlenioDataTable
-              flush
-              label="Users"
-              rows={rows}
-              columns={columns}
-              getRowId={(user) => user.id}
-              getRowLabel={(user) => `Open ${user.name || user.email}`}
-              getRowTestId={(user) => `au-row-${user.id}`}
-              onRowClick={(user) => openUser(user.id)}
-              rowActions={(user) => (
-                <RowActions actions={userActions(user)} label={`Actions for ${user.name}`} testId={`au-menu-${user.id}`} />
-              )}
-              loading={loading}
-              busy={loading && rows.length > 0}
-              loadingRows={6}
-              emptyState={
-                <EmptyState
-                  icon={<Users size={20} strokeWidth={2} />}
-                  title={query || tab !== "all" ? "No one matches" : "No users yet"}
-                  description={query || tab !== "all" ? "Try a different search or list." : "New accounts will show up here."}
-                />
-              }
-            />
+            {showingIncomplete && incompleteMeta ? (
+              <p className="au-incomplete-note">
+                Better Auth accounts: {incompleteMeta.authUserCount?.toLocaleString() ?? "—"} · Finished app users:{" "}
+                {incompleteMeta.appUserCount?.toLocaleString() ?? "—"}
+              </p>
+            ) : null}
+
+            {showingIncomplete ? (
+              <AlenioDataTable
+                flush
+                label="Incomplete signups"
+                rows={incompletePageRows}
+                columns={incompleteColumns}
+                getRowId={(row) => row.id}
+                getRowLabel={(row) => row.email}
+                getRowTestId={(row) => `au-incomplete-row-${row.id}`}
+                loading={loading}
+                busy={loading && incompletePageRows.length > 0}
+                loadingRows={6}
+                emptyState={
+                  <EmptyState
+                    icon={<MailWarning size={20} strokeWidth={2} />}
+                    title={query ? "No incomplete signups match" : "No incomplete signups"}
+                    description={
+                      query
+                        ? "Try a different search."
+                        : "When someone starts signup and never finishes verification, they will show up here."
+                    }
+                  />
+                }
+              />
+            ) : (
+              <AlenioDataTable
+                flush
+                label="Users"
+                rows={rows}
+                columns={columns}
+                getRowId={(user) => user.id}
+                getRowLabel={(user) => `Open ${user.name || user.email}`}
+                getRowTestId={(user) => `au-row-${user.id}`}
+                onRowClick={(user) => openUser(user.id)}
+                rowActions={(user) => (
+                  <RowActions actions={userActions(user)} label={`Actions for ${user.name}`} testId={`au-menu-${user.id}`} />
+                )}
+                loading={loading}
+                busy={loading && rows.length > 0}
+                loadingRows={6}
+                emptyState={
+                  <EmptyState
+                    icon={<Users size={20} strokeWidth={2} />}
+                    title={query || tab !== "all" ? "No one matches" : "No users yet"}
+                    description={query || tab !== "all" ? "Try a different search or list." : "New accounts will show up here."}
+                  />
+                }
+              />
+            )}
             <Pagination
               page={safePage - 1}
               pageSize={PAGE_SIZE}
-              total={visible.length}
+              total={activeCount}
               onPageChange={(next) => setPage(next + 1)}
-              itemLabel="users"
+              itemLabel={showingIncomplete ? "signups" : "users"}
             />
           </section>
         </div>

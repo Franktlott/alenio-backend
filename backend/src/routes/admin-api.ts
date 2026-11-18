@@ -318,6 +318,89 @@ adminApiRouter.get("/users", requireAbility("users.view"), async (c) => {
   return c.json({ data: users.map(withIsAdmin) });
 });
 
+/**
+ * Auth accounts that started signup (and may have received OTP email) but never
+ * became a finished Alenio app user — unverified, or verified but never synced.
+ */
+adminApiRouter.get("/users/incomplete-signups", requireAbility("users.view"), async (c) => {
+  const q = c.req.query("q")?.trim().toLowerCase() ?? "";
+  type IncompleteRow = {
+    id: string;
+    email: string;
+    name: string | null;
+    emailVerified: boolean;
+    createdAt: Date;
+    hasAppUser: boolean;
+  };
+
+  let rows: IncompleteRow[] = [];
+  try {
+    rows = await prisma.$queryRaw<IncompleteRow[]>`
+      SELECT
+        a.id::text AS id,
+        a.email,
+        a.name,
+        a."emailVerified" AS "emailVerified",
+        a."createdAt" AS "createdAt",
+        (u.id IS NOT NULL) AS "hasAppUser"
+      FROM neon_auth."user" a
+      LEFT JOIN public."User" u ON u.id = a.id::text
+      WHERE a."emailVerified" = false OR u.id IS NULL
+      ORDER BY a."createdAt" DESC
+      LIMIT 500
+    `;
+  } catch (err) {
+    console.error("[admin] incomplete-signups query failed:", err);
+    return c.json(
+      { error: { message: "Could not load incomplete signups from Better Auth.", code: "AUTH_QUERY_FAILED" } },
+      500,
+    );
+  }
+
+  const filtered = q
+    ? rows.filter(
+        (row) =>
+          row.email.toLowerCase().includes(q) ||
+          (row.name ?? "").toLowerCase().includes(q),
+      )
+    : rows;
+
+  let authUserCount: number | null = null;
+  let appUserCount: number | null = null;
+  try {
+    const [authCountRows, appCount] = await Promise.all([
+      prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM neon_auth."user"`,
+      prisma.user.count(),
+    ]);
+    authUserCount = authCountRows[0]?.n ?? null;
+    appUserCount = appCount;
+  } catch {
+    // Counts are optional for the UI.
+  }
+
+  return c.json({
+    data: filtered.map((row) => ({
+      id: row.id,
+      email: row.email,
+      name: row.name?.trim() || row.email.split("@")[0] || "Unknown",
+      emailVerified: Boolean(row.emailVerified),
+      hasAppUser: Boolean(row.hasAppUser),
+      createdAt:
+        row.createdAt instanceof Date ? row.createdAt.toISOString() : new Date(row.createdAt).toISOString(),
+      status: !row.emailVerified
+        ? "awaiting_verification"
+        : row.hasAppUser
+          ? "synced"
+          : "verified_not_synced",
+    })),
+    meta: {
+      authUserCount,
+      appUserCount,
+      incompleteCount: rows.length,
+    },
+  });
+});
+
 adminApiRouter.post(
   "/users",
   requireAbility("users.create"),

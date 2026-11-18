@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthGate } from "./components/AuthGate";
 import { DocumentTitle } from "./components/DocumentTitle";
 import { SessionIdleGuard } from "./components/SessionIdleGuard";
+import { UnderConstructionGate } from "./components/UnderConstructionGate";
 import { lazyPage } from "./lib/lazy-page";
 import { getActiveApiTarget, getWebEnvConfigError } from "./lib/env-config";
 
@@ -158,15 +159,20 @@ function SetupEnvScreen({ message }: { message: string }) {
 export default function App() {
   const envMsg = missingWebEnvMessage();
   if (envMsg) {
-    return <SetupEnvScreen message={envMsg} />;
+    return (
+      <UnderConstructionGate>
+        <SetupEnvScreen message={envMsg} />
+      </UnderConstructionGate>
+    );
   }
 
   return (
-    <BrowserRouter>
-      <DocumentTitle />
-      <SessionIdleGuard />
-      <Suspense fallback={<PageLoading />}>
-      <Routes>
+    <UnderConstructionGate>
+      <BrowserRouter>
+        <DocumentTitle />
+        <SessionIdleGuard />
+        <Suspense fallback={<PageLoading />}>
+        <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/sign-up" element={<SignUpPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -252,8 +258,9 @@ export default function App() {
           }
         />
         <Route path="*" element={<Navigate to="/home" replace />} />
-      </Routes>
-      </Suspense>
-    </BrowserRouter>
+        </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </UnderConstructionGate>
   );
 }

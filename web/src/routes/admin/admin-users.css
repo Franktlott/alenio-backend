@@ -435,3 +435,11 @@
   font-weight: var(--al-fw-medium);
   line-height: 20px;
 }
+
+
+.au-incomplete-note {
+  margin: 0 20px 12px;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+}

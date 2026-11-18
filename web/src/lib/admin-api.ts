@@ -115,6 +115,41 @@ export async function fetchAdminUsers(q?: string): Promise<AdminUserRow[]> {
   return (res.data ?? []).map((u) => normalizeCreatedAt(u));
 }
 
+export type IncompleteSignupStatus = "awaiting_verification" | "verified_not_synced" | "synced";
+
+export type IncompleteSignupRow = {
+  id: string;
+  email: string;
+  name: string;
+  emailVerified: boolean;
+  hasAppUser: boolean;
+  createdAt: string;
+  status: IncompleteSignupStatus;
+};
+
+export type IncompleteSignupsResponse = {
+  data: IncompleteSignupRow[];
+  meta: {
+    authUserCount: number | null;
+    appUserCount: number | null;
+    incompleteCount: number;
+  };
+};
+
+/** Better Auth accounts that started signup but never became finished app users. */
+export async function fetchIncompleteSignups(q?: string): Promise<IncompleteSignupsResponse> {
+  const params = new URLSearchParams();
+  const trimmed = q?.trim();
+  if (trimmed) params.set("q", trimmed);
+  const qs = params.toString();
+  const path = qs ? `/api/admin/users/incomplete-signups?${qs}` : "/api/admin/users/incomplete-signups";
+  const res = await apiGetJson<IncompleteSignupsResponse>(path);
+  return {
+    data: (res.data ?? []).map((row) => normalizeCreatedAt(row)),
+    meta: res.meta ?? { authUserCount: null, appUserCount: null, incompleteCount: (res.data ?? []).length },
+  };
+}
+
 export async function fetchAdminUser(id: string): Promise<AdminUserDetail> {
   const res = await apiGetJson<{ data: AdminUserDetail }>(`/api/admin/users/${encodeURIComponent(id)}`);
   return normalizeCreatedAt(res.data);
