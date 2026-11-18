@@ -23,7 +23,7 @@ import { goToEmailVerification } from "../lib/verify-redirect";
 import { setPendingSignUp } from "../lib/pending-signup";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 import { signInWithMicrosoft } from "../lib/microsoft-auth";
-import { fetchSignupProtection, TurnstileCaptcha } from "../components/TurnstileCaptcha";
+import { TurnstileCaptcha } from "../components/TurnstileCaptcha";
 
 export function SignUpPage() {
   const [params] = useSearchParams();
@@ -57,11 +57,6 @@ export function SignUpPage() {
     if (enterpriseInviteToken) setPendingEnterpriseInviteToken(enterpriseInviteToken);
   }, [enterpriseInviteToken]);
 
-  useEffect(() => {
-    void fetchSignupProtection().then((protection) => {
-      setCaptchaRequired(protection.captchaRequired);
-    });
-  }, []);
 
   useEffect(() => {
     if (emailFromInvite) setEmail(emailFromInvite);
@@ -328,7 +323,11 @@ export function SignUpPage() {
                 onChange={(e) => setHoneypot(e.target.value)}
               />
             </div>
-            <TurnstileCaptcha resetKey={captchaReset} onToken={setCaptchaToken} />
+            <TurnstileCaptcha
+              resetKey={captchaReset}
+              onToken={setCaptchaToken}
+              onRequiredChange={setCaptchaRequired}
+            />
             {error ? (
               <p className="auth-error" data-testid="sign-up-error">
                 {error}
@@ -348,7 +347,7 @@ export function SignUpPage() {
             <button
               type="submit"
               className="auth-btn-primary"
-              disabled={loading || microsoftLoading || (captchaRequired && !captchaToken)}
+              disabled={loading || microsoftLoading}
               data-testid="sign-up-submit"
             >
               {loading ? "Creating…" : "Create account"}
