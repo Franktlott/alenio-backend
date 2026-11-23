@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { recordingHasRecoverableContent } from "./check-in-recording-service";
+import {
+  cancelRecordingDecision,
+  recordingHasRecoverableContent,
+} from "./check-in-recording-service";
 
 describe("recordingHasRecoverableContent", () => {
   test("empty consent start has nothing to keep", () => {
@@ -69,36 +72,45 @@ describe("recordingHasRecoverableContent", () => {
   });
 });
 
-/**
- * Mirrors the cancel/sweep branch: recoverable content → finish; else purge.
- * Kept here so the product rule stays explicit next to the helper.
- */
-function cancelAction(
-  recording: Parameters<typeof recordingHasRecoverableContent>[0],
-): "finish" | "delete" {
-  return recordingHasRecoverableContent(recording) ? "finish" : "delete";
-}
-
 describe("cancel and abandoned sweep draft safety", () => {
   test("cancel with segments finishes to draft", () => {
-    expect(cancelAction({ segmentsCount: 3 })).toBe("finish");
+    expect(cancelRecordingDecision({ status: "recording", segmentsCount: 3 })).toBe(
+      "finish",
+    );
   });
 
   test("cancel empty deletes", () => {
-    expect(cancelAction({})).toBe("delete");
+    expect(cancelRecordingDecision({ status: "recording" })).toBe("delete");
   });
 
   test("abandoned with live transcript finishes", () => {
-    expect(cancelAction({ transcriptSegmentsCount: 1 })).toBe("finish");
+    expect(
+      cancelRecordingDecision({
+        status: "recording",
+        transcriptSegmentsCount: 1,
+      }),
+    ).toBe("finish");
   });
 
   test("abandoned empty purges", () => {
     expect(
-      cancelAction({
+      cancelRecordingDecision({
+        status: "recording",
         durationSec: 0,
         transcript: "",
         segmentsCount: 0,
         transcriptSegmentsCount: 0,
+      }),
+    ).toBe("delete");
+  });
+
+  test("dismissing a failed write-up always deletes", () => {
+    expect(
+      cancelRecordingDecision({
+        status: "failed",
+        durationSec: 45,
+        segmentsCount: 2,
+        transcript: "too quiet to write up",
       }),
     ).toBe("delete");
   });

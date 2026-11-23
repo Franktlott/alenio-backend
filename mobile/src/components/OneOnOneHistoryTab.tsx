@@ -637,10 +637,14 @@ export function OneOnOneHistoryTab({
   const dismissFailedRecording = async (recording: ActiveCheckInRecording) => {
     try {
       await cancelCheckInRecording(teamId, memberUserId, recording.id);
+      await refetchActiveRecordings();
     } catch {
-      /* the cleanup sweep gets it eventually */
+      toast({
+        title: "Could not dismiss that recording. Try again.",
+        preset: "error",
+      });
+      void refetchActiveRecordings();
     }
-    void refetchActiveRecordings();
   };
 
   /**

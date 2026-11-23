@@ -195,8 +195,25 @@ export type CancelRecordingResult =
   | { action: "finished"; recordingId: string };
 
 /**
- * Cancel is only allowed for empty starts. Anything with recoverable content is
- * finished into a draft instead of deleted.
+ * Decide cancel vs finish for a recording row.
+ * - `failed`: always delete (leader dismissed a write-up that already failed).
+ * - recoverable content while still live: finish to draft.
+ * - empty: delete.
+ */
+export function cancelRecordingDecision(recording: {
+  status?: string | null;
+  durationSec?: number | null;
+  transcript?: string | null;
+  segmentsCount?: number;
+  transcriptSegmentsCount?: number;
+}): "finish" | "delete" {
+  if (recording.status === "failed") return "delete";
+  return recordingHasRecoverableContent(recording) ? "finish" : "delete";
+}
+
+/**
+ * Cancel is only allowed for empty starts or already-failed write-ups.
+ * Live recordings with recoverable content are finished into a draft instead.
  */
 export async function cancelOrFinishRecording(
   recordingId: string,
@@ -215,14 +232,15 @@ export async function cancelOrFinishRecording(
     return { action: "deleted" };
   }
 
-  const hasContent = recordingHasRecoverableContent({
+  const decision = cancelRecordingDecision({
+    status: recording.status,
     durationSec: recording.durationSec,
     transcript: recording.transcript,
     segmentsCount: recording._count.segments,
     transcriptSegmentsCount: recording._count.transcriptSegments,
   });
 
-  if (hasContent) {
+  if (decision === "finish") {
     if (recording.status === "recording") {
       await prisma.checkInRecording.update({
         where: { id: recordingId },
