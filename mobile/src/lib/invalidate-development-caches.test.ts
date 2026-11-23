@@ -5,23 +5,29 @@ import { invalidateDevelopmentCaches } from "@/lib/invalidate-development-caches
 
 function recordingClient() {
   const keys: unknown[] = [];
+  const refetchKeys: unknown[] = [];
   const queryClient = {
     invalidateQueries: ({ queryKey }: { queryKey: unknown }) => {
       keys.push(queryKey);
       return Promise.resolve();
     },
+    refetchQueries: ({ queryKey }: { queryKey: unknown }) => {
+      refetchKeys.push(queryKey);
+      return Promise.resolve([]);
+    },
   } as unknown as QueryClient;
-  return { keys, queryClient };
+  return { keys, refetchKeys, queryClient };
 }
 
 describe("invalidateDevelopmentCaches", () => {
   test("refreshes the member rows on the Team tab", () => {
-    const { keys, queryClient } = recordingClient();
+    const { keys, refetchKeys, queryClient } = recordingClient();
 
     invalidateDevelopmentCaches(queryClient, "team-1", "user-1");
 
     // Goal counts and check-in compliance.
     expect(keys).toContainEqual(["member-stats", "team-1"]);
+    expect(refetchKeys).toContainEqual(["member-stats", "team-1"]);
     // The next check-in date shown under each name.
     expect(keys).toContainEqual(["calendar-events", "team-1"]);
     expect(keys).toContainEqual(["planned-one-on-ones", "team-1"]);

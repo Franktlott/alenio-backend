@@ -29,9 +29,11 @@ import {
   ClipboardList,
   Clock3,
   Medal,
+  Megaphone,
   Search,
   SlidersHorizontal,
   Star,
+  Target,
   Users,
   X,
 } from "lucide-react-native";
@@ -92,7 +94,9 @@ type ActivityShowFilter =
   | "calendar"
   | "team"
   | "recognition"
-  | "milestones";
+  | "milestones"
+  | "announcements"
+  | "development";
 type ActivityPeopleFilter = "everyone" | "mine";
 type ActivityTimeFilter = "anytime" | "today" | "week" | "30days";
 
@@ -109,11 +113,13 @@ const DEFAULT_ACTIVITY_FILTERS: AppliedActivityFilters = {
 };
 
 const SHOW_FILTER_OPTIONS = [
+  { key: "announcements", label: "Announcements", Icon: Megaphone },
   { key: "tasks", label: "Tasks", Icon: ClipboardList },
   { key: "calendar", label: "Calendar", Icon: CalendarDays },
   { key: "team", label: "Team changes", Icon: Users },
   { key: "recognition", label: "Recognition", Icon: Star },
   { key: "milestones", label: "Milestones", Icon: Medal },
+  { key: "development", label: "Development", Icon: Target },
 ] as const;
 
 const PEOPLE_FILTER_OPTIONS = [
@@ -134,6 +140,7 @@ function matchesShowFilters(
 ): boolean {
   if (filters.length === 0) return true;
   return filters.some((filter) => {
+    if (filter === "announcements") return type === "post";
     if (filter === "tasks") {
       return type === "task_completed" || type === "task_assigned";
     }
@@ -142,6 +149,11 @@ function matchesShowFilters(
       return type === "member_joined" || type === "member_removed";
     }
     if (filter === "recognition") return type === "celebration";
+    if (filter === "development") {
+      return (
+        type === "development_goal_completed" || type === "check_in_completed"
+      );
+    }
     return type === "task_milestone" || type === "personal_best";
   });
 }

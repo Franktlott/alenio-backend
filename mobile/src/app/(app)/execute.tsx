@@ -16,6 +16,7 @@ import {
   Alert,
   Dimensions,
   StyleSheet,
+  useWindowDimensions,
 } from "react-native";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -73,12 +74,10 @@ import {
   Users,
   ImagePlus,
   Camera,
-  Lock,
   Trash2,
   Pencil,
   Search,
   Globe2,
-  Settings,
 } from "lucide-react-native";
 import {
   SafeAreaView,
@@ -108,7 +107,9 @@ import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { useTabBarClearanceFn, WORKSPACE_CARD_BOTTOM_GAP } from "@/lib/tab-bar";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 import {
+  fitsFormSheet,
   PANE_GAP,
   splitPaneWidths,
   useAdaptiveLayout,
@@ -123,6 +124,14 @@ import {
   WorkspaceViewToggle,
   type WorkspaceViewMode,
 } from "@/components/workspace/WorkspaceViewToggle";
+import { WorkspaceOverviewCard } from "@/components/workspace/WorkspaceOverviewCard";
+import { WorkspaceOverviewQuickActions } from "@/components/workspace/WorkspaceOverviewQuickActions";
+import { WorkspaceOverviewPulse } from "@/components/workspace/WorkspaceOverviewPulse";
+import { WorkspaceOverviewUpcomingEvents } from "@/components/workspace/WorkspaceOverviewUpcomingEvents";
+import { WorkspaceOverviewRecentUpdates } from "@/components/workspace/WorkspaceOverviewRecentUpdates";
+import { WorkspaceOverviewPage } from "@/components/workspace/WorkspaceOverviewPage";
+import { WorkspaceOverviewTeamDevelopment } from "@/components/workspace/WorkspaceOverviewRail";
+import type { ActivityFeedItem } from "@/components/activity";
 import {
   CalendarCard,
   type CalendarDisplayMode,
@@ -226,6 +235,7 @@ import {
 import { planOneOnOneHref } from "@/lib/plan-one-on-one";
 import { scheduleCheckInHref, videoCallHref } from "@/lib/meeting-navigation";
 import { selectUpcomingDevelopmentCheckIns } from "@/lib/development-overview";
+import { memberDevelopmentStatus } from "@/lib/member-development-preview";
 import {
   fetchExternalCalendarEvents,
   type ExternalCalendarEventItem,
@@ -249,6 +259,8 @@ export default function TasksScreen() {
   const insets = useSafeAreaInsets();
   const tabClearance = useTabBarClearanceFn();
   const adaptive = useAdaptiveLayout();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const eventFormAsDialog = fitsFormSheet(windowWidth, windowHeight);
   const {
     openModal,
     teamId: linkedTeamId,
@@ -281,9 +293,9 @@ export default function TasksScreen() {
   const [taskSearchQuery, setTaskSearchQuery] = useState("");
   const deferredTaskSearchQuery = React.useDeferredValue(taskSearchQuery);
   const [workspaceMode, setWorkspaceMode] =
-    useState<WorkspaceViewMode>("calendar");
+    useState<WorkspaceViewMode>("overview");
   const lastWorkspaceTabRef =
-    useRef<Exclude<WorkspaceViewMode, "development">>("calendar");
+    useRef<Exclude<WorkspaceViewMode, "development">>("overview");
   const openMembers = useCallback(() => {
     setWorkspaceMode((current) => {
       if (current !== "development") lastWorkspaceTabRef.current = current;
@@ -444,7 +456,6 @@ export default function TasksScreen() {
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [readOnlySheetOpen, setReadOnlySheetOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [previewEvent, setPreviewEvent] = useState<CalendarEvent | null>(null);
   const [previewTask, setPreviewTask] = useState<Task | null>(null);
@@ -660,28 +671,24 @@ export default function TasksScreen() {
   });
   const { switchWorkspace } = useSwitchWorkspace();
 
-  const currentRole =
-    teams?.find((t) => t.id === activeTeamId)?.role ?? "member";
+  const activeTeam = teams?.find((t) => t.id === activeTeamId);
+  const currentRole = activeTeam?.role ?? "member";
+  const activeTeamName = activeTeam?.name?.trim() || "Workspace";
   const isRegularMember = currentRole === "member";
   const isWorkspaceOwner = currentRole === "owner";
   const isOwnerOrLeader =
     currentRole === "owner" || currentRole === "team_leader";
   const isCalendarManager = isOwnerOrLeader;
-
   const summaryAssignedTo = isCalendarManager ? "entire_team" : "me";
   const summaryToday = new Date();
   const summaryYear = summaryToday.getFullYear();
   const summaryMonth = summaryToday.getMonth();
   const { access } = useWorkspaceAccess(activeTeamId);
-  const readOnlyWorkspace = Boolean(activeTeamId && !access.canWrite);
   const workspacePageBottom = tabClearance(WORKSPACE_CARD_BOTTOM_GAP);
   const openWorkspaceCreate = () => {
     if (!access.canWrite) return;
     setShowAddModal(true);
   };
-  useEffect(() => {
-    setReadOnlySheetOpen(false);
-  }, [activeTeamId]);
   const canManageTaskMenu = useCallback(
     (task: Task) => {
       if (!access.canWrite) return false;
@@ -986,18 +993,25 @@ export default function TasksScreen() {
     memberTaskFilter,
     teamData?.members,
   ]);
-  const { data: memberStatsPayload, isPending: memberStatsPending } = useQuery({
+  const {
+    data: memberStatsPayload,
+    dataUpdatedAt: memberStatsUpdatedAt,
+    isPending: memberStatsPending,
+  } = useQuery({
     queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
       api.get<MemberStatsPayload>(
         `/api/teams/${activeTeamId}/tasks/member-stats`,
       ),
     enabled: !!activeTeamId && hasTaskAccess,
-    // The roster polls every few seconds, so a member added while this screen
-    // is open would otherwise sit at an unknown status until the next launch.
-    // This endpoint is heavier than the roster, hence the slower beat.
-    refetchInterval: isScreenFocused ? 15_000 : false,
+    // Overview rings need fresher numbers after goals/check-ins change.
+    refetchInterval: isScreenFocused
+      ? workspaceMode === "overview"
+        ? 5_000
+        : 15_000
+      : false,
     refetchOnWindowFocus: true,
+    refetchOnMount: "always",
   });
   const { data: teamMomentumSummary } = useQuery({
     queryKey: teamMomentumSummaryQueryKey(activeTeamId ?? ""),
@@ -1149,6 +1163,13 @@ export default function TasksScreen() {
   });
 
   const eventCount = calendarEvents.length;
+  const upcomingEventCount = React.useMemo(() => {
+    const todayIso = toLocalIso(new Date());
+    return calendarEvents.filter((event) => {
+      const day = event.startDate.slice(0, 10);
+      return day >= todayIso;
+    }).length;
+  }, [calendarEvents]);
   const tasksBadge = Math.max(
     0,
     taskCount - (acknowledgedCounts[activeTeamId ?? ""] ?? 0),
@@ -1186,6 +1207,14 @@ export default function TasksScreen() {
   useEffect(() => {
     setDevelopmentFocus(null);
   }, [activeTeamId]);
+  // Team Development rings/key read member-stats; refresh as soon as Overview
+  // is shown so a finished check-in or new goal is reflected immediately.
+  useEffect(() => {
+    if (workspaceMode !== "overview" || !activeTeamId) return;
+    void queryClient
+      .refetchQueries({ queryKey: ["member-stats", activeTeamId], type: "active" })
+      .catch(() => {});
+  }, [workspaceMode, activeTeamId, queryClient]);
 
   /**
    * Folding the screen or leaving Tasks takes the pane away; carry the open task
@@ -1851,6 +1880,138 @@ export default function TasksScreen() {
           : undefined,
         standards: summaryStandards,
       });
+  const overviewDevStats = React.useMemo(() => {
+    const empty = {
+      goalsOnTrackPercent: 0,
+      checkInsOnTrackPercent: 0,
+      onTrackCount: 0,
+      needsAttentionCount: 0,
+      notStartedCount: 0,
+    };
+    if (teamMembers.length === 0) return empty;
+
+    const stats = memberStatsPayload?.stats ?? {};
+    const minimumActiveGoals = Math.max(
+      1,
+      summaryStandards.minimumActiveGoals || 1,
+    );
+    let goalsProgressUnits = 0;
+    let goalsEligible = 0;
+    let checkInsOnTrackCount = 0;
+    let checkInsEligible = 0;
+    let onTrackCount = 0;
+    let needsAttentionCount = 0;
+    let notStartedCount = 0;
+
+    for (const member of teamMembers) {
+      const row = stats[member.userId];
+      const goals = row?.activeDevGoals ?? 0;
+      const compliance = row?.standardsCompliance;
+      const goalsStatus = compliance?.goalsStatus;
+      const checkInStatus = compliance?.checkInStatus;
+      const neverCheckedIn = row?.daysSinceLastOneOnOne == null;
+
+      const goalsApply =
+        summaryStandards.goalsRequired &&
+        goalsStatus !== "not_required";
+      const checkInsApply =
+        summaryStandards.checkInRequired &&
+        checkInStatus !== "not_required";
+
+      // Goals ring: partial credit toward the minimum (1 of 2 goals = 50%).
+      if (goalsApply) {
+        goalsEligible += 1;
+        goalsProgressUnits += Math.min(1, goals / minimumActiveGoals);
+      }
+      // Check-ins ring: current if on track or due soon.
+      if (checkInsApply) {
+        checkInsEligible += 1;
+        if (
+          checkInStatus === "on_track" ||
+          checkInStatus === "due_soon"
+        ) {
+          checkInsOnTrackCount += 1;
+        }
+      }
+
+      if (!goalsApply && !checkInsApply) continue;
+
+      const missingGoals = goalsApply && goals < minimumActiveGoals;
+      const checkInTrouble =
+        checkInsApply &&
+        (checkInStatus === "overdue" ||
+          checkInStatus === "due_soon" ||
+          !checkInStatus);
+
+      if (neverCheckedIn && goals === 0) {
+        notStartedCount += 1;
+      } else if (missingGoals || checkInTrouble) {
+        needsAttentionCount += 1;
+      } else {
+        onTrackCount += 1;
+      }
+    }
+
+    return {
+      goalsOnTrackPercent:
+        goalsEligible > 0
+          ? Math.round((goalsProgressUnits / goalsEligible) * 100)
+          : 0,
+      checkInsOnTrackPercent:
+        checkInsEligible > 0
+          ? Math.round((checkInsOnTrackCount / checkInsEligible) * 100)
+          : 0,
+      onTrackCount,
+      needsAttentionCount,
+      notStartedCount,
+    };
+    // dataUpdatedAt ensures rings recompute after every member-stats refetch.
+  }, [
+    teamMembers,
+    memberStatsPayload,
+    memberStatsUpdatedAt,
+    summaryStandards,
+  ]);
+  /** Member overview card: personal rings + status (not the team scoreboard). */
+  const personalOverviewDev = React.useMemo(() => {
+    const row = currentUserId
+      ? memberStatsPayload?.stats[currentUserId]
+      : undefined;
+    const status = memberDevelopmentStatus(row, summaryStandards);
+    const minimumActiveGoals = Math.max(
+      1,
+      summaryStandards.minimumActiveGoals || 1,
+    );
+    const compliance = row?.standardsCompliance;
+    const goalsApply =
+      summaryStandards.goalsRequired &&
+      compliance?.goalsStatus !== "not_required";
+    const checkInsApply =
+      summaryStandards.checkInRequired &&
+      compliance?.checkInStatus !== "not_required";
+    const activeGoals = Math.max(0, row?.activeDevGoals ?? 0);
+    const checkInStatus = compliance?.checkInStatus;
+    const checkInsOnTrackPercent =
+      checkInsApply &&
+      (checkInStatus === "on_track" || checkInStatus === "due_soon")
+        ? 100
+        : 0;
+    const goalsOnTrackPercent = goalsApply
+      ? Math.round(
+          Math.min(1, activeGoals / minimumActiveGoals) * 100,
+        )
+      : 0;
+    return {
+      checkInsOnTrackPercent,
+      goalsOnTrackPercent,
+      status,
+    };
+  }, [
+    currentUserId,
+    memberStatsPayload,
+    memberStatsUpdatedAt,
+    summaryStandards,
+  ]);
   const summaryMetricsLoading =
     (summaryActivePending && !summaryActiveTasksData) ||
     (summaryCompletedPending && !summaryCompletedTasksData) ||
@@ -2064,8 +2225,6 @@ export default function TasksScreen() {
     },
     [useMonthDaySheet],
   );
-
-  const activeTeamName = teams?.find((team) => team.id === activeTeamId)?.name;
 
   // Roster management on the Team tab. The sheet decides per member what is
   // actually allowed; this only decides whether the row menu exists at all.
@@ -2677,30 +2836,7 @@ export default function TasksScreen() {
       workspaceTitleSelector
       showWorkspaceSubtitle
       leftAction={<AlenioHeaderBrand tone="dark" />}
-      rightAction={
-        activeTeamId && isOwnerOrLeader && access.canWrite ? (
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/workspace-settings",
-                params: { teamId: activeTeamId },
-              })
-            }
-            hitSlop={8}
-            style={{
-              width: 34,
-              height: 34,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Workspace settings"
-            testID="workspace-settings-header"
-          >
-            <Settings size={18} color="#FFFFFF" strokeWidth={2.2} />
-          </Pressable>
-        ) : undefined
-      }
+      rightAction={undefined}
       headerTitlePlacement="leading"
       testID="tasks-screen"
       headerTestID="workspace-header"
@@ -3256,51 +3392,6 @@ export default function TasksScreen() {
             </AlenioSheetCard>
           </AlenioBottomSheet>
 
-          <AlenioBottomSheet
-            visible={readOnlySheetOpen && readOnlyWorkspace}
-            title="Read-only workspace"
-            onClose={() => setReadOnlySheetOpen(false)}
-            compact
-            testID="workspace-read-only-sheet"
-          >
-            <Text
-              style={{
-                fontSize: 14,
-                lineHeight: 20,
-                color: "#64748B",
-                textAlign: "center",
-              }}
-            >
-              You can explore your workspace and view existing content. Creating
-              or editing content requires an eligible plan.
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                setReadOnlySheetOpen(false);
-                if (!activeTeamId) return;
-                router.push({
-                  pathname: "/choose-plan",
-                  params: { teamId: activeTeamId },
-                });
-              }}
-              style={[alenioSheetStyles.primaryButton, { marginTop: 16 }]}
-              activeOpacity={0.92}
-              testID="workspace-read-only-view-plans"
-            >
-              <Text style={alenioSheetStyles.primaryButtonText}>
-                View plans
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setReadOnlySheetOpen(false)}
-              style={[alenioSheetStyles.cancelButton, { marginTop: 8 }]}
-              activeOpacity={0.7}
-              testID="workspace-read-only-not-now"
-            >
-              <Text style={alenioSheetStyles.cancelButtonText}>Not now</Text>
-            </TouchableOpacity>
-          </AlenioBottomSheet>
-
           {/* Add choice modal */}
           <AlenioBottomSheet
             visible={showAddModal && access.canWrite}
@@ -3384,6 +3475,7 @@ export default function TasksScreen() {
             visible={showEventModal}
             transparent
             animationType="slide"
+            supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
             onRequestClose={() => {
               setShowEventModal(false);
               setEditingEvent(null);
@@ -3399,7 +3491,16 @@ export default function TasksScreen() {
               <SafeKeyboardAvoidingView
                 behavior="height"
                 enabled={!showEventStockPhotoSearch}
-                style={{ flex: 1, justifyContent: "flex-end" }}
+                style={[
+                  { flex: 1 },
+                  eventFormAsDialog
+                    ? {
+                        justifyContent: "center",
+                        alignItems: "center",
+                        paddingHorizontal: 24,
+                      }
+                    : { justifyContent: "flex-end" },
+                ]}
               >
                 <Pressable
                   style={{
@@ -3422,10 +3523,15 @@ export default function TasksScreen() {
                   }}
                 />
                 <Pressable
-                  style={eventFormStyles.sheet}
+                  style={[
+                    eventFormStyles.sheet,
+                    eventFormAsDialog ? eventFormStyles.sheetDialog : null,
+                  ]}
                   onPress={(e) => e.stopPropagation()}
                 >
-                  <View style={eventFormStyles.handle} />
+                  {eventFormAsDialog ? null : (
+                    <View style={eventFormStyles.handle} />
+                  )}
                   <View style={eventFormStyles.header}>
                     <View style={eventFormStyles.headerBrand}>
                       <Image
@@ -4791,53 +4897,229 @@ export default function TasksScreen() {
           calendarBadge={calendarBadge}
           tasksBadge={tasksBadge}
         />
-        {readOnlyWorkspace ? (
-          <View
-            style={{
-              alignItems: "center",
-              marginTop: -4,
-              marginBottom: 0,
-              paddingLeft: adaptive.contentPadLeft,
-              paddingRight: adaptive.contentPadRight,
-            }}
-          >
-            <Pressable
-              onPress={() => setReadOnlySheetOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Read-only workspace. View plan."
-              testID="workspace-read-only-status"
-              style={{
-                minHeight: 28,
-                paddingVertical: 4,
-                paddingLeft: 12,
-                paddingRight: 14,
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: "#E4DFF8",
-                backgroundColor: "#FFFFFF",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Lock size={13} color="#635BEE" strokeWidth={2.2} />
-              <Text
-                style={{
-                  fontSize: 12,
-                  lineHeight: 16,
-                  fontWeight: "700",
-                  color: "#29324A",
-                }}
-              >
-                Read-only · View plan
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
-
         <View style={{ flex: 1, minHeight: 0 }}>
         <View style={{ flex: 1 }}>
-          {workspaceMode === "development" ? (
+          {workspaceMode === "overview" ? (
+            <WorkspaceOverviewPage
+              bottomInset={workspacePageBottom}
+              hero={<WorkspaceOverviewCard workspaceName={activeTeamName} />}
+              quickActions={
+                <WorkspaceOverviewQuickActions
+                  canScheduleEvent={access.canWrite}
+                  canCreateTask={access.canWrite}
+                  canAddMember={canManageRoster}
+                  canPostUpdate={access.canWrite}
+                  canOpenSettings={Boolean(
+                    activeTeamId && isOwnerOrLeader && access.canWrite,
+                  )}
+                  onScheduleEvent={() => {
+                    if (!access.canWrite) return;
+                    if (isOwnerOrLeader) openEventModal();
+                    else openPersonalEventModal();
+                  }}
+                  onCreateTask={() => {
+                    if (!access.canWrite || !activeTeamId) return;
+                    router.push({
+                      pathname: "/create-task",
+                      params: {
+                        teamId: activeTeamId,
+                        initialDueDate: selectedDay ?? toLocalIso(new Date()),
+                        kind: isOwnerOrLeader ? "workspace_task" : "reminder",
+                      },
+                    });
+                  }}
+                  onAddMember={() => {
+                    if (!canManageRoster) return;
+                    setInviteOpen(true);
+                  }}
+                  onPostUpdate={() => {
+                    if (!access.canWrite || !activeTeamId) return;
+                    router.push({
+                      pathname: "/create-post",
+                      params: { teamId: activeTeamId },
+                    });
+                  }}
+                  onWorkspaceSettings={() => {
+                    if (!activeTeamId || !isOwnerOrLeader || !access.canWrite)
+                      return;
+                    router.push({
+                      pathname: "/workspace-settings",
+                      params: { teamId: activeTeamId },
+                    });
+                  }}
+                />
+              }
+              pulse={
+                <WorkspaceOverviewPulse
+                  memberCount={teamMembers.length}
+                  openTaskCount={taskCount}
+                  upcomingEventCount={upcomingEventCount}
+                  onPressMembers={() => {
+                    setDevelopmentFocus(null);
+                    setWorkspaceMode("development");
+                  }}
+                  onPressTasks={() => {
+                    lastWorkspaceTabRef.current = "tasks";
+                    setWorkspaceMode("tasks");
+                  }}
+                  onPressEvents={() => {
+                    lastWorkspaceTabRef.current = "calendar";
+                    setWorkspaceMode("calendar");
+                  }}
+                />
+              }
+              upcomingEvents={
+                <WorkspaceOverviewUpcomingEvents
+                  events={calendarEvents}
+                  onViewCalendar={() => {
+                    lastWorkspaceTabRef.current = "calendar";
+                    setWorkspaceMode("calendar");
+                  }}
+                  onEventPress={(event) => {
+                    openEventPreview(event);
+                  }}
+                />
+              }
+              recentUpdates={
+                <WorkspaceOverviewRecentUpdates
+                  teamId={activeTeamId}
+                  onViewAll={() => {
+                    if (!activeTeamId) return;
+                    router.push({
+                      pathname: "/workspace-activity",
+                      params: { teamId: activeTeamId },
+                    });
+                  }}
+                  onPressItem={(item: ActivityFeedItem) => {
+                    if (!activeTeamId) return;
+                    if (item.type === "post" || item.type === "celebration") {
+                      router.push({
+                        pathname: "/update-detail",
+                        params: {
+                          teamId: activeTeamId,
+                          activityId: item.id,
+                        },
+                      });
+                      return;
+                    }
+                    if (item.type === "task_milestone") {
+                      const taskId = item.metadata.taskId;
+                      if (taskId) {
+                        router.push({
+                          pathname: "/task-detail",
+                          params: { taskId, teamId: activeTeamId },
+                        });
+                      }
+                      return;
+                    }
+                    if (item.type === "calendar_event_added") {
+                      const eventId =
+                        item.metadata.eventId ?? item.metadata.eventIds?.[0];
+                      const match = eventId
+                        ? calendarEvents.find((event) => event.id === eventId)
+                        : null;
+                      if (match) openEventPreview(match);
+                      else {
+                        lastWorkspaceTabRef.current = "calendar";
+                        setWorkspaceMode("calendar");
+                      }
+                      return;
+                    }
+                    if (
+                      item.type === "development_goal_completed" ||
+                      item.type === "check_in_completed"
+                    ) {
+                      const userId =
+                        item.metadata.memberUserId ??
+                        item.metadata.targetUserId ??
+                        null;
+                      if (userId) {
+                        setDevelopmentFocus({
+                          userId,
+                          section:
+                            item.type === "check_in_completed"
+                              ? "check-ins"
+                              : "goals",
+                        });
+                      }
+                      setWorkspaceMode("development");
+                      return;
+                    }
+                    if (item.type === "member_joined") {
+                      setDevelopmentFocus(null);
+                      setWorkspaceMode("development");
+                    }
+                  }}
+                />
+              }
+              teamDevelopment={
+                <WorkspaceOverviewTeamDevelopment
+                  variant={isOwnerOrLeader ? "team" : "personal"}
+                  checkInsOnTrackPercent={
+                    isOwnerOrLeader
+                      ? overviewDevStats.checkInsOnTrackPercent
+                      : personalOverviewDev.checkInsOnTrackPercent
+                  }
+                  goalsOnTrackPercent={
+                    isOwnerOrLeader
+                      ? overviewDevStats.goalsOnTrackPercent
+                      : personalOverviewDev.goalsOnTrackPercent
+                  }
+                  onTrackCount={overviewDevStats.onTrackCount}
+                  needsAttentionCount={overviewDevStats.needsAttentionCount}
+                  notStartedCount={overviewDevStats.notStartedCount}
+                  personalStatus={
+                    isOwnerOrLeader ? null : personalOverviewDev.status
+                  }
+                  onPressViewMembers={() => {
+                    if (!isOwnerOrLeader && currentUserId) {
+                      setDevelopmentFocus({
+                        userId: currentUserId,
+                        section: "check-ins",
+                      });
+                    } else {
+                      setDevelopmentFocus(null);
+                    }
+                    openMembers();
+                  }}
+                  onPressCheckIns={() => {
+                    const preferred =
+                      (!isOwnerOrLeader && currentUserId
+                        ? teamMembers.find(
+                            (member) => member.userId === currentUserId,
+                          )
+                        : null) ?? teamMembers[0];
+                    if (preferred) {
+                      setDevelopmentFocus({
+                        userId: preferred.userId,
+                        section: "check-ins",
+                      });
+                    } else {
+                      setDevelopmentFocus(null);
+                    }
+                    openMembers();
+                  }}
+                  onPressGoals={() => {
+                    const preferred =
+                      (!isOwnerOrLeader && currentUserId
+                        ? teamMembers.find(
+                            (member) => member.userId === currentUserId,
+                          )
+                        : null) ?? teamMembers[0];
+                    if (preferred) {
+                      setDevelopmentFocus({
+                        userId: preferred.userId,
+                        section: "goals",
+                      });
+                    } else {
+                      setDevelopmentFocus(null);
+                    }
+                    openMembers();
+                  }}
+                />
+              }
+            />
+          ) : workspaceMode === "development" ? (
             <View
               style={{
                 flex: 1,
@@ -5542,12 +5824,23 @@ export default function TasksScreen() {
 
 const eventFormStyles = StyleSheet.create({
   sheet: {
+    width: "100%",
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "92%",
     flexShrink: 1,
     overflow: "hidden",
+  },
+  sheetDialog: {
+    maxWidth: 460,
+    maxHeight: "88%",
+    borderRadius: 22,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.22,
+    shadowRadius: 30,
+    elevation: 18,
   },
   handle: {
     width: 36,

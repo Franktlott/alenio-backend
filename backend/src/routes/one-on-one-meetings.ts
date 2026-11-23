@@ -63,6 +63,36 @@ type Variables = {
 const oneOnOneMeetingsRouter = new Hono<{ Variables: Variables }>();
 oneOnOneMeetingsRouter.use("*", authGuard);
 
+/** High-signal overview activity — never includes notes or transcripts. */
+async function logCheckInCompletedActivity(input: {
+  teamId: string;
+  meetingId: string;
+  memberUserId: string;
+  managerUserId: string;
+  templateTitle?: string | null;
+  publishedAt?: Date | null;
+}) {
+  const member = await prisma.user.findUnique({
+    where: { id: input.memberUserId },
+    select: { name: true },
+  });
+  const memberName = member?.name?.trim() || "a teammate";
+  await logActivity({
+    teamId: input.teamId,
+    userId: input.managerUserId,
+    type: "check_in_completed",
+    metadata: {
+      meetingId: input.meetingId,
+      memberUserId: input.memberUserId,
+      memberName,
+      managerUserId: input.managerUserId,
+      templateTitle: input.templateTitle?.trim() || null,
+      publishedAt: (input.publishedAt ?? new Date()).toISOString(),
+      idempotencyKey: `check_in_completed:${input.meetingId}`,
+    },
+  });
+}
+
 async function publishTeamCheckInsUpdated(teamId: string): Promise<void> {
   const members = await prisma.teamMember.findMany({
     where: { teamId },
@@ -1003,6 +1033,17 @@ oneOnOneMeetingsRouter.post(
         );
       }
 
+      if (!isDraft) {
+        await logCheckInCompletedActivity({
+          teamId,
+          meetingId: meeting.id,
+          memberUserId,
+          managerUserId: user.id,
+          templateTitle: meeting.templateTitle,
+          publishedAt: meeting.publishedAt,
+        });
+      }
+
       await publishTeamCheckInsUpdated(teamId);
       return c.json(
         { data: await serializeMeetingWithTasks(meeting, { canViewLeaderNotes: true }) },
@@ -1164,6 +1205,15 @@ oneOnOneMeetingsRouter.patch(
       if (publishingNow) {
         // The write-up is saved, so the audio has served its purpose.
         await deleteAudioForPublishedMeeting(meetingId);
+        await logCheckInCompletedActivity({
+          teamId,
+          meetingId,
+          memberUserId,
+          managerUserId: user.id,
+          templateTitle:
+            typeof templateTitle === "string" ? templateTitle : existing.templateTitle,
+          publishedAt: new Date(),
+        });
       }
 
       const meeting = await prisma.oneOnOneMeeting.findUnique({

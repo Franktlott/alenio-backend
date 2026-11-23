@@ -40,6 +40,11 @@ type Props = {
   bodyHeightRatio?: number;
   /** Optional fixed maximum body height. Takes precedence over bodyHeightRatio. */
   bodyMaxHeight?: number;
+  /**
+   * Stretch the bottom sheet to its full available height (under the status
+   * clearance) instead of hugging content. Profile uses this.
+   */
+  expandToMax?: boolean;
   /** Show vertical scroll indicator (useful for tall forms). */
   showScrollIndicator?: boolean;
   /** Circle with a down arrow while more of the sheet is below the fold. */
@@ -80,6 +85,7 @@ function SheetContent({
   showCloseButton = false,
   bodyHeightRatio,
   bodyMaxHeight: bodyMaxHeightOverride,
+  expandToMax = false,
   showScrollIndicator = false,
   showMoreIndicator = false,
   scrollEnabled = true,
@@ -101,7 +107,8 @@ function SheetContent({
   const sheetMaxHeight = dialog
     ? undefined
     : Math.round(windowH - topClearance);
-  const ratio = bodyHeightRatio ?? (compact ? 0.5 : 0.58);
+  const ratio =
+    bodyHeightRatio ?? (expandToMax ? 1 : compact ? 0.5 : 0.58);
   const headerChrome = compact ? 112 : 140;
   const reservedChrome = headerChrome + bottomPad + (dialog ? 0 : topClearance);
   const bodyMaxHeight =
@@ -157,6 +164,9 @@ function SheetContent({
             {
               paddingBottom: bottomPad,
               ...(sheetMaxHeight != null ? { maxHeight: sheetMaxHeight } : null),
+              ...(expandToMax && sheetMaxHeight != null
+                ? { height: sheetMaxHeight }
+                : null),
             },
             sheetStyle,
           ]}
@@ -192,14 +202,26 @@ function SheetContent({
             ) : null}
           </View>
           {scrollEnabled ? (
-            <View style={[styles.bodyWrap, { maxHeight: bodyMaxHeight }]}>
+            <View
+              style={[
+                styles.bodyWrap,
+                expandToMax
+                  ? { flex: 1, minHeight: 0, height: bodyMaxHeight }
+                  : { maxHeight: bodyMaxHeight },
+              ]}
+            >
               <ScrollView
                 ref={scrollRef}
-                style={[styles.bodyScroll, { maxHeight: bodyMaxHeight }]}
+                style={[
+                  styles.bodyScroll,
+                  expandToMax
+                    ? { flex: 1, minHeight: 0 }
+                    : { maxHeight: bodyMaxHeight },
+                ]}
                 contentContainerStyle={[
                   styles.bodyContent,
                   compact ? styles.bodyContentCompact : null,
-                  styles.bodyContentGrow,
+                  expandToMax ? styles.bodyContentFill : styles.bodyContentGrow,
                 ]}
                 showsVerticalScrollIndicator={showScrollIndicator}
                 indicatorStyle="black"
@@ -666,6 +688,9 @@ const styles = StyleSheet.create({
   },
   bodyContentGrow: {
     flexGrow: 0,
+  },
+  bodyContentFill: {
+    flexGrow: 1,
   },
   footer: {
     gap: 2,

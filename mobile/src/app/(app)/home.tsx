@@ -19,12 +19,6 @@ import { gradients, palette } from "@/theme";
 import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { HomeTodayCard } from "@/components/home/HomeTodayCard";
 import { NoWorkspaceHome } from "@/components/home/NoWorkspaceHome";
-import { SenecaResumeCard } from "@/components/home/SenecaResumeCard";
-import { fetchSenecaConversations } from "@/lib/seneca-api";
-import {
-  formatSenecaConversationWhen,
-  recentSenecaConversations,
-} from "@/lib/seneca-conversation-presentation";
 import { PANE_GAP, useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -33,6 +27,7 @@ import { useTabBarClearanceFn } from "@/lib/tab-bar";
 import { useSenecaSheetStore } from "@/lib/state/seneca-sheet-store";
 import { useHomeScheduleRealtime } from "@/lib/use-home-schedule-realtime";
 import { fetchHomeInsights } from "@/lib/home-insight-api";
+import { fetchHomeWorkspaceCard } from "@/lib/home-workspace-api";
 import {
   homeInsightForDate,
   mapApiHomeInsight,
@@ -132,35 +127,7 @@ export default function HomeScreen() {
   const openSenecaWithPrompt = useSenecaSheetStore(
     (state) => state.openSheetWithPrompt,
   );
-  const openSeneca = useSenecaSheetStore((state) => state.openSheet);
-  const openSenecaConversation = useSenecaSheetStore(
-    (state) => state.openSheetWithConversation,
-  );
-  const { data: senecaConversations = [] } = useQuery({
-    queryKey: ["seneca-conversations"],
-    queryFn: () => fetchSenecaConversations(),
-    enabled: !!currentUserId,
-    staleTime: 15_000,
-  });
-  /**
-   * One card for every Seneca chat from the last week. Older or expired
-   * chats stay in Seneca's own history.
-   */
-  const resumeConversations = useMemo(() => {
-    const now = Date.now();
-    const weekMs = 7 * 24 * 60 * 60 * 1000;
-    const fresh = senecaConversations.filter((conversation) => {
-      const updated = new Date(conversation.updatedAt).getTime();
-      const expires = new Date(conversation.expiresAt).getTime();
-      return (
-        Number.isFinite(updated) &&
-        now - updated <= weekMs &&
-        (!Number.isFinite(expires) || expires > now)
-      );
-    });
-    return recentSenecaConversations(fresh, 3);
-  }, [senecaConversations]);
-  const bottomPad = tabClearance(resumeConversations.length > 0 ? 56 : 28);
+  const bottomPad = tabClearance(28);
   /**
    * Height left for Today / Insight / Explore under the greeting so the
    * pair fills the visible home sheet on Duo and tablets.
@@ -216,6 +183,13 @@ export default function HomeScreen() {
     enabled: !!currentUserId,
     staleTime: 120_000,
   });
+  const { data: workspacePromo } = useQuery({
+    queryKey: ["home-workspace"],
+    queryFn: fetchHomeWorkspaceCard,
+    enabled: !!currentUserId && teams.length === 0,
+    staleTime: 5 * 60_000,
+  });
+  const workspaceCard = workspacePromo?.current ?? null;
   const deviceTimeZone = getBrowserTimeZone();
   const todayKey = calendarDayFromInstant(new Date(), deviceTimeZone);
   const { data: todayData, isPending: todayPending } = useQuery({
@@ -241,6 +215,8 @@ export default function HomeScreen() {
       await Promise.all(
         [
           "home-today",
+          "home-insights",
+          "home-workspace",
           "connections",
           "teams",
           "seneca-conversations",
@@ -467,26 +443,20 @@ export default function HomeScreen() {
               insightAction={weeklyInsight?.actionLabel ?? ""}
               insightImage={weeklyInsight?.image ?? { uri: "" }}
               onInsight={openWeeklyInsight}
+              workspaceTitle={workspaceCard?.title ?? null}
+              workspaceBody={workspaceCard?.body ?? ""}
+              workspaceAction={workspaceCard?.actionLabel ?? ""}
+              workspaceImage={
+                workspaceCard?.imageUrl
+                  ? { uri: workspaceCard.imageUrl }
+                  : { uri: "" }
+              }
+              workspaceDestination={
+                workspaceCard?.destination ?? { type: "create" }
+              }
             />
           </View>
         )}
-
-        {resumeConversations.length > 0 ? (
-          <View style={{ marginTop: 14 }}>
-            <SenecaResumeCard
-              conversations={resumeConversations.map((conversation) => ({
-                id: conversation.id,
-                title:
-                  conversation.title?.trim() ||
-                  conversation.preview?.trim() ||
-                  "Untitled chat",
-                whenLabel: formatSenecaConversationWhen(conversation.updatedAt),
-              }))}
-              onOpen={openSenecaConversation}
-              onContinue={openSeneca}
-            />
-          </View>
-        ) : null}
       </ScrollView>
     </CurvedTabLayout>
   );

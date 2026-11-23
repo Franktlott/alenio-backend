@@ -16,6 +16,7 @@ import {
   Animated,
   Dimensions,
   PanResponder,
+  useWindowDimensions,
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -113,6 +114,7 @@ import {
   oneOnOneMeetingStatusLabel,
 } from "@/lib/one-on-one-status";
 import { AlenioBottomSheet } from "@/components/AlenioBottomSheet";
+import { fitsFormSheet, useStatusClusterInset } from "@/lib/adaptive-layout";
 import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 type Props = {
@@ -190,12 +192,28 @@ type CheckInActionMenu =
 function checkInActionSheetStyle(
   bottomInset: number,
   expandedForConfirmation = false,
+  asDialog = false,
 ) {
   return {
     ...bottomSheetMenu.sheet,
-    marginBottom: Math.max(bottomInset, 12),
-    paddingBottom: 12,
-    maxHeight: expandedForConfirmation ? ("92%" as const) : bottomSheetMenu.sheet.maxHeight,
+    width: asDialog ? ("100%" as const) : undefined,
+    maxWidth: asDialog ? 400 : undefined,
+    alignSelf: asDialog ? ("center" as const) : undefined,
+    marginHorizontal: asDialog ? 24 : bottomSheetMenu.sheet.marginHorizontal,
+    marginBottom: asDialog ? 0 : Math.max(bottomInset, 12),
+    paddingTop: asDialog ? 8 : 0,
+    paddingBottom: asDialog ? 20 : 12,
+    maxHeight: expandedForConfirmation
+      ? ("92%" as const)
+      : asDialog
+        ? ("88%" as const)
+        : bottomSheetMenu.sheet.maxHeight,
+    borderRadius: asDialog ? 22 : bottomSheetMenu.sheet.borderRadius,
+    shadowColor: asDialog ? "#0F172A" : undefined,
+    shadowOffset: asDialog ? { width: 0, height: 18 } : undefined,
+    shadowOpacity: asDialog ? 0.22 : undefined,
+    shadowRadius: asDialog ? 30 : undefined,
+    elevation: asDialog ? 18 : undefined,
   };
 }
 
@@ -374,6 +392,10 @@ export function OneOnOneHistoryTab({
   onMeetingsChange,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const actionMenuAsDialog = fitsFormSheet(windowWidth, windowHeight);
+  /** Full-screen preview must clear the Duo camera / status cluster itself. */
+  const statusCluster = useStatusClusterInset({ fullScreen: true });
   const queryClient = useQueryClient();
   const canViewUpcoming = canCreate || isSelf;
   const [view, setView] = useState<OneOneView>("list");
@@ -3036,7 +3058,7 @@ export function OneOnOneHistoryTab({
     );
   };
 
-  const renderCheckInActionMenuModal = () => {
+  const renderCheckInActionMenuModal = (opts?: { asOverlay?: boolean }) => {
     if (!checkInActionMenu) return null;
     if (
       (checkInActionMenu.kind === "planned" && !canCreate) ||
@@ -3055,35 +3077,61 @@ export function OneOnOneHistoryTab({
     const deleteTargetId = isPlanned ? checkInActionMenu.event.id : checkInActionMenu.meeting.id;
     const isDeleting = deletingCheckInActionId === deleteTargetId;
     const historyMeeting = checkInActionMenu.kind === "history" ? checkInActionMenu.meeting : null;
+    const asOverlay = opts?.asOverlay === true;
 
-    return (
-      <Modal visible transparent animationType="slide" onRequestClose={closeCheckInActionMenu}>
+    const sheet = (
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.45)", justifyContent: "flex-end" }}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(15, 23, 42, 0.45)",
+            justifyContent: actionMenuAsDialog ? "center" : "flex-end",
+            alignItems: actionMenuAsDialog ? "center" : undefined,
+            paddingHorizontal: actionMenuAsDialog ? 24 : 0,
+          }}
           onPress={closeCheckInActionMenu}
         >
-          <Pressable onPress={(e) => e.stopPropagation?.()}>
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            style={actionMenuAsDialog ? { width: "100%", maxWidth: 400 } : undefined}
+          >
             <View
               style={checkInActionSheetStyle(
                 insets.bottom,
                 checkInActionDeleteConfirm,
+                actionMenuAsDialog,
               )}
             >
-              <View style={bottomSheetMenu.handleWrap}>
-                <View style={bottomSheetMenu.handle} />
-              </View>
+              {actionMenuAsDialog ? null : (
+                <View style={bottomSheetMenu.handleWrap}>
+                  <View style={bottomSheetMenu.handle} />
+                </View>
+              )}
 
-              <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  paddingHorizontal: 20,
+                  paddingTop: actionMenuAsDialog ? 14 : 4,
+                  paddingBottom: actionMenuAsDialog ? 16 : 12,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                   <Image
                     source={require("@/assets/alenio-icon.png")}
-                    style={{ width: 28, height: 28, borderRadius: 7 }}
+                    style={{ width: 30, height: 30, borderRadius: 8 }}
                   />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827" }} numberOfLines={2}>
                       {title}
                     </Text>
-                    <Text style={{ fontSize: 11, color: "#667085", marginTop: 2 }} numberOfLines={2}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#667085",
+                        marginTop: 3,
+                        lineHeight: 16,
+                      }}
+                      numberOfLines={2}
+                    >
                       {whenLabel}
                     </Text>
                   </View>
@@ -3091,9 +3139,9 @@ export function OneOnOneHistoryTab({
                     onPress={closeCheckInActionMenu}
                     hitSlop={8}
                     style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 14,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
                       backgroundColor: "#F1F5F9",
                       alignItems: "center",
                       justifyContent: "center",
@@ -3228,7 +3276,7 @@ export function OneOnOneHistoryTab({
                   </View>
                 </View>
               ) : isPlanned ? (
-                <View style={{ paddingBottom: 4 }}>
+                <View style={{ paddingBottom: actionMenuAsDialog ? 8 : 4 }}>
                   <Pressable
                     onPress={() => {
                       const event = checkInActionMenu.event;
@@ -3242,7 +3290,10 @@ export function OneOnOneHistoryTab({
                         }),
                       );
                     }}
-                    style={bottomSheetMenu.row}
+                    style={[
+                      bottomSheetMenu.row,
+                      actionMenuAsDialog ? { paddingVertical: 16 } : null,
+                    ]}
                     testID="planned-check-in-edit"
                   >
                     <Text style={bottomSheetMenu.rowLabel}>Edit schedule</Text>
@@ -3250,7 +3301,10 @@ export function OneOnOneHistoryTab({
                   </Pressable>
                   <Pressable
                     onPress={() => setCheckInActionDeleteConfirm(true)}
-                    style={bottomSheetMenu.row}
+                    style={[
+                      bottomSheetMenu.row,
+                      actionMenuAsDialog ? { paddingVertical: 16 } : null,
+                    ]}
                     testID="planned-check-in-delete"
                   >
                     <Text style={bottomSheetMenu.rowLabelDestructive}>Delete check-in</Text>
@@ -3258,7 +3312,7 @@ export function OneOnOneHistoryTab({
                   </Pressable>
                 </View>
               ) : historyMeeting ? (
-                <View style={{ paddingBottom: 4 }}>
+                <View style={{ paddingBottom: actionMenuAsDialog ? 8 : 4 }}>
                   {canModify ? (
                     <Pressable
                       onPress={() => {
@@ -3266,7 +3320,10 @@ export function OneOnOneHistoryTab({
                         closeCheckInActionMenu();
                         startEdit(meeting);
                       }}
-                      style={bottomSheetMenu.row}
+                      style={[
+                        bottomSheetMenu.row,
+                        actionMenuAsDialog ? { paddingVertical: 16 } : null,
+                      ]}
                       testID="history-check-in-edit"
                     >
                       <Text style={[bottomSheetMenu.rowLabel, { color: "#4361EE" }]}>
@@ -3282,6 +3339,7 @@ export function OneOnOneHistoryTab({
                         disabled={downloadingPdfId === historyMeeting.id}
                         style={[
                           bottomSheetMenu.row,
+                          actionMenuAsDialog ? { paddingVertical: 16 } : null,
                           downloadingPdfId === historyMeeting.id ? { opacity: 0.55 } : null,
                         ]}
                         testID="history-check-in-save-pdf"
@@ -3296,6 +3354,7 @@ export function OneOnOneHistoryTab({
                         disabled={printingPdf}
                         style={[
                           bottomSheetMenu.row,
+                          actionMenuAsDialog ? { paddingVertical: 16 } : null,
                           printingPdf ? { opacity: 0.55 } : null,
                         ]}
                         testID="history-check-in-print"
@@ -3310,7 +3369,10 @@ export function OneOnOneHistoryTab({
                   {canModify ? (
                     <Pressable
                       onPress={() => setCheckInActionDeleteConfirm(true)}
-                      style={bottomSheetMenu.row}
+                      style={[
+                        bottomSheetMenu.row,
+                        actionMenuAsDialog ? { paddingVertical: 16 } : null,
+                      ]}
                       testID="history-check-in-delete"
                     >
                       <Text style={bottomSheetMenu.rowLabelDestructive}>Delete check-in</Text>
@@ -3322,6 +3384,25 @@ export function OneOnOneHistoryTab({
             </View>
           </Pressable>
         </Pressable>
+    );
+
+    if (asOverlay) {
+      return (
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          {sheet}
+        </View>
+      );
+    }
+
+    return (
+      <Modal
+        visible
+        transparent
+        animationType="slide"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
+        onRequestClose={closeCheckInActionMenu}
+      >
+        {sheet}
       </Modal>
     );
   };
@@ -4165,6 +4246,8 @@ export function OneOnOneHistoryTab({
             flex: 1,
             backgroundColor: "white",
             paddingBottom: insets.bottom,
+            paddingLeft: statusCluster.left,
+            paddingRight: statusCluster.right,
           }}
         >
           <View style={{ flex: 1 }}>
@@ -4210,8 +4293,9 @@ export function OneOnOneHistoryTab({
                   onPress={() => {
                     const meeting = previewMeeting;
                     if (!meeting) return;
-                    setPreviewMeeting(null);
-                    requestAnimationFrame(() => openHistoryMeetingMenu(meeting));
+                    // Keep preview open — closing it first made the page jump
+                    // before the action sheet could appear (stacked Modals).
+                    openHistoryMeetingMenu(meeting);
                   }}
                   hitSlop={10}
                   style={{
@@ -4537,11 +4621,16 @@ export function OneOnOneHistoryTab({
             ) : null}
           </View>
           {renderTranscriptPanel()}
+          {checkInActionMenu?.kind === "history"
+            ? renderCheckInActionMenuModal({ asOverlay: true })
+            : null}
         </View>
       </Modal>
 
       {renderPublishModals()}
-      {renderCheckInActionMenuModal()}
+      {previewMeeting && checkInActionMenu?.kind === "history"
+        ? null
+        : renderCheckInActionMenuModal()}
     </View>
   );
 }

@@ -79,6 +79,17 @@ export function fetchWorkspaceFeed(teamId: string, cursor?: string | null, limit
   );
 }
 
+/** High-signal Recent Updates for Workspace Overview. */
+export function fetchWorkspaceOverviewUpdates(teamId: string, limit = 3) {
+  const params = new URLSearchParams({
+    surface: "overview",
+    limit: String(limit),
+  });
+  return apiGetJson<{ data: WorkspaceFeedPage }>(
+    `${team(teamId)}/activity?${params.toString()}`,
+  ).then((r) => r.data);
+}
+
 export function createWorkspacePost(teamId: string, body: string) {
   return apiPostJson<{ data: WorkspaceActivity }>(`${team(teamId)}/activity/posts`, { body }).then((r) => r.data);
 }
@@ -149,6 +160,20 @@ export function activityHeadline(item: WorkspaceActivity): string {
       return "hit a milestone";
     case "task_completed":
       return item.metadata?.taskTitle ? `completed "${item.metadata.taskTitle}"` : "completed a task";
+    case "calendar_event_added": {
+      const titles = (item.metadata as { eventTitles?: string[] } | null)?.eventTitles;
+      const count =
+        (item.metadata as { eventCount?: number } | null)?.eventCount ??
+        titles?.length ??
+        1;
+      return count > 1 ? `added ${count} events` : "added an event";
+    }
+    case "development_goal_completed":
+      return "completed a development goal";
+    case "check_in_completed": {
+      const name = (item.metadata as { memberName?: string } | null)?.memberName;
+      return name ? `completed a check-in with ${name}` : "completed a check-in";
+    }
     default:
       return "posted an update";
   }

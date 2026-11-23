@@ -103,7 +103,7 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
       select: { image: true },
     }),
     prisma.team.findMany({
-      select: { image: true, goFrontendSettings: true },
+      select: { image: true, coverImage: true, goFrontendSettings: true },
     }),
     prisma.calendarEvent
       .findMany({
@@ -151,6 +151,7 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
 
   for (const team of teams) {
     addUrl(paths, team.image);
+    addUrl(paths, team.coverImage);
     const settings = parseGoFrontendSettings(team.goFrontendSettings);
     addUrl(paths, settings.heroImageUrl);
   }

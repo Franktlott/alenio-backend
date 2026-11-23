@@ -8,13 +8,19 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { router } from "expo-router";
 import { toast } from "burnt";
 import {
   Check,
   ChevronRight,
   Link2,
+  Lock,
   LogOut,
   Plus,
   ScanLine,
@@ -26,6 +32,10 @@ import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
 import { useTeamStore } from "@/lib/state/team-store";
 import { applyTeamRemovedFromAccount } from "@/lib/workspace-switch";
 import { workspaceManagementCapabilities } from "@/lib/workspace-management";
+import {
+  deriveWorkspaceAccess,
+  type WorkspaceSubscription,
+} from "@/lib/workspace-access";
 import {
   WorkspaceTeamAvatar,
   formatTeamRole,
@@ -79,6 +89,23 @@ export function SwitchWorkspaceSheet({ visible, onClose }: Props) {
     () => [...teams].sort((a, b) => a.name.localeCompare(b.name)),
     [teams],
   );
+  const subscriptionQueries = useQueries({
+    queries: sortedTeams.map((team) => ({
+      queryKey: ["subscription", team.id],
+      queryFn: () =>
+        api.get<WorkspaceSubscription>(`/api/teams/${team.id}/subscription`),
+      enabled: Boolean(session?.user && visible),
+      staleTime: 30_000,
+    })),
+  });
+  const readOnlyByTeamId = useMemo(() => {
+    const map = new Map<string, boolean>();
+    sortedTeams.forEach((team, index) => {
+      const access = deriveWorkspaceAccess(subscriptionQueries[index]?.data);
+      map.set(team.id, !access.canWrite);
+    });
+    return map;
+  }, [sortedTeams, subscriptionQueries]);
 
   useEffect(() => {
     if (!visible) setLeaveTarget(null);
@@ -285,9 +312,26 @@ export function SwitchWorkspaceSheet({ visible, onClose }: Props) {
                   active={current}
                 />
                 <View style={styles.workspaceText}>
-                  <Text style={styles.workspaceName} numberOfLines={1}>
-                    {team.name}
-                  </Text>
+                  <View style={styles.workspaceNameRow}>
+                    <Text style={styles.workspaceName} numberOfLines={1}>
+                      {team.name}
+                    </Text>
+                    {readOnlyByTeamId.get(team.id) ? (
+                      <View
+                        style={styles.readOnlyBadge}
+                        testID={`switch-workspace-read-only-${team.id}`}
+                      >
+                        <View style={styles.readOnlyBadgeInner}>
+                          <View style={styles.readOnlyBadgeIcon}>
+                            <Lock size={10} color="#4361EE" strokeWidth={2.5} />
+                          </View>
+                          <Text style={styles.readOnlyBadgeText} numberOfLines={1}>
+                            Read-only
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
                   <Text style={styles.workspaceMeta} numberOfLines={1}>
                     {memberLabel(team)}
                   </Text>
@@ -416,12 +460,49 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  workspaceNameRow: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    gap: 6,
+  },
   workspaceName: {
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 14,
     lineHeight: 18,
     fontWeight: "700",
     letterSpacing: -0.2,
     color: palette.ink,
+  },
+  readOnlyBadge: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 20,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: "#EEF2FF",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#C7D2FE",
+    justifyContent: "center",
+  },
+  readOnlyBadgeInner: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  readOnlyBadgeIcon: {
+    width: 10,
+    height: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readOnlyBadgeText: {
+    marginLeft: 4,
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: "700",
+    letterSpacing: 0.15,
+    color: "#4361EE",
   },
   workspaceMeta: {
     marginTop: 2,

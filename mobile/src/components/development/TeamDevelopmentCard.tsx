@@ -374,7 +374,23 @@ export function TeamDevelopmentCard({
             </View>
             <View style={styles.starsFootnoteCopy}>
               <View style={styles.starsFootnoteTitleRow}>
+                <Text style={styles.sparkleInline} accessibilityElementsHidden>
+                  ✦
+                </Text>
                 <Text style={styles.starsFootnoteTitle}>Stars</Text>
+                <Text style={styles.sparkleInline} accessibilityElementsHidden>
+                  ★
+                </Text>
+                <View style={styles.sparkleTrail} accessibilityElementsHidden>
+                  <Text style={styles.sparkleTrailGlyph}>✦</Text>
+                  <Text style={[styles.sparkleTrailGlyph, styles.sparkleTrailDim]}>
+                    ★
+                  </Text>
+                  <Text style={[styles.sparkleTrailGlyph, styles.sparkleTrailFaint]}>
+                    ✦
+                  </Text>
+                </View>
+                <View style={styles.starsFootnoteTitleSpacer} />
                 <Pressable
                   onPress={() => setStarsInfoOpen(true)}
                   hitSlop={10}
@@ -704,6 +720,34 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+  },
+  starsFootnoteTitleSpacer: {
+    flex: 1,
+    minWidth: 8,
+  },
+  sparkleInline: {
+    fontSize: 10,
+    lineHeight: 12,
+    color: "#C9A84A",
+  },
+  sparkleTrail: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginLeft: 2,
+  },
+  sparkleTrailGlyph: {
+    fontSize: 9,
+    lineHeight: 11,
+    color: "#D4B56A",
+  },
+  sparkleTrailDim: {
+    opacity: 0.7,
+    fontSize: 8,
+  },
+  sparkleTrailFaint: {
+    opacity: 0.45,
+    fontSize: 7,
   },
   starsFootnoteTitle: {
     fontSize: 12,

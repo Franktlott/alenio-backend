@@ -1050,21 +1050,17 @@ export function ProfileScreen({
                 onPress={() => setShowSettings(true)}
                 testID="open-settings-row"
               />
-            </ProfileCard>
-          </ProfileSection>
-
-          <View style={{ marginTop: 20 }}>
-            <ProfileCard>
+              <ProfileDivider inset />
               <ProfileMenuRow
                 icon={LogOut}
-                title="Sign Out"
+                title="Sign out"
                 subtitle="Sign out of Alenio on this device"
                 onPress={requestSignOut}
                 testID="profile-sign-out-button"
                 destructive
               />
             </ProfileCard>
-          </View>
+          </ProfileSection>
 
           </>
           ) : null}
@@ -1435,7 +1431,7 @@ export function ProfileScreen({
         title={showSettings ? "Settings" : "Profile"}
         onClose={closeProfile}
         showCloseButton={!asTab}
-        bodyHeightRatio={asTab ? 0.78 : 0.88}
+        bodyHeightRatio={asTab ? 0.78 : 0.9}
         sheetStyle={asTab ? { marginBottom: tabClearance(4) } : undefined}
         refreshControl={
           <RefreshControl

@@ -7,6 +7,8 @@ import { WorkspaceCreateJoinModals } from "../components/WorkspaceCreateJoinModa
 import { WorkspaceCalendar } from "../components/workspace/WorkspaceCalendar";
 import { PeopleTeamPage } from "../components/workspace/PeopleTeamPage";
 import { WorkspaceMomentumPanel } from "../components/workspace/WorkspaceMomentumPanel";
+import { WorkspaceOverviewRecentUpdates } from "../components/workspace/WorkspaceOverviewRecentUpdates";
+import { WorkspaceFeed } from "../components/workspace/WorkspaceFeed";
 import { WorkspaceSubNav, type WorkspaceSection } from "../components/workspace/WorkspaceSubNav";
 import { WorkspaceTasksPanel, isAssignedTo, isOpenTask } from "../components/workspace/WorkspaceTasksPanel";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
@@ -45,6 +47,7 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
   const navigate = useNavigate();
   const openPerson = useCallback((id: string) => navigate(`/people/${encodeURIComponent(id)}`), [navigate]);
   const [brokenLogo, setBrokenLogo] = useState<string | null>(null);
+  const [showOverviewActivity, setShowOverviewActivity] = useState(false);
 
   const team = useMemo(() => {
     if (!teams || teams.length === 0) return null;
@@ -175,6 +178,21 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
         {section === "overview" ? (
           <div className="ws-grid ws-grid--overview">
             <main className="nw-col ws-col--main">
+              <WorkspaceOverviewRecentUpdates
+                teamId={team.id}
+                onViewAll={() => setShowOverviewActivity(true)}
+              />
+              {showOverviewActivity && me ? (
+                <div className="ws-overview-activity-full">
+                  <WorkspaceFeed
+                    teamId={team.id}
+                    teamName={team.name}
+                    me={me}
+                    canModerate={canModerate}
+                    onOpenPerson={openPerson}
+                  />
+                </div>
+              ) : null}
               <WorkspaceCalendar teamId={team.id} meId={me.id} canManage={canModerate} tasks={tasks.data} />
             </main>
           </div>

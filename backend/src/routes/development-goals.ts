@@ -578,7 +578,9 @@ developmentGoalsRouter.patch(
                   ...workspaceAudienceFields(teamId),
                   metadata: JSON.stringify({
                     goalId,
+                    goalTitle: existing.skill,
                     targetUserId: memberUserId,
+                    memberUserId,
                     completedByUserId: user.id,
                   }),
                 },

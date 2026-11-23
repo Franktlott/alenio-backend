@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
-import { colors, elevation, palette } from "@/theme";
+import { colors, elevation } from "@/theme";
 
 export type SegmentOption<K extends string> = {
   key: K;
@@ -45,7 +45,7 @@ export function SegmentedControl<K extends string>({
             {Icon ? (
               <Icon
                 size={13}
-                color={selected ? "#FFFFFF" : colors.textMuted}
+                color={selected ? colors.brand : colors.textMuted}
                 strokeWidth={selected ? 2.4 : 2.1}
               />
             ) : null}
@@ -86,12 +86,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tabSelected: {
-    backgroundColor: palette.violet,
-    shadowColor: palette.violetBright,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.22,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: colors.brandSoft,
   },
   label: {
     fontSize: 12,
@@ -101,7 +96,7 @@ const styles = StyleSheet.create({
   },
   labelSelected: {
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: colors.brand,
   },
   badge: {
     minWidth: 16,

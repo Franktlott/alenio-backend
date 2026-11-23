@@ -465,12 +465,17 @@ teamsRouter.patch("/:teamId", async (c) => {
     );
   }
 
-  if (body.image !== undefined) {
+  if (body.image !== undefined || body.coverImage !== undefined) {
     const existing = await prisma.team.findUnique({
       where: { id: teamId },
-      select: { image: true },
+      select: { image: true, coverImage: true },
     });
-    await deleteReplacedStorageObject(existing?.image, body.image);
+    if (body.image !== undefined) {
+      await deleteReplacedStorageObject(existing?.image, body.image);
+    }
+    if (body.coverImage !== undefined) {
+      await deleteReplacedStorageObject(existing?.coverImage, body.coverImage);
+    }
   }
 
   let team;
@@ -482,6 +487,7 @@ teamsRouter.patch("/:teamId", async (c) => {
         ...(parsedTimezone?.ok ? { timezone: parsedTimezone.value } : {}),
         ...(normalizedLocation?.ok ? { location: normalizedLocation.value } : {}),
         ...(body.image !== undefined ? { image: body.image } : {}),
+        ...(body.coverImage !== undefined ? { coverImage: body.coverImage } : {}),
         ...(parsedStandards?.ok
           ? { workplaceStandards: serializeWorkplaceStandards(parsedStandards.value) }
           : {}),

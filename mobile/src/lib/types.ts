@@ -55,6 +55,8 @@ export interface Team {
   id: string;
   name: string;
   image?: string | null;
+  /** Wide overview hero cover. Null uses the default mountain. */
+  coverImage?: string | null;
   location?: string | null;
   timezone?: string | null;
   inviteCode: string;

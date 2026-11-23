@@ -84,7 +84,13 @@ function activeNavFromPath(pathname: string): EnterpriseNavId {
   if (pathname.startsWith("/go/org/users")) return "users";
   if (pathname.startsWith("/go")) return "go";
   if (pathname.startsWith("/billing")) return "plan";
-  if (pathname.startsWith("/admin/discover") || pathname.startsWith("/admin/home-insights")) return "content";
+  if (
+    pathname.startsWith("/admin/discover") ||
+    pathname.startsWith("/admin/home-insights") ||
+    pathname.startsWith("/admin/home-workspace")
+  ) {
+    return "content";
+  }
   if (pathname.startsWith("/admin/users")) return "adminUsers";
   if (pathname.startsWith("/admin/workspaces")) return "adminWorkspaces";
   if (pathname.startsWith("/admin/seneca")) return "adminSeneca";
@@ -289,6 +295,7 @@ export function EnterpriseShellLayout() {
     location.pathname === "/discover" ||
     location.pathname === "/admin/discover" ||
     location.pathname.startsWith("/admin/home-insights") ||
+    location.pathname.startsWith("/admin/home-workspace") ||
     location.pathname === "/admin/users"
       ? "enterprise-app--hero-under-topbar"
       : "",

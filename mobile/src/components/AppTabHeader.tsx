@@ -1,16 +1,29 @@
 import React, { useEffect, useState } from "react";
-import { View, Image, StyleSheet, Text, Pressable } from "react-native";
+import {
+  View,
+  Image,
+  StyleSheet,
+  Text,
+  Pressable,
+  TouchableOpacity,
+} from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Video } from "lucide-react-native";
+import { router } from "expo-router";
+import { ChevronDown, Lock, Video } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { HeaderActionPill } from "@/components/HeaderAddButton";
 import { HeaderNotificationsButton } from "@/components/HeaderNotificationsButton";
 import { HeaderProfileButton } from "@/components/HeaderProfileButton";
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { SwitchWorkspaceSheet } from "@/components/SwitchWorkspaceSheet";
+import {
+  AlenioBottomSheet,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { canOpenWorkspaceTitleMenu } from "@/lib/workspace-management";
+import { useWorkspaceAccess } from "@/lib/workspace-access";
 import type { Team } from "@/lib/types";
 import { useMeetingBannerStore } from "@/lib/state/meeting-banner-store";
 import { HEADER_BRAND_COLOR } from "@/lib/header-brand";
@@ -103,10 +116,16 @@ export function AppTabHeader({
   showWorkspaceSubtitle = false,
 }: Props) {
   const [switchOpen, setSwitchOpen] = useState(false);
+  const [readOnlySheetOpen, setReadOnlySheetOpen] = useState(false);
   const [meetingNow, setMeetingNow] = useState(Date.now());
   const cluster = useStatusClusterInset();
   const { iconRailEdge, sceneInsetLeft, sceneInsetRight } = useAdaptiveLayout();
   const activeTeamId = useTeamStore((state) => state.activeTeamId);
+  const { access } = useWorkspaceAccess(activeTeamId);
+  const readOnlyWorkspace = Boolean(activeTeamId && !access.canWrite);
+  useEffect(() => {
+    setReadOnlySheetOpen(false);
+  }, [activeTeamId]);
   const dismissedMeetingIds = useMeetingBannerStore(
     (state) => state.dismissedMeetingIds,
   );
@@ -149,55 +168,100 @@ export function AppTabHeader({
   });
   const pageTitleMode = Boolean(title?.trim());
   const titleLayoutMode = pageTitleMode || hideCenterContent;
-  const titleControl = pageTitleMode ? (
+  const readOnlyPill = readOnlyWorkspace ? (
     <Pressable
-      onPress={() => setSwitchOpen(true)}
-      disabled={!canOpenTitleMenu}
+      onPress={() => setReadOnlySheetOpen(true)}
+      accessibilityRole="button"
+      accessibilityLabel="Read-only workspace. View plan."
+      testID="workspace-read-only-status"
+      hitSlop={6}
       style={({ pressed }) => [
+        styles.readOnlyBadge,
+        pressed ? styles.readOnlyBadgePressed : null,
+      ]}
+    >
+      <View style={styles.readOnlyBadgeInner}>
+        <View style={styles.readOnlyBadgeIcon}>
+          <Lock size={10} color="#4361EE" strokeWidth={2.5} />
+        </View>
+        <Text style={styles.readOnlyBadgeText} numberOfLines={1}>
+          Read-only
+        </Text>
+      </View>
+    </Pressable>
+  ) : null;
+  const titleControl = pageTitleMode ? (
+    <View
+      style={[
         styles.titleBlock,
         titlePlacement === "leading" ? styles.titleBlockLeading : null,
-        pressed ? styles.titleBlockPressed : null,
       ]}
-      accessibilityRole={canOpenTitleMenu ? "button" : undefined}
-      accessibilityLabel={
-        canOpenTitleMenu ? `Open workspace menu. Current: ${title}` : undefined
-      }
     >
-      <View
-        style={[
-          styles.titleLine,
-          titlePlacement === "leading" ? styles.titleLineLeading : null,
-        ]}
+      <Pressable
+        onPress={() => setSwitchOpen(true)}
+        disabled={!canOpenTitleMenu}
+        style={({ pressed }) => (pressed ? styles.titleBlockPressed : null)}
+        accessibilityRole={canOpenTitleMenu ? "button" : undefined}
+        accessibilityLabel={
+          canOpenTitleMenu
+            ? `Open workspace menu. Current: ${title}`
+            : undefined
+        }
       >
-        <Text
+        <View
           style={[
-            styles.pageTitle,
-            tone === "light" ? styles.pageTitleLight : null,
+            styles.titleLine,
+            titlePlacement === "leading" ? styles.titleLineLeading : null,
           ]}
-          numberOfLines={1}
         >
-          {title}
-        </Text>
-        {canOpenTitleMenu ? (
-          <ChevronDown
-            size={14}
-            color={tone === "light" ? "#64748B" : "rgba(255,255,255,0.92)"}
-            strokeWidth={2.5}
-          />
-        ) : null}
-      </View>
+          <Text
+            style={[
+              styles.pageTitle,
+              tone === "light" ? styles.pageTitleLight : null,
+            ]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          {canOpenTitleMenu ? (
+            <ChevronDown
+              size={14}
+              color={tone === "light" ? "#64748B" : "rgba(255,255,255,0.92)"}
+              strokeWidth={2.5}
+            />
+          ) : null}
+        </View>
+      </Pressable>
       {showWorkspaceSubtitle && activeTeam ? (
-        <Text
-          style={[
-            styles.workspaceSubtitle,
-            tone === "light" ? styles.workspaceSubtitleLight : null,
-          ]}
-          numberOfLines={1}
-        >
-          {activeTeam.name}
-        </Text>
+        <View style={styles.workspaceSubtitleRow}>
+          <Pressable
+            onPress={() => setSwitchOpen(true)}
+            disabled={!canOpenTitleMenu}
+            style={({ pressed }) => [
+              styles.workspaceNameHit,
+              pressed ? styles.titleBlockPressed : null,
+            ]}
+            accessibilityRole={canOpenTitleMenu ? "button" : undefined}
+            accessibilityLabel={
+              canOpenTitleMenu
+                ? `Open workspace menu. Current: ${activeTeam.name}`
+                : undefined
+            }
+          >
+            <Text
+              style={[
+                styles.workspaceSubtitle,
+                tone === "light" ? styles.workspaceSubtitleLight : null,
+              ]}
+              numberOfLines={1}
+            >
+              {activeTeam.name}
+            </Text>
+          </Pressable>
+          {readOnlyPill}
+        </View>
       ) : null}
-    </Pressable>
+    </View>
   ) : null;
 
   /**
@@ -255,47 +319,50 @@ export function AppTabHeader({
           ) : pageTitleMode ? (
             titleControl
           ) : (
-            <Pressable
-              onPress={() => setSwitchOpen(true)}
-              style={({ pressed }) => [
-                styles.workspaceSelector,
-                pressed ? styles.workspaceSelectorPressed : null,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={
-                canSwitch
-                  ? `Switch workspace. Current: ${workspaceLabel}`
-                  : `Workspace ${workspaceLabel}`
-              }
-              testID="header-workspace-selector"
-            >
-              <View style={styles.workspaceInner}>
-                {activeTeam ? (
-                  <WorkspaceTeamAvatar
-                    team={activeTeam}
-                    size={16}
-                    radius={5}
-                    backgroundColor="rgba(255,255,255,0.95)"
-                    textColor="#4361EE"
-                    borderColor="rgba(255,255,255,0.5)"
-                  />
-                ) : null}
-                <Text
-                  style={styles.workspaceName}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {workspaceLabel}
-                </Text>
-                {canSwitch ? (
-                  <ChevronDown
-                    size={12}
-                    color="rgba(255,255,255,0.92)"
-                    strokeWidth={2.5}
-                  />
-                ) : null}
-              </View>
-            </Pressable>
+            <View style={styles.workspaceSelectorCluster} pointerEvents="box-none">
+              <Pressable
+                onPress={() => setSwitchOpen(true)}
+                style={({ pressed }) => [
+                  styles.workspaceSelector,
+                  pressed ? styles.workspaceSelectorPressed : null,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  canSwitch
+                    ? `Switch workspace. Current: ${workspaceLabel}`
+                    : `Workspace ${workspaceLabel}`
+                }
+                testID="header-workspace-selector"
+              >
+                <View style={styles.workspaceInner}>
+                  {activeTeam ? (
+                    <WorkspaceTeamAvatar
+                      team={activeTeam}
+                      size={16}
+                      radius={5}
+                      backgroundColor="rgba(255,255,255,0.95)"
+                      textColor="#4361EE"
+                      borderColor="rgba(255,255,255,0.5)"
+                    />
+                  ) : null}
+                  <Text
+                    style={styles.workspaceName}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {workspaceLabel}
+                  </Text>
+                  {canSwitch ? (
+                    <ChevronDown
+                      size={12}
+                      color="rgba(255,255,255,0.92)"
+                      strokeWidth={2.5}
+                    />
+                  ) : null}
+                </View>
+              </Pressable>
+              {readOnlyPill}
+            </View>
           )}
 
           <View style={[styles.sideSlot, styles.sideSlotEnd]}>
@@ -339,6 +406,48 @@ export function AppTabHeader({
         visible={switchOpen}
         onClose={() => setSwitchOpen(false)}
       />
+      <AlenioBottomSheet
+        visible={readOnlySheetOpen && readOnlyWorkspace}
+        title="Read-only workspace"
+        onClose={() => setReadOnlySheetOpen(false)}
+        compact
+        testID="workspace-read-only-sheet"
+      >
+        <Text
+          style={{
+            fontSize: 14,
+            lineHeight: 20,
+            color: "#64748B",
+            textAlign: "center",
+          }}
+        >
+          You can explore your workspace and view existing content. Creating or
+          editing content requires an eligible plan.
+        </Text>
+        <TouchableOpacity
+          onPress={() => {
+            setReadOnlySheetOpen(false);
+            if (!activeTeamId) return;
+            router.push({
+              pathname: "/choose-plan",
+              params: { teamId: activeTeamId },
+            });
+          }}
+          style={[alenioSheetStyles.primaryButton, { marginTop: 16 }]}
+          activeOpacity={0.92}
+          testID="workspace-read-only-view-plans"
+        >
+          <Text style={alenioSheetStyles.primaryButtonText}>View plans</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setReadOnlySheetOpen(false)}
+          style={[alenioSheetStyles.cancelButton, { marginTop: 8 }]}
+          activeOpacity={0.7}
+          testID="workspace-read-only-not-now"
+        >
+          <Text style={alenioSheetStyles.cancelButtonText}>Not now</Text>
+        </TouchableOpacity>
+      </AlenioBottomSheet>
     </>
   );
 }
@@ -421,10 +530,11 @@ const styles = StyleSheet.create({
   },
   titleBlock: {
     flexShrink: 1,
+    minWidth: 0,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 8,
-    maxWidth: 220,
+    maxWidth: 280,
   },
   titleBlockLeading: {
     alignItems: "flex-start",
@@ -454,9 +564,21 @@ const styles = StyleSheet.create({
   pageTitleLight: {
     color: "#18213A",
   },
+  workspaceSubtitleRow: {
+    marginTop: 2,
+    maxWidth: "100%",
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    gap: 6,
+  },
+  workspaceNameHit: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
   workspaceSubtitle: {
-    marginTop: 1,
-    maxWidth: 180,
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 9,
     lineHeight: 11,
     fontWeight: "500",
@@ -464,6 +586,46 @@ const styles = StyleSheet.create({
   },
   workspaceSubtitleLight: {
     color: "#7A8599",
+  },
+  readOnlyBadge: {
+    flexGrow: 0,
+    flexShrink: 0,
+    alignSelf: "center",
+    height: 20,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: "#EEF2FF",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#C7D2FE",
+    justifyContent: "center",
+  },
+  readOnlyBadgePressed: {
+    backgroundColor: "#E0E7FF",
+  },
+  readOnlyBadgeInner: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  readOnlyBadgeIcon: {
+    width: 10,
+    height: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readOnlyBadgeText: {
+    marginLeft: 4,
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: "700",
+    letterSpacing: 0.15,
+    color: "#4361EE",
+  },
+  workspaceSelectorCluster: {
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    maxWidth: 280,
   },
   workspaceSelector: {
     flexShrink: 1,

@@ -26,6 +26,14 @@ const HomeInsightEditorPage = lazyPage(
   () => import("./routes/admin/HomeInsightEditorPage"),
   "HomeInsightEditorPage",
 );
+const HomeWorkspaceListPage = lazyPage(
+  () => import("./routes/admin/HomeWorkspaceListPage"),
+  "HomeWorkspaceListPage",
+);
+const HomeWorkspaceEditorPage = lazyPage(
+  () => import("./routes/admin/HomeWorkspaceEditorPage"),
+  "HomeWorkspaceEditorPage",
+);
 const AdminFeedPostsPage = lazyPage(
   () => import("./routes/admin/AdminFeedPostsPage"),
   "AdminFeedPostsPage",
@@ -239,6 +247,9 @@ export default function App() {
           <Route path="/admin/home-insights" element={<HomeInsightsListPage />} />
           <Route path="/admin/home-insights/new" element={<HomeInsightEditorPage />} />
           <Route path="/admin/home-insights/:insightId" element={<HomeInsightEditorPage />} />
+          <Route path="/admin/home-workspace" element={<HomeWorkspaceListPage />} />
+          <Route path="/admin/home-workspace/new" element={<HomeWorkspaceEditorPage />} />
+          <Route path="/admin/home-workspace/:cardId" element={<HomeWorkspaceEditorPage />} />
           <Route path="/admin/feed-posts" element={<AdminFeedPostsPage />} />
           <Route path="/settings" element={<ProfilePage />} />
           <Route path="/settings/ai" element={<SettingsAiHubPage />} />

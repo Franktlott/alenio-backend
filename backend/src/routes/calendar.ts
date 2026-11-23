@@ -375,7 +375,15 @@ calendarRouter.post(
         teamId,
         userId: user.id,
         type: "calendar_event_added",
-        metadata: { eventTitles: [event.title], eventCount: 1, isVideoMeeting: event.isVideoMeeting, startDate: event.startDate.toISOString(), allDay: event.allDay },
+        metadata: {
+          eventId: event.id,
+          eventIds: [event.id],
+          eventTitles: [event.title],
+          eventCount: 1,
+          isVideoMeeting: event.isVideoMeeting,
+          startDate: event.startDate.toISOString(),
+          allDay: event.allDay,
+        },
       });
     }
 
@@ -629,6 +637,8 @@ async function applyCalendarApproval(
       userId: existing.createdById,
       type: "calendar_event_added",
       metadata: {
+        eventId: updated.id,
+        eventIds: [updated.id],
         eventTitles: [updated.title],
         eventCount: 1,
         isVideoMeeting: updated.isVideoMeeting,

@@ -16,6 +16,7 @@ import {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  fitsFormSheet,
   useAdaptiveLayout,
   useDuoSheetTopClearance,
 } from "@/lib/adaptive-layout";
@@ -451,14 +452,29 @@ function AttachmentPickerSheet({
   );
 }
 
+/** Wide screens get a centred chat card instead of a stretched bottom sheet. */
+const SENECA_DIALOG_MAX_WIDTH = 520;
+
 export function SenecaAssistantSheet({ open, onClose }: Props) {
   const insets = useSafeAreaInsets();
-  const { height: windowH } = useWindowDimensions();
+  const { width: windowW, height: windowH } = useWindowDimensions();
+  const dialog = fitsFormSheet(windowW, windowH);
   const duoSheetTop = useDuoSheetTopClearance({ fullScreen: true });
   /** Clear the notch on phones, or stop just under the Duo status dock. */
   const sheetTopGap = Math.max(duoSheetTop, insets.top);
-  const sheetMaxHeight = Math.round(windowH - sheetTopGap);
+  /**
+   * Seneca stays a sheet, not a full-screen page: leave a clear peek of the
+   * screen behind on phones, and a centred card on wide layouts.
+   */
+  const sheetMaxHeight = dialog
+    ? Math.round(Math.min(windowH * 0.88, windowH - sheetTopGap))
+    : Math.round(
+        Math.min(windowH * 0.92, windowH - Math.max(sheetTopGap, 52)),
+      );
   const { iconRailEdge, iconRailWidth } = useAdaptiveLayout();
+  /** Rail insets only matter when the sheet is edge-to-edge. */
+  const railPadLeft = !dialog && iconRailEdge === "left" ? iconRailWidth : 0;
+  const railPadRight = !dialog && iconRailEdge === "right" ? iconRailWidth : 0;
   const queryClient = useQueryClient();
   const pendingPrompt = useSenecaSheetStore((state) => state.pendingPrompt);
   const clearPendingPrompt = useSenecaSheetStore(
@@ -1281,27 +1297,36 @@ export function SenecaAssistantSheet({ open, onClose }: Props) {
     <Modal
       visible={open}
       transparent
-      animationType="slide"
+      animationType={dialog ? "fade" : "slide"}
       presentationStyle="overFullScreen"
       statusBarTranslucent
       supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
       onRequestClose={handleClose}
     >
-      <View style={styles.backdrop} testID="seneca-assistant-sheet">
+      <View
+        style={[styles.backdrop, dialog ? styles.backdropDialog : null]}
+        testID="seneca-assistant-sheet"
+      >
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={handleClose}
           accessibilityLabel="Close Seneca"
         />
-        <View style={[styles.sheet, { height: sheetMaxHeight }]}>
-          <View style={styles.handle} />
+        <View
+          style={[
+            styles.sheet,
+            dialog ? styles.sheetDialog : null,
+            { height: sheetMaxHeight },
+          ]}
+        >
+          {dialog ? null : <View style={styles.handle} />}
           <SafeKeyboardAvoidingView style={styles.flex}>
           <View style={styles.headerBar}>
             <View
               style={[
                 styles.header,
-                iconRailEdge === "left" ? { paddingLeft: iconRailWidth } : null,
-                iconRailEdge === "right" ? { paddingRight: iconRailWidth } : null,
+                railPadLeft ? { paddingLeft: railPadLeft } : null,
+                railPadRight ? { paddingRight: railPadRight } : null,
               ]}
             >
               <View style={styles.headerIconWrap}>
@@ -1870,12 +1895,27 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.45)",
   },
+  backdropDialog: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
   sheet: {
     width: "100%",
     backgroundColor: COLORS.bg,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: "hidden",
+  },
+  sheetDialog: {
+    width: "100%",
+    maxWidth: SENECA_DIALOG_MAX_WIDTH,
+    borderRadius: 24,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.22,
+    shadowRadius: 30,
+    elevation: 18,
   },
   handle: {
     alignSelf: "center",

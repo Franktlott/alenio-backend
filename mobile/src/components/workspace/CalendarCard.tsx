@@ -21,7 +21,20 @@ import {
   holidayLocalIso,
   sundayMonthWeeks,
 } from "@/lib/calendar-month-view";
-import { CALENDAR_EVENT_COLORS } from "@/lib/calendar-event-colors";
+import {
+  CALENDAR_EVENT_COLORS,
+  calendarEventSoftBackground,
+  resolveCalendarEventColor,
+} from "@/lib/calendar-event-colors";
+
+type DayChip = {
+  key: string;
+  label: string;
+  holiday: boolean;
+  backgroundColor: string;
+  textColor: string;
+  dotColor: string;
+};
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
   "January",
@@ -260,24 +273,31 @@ export function CalendarCard({
             ? 1
             : 0;
 
-  /** Holidays (red), then events/tasks in brand — Outlook-style solid bars. */
-  const cellChips = (iso: string) => {
+  /** Holidays stay vivid; events/tasks use soft fills so the grid isn’t all purple. */
+  const cellChips = (iso: string): DayChip[] => {
     const dayHolidays = holidaysByDay.get(iso) ?? [];
     const dayEvents = eventsByDay.get(iso) ?? [];
     const dayTasks = taskDays.get(iso) ?? [];
-    const chips: { key: string; label: string; holiday: boolean }[] = [];
+    const chips: DayChip[] = [];
     for (const [index, holiday] of dayHolidays.entries()) {
       chips.push({
         key: `holiday-${iso}-${index}`,
         label: holiday.name,
         holiday: true,
+        backgroundColor: "#FEE2E2",
+        textColor: "#B91C1C",
+        dotColor: CALENDAR_EVENT_COLORS.holiday,
       });
     }
     for (const ev of dayEvents) {
+      const accent = resolveCalendarEventColor(ev);
       chips.push({
         key: `event-${ev.id}`,
         label: ev.title,
         holiday: false,
+        backgroundColor: calendarEventSoftBackground(ev),
+        textColor: "#1E293B",
+        dotColor: accent,
       });
     }
     for (const task of dayTasks) {
@@ -285,6 +305,9 @@ export function CalendarCard({
         key: `task-${task.id}`,
         label: task.title,
         holiday: false,
+        backgroundColor: "#D1FAE5",
+        textColor: "#065F46",
+        dotColor: CALENDAR_EVENT_COLORS.task,
       });
     }
     return chips;
@@ -323,13 +346,8 @@ export function CalendarCard({
           );
           const hasOverflow = chips.length > visibleChipCount;
           const hiddenChipCount = chips.length - visibleChipCount;
-          /** Narrow cells: one brand dot per item, capped at three. */
-          const dotCount = Math.min(
-            3,
-            (hasHoliday ? holidaysByDay.get(iso)?.length ?? 0 : 0) +
-              (eventsByDay.get(iso)?.length ?? 0) +
-              (taskDays.get(iso)?.length ?? 0),
-          );
+          /** Narrow cells: one accent dot per item, capped at three. */
+          const visibleDots = chips.slice(0, 3);
 
           return (
             <Pressable
@@ -377,12 +395,15 @@ export function CalendarCard({
                   {chips.slice(0, visibleChipCount).map((chip) => (
                     <View
                       key={chip.key}
-                      style={[styles.chip, chip.holiday ? styles.holidayChip : null]}
+                      style={[
+                        styles.chip,
+                        { backgroundColor: chip.backgroundColor },
+                      ]}
                     >
                       <Text
                         numberOfLines={1}
                         maxFontSizeMultiplier={1.1}
-                        style={styles.chipText}
+                        style={[styles.chipText, { color: chip.textColor }]}
                       >
                         {chip.label}
                       </Text>
@@ -402,25 +423,15 @@ export function CalendarCard({
                 </View>
               ) : (
                 <View style={styles.dotSlot}>
-                  {Array.from({ length: dotCount }, (_, dotIndex) => {
-                    const holidayDotCount = hasHoliday
-                      ? Math.min(
-                          holidaysByDay.get(iso)?.length ?? 0,
-                          dotCount,
-                        )
-                      : 0;
-                    return (
-                      <View
-                        key={`${iso}-dot-${dotIndex}`}
-                        style={[
-                          styles.activityDot,
-                          dotIndex < holidayDotCount
-                            ? styles.holidayDot
-                            : null,
-                        ]}
-                      />
-                    );
-                  })}
+                  {visibleDots.map((chip) => (
+                    <View
+                      key={`${chip.key}-dot`}
+                      style={[
+                        styles.activityDot,
+                        { backgroundColor: chip.dotColor },
+                      ]}
+                    />
+                  ))}
                 </View>
               )}
             </Pressable>
@@ -664,7 +675,7 @@ const styles = StyleSheet.create({
     minHeight: 26,
   },
   modeChipOn: {
-    backgroundColor: colors.brand,
+    backgroundColor: colors.brandSoft,
   },
   modeChipLabel: {
     fontSize: 12,
@@ -675,7 +686,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   modeChipLabelOn: {
-    color: "#FFFFFF",
+    color: colors.brand,
   },
   navRow: {
     flexDirection: "row",
@@ -785,16 +796,12 @@ const styles = StyleSheet.create({
     gap: 2,
     alignSelf: "stretch",
   },
-  /** Outlook-style solid bars — brand for events/tasks, red for holidays. */
+  /** Soft fills by type — brand purple reserved for + New and selection. */
   chip: {
     height: CHIP_HEIGHT,
     borderRadius: 3,
     paddingHorizontal: 5,
     justifyContent: "center",
-    backgroundColor: colors.brand,
-  },
-  holidayChip: {
-    backgroundColor: CALENDAR_EVENT_COLORS.holiday,
   },
   chipText: {
     flex: 1,
@@ -802,7 +809,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 12,
     fontWeight: "600",
-    color: "#FFFFFF",
     letterSpacing: -0.1,
   },
   overflowChip: {
@@ -811,13 +817,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.brandSoft,
+    backgroundColor: colors.surfaceSecondary,
   },
   moreChipText: {
     fontSize: 10,
     lineHeight: 12,
     fontWeight: "700",
-    color: colors.brand,
+    color: colors.textMuted,
     letterSpacing: -0.1,
   },
   dayNumber: {
@@ -864,9 +870,6 @@ const styles = StyleSheet.create({
     width: ACTIVITY_DOT_SIZE,
     height: ACTIVITY_DOT_SIZE,
     borderRadius: ACTIVITY_DOT_SIZE / 2,
-    backgroundColor: colors.brand,
-  },
-  holidayDot: {
-    backgroundColor: CALENDAR_EVENT_COLORS.holiday,
+    backgroundColor: colors.textMuted,
   },
 });

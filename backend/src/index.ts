@@ -67,8 +67,10 @@ import { adminRouter } from "./routes/admin";
 import { adminApiRouter } from "./routes/admin-api";
 import { adminDiscoverRouter } from "./routes/admin-discover";
 import { adminHomeInsightsRouter } from "./routes/admin-home-insights";
+import { adminHomeWorkspaceRouter } from "./routes/admin-home-workspace";
 import { adminFeedPostsRouter } from "./routes/admin-feed-posts";
 import { homeInsightsRouter } from "./routes/home-insights";
+import { homeWorkspaceRouter } from "./routes/home-workspace";
 import { adminNotificationsRouter } from "./routes/admin-notifications";
 import { adminPricingRouter, publicPlansRouter } from "./routes/admin-pricing";
 import { ensureBillingPlansSchema } from "./lib/ensure-billing-plans-schema";
@@ -116,6 +118,7 @@ import { ensureStaffRolesSchema } from "./lib/ensure-staff-roles-schema";
 import { effectiveStaffRole, roleHasAbility, staffAccessFields } from "./lib/staff-roles";
 import { ensureDiscoverSchema } from "./lib/ensure-discover-schema";
 import { ensureHomeInsightSchema } from "./lib/ensure-home-insight-schema";
+import { ensureHomeWorkspaceSchema } from "./lib/ensure-home-workspace-schema";
 import { ensurePushCampaignSchema } from "./lib/ensure-push-campaign-schema";
 import { recordPushCampaignOpen, runDuePushCampaigns } from "./lib/push-campaigns";
 import { applyPlatformAdminAllowlist } from "./lib/platform-admin-allowlist";
@@ -128,6 +131,7 @@ import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards
 import { ensureGoLoginSchema } from "./lib/ensure-go-login-schema";
 import { ensureWorkplaceAlertsSchema } from "./lib/ensure-workplace-alerts-schema";
 import { ensureGoFrontendSettingsSchema } from "./lib/ensure-go-frontend-settings-schema";
+import { ensureTeamCoverImageSchema } from "./lib/ensure-team-cover-image-schema";
 import { ensureGoLeaderPinSchema } from "./lib/ensure-go-leader-pin-schema";
 import { ensureWorkspaceModulesSchema } from "./lib/ensure-workspace-modules-schema";
 import { ensureSubscriptionCancelSchema } from "./lib/ensure-subscription-cancel-schema";
@@ -229,6 +233,11 @@ const startupSchemaReady = Promise.all([
           console.error("[startup] ensureHomeInsightSchema failed:", error);
         }),
       )
+      .then(() =>
+        ensureHomeWorkspaceSchema(prisma).catch((error) => {
+          console.error("[startup] ensureHomeWorkspaceSchema failed:", error);
+        }),
+      )
       .then(() => applyPlatformAdminAllowlist(prisma)),
   ),
   ensureGetStartedSchema(prisma),
@@ -280,6 +289,7 @@ const startupSchemaReady = Promise.all([
         ensureGoLoginSchema(prisma),
         ensureWorkplaceAlertsSchema(prisma),
         ensureGoFrontendSettingsSchema(prisma),
+        ensureTeamCoverImageSchema(prisma),
         ensureGoLeaderPinSchema(prisma),
         ensureWorkspaceModulesSchema(prisma),
         ensureWalksSchema(prisma),
@@ -305,6 +315,7 @@ const startupSchemaReady = Promise.all([
         ensureGoLoginSchema(prisma),
         ensureWorkplaceAlertsSchema(prisma),
         ensureGoFrontendSettingsSchema(prisma),
+        ensureTeamCoverImageSchema(prisma),
         ensureGoLeaderPinSchema(prisma),
         ensureWorkspaceModulesSchema(prisma),
         ensureWalksSchema(prisma),
@@ -2578,12 +2589,14 @@ app.route("/admin", adminRouter);
 app.route("/api/admin/seneca-studio", adminSenecaStudioRouter as any);
 app.route("/api/admin/discover", adminDiscoverRouter);
 app.route("/api/admin/home-insights", adminHomeInsightsRouter);
+app.route("/api/admin/home-workspace", adminHomeWorkspaceRouter);
 app.route("/api/admin/feed-posts", adminFeedPostsRouter);
 app.route("/api/admin/notifications", adminNotificationsRouter);
 app.route("/api/admin/pricing", adminPricingRouter);
 app.route("/api/public/plans", publicPlansRouter);
 app.route("/api/discover", discoverRouter);
 app.route("/api/home-insights", homeInsightsRouter);
+app.route("/api/home-workspace", homeWorkspaceRouter);
 app.route("/api/admin", adminApiRouter);
 app.route("/api/admin-mobile", adminApiRouter);
 app.route("/web", webRouter);

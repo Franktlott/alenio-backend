@@ -29,9 +29,12 @@ export function ActivityFeedCard({ item, footer, onLongPress, testID }: Props) {
       return <EventActivityCard {...shared} />;
     case "member_joined":
     case "member_removed":
+    case "post":
       return <TeamActivityCard {...shared} />;
     case "task_milestone":
     case "personal_best":
+    case "development_goal_completed":
+    case "check_in_completed":
       return <MilestoneActivityCard {...shared} />;
     case "celebration":
       return <CelebrationActivityCard {...shared} />;

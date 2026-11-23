@@ -146,6 +146,7 @@ model User {
   discoverArticlesUpdated           DiscoverArticle[]               @relation("DiscoverArticleUpdatedBy")
   discoverArticlesLastPublished     DiscoverArticle[]               @relation("DiscoverArticleLastPublishedBy")
   homeInsightCardsUpdated           HomeInsightCard[]               @relation("HomeInsightCardUpdatedBy")
+  homeWorkspaceCardsUpdated         HomeWorkspaceCard[]             @relation("HomeWorkspaceCardUpdatedBy")
 }
 
 /**
@@ -535,6 +536,11 @@ model Team {
   industry              String?
   location              String?
   image                 String?
+  /**
+   * Wide overview cover photo. Null uses the default mountain hero.
+   * Separate from `image` (workspace avatar / switcher mark).
+   */
+  coverImage            String?
   /**
    * Canonical IANA timezone for workspace-scoped calendar boundaries.
    * Nullable for additive rollout; runtime resolution supplies member/UTC fallbacks.
@@ -2691,6 +2697,44 @@ model HomeInsightSettings {
   pinnedCardId String?
   /// Rotation epoch (UTC). Weekly uses Monday of this instant; daily uses the UTC day.
   epochAt      DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  updatedById  String?
+}
+
+/// Home “Alenio Workspace” promo card — shown when the viewer has no workspace.
+model HomeWorkspaceCard {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  title              String
+  body               String
+  actionLabel        String
+  accessibilityLabel String   @default("")
+  imageUrl           String?
+  imageAlt           String?
+  surfaceColor       String   @default("#1A0B3A")
+  fadeColors         Json
+  borderColor        String   @default("#2A0F63")
+  titleColor         String   @default("#FFFFFF")
+  bodyColor          String   @default("rgba(255,255,255,0.72)")
+  buttonColors       Json
+  /// create | join
+  destinationType    String   @default("create")
+  displayOrder       Int      @default(0)
+  isActive           Boolean  @default(true)
+  updatedById        String?
+  updatedBy          User?    @relation("HomeWorkspaceCardUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([isActive, displayOrder])
+}
+
+/// Singleton: which Alenio Workspace promo card is live on Home.
+model HomeWorkspaceSettings {
+  id           String   @id @default("default")
+  /// automatic | manual
+  mode         String   @default("manual")
+  pinnedCardId String?
   updatedAt    DateTime @updatedAt
   updatedById  String?
 }

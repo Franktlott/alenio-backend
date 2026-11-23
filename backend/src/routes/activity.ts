@@ -11,6 +11,28 @@ import {
   parseActivityMetadata,
   personalCelebrationBelongsToTeam,
 } from "../lib/workspace-activity-feed";
+import {
+  activityVisibleOnOverview,
+  collectOverviewEventIds,
+  isOverviewRecentUpdateType,
+  OVERVIEW_RECENT_UPDATE_TYPES,
+  parseActivityTypesQuery,
+} from "../lib/workspace-recent-updates";
+function parseEventAssigneeIds(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const ids = (parsed as { assigneeIds?: unknown }).assigneeIds;
+      return Array.isArray(ids)
+        ? ids.filter((id): id is string => typeof id === "string")
+        : [];
+    }
+  } catch {
+    // Ignore malformed legacy data
+  }
+  return [];
+}
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -26,6 +48,10 @@ const ACTIVITY_PAGE_MAX = 25;
 const activityFeedQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(ACTIVITY_PAGE_MAX).optional(),
   cursor: z.string().optional(),
+  /** `overview` = high-signal Recent Updates allowlist + visibility filters. */
+  surface: z.enum(["overview"]).optional(),
+  /** Comma-separated TeamActivity.type values. */
+  types: z.string().optional(),
 });
 
 type ActivityFeedCursor = { createdAt: string; id: string };
@@ -185,8 +211,12 @@ activityRouter.get(
     const { teamId } = c.req.param();
     const paginated =
       c.req.query("limit") != null || c.req.query("cursor") != null;
-    const { limit = ACTIVITY_PAGE_SIZE, cursor: rawCursor } =
-      c.req.valid("query");
+    const {
+      limit = ACTIVITY_PAGE_SIZE,
+      cursor: rawCursor,
+      surface,
+      types: typesRaw,
+    } = c.req.valid("query");
     const cursor = decodeActivityCursor(rawCursor);
     if (cursor === undefined) {
       return c.json(
@@ -204,6 +234,15 @@ activityRouter.get(
         403,
       );
     }
+
+    const overviewSurface = surface === "overview";
+    const requestedTypes = overviewSurface
+      ? [...OVERVIEW_RECENT_UPDATE_TYPES]
+      : parseActivityTypesQuery(typesRaw);
+    const typeFilter =
+      requestedTypes && requestedTypes.length > 0
+        ? { type: { in: requestedTypes } }
+        : {};
 
     const feedStart = new Date(
       Date.now() - ACTIVITY_FEED_DAYS * 24 * 60 * 60 * 1000,
@@ -225,18 +264,31 @@ activityRouter.get(
     const memberIds = members.map((member) => member.userId);
     const memberIdSet = new Set(memberIds);
 
+    // Overview visibility can drop rows; overfetch then trim.
+    const fetchTake = overviewSurface
+      ? Math.min(100, Math.max(limit + 1, limit * 8))
+      : paginated
+        ? limit + 1
+        : 100;
+
+    const includePersonalCelebrations =
+      !requestedTypes ||
+      requestedTypes.includes("celebration") ||
+      overviewSurface;
+
     const [teamActivities, personalCelebrations] = await Promise.all([
       prisma.teamActivity.findMany({
         where: {
           teamId,
           createdAt: { gte: feedStart },
+          ...typeFilter,
           ...cursorBoundary,
         },
         include: activityInclude,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        take: paginated ? limit + 1 : 100,
+        take: fetchTake,
       }),
-      memberIds.length === 0
+      !includePersonalCelebrations || memberIds.length === 0
         ? Promise.resolve([])
         : prisma.teamActivity.findMany({
             where: {
@@ -266,13 +318,55 @@ activityRouter.get(
     for (const activity of [...teamActivities, ...extras]) {
       byId.set(activity.id, activity);
     }
-    const activities = [...byId.values()]
-      .sort(
-        (left, right) =>
-          right.createdAt.getTime() - left.createdAt.getTime() ||
-          right.id.localeCompare(left.id),
-      )
-      .slice(0, 100);
+    let activities = [...byId.values()].sort(
+      (left, right) =>
+        right.createdAt.getTime() - left.createdAt.getTime() ||
+        right.id.localeCompare(left.id),
+    );
+
+    if (overviewSurface) {
+      const eventIds = collectOverviewEventIds(activities);
+      const events =
+        eventIds.length === 0
+          ? []
+          : await prisma.calendarEvent.findMany({
+              where: { teamId, id: { in: eventIds } },
+              select: {
+                id: true,
+                isHidden: true,
+                approvalStatus: true,
+                createdById: true,
+                isVideoMeeting: true,
+                isOneOnOne: true,
+                reminderMinutes: true,
+              },
+            });
+      const eventsById = new Map(
+        events.map((event) => [
+          event.id,
+          {
+            isHidden: event.isHidden,
+            approvalStatus: event.approvalStatus,
+            createdById: event.createdById,
+            isVideoMeeting: event.isVideoMeeting,
+            isOneOnOne: event.isOneOnOne,
+            assigneeIds: parseEventAssigneeIds(event.reminderMinutes),
+          },
+        ]),
+      );
+      const visibilityCtx = {
+        viewerUserId: user.id,
+        viewerRole: membership.role,
+        eventsById,
+      };
+      activities = activities.filter(
+        (activity) =>
+          isOverviewRecentUpdateType(activity.type) &&
+          activityVisibleOnOverview(activity, visibilityCtx),
+      );
+    }
+
+    activities = activities.slice(0, 100);
 
     // Preserve the original array response for older clients.
     if (!paginated) {

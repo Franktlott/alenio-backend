@@ -66,10 +66,23 @@ export async function logActivity(params: {
       const existingTitles = (existingMeta.eventTitles as string[] | undefined) ?? [];
       const existingCount = (existingMeta.eventCount as number | undefined) ?? existingTitles.length;
       const updatedTitles = [...existingTitles, newTitle].filter(Boolean);
+      const newEventId =
+        typeof params.metadata?.eventId === "string"
+          ? params.metadata.eventId
+          : (params.metadata?.eventIds as string[] | undefined)?.[0];
+      const existingEventIds = Array.isArray(existingMeta.eventIds)
+        ? (existingMeta.eventIds as string[]).filter(
+            (id): id is string => typeof id === "string",
+          )
+        : [];
+      const updatedEventIds = newEventId
+        ? [...new Set([...existingEventIds, newEventId])]
+        : existingEventIds;
       updatedMeta = {
         ...existingMeta,
         eventTitles: updatedTitles,
         eventCount: existingCount + 1,
+        ...(updatedEventIds.length > 0 ? { eventIds: updatedEventIds } : {}),
       };
     }
 

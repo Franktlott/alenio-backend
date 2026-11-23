@@ -17,7 +17,12 @@ export function invalidateDevelopmentCaches(
   void invalidateMemberNextAction(queryClient, teamId, memberUserId);
   if (!teamId) return;
   // Goal counts and check-in compliance behind every member row.
+  // Force an immediate network refetch — global staleTime + refetchOnMount:false
+  // can leave Overview rings on old numbers if we only mark the query stale.
   void queryClient.invalidateQueries({ queryKey: ["member-stats", teamId] });
+  void queryClient
+    .refetchQueries({ queryKey: ["member-stats", teamId], type: "all" })
+    .catch(() => {});
   // The "Next check-in" date on each row.
   void queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
   void queryClient.invalidateQueries({

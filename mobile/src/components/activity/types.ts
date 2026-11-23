@@ -16,7 +16,9 @@ export type ActivityFeedType =
   | "workspace_invitation_received"
   | "mention_in_conversation"
   | "celebration"
-  | "post";
+  | "post"
+  | "development_goal_completed"
+  | "check_in_completed";
 
 export type ActivityReactionUser = { id: string; name: string };
 
@@ -66,6 +68,18 @@ export type ActivityMetadata = {
   imageWidth?: number | null;
   imageHeight?: number | null;
   mediaType?: "image" | "video" | null;
+  /** Calendar / development deep links */
+  eventId?: string;
+  eventIds?: string[];
+  goalId?: string;
+  goalTitle?: string;
+  memberUserId?: string;
+  memberName?: string;
+  managerUserId?: string;
+  meetingId?: string;
+  templateTitle?: string | null;
+  publishedAt?: string;
+  taskId?: string;
 };
 
 export type ActivityApiEvent = {
@@ -540,6 +554,22 @@ export function mapApiActivityToFeedItem(
       mapped = {
         title: `${actorName(event)} shared an update`,
         description: metadata.body ?? undefined,
+      };
+      break;
+    case "development_goal_completed":
+      mapped = {
+        title: "Development goal completed",
+        description:
+          metadata.goalTitle?.trim() ||
+          `${metadata.memberName ?? "A teammate"} finished a development goal`,
+      };
+      break;
+    case "check_in_completed":
+      mapped = {
+        title: "Check-in completed",
+        description: metadata.memberName
+          ? `With ${metadata.memberName}`
+          : metadata.templateTitle?.trim() || "A check-in was published",
       };
       break;
     default:

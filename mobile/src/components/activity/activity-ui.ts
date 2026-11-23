@@ -107,7 +107,11 @@ export function getActivityTint(type: ActivityFeedType): ActivityTint {
     case "task_milestone":
     case "personal_best":
     case "celebration":
+    case "development_goal_completed":
+    case "check_in_completed":
       return "milestones";
+    case "post":
+      return "team";
     default:
       return "neutral";
   }
@@ -149,6 +153,12 @@ export function getActivityTypeLabel(type: ActivityFeedType, metadata?: { eventC
       return "Personal Best";
     case "celebration":
       return "Recognition";
+    case "post":
+      return "Announcement";
+    case "development_goal_completed":
+      return "Development";
+    case "check_in_completed":
+      return "Check-in";
     default:
       return "Update";
   }
