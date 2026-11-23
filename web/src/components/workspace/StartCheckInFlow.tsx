@@ -23,8 +23,8 @@ import {
   createCheckIn,
   fetchCheckInRecording,
   fetchCheckIns,
-  finishCheckInRecording,
   isLeaderFillableField,
+  saveCheckInRecordingDraft,
   startCheckInRecording,
   updateCheckIn,
   type CheckIn,
@@ -122,6 +122,10 @@ export function StartCheckInFlow({
   const recorderRef = useRef<WebCheckInRecorder | null>(null);
   const liveRef = useRef<WebLiveTranscription | null>(null);
   const elapsedRef = useRef(0);
+  const finishingRef = useRef(false);
+  const viewRef = useRef<View>("capture");
+  const recordingIdRef = useRef<string | null>(null);
+  const transcriptLinesRef = useRef<LiveTranscriptLine[]>([]);
   const [showTranscript, setShowTranscript] = useState(true);
   const [transcriptLines, setTranscriptLines] = useState<LiveTranscriptLine[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveTranscriptionStatus>("idle");
@@ -142,6 +146,8 @@ export function StartCheckInFlow({
     setError(null);
     setTranscriptOpen(false);
     setRecordingId(null);
+    recordingIdRef.current = null;
+    finishingRef.current = false;
     setElapsed(0);
     elapsedRef.current = 0;
     setPaused(false);
@@ -162,6 +168,18 @@ export function StartCheckInFlow({
       setView(canRecord ? "capture" : "fill");
     }
   }, [open, resume, canRecord, loadDraft]);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  useEffect(() => {
+    recordingIdRef.current = recordingId;
+  }, [recordingId]);
+
+  useEffect(() => {
+    transcriptLinesRef.current = transcriptLines;
+  }, [transcriptLines]);
 
   /* Clean up a live microphone if the drawer unmounts mid-recording. */
   useEffect(
@@ -276,9 +294,20 @@ export function StartCheckInFlow({
     }
   };
 
+  const hasCapture = useCallback(() => {
+    return (
+      uploads.pending > 0 ||
+      uploads.failed > 0 ||
+      transcriptLinesRef.current.length > 0 ||
+      elapsedRef.current > 0
+    );
+  }, [uploads.failed, uploads.pending]);
+
   const finishRecording = useCallback(async () => {
     const recorder = recorderRef.current;
-    if (!recorder || !recordingId) return;
+    const id = recordingIdRef.current ?? recordingId;
+    if (!recorder || !id || finishingRef.current) return;
+    finishingRef.current = true;
     setView("processing");
     setStage("saving");
     try {
@@ -287,10 +316,14 @@ export function StartCheckInFlow({
       liveRef.current = null;
       await recorder.stop();
       recorderRef.current = null;
-      await finishCheckInRecording(teamId, userId, recordingId, elapsedRef.current);
+      await saveCheckInRecordingDraft(teamId, userId, id, elapsedRef.current);
+      setRecordingId(null);
+      recordingIdRef.current = null;
       void qc.invalidateQueries({ queryKey: checkInKeys.active(teamId, userId) });
+      void qc.invalidateQueries({ queryKey: checkInKeys.checkIns(teamId, userId) });
       setStage("writing");
     } catch (err) {
+      finishingRef.current = false;
       setError(errorMessage(err, "We couldn't save that recording."));
       setView("error");
     }
@@ -300,23 +333,56 @@ export function StartCheckInFlow({
     if (view === "recording" && !paused && elapsed >= MAX_RECORDING_SEC) void finishRecording();
   }, [view, paused, elapsed, finishRecording]);
 
-  const discardRecording = () => {
+  /** Empty sessions only — anything captured becomes a draft instead. */
+  const cancelEmptyRecording = useCallback(() => {
     liveRef.current?.stop();
     liveRef.current = null;
     recorderRef.current?.discard();
     recorderRef.current = null;
-    if (recordingId) void cancelCheckInRecording(teamId, userId, recordingId).catch(() => undefined);
+    const id = recordingIdRef.current ?? recordingId;
+    if (id) void cancelCheckInRecording(teamId, userId, id).catch(() => undefined);
     setRecordingId(null);
-  };
+    recordingIdRef.current = null;
+  }, [recordingId, teamId, userId]);
 
   const requestClose = useCallback(() => {
+    if (view === "processing" || finishingRef.current) return;
     if (view === "recording") {
-      if (!window.confirm("Discard this recording? Nothing will be saved.")) return;
-      discardRecording();
+      if (hasCapture()) {
+        if (
+          !window.confirm(
+            `Save draft & leave? What you covered with ${firstName} will be saved as a draft you can review anytime.`,
+          )
+        ) {
+          return;
+        }
+        void finishRecording();
+        return;
+      }
+      if (!window.confirm("Leave without recording? Nothing has been captured yet.")) return;
+      cancelEmptyRecording();
     }
     onClose();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, onClose, recordingId]);
+  }, [view, onClose, hasCapture, firstName, finishRecording, cancelEmptyRecording]);
+
+  /* Tab hide / minimize finishes to a draft instead of abandoning the row. */
+  useEffect(() => {
+    if (!open) return;
+    const onVisibility = () => {
+      if (document.visibilityState !== "hidden") return;
+      if (viewRef.current !== "recording") return;
+      if (!recordingIdRef.current || finishingRef.current) return;
+      if (
+        elapsedRef.current <= 0 &&
+        transcriptLinesRef.current.length === 0
+      ) {
+        return;
+      }
+      void finishRecording();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [open, finishRecording]);
 
   useEffect(() => {
     if (!open) return;
@@ -593,11 +659,12 @@ export function StartCheckInFlow({
                   if (paused) {
                     recorderRef.current?.resume();
                     liveRef.current?.resume();
-                  } else {
-                    recorderRef.current?.pause();
-                    liveRef.current?.pause();
+                    setPaused(false);
+                    return;
                   }
-                  setPaused(!paused);
+                  liveRef.current?.pause();
+                  setPaused(true);
+                  void recorderRef.current?.pause();
                 }}
               >
                 {paused ? <Play size={16} strokeWidth={2.4} /> : <Pause size={16} strokeWidth={2.4} />}
@@ -619,12 +686,23 @@ export function StartCheckInFlow({
               type="button"
               className="ci-discard"
               onClick={() => {
-                if (!window.confirm("Discard this recording? Nothing will be saved.")) return;
-                discardRecording();
+                if (hasCapture()) {
+                  if (
+                    !window.confirm(
+                      `Save draft & leave? What you covered with ${firstName} will be saved as a draft you can review anytime.`,
+                    )
+                  ) {
+                    return;
+                  }
+                  void finishRecording();
+                  return;
+                }
+                if (!window.confirm("Leave without recording? Nothing has been captured yet.")) return;
+                cancelEmptyRecording();
                 setView("capture");
               }}
             >
-              Discard recording
+              {hasCapture() ? "Save draft & leave" : "Cancel check-in"}
             </button>
           </div>
         ) : null}
@@ -642,7 +720,7 @@ export function StartCheckInFlow({
             </p>
             {stage === "writing" ? (
               <>
-                <small>You can close this. The draft will appear in Check-ins when it's ready.</small>
+                <small>Saved as draft — you can review it anytime. It will appear in Check-ins when ready.</small>
                 <button type="button" className="nw-btn" onClick={onClose}>
                   Close
                 </button>

@@ -173,6 +173,84 @@ export type FinishRecordingResult =
   | { ok: false; message: string };
 
 /**
+ * True when a recording has anything worth keeping as a draft — audio segments,
+ * live transcript lines, a stitched transcript, or a non-zero duration.
+ * Used by cancel and the abandoned sweep so captured work is never purged.
+ */
+export function recordingHasRecoverableContent(recording: {
+  durationSec?: number | null;
+  transcript?: string | null;
+  segmentsCount?: number;
+  transcriptSegmentsCount?: number;
+}): boolean {
+  if ((recording.segmentsCount ?? 0) > 0) return true;
+  if ((recording.transcriptSegmentsCount ?? 0) > 0) return true;
+  if ((recording.durationSec ?? 0) > 0) return true;
+  if ((recording.transcript ?? "").trim().length > 0) return true;
+  return false;
+}
+
+export type CancelRecordingResult =
+  | { action: "deleted" }
+  | { action: "finished"; recordingId: string };
+
+/**
+ * Cancel is only allowed for empty starts. Anything with recoverable content is
+ * finished into a draft instead of deleted.
+ */
+export async function cancelOrFinishRecording(
+  recordingId: string,
+): Promise<CancelRecordingResult> {
+  const recording = await prisma.checkInRecording.findUnique({
+    where: { id: recordingId },
+    select: {
+      id: true,
+      durationSec: true,
+      transcript: true,
+      status: true,
+      _count: { select: { segments: true, transcriptSegments: true } },
+    },
+  });
+  if (!recording) {
+    return { action: "deleted" };
+  }
+
+  const hasContent = recordingHasRecoverableContent({
+    durationSec: recording.durationSec,
+    transcript: recording.transcript,
+    segmentsCount: recording._count.segments,
+    transcriptSegmentsCount: recording._count.transcriptSegments,
+  });
+
+  if (hasContent) {
+    if (recording.status === "recording") {
+      await prisma.checkInRecording.update({
+        where: { id: recordingId },
+        data: { status: "transcribing" },
+      });
+    }
+    // Same background path as /finish — never drop a started conversation.
+    void finishRecording(recordingId).catch(async (err) => {
+      console.error("[check-in-recordings] cancel→finish failed", err);
+      await prisma.checkInRecording
+        .update({
+          where: { id: recordingId },
+          data: {
+            status: "failed",
+            error: "We could not turn that recording into a check-in.",
+          },
+        })
+        .catch(() => null);
+    });
+    return { action: "finished", recordingId };
+  }
+
+  await purgeRecordingAudio(recordingId);
+  await prisma.checkInRecording.delete({ where: { id: recordingId } });
+  return { action: "deleted" };
+}
+
+/**
  * Stitches the transcript, maps it onto the template, and saves the result as a
  * draft check-in for the leader to review. When mapping fails we still keep the
  * transcript and drop it into leader comments so the conversation is not lost.
@@ -407,24 +485,33 @@ export async function sweepStalledRecordings(): Promise<{
     if (result?.ok) finishedRecordings += 1;
   }
 
-  // A recording still "recording" long after its last segment means the app
-  // went away without stopping it. Segments land at least every
-  // RECORDING_SEGMENT_MAX_DURATION_SEC and each one touches the row, so a
-  // window of twice that cannot catch a live conversation.
+  // A recording still "recording" long after its last activity means the app
+  // went away without stopping it. Prefer finishing whenever any content
+  // exists — never drop a started conversation.
   const abandonedBefore = new Date(Date.now() - RECORDING_ABANDONED_MS);
   const abandoned = await prisma.checkInRecording.findMany({
     where: { status: "recording", updatedAt: { lt: abandonedBefore } },
-    select: { id: true, _count: { select: { segments: true } } },
+    select: {
+      id: true,
+      durationSec: true,
+      transcript: true,
+      _count: { select: { segments: true, transcriptSegments: true } },
+    },
     take: 50,
   });
   for (const recording of abandoned) {
-    if (recording._count.segments > 0) {
-      // The conversation did happen, so write it up rather than binning it.
+    const hasContent = recordingHasRecoverableContent({
+      durationSec: recording.durationSec,
+      transcript: recording.transcript,
+      segmentsCount: recording._count.segments,
+      transcriptSegmentsCount: recording._count.transcriptSegments,
+    });
+    if (hasContent) {
       const result = await finishRecording(recording.id).catch(() => null);
       if (result?.ok) finishedRecordings += 1;
       continue;
     }
-    // Nothing was ever captured; drop it so it cannot show up as a dead row.
+    // Truly empty consent starts only — safe to clean up.
     await purgeRecordingAudio(recording.id);
     await prisma.checkInRecording.delete({ where: { id: recording.id } }).catch(() => null);
     purgedRecordings += 1;

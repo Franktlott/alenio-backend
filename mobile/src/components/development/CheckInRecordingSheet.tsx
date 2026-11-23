@@ -2,31 +2,106 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
+  type AppStateStatus,
+  Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
-import Svg, { Path } from "react-native-svg";
 import {
-  Check,
+  AudioLines,
   ChevronLeft,
+  ChevronRight,
   CircleAlert,
+  Clock3,
+  FileText,
+  Lock,
   Mic,
   Pause,
+  Pencil,
   Play,
   ShieldCheck,
   Sparkles,
   Square,
+  Target,
   X,
+  type LucideIcon,
 } from "lucide-react-native";
-import { useStatusClusterInset } from "@/lib/adaptive-layout";
+import {
+  useStatusClusterInset,
+} from "@/lib/adaptive-layout";
 import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 import { OPEN_CHECK_IN_TITLE } from "@/lib/open-check-in";
+
+const CONSENT_HERO = require("@/assets/alenio-auth-dusk-mountain.jpg");
+
+/** Product-true reminders — not soft coaching tips from the mock. */
+const BEFORE_YOU_START: { Icon: LucideIcon; label: string }[] = [
+  { Icon: Mic, label: "Live transcription while you talk" },
+  { Icon: Clock3, label: "Audio kept up to 7 days" },
+  { Icon: Lock, label: "Nothing is saved until you publish" },
+];
+
+const BETTER_CHECK_IN_TIPS: {
+  Icon: LucideIcon;
+  title: string;
+  body: string;
+}[] = [
+  {
+    Icon: Mic,
+    title: "Speak naturally",
+    body: "Have a real conversation.",
+  },
+  {
+    Icon: Target,
+    title: "Stay focused",
+    body: "Cover key updates, wins, and next steps.",
+  },
+  {
+    Icon: ShieldCheck,
+    title: "Be comfortable",
+    body: "Only share what you’re okay with recording.",
+  },
+];
+
+function ConsentWave({
+  mirror,
+  level = 0.35,
+  active = true,
+}: {
+  mirror?: boolean;
+  level?: number;
+  active?: boolean;
+}) {
+  const bars = [10, 18, 28, 16, 24, 12, 20, 14, 22, 12];
+  const order = mirror ? [...bars].reverse() : bars;
+  const amp = active ? 0.45 + level * 0.9 : 0.35;
+  return (
+    <View style={styles.consentWaveRow}>
+      {order.map((height, index) => (
+        <View
+          key={`${mirror ? "r" : "l"}-${index}`}
+          style={[
+            styles.consentWaveBar,
+            {
+              height: Math.max(8, Math.round(height * amp)),
+              opacity: active ? 1 : 0.45,
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
 
 import {
   CHECK_IN_RECORDING_OPTIONS,
@@ -47,7 +122,7 @@ import {
 import { loadExpoAudio, type ExpoAudioApi } from "@/lib/expo-audio-module";
 import {
   cancelCheckInRecording,
-  finishCheckInRecording,
+  saveCheckInRecordingDraft,
   startCheckInRecording,
 } from "@/lib/check-in-recordings-api";
 import {
@@ -66,7 +141,6 @@ import {
 
 type Step = "consent" | "recording" | "processing" | "error";
 
-const LEVEL_BARS = 24;
 const KEEP_AWAKE_TAG = "check-in-recording";
 /** How long before the hard cap the remaining time starts being shown. */
 const CAP_WARNING_SEC = 5 * 60;
@@ -183,8 +257,15 @@ function RecordingFlow({
   audio,
 }: SheetProps & { audio: ExpoAudioApi }) {
   const insets = useSafeAreaInsets();
+  const { width: windowW, height: windowH } = useWindowDimensions();
   const cluster = useStatusClusterInset({ fullScreen: true });
   const [step, setStep] = useState<Step>("consent");
+  /** Top band holds the dusk mountain so white hero copy stays readable. */
+  const consentHeroHeight = Math.round(Math.min(windowH * 0.48, windowW * 1.05));
+  /** Shorter band on the live recording stage — transcript is the focus. */
+  const recordingHeroHeight = Math.round(
+    Math.min(windowH * 0.34, Math.max(168, windowW * 0.42)),
+  );
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -200,8 +281,12 @@ function RecordingFlow({
   const recordingIdRef = useRef<string | null>(null);
   const transcriptScrollRef = useRef<ScrollView | null>(null);
   const stickToBottomRef = useRef(true);
+  const finishingRef = useRef(false);
   const [elapsedSec, setElapsedSec] = useState(0);
   const elapsedRef = useRef(0);
+  const segmentsRef = useRef<SegmentUploadState[]>([]);
+  const transcriptLinesRef = useRef<LiveTranscriptLine[]>([]);
+  const stepRef = useRef<Step>("consent");
   const [showTranscript, setShowTranscript] = useState(true);
   const [transcriptLines, setTranscriptLines] = useState<LiveTranscriptLine[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveTranscriptionStatus>("idle");
@@ -221,6 +306,7 @@ function RecordingFlow({
     void stopLiveTranscription();
     sessionRef.current = null;
     recordingIdRef.current = null;
+    finishingRef.current = false;
     stickToBottomRef.current = true;
     setElapsedSec(0);
     setSegments([]);
@@ -244,6 +330,18 @@ function RecordingFlow({
   }, [elapsedSec]);
 
   useEffect(() => {
+    segmentsRef.current = segments;
+  }, [segments]);
+
+  useEffect(() => {
+    transcriptLinesRef.current = transcriptLines;
+  }, [transcriptLines]);
+
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+
+  useEffect(() => {
     if (step !== "recording" || paused) return;
     const timer = setInterval(() => setElapsedSec((seconds) => seconds + 1), 1000);
     return () => clearInterval(timer);
@@ -260,6 +358,22 @@ function RecordingFlow({
       }
     };
   }, [step]);
+
+  /** If the mic session drops mid-check-in, reopen the retention recorder. */
+  useEffect(() => {
+    if (step !== "recording" || paused || starting) return;
+    if (recorderState.isRecording) return;
+    const timer = setTimeout(() => {
+      void sessionRef.current?.ensureRecording().then((ok) => {
+        if (!ok) {
+          setError(
+            "The microphone stopped mid check-in. End and try recording again.",
+          );
+        }
+      });
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [step, paused, starting, recorderState.isRecording]);
 
   const begin = useCallback(async () => {
     if (starting) return;
@@ -288,40 +402,52 @@ function RecordingFlow({
       sessionRef.current = session;
       await session.start();
 
-      // Live STT is best-effort: retention recording already started above.
-      const liveClient = new LiveTranscriptionClient(
-        { teamId, memberUserId, recordingId: created.id },
-        {
-          onEvent: (event) => {
-            setTranscriptLines((current) => applyLiveTranscriptEvent(current, event));
-          },
-          onStatus: (status, message) => {
-            setLiveStatus(status);
-            if (status === "error" && message) setLiveError(message);
-            if (status === "active") setLiveError(null);
-          },
-        },
-      );
-      liveClientRef.current = liveClient;
-      void liveClient.start().then(async () => {
-        if (liveClient.getStatus() === "error") return;
-        const streamer = new LivePcmStreamer(
-          liveRecorder,
-          (pcm) => liveClient.sendPcmBase64(pcm),
-          (message) => {
-            setLiveStatus("error");
-            setLiveError(message);
+      /**
+       * A second file recorder for live STT steals the mic from the retention
+       * recording on iOS/Android every time it rolls a clip. Keep the long-form
+       * check-in audio first; live teeing stays on web where the stream can be shared.
+       */
+      const canTeeLivePcm = Platform.OS === "web";
+      if (canTeeLivePcm) {
+        const liveClient = new LiveTranscriptionClient(
+          { teamId, memberUserId, recordingId: created.id },
+          {
+            onEvent: (event) => {
+              setTranscriptLines((current) =>
+                applyLiveTranscriptEvent(current, event),
+              );
+            },
+            onStatus: (status, message) => {
+              setLiveStatus(status);
+              if (status === "error" && message) setLiveError(message);
+              if (status === "active") setLiveError(null);
+            },
           },
         );
-        livePcmRef.current = streamer;
-        const ok = await streamer.start();
-        if (!ok) {
-          setLiveStatus("error");
-          setLiveError(
-            "Live transcript could not share the microphone. Recording continues.",
+        liveClientRef.current = liveClient;
+        void liveClient.start().then(async () => {
+          if (liveClient.getStatus() === "error") return;
+          const streamer = new LivePcmStreamer(
+            liveRecorder,
+            (pcm) => liveClient.sendPcmBase64(pcm),
+            (message) => {
+              setLiveStatus("error");
+              setLiveError(message);
+            },
           );
-        }
-      });
+          livePcmRef.current = streamer;
+          const ok = await streamer.start();
+          if (!ok) {
+            setLiveStatus("error");
+            setLiveError(
+              "Live transcript could not share the microphone. Recording continues.",
+            );
+          }
+        });
+      } else {
+        setLiveStatus("idle");
+        setLiveError(null);
+      }
 
       setStep("recording");
     } catch (err) {
@@ -332,10 +458,19 @@ function RecordingFlow({
     }
   }, [starting, teamId, memberUserId, templateId, recorder, liveRecorder]);
 
+  const hasCapture = useCallback(() => {
+    return (
+      segmentsRef.current.length > 0 ||
+      transcriptLinesRef.current.length > 0 ||
+      elapsedRef.current > 0
+    );
+  }, []);
+
   const stopAndProcess = useCallback(async () => {
     const session = sessionRef.current;
     const recordingId = recordingIdRef.current;
-    if (!session || !recordingId) return;
+    if (!session || !recordingId || finishingRef.current) return;
+    finishingRef.current = true;
     setStep("processing");
     setStage("uploading");
     const total = elapsedRef.current;
@@ -347,11 +482,12 @@ function RecordingFlow({
       await session.stop();
       await releaseAudioSession();
       setStage("transcribing");
-      await finishCheckInRecording(teamId, memberUserId, recordingId, total);
+      await saveCheckInRecordingDraft(teamId, memberUserId, recordingId, total);
       sessionRef.current = null;
       recordingIdRef.current = null;
       onProcessingStarted(recordingId);
     } catch (err) {
+      finishingRef.current = false;
       setError(recordingErrorMessage(err));
       setStep("error");
     }
@@ -364,6 +500,23 @@ function RecordingFlow({
     void stopAndProcess();
   }, [step, paused, elapsedSec, stopAndProcess]);
 
+  /**
+   * Leaving the app mid-check-in finishes to a draft instead of relying on the
+   * hourly abandoned sweep (and instead of losing an unflushed open segment).
+   */
+  useEffect(() => {
+    if (!visible) return;
+    const onChange = (next: AppStateStatus) => {
+      // `inactive` alone is too noisy (Control Center / permission sheets).
+      if (next !== "background") return;
+      if (stepRef.current !== "recording") return;
+      if (!recordingIdRef.current || !hasCapture()) return;
+      void stopAndProcess();
+    };
+    const sub = AppState.addEventListener("change", onChange);
+    return () => sub.remove();
+  }, [visible, hasCapture, stopAndProcess]);
+
   /** Seconds until the cap stops the recording, or null while that is far off. */
   const maxSec = Math.floor(MAX_RECORDING_MS / 1000);
   const remainingSec = Math.max(0, maxSec - elapsedSec);
@@ -372,21 +525,23 @@ function RecordingFlow({
 
   const togglePause = () => {
     const session = sessionRef.current;
-    if (!session) return;
+    if (!session || finishingRef.current) return;
     if (paused) {
-      session.resume();
-      liveClientRef.current?.resume();
-      livePcmRef.current?.resume();
-      setPaused(false);
+      void session.resume().then(() => {
+        liveClientRef.current?.resume();
+        livePcmRef.current?.resume();
+        setPaused(false);
+      });
       return;
     }
-    session.pause();
     liveClientRef.current?.pause();
     livePcmRef.current?.pause();
     setPaused(true);
+    void session.pause();
   };
 
-  const discard = useCallback(async () => {
+  /** Empty sessions only — anything captured becomes a draft instead. */
+  const cancelEmpty = useCallback(async () => {
     const session = sessionRef.current;
     const recordingId = recordingIdRef.current;
     sessionRef.current = null;
@@ -413,27 +568,42 @@ function RecordingFlow({
   }, [transcriptLines, showTranscript, scrollTranscriptToEnd]);
 
   /**
-   * Asks before throwing away a conversation, but stays out of the way when
-   * nothing has been captured yet, so closing the intro screen is still one tap.
+   * Safe leave: finish to draft when anything was captured; cancel only empty rows.
+   * Closing the consent screen stays one tap.
    */
-  const confirmDiscard = useCallback(() => {
+  const requestSafeExit = useCallback(() => {
+    if (stepRef.current === "processing" || finishingRef.current) return;
     if (!recordingIdRef.current) {
-      void discard();
+      void cancelEmpty();
+      return;
+    }
+    if (hasCapture()) {
+      Alert.alert(
+        "Save draft & leave?",
+        `What you covered with ${firstName} will be saved as a draft you can review anytime.`,
+        [
+          { text: "Keep talking", style: "cancel" },
+          {
+            text: "Save draft & leave",
+            onPress: () => void stopAndProcess(),
+          },
+        ],
+      );
       return;
     }
     Alert.alert(
-      "Discard this recording?",
-      `Nothing from this conversation with ${firstName} will be saved, and the audio is deleted.`,
+      "Leave without recording?",
+      "Nothing has been captured yet, so this check-in will be cancelled.",
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Stay", style: "cancel" },
         {
-          text: "Discard",
+          text: "Cancel check-in",
           style: "destructive",
-          onPress: () => void discard(),
+          onPress: () => void cancelEmpty(),
         },
       ],
     );
-  }, [discard, firstName]);
+  }, [cancelEmpty, firstName, hasCapture, stopAndProcess]);
 
   const confirmFinish = useCallback(() => {
     Alert.alert(
@@ -460,105 +630,183 @@ function RecordingFlow({
       onRequestClose={() => {
         // Closing mid-processing would cancel a write-up already handed over.
         if (step === "processing") return;
-        confirmDiscard();
+        requestSafeExit();
       }}
     >
-      <View style={[styles.screen, screenFrame(insets, cluster)]}>
-        <View style={styles.header}>
-          {step === "consent" ? (
-            <Pressable
-              onPress={confirmDiscard}
-              hitSlop={10}
-              style={styles.closeButton}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-            >
-              <ChevronLeft size={18} color="#172033" strokeWidth={2.3} />
-            </Pressable>
-          ) : null}
-          <Text style={[styles.headerTitle, step === "consent" ? styles.headerTitleCentered : null]} numberOfLines={1}>
-            {step === "recording" || step === "processing"
-              ? `Check-in with ${firstName}`
-              : step === "consent" && !templateId
-                ? OPEN_CHECK_IN_TITLE
-                : templateTitle}
-          </Text>
-          {step !== "recording" && step !== "processing" ? (
-            <Pressable
-              onPress={confirmDiscard}
-              hitSlop={10}
-              style={styles.closeButton}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <X size={17} color="#475569" strokeWidth={2.4} />
-            </Pressable>
-          ) : (
-            <View style={styles.headerSide} />
-          )}
-        </View>
+      {step === "consent" ? (
+        <View
+          style={[
+            styles.consentRoot,
+            {
+              paddingLeft: cluster.left,
+              paddingRight: cluster.right,
+            },
+          ]}
+        >
+          <View style={styles.consentBackdrop} pointerEvents="none">
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#F8F7FC" }]} />
+            <Image
+              source={CONSENT_HERO}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: windowW,
+                height: consentHeroHeight,
+              }}
+              resizeMode="cover"
+            />
+            {/* Soften the photo’s hard bottom edge so it doesn’t cut a line through the card. */}
+            <LinearGradient
+              colors={[
+                "transparent",
+                "rgba(248,247,252,0.35)",
+                "rgba(248,247,252,0.82)",
+                "#F8F7FC",
+              ]}
+              locations={[0.42, 0.68, 0.88, 1]}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: windowW,
+                height: consentHeroHeight + 2,
+              }}
+            />
+            <LinearGradient
+              colors={[
+                "rgba(13,7,38,0.52)",
+                "rgba(26,11,69,0.22)",
+                "transparent",
+              ]}
+              locations={[0, 0.45, 1]}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: windowW,
+                height: Math.round(consentHeroHeight * 0.72),
+              }}
+            />
+          </View>
 
-        {step === "consent" ? (
-          <View style={styles.consentScreen}>
+          <View
+            style={[
+              styles.consentFrame,
+              {
+                paddingTop: insets.top + 8,
+                paddingBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            <View style={styles.consentHeaderBar}>
+              <Pressable
+                onPress={requestSafeExit}
+                hitSlop={10}
+                style={styles.consentNavBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+              >
+                <ChevronLeft size={18} color="#FFFFFF" strokeWidth={2.3} />
+              </Pressable>
+              <Text style={styles.consentNavTitle} numberOfLines={1}>
+                Check-In
+              </Text>
+              <Pressable
+                onPress={requestSafeExit}
+                hitSlop={10}
+                style={styles.consentNavBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <X size={17} color="#FFFFFF" strokeWidth={2.4} />
+              </Pressable>
+            </View>
+
             <ScrollView
               style={styles.consentScroll}
               contentContainerStyle={styles.consentContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.intro}>
-                <Text style={styles.introTitle}>Record this check-in</Text>
-                <Text style={styles.introBody}>
+              <View style={styles.consentHero}>
+                <View style={styles.consentHeroIcon}>
+                  <AudioLines size={18} color="#FFFFFF" strokeWidth={2.3} />
+                </View>
+                <Text style={styles.consentHeroTitle}>
+                  Let’s Record Your Check-In
+                </Text>
+                <Text style={styles.consentHeroBody}>
                   {templateId
                     ? `Have a natural conversation with ${firstName}. Alenio will listen and fill in ${templateTitle} for you to review before saving.`
-                    : `Have a natural conversation with ${firstName}. Alenio will listen and create a structured summary with key takeaways for you to review before saving.`}
+                    : `Have a natural conversation with ${firstName}. Alenio will listen, create a summary, and highlight the key takeaways for you to review before saving.`}
                 </Text>
               </View>
 
               <View style={styles.consentCard}>
-                <View style={styles.consentHeader}>
-                  <View style={styles.consentIcon}>
-                    <ShieldCheck size={20} color="#0F9D6E" strokeWidth={2.2} />
+                <View style={styles.consentCardHeader}>
+                  <View style={styles.consentShield}>
+                    <ShieldCheck size={15} color="#5B3FF0" strokeWidth={2.2} />
                   </View>
-                  <View style={styles.consentCopy}>
-                    <Text style={styles.consentTitle}>Tell {firstName} first</Text>
-                    <Text style={styles.consentBody}>
-                      Let {firstName} know the conversation is being recorded and transcribed, and that they can ask you to stop at any time. Audio is kept for up to seven days or until you publish; the transcript stays with the check-in.
+                  <View style={styles.consentCardCopy}>
+                    <Text style={styles.consentCardTitle}>Before You Start</Text>
+                    <Text style={styles.consentCardBody}>
+                      Tell {firstName} you’re recording first. A few Alenio reminders for a great check-in.
                     </Text>
                   </View>
                 </View>
-                <View style={styles.chips}>
-                  {[
-                    "Live transcription while you talk",
-                    "Audio kept up to 7 days",
-                    "Only you can see the write-up",
-                    "Nothing is saved until you publish",
-                  ].map((chip) => (
-                    <View key={chip} style={styles.chip}>
-                      <Check size={12} color="#0F9D6E" strokeWidth={2.6} />
-                      <Text style={styles.chipText}>{chip}</Text>
+                <View style={styles.consentTips}>
+                  {BEFORE_YOU_START.map(({ Icon, label }) => (
+                    <View key={label} style={styles.consentTip}>
+                      <View style={styles.consentTipIcon}>
+                        <Icon size={12} color="#5B3FF0" strokeWidth={2.3} />
+                      </View>
+                      <Text style={styles.consentTipText}>{label}</Text>
                     </View>
                   ))}
                 </View>
               </View>
             </ScrollView>
 
-            <Pressable
-              onPress={() => void begin()}
-              disabled={starting}
-              style={[styles.startButton, starting ? styles.primaryDisabled : null]}
-              accessibilityRole="button"
-              accessibilityLabel={`Start recording the check-in with ${firstName}`}
-              testID="start-check-in-recording"
-            >
-              {starting ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <View style={styles.startButtonRow}>
-                  <Mic size={16} color="#FFFFFF" strokeWidth={2.4} />
-                  <Text style={styles.primaryLabel}>{firstName} agreed, start recording</Text>
-                </View>
-              )}
-            </Pressable>
+            <View style={styles.consentActions}>
+              <View style={styles.consentMicBlock}>
+                <ConsentWave />
+                <Pressable
+                  onPress={() => void begin()}
+                  disabled={starting}
+                  style={[
+                    styles.consentMicButton,
+                    starting ? styles.primaryDisabled : null,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Start recording the check-in with ${firstName}`}
+                >
+                  {starting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Mic size={26} color="#FFFFFF" strokeWidth={2.2} />
+                  )}
+                </Pressable>
+                <ConsentWave mirror />
+              </View>
+
+              <Pressable
+                onPress={() => void begin()}
+                disabled={starting}
+                style={[
+                  styles.consentStartButton,
+                  starting ? styles.primaryDisabled : null,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Start recording the check-in with ${firstName}`}
+                testID="start-check-in-recording"
+              >
+                {starting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.consentStartLabel}>Start Recording</Text>
+                )}
+              </Pressable>
+            </View>
 
             {onWriteManually ? (
               <Pressable
@@ -569,48 +817,106 @@ function RecordingFlow({
                 accessibilityLabel="Write the check-in yourself instead"
                 testID="write-check-in-manually"
               >
-                <Text style={styles.manualLinkLabel}>Write it up yourself instead</Text>
+                <Pencil size={14} color="#5B3FF0" strokeWidth={2.3} />
+                <Text style={styles.manualLinkLabel}>Write It Up Yourself Instead</Text>
               </Pressable>
             ) : null}
 
-            <View style={styles.senecaFooter}>
-              <View style={styles.senecaRow}>
-                <Sparkles size={18} color="#6D4AFF" strokeWidth={2.2} />
-                <View style={styles.senecaRule} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.senecaTitle}>Seneca helps with both</Text>
-                  <Text style={styles.senecaBody}>
-                    Review and refine your check-in summary before saving.
-                  </Text>
-                </View>
+            <View style={styles.senecaFooterCard}>
+              <Sparkles size={18} color="#5B3FF0" strokeWidth={2.2} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.senecaTitle}>Powered by Seneca</Text>
+                <Text style={styles.senecaBody}>
+                  Review and refine your check-in summary before saving.
+                </Text>
               </View>
-              <View style={styles.senecaWave} pointerEvents="none">
-                <Svg width="100%" height="100%" viewBox="0 0 360 70" preserveAspectRatio="none">
-                  <Path
-                    d="M0 28 C80 10 150 18 210 32 C280 48 320 20 360 28 L360 70 L0 70 Z"
-                    fill="#F4F0FF"
-                  />
-                  <Path
-                    d="M0 46 C90 34 170 52 250 40 C310 32 340 42 360 40 L360 70 L0 70 Z"
-                    fill="#E9E2FF"
-                  />
-                </Svg>
-              </View>
+              <ChevronRight size={16} color="#A78BFA" strokeWidth={2.2} />
             </View>
           </View>
-        ) : null}
+        </View>
+      ) : step === "recording" ? (
+        <View
+          style={[
+            styles.recordingRoot,
+            {
+              paddingLeft: cluster.left,
+              paddingRight: cluster.right,
+              paddingBottom: Math.max(insets.bottom, 10),
+            },
+          ]}
+        >
+          <View style={styles.recordingBackdrop} pointerEvents="none">
+            <View
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: "#F4F1FC" }]}
+            />
+            <Image
+              source={CONSENT_HERO}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: windowW,
+                height: recordingHeroHeight,
+              }}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={[
+                "transparent",
+                "rgba(244,241,252,0.35)",
+                "rgba(244,241,252,0.88)",
+                "#F4F1FC",
+              ]}
+              locations={[0.35, 0.62, 0.86, 1]}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: windowW,
+                height: recordingHeroHeight + 2,
+              }}
+            />
+          </View>
 
-        {step === "recording" ? (
-          <View style={styles.body}>
-            <View style={styles.liveWrap}>
+          <View
+            style={[
+              styles.recordingFrame,
+              { paddingTop: Math.max(insets.top, 10) },
+            ]}
+          >
+            <View style={styles.recordingHeaderBar}>
+              <Pressable
+                onPress={requestSafeExit}
+                hitSlop={10}
+                style={styles.recordingNavBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+              >
+                <ChevronLeft size={18} color="#FFFFFF" strokeWidth={2.3} />
+              </Pressable>
+              <Text style={styles.recordingNavTitle} numberOfLines={1}>
+                Check-In with {firstName}
+              </Text>
+              <View style={styles.headerSide} />
+            </View>
+
+            <View style={styles.liveHero}>
               <View style={styles.liveBadge}>
-                <View style={[styles.liveDot, paused ? styles.liveDotPaused : null]} />
-                <Text style={styles.liveLabel}>{paused ? "Paused" : "Recording"}</Text>
+                <View
+                  style={[styles.liveDot, paused ? styles.liveDotPaused : null]}
+                />
+                <Text
+                  style={[
+                    styles.liveLabel,
+                    paused ? styles.liveLabelPaused : null,
+                  ]}
+                >
+                  {paused ? "Paused" : "Recording"}
+                </Text>
               </View>
-              <Text style={styles.clock}>{formatRecordingClock(elapsedSec)}</Text>
-              {/* The cap stops the recording on its own, so it is worth
-                  saying out loud before it happens rather than cutting a
-                  conversation off without warning. */}
+              <Text style={styles.clock}>
+                {formatRecordingClock(elapsedSec)}
+              </Text>
               {secondsLeft !== null ? (
                 <View style={styles.capWarning}>
                   <Text style={styles.capWarningText}>
@@ -623,24 +929,22 @@ function RecordingFlow({
                   ? "Recording stops at 90 minutes. Wrap up, or stop and start a second recording."
                   : paused
                     ? "Tap resume when you are ready to carry on."
-                    : `Talking with ${firstName}. Keep the phone nearby.`}
+                    : "Keep the phone nearby."}
               </Text>
 
-              <View style={styles.meter}>
-                {Array.from({ length: LEVEL_BARS }).map((_, index) => {
-                  const threshold = (index + 1) / LEVEL_BARS;
-                  const active = !paused && level >= threshold * 0.9;
-                  return (
-                    <View
-                      key={index}
-                      style={[
-                        styles.meterBar,
-                        { height: 8 + Math.round(threshold * 26) },
-                        active ? styles.meterBarActive : null,
-                      ]}
-                    />
-                  );
-                })}
+              <View style={styles.liveMicStage}>
+                <View style={styles.liveMicBlock}>
+                  <ConsentWave level={level} active={!paused} />
+                  <View
+                    style={[
+                      styles.liveMicButton,
+                      paused ? styles.liveMicButtonPaused : null,
+                    ]}
+                  >
+                    <Mic size={20} color="#FFFFFF" strokeWidth={2.2} />
+                  </View>
+                  <ConsentWave mirror level={level} active={!paused} />
+                </View>
               </View>
 
               {pendingUploads > 0 ? (
@@ -655,134 +959,214 @@ function RecordingFlow({
               ) : null}
             </View>
 
-            {showTranscript ? (
-              <View style={styles.transcriptCard}>
-                <View style={styles.transcriptHeader}>
-                  <Text style={styles.transcriptTitle}>Live transcript</Text>
-                  {liveStatus === "active" || liveStatus === "paused" ? (
-                    <View style={styles.transcribingPill}>
-                      <Text style={styles.transcribingPillText}>
-                        {liveStatus === "paused" ? "Paused" : "Transcribing live"}
-                      </Text>
-                    </View>
-                  ) : null}
+            <View style={styles.tipsStrip}>
+              {BETTER_CHECK_IN_TIPS.map(({ Icon, title }) => (
+                <View key={title} style={styles.tipsStripChip}>
+                  <Icon size={12} color="#5B3FF0" strokeWidth={2.2} />
+                  <Text style={styles.tipsStripText}>{title}</Text>
                 </View>
-                {liveError ? (
-                  <Text style={styles.transcriptError}>{liveError}</Text>
-                ) : null}
-                <ScrollView
-                  ref={transcriptScrollRef}
-                  style={styles.transcriptScroll}
-                  contentContainerStyle={styles.transcriptList}
-                  showsVerticalScrollIndicator={false}
-                  onContentSizeChange={() => scrollTranscriptToEnd(true)}
-                  onLayout={() => scrollTranscriptToEnd(false)}
-                  onScrollBeginDrag={() => {
-                    stickToBottomRef.current = false;
-                  }}
-                  onScroll={(event) => {
-                    const { layoutMeasurement, contentOffset, contentSize } =
-                      event.nativeEvent;
-                    const distance =
-                      contentSize.height -
-                      layoutMeasurement.height -
-                      contentOffset.y;
-                    if (distance < 48) stickToBottomRef.current = true;
-                  }}
-                  scrollEventThrottle={16}
-                >
-                  {transcriptLines.length === 0 ? (
-                    <Text style={styles.transcriptEmpty}>
-                      Recognized speech will appear here as you talk.
-                    </Text>
-                  ) : (
-                    transcriptLines.map((line) => (
-                      <View key={line.id} style={styles.transcriptRow}>
-                        <Text style={styles.transcriptTime}>
-                          {formatClockMs(line.startMs)}
-                          {line.speakerLabel ? ` — ${line.speakerLabel}` : ""}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.transcriptText,
-                            line.interim ? styles.transcriptInterim : null,
-                          ]}
-                        >
-                          {line.text}
-                        </Text>
+              ))}
+            </View>
+
+            <View style={styles.sessionCard}>
+              <View style={styles.sessionPrimary}>
+                {showTranscript ? (
+                  <>
+                    <View style={styles.transcriptHeader}>
+                      <View style={styles.transcriptTitleBlock}>
+                        <View style={styles.transcriptTitleRow}>
+                          <View style={styles.transcriptDocIcon}>
+                            <FileText
+                              size={14}
+                              color="#5B3FF0"
+                              strokeWidth={2.2}
+                            />
+                          </View>
+                          <Text style={styles.transcriptTitle}>
+                            Live Transcript
+                          </Text>
+                        </View>
                       </View>
-                    ))
-                  )}
-                </ScrollView>
-              </View>
-            ) : questions.length === 0 && !templateId ? (
-              <View style={styles.questionsCard}>
-                <Text style={styles.questionsTitle}>No set questions</Text>
-                <Text style={styles.openHint}>
-                  Talk through whatever matters. Alenio works out the questions
-                  you covered once you finish.
-                </Text>
-              </View>
-            ) : questions.length > 0 ? (
-              <View style={styles.questionsCard}>
-                <Text style={styles.questionsTitle}>What to cover</Text>
-                <ScrollView
-                  contentContainerStyle={styles.questionsList}
-                  showsVerticalScrollIndicator={false}
-                >
-                  {questions.map((question, index) => (
-                    <View key={`${index}-${question}`} style={styles.questionRow}>
-                      <Text style={styles.questionNumber}>{index + 1}</Text>
-                      <Text style={styles.questionText}>{question}</Text>
+                      <View style={styles.transcriptHeaderActions}>
+                        {liveStatus === "active" || liveStatus === "paused" ? (
+                          <View style={styles.transcribingPill}>
+                            <View
+                              style={[
+                                styles.transcribingDot,
+                                liveStatus === "paused"
+                                  ? styles.transcribingDotPaused
+                                  : null,
+                              ]}
+                            />
+                            <Text style={styles.transcribingPillText}>
+                              {liveStatus === "paused"
+                                ? "Paused"
+                                : "Transcribing"}
+                            </Text>
+                          </View>
+                        ) : null}
+                        <Pressable
+                          onPress={() => setShowTranscript(false)}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Hide transcript"
+                        >
+                          <Text style={styles.transcriptToggleLabel}>Hide</Text>
+                        </Pressable>
+                      </View>
                     </View>
-                  ))}
-                </ScrollView>
+                    {liveError ? (
+                      <Text style={styles.transcriptError}>{liveError}</Text>
+                    ) : null}
+                    <ScrollView
+                      ref={transcriptScrollRef}
+                      style={styles.transcriptScroll}
+                      contentContainerStyle={styles.transcriptList}
+                      showsVerticalScrollIndicator={false}
+                      onContentSizeChange={() => scrollTranscriptToEnd(true)}
+                      onLayout={() => scrollTranscriptToEnd(false)}
+                      onScrollBeginDrag={() => {
+                        stickToBottomRef.current = false;
+                      }}
+                      onScroll={(event) => {
+                        const {
+                          layoutMeasurement,
+                          contentOffset,
+                          contentSize,
+                        } = event.nativeEvent;
+                        const distance =
+                          contentSize.height -
+                          layoutMeasurement.height -
+                          contentOffset.y;
+                        if (distance < 48) stickToBottomRef.current = true;
+                      }}
+                      scrollEventThrottle={16}
+                    >
+                      {transcriptLines.length === 0 ? (
+                        <View style={styles.transcriptEmptyCard}>
+                          <Sparkles
+                            size={18}
+                            color="#5B3FF0"
+                            strokeWidth={2.2}
+                          />
+                          <Text style={styles.transcriptEmptyTitle}>
+                            Listening…
+                          </Text>
+                          <Text style={styles.transcriptEmpty}>
+                            {Platform.OS === "web"
+                              ? "Recognized speech will appear here as you talk."
+                              : "Lines show up as you talk. Seneca drafts the write-up when you end."}
+                          </Text>
+                        </View>
+                      ) : (
+                        transcriptLines.map((line) => (
+                          <View key={line.id} style={styles.transcriptRow}>
+                            <Text style={styles.transcriptTime}>
+                              {line.speakerLabel
+                                ? `${line.speakerLabel}`
+                                : formatClockMs(line.startMs)}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.transcriptText,
+                                line.interim
+                                  ? styles.transcriptInterim
+                                  : null,
+                              ]}
+                            >
+                              {line.text}
+                            </Text>
+                          </View>
+                        ))
+                      )}
+                    </ScrollView>
+                  </>
+                ) : questions.length === 0 && !templateId ? (
+                  <View style={styles.questionsInner}>
+                    <Text style={styles.questionsTitle}>No set questions</Text>
+                    <Text style={styles.openHint}>
+                      Talk through whatever matters. Alenio works out the
+                      questions you covered once you finish.
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        stickToBottomRef.current = true;
+                        setShowTranscript(true);
+                      }}
+                      style={styles.transcriptToggle}
+                    >
+                      <Text style={styles.transcriptToggleLabel}>
+                        Show Live Transcript
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : questions.length > 0 ? (
+                  <View style={styles.questionsInner}>
+                    <Text style={styles.questionsTitle}>What to cover</Text>
+                    <ScrollView
+                      contentContainerStyle={styles.questionsList}
+                      showsVerticalScrollIndicator={false}
+                    >
+                      {questions.map((question, index) => (
+                        <View
+                          key={`${index}-${question}`}
+                          style={styles.questionRow}
+                        >
+                          <Text style={styles.questionNumber}>{index + 1}</Text>
+                          <Text style={styles.questionText}>{question}</Text>
+                        </View>
+                      ))}
+                    </ScrollView>
+                    <Pressable
+                      onPress={() => {
+                        stickToBottomRef.current = true;
+                        setShowTranscript(true);
+                      }}
+                      style={styles.transcriptToggle}
+                    >
+                      <Text style={styles.transcriptToggleLabel}>
+                        Show Live Transcript
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.questionsInner}>
+                    <Text style={styles.transcriptEmpty}>
+                      Transcript hidden — still capturing in the background.
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        stickToBottomRef.current = true;
+                        setShowTranscript(true);
+                      }}
+                      style={styles.transcriptToggle}
+                    >
+                      <Text style={styles.transcriptToggleLabel}>
+                        Show Live Transcript
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
-            ) : null}
+            </View>
 
-            <Pressable
-              onPress={() => {
-                setShowTranscript((value) => {
-                  const next = !value;
-                  if (next) stickToBottomRef.current = true;
-                  return next;
-                });
-              }}
-              style={styles.transcriptToggle}
-              accessibilityRole="button"
-              accessibilityLabel={
-                showTranscript ? "Hide transcript" : "Show live transcript"
-              }
-            >
-              <Text style={styles.transcriptToggleLabel}>
-                {showTranscript ? "Hide Transcript" : "Show Live Transcript"}
-              </Text>
-            </Pressable>
-            {!showTranscript &&
-            (liveStatus === "active" ||
-              liveStatus === "connecting" ||
-              liveStatus === "paused") ? (
-              <Text style={styles.transcriptBackgroundNote}>
-                Transcribing in background
-              </Text>
-            ) : null}
-            {!showTranscript && liveError ? (
-              <Text style={styles.transcriptError}>{liveError}</Text>
-            ) : null}
-
-            <View style={styles.controls}>
+            <View style={styles.recordingDock}>
               <Pressable
                 onPress={togglePause}
                 style={styles.secondaryControl}
                 accessibilityRole="button"
-                accessibilityLabel={paused ? "Resume recording" : "Pause recording"}
+                accessibilityLabel={
+                  paused ? "Resume recording" : "Pause recording"
+                }
               >
                 {paused ? (
-                  <Play size={18} color="#0F172A" strokeWidth={2.4} />
+                  <Play size={17} color="#5B3FF0" strokeWidth={2.4} />
                 ) : (
-                  <Pause size={18} color="#0F172A" strokeWidth={2.4} />
+                  <Pause size={17} color="#5B3FF0" strokeWidth={2.4} />
                 )}
-                <Text style={styles.secondaryControlLabel}>{paused ? "Resume" : "Pause"}</Text>
+                <Text style={styles.secondaryControlLabel}>
+                  {paused ? "Resume" : "Pause"}
+                </Text>
               </Pressable>
 
               <Pressable
@@ -792,162 +1176,521 @@ function RecordingFlow({
                 accessibilityLabel="End check-in and write it up"
                 testID="stop-check-in-recording"
               >
-                <Square size={16} color="#FFFFFF" strokeWidth={2.8} fill="#FFFFFF" />
+                <Square
+                  size={15}
+                  color="#FFFFFF"
+                  strokeWidth={2.8}
+                  fill="#FFFFFF"
+                />
                 <Text style={styles.stopLabel}>End Check-In</Text>
               </Pressable>
             </View>
 
             <Pressable
-              onPress={confirmDiscard}
+              onPress={requestSafeExit}
               style={styles.discard}
               accessibilityRole="button"
-              accessibilityLabel="Discard this recording"
+              accessibilityLabel={
+                hasCapture()
+                  ? "Save draft and leave"
+                  : "Cancel this check-in"
+              }
             >
-              <Text style={styles.discardLabel}>Discard recording</Text>
+              <Text style={styles.discardLabel}>
+                {hasCapture() ? "Save draft & leave" : "Cancel check-in"}
+              </Text>
             </Pressable>
           </View>
-        ) : null}
-
-        {step === "processing" ? (
-          <View style={[styles.body, styles.centered]}>
-            <ActivityIndicator color="#5B3FF0" size="large" />
-            <Text style={styles.processingTitle}>Saving your recording</Text>
-            <Text style={styles.processingBody}>{processingLabel(stage, pendingUploads)}</Text>
-            <Text style={styles.processingHint}>
-              You can carry on as soon as this is stored — the write-up finishes in the
-              background.
-            </Text>
-          </View>
-        ) : null}
-
-        {step === "error" ? (
-          <View style={[styles.body, styles.centered]}>
-            <View style={styles.errorIcon}>
-              <CircleAlert size={22} color="#DC2626" strokeWidth={2.2} />
-            </View>
-            <Text style={styles.processingTitle}>That did not work</Text>
-            <Text style={styles.processingBody}>
-              {error ?? "Something went wrong while recording."}
-            </Text>
+        </View>
+      ) : (
+        <View style={[styles.screen, screenFrame(insets, cluster)]}>
+          <View style={styles.header}>
             <Pressable
-              onPress={confirmDiscard}
-              style={styles.primary}
+              onPress={requestSafeExit}
+              hitSlop={10}
+              style={styles.closeButton}
               accessibilityRole="button"
-              accessibilityLabel="Close"
+              accessibilityLabel="Back"
             >
-              <Text style={styles.primaryLabel}>Close</Text>
+              <ChevronLeft size={18} color="#5B3FF0" strokeWidth={2.3} />
             </Pressable>
+            <Text
+              style={[styles.headerTitle, styles.headerTitleCentered]}
+              numberOfLines={1}
+            >
+              {!templateId ? OPEN_CHECK_IN_TITLE : templateTitle}
+            </Text>
+            <View style={styles.headerSide} />
           </View>
-        ) : null}
-      </View>
+
+          {step === "processing" ? (
+            <View style={[styles.body, styles.centered]}>
+              <ActivityIndicator color="#5B3FF0" size="large" />
+              <Text style={styles.processingTitle}>Saving your recording</Text>
+              <Text style={styles.processingBody}>
+                {processingLabel(stage, pendingUploads)}
+              </Text>
+              <Text style={styles.processingHint}>
+                Saved as draft — you can review it anytime. The write-up finishes
+                in the background.
+              </Text>
+            </View>
+          ) : null}
+
+          {step === "error" ? (
+            <View style={[styles.body, styles.centered]}>
+              <View style={styles.errorIcon}>
+                <CircleAlert size={22} color="#DC2626" strokeWidth={2.2} />
+              </View>
+              <Text style={styles.processingTitle}>That did not work</Text>
+              <Text style={styles.processingBody}>
+                {error ?? "Something went wrong while recording."}
+              </Text>
+              <Pressable
+                onPress={requestSafeExit}
+                style={styles.primary}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <Text style={styles.primaryLabel}>Close</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      )}
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#FFFFFF" },
+  screen: { flex: 1, backgroundColor: "#F8F7FC" },
   header: {
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 4,
+  },
+  headerSide: { width: 34, height: 34 },
+  headerTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: -0.25,
+    color: "#17142B",
+  },
+  headerTitleCentered: { textAlign: "center" },
+  closeButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEE9FF",
+  },
+  body: { flex: 1, paddingTop: 10, gap: 12 },
+  recordingRoot: {
+    flex: 1,
+    backgroundColor: "#F4F1FC",
+    overflow: "hidden",
+  },
+  recordingBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  recordingFrame: {
+    flex: 1,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  recordingHeaderBar: {
     minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    marginBottom: 6,
   },
-  headerSide: { width: 30, height: 30 },
-  headerTitle: {
+  recordingNavBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  recordingNavTitle: {
     flex: 1,
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    color: "#FFFFFF",
+  },
+  liveHero: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingTop: 2,
+    paddingBottom: 2,
+  },
+  liveMicStage: {
+    marginTop: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 320,
+    paddingVertical: 2,
+  },
+  liveMicBlock: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  liveMicButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#5B3FF0",
+    shadowColor: "#5B3FF0",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
+    elevation: 7,
+  },
+  liveMicButtonPaused: {
+    backgroundColor: "#94A3B8",
+    shadowOpacity: 0.12,
+  },
+  sessionCard: {
+    flex: 1,
+    minHeight: 160,
+    maxWidth: 720,
+    width: "100%",
+    alignSelf: "center",
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    overflow: "hidden",
+    shadowColor: "#2A1A6E",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    elevation: 6,
+  },
+  sessionPrimary: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    padding: 14,
+    gap: 8,
+  },
+  sessionTips: {
+    width: 248,
+    minHeight: 0,
+    alignSelf: "stretch",
+    backgroundColor: "#F7F4FF",
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: "rgba(91, 63, 240, 0.1)",
+  },
+  sessionTipsContent: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    gap: 10,
+  },
+  tipsSidebarIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEE9FF",
+  },
+  tipsSidebarTitle: {
     fontSize: 15,
     fontWeight: "800",
-    letterSpacing: -0.2,
-    color: "#172033",
+    color: "#17142B",
+    letterSpacing: -0.25,
   },
-  headerTitleCentered: { textAlign: "center" },
-  closeButton: {
+  tipsSidebarBody: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#667085",
+    marginBottom: 2,
+  },
+  tipsSidebarList: { gap: 12, marginTop: 2 },
+  tipRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  tipIcon: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9",
-  },
-  body: { flex: 1, paddingTop: 14, gap: 14 },
-  consentScreen: { flex: 1 },
-  consentScroll: { flex: 1 },
-  consentContent: { paddingTop: 10, paddingBottom: 12, gap: 14 },
-  centered: { alignItems: "center", justifyContent: "center", gap: 10 },
-  intro: { gap: 6 },
-  introTitle: {
-    fontSize: 22,
-    lineHeight: 27,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    color: "#121826",
-  },
-  introBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#7B8794",
-  },
-  consentCard: {
-    padding: 14,
-    gap: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#D7F2E7",
     backgroundColor: "#FFFFFF",
   },
-  consentHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  consentIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E7F8F1",
+  tipCopy: { flex: 1, minWidth: 0, gap: 2 },
+  tipTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#17142B",
   },
-  consentCopy: { flex: 1, minWidth: 0 },
-  consentTitle: { fontSize: 16, lineHeight: 20, fontWeight: "800", color: "#121826" },
-  consentBody: { marginTop: 3, fontSize: 13, lineHeight: 18, color: "#667085" },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
+  tipBody: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#667085",
+  },
+  tipsStrip: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    justifyContent: "center",
+  },
+  tipsStripChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#F3FBF8",
+    backgroundColor: "rgba(255,255,255,0.88)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(91,63,240,0.12)",
   },
-  chipText: { fontSize: 12, fontWeight: "600", color: "#3F4658" },
-  startButton: {
-    minHeight: 50,
-    marginTop: 8,
+  tipsStripText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#5B3FF0",
+  },
+  questionsInner: {
+    flex: 1,
+    gap: 10,
+  },
+  recordingDock: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 420,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 8,
+    borderRadius: 26,
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(16,24,40,0.08)",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  transcriptHeaderActions: {
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  consentRoot: { flex: 1, backgroundColor: "#F8F7FC", overflow: "hidden" },
+  consentBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  consentFrame: { flex: 1, paddingHorizontal: 18 },
+  consentHeaderBar: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 8,
+  },
+  consentNavBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
-    backgroundColor: "#1B2430",
+    backgroundColor: "rgba(255,255,255,0.22)",
   },
-  startButtonRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  manualLink: { alignSelf: "center", paddingVertical: 10 },
+  consentNavTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    color: "#FFFFFF",
+  },
+  consentScroll: { flex: 1 },
+  consentContent: {
+    paddingTop: 6,
+    paddingBottom: 16,
+    gap: 16,
+    alignItems: "center",
+  },
+  consentHero: { alignItems: "center", gap: 10, paddingHorizontal: 8, width: "100%" },
+  consentHeroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  consentHeroTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "800",
+    letterSpacing: -0.6,
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+  consentHeroBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: "rgba(255,255,255,0.9)",
+    textAlign: "center",
+    maxWidth: 340,
+  },
+  consentCard: {
+    width: "100%",
+    maxWidth: 400,
+    padding: 12,
+    gap: 8,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#2A1A6E",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  consentCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  consentShield: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEE9FF",
+  },
+  consentCardCopy: { flex: 1, minWidth: 0 },
+  consentCardTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: "#121826",
+  },
+  consentCardBody: {
+    marginTop: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#667085",
+  },
+  consentTips: { gap: 4 },
+  consentTip: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "stretch",
+    gap: 7,
+    minHeight: 30,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: "#F4F0FF",
+  },
+  consentTipIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  consentTipText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: "600",
+    color: "#3F4658",
+  },
+  consentActions: {
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
+    gap: 10,
+    paddingTop: 4,
+  },
+  consentMicBlock: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  consentWaveRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  consentWaveBar: {
+    width: 4,
+    borderRadius: 999,
+    backgroundColor: "#A78BFA",
+  },
+  consentMicButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#5B3FF0",
+    shadowColor: "#5B3FF0",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  consentStartButton: {
+    minHeight: 50,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    backgroundColor: "#5B3FF0",
+  },
+  consentStartLabel: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.2,
+  },
+  manualLink: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 12,
+  },
   manualLinkLabel: { fontSize: 13, fontWeight: "700", color: "#5B3FF0" },
-  senecaFooter: { marginTop: 8 },
-  senecaRow: {
-    paddingTop: 8,
-    paddingBottom: 12,
+  senecaFooterCard: {
+    marginTop: 2,
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-  },
-  senecaRule: {
-    width: 2,
-    height: 38,
-    borderRadius: 1,
-    backgroundColor: "#DDD6FE",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: "#EEE9FF",
   },
   senecaTitle: { fontSize: 14, lineHeight: 18, fontWeight: "800", color: "#17142B" },
-  senecaBody: { marginTop: 2, fontSize: 13, lineHeight: 18, color: "#667085" },
-  senecaWave: { height: 64, marginHorizontal: -18 },
+  senecaBody: { marginTop: 2, fontSize: 12, lineHeight: 16, color: "#667085" },
+  centered: { alignItems: "center", justifyContent: "center", gap: 10 },
   primary: {
     minHeight: 50,
     marginTop: 8,
@@ -960,35 +1703,58 @@ const styles = StyleSheet.create({
   },
   primaryDisabled: { opacity: 0.7 },
   primaryLabel: { fontSize: 14, fontWeight: "800", color: "#FFFFFF" },
-  // Sized to its content rather than flex:1 so the question list gets the
-  // leftover height instead of the clock being centred in an empty screen.
-  liveWrap: { alignItems: "center", justifyContent: "center", gap: 8, paddingTop: 6 },
-  transcriptCard: {
-    flex: 1,
-    minHeight: 120,
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#EDE9FE",
-    backgroundColor: "#FAFAFF",
-    gap: 8,
-  },
   transcriptHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
+    gap: 10,
+  },
+  transcriptTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  transcriptTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
+  },
+  transcriptDocIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEE9FF",
   },
   transcriptTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#172033",
+    color: "#17142B",
+  },
+  transcriptSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#667085",
+    paddingLeft: 36,
   },
   transcribingPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "#EDE9FE",
+    backgroundColor: "#EEE9FF",
+  },
+  transcribingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#5B3FF0",
+  },
+  transcribingDotPaused: {
+    backgroundColor: "#94A3B8",
   },
   transcribingPillText: {
     fontSize: 11,
@@ -996,17 +1762,17 @@ const styles = StyleSheet.create({
     color: "#5B3FF0",
   },
   transcriptScroll: { flex: 1 },
-  transcriptList: { gap: 10, paddingBottom: 4 },
-  transcriptRow: { gap: 2 },
+  transcriptList: { gap: 12, paddingBottom: 4 },
+  transcriptRow: { gap: 3 },
   transcriptTime: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#5B3FF0",
   },
   transcriptText: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#172033",
+    color: "#17142B",
   },
   transcriptInterim: {
     fontStyle: "italic",
@@ -1039,15 +1805,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#94A3B8",
   },
-  questionsCard: {
-    flex: 1,
-    minHeight: 90,
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#EEF0F4",
-    backgroundColor: "#FAFAFC",
-  },
   questionsTitle: {
     fontSize: 10.5,
     fontWeight: "800",
@@ -1056,7 +1813,7 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     marginBottom: 8,
   },
-  openHint: { fontSize: 12, lineHeight: 17, color: "#64748B" },
+  openHint: { fontSize: 12, lineHeight: 17, color: "#667085" },
   questionsList: { gap: 9, paddingBottom: 2 },
   questionRow: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
   questionNumber: {
@@ -1066,7 +1823,7 @@ const styles = StyleSheet.create({
     color: "#5B3FF0",
     lineHeight: 17,
   },
-  questionText: { flex: 1, fontSize: 12.5, lineHeight: 17, color: "#334155" },
+  questionText: { flex: 1, fontSize: 12.5, lineHeight: 17, color: "#3F4658" },
   liveBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1074,17 +1831,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     minHeight: 28,
     borderRadius: 14,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "rgba(254,226,226,0.92)",
   },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#DC2626" },
   liveDotPaused: { backgroundColor: "#94A3B8" },
   liveLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4, color: "#B91C1C" },
+  liveLabelPaused: { color: "#64748B" },
   capWarning: {
-    marginTop: 6,
+    marginTop: 4,
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "rgba(254,243,199,0.95)",
   },
   capWarningText: {
     fontSize: 12,
@@ -1093,81 +1851,87 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   clock: {
-    fontSize: 38,
+    fontSize: 34,
     fontWeight: "800",
-    letterSpacing: -1.5,
-    color: "#0F172A",
+    letterSpacing: -1.2,
+    color: "#FFFFFF",
     fontVariant: ["tabular-nums"],
+    textShadowColor: "rgba(15,10,40,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   liveHint: {
-    maxWidth: 260,
-    fontSize: 12,
+    maxWidth: 300,
+    fontSize: 12.5,
     lineHeight: 17,
-    color: "#64748B",
+    color: "rgba(255,255,255,0.9)",
     textAlign: "center",
   },
-  meter: {
-    marginTop: 8,
-    height: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-  },
-  meterBar: { width: 3, borderRadius: 2, backgroundColor: "#E2E8F0" },
-  meterBarActive: { backgroundColor: "#5B3FF0" },
-  uploadNote: { fontSize: 11, color: "#64748B" },
+  uploadNote: { fontSize: 11, color: "rgba(255,255,255,0.85)" },
   uploadWarn: {
     maxWidth: 280,
     fontSize: 11,
     lineHeight: 15,
-    color: "#B45309",
+    color: "#FDE68A",
     textAlign: "center",
   },
-  controls: { flexDirection: "row", alignItems: "center", gap: 10 },
   secondaryControl: {
     flex: 1,
-    minHeight: 50,
+    minHeight: 46,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
+    borderRadius: 999,
+    backgroundColor: "#EEE9FF",
   },
-  secondaryControlLabel: { fontSize: 13.5, fontWeight: "800", color: "#0F172A" },
+  secondaryControlLabel: { fontSize: 14, fontWeight: "800", color: "#5B3FF0" },
   stopControl: {
-    flex: 1,
-    minHeight: 50,
+    flex: 1.15,
+    minHeight: 46,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    borderRadius: 15,
-    backgroundColor: "#0F172A",
+    borderRadius: 999,
+    backgroundColor: "#5B3FF0",
   },
-  stopLabel: { fontSize: 13.5, fontWeight: "800", color: "#FFFFFF" },
+  stopLabel: { fontSize: 14, fontWeight: "800", color: "#FFFFFF" },
   discard: {
-    minHeight: 34,
+    minHeight: 30,
     alignItems: "center",
     justifyContent: "center",
   },
   discardLabel: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
+  transcriptEmptyCard: {
+    flex: 1,
+    minHeight: 120,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    borderRadius: 16,
+    backgroundColor: "#F7F4FF",
+  },
+  transcriptEmptyTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#17142B",
+  },
   processingTitle: {
     marginTop: 6,
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: -0.3,
-    color: "#0F172A",
+    color: "#17142B",
     textAlign: "center",
   },
   processingBody: {
     maxWidth: 280,
     fontSize: 12.5,
     lineHeight: 18,
-    color: "#64748B",
+    color: "#667085",
     textAlign: "center",
   },
   processingHint: { fontSize: 11, color: "#94A3B8", textAlign: "center" },

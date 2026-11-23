@@ -151,6 +151,16 @@ export function finishCheckInRecording(
   );
 }
 
+/** Same as finish — used when leaving mid-check-in so work lands as a draft. */
+export function saveCheckInRecordingDraft(
+  teamId: string,
+  memberUserId: string,
+  recordingId: string,
+  durationSec: number,
+): Promise<CheckInRecording> {
+  return finishCheckInRecording(teamId, memberUserId, recordingId, durationSec);
+}
+
 export function fetchCheckInRecording(
   teamId: string,
   memberUserId: string,

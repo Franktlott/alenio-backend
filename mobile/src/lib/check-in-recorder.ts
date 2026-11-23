@@ -160,6 +160,8 @@ export class CheckInSegmentRecorder {
   private segmentStartedAt = 0;
   private segments: SegmentUploadState[] = [];
   private stopped = false;
+  /** True between pause() and resume() so ensureRecording does not reopen the mic. */
+  private paused = false;
   private acceptedOptions: RecordingOptions | null = null;
 
   constructor(
@@ -178,21 +180,58 @@ export class CheckInSegmentRecorder {
 
   async start(): Promise<void> {
     this.stopped = false;
+    this.paused = false;
     this.acceptedOptions = await prepareWithFallback(this.recorder, null);
     this.recorder.record();
     this.segmentStartedAt = Date.now();
     this.scheduleRoll();
   }
 
-  pause(): void {
+  /**
+   * Stops the mic and uploads the open segment before parking. That way a kill
+   * while paused still has audio on the server for draft recovery.
+   */
+  async pause(): Promise<void> {
+    if (this.stopped || this.paused) return;
+    this.paused = true;
     this.clearRoll();
-    this.recorder.pause();
+    await this.finishCurrentSegment();
   }
 
-  resume(): void {
+  async resume(): Promise<void> {
+    if (this.stopped || !this.paused) return;
+    this.paused = false;
+    this.acceptedOptions = await prepareWithFallback(
+      this.recorder,
+      this.acceptedOptions,
+    );
     this.recorder.record();
     this.segmentStartedAt = Date.now();
     this.scheduleRoll();
+  }
+
+  /**
+   * Re-opens the retention recorder if something else stole the mic (a second
+   * recorder for live transcription is the usual culprit on iOS).
+   */
+  async ensureRecording(): Promise<boolean> {
+    if (this.stopped || this.paused) return false;
+    try {
+      const status = this.recorder.getStatus?.();
+      if (status?.isRecording) return true;
+      this.clearRoll();
+      this.acceptedOptions = await prepareWithFallback(
+        this.recorder,
+        this.acceptedOptions,
+      );
+      this.recorder.record();
+      this.segmentStartedAt = Date.now();
+      this.scheduleRoll();
+      return true;
+    } catch (err) {
+      this.reportError(err);
+      return false;
+    }
   }
 
   /** Stops capture and waits for the final segment to finish uploading. */
@@ -232,9 +271,13 @@ export class CheckInSegmentRecorder {
 
   /** Closes the current file, starts the next one, then uploads the closed one. */
   private async rollSegment(): Promise<void> {
-    if (this.stopped) return;
+    if (this.stopped || this.paused) return;
     try {
       const finished = await this.closeSegment();
+      if (this.stopped || this.paused) {
+        if (finished) void this.uploadSegment(finished.uri, finished.index, finished.durationSec);
+        return;
+      }
       await prepareWithFallback(this.recorder, this.acceptedOptions);
       this.recorder.record();
       this.segmentStartedAt = Date.now();

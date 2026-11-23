@@ -118,18 +118,21 @@ export class WebCheckInRecorder {
     return Math.min(1, Math.sqrt(sum / this.levelBuffer.length) * 4);
   }
 
-  pause() {
-    if (!this.recorder || this.paused) return;
+  /**
+   * Uploads the open segment before parking so a closed tab still has audio
+   * on the server for draft recovery.
+   */
+  async pause(): Promise<void> {
+    if (this.paused || this.stopping) return;
     this.segmentActiveMs += Date.now() - this.resumedAt;
     this.paused = true;
-    if (this.recorder.state === "recording") this.recorder.pause();
+    await this.endSegment();
   }
 
   resume() {
-    if (!this.recorder || !this.paused) return;
+    if (!this.paused || this.stopping) return;
     this.paused = false;
-    this.resumedAt = Date.now();
-    if (this.recorder.state === "paused") this.recorder.resume();
+    this.beginSegment();
   }
 
   /** Stops the microphone and waits for every part to finish uploading. */

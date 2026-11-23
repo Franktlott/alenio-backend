@@ -21,6 +21,7 @@ import {
   transcriptionUnavailableMessage,
 } from "../lib/seneca-transcribe";
 import {
+  cancelOrFinishRecording,
   deleteRecordingAudio,
   finishRecording,
   purgeRecordingAudio,
@@ -826,6 +827,7 @@ checkInRecordingsRouter.delete(
 );
 
 // POST /api/teams/:teamId/members/:memberUserId/check-in-recordings/:id/cancel
+// Empty starts are deleted; anything with capture is finished into a draft.
 checkInRecordingsRouter.post(
   "/:memberUserId/check-in-recordings/:recordingId/cancel",
   async (c) => {
@@ -845,9 +847,25 @@ checkInRecordingsRouter.post(
     }
 
     try {
-      await purgeRecordingAudio(recordingId);
-      await prisma.checkInRecording.delete({ where: { id: recordingId } });
-      return c.json({ data: { ok: true } });
+      const result = await cancelOrFinishRecording(recordingId);
+      if (result.action === "finished") {
+        const updated = await prisma.checkInRecording.findUnique({
+          where: { id: recordingId },
+        });
+        return c.json(
+          {
+            data: {
+              ok: true,
+              savedAsDraft: true,
+              recording: updated
+                ? serializeRecording(updated, user.id)
+                : serializeRecording(recording, user.id),
+            },
+          },
+          202,
+        );
+      }
+      return c.json({ data: { ok: true, savedAsDraft: false } });
     } catch (err) {
       return prismaRouteError(c, err, "[check-in-recordings] cancel failed");
     }

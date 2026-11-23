@@ -238,6 +238,16 @@ export function finishCheckInRecording(teamId: string, userId: string, recording
   ).then((r) => r.data);
 }
 
+/** Same as finish — used when leaving mid-check-in so work lands as a draft. */
+export function saveCheckInRecordingDraft(
+  teamId: string,
+  userId: string,
+  recordingId: string,
+  durationSec: number,
+) {
+  return finishCheckInRecording(teamId, userId, recordingId, durationSec);
+}
+
 export function startLiveTranscriptionSession(
   teamId: string,
   userId: string,
