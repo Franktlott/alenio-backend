@@ -55,6 +55,8 @@ import {
   Pin,
   ImagePlus,
   ChevronRight,
+  Link2Off,
+  Ban,
 } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api, ApiError } from "@/lib/api/api";
@@ -265,20 +267,20 @@ function DmChatEmptyState({
         >
           Start a conversation
         </Text>
-        <Text
-          style={{
-            marginTop: 9,
-            fontSize: 13,
-            color: "#667085",
-            textAlign: "center",
-            lineHeight: 19,
-            maxWidth: 275,
-          }}
-        >
-          {isGroup
-            ? `Bring ${displayName} together for updates, questions, and ideas.`
-            : `A private space for you and ${displayName}. Share an update, ask a question, or simply say hello.`}
-        </Text>
+        {isGroup ? (
+          <Text
+            style={{
+              marginTop: 9,
+              fontSize: 13,
+              color: "#667085",
+              textAlign: "center",
+              lineHeight: 19,
+              maxWidth: 275,
+            }}
+          >
+            {`Bring ${displayName} together for updates, questions, and ideas.`}
+          </Text>
+        ) : null}
 
         <View
           style={{
@@ -2162,94 +2164,93 @@ export function DmThread({
             }}
             testID="dm-messaging-unavailable"
             style={{
-              marginHorizontal: 12,
-              marginBottom: 8,
-              borderRadius: 16,
-              shadowColor: "#342768",
-              shadowOpacity: 0.055,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 2,
+              marginHorizontal: 0,
+              marginBottom: 0,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: "#E2E8F0",
+              backgroundColor: "#F8FAFC",
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
             }}
           >
-            <LinearGradient
-              colors={["#FFFFFF", "#F8F7FF"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+            <View
               style={{
-                minHeight: 52,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: "#E7E3F6",
-                flexDirection: "row",
+                width: 34,
+                height: 34,
+                borderRadius: 17,
                 alignItems: "center",
-                gap: 9,
+                justifyContent: "center",
+                backgroundColor: "#F1F5F9",
               }}
             >
-              <LinearGradient
-                colors={["#F0EDFF", "#E5E1FA"]}
+              {messagingStatus === "blocked_by_me" ? (
+                <Ban size={15} color="#334155" strokeWidth={2} />
+              ) : messagingStatus === "connection_required" ? (
+                <Link2Off size={15} color="#334155" strokeWidth={2} />
+              ) : (
+                <Shield size={15} color="#334155" strokeWidth={2} />
+              )}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 11,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: "rgba(105,84,191,0.10)",
+                  fontSize: 13.5,
+                  lineHeight: 18,
+                  fontWeight: "600",
+                  letterSpacing: -0.2,
+                  color: "#0F172A",
                 }}
               >
-                <Shield size={14} color="#6854B5" strokeWidth={2} />
-              </LinearGradient>
-              <View style={{ flex: 1 }}>
+                {messagingStatus === "blocked_by_me"
+                  ? "You blocked this person"
+                  : messagingStatus === "connection_required"
+                    ? "You’re no longer connected"
+                    : "Messaging is unavailable"}
+              </Text>
+              <Text
+                style={{
+                  marginTop: 2,
+                  fontSize: 12,
+                  lineHeight: 16,
+                  fontWeight: "400",
+                  color: "#64748B",
+                }}
+                numberOfLines={2}
+              >
+                {messagingStatus === "blocked_by_me"
+                  ? "Manage this from their profile."
+                  : messagingStatus === "connection_required"
+                    ? "Reconnect to message, react, or start a video call."
+                    : "New messages cannot be sent here."}
+              </Text>
+            </View>
+            {messagingStatus === "blocked_by_me" ||
+            messagingStatus === "connection_required" ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 2,
+                  paddingLeft: 4,
+                }}
+              >
                 <Text
                   style={{
                     fontSize: 12.5,
                     lineHeight: 16,
-                    fontWeight: "700",
-                    color: "#29283B",
+                    fontWeight: "600",
+                    letterSpacing: -0.1,
+                    color: "#334155",
                   }}
                 >
-                  {messagingStatus === "blocked_by_me"
-                    ? "You blocked this person"
-                    : messagingStatus === "connection_required"
-                      ? "You’re no longer connected"
-                    : "Messaging is unavailable"}
+                  {messagingStatus === "blocked_by_me" ? "Manage" : "Reconnect"}
                 </Text>
-                <Text
-                  style={{
-                    marginTop: 1,
-                    fontSize: 10,
-                    lineHeight: 13,
-                    color: "#7B8192",
-                  }}
-                >
-                  {messagingStatus === "blocked_by_me"
-                    ? "Manage this from their profile."
-                    : messagingStatus === "connection_required"
-                      ? "Reconnect to message, react, or start a video call."
-                    : "New messages cannot be sent here."}
-                </Text>
+                <ChevronRight size={14} color="#64748B" strokeWidth={2.2} />
               </View>
-              {messagingStatus === "blocked_by_me" ||
-              messagingStatus === "connection_required" ? (
-                <View
-                  style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: 13,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#F0EEFA",
-                    borderWidth: 1,
-                    borderColor: "#E2DDF5",
-                  }}
-                >
-                  <ChevronRight size={13} color="#6E5AAE" strokeWidth={2.1} />
-                </View>
-              ) : null}
-            </LinearGradient>
+            ) : null}
           </Pressable>
         ) : null}
 
