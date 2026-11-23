@@ -21,6 +21,8 @@ type Props = {
   glyph?: string | null;
   /** Accent for the reaction a person picked; defaults to Alenio indigo. */
   activeColor?: string;
+  /** Facebook-style action bar: fill the slot and center the control. */
+  block?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
   accessibilityLabel: string;
@@ -35,6 +37,7 @@ export function FeedActionButton({
   filled = false,
   glyph,
   activeColor = ACTIVE,
+  block = false,
   onPress,
   onLongPress,
   accessibilityLabel,
@@ -72,12 +75,12 @@ export function FeedActionButton({
       testID={testID}
       // Narrow horizontal slop so neighbouring buttons sitting close together
       // never overlap each other's touch area; vertical slop covers the 44pt.
-      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      hitSlop={block ? undefined : { top: 8, bottom: 8, left: 4, right: 4 }}
       // Plain style: css-interop ignores the function form on Pressable, and the
       // icon already springs on press, so nothing is lost.
-      style={styles.button}
+      style={[styles.button, block ? styles.buttonBlock : null]}
     >
-      <View style={styles.content}>
+      <View style={[styles.content, block ? styles.contentBlock : null]}>
         <Animated.View
           style={[styles.iconSlot, glyph ? styles.iconSlotGlyph : null, iconStyle]}
         >
@@ -87,7 +90,7 @@ export function FeedActionButton({
             </Text>
           ) : (
             <Icon
-              size={17}
+              size={block ? 18 : 17}
               color={color}
               fill={active && filled ? activeColor : "transparent"}
               strokeWidth={2.1}
@@ -95,7 +98,7 @@ export function FeedActionButton({
           )}
         </Animated.View>
         {label ? (
-          <Text style={[styles.label, { color }]} numberOfLines={1}>
+          <Text style={[styles.label, block ? styles.labelBlock : null, { color }]} numberOfLines={1}>
             {label}
           </Text>
         ) : null}
@@ -107,14 +110,24 @@ export function FeedActionButton({
 const styles = StyleSheet.create({
   button: {
     // Visually tight; hitSlop keeps the tappable area at 44pt.
-    minHeight: 32,
+    minHeight: 24,
     justifyContent: "center",
     paddingRight: 14,
+  },
+  buttonBlock: {
+    flex: 1,
+    minHeight: 40,
+    paddingRight: 0,
+    paddingHorizontal: 8,
   },
   content: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
+  },
+  contentBlock: {
+    justifyContent: "center",
+    width: "100%",
   },
   iconSlot: {
     width: 18,
@@ -135,5 +148,9 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 16,
     fontWeight: "600",
+  },
+  labelBlock: {
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

@@ -11,11 +11,13 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   Building2,
-  Check,
   ChevronDown,
   Images,
   Users,
@@ -56,6 +58,7 @@ export default function CreatePostScreen() {
     attach?: string;
     draft?: string;
   }>();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const { data: authReady } = useMobileAuthReady();
@@ -372,7 +375,12 @@ export default function CreatePostScreen() {
           ) : null}
         </ScrollView>
 
-        <View style={styles.toolbar}>
+        <View
+          style={[
+            styles.toolbar,
+            { paddingBottom: Math.max(insets.bottom, 10) + 6 },
+          ]}
+        >
           <Pressable
             onPress={onAttach}
             accessibilityRole="button"
@@ -388,43 +396,90 @@ export default function CreatePostScreen() {
       <AlenioBottomSheet
         visible={pickerOpen}
         title="Who should see this?"
-        subtitle="Choose where this post goes"
+        subtitle="Pick an audience for this update"
         onClose={() => setPickerOpen(false)}
         compact
-        scrollEnabled
+        scrollEnabled={options.length > 6}
+        bodyMaxHeight={options.length > 6 ? 340 : 280}
         testID="create-post-audience-sheet"
       >
-        {options.map((option) => {
-          const selected = postAudienceKey(audience) === option.key;
-          return (
-            <Pressable
-              key={option.key}
-              onPress={() => {
-                setAudience(resolvePostAudience(option, teams));
-                setPickerOpen(false);
-              }}
-              style={[styles.optionRow, selected ? styles.optionRowSelected : null]}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              testID={`create-post-audience-${option.key}`}
-            >
-              <View style={styles.optionIcon}>
-                {option.kind === "network" ? (
-                  <Users size={16} color={colors.brand} strokeWidth={2.2} />
-                ) : (
-                  <Building2 size={16} color={colors.brand} strokeWidth={2.2} />
-                )}
+        <View style={styles.audienceList}>
+          {options.map((option, index) => {
+            const selected = postAudienceKey(audience) === option.key;
+            const showSection =
+              index === 0 ||
+              options[index - 1]?.kind !== option.kind;
+            return (
+              <View key={option.key}>
+                {showSection ? (
+                  <Text style={styles.audienceSection}>
+                    {option.kind === "network" ? "Network" : "Workspaces"}
+                  </Text>
+                ) : null}
+                <Pressable
+                  onPress={() => {
+                    setAudience(resolvePostAudience(option, teams));
+                    setPickerOpen(false);
+                  }}
+                  style={[
+                    styles.audienceRow,
+                    selected ? styles.audienceRowSelected : null,
+                    index < options.length - 1 &&
+                    options[index + 1]?.kind === option.kind
+                      ? styles.audienceRowDivider
+                      : null,
+                  ]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  testID={`create-post-audience-${option.key}`}
+                >
+                  <View
+                    style={[
+                      styles.audienceIcon,
+                      selected ? styles.audienceIconSelected : null,
+                    ]}
+                  >
+                    {option.kind === "network" ? (
+                      <Users
+                        size={15}
+                        color={selected ? colors.brand : "#64748B"}
+                        strokeWidth={2.2}
+                      />
+                    ) : (
+                      <Building2
+                        size={15}
+                        color={selected ? colors.brand : "#64748B"}
+                        strokeWidth={2.2}
+                      />
+                    )}
+                  </View>
+                  <View style={styles.audienceCopy}>
+                    <Text
+                      style={[
+                        styles.audienceTitle,
+                        selected ? styles.audienceTitleSelected : null,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {option.title}
+                    </Text>
+                    <Text style={styles.audienceSub} numberOfLines={1}>
+                      {option.subtitle}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.audienceRadio,
+                      selected ? styles.audienceRadioSelected : null,
+                    ]}
+                  >
+                    {selected ? <View style={styles.audienceRadioDot} /> : null}
+                  </View>
+                </Pressable>
               </View>
-              <View style={styles.optionCopy}>
-                <Text style={styles.optionTitle}>{option.title}</Text>
-                <Text style={styles.optionSub}>{option.subtitle}</Text>
-              </View>
-              {selected ? (
-                <Check size={18} color={colors.brand} strokeWidth={2.4} />
-              ) : null}
-            </Pressable>
-          );
-        })}
+            );
+          })}
+        </View>
       </AlenioBottomSheet>
 
       <AlenioBottomSheet
@@ -599,7 +654,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: "#EEF1F6",
   },
@@ -611,43 +666,84 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#F3F6FF",
   },
-  optionRow: {
+  audienceList: {
+    borderRadius: 14,
+    backgroundColor: "#F7F8FA",
+    overflow: "hidden",
+  },
+  audienceSection: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 4,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: "#8A94A6",
+  },
+  audienceRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-    marginBottom: 8,
+    gap: 11,
+    minHeight: 54,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "#F7F8FA",
   },
-  optionRowSelected: {
-    borderColor: "#C4B5FD",
-    backgroundColor: "#F5F3FF",
+  audienceRowSelected: {
+    backgroundColor: "#F1EEFF",
   },
-  optionIcon: {
-    width: 36,
-    height: 36,
+  audienceRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E4E7EC",
+  },
+  audienceIcon: {
+    width: 32,
+    height: 32,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EFE9FF",
+    backgroundColor: "#FFFFFF",
   },
-  optionCopy: {
+  audienceIconSelected: {
+    backgroundColor: "#E8E2FF",
+  },
+  audienceCopy: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: 1,
   },
-  optionTitle: {
-    fontSize: 15,
+  audienceTitle: {
+    fontSize: 14.5,
     fontWeight: "700",
     color: "#0F172A",
   },
-  optionSub: {
+  audienceTitleSelected: {
+    color: colors.brand,
+  },
+  audienceSub: {
     fontSize: 12,
-    color: "#64748B",
+    lineHeight: 16,
+    color: "#8A94A6",
+  },
+  audienceRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#C5CBD6",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  audienceRadioSelected: {
+    borderColor: colors.brand,
+  },
+  audienceRadioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.brand,
   },
   confirmCard: {
     padding: 14,

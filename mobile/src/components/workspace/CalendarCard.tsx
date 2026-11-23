@@ -17,15 +17,11 @@ import { isSameDay, startOfWeekSunday, toLocalIso } from "./workspace-utils";
 import { WS } from "./workspace-ui";
 import { colors, elevation, radii, space, surfaces } from "@/theme";
 import {
-  CALENDAR_EVENT_COLORS,
-  calendarEventSoftBackground,
-  resolveCalendarEventColor,
-} from "@/lib/calendar-event-colors";
-import {
   datedItemLocalIso,
   holidayLocalIso,
   sundayMonthWeeks,
 } from "@/lib/calendar-month-view";
+import { CALENDAR_EVENT_COLORS } from "@/lib/calendar-event-colors";
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
   "January",
@@ -72,7 +68,6 @@ const WEEK_ROW_HEIGHT = 46;
 
 /** Titled chips need this much room per row before dots are the better call. */
 const CHIP_HEIGHT = 15;
-const CHIP_GAP = 2;
 const ROW_HEIGHT_FOR_ONE_CHIP = 52;
 const ROW_HEIGHT_FOR_TWO_CHIPS = 74;
 const ROW_HEIGHT_FOR_TWO_CHIPS_AND_MORE = 91;
@@ -265,35 +260,31 @@ export function CalendarCard({
             ? 1
             : 0;
 
-  /** Holidays, events, then due tasks — the order people scan a day in. */
+  /** Holidays (red), then events/tasks in brand — Outlook-style solid bars. */
   const cellChips = (iso: string) => {
     const dayHolidays = holidaysByDay.get(iso) ?? [];
     const dayEvents = eventsByDay.get(iso) ?? [];
     const dayTasks = taskDays.get(iso) ?? [];
-    const chips: { key: string; label: string; tint: string; ink: string }[] =
-      [];
+    const chips: { key: string; label: string; holiday: boolean }[] = [];
     for (const [index, holiday] of dayHolidays.entries()) {
       chips.push({
         key: `holiday-${iso}-${index}`,
         label: holiday.name,
-        tint: "#FEE2E2",
-        ink: CALENDAR_EVENT_COLORS.holiday,
+        holiday: true,
       });
     }
     for (const ev of dayEvents) {
       chips.push({
         key: `event-${ev.id}`,
         label: ev.title,
-        tint: calendarEventSoftBackground(ev),
-        ink: resolveCalendarEventColor(ev),
+        holiday: false,
       });
     }
     for (const task of dayTasks) {
       chips.push({
         key: `task-${task.id}`,
         label: task.title,
-        tint: "#E7F6EE",
-        ink: CALENDAR_EVENT_COLORS.task,
+        holiday: false,
       });
     }
     return chips;
@@ -332,22 +323,13 @@ export function CalendarCard({
           );
           const hasOverflow = chips.length > visibleChipCount;
           const hiddenChipCount = chips.length - visibleChipCount;
-          /** Narrow cells carry dots instead of truncated titles: one per
-           * kind present, in the day's own colors, capped at three. */
-          const dots: string[] = [];
-          if (hasHoliday) dots.push(CALENDAR_EVENT_COLORS.holiday);
-          for (const ev of eventsByDay.get(iso) ?? []) {
-            if (dots.length >= 3) break;
-            const color = resolveCalendarEventColor(ev);
-            if (!dots.includes(color)) dots.push(color);
-          }
-          if (
-            dots.length < 3 &&
-            (taskDays.get(iso)?.length ?? 0) > 0 &&
-            !dots.includes(CALENDAR_EVENT_COLORS.task)
-          ) {
-            dots.push(CALENDAR_EVENT_COLORS.task);
-          }
+          /** Narrow cells: one brand dot per item, capped at three. */
+          const dotCount = Math.min(
+            3,
+            (hasHoliday ? holidaysByDay.get(iso)?.length ?? 0 : 0) +
+              (eventsByDay.get(iso)?.length ?? 0) +
+              (taskDays.get(iso)?.length ?? 0),
+          );
 
           return (
             <Pressable
@@ -395,39 +377,52 @@ export function CalendarCard({
                   {chips.slice(0, visibleChipCount).map((chip) => (
                     <View
                       key={chip.key}
-                      style={[styles.chip, { backgroundColor: chip.tint }]}
+                      style={[styles.chip, chip.holiday ? styles.holidayChip : null]}
                     >
                       <Text
                         numberOfLines={1}
-                        maxFontSizeMultiplier={1.15}
-                        style={[styles.chipText, { color: chip.ink }]}
+                        maxFontSizeMultiplier={1.1}
+                        style={styles.chipText}
                       >
                         {chip.label}
                       </Text>
                     </View>
                   ))}
+                  {hasOverflow ? (
+                    <View style={styles.overflowChip}>
+                      <Text
+                        numberOfLines={1}
+                        maxFontSizeMultiplier={1.1}
+                        style={styles.moreChipText}
+                      >
+                        +{hiddenChipCount}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               ) : (
                 <View style={styles.dotSlot}>
-                  {dots.map((color, dotIndex) => (
-                    <View
-                      key={`${iso}-dot-${dotIndex}`}
-                      style={[styles.activityDot, { backgroundColor: color }]}
-                    />
-                  ))}
+                  {Array.from({ length: dotCount }, (_, dotIndex) => {
+                    const holidayDotCount = hasHoliday
+                      ? Math.min(
+                          holidaysByDay.get(iso)?.length ?? 0,
+                          dotCount,
+                        )
+                      : 0;
+                    return (
+                      <View
+                        key={`${iso}-dot-${dotIndex}`}
+                        style={[
+                          styles.activityDot,
+                          dotIndex < holidayDotCount
+                            ? styles.holidayDot
+                            : null,
+                        ]}
+                      />
+                    );
+                  })}
                 </View>
               )}
-              {chipsPerCell > 0 && hasOverflow ? (
-                <View style={styles.overflowChip}>
-                  <Text
-                    numberOfLines={1}
-                    maxFontSizeMultiplier={1.15}
-                    style={styles.moreChipText}
-                  >
-                    +{hiddenChipCount}
-                  </Text>
-                </View>
-              ) : null}
             </Pressable>
           );
         })}
@@ -468,6 +463,8 @@ export function CalendarCard({
         style={{
           ...surfaces.groupedCard,
           ...elevation.card,
+          borderWidth: 0,
+          borderColor: "transparent",
           borderRadius: 18,
           // The grid sits inside the padding, so nothing needs clipping, and
           // clipping would drop the card shadow on iOS.
@@ -784,41 +781,44 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
   },
   chipStack: {
-    marginTop: 2,
-    gap: CHIP_GAP,
+    marginTop: 3,
+    gap: 2,
+    alignSelf: "stretch",
   },
+  /** Outlook-style solid bars — brand for events/tasks, red for holidays. */
   chip: {
     height: CHIP_HEIGHT,
-    borderRadius: 4,
-    paddingHorizontal: 4,
+    borderRadius: 3,
+    paddingHorizontal: 5,
     justifyContent: "center",
+    backgroundColor: colors.brand,
+  },
+  holidayChip: {
+    backgroundColor: CALENDAR_EVENT_COLORS.holiday,
   },
   chipText: {
     flex: 1,
     minWidth: 0,
-    fontSize: 9.5,
+    fontSize: 10,
+    lineHeight: 12,
     fontWeight: "600",
+    color: "#FFFFFF",
+    letterSpacing: -0.1,
   },
   overflowChip: {
-    position: "absolute",
-    left: "50%",
-    bottom: 4,
-    width: 28,
-    height: 16,
-    transform: [{ translateX: -14 }],
-    borderRadius: 8,
+    height: CHIP_HEIGHT,
+    borderRadius: 3,
     paddingHorizontal: 5,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F4F8",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#D9E0EA",
+    backgroundColor: colors.brandSoft,
   },
   moreChipText: {
-    fontSize: 9,
+    fontSize: 10,
+    lineHeight: 12,
     fontWeight: "700",
-    color: "#5F6F85",
-    letterSpacing: 0.1,
+    color: colors.brand,
+    letterSpacing: -0.1,
   },
   dayNumber: {
     width: DAY_NUMBER_SIZE,
@@ -865,5 +865,8 @@ const styles = StyleSheet.create({
     height: ACTIVITY_DOT_SIZE,
     borderRadius: ACTIVITY_DOT_SIZE / 2,
     backgroundColor: colors.brand,
+  },
+  holidayDot: {
+    backgroundColor: CALENDAR_EVENT_COLORS.holiday,
   },
 });

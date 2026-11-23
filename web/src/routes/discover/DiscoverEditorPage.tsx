@@ -935,10 +935,10 @@ export function DiscoverEditorPage() {
               <>
                 <Section
                   title="Placement"
-                  hint="Homepage feature is global. Category feature is exclusive — only one article per category."
+                  hint="Homepage feature is exclusive — only one Explore article on Home. Category feature is exclusive within that category."
                 >
                   <Switch
-                    label="Featured on homepage"
+                    label="Featured on homepage (Explore)"
                     checked={isFeatured}
                     onChange={(next) => {
                       setIsFeatured(next);

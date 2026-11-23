@@ -20,7 +20,7 @@ import {
   bootstrapMobileAuth,
   useMobileAuthReady,
 } from "@/lib/auth/use-session";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Notifications from "expo-notifications";
 import * as Haptics from "expo-haptics";
 import { registerForPushNotificationsAsync } from "@/lib/notifications";
@@ -38,9 +38,19 @@ import { LaunchScreen } from "@/components/LaunchScreen";
 import { toast } from "burnt";
 import { subscribeToWorkspaceReadOnly } from "@/lib/workspace-access";
 import { api } from "@/lib/api/api";
+import { fetchHomeInsights } from "@/lib/home-insight-api";
+import type { LaunchPhase } from "@/lib/launch-status";
+import {
+  calendarDayFromInstant,
+  getBrowserTimeZone,
+} from "@/lib/timezone";
 import { useSenecaSheetStore } from "@/lib/state/seneca-sheet-store";
 import { createForegroundIntervalController } from "@/lib/foreground-interval";
-import type { Team } from "@/lib/types";
+import type {
+  ConnectionsResponse,
+  HomeTodayResponse,
+  Team,
+} from "@/lib/types";
 
 export const unstable_settings = {
   /** Run `index` first so session + `/api/me` gate to Chat or Sign-in stays consistent. */
@@ -76,9 +86,8 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   /**
-   * Phones stay upright; anything tablet-sized or unfolded turns with the
-   * device. See `use-screen-orientation` for why iOS needs the same rule
-   * stated natively as well.
+   * Phones stay upright. A Duo follows its status bar so the window fills
+   * the display, including the status column. See `use-screen-orientation`.
    */
   const screenOrientation = useScreenOrientation();
   const { isLoading: sessionLoading } = useSession();
@@ -95,9 +104,14 @@ function RootLayoutNav() {
   const { data: authReady } = useMobileAuthReady();
 
   const me = authReady?.me;
+  const currentUserId = me?.id ?? "";
   const hasBackendSession = !!authReady?.me?.id;
   const isAdmin = me?.isAdmin === true;
-  const { data: bootTeams, isError: bootTeamsError } = useQuery({
+  const {
+    data: bootTeams,
+    isError: bootTeamsError,
+    isPending: bootTeamsPending,
+  } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
     enabled: hasBackendSession,
@@ -107,6 +121,87 @@ function RootLayoutNav() {
   const workspaceMembershipReady =
     authDecisionReady &&
     (!hasBackendSession || bootTeams !== undefined || bootTeamsError);
+  const hasTeams = (bootTeams?.length ?? 0) > 0;
+  const deviceTimeZone = getBrowserTimeZone();
+  const todayKey = calendarDayFromInstant(new Date(), deviceTimeZone);
+  const {
+    isPending: connectionsPending,
+    isError: connectionsError,
+    isFetched: connectionsFetched,
+  } = useQuery({
+    queryKey: ["connections", currentUserId],
+    queryFn: () => api.get<ConnectionsResponse>("/api/connections"),
+    enabled: hasBackendSession && !!currentUserId,
+    staleTime: 15_000,
+  });
+  const {
+    isPending: todayPending,
+    isError: todayError,
+    isFetched: todayFetched,
+  } = useQuery({
+    queryKey: ["home-today", currentUserId, todayKey, deviceTimeZone],
+    queryFn: () =>
+      api.get<HomeTodayResponse>(
+        `/api/activity/today?timeZone=${encodeURIComponent(deviceTimeZone)}`,
+      ),
+    enabled: hasBackendSession && !!currentUserId && hasTeams,
+    staleTime: 30_000,
+  });
+  const {
+    isPending: insightsPending,
+    isError: insightsError,
+    isFetched: insightsFetched,
+  } = useQuery({
+    queryKey: ["home-insights"],
+    queryFn: fetchHomeInsights,
+    enabled: hasBackendSession && !!currentUserId,
+    staleTime: 5 * 60_000,
+  });
+  /** Home’s first paint: network + day (+ insight) — not only session/teams. */
+  const homeContentReady =
+    !hasBackendSession ||
+    (workspaceMembershipReady &&
+      (connectionsFetched || connectionsError) &&
+      (!hasTeams || todayFetched || todayError) &&
+      (insightsFetched || insightsError));
+  const launchPhase: LaunchPhase = useMemo(() => {
+    if (!authDecisionReady || sessionLoading) return "session";
+    if (!hasBackendSession) return "finish";
+    if (!workspaceMembershipReady || bootTeamsPending) return "workspace";
+    if (connectionsPending && !connectionsFetched && !connectionsError) {
+      return "network";
+    }
+    if (
+      hasTeams &&
+      todayPending &&
+      !todayFetched &&
+      !todayError
+    ) {
+      return "today";
+    }
+    if (insightsPending && !insightsFetched && !insightsError) {
+      return "today";
+    }
+    if (!homeContentReady) return "today";
+    return "finish";
+  }, [
+    authDecisionReady,
+    sessionLoading,
+    hasBackendSession,
+    workspaceMembershipReady,
+    bootTeamsPending,
+    connectionsPending,
+    connectionsFetched,
+    connectionsError,
+    hasTeams,
+    todayPending,
+    todayFetched,
+    todayError,
+    insightsPending,
+    insightsFetched,
+    insightsError,
+    homeContentReady,
+  ]);
 
   // Cold start: populate auth-ready once (sign-in/logout write directly via setQueryData).
   useEffect(() => {
@@ -344,9 +439,8 @@ function RootLayoutNav() {
   );
 
   /**
-   * On a tablet a task opens over the list it came from rather than replacing
-   * it: the detail is a short stack of fields, and losing the surrounding
-   * context to read it is the thing that made the full screen feel oversized.
+   * A task opens over the screen it came from. On a phone that is a bottom
+   * sheet; on a tablet it is a centred dialog. Either way Home stays put.
    */
   const taskDetailAsSheet = fitsFormSheet(windowWidth, windowHeight);
 
@@ -397,15 +491,13 @@ function RootLayoutNav() {
           <Stack.Screen name="plan-one-on-one" />
           <Stack.Screen
             name="task-detail"
-            options={
-              taskDetailAsSheet
-                ? {
-                    presentation: "transparentModal",
-                    animation: "fade",
-                    headerShown: false,
-                  }
-                : undefined
-            }
+            options={{
+              presentation: "transparentModal",
+              headerShown: false,
+              contentStyle: { backgroundColor: "transparent" },
+              animation: taskDetailAsSheet ? "fade" : "slide_from_bottom",
+              gestureDirection: taskDetailAsSheet ? "horizontal" : "vertical",
+            }}
           />
           <Stack.Screen name="member-profile" />
           <Stack.Screen
@@ -650,7 +742,13 @@ function RootLayoutNav() {
       </Stack>
       {showSplash ? (
         <LaunchScreen
-          isReady={animDone && sessionSettled && workspaceMembershipReady}
+          phase={launchPhase}
+          isReady={
+            animDone &&
+            sessionSettled &&
+            workspaceMembershipReady &&
+            homeContentReady
+          }
           onDone={() => setShowSplash(false)}
         />
       ) : null}

@@ -70,6 +70,8 @@ type Props = {
   emptySubtitle?: string;
   emptyActionLabel?: string;
   onEmptyAction?: () => void;
+  /** First-run blank list, with the illustrated welcome. */
+  emptyWelcome?: boolean;
   footer?: React.ReactNode;
   /** Each section sits in its own raised card. Off when the list is already inside one. */
   raisedSections?: boolean;
@@ -94,6 +96,7 @@ function renderTaskRows(
           isLast={index === tasks.length - 1}
           selected={task.id === selectedTaskId}
           currentUserId={currentUserId}
+          compact={selectedTaskId != null}
           onToggle={() => onToggle(task)}
           onPress={() => onPress(task)}
           onLongPress={onLongPress ? () => onLongPress(task) : undefined}
@@ -123,6 +126,7 @@ export function TaskListCard({
   emptySubtitle,
   emptyActionLabel,
   onEmptyAction,
+  emptyWelcome = false,
   footer,
   raisedSections = false,
 }: Props) {
@@ -139,6 +143,7 @@ export function TaskListCard({
         subtitle={emptySubtitle}
         actionLabel={emptyActionLabel}
         onAction={onEmptyAction}
+        welcome={emptyWelcome}
       />
     );
   }

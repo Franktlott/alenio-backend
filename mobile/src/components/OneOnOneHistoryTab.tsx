@@ -60,6 +60,7 @@ import { AlenioHeaderBrand } from "@/components/AlenioHeaderBrand";
 import { CheckInEmptyState } from "@/components/development/CheckInEmptyState";
 import { CheckInRecordingSheet } from "@/components/development/CheckInRecordingSheet";
 import { CheckInTranscriptPanel } from "@/components/development/CheckInTranscriptPanel";
+import { SenecaIcon } from "@/components/seneca/SenecaIcon";
 import { isAudioRecordingSupported } from "@/lib/expo-audio-module";
 import {
   cancelCheckInRecording,
@@ -652,7 +653,7 @@ export function OneOnOneHistoryTab({
       await refetchActiveRecordings();
     } catch {
       toast({
-        title: "Could not dismiss that recording. Try again.",
+        title: "Could not delete that recording. Try again.",
         preset: "error",
       });
       void refetchActiveRecordings();
@@ -705,7 +706,7 @@ export function OneOnOneHistoryTab({
               [
                 { text: "Keep it", style: "cancel" },
                 {
-                  text: "Dismiss",
+                  text: "Delete",
                   style: "destructive",
                   onPress: () => void dismissActiveRecording(recording),
                 },
@@ -776,7 +777,7 @@ export function OneOnOneHistoryTab({
               {failed
                 ? "Tap for what went wrong"
                 : transcriptDraft
-                  ? "Tap to resume, write up, or dismiss"
+                  ? "Tap to resume, Seneca write-up, or delete"
                   : "Alenio is turning your conversation into a draft"}
             </Text>
           </View>
@@ -1117,11 +1118,36 @@ export function OneOnOneHistoryTab({
       void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
       toast({ title: "Check-in deleted", preset: "done" });
       closeCheckInActionMenu();
+      return true;
     } catch (e) {
       toast({ title: e instanceof Error ? e.message : "Could not delete", preset: "error" });
+      return false;
     } finally {
       setDeletingCheckInActionId(null);
     }
+  };
+
+  /** Delete while reviewing/editing a draft form — not available after publish. */
+  const confirmDeleteEditingDraft = () => {
+    const meeting = editingMeeting;
+    if (!meeting || meeting.status !== "draft" || !canModify) return;
+    Alert.alert(
+      "Delete this draft?",
+      "This check-in draft will be removed. This can’t be undone.",
+      [
+        { text: "Keep it", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              const deleted = await deleteHistoryMeeting(meeting);
+              if (deleted) exitFill();
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const openPlannedEventMenu = (event: PlannedOneOnOneEvent) => {
@@ -2016,7 +2042,6 @@ export function OneOnOneHistoryTab({
       return (
       <View
         style={{
-          flexDirection: "row",
           paddingHorizontal: 12,
           paddingTop: 8,
           paddingBottom: Math.max(16, insets.bottom + 8),
@@ -2026,65 +2051,90 @@ export function OneOnOneHistoryTab({
           gap: 8,
         }}
       >
-        {meetingToolMode ? (
-          <View
-            style={{
-              flex: 1,
-              borderRadius: 10,
-              paddingVertical: 11,
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              backgroundColor: "#F8FAFC",
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748B" }}>
-              {saving ? "Saving draft…" : "Draft autosaves"}
-            </Text>
-          </View>
-        ) : !editingMeeting || editingMeeting.status === "draft" ? (
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {meetingToolMode ? (
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 10,
+                paddingVertical: 11,
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748B" }}>
+                {saving ? "Saving draft…" : "Draft autosaves"}
+              </Text>
+            </View>
+          ) : !editingMeeting || editingMeeting.status === "draft" ? (
+            <Pressable
+              onPress={onSaveDraftClick}
+              disabled={saving}
+              style={{
+                flex: 1,
+                borderRadius: 10,
+                paddingVertical: 11,
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                backgroundColor: "#FFFFFF",
+                opacity: saving ? 0.6 : 1,
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569" }}>
+                {saving ? "Saving…" : "Save draft"}
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable
-            onPress={onSaveDraftClick}
+            onPress={onPublishClick}
             disabled={saving}
             style={{
-              flex: 1,
+              flex: 1.2,
+              backgroundColor: "#4361EE",
               borderRadius: 10,
-              paddingVertical: 11,
+              paddingVertical: 12,
               alignItems: "center",
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              backgroundColor: "#FFFFFF",
               opacity: saving ? 0.6 : 1,
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#475569" }}>
-              {saving ? "Saving…" : "Save draft"}
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>
+              {saving
+                ? "Saving…"
+                : editingMeeting?.status === "draft"
+                  ? "Publish Check-in"
+                  : editingMeeting
+                    ? "Save changes"
+                    : "Publish Check-in"}
+            </Text>
+          </Pressable>
+        </View>
+        {canModify &&
+        editingMeeting?.status === "draft" &&
+        !meetingToolMode &&
+        !videoCheckInSubmitted ? (
+          <Pressable
+            onPress={confirmDeleteEditingDraft}
+            disabled={deletingCheckInActionId === editingMeeting.id}
+            hitSlop={6}
+            style={{
+              alignSelf: "center",
+              paddingVertical: 4,
+              opacity:
+                deletingCheckInActionId === editingMeeting.id ? 0.55 : 1,
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Delete draft check-in"
+            testID="delete-draft-check-in-footer"
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#EF4444" }}>
+              Delete draft
             </Text>
           </Pressable>
         ) : null}
-        <Pressable
-          onPress={onPublishClick}
-          disabled={saving}
-          style={{
-            flex: 1.2,
-            backgroundColor: "#4361EE",
-            borderRadius: 10,
-            paddingVertical: 12,
-            alignItems: "center",
-            opacity: saving ? 0.6 : 1,
-          }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>
-            {saving
-              ? "Saving…"
-              : editingMeeting?.status === "draft"
-                ? "Publish Check-in"
-                : editingMeeting
-                  ? "Save changes"
-                  : "Publish Check-in"}
-          </Text>
-        </Pressable>
       </View>
       );
     };
@@ -2231,6 +2281,29 @@ export function OneOnOneHistoryTab({
               >
                 End
               </Text>
+            </Pressable>
+          ) : canModify &&
+            editingMeeting?.status === "draft" &&
+            !videoCheckInSubmitted ? (
+            <Pressable
+              onPress={confirmDeleteEditingDraft}
+              hitSlop={8}
+              disabled={deletingCheckInActionId === editingMeeting.id}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#FFF1F2",
+                opacity:
+                  deletingCheckInActionId === editingMeeting.id ? 0.55 : 1,
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Delete draft check-in"
+              testID="delete-draft-check-in"
+            >
+              <Trash2 size={16} color="#EF4444" strokeWidth={2.2} />
             </Pressable>
           ) : null}
         </View>
@@ -3584,7 +3657,7 @@ export function OneOnOneHistoryTab({
         title="Saved draft"
         subtitle={
           recording
-            ? `${durationLabel}. Resume to keep talking, or write it up when you’re ready.`
+            ? `${durationLabel}. Resume to keep talking, or let Seneca write it up when you’re ready.`
             : undefined
         }
         onClose={() => setDraftActionRecording(null)}
@@ -3617,10 +3690,10 @@ export function OneOnOneHistoryTab({
               }}
               style={bottomSheetMenu.row}
               accessibilityRole="button"
-              accessibilityLabel="Write up"
+              accessibilityLabel="Seneca write-up"
             >
-              <Text style={bottomSheetMenu.rowLabel}>Write up</Text>
-              <Sparkles size={bottomSheetMenu.iconSize} color="#4361EE" />
+              <Text style={bottomSheetMenu.rowLabel}>Seneca write-up</Text>
+              <SenecaIcon size={22} />
             </Pressable>
 
             <Pressable
@@ -3630,9 +3703,9 @@ export function OneOnOneHistoryTab({
               }}
               style={bottomSheetMenu.row}
               accessibilityRole="button"
-              accessibilityLabel="Dismiss draft"
+              accessibilityLabel="Delete draft"
             >
-              <Text style={bottomSheetMenu.rowLabelDestructive}>Dismiss</Text>
+              <Text style={bottomSheetMenu.rowLabelDestructive}>Delete</Text>
               <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
             </Pressable>
           </View>

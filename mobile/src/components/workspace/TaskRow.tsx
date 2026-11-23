@@ -5,7 +5,7 @@ import { isReminderTask } from "@/lib/task-kind";
 import { instantHasPassed, scheduleTimeParts } from "@/lib/schedule-time";
 import { CheckBurst } from "@/components/schedule/CheckBurst";
 import { TimelineRow } from "@/components/schedule/TimelineRow";
-import { colors, typography } from "@/theme";
+import { colors } from "@/theme";
 import { PriorityBadge } from "@/components/ui";
 import { AssigneeStack } from "./AssigneeStack";
 
@@ -47,6 +47,8 @@ type Props = {
   selected?: boolean;
   /** Marks which face in the assignee stack is the viewer's own. */
   currentUserId?: string | null;
+  /** Kept for callers; avatars stay trailing so the row stays one compact block. */
+  compact?: boolean;
   onToggle: () => void;
   onPress: () => void;
   onLongPress?: () => void;
@@ -92,6 +94,8 @@ export function TaskRow({
               : null;
   const showAvatars = !isReminder && assignments.length >= 1;
   const showPriority = !isReminder && shouldShowPriority(task.priority);
+  const showMeta =
+    task.isJoint || !!statusWord || showPriority || isReminder;
 
   const checkbox = (
     <Pressable
@@ -99,13 +103,13 @@ export function TaskRow({
         event.stopPropagation?.();
         onToggle();
       }}
-      hitSlop={12}
+      hitSlop={10}
       accessibilityRole="button"
       accessibilityState={{ checked: isDone }}
       accessibilityLabel="Open task"
       style={{
-        width: 28,
-        height: 28,
+        width: 26,
+        height: 26,
         alignItems: "center",
         justifyContent: "center",
       }}
@@ -114,18 +118,18 @@ export function TaskRow({
         {isDone ? (
           <View
             style={{
-              width: 18,
-              height: 18,
-              borderRadius: 5,
+              width: 16,
+              height: 16,
+              borderRadius: 4,
               backgroundColor: "#16A34A",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Check size={12} color="#FFFFFF" strokeWidth={3} />
+            <Check size={11} color="#FFFFFF" strokeWidth={3} />
           </View>
         ) : (
-          <Square size={17} color="#8B95A5" strokeWidth={2.1} />
+          <Square size={16} color="#8B95A5" strokeWidth={2.1} />
         )}
       </CheckBurst>
     </Pressable>
@@ -141,6 +145,7 @@ export function TaskRow({
       isLast={isLast}
       // Tasks tab is a list, not a day timeline — keep the rail for schedule views.
       showRail={false}
+      dense
       onPress={onPress}
       onLongPress={onLongPress}
       testID="task-row"
@@ -158,10 +163,9 @@ export function TaskRow({
       <Text
         numberOfLines={2}
         style={[
-          typography.rowTitle,
           {
-            fontSize: 14,
-            lineHeight: 19,
+            fontSize: 13.5,
+            lineHeight: 17,
             fontWeight: "700",
             color: colors.textPrimary,
           },
@@ -176,44 +180,59 @@ export function TaskRow({
         {task.title}
       </Text>
 
-      {task.isJoint ? (
-        <Text
-          style={{
-            marginTop: 2,
-            fontSize: 11,
-            lineHeight: 14,
-            fontWeight: "600",
-            color: "#64748B",
-          }}
-          accessibilityLabel="Joint task"
-          testID="task-row-joint-badge"
-        >
-          🤝 Joint task
-        </Text>
-      ) : null}
-
-      {statusWord || showPriority ? (
+      {showMeta ? (
         <View
           style={{
-            marginTop: task.isJoint ? 2 : 3,
+            marginTop: 1,
             flexDirection: "row",
             alignItems: "center",
-            gap: 8,
+            flexWrap: "wrap",
+            gap: 6,
             minWidth: 0,
           }}
         >
+          {task.isJoint ? (
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 13,
+                fontWeight: "600",
+                color: "#64748B",
+              }}
+              accessibilityLabel="Joint task"
+              testID="task-row-joint-badge"
+            >
+              🤝 Joint task
+            </Text>
+          ) : null}
+          {task.isJoint && (statusWord || showPriority || isReminder) ? (
+            <Text style={{ fontSize: 11, lineHeight: 13, color: "#C4C9D4" }}>
+              ·
+            </Text>
+          ) : null}
           {statusWord ? (
             <Text
               numberOfLines={1}
               style={{
                 flexShrink: 1,
                 fontSize: 11,
-                lineHeight: 14,
+                lineHeight: 13,
                 fontWeight: isOverdue ? "600" : "500",
                 color: isOverdue ? "#9F2A2A" : colors.textMuted,
               }}
             >
               {statusWord}
+            </Text>
+          ) : isReminder ? (
+            <Text
+              style={{
+                fontSize: 11,
+                lineHeight: 13,
+                fontWeight: "500",
+                color: colors.textMuted,
+              }}
+            >
+              Only you
             </Text>
           ) : null}
           {showPriority && task.priority ? (
@@ -224,18 +243,6 @@ export function TaskRow({
             />
           ) : null}
         </View>
-      ) : isReminder ? (
-        <Text
-          style={{
-            marginTop: 3,
-            fontSize: 11,
-            lineHeight: 14,
-            fontWeight: "500",
-            color: colors.textMuted,
-          }}
-        >
-          Only you
-        </Text>
       ) : null}
     </TimelineRow>
   );

@@ -336,8 +336,8 @@ export function AddConnectionSheet({
                         user={person}
                         size={46}
                         radius={23}
-                        backgroundColor="#EFE9FF"
-                        textColor={colors.brand}
+                        backgroundColor="#F1F5F9"
+                        textColor="#334155"
                         fontSize={15}
                       />
                       <View style={styles.personCopy}>

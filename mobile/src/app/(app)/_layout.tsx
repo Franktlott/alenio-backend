@@ -1,5 +1,10 @@
 import { Tabs } from "expo-router";
-import { CheckSquare, House, MessageCircle, Newspaper } from "lucide-react-native";
+import {
+  CheckSquare,
+  House,
+  MessageCircle,
+  Network as NetworkIcon,
+} from "lucide-react-native";
 import {
   View,
   Text,
@@ -9,6 +14,7 @@ import {
   Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import {
   TAB_BAR_ACTIVE_COLOR,
@@ -19,11 +25,15 @@ import {
   TAB_BAR_LABEL_SIZE,
   TAB_BAR_DIVIDER_COLOR,
   TAB_BAR_ACTIVE_HIGHLIGHT,
+  TAB_BAR_BOTTOM_GAP,
+  TAB_BAR_MAX_WIDTH,
+  TAB_BAR_WIDE_MIN_WIDTH,
   SENECA_FAB_SIZE,
   SENECA_FAB_VISIBLE_SIZE,
   SENECA_FAB_RIGHT_INSET,
 } from "@/lib/tab-bar";
 import { useAdaptiveLayout } from "@/lib/adaptive-layout";
+import { COMPACT_DOCK_WIDTH } from "@/lib/adaptive-navigation";
 import { colors, radii } from "@/theme";
 import { useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -53,7 +63,7 @@ const ALL_TABS = [
   { name: "home", label: "Home", Icon: House },
   { name: "chat", label: "Chat", Icon: MessageCircle },
   { name: "execute", label: "Workspace", Icon: CheckSquare },
-  { name: "team", label: "Feed", Icon: Newspaper },
+  { name: "team", label: "My Network", Icon: NetworkIcon },
 ] as const;
 
 /**
@@ -153,8 +163,8 @@ function NavigationRail({
 }
 
 /**
- * Closed Duo: the five destinations sit under the clock, icons only. The
- * workspace switcher stays in the page, so both bars are on screen together.
+ * Closed Duo: destinations + Seneca sit in one dock under the clock.
+ * The workspace switcher stays in the page, so both bars are on screen together.
  */
 function DuoIconRail({
   descriptors,
@@ -162,12 +172,16 @@ function DuoIconRail({
   edge,
   width,
   bottomInset,
+  senecaOpen,
+  onSenecaPress,
 }: {
   descriptors: any[];
   onTabPress: (route: any, isFocused: boolean) => void;
   edge: "left" | "right";
   width: number;
   bottomInset: number;
+  senecaOpen: boolean;
+  onSenecaPress: () => void;
 }) {
   const iconFor = (descriptor: any) => {
     const { route, tab, isFocused, badge } = descriptor;
@@ -204,13 +218,36 @@ function DuoIconRail({
       pointerEvents="box-none"
       style={[
         iconRailStyles.rail,
-        edge === "left" ? { left: 0 } : { right: 0 },
+        edge === "left"
+          ? { left: 0, alignItems: "flex-start", paddingLeft: 4 }
+          : { right: 0, alignItems: "flex-end", paddingRight: 4 },
         { width, paddingBottom: bottomInset + 16 },
       ]}
       testID="duo-icon-rail"
     >
       <View style={iconRailStyles.dock} testID="duo-icon-dock">
         {descriptors.map(iconFor)}
+        <Pressable
+          onPress={onSenecaPress}
+          style={iconRailStyles.item}
+          testID="tab-seneca"
+          accessibilityRole="button"
+          accessibilityLabel="Open Seneca leadership assistant"
+          accessibilityState={{ selected: senecaOpen }}
+        >
+          <View
+            style={[
+              iconRailStyles.senecaDisc,
+              senecaOpen ? iconRailStyles.senecaDiscOpen : null,
+            ]}
+          >
+            <Image
+              source={require("@/assets/seneca-button-icon.png")}
+              style={iconRailStyles.senecaIcon}
+              resizeMode="cover"
+            />
+          </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -255,7 +292,14 @@ function SenecaFab({
 
 function FixedTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { showRail, railEdge, railWidth, iconRailEdge, iconRailWidth } = useAdaptiveLayout();
+  const {
+    width: windowWidth,
+    showRail,
+    railEdge,
+    railWidth,
+    iconRailEdge,
+    iconRailWidth,
+  } = useAdaptiveLayout();
   const onTabBarHeightChange = useContext(BottomTabBarHeightCallbackContext);
   const queryClient = useQueryClient();
   const senecaOpen = useSenecaSheetStore((store) => store.open);
@@ -500,22 +544,17 @@ function FixedTabBar({ state, navigation }: any) {
     })
     .filter(Boolean);
 
-  const sideRail = showRail || iconRailEdge != null;
   const toggleSeneca = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (senecaOpen) closeSeneca();
     else openSeneca();
   };
-  // Sit just above the nav — no extra lift into the content.
-  const fabBottom = sideRail
-    ? Math.max(insets.bottom, 8) + 16
-    : TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 8;
+  // Labeled iPad rail still uses the floating Seneca control.
+  const fabBottom = Math.max(insets.bottom, 8) + 16;
   const fabRight =
-    iconRailEdge === "right"
-      ? iconRailWidth + SENECA_FAB_RIGHT_INSET
-      : showRail && railEdge === "right"
-        ? railWidth + insets.right + SENECA_FAB_RIGHT_INSET
-        : SENECA_FAB_RIGHT_INSET;
+    showRail && railEdge === "right"
+      ? railWidth + insets.right + SENECA_FAB_RIGHT_INSET
+      : SENECA_FAB_RIGHT_INSET;
   const senecaFab = (
     <SenecaFab
       open={senecaOpen}
@@ -534,8 +573,9 @@ function FixedTabBar({ state, navigation }: any) {
           edge={iconRailEdge}
           width={iconRailWidth}
           bottomInset={insets.bottom}
+          senecaOpen={senecaOpen}
+          onSenecaPress={toggleSeneca}
         />
-        {senecaFab}
         <SenecaAssistantSheet open={senecaOpen} onClose={closeSeneca} />
       </>
     );
@@ -557,6 +597,13 @@ function FixedTabBar({ state, navigation }: any) {
     );
   }
 
+  const dockBottom = Math.max(insets.bottom, 8) + TAB_BAR_BOTTOM_GAP;
+  const dockSpan = Math.max(0, windowWidth - TAB_BAR_HORIZONTAL_INSET * 2);
+  const limitWideDock = windowWidth >= TAB_BAR_WIDE_MIN_WIDTH;
+  const dockWidth = limitWideDock
+    ? Math.min(dockSpan, TAB_BAR_MAX_WIDTH)
+    : dockSpan;
+  const dockLeft = (windowWidth - dockWidth) / 2;
   const tabs = tabDescriptors.map((descriptor: any) => {
     const { route, tab, isFocused, badge } = descriptor;
     const { Icon, label, name } = tab;
@@ -571,7 +618,12 @@ function FixedTabBar({ state, navigation }: any) {
         accessibilityState={{ selected: isFocused }}
         accessibilityLabel={label}
       >
-        <View style={tabBarStyles.iconWrap}>
+        <View
+          style={[
+            tabBarStyles.iconDisc,
+            isFocused ? tabBarStyles.iconDiscActive : null,
+          ]}
+        >
           <GradientTabIcon
             Icon={Icon}
             size={TAB_BAR_ICON_SIZE}
@@ -580,7 +632,9 @@ function FixedTabBar({ state, navigation }: any) {
           />
           {badge ? (
             <View style={tabBarStyles.badge}>
-              <Text style={tabBarStyles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
+              <Text style={tabBarStyles.badgeText}>
+                {badge > 99 ? "99+" : badge}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -588,8 +642,8 @@ function FixedTabBar({ state, navigation }: any) {
           style={[
             tabBarStyles.label,
             {
-              color: isFocused ? TAB_BAR_ACTIVE_COLOR : TAB_BAR_INACTIVE_COLOR,
-              fontWeight: isFocused ? "700" : "500",
+              color: isFocused ? TAB_BAR_ACTIVE_COLOR : "#0F172A",
+              fontWeight: isFocused ? "600" : "500",
             },
           ]}
           numberOfLines={1}
@@ -608,7 +662,7 @@ function FixedTabBar({ state, navigation }: any) {
         style={[
           tabBarStyles.container,
           {
-            height: TAB_BAR_HEIGHT + Math.max(insets.bottom, 8),
+            height: TAB_BAR_HEIGHT + dockBottom,
           },
         ]}
         pointerEvents="box-none"
@@ -616,25 +670,50 @@ function FixedTabBar({ state, navigation }: any) {
       >
         <View
           style={[
-            tabBarStyles.barSurface,
-            { height: TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) },
+            tabBarStyles.dock,
+            {
+              height: TAB_BAR_HEIGHT,
+              bottom: dockBottom,
+              left: dockLeft,
+              width: dockWidth,
+            },
           ]}
-          pointerEvents="none"
-        />
-        <View
-          style={[
-            tabBarStyles.row,
-            { bottom: Math.max(insets.bottom, 8) },
-          ]}
+          testID="phone-nav-dock"
         >
-          {tabs}
+          <BlurView
+            intensity={70}
+            tint="systemThickMaterialLight"
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={tabBarStyles.dockGlass} pointerEvents="none" />
+          <View style={tabBarStyles.row}>
+            {tabs}
+            <View style={tabBarStyles.senecaDivider} pointerEvents="none" />
+            <Pressable
+              onPress={toggleSeneca}
+              style={tabBarStyles.senecaTab}
+              testID="tab-seneca"
+              accessibilityRole="button"
+              accessibilityLabel="Open Seneca leadership assistant"
+              accessibilityState={{ selected: senecaOpen }}
+            >
+              <View
+                style={[
+                  tabBarStyles.senecaDisc,
+                  senecaOpen ? tabBarStyles.senecaDiscOpen : null,
+                ]}
+              >
+                <Image
+                  source={require("@/assets/seneca-button-icon.png")}
+                  style={tabBarStyles.senecaIcon}
+                  resizeMode="cover"
+                />
+              </View>
+            </Pressable>
+          </View>
         </View>
       </View>
-      {senecaFab}
-      <SenecaAssistantSheet
-        open={senecaOpen}
-        onClose={closeSeneca}
-      />
+      <SenecaAssistantSheet open={senecaOpen} onClose={closeSeneca} />
     </>
   );
 }
@@ -642,64 +721,109 @@ function FixedTabBar({ state, navigation }: any) {
 const tabBarStyles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: TAB_BAR_HORIZONTAL_INSET,
-    right: TAB_BAR_HORIZONTAL_INSET,
+    left: 0,
+    right: 0,
     bottom: 0,
     zIndex: 10100,
     elevation: 10100,
     backgroundColor: "transparent",
     overflow: "visible",
   },
-  barSurface: {
+  dock: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
+    borderRadius: 26,
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.65)",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 12,
+    backgroundColor: "rgba(255,255,255,0.94)",
+  },
+  dockGlass: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.82)",
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(20, 30, 60, 0.10)",
-    backgroundColor: "#FFFFFF",
+    borderTopColor: "rgba(255,255,255,0.9)",
   },
   row: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: TAB_BAR_HEIGHT,
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    paddingLeft: 4,
+    paddingRight: 4,
     backgroundColor: "transparent",
   },
   tab: {
     flex: 1,
     minHeight: 44,
-    minWidth: 44,
+    minWidth: 0,
     alignItems: "center",
     justifyContent: "center",
     gap: 2,
-    paddingHorizontal: 2,
+    paddingHorizontal: 0,
   },
-  iconWrap: {
+  iconDisc: {
+    width: 32,
+    height: 26,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
+  iconDiscActive: {
+    backgroundColor: TAB_BAR_ACTIVE_HIGHLIGHT,
+  },
   label: {
     fontSize: TAB_BAR_LABEL_SIZE,
+    letterSpacing: 0.15,
   },
   badge: {
     position: "absolute",
-    top: -4,
-    right: -10,
+    top: -3,
+    right: -7,
     backgroundColor: "#EF4444",
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    borderRadius: 7,
+    minWidth: 15,
+    height: 15,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 3,
   },
   badgeText: {
     color: "white",
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: "700",
+  },
+  senecaDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 22,
+    marginHorizontal: 2,
+    backgroundColor: "rgba(15, 23, 42, 0.12)",
+  },
+  senecaTab: {
+    width: 40,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  senecaDisc: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.9)",
+  },
+  senecaDiscOpen: {
+    backgroundColor: TAB_BAR_ACTIVE_HIGHLIGHT,
+  },
+  senecaIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
   },
   senecaFab: {
     position: "absolute",
@@ -747,7 +871,7 @@ const iconRailStyles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   dock: {
-    width: 56,
+    width: COMPACT_DOCK_WIDTH,
     paddingVertical: 8,
     gap: 2,
     borderRadius: 28,
@@ -776,6 +900,23 @@ const iconRailStyles = StyleSheet.create({
   },
   discActive: {
     backgroundColor: TAB_BAR_ACTIVE_HIGHLIGHT,
+  },
+  senecaDisc: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
+  },
+  senecaDiscOpen: {
+    backgroundColor: TAB_BAR_ACTIVE_HIGHLIGHT,
+  },
+  senecaIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
 });
 

@@ -33,18 +33,20 @@ import {
   formatTimeZoneLabel,
   resolveTimeZone,
 } from "@/lib/timezone";
+import { useDuoSheetTopClearance } from "@/lib/adaptive-layout";
 import { palette } from "@/theme";
 
-const BAND_SHEET_RADIUS = 24;
+const BAND_SHEET_RADIUS = 0;
 const HEADER_ROW = 48;
 
 export default function WorkspaceTimezoneScreen() {
   const insets = useSafeAreaInsets();
+  const duoSheetTop = useDuoSheetTopClearance({ fullScreen: true });
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ teamId?: string }>();
   const teamId = typeof params.teamId === "string" ? params.teamId : "";
   const { access } = useWorkspaceAccess(teamId);
-  const bandHeight = insets.top + HEADER_ROW + 18;
+  const bandHeight = Math.max(insets.top + HEADER_ROW + 18, duoSheetTop);
 
   useFocusEffect(
     useCallback(() => {

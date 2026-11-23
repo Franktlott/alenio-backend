@@ -13,3 +13,19 @@ const ROTATES_ABOVE = 500;
 export function screenRotates(width: number, height: number): boolean {
   return Math.min(width, height) >= ROTATES_ABOVE;
 }
+
+export type OrientationLock = "all" | "portrait_up" | "landscape";
+
+/**
+ * A known hinge follows the status bar, folded or open. Locking that window
+ * to landscape letterboxes the app in a narrow column and leaves the status
+ * sidebar black. A phone with no hinge stays upright; a tablet turns freely.
+ */
+export function orientationForPosture(
+  hinge: "unknown" | "closed" | "partiallyOpen" | "fullyOpen",
+  width: number,
+  height: number,
+): OrientationLock {
+  if (hinge !== "unknown") return "all";
+  return screenRotates(width, height) ? "all" : "portrait_up";
+}

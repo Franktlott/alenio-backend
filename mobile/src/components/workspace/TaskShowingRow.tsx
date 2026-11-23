@@ -1,4 +1,4 @@
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Plus, Search, SlidersHorizontal } from "lucide-react-native";
 import type { WorkspaceFiltersState } from "./workspace-types";
 import { WS } from "./workspace-ui";
@@ -14,7 +14,7 @@ type Props = {
   createLabel?: "Task";
 };
 
-const CONTROL_HEIGHT = 32;
+const CONTROL_HEIGHT = 28;
 
 export function TaskShowingRow({
   filters,
@@ -34,28 +34,9 @@ export function TaskShowingRow({
 
   return (
     <View testID="task-showing-row">
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
-        <View
-          style={{
-            flex: 1,
-            height: CONTROL_HEIGHT,
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 10,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: "#EEF2F6",
-            backgroundColor: "#FFFFFF",
-          }}
-          testID="task-search-control"
-        >
-          <Search size={13} color="#8A96A8" strokeWidth={2.1} />
+      <View style={styles.row}>
+        <View style={styles.search} testID="task-search-control">
+          <Search size={12} color="#8A96A8" strokeWidth={2.1} />
           <TextInput
             value={searchQuery}
             onChangeText={onChangeSearch}
@@ -64,17 +45,7 @@ export function TaskShowingRow({
             returnKeyType="search"
             clearButtonMode="while-editing"
             autoCorrect={false}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              height: "100%",
-              marginLeft: 6,
-              paddingVertical: 0,
-              fontSize: 13,
-              lineHeight: 18,
-              textAlignVertical: "center",
-              color: WS.ink,
-            }}
+            style={styles.searchInput}
             accessibilityLabel="Search tasks"
             testID="task-search-input"
           />
@@ -82,64 +53,32 @@ export function TaskShowingRow({
 
         <Pressable
           onPress={onOpenFilterView}
-          style={{
-            height: CONTROL_HEIGHT,
-            paddingHorizontal: 10,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: filtersActive ? "#D7DEE8" : "#EEF2F6",
-            backgroundColor: filtersActive ? "#F5F7FA" : "#FFFFFF",
-          }}
+          style={[
+            styles.filter,
+            filtersActive ? styles.filterActive : null,
+          ]}
           accessibilityRole="button"
           accessibilityLabel="Open task filters"
           testID="task-filter-button"
         >
           <SlidersHorizontal
-            size={13}
+            size={12}
             color={filtersActive ? WS.ink : WS.muted}
             strokeWidth={2.2}
           />
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: WS.ink,
-            }}
-          >
-            Filters
-          </Text>
+          <Text style={styles.filterLabel}>Filters</Text>
         </Pressable>
 
         {canCreateTask ? (
           <Pressable
             onPress={onCreateTask}
-            style={{
-              height: CONTROL_HEIGHT,
-              paddingHorizontal: 11,
-              borderRadius: 999,
-              backgroundColor: colors.brand,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            style={styles.newButton}
             accessibilityRole="button"
             accessibilityLabel={`New ${createLabel}`}
             testID="task-new-button"
           >
-            <Plus size={13} color="#FFFFFF" strokeWidth={2.8} />
-            <Text
-              style={{
-                marginLeft: 3,
-                fontSize: 12.5,
-                lineHeight: 15,
-                fontWeight: "700",
-                color: "#FFFFFF",
-              }}
-              numberOfLines={1}
-            >
+            <Plus size={12} color="#FFFFFF" strokeWidth={2.6} />
+            <Text style={styles.newLabel} numberOfLines={1}>
               New
             </Text>
           </Pressable>
@@ -148,3 +87,69 @@ export function TaskShowingRow({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  search: {
+    flex: 1,
+    height: CONTROL_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#FFFFFF",
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    height: "100%",
+    marginLeft: 5,
+    paddingVertical: 0,
+    fontSize: 12.5,
+    lineHeight: 16,
+    textAlignVertical: "center",
+    color: WS.ink,
+  },
+  filter: {
+    height: CONTROL_HEIGHT,
+    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#FFFFFF",
+  },
+  filterActive: {
+    borderColor: "#D0D5DD",
+    backgroundColor: "#F5F7FA",
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: WS.ink,
+  },
+  newButton: {
+    height: CONTROL_HEIGHT,
+    paddingHorizontal: 9,
+    borderRadius: 8,
+    backgroundColor: colors.brand,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  newLabel: {
+    marginLeft: 3,
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+});

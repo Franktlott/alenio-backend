@@ -14,7 +14,10 @@ import { canOpenWorkspaceTitleMenu } from "@/lib/workspace-management";
 import type { Team } from "@/lib/types";
 import { useMeetingBannerStore } from "@/lib/state/meeting-banner-store";
 import { HEADER_BRAND_COLOR } from "@/lib/header-brand";
-import { useStatusClusterInset } from "@/lib/adaptive-layout";
+import {
+  useAdaptiveLayout,
+  useStatusClusterInset,
+} from "@/lib/adaptive-layout";
 import { typography } from "@/theme";
 
 type Props = {
@@ -56,9 +59,9 @@ const TITLE_HEADER_PAD_BOTTOM = 3;
 /**
  * Portrait leans on the status bar inset for breathing room. Landscape and
  * the Duo's inner display report no top inset at all, which would leave the
- * logo and the avatar touching the edge of the glass.
+ * action pill and avatar flush with the glass — keep a clear gap above them.
  */
-const MIN_HEADER_PAD_TOP = 10;
+const MIN_HEADER_PAD_TOP = 18;
 const HEADER_PAD_HORIZONTAL = 14;
 // 48 leaves the 38pt header icons a touch target past the 44pt iOS minimum.
 // A shorter row clips their hitSlop, since iOS drops touches outside a parent.
@@ -102,6 +105,7 @@ export function AppTabHeader({
   const [switchOpen, setSwitchOpen] = useState(false);
   const [meetingNow, setMeetingNow] = useState(Date.now());
   const cluster = useStatusClusterInset();
+  const { iconRailEdge, sceneInsetLeft, sceneInsetRight } = useAdaptiveLayout();
   const activeTeamId = useTeamStore((state) => state.activeTeamId);
   const dismissedMeetingIds = useMeetingBannerStore(
     (state) => state.dismissedMeetingIds,
@@ -196,6 +200,13 @@ export function AppTabHeader({
     </Pressable>
   ) : null;
 
+  /**
+   * Header sits above the curved sheet on a full-bleed Duo scene, so it must
+   * clear the status column with the same inset the sheet uses (not the
+   * narrower rail width alone).
+   */
+  const railClearLeft = iconRailEdge != null ? sceneInsetLeft : 0;
+  const railClearRight = iconRailEdge != null ? sceneInsetRight : 0;
   const headerPad = {
     paddingTop:
       Math.max(MIN_HEADER_PAD_TOP, topInset - 4) +
@@ -203,13 +214,8 @@ export function AppTabHeader({
     paddingBottom:
       (titleLayoutMode ? TITLE_HEADER_PAD_BOTTOM : HEADER_PAD_BOTTOM) +
       Math.max(0, overlapPad),
-    /**
-     * Keep the row clear of whatever the display curves or the system bar
-     * took. The rail's edge is already offset by the tab layout, so only the
-     * opposite edge needs the inset added here.
-     */
-    paddingLeft: HEADER_PAD_HORIZONTAL + cluster.left,
-    paddingRight: HEADER_PAD_HORIZONTAL + cluster.right,
+    paddingLeft: HEADER_PAD_HORIZONTAL + cluster.left + railClearLeft,
+    paddingRight: HEADER_PAD_HORIZONTAL + cluster.right + railClearRight,
   };
   return (
     <>

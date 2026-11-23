@@ -92,7 +92,9 @@ export default function TeamScreen() {
         activeTeamId,
         setActiveTeamId,
         queryClient,
-      );
+      ).catch(() => {
+        // Cancelled query races are handled inside reconcile; keep focus quiet.
+      });
     }, [activeTeamId, queryClient, session?.user, setActiveTeamId]),
   );
 
@@ -277,7 +279,7 @@ export default function TeamScreen() {
   return (
     <CurvedTabLayout
       topInset={insets.top}
-      title="Feed"
+      title="My Network"
       leftAction={<AlenioHeaderBrand tone="dark" />}
       band
       sheetColor="#FFFFFF"

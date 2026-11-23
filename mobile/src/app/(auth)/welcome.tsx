@@ -11,7 +11,16 @@ import {
 } from "react-native";
 import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Circle, Defs, Pattern, RadialGradient, Rect, Stop } from "react-native-svg";
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Mask,
+  Pattern,
+  RadialGradient,
+  Rect,
+  Stop,
+} from "react-native-svg";
 import { StatusBar, setStatusBarStyle } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
@@ -81,7 +90,15 @@ function PressButton({
   );
 }
 
-function Backdrop() {
+function Backdrop({ width, height }: { width: number; height: number }) {
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+  /**
+   * Percentage sizes stick to the first layout on a Duo, so the field is drawn
+   * in real pixels and remounted when the window changes. The dots fade from
+   * the top to the bottom edge instead of ending in a hard line.
+   */
+  const key = `${w}x${h}`;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <LinearGradient
@@ -91,23 +108,35 @@ function Backdrop() {
         end={{ x: 0.8, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+      <Svg key={key} width={w} height={h} style={StyleSheet.absoluteFill}>
         <Defs>
-          <RadialGradient id="violet" cx="85%" cy="22%" rx="70%" ry="45%">
+          <RadialGradient id={`violet-${key}`} cx="85%" cy="22%" rx="70%" ry="45%">
             <Stop offset="0" stopColor="#9333ea" stopOpacity="0.5" />
             <Stop offset="1" stopColor="#9333ea" stopOpacity="0" />
           </RadialGradient>
-          <RadialGradient id="cyan" cx="0%" cy="95%" rx="60%" ry="40%">
+          <RadialGradient id={`cyan-${key}`} cx="0%" cy="95%" rx="60%" ry="40%">
             <Stop offset="0" stopColor="#22d3ee" stopOpacity="0.13" />
             <Stop offset="1" stopColor="#22d3ee" stopOpacity="0" />
           </RadialGradient>
-          <Pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+          <Pattern id={`dots-${key}`} width="24" height="24" patternUnits="userSpaceOnUse">
             <Circle cx="1" cy="1" r="1" fill="#fff" fillOpacity="0.07" />
           </Pattern>
+          <SvgLinearGradient id={`dotsFade-${key}`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#ffffff" />
+            <Stop offset="1" stopColor="#000000" />
+          </SvgLinearGradient>
+          <Mask id={`dotsMask-${key}`} x="0" y="0" width={w} height={h}>
+            <Rect width={w} height={h} fill={`url(#dotsFade-${key})`} />
+          </Mask>
         </Defs>
-        <Rect width="100%" height="100%" fill="url(#violet)" />
-        <Rect width="100%" height="100%" fill="url(#cyan)" />
-        <Rect width="100%" height="55%" fill="url(#dots)" />
+        <Rect width={w} height={h} fill={`url(#violet-${key})`} />
+        <Rect width={w} height={h} fill={`url(#cyan-${key})`} />
+        <Rect
+          width={w}
+          height={h}
+          fill={`url(#dots-${key})`}
+          mask={`url(#dotsMask-${key})`}
+        />
       </Svg>
     </View>
   );
@@ -286,7 +315,7 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      <Backdrop />
+      <Backdrop width={width} height={height} />
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         {wide ? (
           <View style={styles.wideRow}>

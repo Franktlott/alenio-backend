@@ -43,13 +43,15 @@ import {
   SectionHeader,
   tintInk,
 } from "@/components/ui";
+import { useDuoSheetTopClearance } from "@/lib/adaptive-layout";
 import { palette, tints } from "@/theme";
 
-const BAND_SHEET_RADIUS = 24;
+const BAND_SHEET_RADIUS = 0;
 const HEADER_ROW = 48;
 
 export default function WorkspaceAdvancedScreen() {
   const insets = useSafeAreaInsets();
+  const duoSheetTop = useDuoSheetTopClearance({ fullScreen: true });
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const params = useLocalSearchParams<{ teamId?: string }>();
@@ -62,7 +64,7 @@ export default function WorkspaceAdvancedScreen() {
   const [deletePassword, setDeletePassword] = useState("");
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [transferMember, setTransferMember] = useState<TeamMember | null>(null);
-  const bandHeight = insets.top + HEADER_ROW + 18;
+  const bandHeight = Math.max(insets.top + HEADER_ROW + 18, duoSheetTop);
 
   useFocusEffect(
     useCallback(() => {
@@ -89,7 +91,7 @@ export default function WorkspaceAdvancedScreen() {
   const capabilities = workspaceManagementCapabilities(role);
   const canDelete = capabilities.canDelete && access.canWrite;
   const canTransfer = canDelete;
-  const canLeave = !canDelete;
+  const canLeave = capabilities.canLeave;
   const transferCandidates = useMemo(
     () =>
       (team?.members ?? []).filter(
@@ -171,7 +173,11 @@ export default function WorkspaceAdvancedScreen() {
         </Pressable>
         <View style={styles.topTitleWrap}>
           <Text style={styles.bandTitle} numberOfLines={1}>
-            {deleteOpen ? "Delete workspace" : "Ownership & deletion"}
+            {deleteOpen
+              ? "Delete workspace"
+              : canLeave && !canDelete
+                ? "Leave workspace"
+                : "Ownership & deletion"}
           </Text>
           {!deleteOpen && team?.name ? (
             <Text style={styles.bandSubtitle} numberOfLines={1}>
@@ -300,11 +306,14 @@ export default function WorkspaceAdvancedScreen() {
                     Advanced
                   </AppText>
                   <AppText variant="sectionTitle" style={styles.heroTitle}>
-                    Ownership & deletion
+                    {canLeave && !canDelete
+                      ? "Leave workspace"
+                      : "Ownership & deletion"}
                   </AppText>
                   <AppText variant="supporting" style={{ marginTop: 2 }}>
-                    Ownership and access changes can affect every workspace
-                    member.
+                    {canLeave && !canDelete
+                      ? "You’ll lose access to this workspace’s tasks, goals, and check-ins."
+                      : "Ownership and access changes can affect every workspace member."}
                   </AppText>
                 </View>
               </View>

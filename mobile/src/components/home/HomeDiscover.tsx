@@ -1,151 +1,154 @@
 import { useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Sparkles } from "lucide-react-native";
+import { ChevronRight, ExternalLink, Sparkles } from "lucide-react-native";
 import { router } from "expo-router";
-import { AppText, Button, buttonInk, PanelHeader, tintInk } from "@/components/ui";
-import { fetchHomeDiscoverArticles, type DiscoverArticleSummary } from "@/lib/discover";
+import { PanelHeader, tintInk } from "@/components/ui";
+import {
+  articlesForHome,
+  fetchHomeDiscoverArticles,
+  type DiscoverArticleSummary,
+} from "@/lib/discover";
 import { discoverCardImageSource } from "@/lib/discover-topic-photos";
 import { elevation, palette } from "@/theme";
 
 const PURPLE = palette.violet;
-const CARD_GAP = 10;
-const WIDE_COLUMNS = 3;
-/** Phone shows one full card and a peek of the next. */
-const PHONE_VISIBLE = 2.15;
-/** Wide rows are much wider than a phone, so a third of that row is too large. */
-const WIDE_CARD_MAX = 200;
+const THUMB_W = 96;
+const THUMB_H = 72;
 
-function cardWidthForRow(rowWidth: number, columns: number) {
-  if (rowWidth <= 0) return 0;
-  return (rowWidth - CARD_GAP * (columns - 1)) / columns;
+function openExplore() {
+  router.push("/discover");
 }
-
-const CATEGORY_COLOR: Record<string, string> = {
-  reflection: "#6D5EF8",
-  growth: "#0F9D6E",
-  leadership: "#4F46E5",
-  communication: "#7C3AED",
-  connection: "#059669",
-  wellbeing: "#DB2777",
-  productivity: "#D97706",
-};
 
 function openArticle(slug: string) {
   router.push({ pathname: "/discover/[slug]", params: { slug } });
 }
 
-function DiscoverCard({
+function readingLabel(minutes: number) {
+  return minutes > 0 ? `${minutes} MIN READ` : "QUICK READ";
+}
+
+function FeaturedArticle({
   article,
-  width,
+  cardWidth,
 }: {
   article: DiscoverArticleSummary;
-  width: number;
+  cardWidth?: number;
 }) {
-  const slug = article.category?.slug ?? "";
-  const labelColor = CATEGORY_COLOR[slug] ?? PURPLE;
   const [coverFailed, setCoverFailed] = useState(false);
   const imageSource = discoverCardImageSource(
     article.coverImageUrl,
     article.category,
     { coverFailed },
   );
-  /** Lock the frame so portrait topic photos cannot stretch the card. */
-  const imageHeight = Math.max(72, Math.round(width / 2));
+  const categoryName = article.category?.name?.trim() ?? "";
+  // Section padding + thumb + gap. A real pixel width keeps the title from collapsing.
+  const copyWidth =
+    cardWidth != null ? Math.max(96, cardWidth - 28 - THUMB_W - 12) : undefined;
+
   return (
     <Pressable
       onPress={() => openArticle(article.slug)}
-      style={[styles.card, { width }]}
+      style={({ pressed }) => [styles.articlePress, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={article.title}
+      accessibilityHint="Read article"
       testID={`home-discover-${article.slug}`}
     >
-      <View style={[styles.imageFrame, { height: imageHeight }]}>
+      <View style={styles.article}>
         <Image
           source={imageSource}
-          style={styles.image}
+          style={styles.thumb}
           resizeMode="cover"
+          accessible={false}
           accessibilityIgnoresInvertColors
           onError={() => setCoverFailed(true)}
         />
-      </View>
-      <View style={styles.copy}>
-        <Text style={styles.kicker} numberOfLines={1}>
-          {article.category ? (
-            <>
-              <Text style={{ color: labelColor }}>{article.category.name.toUpperCase()}</Text>
-              <Text style={styles.dot}>{"  ·  "}</Text>
-            </>
-          ) : null}
-          {article.readingTimeMinutes > 0 ? `${article.readingTimeMinutes} MIN` : "QUICK"}
-        </Text>
-        <Text style={styles.title} numberOfLines={2}>
-          {article.title}
-        </Text>
-        {article.excerpt ? (
-          <Text style={styles.excerpt} numberOfLines={1}>
-            {article.excerpt}
+        <View style={[styles.copy, copyWidth != null ? { width: copyWidth } : null]}>
+          <Text style={styles.meta} numberOfLines={1}>
+            {categoryName ? (
+              <Text style={styles.category}>{categoryName.toUpperCase()}</Text>
+            ) : null}
+            {categoryName ? <Text style={styles.dot}>{"  ·  "}</Text> : null}
+            <Text style={styles.reading}>{readingLabel(article.readingTimeMinutes)}</Text>
           </Text>
-        ) : null}
+          <Text style={styles.title} numberOfLines={2}>
+            {article.title}
+          </Text>
+          <Text style={styles.readLabel} numberOfLines={1}>
+            Read article ›
+          </Text>
+        </View>
       </View>
     </Pressable>
   );
 }
 
-export function HomeDiscover({ wide }: { wide: boolean }) {
-  const query = useQuery({
+export function HomeDiscover({
+  width,
+  fill = false,
+}: {
+  width?: number;
+  /** Stretch the card to the cell when Home splits the screen evenly. */
+  fill?: boolean;
+}) {
+  const articlesQuery = useQuery({
     queryKey: ["discover", "home"],
     queryFn: fetchHomeDiscoverArticles,
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
-  const articles = query.data ?? [];
-  const [rowWidth, setRowWidth] = useState(0);
-  if (articles.length === 0) return null;
-  const fitted = wide
-    ? cardWidthForRow(rowWidth, WIDE_COLUMNS)
-    : rowWidth > 0
-      ? (rowWidth - CARD_GAP) / PHONE_VISIBLE
-      : 0;
-  const cardWidth = wide ? Math.min(fitted, WIDE_CARD_MAX) : fitted;
-  const cards =
-    cardWidth > 0
-      ? articles.map((article) => (
-          <DiscoverCard key={article.id} article={article} width={cardWidth} />
-        ))
-      : null;
+  const articles = articlesQuery.data ?? [];
+  const featured = articlesForHome(articles, [], 1)[0];
+
+  if (!featured) return null;
 
   return (
-    <View style={styles.section} testID="home-discover">
-      <PanelHeader
-        title="Explore"
-        tint="sky"
-        icon={<Sparkles size={16} color={tintInk("sky")} strokeWidth={2.3} />}
-        action={
-          <Button
-            variant="link"
-            label="Explore all"
-            accessibilityLabel="Explore all articles"
-            onPress={() => router.push("/discover")}
-            iconRight={<ChevronRight size={14} color={buttonInk("link")} strokeWidth={2.4} />}
-          />
-        }
-      />
-      <AppText variant="supporting" style={styles.subtitle}>
-        Ideas, perspectives, and tools to help you grow.
-      </AppText>
-      <View style={styles.scrollerWrap} onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}>
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          style={styles.scroller}
-          contentContainerStyle={styles.row}
-        >
-          {cards}
-        </ScrollView>
+    <View
+      style={[
+        styles.section,
+        width != null
+          ? { width, maxWidth: width, alignSelf: fill ? "stretch" : "flex-start" }
+          : null,
+        fill ? styles.sectionFill : null,
+      ]}
+      testID="home-discover"
+    >
+      <Pressable
+        onPress={openExplore}
+        style={({ pressed }) => [styles.header, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Explore"
+        testID="home-discover-open"
+      >
+        <PanelHeader
+          title="Explore"
+          subtitle="Ideas worth discovering."
+          tint="sky"
+          icon={<Sparkles size={16} color={tintInk("sky")} strokeWidth={2.3} />}
+          action={<ChevronRight size={18} color="#98A2B3" strokeWidth={2.2} />}
+        />
+      </Pressable>
+
+      <View style={styles.articleBlock}>
+        <FeaturedArticle article={featured} cardWidth={width} />
       </View>
+
+      <Pressable
+        onPress={openExplore}
+        style={({ pressed }) => [styles.footer, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Browse all articles"
+        testID="home-discover-browse-all"
+      >
+        <Text style={styles.footerLabel} numberOfLines={1}>
+          Browse all articles
+        </Text>
+        <View style={styles.footerIcon}>
+          <ExternalLink size={16} color="#111A2B" strokeWidth={2.2} />
+        </View>
+      </Pressable>
     </View>
   );
 }
@@ -153,75 +156,111 @@ export function HomeDiscover({ wide }: { wide: boolean }) {
 const styles = StyleSheet.create({
   section: {
     ...elevation.card,
-    marginTop: 14,
+    marginTop: 0,
+    marginHorizontal: 0,
     paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 14,
-  },
-  subtitle: {
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  scrollerWrap: {
-    position: "relative",
-    justifyContent: "flex-start",
-  },
-  scroller: {
+    paddingTop: 12,
+    paddingBottom: 12,
+    alignSelf: "stretch",
+    alignItems: "stretch",
+    width: "100%",
+    maxWidth: "100%",
     flexGrow: 0,
     flexShrink: 0,
   },
-  row: {
+  sectionFill: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
+  },
+  header: {
+    borderRadius: 12,
+  },
+  articleBlock: {
+    alignSelf: "stretch",
+    flexShrink: 0,
+    marginTop: 10,
+    marginBottom: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: palette.rowDivider,
+  },
+  pressed: {
+    opacity: 0.92,
+  },
+  articlePress: {
+    alignSelf: "stretch",
+    width: "100%",
+  },
+  article: {
+    width: "100%",
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: CARD_GAP,
+    alignItems: "center",
   },
-  card: {
-    flexGrow: 0,
-    flexShrink: 0,
-    alignSelf: "flex-start",
+  thumb: {
+    width: THUMB_W,
+    height: THUMB_H,
     borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#EDE9FE",
-  },
-  imageFrame: {
-    width: "100%",
-    overflow: "hidden",
-    backgroundColor: "#EDE9FE",
-  },
-  image: {
-    ...StyleSheet.absoluteFillObject,
-    width: "100%",
-    height: "100%",
+    backgroundColor: palette.lilacSoft,
   },
   copy: {
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 10,
+    flexGrow: 1,
+    flexShrink: 1,
+    marginLeft: 12,
+    justifyContent: "center",
   },
-  kicker: {
-    fontSize: 9.5,
-    lineHeight: 12,
+  meta: {
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: "800",
-    letterSpacing: 0.6,
-    color: "#98A2B3",
+  },
+  category: {
+    color: PURPLE,
+    fontWeight: "800",
+    letterSpacing: 0.3,
   },
   dot: {
     color: "#C4C9D4",
+    fontWeight: "700",
+  },
+  reading: {
+    color: "#98A2B3",
+    fontWeight: "700",
   },
   title: {
     marginTop: 3,
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: "800",
-    letterSpacing: -0.2,
     color: "#111A2B",
   },
-  excerpt: {
+  readLabel: {
     marginTop: 2,
-    fontSize: 11.5,
-    lineHeight: 15,
-    color: "#667085",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: PURPLE,
+  },
+  footer: {
+    width: "100%",
+    alignSelf: "stretch",
+    minHeight: 24,
+    justifyContent: "center",
+  },
+  footerLabel: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "700",
+    color: "#111A2B",
+    marginRight: 28,
+  },
+  footerIcon: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
   },
 });

@@ -45,6 +45,11 @@ type Props = {
   hasWorkspace: boolean;
   wide: boolean;
   columnWidth: number;
+  /**
+   * Wide Home: height left under the greeting. Today / Insight / Explore
+   * share this so the pair fills the screen instead of floating short.
+   */
+  stackHeight?: number;
   todayCard?: React.ReactNode;
   /** When null, the Insight card is held until Home has a resolved card. */
   insightTitle: string | null;
@@ -66,6 +71,7 @@ export function NoWorkspaceHome({
   hasWorkspace,
   wide,
   columnWidth,
+  stackHeight = 0,
   todayCard,
   insightTitle,
   insightBody,
@@ -78,44 +84,12 @@ export function NoWorkspaceHome({
   const networkReady = connections !== undefined;
   const accepted = connections?.accepted.length ?? 0;
   const incomingCount = connections?.incoming.length ?? 0;
-  const sent = connections?.outgoing.length ?? 0;
-  const networkIsEmpty =
-    networkReady && accepted === 0 && incomingCount === 0 && sent === 0;
   const networkStarted = accepted > 0;
   const showWelcomeHero =
     !hasWorkspace && networkReady && accepted < 3;
   const showInsight = insightTitle != null && insightTitle.length > 0;
-  /**
-   * Network has its own tab now — Home only surfaces a signal when someone is
-   * waiting, or an empty-state nudge for brand-new accounts.
-   */
-  const networkSignal = networkIsEmpty ? (
-    <View
-      style={[styles.card, wide && !hasWorkspace ? styles.wideCard : null]}
-      testID="home-network-empty"
-    >
-      <PanelHeader
-        title="Your network"
-        tint="mint"
-        icon={<Users size={16} color={tintInk("mint")} strokeWidth={2.2} />}
-      />
-      <View style={styles.networkEmpty}>
-        <Text style={styles.networkEmptyTitle}>Your network starts here</Text>
-        <Text style={styles.networkEmptyText}>
-          Find someone you already know on Alenio.
-        </Text>
-        <Button
-          variant="soft"
-          size="sm"
-          label="Find people"
-          onPress={() => setFindPeopleOpen(true)}
-          icon={<UserPlus size={13} color={buttonInk("soft")} strokeWidth={2.3} />}
-          testID="home-network-empty-find"
-          style={{ alignSelf: "center", marginTop: 7 }}
-        />
-      </View>
-    </View>
-  ) : networkReady && incomingCount > 0 ? (
+  /** Network has its own tab. Home only speaks up when a request is waiting. */
+  const networkSignal = networkReady && incomingCount > 0 ? (
     <View style={styles.card} testID="home-network-requests">
       <Pressable
         onPress={() => setRequestsOpen(true)}
@@ -147,21 +121,18 @@ export function NoWorkspaceHome({
 
   const stayCard = (paired = false) => (
     <View
-      style={[
-        styles.card,
-        wide ? styles.wideCard : null,
-        paired ? styles.stayBesideHero : null,
-      ]}
+      style={[styles.card, paired ? styles.stayCompact : null]}
       testID="home-stay-connected"
     >
       <PanelHeader
         title="Stay connected"
-        subtitle="Meaningful ways to get started."
-        icon={<Sparkles size={16} color={tintInk("lavender")} strokeWidth={2.2} />}
+        subtitle={paired ? undefined : "Meaningful ways to get started."}
+        icon={<Sparkles size={paired ? 14 : 16} color={tintInk("lavender")} strokeWidth={2.2} />}
       />
       <AlenioList card={false}>
         <StayRow
-          icon={<UserPlus size={16} color={tintInk("lavender")} strokeWidth={2.2} />}
+          compact={paired}
+          icon={<UserPlus size={paired ? 14 : 16} color={tintInk("lavender")} strokeWidth={2.2} />}
           tint="lavender"
           title="Find people"
           subtitle="Search for someone you know"
@@ -169,8 +140,9 @@ export function NoWorkspaceHome({
           testID="home-find-people"
         />
         <StayRow
+          compact={paired}
           icon={
-            <MessageCircle size={16} color={tintInk("peach")} strokeWidth={2.2} />
+            <MessageCircle size={paired ? 14 : 16} color={tintInk("peach")} strokeWidth={2.2} />
           }
           tint="peach"
           title="Start a conversation"
@@ -179,8 +151,9 @@ export function NoWorkspaceHome({
           testID="home-start-conversation"
         />
         <StayRow
+          compact={paired}
           icon={
-            <UsersRound size={16} color={tintInk("sky")} strokeWidth={2.2} />
+            <UsersRound size={paired ? 14 : 16} color={tintInk("sky")} strokeWidth={2.2} />
           }
           tint="sky"
           title="Join a workspace"
@@ -198,7 +171,7 @@ export function NoWorkspaceHome({
           router.push({ pathname: "/onboarding", params: { mode: "create" } })
         }
         testID="home-create-workspace"
-        style={styles.createLink}
+        style={paired ? styles.createLinkCompact : styles.createLink}
       />
     </View>
   );
@@ -214,11 +187,7 @@ export function NoWorkspaceHome({
     >
       <Pressable
         onPress={onInsight}
-        style={[
-          styles.insight,
-          !wide ? styles.insightNarrow : null,
-          paired ? styles.insightPaired : null,
-        ]}
+        style={[styles.insight, paired ? styles.insightPaired : null]}
         accessibilityRole="button"
         accessibilityLabel={(insightTitle ?? "").replace(/\n/g, " ")}
         testID="home-no-workspace-insight"
@@ -243,26 +212,45 @@ export function NoWorkspaceHome({
           style={styles.insightFade}
         />
         <View style={[styles.insightCopy, !wide ? styles.insightCopyNarrow : null]}>
-          <View style={styles.insightLabelRow}>
-            <Sparkles size={12} color="#E9DDFF" strokeWidth={2.4} />
-            <Text style={styles.insightLabel}>INSIGHT</Text>
-          </View>
-          <Text
-            style={[styles.insightTitle, !wide ? styles.insightTitleNarrow : null]}
-          >
-            {insightTitle}
-          </Text>
-          {wide ? <Text style={styles.insightBody}>{insightBody}</Text> : null}
-          <LinearGradient
-            colors={[...gradients.cta]}
-            locations={[0, 0.55, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0.3 }}
-            style={[styles.insightAction, !wide ? styles.insightActionNarrow : null]}
-          >
-            <Text style={styles.insightActionText}>{insightAction}</Text>
-            <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.4} />
-          </LinearGradient>
+          {wide ? (
+            <>
+              <View style={styles.insightLabelRow}>
+                <Sparkles size={12} color="#E9DDFF" strokeWidth={2.4} />
+                <Text style={styles.insightLabel}>INSIGHT</Text>
+              </View>
+              <Text numberOfLines={2} style={styles.insightTitle}>
+                {insightTitle}
+              </Text>
+              <Text style={styles.insightBody}>{insightBody}</Text>
+              <LinearGradient
+                colors={[...gradients.cta]}
+                locations={[0, 0.55, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0.3 }}
+                style={styles.insightAction}
+              >
+                <Text style={styles.insightActionText}>{insightAction}</Text>
+                <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.4} />
+              </LinearGradient>
+            </>
+          ) : (
+            <View style={styles.insightHeaderMatch}>
+              <IconTile tint="sky" size={32}>
+                <Sparkles size={16} color={tintInk("sky")} strokeWidth={2.3} />
+              </IconTile>
+              <View style={styles.insightHeaderCopy}>
+                <Text numberOfLines={1} style={styles.insightEyebrow}>
+                  Insight
+                </Text>
+                <Text numberOfLines={2} style={styles.insightTitleMatch}>
+                  {insightTitle}
+                </Text>
+                <Text style={styles.insightLink} numberOfLines={1}>
+                  {insightAction} ›
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
       </Pressable>
     </View>
@@ -376,31 +364,75 @@ export function NoWorkspaceHome({
       {wide && hasWorkspace && todayCard ? (
         <>
           {showInsight ? (
-            <View style={[styles.cardRow, styles.cardRowMatch]}>
+            <View
+              style={[
+                styles.cardRow,
+                styles.cardRowMatch,
+                stackHeight > 0 ? { height: stackHeight } : null,
+              ]}
+            >
               <View style={[styles.todayColumn, { width: columnWidth }]}>
                 <View style={styles.todayFill}>{todayCard}</View>
               </View>
               <View style={[styles.insightColumn, { width: columnWidth }]}>
-                {insightCard(true, true)}
+                <View style={styles.insightGrow}>{insightCard(true, true)}</View>
+                <View style={[styles.exploreSlot, { width: columnWidth }]}>
+                  <HomeDiscover width={columnWidth} />
+                </View>
               </View>
             </View>
           ) : (
-            <View style={styles.todaySlot}>{todayCard}</View>
+            <>
+              <View style={styles.todaySlot}>{todayCard}</View>
+              <HomeDiscover width={columnWidth} />
+            </>
           )}
           {networkSignal ? (
             <View style={styles.belowPair}>{networkSignal}</View>
           ) : null}
-          <HomeDiscover wide={wide} />
         </>
       ) : (
         <>
           {todayCard ? <View style={styles.todaySlot}>{todayCard}</View> : null}
 
-          {wide && !hasWorkspace && showWelcomeHero ? (
+          {wide && !hasWorkspace && showWelcomeHero && showInsight ? (
             <>
-              <View style={[styles.cardRow, styles.cardRowMatch, styles.heroPairRow]}>
-                <View style={{ width: columnWidth }}>{welcomeHero}</View>
+              <View
+                style={[
+                  styles.fillStack,
+                  stackHeight > 0 ? { height: stackHeight } : null,
+                ]}
+              >
+                <View style={[styles.cardRow, styles.cardRowMatch, styles.fillRowTop]}>
+                  <View style={[styles.fillCell, { width: columnWidth }]}>
+                    {welcomeHero}
+                  </View>
+                  <View style={[styles.fillCell, { width: columnWidth }]}>
+                    {insightCard(true, true)}
+                  </View>
+                </View>
+                <View style={[styles.cardRow, styles.cardRowMatch, styles.fillRow]}>
+                  <View style={[styles.fillCell, { width: columnWidth }]}>
+                    {stayCard(true)}
+                  </View>
+                  <View style={[styles.fillCell, { width: columnWidth }]}>
+                    <HomeDiscover width={columnWidth} fill />
+                  </View>
+                </View>
+              </View>
+              {networkSignal ? (
+                <View style={styles.belowPair}>{networkSignal}</View>
+              ) : null}
+            </>
+          ) : wide && !hasWorkspace ? (
+            <>
+              {welcomeHero}
+              {showInsight ? insightCard() : null}
+              <View style={styles.cardRow}>
                 <View style={{ width: columnWidth }}>{stayCard(true)}</View>
+                <View style={{ width: columnWidth }}>
+                  <HomeDiscover width={columnWidth} />
+                </View>
               </View>
               {networkSignal ? (
                 <View style={styles.belowPair}>{networkSignal}</View>
@@ -409,24 +441,18 @@ export function NoWorkspaceHome({
           ) : (
             <>
               {welcomeHero}
-              {wide && !hasWorkspace ? (
-                <View style={styles.cardRow}>
-                  {networkSignal ? (
-                    <View style={{ width: columnWidth }}>{networkSignal}</View>
-                  ) : null}
-                  <View style={{ width: columnWidth }}>{stayCard()}</View>
-                </View>
-              ) : (
+              {showInsight ? insightCard() : null}
+              {networkSignal || !hasWorkspace ? (
                 <View style={styles.cardStack}>
                   {networkSignal}
                   {!hasWorkspace ? stayCard() : null}
                 </View>
-              )}
+              ) : null}
+              <View style={showInsight ? styles.exploreStack : null}>
+                <HomeDiscover />
+              </View>
             </>
           )}
-
-          <HomeDiscover wide={wide} />
-          {showInsight ? insightCard() : null}
         </>
       )}
       <ConnectionRequestsSheet
@@ -451,6 +477,7 @@ function StayRow({
   subtitle,
   onPress,
   testID,
+  compact = false,
 }: {
   icon: React.ReactNode;
   tint: TintName;
@@ -458,16 +485,18 @@ function StayRow({
   subtitle: string;
   onPress: () => void;
   testID: string;
+  compact?: boolean;
 }) {
   return (
     <AlenioListRow
-      leading={<IconTile tint={tint}>{icon}</IconTile>}
+      leading={<IconTile tint={tint} size={compact ? 28 : 32}>{icon}</IconTile>}
       title={title}
-      subtitle={subtitle}
+      subtitle={compact ? undefined : subtitle}
       onPress={onPress}
       chevron
       accessibilityLabel={title}
       testID={testID}
+      style={compact ? styles.stayRowCompact : undefined}
     />
   );
 }
@@ -482,7 +511,8 @@ const styles = StyleSheet.create({
   heroShadowWide: {
     marginTop: 0,
     flex: 1,
-    minHeight: 248,
+    alignSelf: "stretch",
+    minHeight: 0,
   },
   hero: {
     minHeight: 168,
@@ -492,7 +522,9 @@ const styles = StyleSheet.create({
   },
   heroWide: {
     flex: 1,
-    minHeight: 248,
+    alignSelf: "stretch",
+    minHeight: 0,
+    height: "100%",
   },
   heroNarrow: {
     minHeight: 0,
@@ -532,11 +564,38 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
   },
-  heroPairRow: {
-    marginTop: 8,
+  /** Same footprint as Today beside Insight and Explore. */
+  fillStack: {
+    marginTop: 12,
+    gap: 10,
   },
-  stayBesideHero: {
+  fillRowTop: {
+    flex: 1.28,
     marginTop: 0,
+    minHeight: 0,
+  },
+  fillRow: {
+    flex: 0.72,
+    marginTop: 0,
+    minHeight: 0,
+  },
+  fillCell: {
+    alignSelf: "stretch",
+    minHeight: 0,
+  },
+  stayCompact: {
+    flex: 1,
+    alignSelf: "stretch",
+    minHeight: 0,
+    marginTop: 0,
+    paddingTop: 10,
+    paddingBottom: 4,
+    paddingHorizontal: 12,
+  },
+  stayRowCompact: {
+    minHeight: 36,
+    paddingVertical: 2,
+    gap: 8,
   },
   heroEyebrow: {
     fontSize: 11,
@@ -652,6 +711,29 @@ const styles = StyleSheet.create({
   },
   insightColumn: {
     alignSelf: "stretch",
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 0,
+    gap: 10,
+  },
+  /** Insight fills leftover height above the content-sized Explore card. */
+  insightGrow: {
+    flex: 1,
+    minHeight: 0,
+    alignSelf: "stretch",
+    width: "100%",
+  },
+  exploreSlot: {
+    flexGrow: 0,
+    flexShrink: 0,
+    alignSelf: "stretch",
+    width: "100%",
+  },
+  /** Phone stack: Insight's own top margin does not separate the card under it. */
+  exploreStack: {
+    marginTop: 14,
   },
   todaySlot: {
     marginTop: 12,
@@ -672,9 +754,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 10,
-  },
-  wideCard: {
-    height: 248,
   },
   requestsRow: {
     flexDirection: "row",
@@ -704,61 +783,49 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: PURPLE,
   },
-  networkEmpty: {
-    flex: 1,
-    minHeight: 76,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  networkEmptyTitle: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: "800",
-    color: "#111A2B",
-  },
-  networkEmptyText: {
-    marginTop: 2,
-    fontSize: 11,
-    lineHeight: 15,
-    color: "#667085",
-  },
   createLink: {
     alignSelf: "flex-start",
     marginLeft: 42,
     marginTop: 2,
     marginBottom: 8,
   },
+  createLinkCompact: {
+    alignSelf: "flex-start",
+    marginLeft: 36,
+    marginTop: 0,
+    marginBottom: 2,
+  },
   insightShadow: {
     ...elevation.raised,
     marginTop: 14,
     backgroundColor: palette.dusk,
   },
+  /** Beside Today; grows above the content-sized Explore card. */
   insightShadowPaired: {
     flex: 1,
-    minHeight: 228,
+    minHeight: 0,
+    marginTop: 0,
   },
   insight: {
-    minHeight: 148,
+    minHeight: 0,
     borderRadius: 22,
     overflow: "hidden",
     backgroundColor: palette.dusk,
   },
   insightPaired: {
     flex: 1,
-    minHeight: 228,
+    minHeight: 0,
+    height: "100%",
   },
   insightFlush: {
     marginTop: 0,
-  },
-  insightNarrow: {
-    minHeight: 116,
   },
   insightPhoto: {
     position: "absolute",
     top: 0,
     right: 0,
+    bottom: 0,
+    left: 0,
     height: "100%",
     width: "100%",
   },
@@ -774,10 +841,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
+  /** Content-sized so the trophy sits beside the copy, not under empty purple. */
   insightCopyNarrow: {
-    maxWidth: "66%",
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    maxWidth: "62%",
+    paddingTop: 14,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+  },
+  /** Same row as Explore's header: 32pt icon, 10pt gap, title beside it. */
+  insightHeaderMatch: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  insightHeaderCopy: {
+    flexShrink: 1,
+    minWidth: 0,
+    paddingTop: 1,
+  },
+  insightEyebrow: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+    color: "#E9DDFF",
+  },
+  insightTitleMatch: {
+    marginTop: 2,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    color: "#FFFFFF",
   },
   insightLabelRow: {
     flexDirection: "row",
@@ -791,6 +886,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color: "#E9DDFF",
   },
+  insightLabelNarrow: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
   insightTitle: {
     marginTop: 8,
     fontSize: 18,
@@ -801,9 +902,10 @@ const styles = StyleSheet.create({
   },
   insightTitleNarrow: {
     marginTop: 3,
-    fontSize: 14,
-    lineHeight: 17,
-    letterSpacing: -0.15,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "800",
+    letterSpacing: 0,
   },
   insightBody: {
     marginTop: 4,
@@ -821,10 +923,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 2,
   },
-  insightActionNarrow: {
-    marginTop: 7,
-    height: 27,
-    paddingHorizontal: 9,
+  insightLink: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: "#E9DDFF",
   },
   insightActionText: {
     fontSize: 13,

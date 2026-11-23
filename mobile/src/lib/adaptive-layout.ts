@@ -3,6 +3,17 @@ import { Dimensions, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { space } from "@/theme";
 import { PANE_GAP } from "@/lib/adaptive-layout-constants";
+import {
+  COMPACT_RAIL_WIDTH,
+  LABELED_RAIL_WIDTH,
+  closedCoverClusterEdge,
+  navigationSceneInsets,
+  resolveNavigationMode,
+  type NavigationMode,
+  type SystemBarEdge,
+} from "@/lib/adaptive-navigation";
+
+export type { NavigationMode, SystemBarEdge } from "@/lib/adaptive-navigation";
 
 export {
   MASTER_PANE_WIDTH,
@@ -29,7 +40,7 @@ export const SPLIT_MIN_WIDTH = 700;
  */
 export const SPLIT_MIN_ASPECT = 1.1;
 
-export const RAIL_WIDTH = 74;
+export const RAIL_WIDTH = LABELED_RAIL_WIDTH;
 
 /** A sheet needs height as well as width, or it covers the screen regardless. */
 export const SHEET_MIN_HEIGHT = 600;
@@ -70,8 +81,6 @@ const GRID_MIN = 280;
  * carry a readable event chip rather than a truncated stub.
  */
 const GRID_MIN_FOR_CENTERED_DIVIDER = 392;
-
-export type SystemBarEdge = "left" | "right" | null;
 
 /**
  * Pane widths for a split whose real position on screen is known, which is
@@ -149,6 +158,11 @@ export type AdaptiveLayout = {
    */
   iconRailEdge: SystemBarEdge;
   iconRailWidth: number;
+  /** One authoritative navigation presentation for the current window. */
+  navigationMode: NavigationMode;
+  /** Space reserved by the shared tab shell before a scene is laid out. */
+  sceneInsetLeft: number;
+  sceneInsetRight: number;
 };
 
 /**
@@ -214,6 +228,13 @@ export function useAdaptiveLayout(): AdaptiveLayout {
    */
   const iconRailEdge = clusterEdge;
   const showRail = isSplit && iconRailEdge == null;
+  const navigationMode = resolveNavigationMode(isSplit, iconRailEdge);
+  const iconRailWidth = iconRailEdge ? CLOSED_DUO_CLUSTER : 0;
+  const sceneInsets = navigationSceneInsets(
+    navigationMode,
+    iconRailEdge ?? railEdge,
+    insets,
+  );
 
   const padLeft = insets.left + space.pagePad;
   const padRight = insets.right + space.pagePad;
@@ -249,20 +270,16 @@ export function useAdaptiveLayout(): AdaptiveLayout {
     railWidth: RAIL_WIDTH,
     padLeft,
     padRight,
-    /**
-     * Icon-rail scenes are full-bleed so the mountain band can reach the glass.
-     * Content clears the status column itself. Labeled-rail scenes stay inset
-     * by the tab layout, so they only need the plain page gutter here.
-     */
+    /** Rail scenes are inset by the tab shell and only need a page gutter. */
     contentPadLeft:
       iconRailEdge === "left"
-        ? CLOSED_DUO_CLUSTER + space.pagePad
+        ? space.pagePad
         : showRail && railEdge === "left"
           ? space.pagePad
           : padLeft,
     contentPadRight:
       iconRailEdge === "right"
-        ? CLOSED_DUO_CLUSTER + space.pagePad
+        ? space.pagePad
         : showRail && railEdge === "right"
           ? space.pagePad
           : padRight,
@@ -272,7 +289,10 @@ export function useAdaptiveLayout(): AdaptiveLayout {
     dividerOnCenter: panes.onHinge,
     hingeX,
     iconRailEdge,
-    iconRailWidth: iconRailEdge ? CLOSED_DUO_CLUSTER : 0,
+    iconRailWidth,
+    navigationMode,
+    sceneInsetLeft: sceneInsets.left,
+    sceneInsetRight: sceneInsets.right,
   };
 }
 
@@ -291,8 +311,9 @@ export function statusClusterEdge(
     if (insets.right - insets.left >= SIDE_BAR_MIN_INSET) return "right";
     if (insets.left - insets.right >= SIDE_BAR_MIN_INSET) return "left";
   }
-  // Closed outer display. A phone is at most ~440pt wide.
-  if (width < height && width >= 450 && width <= 520 && height < 760) return "right";
+  // Closed cover. A phone's short side stays under 450.
+  const closedCover = closedCoverClusterEdge(width, height);
+  if (closedCover) return closedCover;
   // Open inner display, sideways. Wider than a phone, narrower than an iPad.
   if (width > height && width >= 760 && width <= 980 && height >= 580 && height <= 760) {
     return "right";
@@ -305,13 +326,12 @@ export function statusClusterEdge(
  * Matches the 84pt column iOS reserves beside the camera on that display.
  * A phone is at most ~440pt wide, so this never applies there.
  */
-const CLOSED_DUO_CLUSTER = 84;
+const CLOSED_DUO_CLUSTER = COMPACT_RAIL_WIDTH;
 
 /**
  * Side space the status cluster occupies, for controls at the top of the page.
- * A phone reports no side inset and is narrower than the closed Duo, so the
- * result stays zero and those screens do not move. The rail's own edge is
- * already offset by the tab layout.
+ * Tab scenes are already inset by the navigation shell. Full-screen routes
+ * still need to clear the Duo status column themselves.
  */
 export function useStatusClusterInset(options?: {
   /**
@@ -322,16 +342,10 @@ export function useStatusClusterInset(options?: {
 }): { left: number; right: number } {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { showRail, railEdge, iconRailEdge, iconRailWidth } = useAdaptiveLayout();
-  /**
-   * Tab scenes paint full-bleed under the icon rail so the header band can
-   * reach the glass. Headers still clear the status column themselves.
-   */
+  const { showRail, railEdge, iconRailEdge } = useAdaptiveLayout();
+  /** The shared tab shell has already reserved the compact rail. */
   if (iconRailEdge && !options?.fullScreen) {
-    return {
-      left: iconRailEdge === "left" ? iconRailWidth : 0,
-      right: iconRailEdge === "right" ? iconRailWidth : 0,
-    };
+    return { left: 0, right: 0 };
   }
   let left = showRail && railEdge === "left" ? 0 : insets.left;
   let right = showRail && railEdge === "right" ? 0 : insets.right;
@@ -340,3 +354,23 @@ export function useStatusClusterInset(options?: {
   if (edge === "left" && left < SIDE_BAR_MIN_INSET) left = CLOSED_DUO_CLUSTER;
   return { left, right };
 }
+
+/**
+ * How far from the top a bottom sheet should stop so the Duo status dock stays
+ * above it. Sheets stay full-width; content scrolls inside the shorter card.
+ * Phones without a side cluster keep a normal safe-area nudge.
+ */
+export function useDuoSheetTopClearance(options?: {
+  fullScreen?: boolean;
+}): number {
+  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const cluster = useStatusClusterInset(options);
+  if (cluster.left <= 0 && cluster.right <= 0) {
+    return Math.min(insets.top, 20);
+  }
+  // Closed-cover dock + a little air under it before the sheet starts.
+  const dockEnd = Math.round(Math.min(Math.max(height * 0.34, 200), 280));
+  return Math.max(insets.top + 12, dockEnd);
+}
+

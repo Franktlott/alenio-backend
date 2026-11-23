@@ -799,8 +799,14 @@ export default function WorkspaceSettingsScreen() {
                       />
                     </IconTile>
                   }
-                  title="Ownership & deletion"
-                  subtitle="Transfer ownership or delete this workspace"
+                  title={
+                    isOwner ? "Ownership & deletion" : "Leave workspace"
+                  }
+                  subtitle={
+                    isOwner
+                      ? "Transfer ownership or delete this workspace"
+                      : "Remove your account from this workspace"
+                  }
                   onPress={() =>
                     router.push({
                       pathname: "/workspace-advanced",

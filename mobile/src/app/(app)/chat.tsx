@@ -607,14 +607,14 @@ export default function ChatScreen() {
                   width: PINNED_CIRCLE,
                   height: PINNED_CIRCLE,
                   borderRadius: PINNED_CIRCLE / 2,
-                  backgroundColor: "#F5F3FF",
+                  backgroundColor: "#F1F5F9",
                   borderWidth: 1.5,
-                  borderColor: "#C4B5FD",
+                  borderColor: "#E2E8F0",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Users size={18} color="#7C3AED" />
+                <Users size={18} color="#64748B" />
               </View>
             )
           ) : otherUser ? (
@@ -622,7 +622,7 @@ export default function ChatScreen() {
               style={{
                 borderRadius: PINNED_CIRCLE / 2,
                 borderWidth: 1.5,
-                borderColor: "#A5B4FC",
+                borderColor: "#E2E8F0",
                 overflow: "hidden",
               }}
             >
@@ -630,8 +630,8 @@ export default function ChatScreen() {
                 user={otherUser}
                 size={PINNED_CIRCLE - 3}
                 radius={(PINNED_CIRCLE - 3) / 2}
-                backgroundColor="#EFE9FF"
-                textColor="#6d28d9"
+                backgroundColor="#F1F5F9"
+                textColor="#334155"
                 fontSize={13}
               />
             </View>
@@ -641,14 +641,14 @@ export default function ChatScreen() {
                 width: PINNED_CIRCLE,
                 height: PINNED_CIRCLE,
                 borderRadius: PINNED_CIRCLE / 2,
-                backgroundColor: "#EFE9FF",
+                backgroundColor: "#F1F5F9",
                 borderWidth: 1.5,
-                borderColor: "#A5B4FC",
+                borderColor: "#E2E8F0",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <MessageCircle size={18} color="#6d28d9" />
+              <MessageCircle size={18} color="#64748B" />
             </View>
           )}
           {unreadCount > 0 ? (
@@ -657,7 +657,7 @@ export default function ChatScreen() {
                 position: "absolute",
                 top: -1,
                 right: -1,
-                backgroundColor: "#6d28d9",
+                backgroundColor: "#EF4444",
                 borderRadius: 9,
                 minWidth: 18,
                 height: 18,
@@ -788,13 +788,13 @@ export default function ChatScreen() {
                   width: AVATAR,
                   height: AVATAR,
                   borderRadius: AVATAR / 2,
-                  backgroundColor: "#F5F3FF",
+                  backgroundColor: "#F1F5F9",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
-                <Users size={19} color="#7C3AED" />
+                <Users size={19} color="#64748B" />
               </View>
             )
           ) : otherUser ? (
@@ -812,8 +812,8 @@ export default function ChatScreen() {
                 user={otherUser}
                 size={AVATAR}
                 radius={AVATAR / 2}
-                backgroundColor="#EFE9FF"
-                textColor="#6d28d9"
+                backgroundColor="#F1F5F9"
+                textColor="#334155"
                 fontSize={16}
               />
             </Pressable>
@@ -823,13 +823,13 @@ export default function ChatScreen() {
                 width: AVATAR,
                 height: AVATAR,
                 borderRadius: AVATAR / 2,
-                backgroundColor: "#EFE9FF",
+                backgroundColor: "#F1F5F9",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <MessageCircle size={19} color="#6d28d9" />
+              <MessageCircle size={19} color="#64748B" />
             </View>
           )}
 
@@ -851,7 +851,7 @@ export default function ChatScreen() {
                 style={{
                   fontSize: 11,
                   fontWeight: unreadCount > 0 ? "700" : "500",
-                  color: unreadCount > 0 ? "#5B45FF" : "#98A2B3",
+                  color: unreadCount > 0 ? "#475467" : "#98A2B3",
                   marginLeft: 8,
                   flexShrink: 0,
                 }}
@@ -875,7 +875,7 @@ export default function ChatScreen() {
               {unreadCount > 0 ? (
                 <View
                   style={{
-                    backgroundColor: "#6d28d9",
+                    backgroundColor: "#EF4444",
                     borderRadius: 9,
                     minWidth: 18,
                     height: 18,

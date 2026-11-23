@@ -13,7 +13,6 @@ import {
   Pressable,
   StyleSheet,
   Animated,
-  useWindowDimensions,
 } from "react-native";
 import {
   SafeAreaView,
@@ -41,6 +40,7 @@ import {
   ChevronRight,
   Lock,
   Sparkles,
+  Handshake,
 } from "lucide-react-native";
 import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { api } from "@/lib/api/api";
@@ -85,8 +85,9 @@ import { TaskNotesSection } from "@/components/tasks/TaskNotesSection";
 import { AssigneeStack } from "@/components/workspace/AssigneeStack";
 import { AssigneesSheet } from "@/components/workspace/AssigneesSheet";
 import { UserAvatar } from "@/components/UserAvatar";
-import { CONTENT_MAX_WIDTH, fitsFormSheet } from "@/lib/adaptive-layout";
+import { CONTENT_MAX_WIDTH } from "@/lib/adaptive-layout";
 import { HEADER_BRAND_COLOR } from "@/lib/header-brand";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 import { useWorkspaceAccess } from "@/lib/workspace-access";
 import { isReminderTask, ownerCompletingUnassignedTask } from "@/lib/task-kind";
 import {
@@ -95,12 +96,6 @@ import {
   completedByOtherMember,
 } from "@/lib/subtask-completion";
 import { StreakCelebrationModal } from "@/components/StreakCelebrationModal";
-import {
-  Badge,
-  PriorityBadge,
-  StatusBadge,
-  type StatusKind,
-} from "@/components/ui";
 import { colors, palette, tints } from "@/theme";
 
 function sameCalendarDay(a: Date | null, b: Date | null): boolean {
@@ -149,20 +144,8 @@ export default function TaskDetailScreen() {
     teamId: string;
     startEdit?: string;
   }>();
-  const { width, height } = useWindowDimensions();
-  /**
-   * The route is presented as a sheet on a tablet (see its options in the root
-   * layout). A sheet is dismissed rather than navigated back from and sits
-   * below the status bar, which is exactly what `onClose` already means here.
-   */
-  const asSheet = fitsFormSheet(width, height);
   return (
-    <TaskDetail
-      taskId={taskId}
-      teamId={teamId}
-      startEdit={startEdit}
-      onClose={asSheet ? () => router.back() : undefined}
-    />
+    <TaskDetail taskId={taskId} teamId={teamId} startEdit={startEdit} />
   );
 }
 
@@ -230,6 +213,7 @@ export function TaskDetail({
     completedByName: string;
   } | null>(null);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState<string>("");
+  const [addingSubtask, setAddingSubtask] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [draftTitle, setDraftTitle] = useState<string>("");
   const [draftPriority, setDraftPriority] = useState<string>("");
@@ -565,14 +549,6 @@ export function TaskDetail({
     !isCompleted &&
     displayedDueDate.getTime() < Date.now(),
   );
-  const statusKind: StatusKind = isCompleted
-    ? "done"
-    : displayedDueOverdue
-      ? "overdue"
-      : displayedDueToday
-        ? "soon"
-        : "open";
-
   const { data: seriesTasksData, isPending: seriesTasksPending } = useQuery({
     queryKey: ["series-tasks", teamId, seriesId],
     queryFn: () =>
@@ -960,9 +936,7 @@ export function TaskDetail({
 
   const sheetTitle = isEditMode
     ? "Edit task"
-    : showFocusedFeedbackTask
-      ? "Task details"
-      : task.title;
+    : "Task details";
 
   const sheetSubtitle = (() => {
     if (isEditMode) return "Make your changes, then save";
@@ -991,13 +965,7 @@ export function TaskDetail({
       </TouchableOpacity>
     ) : canEdit && !isFeedbackTask ? (
       <TouchableOpacity
-        onPress={() => {
-          if (isReminder) {
-            setShowReminderActions(true);
-            return;
-          }
-          beginEdit();
-        }}
+        onPress={() => setShowReminderActions(true)}
         style={{
           width: 32,
           height: 32,
@@ -1006,17 +974,13 @@ export function TaskDetail({
           justifyContent: "center",
           backgroundColor: colors.brandSoft,
         }}
-        testID={isReminder ? "reminder-options-button" : "enter-edit-button"}
+        testID={isReminder ? "reminder-options-button" : "task-options-button"}
       >
-        {isReminder ? (
-          <MoreHorizontal
-            size={18}
-            color={colors.brand}
-            strokeWidth={2.1}
-          />
-        ) : (
-          <Pencil size={15} color={colors.brand} strokeWidth={2.1} />
-        )}
+        <MoreHorizontal
+          size={18}
+          color={colors.brand}
+          strokeWidth={2.1}
+        />
       </TouchableOpacity>
     ) : null;
 
@@ -1101,7 +1065,38 @@ export function TaskDetail({
           </Text>
         ) : null}
 
-        {/* Title — edit mode; read mode title lives in the header */}
+        {/* Keep the navigation header stable; the task title belongs to the content. */}
+        {!showFocusedFeedbackTask && !isEditMode ? (
+          <View style={{ marginTop: 20, marginBottom: isReminder ? 7 : 12 }}>
+            {!isReminder ? (
+              <Text
+                style={{
+                  marginBottom: 7,
+                  fontSize: 10,
+                  fontWeight: "800",
+                  color: colors.brand,
+                  letterSpacing: 0.75,
+                }}
+              >
+                WORKSPACE TASK · {task.priority.toUpperCase()} PRIORITY
+                {task.recurrenceRule ? " · RECURRING" : ""}
+              </Text>
+            ) : null}
+            <Text
+              style={{
+                fontSize: 25,
+                lineHeight: 31,
+                fontWeight: "700",
+                color: palette.ink,
+                letterSpacing: -0.45,
+              }}
+            >
+              {task.title}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Title — edit mode */}
         {!showFocusedFeedbackTask && isEditMode ? (
           <View style={{ marginTop: isReminder ? 0 : 16, marginBottom: 10 }}>
             <TextInput
@@ -1119,39 +1114,6 @@ export function TaskDetail({
               placeholderTextColor={palette.inkMuted}
               testID="edit-title-input"
             />
-          </View>
-        ) : null}
-
-        {!showFocusedFeedbackTask && !isReminder && !isEditMode ? (
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: 8,
-              marginTop: 14,
-              marginBottom: 14,
-            }}
-          >
-            <PriorityBadge
-              priority={task.priority}
-              label={
-                task.priority.charAt(0).toUpperCase() + task.priority.slice(1)
-              }
-            />
-            {task.isJoint ? (
-              <View testID="joint-task-badge">
-                <Badge tone="info" size="sm">
-                  Joint
-                </Badge>
-              </View>
-            ) : null}
-            <StatusBadge status={statusKind} />
-            {task.recurrenceRule ? (
-              <Badge tone="neutral" size="sm" icon={<RefreshCw size={10} color={palette.inkMuted} />}>
-                {task.recurrenceRule.type}
-              </Badge>
-            ) : null}
           </View>
         ) : null}
 
@@ -1348,7 +1310,101 @@ export function TaskDetail({
           </View>
         ) : null}
 
-        {!showFocusedFeedbackTask ? (
+        {!showFocusedFeedbackTask && !isEditMode ? (
+            <View style={{ marginBottom: 18 }} testID="task-summary">
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingVertical: 13,
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderColor: palette.rowDivider,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, color: palette.inkMuted }}>
+                    Created
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 3,
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: palette.ink,
+                    }}
+                    numberOfLines={1}
+                    testID="task-created-date"
+                  >
+                    {new Date(task.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: StyleSheet.hairlineWidth,
+                    height: 34,
+                    marginHorizontal: 10,
+                    backgroundColor: palette.rowDivider,
+                  }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, color: palette.inkMuted }}>Due</Text>
+                  <Text
+                    style={{
+                      marginTop: 3,
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: displayedDueOverdue ? colors.error : palette.ink,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {displayedDueClock
+                      ? `${displayedDueLabel} · ${displayedDueClock}`
+                      : isReminder && !displayedDueDate
+                        ? "Anytime"
+                        : displayedDueLabel}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: StyleSheet.hairlineWidth,
+                    height: 34,
+                    marginHorizontal: 10,
+                    backgroundColor: palette.rowDivider,
+                  }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, color: palette.inkMuted }}>
+                    Status
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 3,
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: isCompleted
+                        ? "#059669"
+                        : displayedDueOverdue
+                          ? colors.error
+                          : palette.ink,
+                    }}
+                  >
+                    {isCompleted
+                      ? "Completed"
+                      : displayedDueOverdue
+                        ? "Overdue"
+                        : "Open"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+        ) : null}
+
+        {!showFocusedFeedbackTask && isEditMode ? (
           <View style={{ marginBottom: 14 }} testID="task-timeline-card">
             <AlenioSheetCard
               tint="slate"
@@ -1574,6 +1630,8 @@ export function TaskDetail({
             visible={showDatePicker}
             transparent
             animationType="slide"
+            presentationStyle="overFullScreen"
+            supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
             onRequestClose={() => setShowDatePicker(false)}
           >
             <View style={{ flex: 1, justifyContent: "flex-end" }}>
@@ -1709,6 +1767,8 @@ export function TaskDetail({
             visible={showTimePicker}
             transparent
             animationType="slide"
+            presentationStyle="overFullScreen"
+            supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
             onRequestClose={() => setShowTimePicker(false)}
           >
             <View style={{ flex: 1, justifyContent: "flex-end" }}>
@@ -2107,7 +2167,9 @@ export function TaskDetail({
         ) : null}
 
         {/* Subtasks */}
-        {!showFocusedFeedbackTask && !isReminder
+        {!showFocusedFeedbackTask &&
+        !isReminder &&
+        (task.subtasks?.length ?? 0) > 0
           ? (() => {
               const subtasks = task.subtasks ?? [];
               const isJointTask = task.isJoint === true;
@@ -2142,10 +2204,11 @@ export function TaskDetail({
                         : ""}
                     </Text>
                   </View>
-                  <AlenioSheetCard
-                    tint="slate"
-                    style={{ paddingHorizontal: 8, paddingVertical: 4, gap: 0 }}
-                  >
+                  {subtasks.length > 0 || addingSubtask ? (
+                    <AlenioSheetCard
+                      tint="slate"
+                      style={{ paddingHorizontal: 8, paddingVertical: 4, gap: 0 }}
+                    >
                   {subtasks.length > 0 && (
                     <View style={{ gap: 2 }}>
                       {subtasks.map((subtask) => {
@@ -2234,19 +2297,7 @@ export function TaskDetail({
                       })}
                     </View>
                   )}
-                  {subtasks.length === 0 ? (
-                    <Text
-                      style={{
-                        paddingVertical: 12,
-                        paddingHorizontal: 8,
-                        fontSize: 13,
-                        color: palette.inkMuted,
-                      }}
-                    >
-                      No subtasks yet
-                    </Text>
-                  ) : null}
-                  {isEditable ? (
+                  {isEditable && addingSubtask ? (
                     <View
                       style={{
                         flexDirection: "row",
@@ -2310,7 +2361,32 @@ export function TaskDetail({
                       </TouchableOpacity>
                     </View>
                   ) : null}
-                  </AlenioSheetCard>
+                    </AlenioSheetCard>
+                  ) : null}
+                  {isEditable && !addingSubtask ? (
+                    <TouchableOpacity
+                      onPress={() => setAddingSubtask(true)}
+                      style={{
+                        minHeight: 42,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        paddingHorizontal: 2,
+                      }}
+                      testID="show-add-subtask-button"
+                    >
+                      <Plus size={17} color={colors.brand} strokeWidth={2.3} />
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "700",
+                          color: colors.brand,
+                        }}
+                      >
+                        Add subtask
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               );
             })()
@@ -2328,20 +2404,40 @@ export function TaskDetail({
                 paddingHorizontal: 2,
               }}
             >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: "700",
-                  color: palette.inkSecondary,
-                  letterSpacing: 0.5,
-                  textTransform: "uppercase",
-                }}
-              >
-                People
-                {task.assignments?.length
-                  ? ` · ${task.assignments.length}`
-                  : ""}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: palette.inkSecondary,
+                    letterSpacing: 0.5,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Assigned to
+                  {task.assignments?.length
+                    ? ` · ${task.assignments.length}`
+                    : ""}
+                </Text>
+                {task.isJoint ? (
+                  <View
+                    style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                    testID="joint-task-indicator"
+                  >
+                    <Handshake size={13} color={colors.brand} strokeWidth={2.2} />
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "800",
+                        color: colors.brand,
+                        letterSpacing: 0.4,
+                      }}
+                    >
+                      JOINT
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               {canEdit ? (
                 <TouchableOpacity
                   testID="manage-assignees-button"
@@ -2361,21 +2457,6 @@ export function TaskDetail({
               ) : null}
             </View>
 
-            <AlenioSheetCard tint="slate">
-              {task.isJoint && (task.assignments?.length ?? 0) > 1 ? (
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "600",
-                    color: colors.textSecondary,
-                    marginBottom: 8,
-                  }}
-                  testID="joint-assignees-note"
-                >
-                  Working together
-                </Text>
-              ) : null}
-
               {task.assignments && task.assignments.length > 0 ? (
                 <Pressable
                   onPress={() => setShowAssigneesSheet(true)}
@@ -2383,7 +2464,8 @@ export function TaskDetail({
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    paddingVertical: 2,
+                    minHeight: 48,
+                    paddingVertical: 5,
                   }}
                   accessibilityRole="button"
                   accessibilityLabel="Show all assignees"
@@ -2395,21 +2477,35 @@ export function TaskDetail({
                   />
                   <View
                     style={{
+                      flex: 1,
+                      minWidth: 0,
+                      marginLeft: 12,
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 4,
+                      justifyContent: "space-between",
+                      gap: 8,
                     }}
                   >
                     <Text
                       style={{
-                        fontSize: 12,
+                        flex: 1,
+                        fontSize: 13,
                         fontWeight: "600",
                         color: palette.inkSecondary,
                       }}
+                      numberOfLines={1}
                     >
-                      {(task.assignments?.length ?? 0) > 2
-                        ? `View all ${task.assignments.length}`
-                        : "View"}
+                      {task.assignments
+                        .slice(0, 2)
+                        .map((assignment) =>
+                          assignment.userId === currentUserId
+                            ? "You"
+                            : assignment.user.name?.trim() || "Teammate",
+                        )
+                        .join(", ")}
+                      {task.assignments.length > 2
+                        ? ` +${task.assignments.length - 2}`
+                        : ""}
                     </Text>
                     <ChevronRight
                       size={14}
@@ -2428,7 +2524,6 @@ export function TaskDetail({
                   No one assigned yet
                 </Text>
               )}
-            </AlenioSheetCard>
           </View>
         ) : null}
 
@@ -2517,9 +2612,9 @@ export function TaskDetail({
   const overlays = (
     <>
       <AlenioBottomSheet
-        visible={showReminderActions && isReminder}
+        visible={showReminderActions}
         title="Task options"
-        subtitle="Manage this private task"
+        subtitle={isReminder ? "Manage this private task" : "Manage this task"}
         onClose={() => setShowReminderActions(false)}
         compact
         showCloseButton
@@ -2537,7 +2632,7 @@ export function TaskDetail({
               setShowReminderActions(false);
               setTimeout(beginEdit, 220);
             }}
-            testID="edit-reminder-option"
+            testID={isReminder ? "edit-reminder-option" : "edit-task-option"}
           />
           {isCreator || isOwnerOrLeader ? (
             <AlenioSheetOption
@@ -2677,6 +2772,8 @@ export function TaskDetail({
         visible={showSeriesList}
         transparent
         animationType="slide"
+        presentationStyle="overFullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => setShowSeriesList(false)}
       >
         <View
@@ -2764,6 +2861,8 @@ export function TaskDetail({
         visible={showDeleteConfirm}
         transparent
         animationType="fade"
+        presentationStyle="overFullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => setShowDeleteConfirm(false)}
       >
         <TouchableOpacity
@@ -2818,6 +2917,8 @@ export function TaskDetail({
         visible={recurringScopeMode !== null}
         transparent
         animationType="fade"
+        presentationStyle="overFullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => setRecurringScopeMode(null)}
       >
         <TouchableOpacity
@@ -2897,6 +2998,8 @@ export function TaskDetail({
         visible={showRecallConfirm}
         transparent
         animationType="fade"
+        presentationStyle="overFullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => setShowRecallConfirm(false)}
       >
         <TouchableOpacity
@@ -2951,6 +3054,8 @@ export function TaskDetail({
         visible={uncheckConfirm != null}
         transparent
         animationType="fade"
+        presentationStyle="overFullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => setUncheckConfirm(null)}
       >
         <TouchableOpacity
@@ -3010,6 +3115,8 @@ export function TaskDetail({
         visible={showSubtaskBlock}
         transparent
         animationType="fade"
+        presentationStyle="overFullScreen"
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
         onRequestClose={() => setShowSubtaskBlock(false)}
       >
         <TouchableOpacity
@@ -3063,7 +3170,9 @@ export function TaskDetail({
         visible={showCompletionSuccess}
         transparent
         animationType="fade"
+        presentationStyle="overFullScreen"
         statusBarTranslucent
+        supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
       >
         <View
           style={completionMomentStyles.backdrop}

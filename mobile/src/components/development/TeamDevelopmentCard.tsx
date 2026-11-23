@@ -8,26 +8,31 @@ import {
   View,
 } from "react-native";
 import {
-  AlertCircle,
+  CalendarDays,
   Check,
   ChevronRight,
-  Clock,
-  Lock,
-  Minus,
-  MoreHorizontal,
+  Flag,
+  Info,
   Search,
+  Star,
   UserPlus,
+  X,
 } from "lucide-react-native";
+import {
+  AlenioBottomSheet,
+  AlenioSheetCard,
+  AlenioSheetIcon,
+} from "@/components/AlenioBottomSheet";
 import { UserAvatar } from "@/components/UserAvatar";
 import type { CalendarEvent, TeamMember, TeamRole } from "@/lib/types";
+import { STARS_GOLD } from "@/lib/stars";
 import { getWorkspaceRolePresentation } from "@/lib/workspace-permissions";
 import { WS } from "@/components/workspace/workspace-ui";
-import { colors } from "@/theme";
+import { colors, palette } from "@/theme";
 import type {
   MemberStatsRow,
   WorkplaceStandards,
 } from "@/lib/workplace-standards";
-import { memberDevelopmentStatus } from "@/lib/member-development-preview";
 import {
   nextCheckInByMember,
   sortDevelopmentMembers,
@@ -40,6 +45,8 @@ type Props = {
   memberStats?: Record<string, MemberStatsRow>;
   standards: WorkplaceStandards;
   onMemberPress: (member: TeamMember) => void;
+  /** Explains the role-aware destination of a member row. */
+  memberPressHint?: string;
   /**
    * Regular members can open only their own row. Everyone else is faded and
    * locked, because their goals and check-ins are not available.
@@ -61,39 +68,33 @@ type Props = {
   flush?: boolean;
 };
 
-const STATUS_TONES = {
-  on_track: { color: "#059669", background: "#ECFDF5" },
-  due_soon: { color: "#D97706", background: "#FFF7ED" },
-  needs_attention: { color: "#DC2626", background: "#FEF2F2" },
-  not_required: { color: "#64748B", background: "#F1F5F9" },
-  unavailable: { color: "#64748B", background: "#F1F5F9" },
-} as const;
-
-/**
- * Each state gets its own shape, not just its own colour, so the row still
- * reads for anyone who cannot separate the red from the amber.
- */
-const STATUS_ICONS = {
-  on_track: Check,
-  due_soon: Clock,
-  needs_attention: AlertCircle,
-  not_required: Minus,
-  unavailable: Minus,
-} as const;
-
-function shortCheckInDate(event: CalendarEvent | undefined): string {
-  if (!event) return "";
-  const date = new Date(event.startDate);
-  if (!Number.isFinite(date.getTime())) return "";
-  const today = new Date();
-  if (
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
-  ) {
-    return "Today";
+function shortCheckInLabel(
+  event: CalendarEvent | undefined,
+  daysSince: number | null | undefined,
+  required: boolean,
+): string {
+  if (event) {
+    const date = new Date(event.startDate);
+    if (Number.isFinite(date.getTime())) {
+      const today = new Date();
+      if (
+        date.getFullYear() === today.getFullYear() &&
+        date.getMonth() === today.getMonth() &&
+        date.getDate() === today.getDate()
+      ) {
+        return "Today";
+      }
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+    }
   }
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (!required) return "No check-in";
+  if (daysSince == null) return "No check-in";
+  if (daysSince === 0) return "Today";
+  if (daysSince === 1) return "1 day ago";
+  return `${daysSince} days ago`;
 }
 
 export function TeamDevelopmentCard({
@@ -103,6 +104,7 @@ export function TeamDevelopmentCard({
   memberStats,
   standards,
   onMemberPress,
+  memberPressHint,
   lockOtherMembers = false,
   onManageMember,
   onInvite,
@@ -110,6 +112,7 @@ export function TeamDevelopmentCard({
   flush = false,
 }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [starsInfoOpen, setStarsInfoOpen] = useState(false);
   const sortedMembers = sortDevelopmentMembers(
     members,
     memberStats,
@@ -131,6 +134,11 @@ export function TeamDevelopmentCard({
 
   return (
     <View style={styles.page} testID="team-development-card">
+      {memberPressHint ? (
+        <View style={styles.memberPressHint} testID="members-press-hint">
+          <Text style={styles.memberPressHintText}>{memberPressHint}</Text>
+        </View>
+      ) : null}
       {/* The Members tab names the page, so only the controls sit up here. */}
       <View style={styles.titleRow}>
         {/* Nothing to search in an empty workspace; Invite still needs the row. */}
@@ -198,119 +206,128 @@ export function TeamDevelopmentCard({
         >
           {visibleMembers.map((member) => {
             const stats = memberStats?.[member.userId];
-            const status = memberDevelopmentStatus(stats, standards);
-            const tone = STATUS_TONES[status.level];
-            const StatusIcon = STATUS_ICONS[status.level];
             const displayName =
               member.user.name?.trim() ||
               member.user.email.split("@")[0] ||
               "Member";
-            const roleLabel = getWorkspaceRolePresentation(
+            const role = getWorkspaceRolePresentation(
               member.role as TeamRole,
-            ).shortLabel;
+            );
             const compliance = stats?.standardsCompliance;
-            const goalsRequired =
-              standards.goalsRequired &&
-              compliance?.goalsStatus !== "not_required";
             const checkInsRequired =
               standards.checkInRequired &&
               compliance?.checkInStatus !== "not_required";
-
-            // What someone actually has beats what the workspace asks of them,
-            // so a real count or a booked date always wins. "Optional" only
-            // fills the gap where there would otherwise be a bare zero that
-            // reads like a failing.
             const goalCount = Math.max(0, stats?.activeDevGoals ?? 0);
             const goalText =
-              goalCount > 0
-                ? `${goalCount} ${goalCount === 1 ? "goal" : "goals"}`
-                : goalsRequired
-                  ? "0 goals"
-                  : "Goals optional";
-
-            const nextCheckIn = nextCheckIns.get(member.userId);
-            const nextDate = shortCheckInDate(nextCheckIn);
-            const checkInStatus = nextDate
-              ? `Next check-in ${nextDate}`
-              : !checkInsRequired
-                ? "Check-ins optional"
-                : compliance?.checkInStatus === "overdue"
-                  ? stats?.daysSinceLastOneOnOne == null
-                    ? "No check-in yet"
-                    : "Check-in overdue"
-                  : compliance?.checkInStatus === "due_soon"
-                    ? "Check-in due soon"
-                    : "Check-ins current";
-            const selected = !!selectedUserId && selectedUserId === member.userId;
+              goalCount === 1 ? "1 goal" : `${goalCount} goals`;
+            const checkInText = shortCheckInLabel(
+              nextCheckIns.get(member.userId),
+              stats?.daysSinceLastOneOnOne,
+              checkInsRequired,
+            );
+            const growth = Math.max(0, stats?.streak ?? 0);
+            const selected =
+              !!selectedUserId && selectedUserId === member.userId;
             const locked =
               lockOtherMembers && member.userId !== currentUserId;
+            const isYou = member.userId === currentUserId;
             const row = (
               <>
-                {/* Reads as the open row even where the tint is too faint. */}
                 <View
                   style={[
                     styles.selectedAccent,
                     (!selected || locked) && styles.selectedAccentHidden,
                   ]}
                 />
-                <View style={[styles.memberMain, locked && styles.memberLocked]}>
-                <UserAvatar
-                  user={member.user}
-                  size={34}
-                  radius={17}
-                  backgroundColor="#EEEAFE"
-                  textColor="#684BFF"
-                  fontSize={11}
-                />
-                <View style={styles.memberCopy}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.memberName} numberOfLines={1}>
-                      {displayName}
-                    </Text>
-                    {/* Kept out of the line below so a long email cannot
-                        truncate the role away. */}
-                    <View style={styles.rolePill}>
-                      <Text style={styles.roleText}>{roleLabel}</Text>
+                <View
+                  style={[styles.memberMain, locked && styles.memberLocked]}
+                >
+                  <UserAvatar
+                    user={member.user}
+                    size={36}
+                    radius={18}
+                    backgroundColor="#F1F5F9"
+                    textColor="#334155"
+                    fontSize={12}
+                  />
+                  <View style={styles.memberCopy}>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.memberName} numberOfLines={1}>
+                        {displayName}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.rolePill,
+                          {
+                            color: role.badgeText,
+                            backgroundColor: role.badgeBackground,
+                          },
+                        ]}
+                      >
+                        {role.shortLabel}
+                      </Text>
+                      {isYou ? (
+                        <Text style={styles.youPill}>You</Text>
+                      ) : null}
+                    </View>
+                    <View style={styles.metaRow}>
+                      <View style={styles.metaItem}>
+                        <Flag
+                          size={12}
+                          color={palette.inkMuted}
+                          strokeWidth={2.1}
+                        />
+                        <Text style={styles.metaText} numberOfLines={1}>
+                          {goalText}
+                        </Text>
+                      </View>
+                      <Text style={styles.metaDot}>·</Text>
+                      <View style={styles.metaItem}>
+                        <CalendarDays
+                          size={12}
+                          color={palette.inkMuted}
+                          strokeWidth={2.1}
+                        />
+                        <Text style={styles.metaText} numberOfLines={1}>
+                          {checkInText}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                  {member.user.email ? (
-                    <Text style={styles.memberIdentity} numberOfLines={1}>
-                      {member.user.email}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.memberDetail} numberOfLines={1}>
-                    {goalText} · {checkInStatus}
-                  </Text>
-                </View>
-                {locked ? null : (
+                  {/* Stars stay visible for the whole team even when the
+                      development menu is locked to managers + self. */}
                   <View
                     style={[
-                      styles.statusIcon,
-                      { backgroundColor: tone.background },
+                      styles.growthBadge,
+                      growth > 0 ? styles.growthBadgeActive : null,
                     ]}
-                    accessible
-                    accessibilityLabel={status.title}
+                    pointerEvents="none"
+                    testID={`team-development-growth-${member.userId}`}
                   >
-                    <StatusIcon size={14} color={tone.color} strokeWidth={2.6} />
+                    <Star
+                      size={12}
+                      color={growth > 0 ? STARS_GOLD : "#C4B5A0"}
+                      fill={growth > 0 ? STARS_GOLD : "transparent"}
+                      strokeWidth={2.2}
+                    />
+                    <Text
+                      style={[
+                        styles.growthValue,
+                        growth > 0 ? styles.growthValueActive : null,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {String(growth)}
+                    </Text>
                   </View>
-                )}
+                  {isYou && !locked ? (
+                    <ChevronRight
+                      size={16}
+                      color="#94A3B8"
+                      strokeWidth={2.2}
+                    />
+                  ) : null}
                 </View>
-                {locked ? (
-                  <Lock size={16} color="#98A2B3" strokeWidth={2.4} />
-                ) : onManageMember ? (
-                  <Pressable
-                    onPress={() => onManageMember(member)}
-                    hitSlop={8}
-                    style={styles.manageButton}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Manage ${displayName}`}
-                    testID={`team-development-manage-${member.userId}`}
-                  >
-                    <MoreHorizontal size={16} color="#94A3B8" strokeWidth={2.2} />
-                  </Pressable>
-                ) : (
-                  <ChevronRight size={15} color="#94A3B8" strokeWidth={2.2} />
-                )}
               </>
             );
             return locked ? (
@@ -318,7 +335,7 @@ export function TeamDevelopmentCard({
                 key={member.userId}
                 style={styles.memberCard}
                 accessibilityRole="text"
-                accessibilityLabel={`${displayName} is locked`}
+                accessibilityLabel={`${displayName}, ${growth} ${growth === 1 ? "star" : "stars"}`}
                 testID={`team-development-member-${member.userId}`}
               >
                 {row}
@@ -327,10 +344,16 @@ export function TeamDevelopmentCard({
               <Pressable
                 key={member.userId}
                 onPress={() => onMemberPress(member)}
-                style={[styles.memberCard, selected && styles.memberCardSelected]}
+                onLongPress={
+                  onManageMember ? () => onManageMember(member) : undefined
+                }
+                style={[
+                  styles.memberCard,
+                  selected && styles.memberCardSelected,
+                ]}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
-                accessibilityLabel={`Open ${displayName}'s development, ${status.title}`}
+                accessibilityLabel={`Open goals and check-ins for ${displayName}`}
                 testID={`team-development-member-${member.userId}`}
               >
                 {row}
@@ -339,7 +362,104 @@ export function TeamDevelopmentCard({
           })}
           </ScrollView>
         )}
+        {sortedMembers.length > 0 ? (
+          <View style={styles.starsFootnote} testID="members-stars-footnote">
+            <View style={styles.starsFootnoteIcon}>
+              <Star
+                size={12}
+                color={STARS_GOLD}
+                fill={STARS_GOLD}
+                strokeWidth={2.2}
+              />
+            </View>
+            <View style={styles.starsFootnoteCopy}>
+              <View style={styles.starsFootnoteTitleRow}>
+                <Text style={styles.starsFootnoteTitle}>Stars</Text>
+                <Pressable
+                  onPress={() => setStarsInfoOpen(true)}
+                  hitSlop={10}
+                  style={styles.starsFootnoteInfo}
+                  accessibilityRole="button"
+                  accessibilityLabel="What counts for a star"
+                  testID="members-stars-info"
+                >
+                  <Info size={13} color="#A08955" strokeWidth={2.2} />
+                </Pressable>
+              </View>
+              <Text style={styles.starsFootnoteText}>
+                Finish assigned tasks to earn stars. Higher counts mean more
+                momentum.
+              </Text>
+            </View>
+          </View>
+        ) : null}
       </View>
+
+      <AlenioBottomSheet
+        visible={starsInfoOpen}
+        title="What counts for a star"
+        subtitle="Assigned workspace work fills stars and builds momentum."
+        onClose={() => setStarsInfoOpen(false)}
+        compact
+        showCloseButton
+        scrollEnabled={false}
+        testID="members-stars-info-sheet"
+        footer={
+          <Pressable
+            onPress={() => setStarsInfoOpen(false)}
+            style={styles.starsInfoDone}
+            accessibilityRole="button"
+            accessibilityLabel="Got it"
+            testID="members-stars-info-done"
+          >
+            <Text style={styles.starsInfoDoneText}>Got it</Text>
+          </Pressable>
+        }
+      >
+        <View style={styles.starsInfoBody}>
+          <AlenioSheetCard tint="purple" compact>
+            <View style={styles.starsInfoSection}>
+              <AlenioSheetIcon color={palette.violet} compact>
+                <Check size={14} color="#FFFFFF" strokeWidth={2.6} />
+              </AlenioSheetIcon>
+              <View style={styles.starsInfoCopy}>
+                <Text style={styles.starsInfoHeading}>Counts</Text>
+                <Text style={styles.starsInfoLine}>
+                  Completing an assigned workspace task
+                </Text>
+              </View>
+            </View>
+          </AlenioSheetCard>
+
+          <AlenioSheetCard tint="slate" compact>
+            <View style={styles.starsInfoSection}>
+              <AlenioSheetIcon color="#94A3B8" compact>
+                <X size={14} color="#FFFFFF" strokeWidth={2.6} />
+              </AlenioSheetIcon>
+              <View style={styles.starsInfoCopy}>
+                <Text style={styles.starsInfoHeading}>Doesn’t count</Text>
+                <Text style={styles.starsInfoLine}>Personal reminders</Text>
+                <Text style={styles.starsInfoLine}>
+                  Tasks you weren’t assigned
+                </Text>
+                <Text style={styles.starsInfoLine}>Goals or check-ins</Text>
+              </View>
+            </View>
+          </AlenioSheetCard>
+
+          <View style={styles.starsInfoMilestone}>
+            <Star
+              size={14}
+              color={STARS_GOLD}
+              fill={STARS_GOLD}
+              strokeWidth={2.2}
+            />
+            <Text style={styles.starsInfoMilestoneText}>
+              Milestones land at 5, 10, 20, 50… then every +50.
+            </Text>
+          </View>
+        </View>
+      </AlenioBottomSheet>
     </View>
   );
 }
@@ -348,6 +468,20 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     minHeight: 0,
+  },
+  memberPressHint: {
+    marginHorizontal: WS.pageGutter,
+    marginBottom: 10,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#EEF2F6",
+  },
+  memberPressHintText: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "500",
+    letterSpacing: -0.1,
+    color: "#64748B",
   },
   // Mirrors the Tasks heading strip: same gutter, spacing, and type.
   titleRow: {
@@ -401,7 +535,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 9,
   },
-  memberLocked: { opacity: 0.4 },
+  memberLocked: { opacity: 0.78 },
   memberCardSelected: {
     backgroundColor: "#EEF2FF",
     borderRadius: 10,
@@ -462,14 +596,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  manageButton: {
-    width: 26,
-    height: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  // Matched to a task row, so a member reads at the same size as their work.
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -477,45 +603,176 @@ const styles = StyleSheet.create({
   },
   memberName: {
     flexShrink: 1,
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 14.5,
+    lineHeight: 18,
     fontWeight: "800",
-    color: "#20283C",
+    color: palette.ink,
   },
-  // Deliberately quiet: it labels the person, it is not a status.
   rolePill: {
+    overflow: "hidden",
     flexShrink: 0,
     paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 5,
-    backgroundColor: "#F1F3F7",
-  },
-  roleText: {
-    fontSize: 9,
-    lineHeight: 12,
+    borderRadius: 999,
+    fontSize: 10.5,
     fontWeight: "700",
-    letterSpacing: 0.2,
-    color: "#6B7789",
   },
-  memberIdentity: {
-    marginTop: 2,
-    fontSize: 11,
-    lineHeight: 14,
-    color: "#8490A4",
+  youPill: {
+    overflow: "hidden",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: palette.lilacSoft,
+    color: palette.violet,
+    fontSize: 10.5,
+    fontWeight: "700",
   },
-  memberDetail: {
-    marginTop: 2,
-    fontSize: 11,
-    lineHeight: 14,
-    color: "#8490A4",
+  metaRow: {
+    marginTop: 3,
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    gap: 6,
   },
-  statusIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    flexShrink: 0,
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    flexShrink: 1,
+  },
+  metaDot: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#D0CBD8",
+  },
+  metaText: {
+    flexShrink: 1,
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: palette.inkSecondary,
+  },
+  growthBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    minWidth: 40,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: "#F7F5F1",
+  },
+  growthBadgeActive: {
+    backgroundColor: "#FFF8EB",
+  },
+  growthValue: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    color: "#9A8F7E",
+  },
+  growthValueActive: {
+    color: "#8A6419",
+  },
+  starsFootnote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: "auto",
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#EEF0F4",
+    backgroundColor: "#FCFAF6",
+  },
+  starsFootnoteIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#FFF8EB",
+    marginTop: 1,
+  },
+  starsFootnoteCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  starsFootnoteTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  starsFootnoteTitle: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: "800",
+    color: "#8A6419",
+  },
+  starsFootnoteInfo: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  starsFootnoteText: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "500",
+    color: "#8490A4",
+  },
+  starsInfoBody: {
+    gap: 10,
+  },
+  starsInfoSection: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  starsInfoCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  starsInfoHeading: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: "#111A2B",
+  },
+  starsInfoLine: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#5B6475",
+  },
+  starsInfoMilestone: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+    paddingHorizontal: 4,
+  },
+  starsInfoMilestoneText: {
+    flex: 1,
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "600",
+    color: "#8A6419",
+  },
+  starsInfoDone: {
+    height: 48,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.violet,
+  },
+  starsInfoDoneText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   emptyState: {
     minHeight: 90,

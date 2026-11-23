@@ -461,6 +461,16 @@ async function saveArticle(
     ...extra,
   };
   const article = await prisma.$transaction(async (tx) => {
+    // Homepage feature is exclusive: Home shows one Explore article.
+    if (data.isFeatured) {
+      await tx.discoverArticle.updateMany({
+        where: {
+          isFeatured: true,
+          ...(existingId ? { id: { not: existingId } } : {}),
+        },
+        data: { isFeatured: false },
+      });
+    }
     if (featuredInCategory && categoryId) {
       await tx.discoverArticle.updateMany({
         where: {

@@ -64,7 +64,6 @@ export function ReactionFacepile({
           </View>
         ))}
       </View>
-      <Text style={compact ? styles.countCompact : styles.count}>{total}</Text>
     </Pressable>
   );
 }
@@ -99,17 +98,5 @@ const styles = StyleSheet.create({
   emojiCompact: {
     fontSize: 10,
     lineHeight: 14,
-  },
-  count: {
-    fontSize: 12.5,
-    lineHeight: 17,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  countCompact: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "600",
-    color: "#64748B",
   },
 });

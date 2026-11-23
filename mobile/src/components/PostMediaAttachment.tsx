@@ -8,6 +8,8 @@ type Props = {
   height?: number | null;
   testID?: string;
   onInteraction?: () => void;
+  /** Flush media for continuous feeds — no rounded frame. */
+  flat?: boolean;
 };
 
 function PostVideo({
@@ -56,12 +58,13 @@ export function PostMediaAttachment({
   height,
   testID,
   onInteraction,
+  flat = false,
 }: Props) {
   const aspectRatio =
     mediaType === "video" ? 16 / 9 : width && height ? width / height : 4 / 3;
 
   return (
-    <View style={[styles.frame, { aspectRatio }]}>
+    <View style={[styles.frame, flat ? styles.frameFlat : null, { aspectRatio }]}>
       {mediaType === "video" ? (
         <PostVideo
           url={url}
@@ -88,6 +91,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderRadius: 12,
     backgroundColor: "#EEF1F6",
+  },
+  frameFlat: {
+    marginTop: 0,
+    borderRadius: 0,
   },
   media: {
     width: "100%",

@@ -60,7 +60,6 @@ import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import {
   Plus,
   User,
-  ChevronLeft,
   ChevronRight,
   ChevronDown,
   X,
@@ -79,7 +78,7 @@ import {
   Pencil,
   Search,
   Globe2,
-  Award,
+  Settings,
 } from "lucide-react-native";
 import {
   SafeAreaView,
@@ -159,7 +158,6 @@ import {
   SnapshotDevelopmentSheet,
   SnapshotScheduledSheet,
 } from "@/components/SnapshotDetailSheets";
-import { WorkspaceSnapshotCarousel } from "@/components/workspace/snapshot/WorkspaceSnapshotCarousel";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
@@ -212,7 +210,6 @@ import {
   teamMomentumSummaryQueryKey,
   type TeamMomentumLeaderSummary,
 } from "@/lib/team-momentum";
-import { buildSnapshotPages } from "@/lib/workspace-snapshot-pages";
 import {
   buildGoalCoverageItems,
   oneOnOneMember,
@@ -228,10 +225,7 @@ import {
 } from "@/lib/workspace-development-navigation";
 import { planOneOnOneHref } from "@/lib/plan-one-on-one";
 import { scheduleCheckInHref, videoCallHref } from "@/lib/meeting-navigation";
-import {
-  selectUpcomingDevelopmentCheckIns,
-  sortDevelopmentMembers,
-} from "@/lib/development-overview";
+import { selectUpcomingDevelopmentCheckIns } from "@/lib/development-overview";
 import {
   fetchExternalCalendarEvents,
   type ExternalCalendarEventItem,
@@ -307,9 +301,9 @@ export default function TasksScreen() {
     plannedEventId?: string | null;
     checkInId?: string | null;
   } | null>(null);
-  const [selectedDay, setSelectedDay] = useState<string | null>(
-    toLocalIso(new Date()),
-  );
+  /** Null until a day is tapped — Duo/stacked calendars keep the day pane closed until then. */
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [showCalendarDayDetail, setShowCalendarDayDetail] = useState(false);
   const [selectedSnapshotDetail, setSelectedSnapshotDetail] =
     useState<SnapshotDetail | null>(null);
   const [manageMember, setManageMember] = useState<TeamMember | null>(null);
@@ -321,7 +315,9 @@ export default function TasksScreen() {
   const [calendarMonth, setCalendarMonth] = useState(() =>
     new Date().getMonth(),
   );
-  const [assigneesSheetTask, setAssigneesSheetTask] = useState<Task | null>(null);
+  const [assigneesSheetTask, setAssigneesSheetTask] = useState<Task | null>(
+    null,
+  );
   const [actionMenuEvent, setActionMenuEvent] = useState<CalendarEvent | null>(
     null,
   );
@@ -377,11 +373,15 @@ export default function TasksScreen() {
    * Two panes side by side. Month view only — the week agenda already uses the
    * full screen, so splitting it would just halve the agenda.
    */
-  const splitCalendar = adaptive.isSplit && calendarDisplayMode === "month";
-  /**
-   * The Tasks detail pane. Same rule as the calendar's second pane, so the page
-   * gains and loses its second column at one width rather than two.
-   */
+  const splitCalendar =
+    adaptive.isSplit &&
+    adaptive.detailPaneWidth >= 420 &&
+    calendarDisplayMode === "month";
+  const calendarUsesDaySheet =
+    adaptive.isSplit &&
+    !splitCalendar &&
+    calendarDisplayMode === "month";
+  /** Keep task details beside the task list whenever the workspace is split. */
   const showTaskDetailPane = adaptive.isSplit;
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   /** The shared Workspace divider, so Tasks splits where Calendar does. */
@@ -389,14 +389,15 @@ export default function TasksScreen() {
   /** Same divider again: the roster is this tab's primary column. */
   const rosterPaneWidth = Math.round(adaptive.gridPaneWidth);
   /**
-   * The stacked month stays compact at its natural height, and the day list
-   * always sits beneath it, even on short screens: the grid no longer
-   * stretches to fill the area just because the area is short.
+   * Month day schedule opens in a sheet so the grid can stay full-height.
+   * Side-by-side Duo keeps the day list in the right pane instead.
    */
-  const showStackedDayPane =
+  const useMonthDaySheet =
     !splitCalendar && calendarDisplayMode === "month";
   /** The week card carries its own agenda, so it still takes the area. */
-  const calendarCardFillsArea = !splitCalendar && !showStackedDayPane;
+  const calendarCardFillsArea = !splitCalendar;
+  /** Duo already clears the dock; keep a light gutter beside the grid. */
+  const calendarGutter = adaptive.iconRailEdge ? 8 : WS.pageGutter;
   /**
    * Members keeps the roster beside the open member instead of replacing it,
    * which is also what fills the width a single stretched list cannot.
@@ -478,7 +479,6 @@ export default function TasksScreen() {
   const [expandedTaskSections, setExpandedTaskSections] = useState<
     Record<string, boolean>
   >({});
-  const appliedLeaderTaskScopeRef = React.useRef(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const { data: session } = useSession();
@@ -570,12 +570,8 @@ export default function TasksScreen() {
   const handleViewMonthChange = useCallback((year: number, month: number) => {
     setCalendarYear(year);
     setCalendarMonth(month);
-    const now = new Date();
-    const keepToday =
-      now.getFullYear() === year && now.getMonth() === month
-        ? toLocalIso(now)
-        : toLocalIso(new Date(year, month, 1));
-    setSelectedDay(keepToday);
+    setSelectedDay(null);
+    setShowCalendarDayDetail(false);
     setNextCursor(null);
   }, []);
 
@@ -583,9 +579,9 @@ export default function TasksScreen() {
     const now = new Date();
     setCalendarYear(now.getFullYear());
     setCalendarMonth(now.getMonth());
-    setSelectedDay(toLocalIso(now));
+    setSelectedDay(null);
+    setShowCalendarDayDetail(false);
     setNextCursor(null);
-    appliedLeaderTaskScopeRef.current = false;
     setExpandedTaskSections({});
   }, [activeTeamId]);
 
@@ -672,24 +668,13 @@ export default function TasksScreen() {
     currentRole === "owner" || currentRole === "team_leader";
   const isCalendarManager = isOwnerOrLeader;
 
-  React.useEffect(() => {
-    if (!isOwnerOrLeader || appliedLeaderTaskScopeRef.current) return;
-    appliedLeaderTaskScopeRef.current = true;
-    setFilters((current) =>
-      current.assignedTo === "me"
-        ? { ...current, assignedTo: "entire_team" }
-        : current,
-    );
-  }, [isOwnerOrLeader]);
   const summaryAssignedTo = isCalendarManager ? "entire_team" : "me";
   const summaryToday = new Date();
   const summaryYear = summaryToday.getFullYear();
   const summaryMonth = summaryToday.getMonth();
   const { access } = useWorkspaceAccess(activeTeamId);
   const readOnlyWorkspace = Boolean(activeTeamId && !access.canWrite);
-  const workspacePageBottom = tabClearance(
-    WORKSPACE_CARD_BOTTOM_GAP + (readOnlyWorkspace ? 56 : 0),
-  );
+  const workspacePageBottom = tabClearance(WORKSPACE_CARD_BOTTOM_GAP);
   const openWorkspaceCreate = () => {
     if (!access.canWrite) return;
     setShowAddModal(true);
@@ -882,7 +867,9 @@ export default function TasksScreen() {
   const { data: ownActiveRemindersData } = useQuery({
     queryKey: ["tasks", activeTeamId, "own-reminders", "active"],
     queryFn: async () =>
-      api.get<{ tasks: Task[]; nextCursor: string | null }>(ownReminderPath("active")),
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        ownReminderPath("active"),
+      ),
     enabled: !!activeTeamId && hasTaskAccess,
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
@@ -956,7 +943,10 @@ export default function TasksScreen() {
             ]
           : (ownActiveRemindersData?.tasks ?? [])
     : [];
-  const rawTasks: Task[] = mergeViewerReminders(workspaceTasks, ownRemindersForTab);
+  const rawTasks: Task[] = mergeViewerReminders(
+    workspaceTasks,
+    ownRemindersForTab,
+  );
   const { data: teamData } = useQuery({
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
@@ -1189,7 +1179,9 @@ export default function TasksScreen() {
   // Leaving development, or moving to another workspace, drops back to the
   // team list rather than reopening whoever was last looked at.
   useEffect(() => {
-    if (workspaceMode !== "development") setDevelopmentFocus(null);
+    if (workspaceMode !== "development") {
+      setDevelopmentFocus(null);
+    }
   }, [workspaceMode]);
   useEffect(() => {
     setDevelopmentFocus(null);
@@ -1239,10 +1231,11 @@ export default function TasksScreen() {
   };
 
   const openScheduleTask = (task: Task) => {
-    if (showTaskDetailPane) {
+    if (showTaskDetailPane && !calendarUsesDaySheet) {
       openTaskDetails(task);
       return;
     }
+    setShowCalendarDayDetail(false);
     setPreviewTask(task);
   };
 
@@ -1672,6 +1665,37 @@ export default function TasksScreen() {
   const currentUserId = session?.user?.id ?? null;
 
   const teamMembers: TeamMember[] = teamData?.members ?? [];
+  // Wide Members: keep a person selected so the Goals/Check-ins pane stays open.
+  // Regular members may only open themselves; leaders keep the first teammate.
+  useEffect(() => {
+    if (workspaceMode !== "development" || !splitMembers) return;
+    if (developmentFocus) {
+      if (
+        !isOwnerOrLeader &&
+        currentUserId &&
+        developmentFocus.userId !== currentUserId
+      ) {
+        setDevelopmentFocus({
+          userId: currentUserId,
+          section: developmentFocus.section ?? "check-ins",
+        });
+      }
+      return;
+    }
+    const preferred =
+      (!isOwnerOrLeader && currentUserId
+        ? teamMembers.find((member) => member.userId === currentUserId)
+        : null) ?? teamMembers[0];
+    if (!preferred) return;
+    setDevelopmentFocus({ userId: preferred.userId, section: "check-ins" });
+  }, [
+    workspaceMode,
+    splitMembers,
+    developmentFocus,
+    teamMembers,
+    isOwnerOrLeader,
+    currentUserId,
+  ]);
   const developmentMember = developmentFocus
     ? (teamMembers.find(
         (member) => member.userId === developmentFocus.userId,
@@ -1733,18 +1757,21 @@ export default function TasksScreen() {
       return;
     }
 
-    const targetUserId = linkedMemberUserId ?? summaryMemberUserId;
-    if (!targetUserId) return;
+    const requestedUserId = linkedMemberUserId ?? summaryMemberUserId;
+    if (!requestedUserId) return;
+    // Members can only open their own development from a deep link.
+    const targetUserId =
+      !isOwnerOrLeader && summaryMemberUserId
+        ? summaryMemberUserId
+        : requestedUserId;
 
     const section: WorkspaceDevelopmentSection =
-      linkedDevelopmentSection === "check-ins" ||
-      linkedMode === "check-ins" ||
-      linkedMode === "check-in" ||
-      linkedStartCheckIn === "1" ||
-      linkedStartCheckIn === "true" ||
-      !!linkedCheckInId
-        ? "check-ins"
-        : "goals";
+      linkedDevelopmentSection === "goals" ||
+      linkedMode === "goals" ||
+      linkedCreateGoal === "1" ||
+      linkedCreateGoal === "true"
+        ? "goals"
+        : "check-ins";
     const linkKey = [
       activeTeamId,
       targetUserId,
@@ -1774,6 +1801,7 @@ export default function TasksScreen() {
     });
   }, [
     activeTeamId,
+    isOwnerOrLeader,
     linkedCheckInId,
     linkedCheckInLaunchId,
     linkedCreateGoal,
@@ -1792,47 +1820,6 @@ export default function TasksScreen() {
     () => mergeWorkplaceStandards(memberStatsPayload?.workplaceStandards),
     [memberStatsPayload?.workplaceStandards],
   );
-  /**
-   * The roster's own order, so whoever sits at the top of the list is who the
-   * detail pane opens with.
-   */
-  const rosterOrder = React.useMemo(
-    () =>
-      sortDevelopmentMembers(
-        teamMembers,
-        memberStatsPayload?.stats,
-        summaryStandards,
-      ),
-    [teamMembers, memberStatsPayload?.stats, summaryStandards],
-  );
-  /**
-   * A split has a pane that would otherwise sit empty, so it opens on the first
-   * member. Stacked layouts still land on the roster and wait for a tap.
-   */
-  const topRosterUserId = rosterOrder[0]?.userId ?? null;
-  useEffect(() => {
-    if (workspaceMode !== "development") return;
-    if (!isOwnerOrLeader) {
-      if (!currentUserId) return;
-      if (developmentFocus?.userId === currentUserId) return;
-      if (splitMembers) {
-        setDevelopmentFocus({ userId: currentUserId, section: "check-ins" });
-      } else if (developmentFocus) {
-        setDevelopmentFocus(null);
-      }
-      return;
-    }
-    if (!splitMembers) return;
-    if (developmentFocus || !topRosterUserId) return;
-    setDevelopmentFocus({ userId: topRosterUserId, section: "check-ins" });
-  }, [
-    currentUserId,
-    developmentFocus,
-    isOwnerOrLeader,
-    splitMembers,
-    topRosterUserId,
-    workspaceMode,
-  ]);
   const summaryActiveWorkspaceTasks = mergeViewerReminders(
     workspaceTasksOnly(summaryActiveTasksData?.tasks ?? []),
     ownActiveRemindersData?.tasks ?? [],
@@ -2069,65 +2056,15 @@ export default function TasksScreen() {
     ],
   );
 
-  const handleSelectDay = useCallback((iso: string | null) => {
-    setSelectedDay(iso);
-  }, []);
-
-  const snapshotPages = React.useMemo(
-    () =>
-      buildSnapshotPages({
-        isManager: isCalendarManager,
-        dueToday: summaryDueToday,
-        overdue: summaryOverdue,
-        completedToday: summaryCompletedToday,
-        checkInsToday: summaryCheckInsToday,
-        needsAttention: summaryNeedsAttention,
-        momentumCount: summaryMomentumCount,
-        memberDevelopmentCount: summaryMemberDevelopmentCount,
-        memberDevelopmentStatus: summaryMemberDevelopmentStatus,
-        memberMissingGoals: summaryMemberMissingGoals,
-        health: summaryHealth,
-        goalsOnTrackPct: summaryGoalsOnTrackPct,
-        goalsRequired: summaryStandards.goalsRequired,
-        onPressActionTasks: () => setSelectedSnapshotDetail("actionTasks"),
-        onPressDueToday: () => setSelectedSnapshotDetail("dueToday"),
-        onPressOverdue: () => setSelectedSnapshotDetail("overdue"),
-        onPressCompletedToday: () =>
-          setSelectedSnapshotDetail("completedToday"),
-        onPressCheckIns: () => setSelectedSnapshotDetail("scheduled"),
-        onPressNeedsAttention: isCalendarManager
-          ? () => setSelectedSnapshotDetail("development")
-          : undefined,
-        onPressMomentum: activeTeamId
-          ? () =>
-              router.push({
-                pathname: "/team-momentum",
-                params: { teamId: activeTeamId },
-              })
-          : undefined,
-        onPressHealth: () => setSelectedSnapshotDetail("health"),
-        onPressGoals: () => setSelectedSnapshotDetail("development"),
-      }),
-    [
-      isCalendarManager,
-      summaryDueToday,
-      summaryOverdue,
-      summaryCompletedToday,
-      summaryCheckInsToday,
-      summaryNeedsAttention,
-      summaryMomentumCount,
-      summaryMemberDevelopmentCount,
-      summaryMemberDevelopmentStatus,
-      summaryMemberMissingGoals,
-      teamMembers.length,
-      summaryHealth,
-      summaryGoalsOnTrackPct,
-      summaryStandards.goalsRequired,
-      activeTeamId,
-      summaryMemberUserId,
-      openMembers,
-    ],
+  const handleSelectDay = useCallback(
+    (iso: string | null) => {
+      setSelectedDay(iso);
+      if (iso && useMonthDaySheet) setShowCalendarDayDetail(true);
+      else setShowCalendarDayDetail(false);
+    },
+    [useMonthDaySheet],
   );
+
   const activeTeamName = teams?.find((team) => team.id === activeTeamId)?.name;
 
   // Roster management on the Team tab. The sheet decides per member what is
@@ -2194,6 +2131,7 @@ export default function TasksScreen() {
   };
 
   const openEventPreview = (ev: CalendarEvent) => {
+    setShowCalendarDayDetail(false);
     setPreviewEvent(ev);
   };
 
@@ -2499,6 +2437,12 @@ export default function TasksScreen() {
     tasks.length === 0;
   const showTasksListEmpty =
     !showTasksLoading && !tasksLoadError && tasks.length === 0;
+  const showTasksWelcome =
+    showTasksListEmpty &&
+    !taskSearchQuery.trim() &&
+    filters.statusTab === "active" &&
+    filters.assignedTo === "me" &&
+    filters.dueDate === "all";
 
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
@@ -2613,11 +2557,15 @@ export default function TasksScreen() {
     daySheetCount === 0 ? (
       <EmptyState
         card
-        icon={<CalendarDays size={20} color={tintInk("lavender")} strokeWidth={2} />}
+        icon={
+          <CalendarDays size={20} color={tintInk("lavender")} strokeWidth={2} />
+        }
         title="Nothing scheduled"
         body="No events or tasks due this day."
         actionLabel={access.canWrite ? "Add event" : undefined}
-        actionIcon={<Plus size={13} color={buttonInk("soft")} strokeWidth={2.6} />}
+        actionIcon={
+          <Plus size={13} color={buttonInk("soft")} strokeWidth={2.6} />
+        }
         onAction={access.canWrite ? openWorkspaceCreate : undefined}
         testID="calendar-stacked-day-empty"
         style={{ marginTop: 10 }}
@@ -2659,6 +2607,9 @@ export default function TasksScreen() {
       </View>
     );
 
+  const showSplitMembers = splitMembers;
+  const showSplitDevelopmentDetail =
+    showSplitMembers && Boolean(developmentFocus && developmentMember);
   const membersRoster = (
     <TeamDevelopmentCard
       members={teamMembers}
@@ -2666,21 +2617,20 @@ export default function TasksScreen() {
       calendarEvents={developmentUpcomingCheckIns}
       memberStats={memberStatsPayload?.stats}
       standards={summaryStandards}
-      selectedUserId={splitMembers ? (developmentFocus?.userId ?? null) : null}
-      lockOtherMembers={false}
+      selectedUserId={
+        showSplitMembers ? (developmentFocus?.userId ?? null) : null
+      }
+      lockOtherMembers={!isOwnerOrLeader}
       onMemberPress={(member) => {
-        if (!isOwnerOrLeader && member.userId !== currentUserId) {
-          router.push({
-            pathname: "/person",
-            params: { userId: member.userId },
-          });
-          return;
-        }
-        setDevelopmentFocus({ userId: member.userId, section: "check-ins" });
+        if (!isOwnerOrLeader && member.userId !== currentUserId) return;
+        setDevelopmentFocus({
+          userId: member.userId,
+          section: "check-ins",
+        });
       }}
       onManageMember={canManageRoster ? setManageMember : undefined}
       onInvite={canManageRoster ? () => setInviteOpen(true) : undefined}
-      flush={splitMembers}
+      flush={showSplitMembers}
     />
   );
 
@@ -2703,7 +2653,11 @@ export default function TasksScreen() {
          * A split keeps the roster on screen, so there is nowhere to go back
          * to and the header drops its back button.
          */
-        onBack={splitMembers ? undefined : () => setDevelopmentFocus(null)}
+        onBack={
+          showSplitDevelopmentDetail
+            ? undefined
+            : () => setDevelopmentFocus(null)
+        }
         autoOpenCreateGoal={developmentFocus.createGoal ?? false}
         onCreateGoalIntentHandled={() =>
           setDevelopmentFocus((current) =>
@@ -2723,6 +2677,30 @@ export default function TasksScreen() {
       workspaceTitleSelector
       showWorkspaceSubtitle
       leftAction={<AlenioHeaderBrand tone="dark" />}
+      rightAction={
+        activeTeamId && isOwnerOrLeader && access.canWrite ? (
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/workspace-settings",
+                params: { teamId: activeTeamId },
+              })
+            }
+            hitSlop={8}
+            style={{
+              width: 34,
+              height: 34,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Workspace settings"
+            testID="workspace-settings-header"
+          >
+            <Settings size={18} color="#FFFFFF" strokeWidth={2.2} />
+          </Pressable>
+        ) : undefined
+      }
       headerTitlePlacement="leading"
       testID="tasks-screen"
       headerTestID="workspace-header"
@@ -2742,6 +2720,49 @@ export default function TasksScreen() {
               setExpandedTaskSections({});
             }}
           />
+
+          <AlenioBottomSheet
+            visible={showCalendarDayDetail && useMonthDaySheet}
+            title={daySheetTitle}
+            subtitle={daySheetSubtitle}
+            onClose={() => setShowCalendarDayDetail(false)}
+            showCloseButton
+            bodyHeightRatio={0.72}
+            testID="calendar-day-detail-sheet"
+            headerRight={
+              access.canWrite ? (
+                <Pressable
+                  onPress={() => {
+                    setShowCalendarDayDetail(false);
+                    openWorkspaceCreate();
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add event"
+                  style={{
+                    minHeight: 32,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 4,
+                  }}
+                >
+                  <Plus size={13} color="#6d28d9" strokeWidth={2.4} />
+                  <Text
+                    style={{
+                      marginLeft: 3,
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: "#6d28d9",
+                    }}
+                  >
+                    Add
+                  </Text>
+                </Pressable>
+              ) : undefined
+            }
+          >
+            {stackedDayList}
+          </AlenioBottomSheet>
 
           <TeamOverviewTasksSheet
             visible={selectedTaskDetail != null}
@@ -2890,7 +2911,9 @@ export default function TasksScreen() {
                           ? "Your next check-in is due soon."
                           : summaryMemberDevelopmentStatus === "goals_missing"
                             ? `${summaryMemberMissingGoals ?? 1} ${
-                                summaryMemberMissingGoals === 1 ? "goal is" : "goals are"
+                                summaryMemberMissingGoals === 1
+                                  ? "goal is"
+                                  : "goals are"
                               } still needed.`
                             : summaryMemberDevelopmentStatus
                               ? "Your development plan is on track."
@@ -3248,8 +3271,8 @@ export default function TasksScreen() {
                 textAlign: "center",
               }}
             >
-              You can explore your workspace and view existing content.
-              Creating or editing content requires an eligible plan.
+              You can explore your workspace and view existing content. Creating
+              or editing content requires an eligible plan.
             </Text>
             <TouchableOpacity
               onPress={() => {
@@ -3264,7 +3287,9 @@ export default function TasksScreen() {
               activeOpacity={0.92}
               testID="workspace-read-only-view-plans"
             >
-              <Text style={alenioSheetStyles.primaryButtonText}>View plans</Text>
+              <Text style={alenioSheetStyles.primaryButtonText}>
+                View plans
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setReadOnlySheetOpen(false)}
@@ -3344,26 +3369,9 @@ export default function TasksScreen() {
                       pathname: "/create-task",
                       params: {
                         teamId: activeTeamId!,
-                        initialDueDate:
-                          selectedDay ?? toLocalIso(new Date()),
+                        initialDueDate: selectedDay ?? toLocalIso(new Date()),
                         kind: isOwnerOrLeader ? "workspace_task" : "reminder",
                       },
-                    });
-                  },
-                },
-                {
-                  key: "celebrate",
-                  label: "Celebrate",
-                  hint: "Recognize someone on Feed",
-                  icon: (
-                    <Award size={16} color={tintInk("lavender")} strokeWidth={2.2} />
-                  ),
-                  testID: "workspace-add-celebrate",
-                  onPress: () => {
-                    setShowAddModal(false);
-                    router.push({
-                      pathname: "/recognition-hub",
-                      params: { openGive: "1", teamId: activeTeamId! },
                     });
                   },
                 },
@@ -4773,30 +4781,61 @@ export default function TasksScreen() {
           mode={workspaceMode}
           onChange={(next) => {
             if (next !== "development") lastWorkspaceTabRef.current = next;
-            // The tab always lands on the roster; a member left open from a
-            // previous visit would otherwise reappear instead.
-            else setDevelopmentFocus(null);
+            // The tab always lands on the people directory; a member left open
+            // from a previous visit would otherwise reappear instead.
+            else {
+              setDevelopmentFocus(null);
+            }
             setWorkspaceMode(next);
           }}
           calendarBadge={calendarBadge}
           tasksBadge={tasksBadge}
         />
+        {readOnlyWorkspace ? (
+          <View
+            style={{
+              alignItems: "center",
+              marginTop: -4,
+              marginBottom: 0,
+              paddingLeft: adaptive.contentPadLeft,
+              paddingRight: adaptive.contentPadRight,
+            }}
+          >
+            <Pressable
+              onPress={() => setReadOnlySheetOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Read-only workspace. View plan."
+              testID="workspace-read-only-status"
+              style={{
+                minHeight: 28,
+                paddingVertical: 4,
+                paddingLeft: 12,
+                paddingRight: 14,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: "#E4DFF8",
+                backgroundColor: "#FFFFFF",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Lock size={13} color="#635BEE" strokeWidth={2.2} />
+              <Text
+                style={{
+                  fontSize: 12,
+                  lineHeight: 16,
+                  fontWeight: "700",
+                  color: "#29324A",
+                }}
+              >
+                Read-only · View plan
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <View style={{ flex: 1, minHeight: 0 }}>
-        <WorkspaceSnapshotCarousel
-          pages={snapshotPages}
-          loading={summaryMetricsLoading}
-          onOpenSettings={
-            activeTeamId && isOwnerOrLeader && access.canWrite
-              ? () =>
-                  router.push({
-                    pathname: "/workspace-settings",
-                    params: { teamId: activeTeamId },
-                  })
-              : undefined
-          }
-        />
-
         <View style={{ flex: 1 }}>
           {workspaceMode === "development" ? (
             <View
@@ -4814,11 +4853,15 @@ export default function TasksScreen() {
                     minHeight: 0,
                     flexDirection: "row",
                     paddingBottom: 10,
-                    paddingLeft: splitMembers ? adaptive.contentPadLeft : 0,
-                    paddingRight: splitMembers ? adaptive.contentPadRight : 0,
+                    paddingLeft: showSplitMembers
+                      ? adaptive.contentPadLeft
+                      : 0,
+                    paddingRight: showSplitMembers
+                      ? adaptive.contentPadRight
+                      : 0,
                   }}
                 >
-                  {splitMembers ? (
+                  {showSplitMembers ? (
                     <View
                       key="members-roster-pane"
                       style={{ width: rosterPaneWidth, minHeight: 0 }}
@@ -4833,21 +4876,61 @@ export default function TasksScreen() {
                       flex: 1,
                       minWidth: 0,
                       minHeight: 0,
-                      paddingLeft: splitMembers ? PANE_GAP : 0,
+                      paddingLeft: showSplitMembers ? PANE_GAP : 0,
                     }}
                     testID="members-detail-pane"
                   >
                     <View
                       style={
-                        splitMembers ? splitPaneCard : { flex: 1, minHeight: 0 }
+                        showSplitMembers
+                          ? splitPaneCard
+                          : { flex: 1, minHeight: 0 }
                       }
                     >
-                      {memberDetail ?? (splitMembers ? null : membersRoster)}
+                      {memberDetail ??
+                        (showSplitMembers ? (
+                          <View
+                            style={{
+                              flex: 1,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: 24,
+                            }}
+                            testID="members-detail-empty"
+                          >
+                            <Text
+                              style={{
+                                fontSize: 15,
+                                fontWeight: "700",
+                                color: "#160f2e",
+                                textAlign: "center",
+                              }}
+                            >
+                              Select a member
+                            </Text>
+                            <Text
+                              style={{
+                                marginTop: 6,
+                                fontSize: 13,
+                                lineHeight: 18,
+                                color: "#6b6580",
+                                textAlign: "center",
+                              }}
+                            >
+                              Their goals and check-ins open here.
+                            </Text>
+                          </View>
+                        ) : (
+                          membersRoster
+                        ))}
                     </View>
                   </View>
                 </View>
               ) : (
-                <ActivityIndicator color="#6d28d9" style={{ marginTop: 32 }} />
+                <ActivityIndicator
+                  color="#6d28d9"
+                  style={{ marginTop: 32 }}
+                />
               )}
             </View>
           ) : workspaceMode === "calendar" ? (
@@ -4868,8 +4951,14 @@ export default function TasksScreen() {
                  * horizontal insets asymmetric. The stacked layout keeps each
                  * card's own gutter so phones are untouched.
                  */
-                paddingLeft: splitCalendar ? adaptive.contentPadLeft : 0,
-                paddingRight: splitCalendar ? adaptive.contentPadRight : 0,
+                paddingLeft:
+                  splitCalendar || calendarUsesDaySheet
+                    ? adaptive.contentPadLeft
+                    : 0,
+                paddingRight:
+                  splitCalendar || calendarUsesDaySheet
+                    ? adaptive.contentPadRight
+                    : 0,
               }}
             >
               <View
@@ -4928,8 +5017,8 @@ export default function TasksScreen() {
                   }}
                 >
                   <CalendarCard
-                    expanded={splitCalendar}
-                    insetHorizontal={splitCalendar ? 0 : undefined}
+                    expanded={splitCalendar || calendarCardFillsArea}
+                    insetHorizontal={splitCalendar ? 0 : calendarGutter}
                     tasks={visibleDatedTasks}
                     events={calendarEventsWithOutlook}
                     members={teamMembers}
@@ -4968,11 +5057,14 @@ export default function TasksScreen() {
                             events.length +
                             dayHolidayList.length +
                             tasks.length;
-                          const heading = dayDate.toLocaleDateString("en-US", {
+                            const heading = dayDate.toLocaleDateString(
+                              "en-US",
+                              {
                             weekday: "long",
                             month: "long",
                             day: "numeric",
-                          });
+                              },
+                            );
                           return (
                             <View key={iso} style={{ marginTop: 12 }}>
                               <Pressable
@@ -5018,7 +5110,9 @@ export default function TasksScreen() {
                                   onToggleTask={openScheduleTask}
                                   onTaskLongPress={(task) => {
                                     if (!canManageTaskMenu(task)) return;
-                                    openTaskDetails(task, { startEdit: true });
+                                      openTaskDetails(task, {
+                                        startEdit: true,
+                                      });
                                   }}
                                   onAddEvent={
                                     access.canWrite
@@ -5057,7 +5151,7 @@ export default function TasksScreen() {
                           onClose={() => setOpenTaskId(null)}
                           onSelectTask={setOpenTaskId}
                         />
-                      ) : (
+                      ) : selectedDay ? (
                         <View
                           style={{
                             flex: 1,
@@ -5067,25 +5161,35 @@ export default function TasksScreen() {
                           }}
                         >
                           {dayPaneHeader}
-                          <View style={{ flex: 1, minHeight: 0 }}>{dayPaneList}</View>
+                            <View style={{ flex: 1, minHeight: 0 }}>
+                              {dayPaneList}
+                            </View>
+                        </View>
+                      ) : (
+                        <View
+                          style={{
+                            flex: 1,
+                            minHeight: 0,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            paddingHorizontal: 24,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              fontWeight: "600",
+                              color: "#64748B",
+                              textAlign: "center",
+                            }}
+                          >
+                            Select a day to see its schedule
+                          </Text>
                         </View>
                       )}
                     </View>
                   </View>
-                ) : !showStackedDayPane ? null : (
-                  <ScrollView
-                    testID="calendar-day-pane"
-                    style={{ flex: 1, minHeight: 0 }}
-                    contentContainerStyle={{
-                      marginHorizontal: WS.pageGutter,
-                      paddingBottom: 16,
-                    }}
-                    showsVerticalScrollIndicator={false}
-                  >
-                    {dayPaneHeader}
-                    {stackedDayList}
-                  </ScrollView>
-                )}
+                ) : null}
               </View>
             </View>
           ) : showMemberTasksEmpty ? (
@@ -5141,15 +5245,21 @@ export default function TasksScreen() {
                     : null),
                 }}
               >
-                <View style={showTaskDetailPane ? splitPaneCard : { flex: 1, minHeight: 0 }}>
+                  <View
+                    style={
+                      showTaskDetailPane
+                        ? splitPaneCard
+                        : { flex: 1, minHeight: 0 }
+                    }
+                  >
                 <View
                   style={{
                     flexShrink: 0,
-                    paddingHorizontal: showTaskDetailPane ? 12 : WS.pageGutter,
-                    // Match CalendarCard marginTop / Members titleRow so the
-                    // first task card doesn't sit a step below the other tabs.
-                    paddingTop: 2,
-                    paddingBottom: 6,
+                        paddingHorizontal: showTaskDetailPane
+                          ? 12
+                          : WS.pageGutter,
+                    paddingTop: 6,
+                    paddingBottom: 4,
                     backgroundColor: WS.pageBg,
                   }}
                 >
@@ -5166,8 +5276,11 @@ export default function TasksScreen() {
                         pathname: "/create-task",
                         params: {
                           teamId: activeTeamId,
-                          initialDueDate: selectedDay ?? toLocalIso(new Date()),
-                          kind: isOwnerOrLeader ? "workspace_task" : "reminder",
+                              initialDueDate:
+                                selectedDay ?? toLocalIso(new Date()),
+                              kind: isOwnerOrLeader
+                                ? "workspace_task"
+                                : "reminder",
                         },
                       });
                     }}
@@ -5178,10 +5291,16 @@ export default function TasksScreen() {
                   style={{
                     flex: 1,
                     minHeight: 140,
-                    paddingHorizontal: showTaskDetailPane ? 12 : WS.pageGutter,
-                    paddingBottom: showTaskDetailPane
-                      ? 8
-                      : workspacePageBottom,
+                        paddingHorizontal: showTasksWelcome
+                          ? 0
+                          : showTaskDetailPane
+                            ? 12
+                            : WS.pageGutter,
+                    paddingBottom: showTasksWelcome
+                      ? 0
+                      : showTaskDetailPane
+                        ? 8
+                        : workspacePageBottom,
                   }}
                 >
                   <ScrollView
@@ -5197,7 +5316,10 @@ export default function TasksScreen() {
                     }
                     contentContainerStyle={{
                       flexGrow: 1,
-                      justifyContent: showTasksListEmpty ? "center" : undefined,
+                      justifyContent:
+                        showTasksListEmpty && !showTasksWelcome
+                          ? "center"
+                          : undefined,
                     }}
                   >
                     <TaskListCard
@@ -5207,14 +5329,19 @@ export default function TasksScreen() {
                       loadError={tasksLoadError}
                       onRetry={() => void refetchActiveTasks()}
                       currentUserId={currentUserId}
-                      selectedTaskId={showTaskDetailPane ? openTaskId : null}
+                          selectedTaskId={
+                            showTaskDetailPane ? openTaskId : null
+                          }
                       onToggle={openTaskDetails}
                       onPress={openTaskDetails}
-                      onAssigneesPress={(task) => setAssigneesSheetTask(task)}
+                          onAssigneesPress={(task) =>
+                            setAssigneesSheetTask(task)
+                          }
                       onLongPress={(task) => {
                         if (!canManageTaskMenu(task)) return;
                         openTaskDetails(task, { startEdit: true });
                       }}
+                      emptyWelcome={showTasksWelcome}
                       emptyTitle={
                         taskSearchQuery.trim()
                           ? "No tasks"
@@ -5224,7 +5351,7 @@ export default function TasksScreen() {
                               ? "Nothing completed"
                               : filters.dueDate === "calendar_day"
                                 ? "No active tasks"
-                                : "You're all"
+                                : "No tasks yet"
                       }
                       emptyAccentTitle={
                         taskSearchQuery.trim()
@@ -5244,23 +5371,49 @@ export default function TasksScreen() {
                           ? "Try a different task name or adjust your filters."
                           : filters.statusTab === "archived"
                             ? "Completed tasks move here after 30 days."
-                            : filters.dueDate === "calendar_day" && selectedDay
+                                : filters.dueDate === "calendar_day" &&
+                                    selectedDay
                               ? "Try viewing upcoming tasks or adjust your filters."
                               : filters.statusTab === "completed"
                                 ? "Completed work from the last 30 days shows here."
-                                : "No active tasks for the current filters."
+                                : filters.assignedTo === "me"
+                                  ? "Nothing is assigned to you right now."
+                                  : filters.assignedTo === "entire_team"
+                                    ? "No one on the team has a task here yet."
+                                    : typeof filters.assignedTo === "object"
+                                      ? `Nothing is assigned to ${filters.assignedTo.memberName}.`
+                                      : "Nothing matches this filter."
                       }
                       emptyActionLabel={
                         !taskSearchQuery.trim() &&
                         filters.dueDate === "calendar_day"
                           ? "View upcoming tasks"
-                          : undefined
+                          : !taskSearchQuery.trim() &&
+                              filters.statusTab === "active" &&
+                              access.canWrite
+                            ? "Create a Task"
+                            : undefined
                       }
                       onEmptyAction={
                         !taskSearchQuery.trim() &&
                         filters.dueDate === "calendar_day"
-                          ? () => setFilters((f) => ({ ...f, dueDate: "all" }))
-                          : undefined
+                              ? () =>
+                                  setFilters((f) => ({ ...f, dueDate: "all" }))
+                          : !taskSearchQuery.trim() &&
+                              filters.statusTab === "active" &&
+                              access.canWrite &&
+                              activeTeamId
+                            ? () => {
+                                router.push({
+                                  pathname: "/create-task",
+                                  params: {
+                                    teamId: activeTeamId,
+                                    initialDueDate: selectedDay ?? toLocalIso(new Date()),
+                                    kind: isOwnerOrLeader ? "workspace_task" : "reminder",
+                                  },
+                                });
+                              }
+                            : undefined
                       }
                       footer={
                         <>
@@ -5295,7 +5448,9 @@ export default function TasksScreen() {
                                   color: "#6d28d9",
                                 }}
                               >
-                                {loadingMore ? "Loading..." : "Load more tasks"}
+                                    {loadingMore
+                                      ? "Loading..."
+                                      : "Load more tasks"}
                               </Text>
                             </Pressable>
                           ) : null}
@@ -5379,49 +5534,6 @@ export default function TasksScreen() {
             </View>
           )}
         </View>
-        {readOnlyWorkspace ? (
-          <View
-            pointerEvents="box-none"
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: tabClearance(10),
-              alignItems: "center",
-            }}
-          >
-            <Pressable
-              onPress={() => setReadOnlySheetOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Read-only workspace. View plan."
-              testID="workspace-read-only-status"
-              style={{
-                minHeight: 36,
-                paddingLeft: 12,
-                paddingRight: 14,
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: "#E4DFF8",
-                backgroundColor: "#FFFFFF",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Lock size={13} color="#635BEE" strokeWidth={2.2} />
-              <Text
-                style={{
-                  fontSize: 12,
-                  lineHeight: 16,
-                  fontWeight: "700",
-                  color: "#29324A",
-                }}
-              >
-                Read-only · View plan
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
         </View>
       </View>
     </CurvedTabLayout>

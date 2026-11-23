@@ -14,11 +14,17 @@ import {
   recordDiscoverView,
   type DiscoverArticleSummary,
 } from "@/lib/discover";
+import {
+  CONTENT_MAX_WIDTH,
+  useStatusClusterInset,
+} from "@/lib/adaptive-layout";
 import { useSenecaSheetStore } from "@/lib/state/seneca-sheet-store";
 
 const PURPLE = "#6D5EF8";
 const FURTHER_COPY = "Want to explore how this idea applies to a situation you're facing?";
 const WIDE_MIN = 700;
+/** Side air on large screens so the article does not go edge-to-edge. */
+const ARTICLE_SIDE_INSET = 28;
 
 const CATEGORY_COLOR: Record<string, string> = {
   reflection: "#6D5EF8",
@@ -53,9 +59,15 @@ function openArticle(slug: string) {
 
 export default function DiscoverArticleScreen() {
   const insets = useSafeAreaInsets();
+  const cluster = useStatusClusterInset({ fullScreen: true });
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
-  const wide = width >= WIDE_MIN;
+  /** Comfortable reading width; clears Duo and stays short of full bleed. */
+  const columnWidth = Math.min(
+    CONTENT_MAX_WIDTH,
+    Math.max(0, width - cluster.left - cluster.right - ARTICLE_SIDE_INSET * 2),
+  );
+  const wide = width >= WIDE_MIN && columnWidth >= WIDE_MIN;
   const { slug } = useLocalSearchParams<{ slug?: string }>();
   const openSeneca = useSenecaSheetStore((state) => state.openSheetWithPrompt);
   const query = useQuery({
@@ -189,79 +201,125 @@ export default function DiscoverArticleScreen() {
     ) : null;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.topRow}>
-        <Pressable onPress={() => router.back()} style={styles.back} accessibilityRole="button" accessibilityLabel="Back">
-          <ChevronLeft size={22} color="#111A2B" />
-          <Text style={styles.backText}>Explore</Text>
-        </Pressable>
-        {article ? (
+    <View
+      style={[
+        styles.screen,
+        {
+          paddingTop: insets.top + 8,
+          paddingLeft: cluster.left,
+          paddingRight: cluster.right,
+        },
+      ]}
+    >
+      <View style={[styles.column, { width: columnWidth }]}>
+        <View style={styles.topRow}>
           <Pressable
-            onPress={() => void savePdf()}
-            disabled={pdfBusy}
-            style={styles.pdfButton}
+            onPress={() => router.back()}
+            style={styles.back}
             accessibilityRole="button"
-            accessibilityLabel="Download PDF"
-            testID="discover-pdf"
+            accessibilityLabel="Back"
           >
-            {pdfBusy ? <ActivityIndicator size="small" color={PURPLE} /> : <FileDown size={16} color={PURPLE} strokeWidth={2.3} />}
-            <Text style={styles.pdfText}>PDF</Text>
+            <ChevronLeft size={22} color="#111A2B" />
+            <Text style={styles.backText}>Explore</Text>
           </Pressable>
+          {article ? (
+            <Pressable
+              onPress={() => void savePdf()}
+              disabled={pdfBusy}
+              style={styles.pdfButton}
+              accessibilityRole="button"
+              accessibilityLabel="Download PDF"
+              testID="discover-pdf"
+            >
+              {pdfBusy ? (
+                <ActivityIndicator size="small" color={PURPLE} />
+              ) : (
+                <FileDown size={16} color={PURPLE} strokeWidth={2.3} />
+              )}
+              <Text style={styles.pdfText}>PDF</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {!article && query.isLoading ? (
+          <Text style={styles.note}>Loading…</Text>
+        ) : null}
+        {!article && query.isError ? (
+          <Text style={styles.note}>This article is not available.</Text>
+        ) : null}
+        {article ? (
+          <ScrollView
+            contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {article.coverImageUrl ? (
+              <Image
+                source={{ uri: article.coverImageUrl }}
+                style={[styles.cover, wide ? styles.coverWide : null]}
+                resizeMode="cover"
+                accessibilityLabel={article.coverImageAlt ?? ""}
+              />
+            ) : null}
+            <View style={wide ? styles.columns : null}>
+              <View style={wide ? styles.article : null}>
+                <View style={styles.metaRow}>
+                  {article.category ? (
+                    <View
+                      style={[styles.pill, { backgroundColor: `${labelColor}18` }]}
+                    >
+                      <Text style={[styles.pillText, { color: labelColor }]}>
+                        {article.category.name.toUpperCase()}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {article.readingTimeMinutes > 0 ? (
+                    <Text style={styles.readTime}>
+                      {article.readingTimeMinutes} min read
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={styles.title}>{article.title}</Text>
+                {article.excerpt ? (
+                  <Text style={styles.excerpt}>{article.excerpt}</Text>
+                ) : null}
+                <View style={styles.byline} testID="discover-byline">
+                  {article.authorName?.trim() ? null : (
+                    <Image
+                      source={require("@/assets/alenio-icon.png")}
+                      style={styles.bylineMark}
+                    />
+                  )}
+                  <Text style={styles.bylineText}>
+                    By <Text style={styles.bylineAuthor}>{byline.author}</Text>
+                    {byline.when ? `  ·  ${byline.when}` : ""}
+                  </Text>
+                </View>
+                <DiscoverArticleBody blocks={article.content?.content ?? []} />
+              </View>
+              {sidebar}
+            </View>
+          </ScrollView>
         ) : null}
       </View>
-      {!article && query.isLoading ? <Text style={styles.note}>Loading…</Text> : null}
-      {!article && query.isError ? <Text style={styles.note}>This article is not available.</Text> : null}
-      {article ? (
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {article.coverImageUrl ? (
-            <Image
-              source={{ uri: article.coverImageUrl }}
-              style={[styles.cover, wide ? styles.coverWide : null]}
-              resizeMode="cover"
-              accessibilityLabel={article.coverImageAlt ?? ""}
-            />
-          ) : null}
-          <View style={wide ? styles.columns : null}>
-            <View style={wide ? styles.article : null}>
-              <View style={styles.metaRow}>
-                {article.category ? (
-                  <View style={[styles.pill, { backgroundColor: `${labelColor}18` }]}>
-                    <Text style={[styles.pillText, { color: labelColor }]}>
-                      {article.category.name.toUpperCase()}
-                    </Text>
-                  </View>
-                ) : null}
-                {article.readingTimeMinutes > 0 ? (
-                  <Text style={styles.readTime}>{article.readingTimeMinutes} min read</Text>
-                ) : null}
-              </View>
-              <Text style={styles.title}>{article.title}</Text>
-              {article.excerpt ? <Text style={styles.excerpt}>{article.excerpt}</Text> : null}
-              <View style={styles.byline} testID="discover-byline">
-                {article.authorName?.trim() ? null : (
-                  <Image source={require("@/assets/alenio-icon.png")} style={styles.bylineMark} />
-                )}
-                <Text style={styles.bylineText}>
-                  By <Text style={styles.bylineAuthor}>{byline.author}</Text>
-                  {byline.when ? `  ·  ${byline.when}` : ""}
-                </Text>
-              </View>
-              <DiscoverArticleBody blocks={article.content?.content ?? []} />
-            </View>
-            {sidebar}
-          </View>
-        </ScrollView>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#FFFFFF", paddingHorizontal: 20 },
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  screen: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+  },
+  column: {
+    flex: 1,
+    maxWidth: "100%",
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
   back: { flexDirection: "row", alignItems: "center", gap: 2, alignSelf: "flex-start" },
   pdfButton: {
     flexDirection: "row",

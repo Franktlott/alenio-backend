@@ -16,8 +16,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown, X } from "lucide-react-native";
-import { fitsFormSheet } from "@/lib/adaptive-layout";
-import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import { fitsFormSheet, useDuoSheetTopClearance } from "@/lib/adaptive-layout";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
+import { SafeKeyboardAvoidingView, SafeKeyboardProvider } from "@/lib/safe-keyboard-controller";
 
 type Props = {
   visible?: boolean;
@@ -88,6 +89,7 @@ function SheetContent({
 }: Omit<Props, "visible" | "asScreen">) {
   const insets = useSafeAreaInsets();
   const dialog = useIsDialogSize();
+  const topClearance = useDuoSheetTopClearance({ fullScreen: true });
   /** Centred, so it owes nothing to the home indicator at the bottom edge. */
   const bottomPad = dialog
     ? compact
@@ -95,13 +97,24 @@ function SheetContent({
       : 18
     : Math.max(insets.bottom, compact ? 10 : 20) + (compact ? 4 : 12);
   const windowH = Dimensions.get("window").height;
+  /** On Duo, stop just under the status dock; otherwise keep the usual ratio. */
+  const sheetMaxHeight = dialog
+    ? undefined
+    : Math.round(windowH - topClearance);
   const ratio = bodyHeightRatio ?? (compact ? 0.5 : 0.58);
-  const reservedChrome = (compact ? 152 : 188) + bottomPad + Math.min(insets.top, 20);
+  const headerChrome = compact ? 112 : 140;
+  const reservedChrome = headerChrome + bottomPad + (dialog ? 0 : topClearance);
   const bodyMaxHeight =
     bodyMaxHeightOverride ??
     Math.max(
       180,
-      Math.min(Math.round(windowH * ratio), Math.round(windowH - reservedChrome)),
+      Math.min(
+        Math.round(windowH * ratio),
+        Math.round(windowH - reservedChrome),
+        sheetMaxHeight != null
+          ? Math.max(160, sheetMaxHeight - headerChrome - bottomPad)
+          : Number.POSITIVE_INFINITY,
+      ),
     );
   const scrollRef = useRef<ScrollView>(null);
   const scrollMetrics = useRef({ layout: 0, content: 0, offset: 0 });
@@ -128,7 +141,12 @@ function SheetContent({
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
       <SheetKeyboardWrap
         enabled={avoidKeyboard}
-        style={[styles.avoider, dialog ? styles.avoiderDialog : null]}
+        style={[
+          styles.avoider,
+          dialog ? styles.avoiderDialog : null,
+          styles.avoiderFront,
+          sheetMaxHeight != null ? { maxHeight: sheetMaxHeight } : null,
+        ]}
       >
         {/* View (not Pressable) so ScrollView can receive pan gestures */}
         <View
@@ -136,7 +154,10 @@ function SheetContent({
             styles.sheet,
             compact ? styles.sheetCompact : null,
             dialog ? styles.sheetDialog : null,
-            { paddingBottom: bottomPad },
+            {
+              paddingBottom: bottomPad,
+              ...(sheetMaxHeight != null ? { maxHeight: sheetMaxHeight } : null),
+            },
             sheetStyle,
           ]}
         >
@@ -144,7 +165,9 @@ function SheetContent({
           {dialog ? null : (
             <View style={[styles.handle, compact ? styles.handleCompact : null]} />
           )}
-          <View style={[styles.headerRow, compact ? styles.headerRowCompact : null]}>
+          <View
+            style={[styles.headerRow, compact ? styles.headerRowCompact : null]}
+          >
             <Image source={require("@/assets/alenio-icon.png")} style={[styles.logo, compact ? styles.logoCompact : null]} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[styles.title, compact ? styles.titleCompact : null]}>{title}</Text>
@@ -180,7 +203,9 @@ function SheetContent({
                 ]}
                 showsVerticalScrollIndicator={showScrollIndicator}
                 indicatorStyle="black"
-                keyboardShouldPersistTaps="handled"
+                keyboardShouldPersistTaps="always"
+                keyboardDismissMode="none"
+                removeClippedSubviews={false}
                 bounces={showScrollIndicator || !!refreshControl}
                 alwaysBounceVertical={showScrollIndicator || !!refreshControl}
                 nestedScrollEnabled
@@ -229,7 +254,11 @@ function SheetContent({
           {footer ? <View style={[styles.footer, compact ? styles.footerCompact : null]}>{footer}</View> : null}
         </View>
       </SheetKeyboardWrap>
-      {overlay}
+      {overlay ? (
+        <View pointerEvents="box-none" style={styles.overlayHost}>
+          {overlay}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -265,7 +294,13 @@ export function AlenioBottomSheet({
   const dialog = useIsDialogSize();
   if (asScreen) {
     if (!visible) return null;
-    return <SheetContent {...props} />;
+    // A native modal is its own window. The root keyboard provider does not
+    // reach it, so a field can focus without the keyboard ever appearing.
+    return (
+      <SafeKeyboardProvider>
+        <SheetContent {...props} />
+      </SafeKeyboardProvider>
+    );
   }
 
   return (
@@ -276,6 +311,12 @@ export function AlenioBottomSheet({
       animationType={dialog ? "fade" : "slide"}
       presentationStyle="overFullScreen"
       statusBarTranslucent
+      /**
+       * RN Modal defaults to portrait-only on phone idiom. On an open Duo that
+       * collapses the spanned window to one leaf and fights our native
+       * orientation rule — the calendar day sheet then flips forever.
+       */
+      supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
       onRequestClose={props.onClose}
     >
       <SheetContent {...props} />
@@ -479,6 +520,20 @@ const styles = StyleSheet.create({
     maxHeight: "88%",
     alignItems: "center",
     justifyContent: "center",
+  },
+  avoiderFront: {
+    zIndex: 2,
+    elevation: 24,
+  },
+  /** Above the sheet, and out of the layout so the card does not shift. */
+  overlayHost: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 4,
+    elevation: 32,
   },
   sheet: {
     width: "100%",

@@ -615,9 +615,9 @@ export function HeaderNotificationsButton({
         }
         testID={testID}
         style={({ pressed }) => ({
-          width: large ? 38 : 32,
-          height: large ? 38 : 32,
-          borderRadius: large ? 19 : 16,
+          width: large ? 34 : 30,
+          height: large ? 34 : 30,
+          borderRadius: large ? 17 : 15,
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: "transparent",
@@ -625,7 +625,7 @@ export function HeaderNotificationsButton({
         })}
       >
         <Bell
-          size={large ? 23 : 18}
+          size={large ? 21 : 17}
           color={tone === "light" ? HEADER_LIGHT_ICON_COLOR : "white"}
           strokeWidth={2.2}
         />

@@ -1785,3 +1785,513 @@
     margin: 12px 16px 0;
   }
 }
+
+/* ---------- People & Team ---------- */
+.enterprise-app--hero-under-topbar .ws-page--members {
+  padding-top: calc(var(--alenio-topbar-h, 56px) + 16px);
+  background: #f6f4fb;
+}
+
+.pt-page {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.pt-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pt-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 168px;
+  border-radius: 22px;
+  background: #2a0f63;
+  color: #fff;
+}
+
+.pt-hero-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pt-hero-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(26, 11, 69, 0.2) 0%, rgba(26, 11, 69, 0.78) 100%);
+}
+
+.pt-hero-copy {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 168px;
+  padding: 18px;
+}
+
+.pt-hero h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.pt-hero p {
+  margin: 6px 0 0;
+  max-width: 220px;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.pt-nav,
+.pt-promo,
+.pt-stat,
+.pt-panel {
+  background: #fff;
+  border: 1px solid rgba(76, 29, 149, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 10px 22px rgba(42, 22, 96, 0.06);
+}
+
+.pt-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+}
+
+.pt-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #3b3554;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pt-nav-item:hover {
+  background: #f6f3ff;
+}
+
+.pt-nav-item.is-active {
+  background: #efe9ff;
+  color: #5b21b6;
+}
+
+.pt-nav-icon {
+  display: inline-flex;
+  color: #7c6ae6;
+}
+
+.pt-nav-item.is-active .pt-nav-icon {
+  color: #6d28d9;
+}
+
+.pt-nav-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.pt-nav-count {
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f3f0fa;
+  color: #6b6580;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.pt-nav-item.is-active .pt-nav-count {
+  background: #e4dcff;
+  color: #5b21b6;
+}
+
+.pt-promo {
+  padding: 16px;
+}
+
+.pt-promo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #efe9ff;
+  color: #6d28d9;
+}
+
+.pt-promo h2 {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 800;
+  color: #160f2e;
+}
+
+.pt-promo p {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: #6b6580;
+}
+
+.pt-promo .al-btn {
+  width: 100%;
+  color: #6d28d9;
+  border-color: #ddd4ff;
+}
+
+.pt-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.pt-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pt-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px 16px;
+}
+
+.pt-stat-icon {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: #6d28d9;
+}
+
+.pt-stat strong {
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 800;
+  color: #160f2e;
+}
+
+.pt-stat span:last-child {
+  font-size: 13px;
+  line-height: 18px;
+  color: #6b6580;
+}
+
+.pt-panel {
+  padding: 8px 8px 4px;
+}
+
+.pt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 12px;
+}
+
+.pt-toolbar h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  color: #160f2e;
+  white-space: nowrap;
+}
+
+.pt-toolbar-spacer,
+.pt-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.pt-role-filter {
+  flex: 0 0 140px;
+}
+
+.pt-people,
+.pt-invites,
+.pt-teams {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pt-person,
+.pt-invite,
+.pt-team {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 10px;
+  border: 0;
+  border-top: 1px solid #f1eef8;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.pt-person {
+  grid-template-columns: auto minmax(0, 1.4fr) minmax(72px, 0.5fr) minmax(88px, 0.6fr) minmax(120px, 0.8fr) auto;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+.pt-person:hover,
+.pt-team:hover {
+  background: #faf8ff;
+}
+
+.pt-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pt-person-copy,
+.pt-invite-copy,
+.pt-team-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pt-person-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pt-person-name strong,
+.pt-invite-copy strong,
+.pt-team-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 800;
+  color: #160f2e;
+}
+
+.pt-role,
+.pt-you,
+.pt-invite-status,
+.pt-team-current {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #efe9ff;
+  color: #6d28d9;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 700;
+}
+
+.pt-role--lead {
+  background: #f3e8ff;
+}
+
+.pt-email,
+.pt-invite-copy span,
+.pt-team-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 16px;
+  color: #8d88a6;
+}
+
+.pt-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5b5675;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.pt-meta svg {
+  color: #a39bb8;
+}
+
+.pt-meta--stars svg {
+  color: #c9a227;
+  fill: #c9a227;
+}
+
+.pt-menu {
+  justify-self: end;
+}
+
+.pt-empty {
+  margin: 0;
+  padding: 28px 12px;
+  text-align: center;
+  color: #6b6580;
+}
+
+.pt-role-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pt-role-group header {
+  padding: 12px 10px 0;
+}
+
+.pt-role-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #160f2e;
+}
+
+.pt-role-group h3 span {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #f3f0fa;
+  color: #6b6580;
+  font-size: 12px;
+}
+
+.pt-role-group p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: #8d88a6;
+}
+
+.pt-invite {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.pt-invite-mark,
+.pt-team-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #efe9ff;
+  color: #6d28d9;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.pt-invite-status {
+  background: #f4f1ea;
+  color: #8a6a2f;
+}
+
+.pt-invite-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pt-invite-actions button {
+  padding: 6px 10px;
+  border: 1px solid #e6e1f2;
+  border-radius: 999px;
+  background: #fff;
+  color: #3b3554;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pt-invite-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.pt-team {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+.pt-team.is-current {
+  background: #f7f4ff;
+}
+
+.pt-team-mark {
+  border-radius: 12px;
+}
+
+@media (max-width: 1100px) {
+  .pt-page {
+    grid-template-columns: 1fr;
+  }
+
+  .pt-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pt-person {
+    grid-template-columns: auto minmax(0, 1fr) minmax(72px, auto) auto;
+  }
+
+  .pt-person .pt-meta:not(.pt-meta--stars),
+  .pt-person .pt-meta--checkin {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .pt-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .pt-search,
+  .pt-role-filter {
+    flex: 1 1 160px;
+  }
+
+  .pt-person {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+
+  .pt-invite {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .pt-person .pt-meta:not(.pt-meta--stars),
+  .pt-invite-status {
+    display: none;
+  }
+}

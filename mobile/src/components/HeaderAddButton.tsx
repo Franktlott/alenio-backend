@@ -53,7 +53,7 @@ export function HeaderAddButton({
       testID={testID}
     >
       <Plus
-        size={large ? 23 : 18}
+        size={large ? 21 : 17}
         color={tone === "light" ? HEADER_LIGHT_ICON_COLOR : "white"}
         strokeWidth={2.25}
       />
@@ -65,11 +65,10 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: "row",
     alignItems: "center",
-    // Matches the header row so the icons inside can use their full hitSlop.
-    height: 48,
+    height: 40,
     paddingHorizontal: 6,
     gap: 10,
-    borderRadius: 24,
+    borderRadius: 20,
     overflow: "visible",
   },
   pillLight: {
@@ -90,9 +89,9 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   buttonLarge: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
   },
   pressed: {
     opacity: 0.7,

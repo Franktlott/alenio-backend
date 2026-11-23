@@ -38,6 +38,7 @@ import {
 } from "@/components/AlenioBottomSheet";
 import { ActivityReactionRow } from "@/components/activity/ActivityReactionRow";
 import { FeedEngagementRow } from "@/components/workspace/FeedEngagementRow";
+import { ReactionListSheet } from "@/components/workspace/ReactionListSheet";
 import {
   formatFeedTimestamp,
   myReactionEmoji,
@@ -287,8 +288,8 @@ export function NetworkUpdatesFeed({
                   }}
                   size={36}
                   radius={18}
-                  backgroundColor="#EFE9FF"
-                  textColor="#6d28d9"
+                  backgroundColor="#F1F5F9"
+                  textColor="#334155"
                 />
                 <Pressable
                   onPress={() => openComposer()}
@@ -461,6 +462,7 @@ export function NetworkUpdateCard({
   onMore: () => void;
   onOpen?: () => void;
 }) {
+  const [showReactions, setShowReactions] = useState(false);
   const body = item.metadata?.body?.trim();
   const imageUrl = item.metadata?.imageUrl;
   const width = item.metadata?.imageWidth;
@@ -473,6 +475,7 @@ export function NetworkUpdateCard({
   };
 
   return (
+    <>
     <Pressable
       onPress={onOpen ? openUpdate : undefined}
       disabled={!onOpen}
@@ -486,8 +489,8 @@ export function NetworkUpdateCard({
           user={item.user ?? { name: "Alenio member", image: null }}
           size={36}
           radius={18}
-          backgroundColor="#EFE9FF"
-          textColor="#6d28d9"
+          backgroundColor="#F1F5F9"
+          textColor="#334155"
           resetKey={item.id}
         />
         <View style={styles.authorCopy}>
@@ -539,13 +542,23 @@ export function NetworkUpdateCard({
         currentUserId={currentUserId}
         onToggleReaction={onReact}
         onOpenPicker={onTogglePicker}
-        onPressReactions={onTogglePicker}
+        onPressReactions={() => {
+          if (pickerOpen) onTogglePicker();
+          setShowReactions(true);
+        }}
         onPressComment={onToggleComments}
         commentCount={item.commentCount}
         testID={`network-update-${item.id}-engage`}
       />
       {commentsOpen ? <NetworkComments update={item} /> : null}
     </Pressable>
+    <ReactionListSheet
+      visible={showReactions}
+      reactions={item.reactions}
+      currentUserId={currentUserId}
+      onClose={() => setShowReactions(false)}
+    />
+    </>
   );
 }
 
@@ -628,8 +641,8 @@ export function NetworkComments({ update }: { update: NetworkUpdate }) {
               user={comment.author}
               size={28}
               radius={14}
-              backgroundColor="#EFE9FF"
-              textColor="#6d28d9"
+              backgroundColor="#F1F5F9"
+              textColor="#334155"
             />
             <View style={styles.commentBubble}>
               <View style={styles.commentMeta}>

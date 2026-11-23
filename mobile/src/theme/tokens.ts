@@ -174,8 +174,8 @@ export const palette = {
   ink: "#160f2e",
   inkSecondary: "#5b5675",
   inkMuted: "#8d88a6",
-  /** Warm off-white under the cards, so white cards read as raised. */
-  page: "#F6F4FB",
+  /** Page behind cards. White, so the sheet does not read as gray. */
+  page: "#FFFFFF",
   cardBorder: "rgba(76, 29, 149, 0.08)",
   rowDivider: "#F1EEF8",
 } as const;
@@ -196,26 +196,26 @@ export const tints = {
 } as const;
 
 export const elevation = {
-  /** White card on the warm page: hairline edge plus a soft violet-tinted lift. */
+  /** White card on the warm page: hairline edge only — no outer glow. */
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
     borderColor: palette.cardBorder,
-    shadowColor: "#2A1660",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 22,
-    elevation: 3,
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
-  /** Feature surfaces that should sit above the cards around them. */
+  /** Feature surfaces that share the same flat edge as cards. */
   raised: {
     borderRadius: 22,
-    shadowColor: "#2A0F63",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.28,
-    shadowRadius: 26,
-    elevation: 6,
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
 } as const;
 

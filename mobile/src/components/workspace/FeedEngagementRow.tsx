@@ -16,7 +16,7 @@ import {
 type Props = {
   reactions: ActivityReactions;
   currentUserId?: string;
-  /** Quick-tap toggle (Facebook-style default reaction). */
+  /** Quick-tap toggle (default reaction). */
   onToggleReaction?: (emoji: string) => void;
   /** Long-press opens the full emoji picker. */
   onOpenPicker?: () => void;
@@ -24,12 +24,14 @@ type Props = {
   onPressReactions?: () => void;
   onPressComment?: () => void;
   commentCount?: number;
+  /** Continuous feeds: tighter spacing under media. */
+  flat?: boolean;
   testID?: string;
 };
 
 /**
- * Facebook-style engagement: React + Comment on the left, reaction summary on
- * the right. Tap reacts with the default; long-press opens the picker.
+ * LinkedIn-style engagement: icon actions on the left, reaction summary on the
+ * right. Tap the facepile to see who reacted and with what.
  */
 export function FeedEngagementRow({
   reactions,
@@ -39,6 +41,7 @@ export function FeedEngagementRow({
   onPressReactions,
   onPressComment,
   commentCount = 0,
+  flat = false,
   testID,
 }: Props) {
   const mine = myReactionEmoji(reactions, currentUserId);
@@ -53,7 +56,7 @@ export function FeedEngagementRow({
   };
 
   return (
-    <View style={styles.row} testID={testID}>
+    <View style={[styles.row, flat ? styles.rowFlat : null]} testID={testID}>
       <View style={styles.actions}>
         {onToggleReaction || onOpenPicker ? (
           <FeedActionButton
@@ -76,7 +79,7 @@ export function FeedEngagementRow({
         {onPressComment ? (
           <FeedActionButton
             Icon={MessageCircle}
-            label={commentCount > 0 ? String(commentCount) : ""}
+            label=""
             onPress={onPressComment}
             accessibilityLabel={
               commentCount > 0
@@ -92,6 +95,7 @@ export function FeedEngagementRow({
         <ReactionFacepile
           reactions={reactions}
           onPress={onPressReactions}
+          compact
           testID={testID ? `${testID}-facepile` : undefined}
         />
       ) : null}
@@ -101,14 +105,18 @@ export function FeedEngagementRow({
 
 const styles = StyleSheet.create({
   row: {
-    marginTop: 1,
-    paddingTop: 5,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#EBEEF3",
+    marginTop: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
+    minHeight: 24,
+  },
+  rowFlat: {
+    marginTop: 0,
+    paddingTop: 0,
   },
   actions: {
     flexDirection: "row",

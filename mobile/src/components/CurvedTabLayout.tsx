@@ -4,14 +4,15 @@ import { useFocusEffect } from "expo-router";
 import { setStatusBarStyle } from "expo-status-bar";
 import { AppTabHeader } from "@/components/AppTabHeader";
 import { AppHeaderBand } from "@/components/AppHeaderBand";
+import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { palette } from "@/theme";
 
 /** Shared curve so Chat / Workspace / Activity / Team / Settings stay consistent. */
 export const CURVED_HEADER_OVERLAP = 48;
 export const CURVED_SHEET_RADIUS = 16;
 export const CURVED_SEARCH_DOCK_HEIGHT = 40;
-/** The sheet's corners when it rises over the purple band. */
-const BAND_SHEET_RADIUS = 24;
+/** Purple-band tabs span straight across — no rounded sheet corner. */
+const BAND_SHEET_RADIUS = 0;
 
 type Props = {
   topInset: number;
@@ -86,6 +87,7 @@ export function CurvedTabLayout({
   style,
 }: Props) {
   const [headerHeight, setHeaderHeight] = useState(0);
+  const { sceneInsetLeft, sceneInsetRight, iconRailEdge } = useAdaptiveLayout();
   useFocusEffect(
     useCallback(() => {
       if (!band) return undefined;
@@ -97,10 +99,27 @@ export function CurvedTabLayout({
   const fill = sheetColor ?? (band ? palette.page : "#FFFFFF");
   /** Home paints its own band via `backdrop`; keep the sheet clear so white greeting text stays readable. */
   const sheetClear = backdropVisible && !band;
+  /**
+   * Duo scenes stay full-bleed so the purple band can paint under the glass.
+   * Pad the sheet for every Duo tab (Home included) so cards clear the dock.
+   */
+  const spanStraight = band;
+  const sheetInset =
+    iconRailEdge != null
+      ? {
+          paddingLeft: sceneInsetLeft,
+          paddingRight: sceneInsetRight,
+        }
+      : null;
 
   return (
     <View
-      style={[styles.screen, { backgroundColor: sheetClear ? "transparent" : fill }, style]}
+      style={[
+        styles.screen,
+        sheetClear || spanStraight ? styles.screenBleed : null,
+        { backgroundColor: sheetClear ? "transparent" : fill },
+        style,
+      ]}
       testID={testID}
     >
       {band ? (
@@ -138,6 +157,7 @@ export function CurvedTabLayout({
               borderTopRightRadius: radius,
               backgroundColor: sheetClear ? "transparent" : fill,
             },
+            sheetInset,
           ]}
         >
           {searchSlot ? <View style={styles.searchDock}>{searchSlot}</View> : null}
@@ -165,6 +185,10 @@ const styles = StyleSheet.create({
     flex: 1,
     position: "relative",
     backgroundColor: "#FFFFFF",
+  },
+  /** Home's purple band must paint into the Duo status column inset. */
+  screenBleed: {
+    overflow: "visible",
   },
   body: {
     flex: 1,

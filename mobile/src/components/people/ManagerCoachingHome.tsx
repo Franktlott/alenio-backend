@@ -567,8 +567,8 @@ export function ManagerCoachingHome({
                       user={member.user}
                       size={38}
                       radius={19}
-                      backgroundColor="#EFE9FF"
-                      textColor={colors.brand}
+                      backgroundColor="#F1F5F9"
+                      textColor="#334155"
                       fontSize={14}
                     />
                   </View>

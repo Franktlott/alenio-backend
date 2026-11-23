@@ -1,51 +1,50 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
-import { Building2, Megaphone, Newspaper, Users } from "lucide-react-native";
-import { colors, elevation, palette, space } from "@/theme";
+import { PenLine } from "lucide-react-native";
+import { colors } from "@/theme";
 
 type Props = {
   onFindPeople?: () => void;
 };
 
-/** Phase 0/1 shell for the unified personal Feed (workspace + Alenio + network). */
+/**
+ * Empty feed intro — one composed block, quiet enterprise tone.
+ * Invites writing without marketing chips or a sparse checklist.
+ */
 export function PersonalFeedShell({ onFindPeople }: Props) {
   return (
     <View style={styles.wrap} testID="personal-feed-shell">
       <View style={styles.card}>
-        <View style={styles.iconWrap}>
-          <Newspaper size={22} color={colors.brand} strokeWidth={2.2} />
+        <View style={styles.mark}>
+          <PenLine size={18} color="#475569" strokeWidth={2.1} />
         </View>
-        <Text style={styles.title}>Your Feed</Text>
-        <Text style={styles.body}>
-          One place for updates from your workspaces, your network, and Alenio.
-          Choose who sees each post before you share.
-        </Text>
 
-        <View style={styles.sources}>
-          <SourceChip Icon={Building2} label="Workspaces" />
-          <SourceChip Icon={Users} label="Network" />
-          <SourceChip Icon={Megaphone} label="Alenio" />
-        </View>
+        <Text style={styles.title}>Share an update</Text>
+        <Text style={styles.body}>
+          Post to a workspace, your network, or both. You choose who sees it
+          before it goes out.
+        </Text>
 
         <Pressable
           onPress={() => router.push("/create-post")}
-          style={styles.cta}
+          style={styles.primary}
           accessibilityRole="button"
           accessibilityLabel="Create a post"
           testID="personal-feed-create-post"
         >
-          <Text style={styles.ctaLabel}>Create a post</Text>
+          <Text style={styles.primaryLabel}>Create a post</Text>
         </Pressable>
 
         {onFindPeople ? (
           <Pressable
             onPress={onFindPeople}
-            style={styles.secondaryCta}
+            hitSlop={8}
+            style={styles.link}
             accessibilityRole="button"
             accessibilityLabel="Find people"
             testID="personal-feed-find-people"
           >
-            <Text style={styles.secondaryCtaLabel}>Find people</Text>
+            <Text style={styles.linkLabel}>Find people to follow</Text>
           </Pressable>
         ) : null}
       </View>
@@ -53,95 +52,73 @@ export function PersonalFeedShell({ onFindPeople }: Props) {
   );
 }
 
-function SourceChip({
-  Icon,
-  label,
-}: {
-  Icon: typeof Building2;
-  label: string;
-}) {
-  return (
-    <View style={styles.chip}>
-      <Icon size={13} color={palette.violet} strokeWidth={2.2} />
-      <Text style={styles.chipLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    paddingTop: space.sm,
+    paddingTop: 28,
+    paddingHorizontal: 4,
+    alignItems: "center",
   },
   card: {
-    ...elevation.card,
-    paddingHorizontal: 18,
-    paddingVertical: 22,
-    gap: 12,
-    alignItems: "flex-start",
+    width: "100%",
+    maxWidth: 380,
+    alignItems: "center",
+    paddingHorizontal: 22,
+    paddingVertical: 28,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E8ECF1",
   },
-  iconWrap: {
+  mark: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.brandSoft,
+    backgroundColor: "#F1F5F9",
+    marginBottom: 14,
   },
   title: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.textPrimary,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "700",
     letterSpacing: -0.3,
+    color: colors.textPrimary,
+    textAlign: "center",
   },
   body: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textSecondary,
-  },
-  sources: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: palette.lilacSoft,
-  },
-  chipLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: palette.violet,
-  },
-  cta: {
     marginTop: 8,
-    alignSelf: "stretch",
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "500",
+    color: "#64748B",
+    textAlign: "center",
+    maxWidth: 300,
+  },
+  primary: {
+    marginTop: 20,
+    minHeight: 42,
+    paddingHorizontal: 18,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 14,
     backgroundColor: colors.brand,
+    alignSelf: "stretch",
   },
-  ctaLabel: {
+  primaryLabel: {
     fontSize: 14,
     fontWeight: "700",
     color: "#FFFFFF",
+    letterSpacing: -0.1,
   },
-  secondaryCta: {
-    alignSelf: "stretch",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
+  link: {
+    marginTop: 14,
+    paddingVertical: 4,
   },
-  secondaryCtaLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.brand,
+  linkLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
   },
 });

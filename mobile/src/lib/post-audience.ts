@@ -40,6 +40,7 @@ export function postAudienceFromParams(input: {
 
 export function buildPostAudienceOptions(input: {
   teams: Array<{ id: string; name: string }>;
+  /** Kept for callers; picker copy no longer shows a count. */
   networkConnectionCount?: number | null;
 }): PostAudienceOption[] {
   const options: PostAudienceOption[] = [
@@ -47,7 +48,7 @@ export function buildPostAudienceOptions(input: {
       key: "network",
       kind: "network",
       title: "My network",
-      subtitle: networkAudienceSubtitle(input.networkConnectionCount),
+      subtitle: "People you’re connected with",
     },
   ];
   for (const team of input.teams) {
@@ -66,7 +67,7 @@ export function networkAudienceSubtitle(count?: number | null): string {
   if (typeof count === "number" && count > 0) {
     return `${count} connection${count === 1 ? "" : "s"}`;
   }
-  return "Accepted connections";
+  return "People you’re connected with";
 }
 
 /** Chip / confirm copy: where this post will go. */

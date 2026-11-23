@@ -66,8 +66,8 @@ function MutualFaces({ suggestion }: { suggestion: ConnectionSuggestion }) {
             user={{ name: mutual.name, image: mutual.image }}
             size={16}
             radius={8}
-            backgroundColor="#E6EBFF"
-            textColor={BRAND}
+            backgroundColor="#F1F5F9"
+            textColor="#334155"
             fontSize={8}
           />
         </View>
@@ -153,8 +153,8 @@ export function SuggestionPersonCard({
             user={suggestion.person}
             size={32}
             radius={16}
-            backgroundColor="#EFE9FF"
-            textColor={BRAND}
+            backgroundColor="#F1F5F9"
+            textColor="#334155"
             fontSize={13}
           />
         </View>

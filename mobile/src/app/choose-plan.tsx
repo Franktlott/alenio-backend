@@ -38,7 +38,7 @@ import { palette, tints } from "@/theme";
 
 type PlanId = "pro" | "operations";
 
-const BAND_SHEET_RADIUS = 24;
+const BAND_SHEET_RADIUS = 0;
 const HEADER_ROW = 48;
 
 /** Names, prices, features, and availability come from the server; this is only icon look. */

@@ -31,11 +31,6 @@ import { useSession } from "@/lib/auth/use-session";
 import { timeOfDayGreeting } from "@/lib/coaching-priorities";
 import { useTabBarClearanceFn } from "@/lib/tab-bar";
 import { useSenecaSheetStore } from "@/lib/state/seneca-sheet-store";
-import {
-  buildDmLastReadMap,
-  getDmUnreadCount,
-  useUnreadStore,
-} from "@/lib/state/unread-store";
 import { useHomeScheduleRealtime } from "@/lib/use-home-schedule-realtime";
 import { fetchHomeInsights } from "@/lib/home-insight-api";
 import {
@@ -49,7 +44,6 @@ import {
 import { getUSHolidays } from "@/lib/us-federal-holidays";
 import type {
   ConnectionsResponse,
-  Conversation,
   HomeTodayResponse,
   Team,
 } from "@/lib/types";
@@ -88,6 +82,8 @@ export default function HomeScreen() {
   const tabClearance = useTabBarClearanceFn();
   const adaptive = useAdaptiveLayout();
   const [bodyWidth, setBodyWidth] = useState(0);
+  const [bodyHeight, setBodyHeight] = useState(0);
+  const [headerHeight, setHeaderHeight] = useState(0);
   /**
    * Two columns need height as well as width: a phone on its side clears the
    * width bar but leaves both columns too narrow and too short to read. The
@@ -96,20 +92,22 @@ export default function HomeScreen() {
   const splitHome =
     adaptive.isSplit && adaptive.height >= 560 && bodyWidth > 0;
   /**
-   * Scenes stay full-bleed under the Duo status column; cards clear that
-   * column with the rail width so they don't sit under the icons.
+   * CurvedTabLayout already clears the Duo dock. Keep a normal left gutter and
+   * only a slim right gutter so Home cards sit closer to the column.
    */
   const edgeInsetLeft =
-    adaptive.iconRailEdge === "left" ? adaptive.iconRailWidth : insets.left;
+    adaptive.iconRailEdge === "left" ? 0 : insets.left;
   const edgeInsetRight =
-    adaptive.iconRailEdge === "right" ? adaptive.iconRailWidth : insets.right;
+    adaptive.iconRailEdge === "right" ? 0 : insets.right;
+  const pageGutter = 16;
+  const duoSideGutter = adaptive.iconRailEdge ? 8 : pageGutter;
   const gutterLeft = Math.max(
-    splitHome ? adaptive.contentPadLeft : 16,
-    edgeInsetLeft + 16,
+    splitHome ? adaptive.contentPadLeft : pageGutter,
+    edgeInsetLeft + pageGutter,
   );
   const gutterRight = Math.max(
-    splitHome ? adaptive.contentPadRight : 16,
-    edgeInsetRight + 16,
+    splitHome ? adaptive.contentPadRight : duoSideGutter,
+    edgeInsetRight + duoSideGutter,
   );
   const availableArea = Math.max(
     0,
@@ -162,6 +160,18 @@ export default function HomeScreen() {
     });
     return recentSenecaConversations(fresh, 3);
   }, [senecaConversations]);
+  const bottomPad = tabClearance(resumeConversations.length > 0 ? 56 : 28);
+  /**
+   * Height left for Today / Insight / Explore under the greeting so the
+   * pair fills the visible home sheet on Duo and tablets.
+   */
+  const stackHeight =
+    splitHome && bodyHeight > 0 && headerHeight > 0
+      ? Math.max(
+          320,
+          Math.floor(bodyHeight - headerHeight - bottomPad - FIRST_CARD_GAP),
+        )
+      : 0;
   const { data: remoteInsights, isPending: insightsPending } = useQuery({
     queryKey: ["home-insights"],
     queryFn: fetchHomeInsights,
@@ -200,26 +210,6 @@ export default function HomeScreen() {
     enabled: !!currentUserId,
     staleTime: 15_000,
   });
-  const { data: conversations = [] } = useQuery({
-    queryKey: ["dms"],
-    queryFn: () => api.get<Conversation[]>("/api/dms"),
-    enabled: !!currentUserId,
-    staleTime: 15_000,
-  });
-  const lastReadIds = useUnreadStore((state) => state.lastReadIds);
-  const dmLastReadIds = useMemo(
-    () => buildDmLastReadMap(conversations, lastReadIds),
-    [conversations, lastReadIds],
-  );
-  const { data: dmUnreadCounts } = useQuery({
-    queryKey: ["dm-unread-counts", dmLastReadIds],
-    queryFn: () =>
-      api.post<Record<string, number>>("/api/dms/unread-counts", {
-        lastReadIds: dmLastReadIds,
-      }),
-    enabled: !!currentUserId && conversations.length > 0,
-    staleTime: 15_000,
-  });
   const { data: teams = [], isPending: teamsPending } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
@@ -253,8 +243,6 @@ export default function HomeScreen() {
           "home-today",
           "connections",
           "teams",
-          "dms",
-          "dm-unread-counts",
           "seneca-conversations",
           "discover",
         ].map((key) => queryClient.refetchQueries({ queryKey: [key] })),
@@ -287,25 +275,12 @@ export default function HomeScreen() {
       ...items,
     ];
   }, [todayData]);
-  const unreadMessages = conversations.reduce(
-    (total, conversation) =>
-      total + Math.max(0, getDmUnreadCount(dmUnreadCounts ?? {}, conversation.id)),
-    0,
-  );
   const openToday = todayItems.filter(
     (item) => item.type !== "holiday" && !("done" in item && item.done),
   ).length;
   const glanceChips = [
     teams.length > 0 && !todayPending
       ? { key: "today", value: openToday, label: "today", dot: "#a78bfa" }
-      : null,
-    unreadMessages > 0
-      ? {
-          key: "messages",
-          value: unreadMessages,
-          label: unreadMessages === 1 ? "new message" : "new messages",
-          dot: "#f472b6",
-        }
       : null,
     connections
       ? {
@@ -364,7 +339,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     measureBand();
-  }, [measureBand, insets.top, adaptive.iconRailWidth, adaptive.width]);
+  }, [measureBand, insets.top, adaptive.width]);
 
   const heroBackdrop = (
     <AppHeaderBand
@@ -422,6 +397,7 @@ export default function HomeScreen() {
       headerTone="brand"
       backdrop={heroBackdrop}
       backdropVisible
+      sheetTopRadius={0}
       testID="home-screen"
       headerTestID="home-header"
     >
@@ -430,9 +406,10 @@ export default function HomeScreen() {
         contentContainerStyle={[
           styles.content,
           {
-            paddingBottom: tabClearance(resumeConversations.length > 0 ? 56 : 28),
+            paddingBottom: bottomPad,
             paddingLeft: gutterLeft + slack,
             paddingRight: gutterRight + slack,
+            ...(splitHome ? { flexGrow: 1 } : null),
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -449,11 +426,22 @@ export default function HomeScreen() {
           />
         }
         onLayout={(event) => {
-          setBodyWidth(event.nativeEvent.layout.width);
+          const { width, height } = event.nativeEvent.layout;
+          setBodyWidth(width);
+          setBodyHeight(height);
           measureBand();
         }}
       >
-        <View>{headerBlock}</View>
+        <View
+          onLayout={(event) => {
+            const next = Math.round(event.nativeEvent.layout.height);
+            setHeaderHeight((current) =>
+              Math.abs(current - next) > 1 ? next : current,
+            );
+          }}
+        >
+          {headerBlock}
+        </View>
 
         {teamsPending ? null : (
           <View style={styles.sectionGap} testID="home-stack">
@@ -462,12 +450,13 @@ export default function HomeScreen() {
               hasWorkspace={teams.length > 0}
               wide={splitHome}
               columnWidth={columnWidth}
+              stackHeight={stackHeight}
               todayCard={
                 teams.length > 0 ? (
                   <HomeTodayCard
                     items={todayItems}
                     pending={todayPending}
-                    // Wide Home pairs Today with Insight; fill matches that column.
+                    // Wide Home: Today fills the left column beside Insight + Explore.
                     fill={splitHome && !!weeklyInsight?.title}
                     variant="alenio"
                   />

@@ -27,10 +27,15 @@ describe("home discover selection", () => {
     ]);
   });
 
-  test("falls back to the newest articles when nothing is featured", () => {
+  test("falls back to the newest article when nothing is featured", () => {
     expect(articlesForHome([], [article("one"), article("two")]).map((item) => item.slug)).toEqual([
       "one",
-      "two",
     ]);
+  });
+
+  test("can still return more than one when a higher limit is passed", () => {
+    expect(
+      articlesForHome([], [article("one"), article("two")], 2).map((item) => item.slug),
+    ).toEqual(["one", "two"]);
   });
 });

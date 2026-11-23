@@ -1,6 +1,7 @@
 import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Sparkles, Star, Trophy } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 type Props = {
   visible: boolean;
@@ -24,8 +25,10 @@ export function StreakCelebrationModal({
       visible={visible}
       transparent
       animationType="fade"
+      presentationStyle="overFullScreen"
       onRequestClose={onClose}
       statusBarTranslucent
+      supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
     >
       <Pressable
         style={styles.backdrop}

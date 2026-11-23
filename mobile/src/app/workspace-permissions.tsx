@@ -44,9 +44,10 @@ import {
   sortWorkspacePermissionMembers,
   type EditableWorkspaceRole,
 } from "@/lib/workspace-permissions";
+import { useDuoSheetTopClearance } from "@/lib/adaptive-layout";
 import { palette, tints } from "@/theme";
 
-const BAND_SHEET_RADIUS = 24;
+const BAND_SHEET_RADIUS = 0;
 const HEADER_ROW = 48;
 
 const OVERVIEW_ROLES: readonly TeamRole[] = [
@@ -76,6 +77,7 @@ function overviewIcon(role: TeamRole) {
 
 export default function WorkspacePermissionsScreen() {
   const insets = useSafeAreaInsets();
+  const duoSheetTop = useDuoSheetTopClearance({ fullScreen: true });
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ teamId?: string }>();
   const teamId = typeof params.teamId === "string" ? params.teamId : "";
@@ -84,7 +86,8 @@ export default function WorkspacePermissionsScreen() {
   const [selectedRole, setSelectedRole] =
     useState<EditableWorkspaceRole>("member");
 
-  const bandHeight = insets.top + HEADER_ROW + 18;
+  /** On Duo, grow the purple band so the white sheet starts just under the dock. */
+  const bandHeight = Math.max(insets.top + HEADER_ROW + 18, duoSheetTop);
 
   useFocusEffect(
     useCallback(() => {

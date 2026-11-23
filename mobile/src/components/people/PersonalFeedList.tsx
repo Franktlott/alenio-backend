@@ -16,7 +16,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
-import { Building2, Newspaper, Users } from "lucide-react-native";
+import { Building2, Users } from "lucide-react-native";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import {
@@ -36,8 +36,9 @@ import { PostMediaAttachment } from "@/components/PostMediaAttachment";
 import { PersonalFeedShell } from "@/components/people/PersonalFeedShell";
 import { ActivityReactionRow } from "@/components/activity/ActivityReactionRow";
 import { FeedEngagementRow } from "@/components/workspace/FeedEngagementRow";
+import { ReactionListSheet } from "@/components/workspace/ReactionListSheet";
 import { WS } from "@/components/workspace/workspace-ui";
-import { colors, elevation, space } from "@/theme";
+import { colors, space } from "@/theme";
 
 export const PERSONAL_FEED_KEY = ["personal-feed"] as const;
 
@@ -125,14 +126,20 @@ function SourceBadge({ item }: { item: PersonalFeedItem }) {
 function FeedCard({
   item,
   currentUserId,
+  contentInsetLeft,
+  contentInsetRight,
   pickerOpen,
   onTogglePicker,
+  onPressReactions,
   onReact,
 }: {
   item: PersonalFeedItem;
   currentUserId: string;
+  contentInsetLeft: number;
+  contentInsetRight: number;
   pickerOpen: boolean;
   onTogglePicker: () => void;
+  onPressReactions: () => void;
   onReact: (emoji: string) => void;
 }) {
   const author = item.user?.name?.trim() || "Someone";
@@ -151,88 +158,103 @@ function FeedCard({
     if (Date.now() < suppressOpenUntil.current) return;
     openFeedItem(item);
   };
+  const itemPad = {
+    paddingLeft: contentInsetLeft,
+    paddingRight: contentInsetRight,
+  };
 
   return (
     <Pressable
       onPress={onOpen}
-      style={styles.card}
+      style={styles.item}
       accessibilityRole="button"
       testID={`personal-feed-card-${item.id}`}
     >
-      <View style={styles.cardTop}>
-        {isAlenioItem(item) ? (
-          <Image
-            source={require("@/assets/alenio-icon.png")}
-            style={styles.alenioMark}
-            resizeMode="contain"
-            accessibilityLabel="Alenio"
-          />
-        ) : (
-          <UserAvatar
-            user={{
-              name: author,
-              image: item.user?.image ?? null,
-            }}
-            size={36}
-            radius={18}
-            backgroundColor="#EFE9FF"
-            textColor="#6d28d9"
-            fontSize={13}
-            workplaceConnected={false}
-          />
-        )}
-        <View style={styles.cardMeta}>
-          <Text style={styles.author} numberOfLines={1}>
-            {author}
-          </Text>
-          <View style={styles.metaRow}>
-            <SourceBadge item={item} />
-            <Text style={styles.time}>{formatFeedTimestamp(item.createdAt)}</Text>
+      <View style={styles.itemBody}>
+        <View style={[styles.itemPad, itemPad]}>
+          <View style={styles.cardTop}>
+            {isAlenioItem(item) ? (
+              <Image
+                source={require("@/assets/alenio-icon.png")}
+                style={styles.alenioMark}
+                resizeMode="contain"
+                accessibilityLabel="Alenio"
+              />
+            ) : (
+              <UserAvatar
+                user={{
+                  name: author,
+                  image: item.user?.image ?? null,
+                }}
+                size={36}
+                radius={18}
+                backgroundColor="#F1F5F9"
+                textColor="#334155"
+                fontSize={13}
+                workplaceConnected={false}
+              />
+            )}
+            <View style={styles.cardMeta}>
+              <Text style={styles.author} numberOfLines={1}>
+                {author}
+              </Text>
+              <View style={styles.metaRow}>
+                <SourceBadge item={item} />
+                <Text style={styles.time}>{formatFeedTimestamp(item.createdAt)}</Text>
+              </View>
+            </View>
           </View>
+          {headline ? <Text style={styles.headline}>{headline}</Text> : null}
+          {isPost && body ? (
+            <Text style={styles.body} numberOfLines={6}>
+              {body}
+            </Text>
+          ) : null}
+          {isPost && !body && !imageUrl ? (
+            <Text style={styles.body}>Shared an update</Text>
+          ) : null}
         </View>
-      </View>
-      {headline ? <Text style={styles.headline}>{headline}</Text> : null}
-      {isPost && body ? (
-        <Text style={styles.body} numberOfLines={6}>
-          {body}
-        </Text>
-      ) : null}
-      {isPost && !body && !imageUrl ? (
-        <Text style={styles.body}>Shared an update</Text>
-      ) : null}
-      {imageUrl ? (
-        <View style={styles.media}>
-          <PostMediaAttachment
-            url={imageUrl}
-            mediaType={mediaType}
-            onInteraction={() => {
-              suppressOpenUntil.current = Date.now() + 750;
-            }}
+        {imageUrl ? (
+          <View style={styles.media}>
+            <PostMediaAttachment
+              url={imageUrl}
+              mediaType={mediaType}
+              flat
+              onInteraction={() => {
+                suppressOpenUntil.current = Date.now() + 750;
+              }}
+            />
+          </View>
+        ) : null}
+        <View style={[styles.engagePad, itemPad]}>
+          {pickerOpen ? (
+            <View style={styles.reactionPicker}>
+              <ActivityReactionRow
+                activityId={item.id}
+                reactions={item.reactions}
+                currentUserId={currentUserId}
+                onToggleReaction={onReact}
+                showPicker={pickerOpen}
+                onClosePicker={onTogglePicker}
+                floatPicker
+                showPills={false}
+              />
+            </View>
+          ) : null}
+          <FeedEngagementRow
+            reactions={item.reactions}
+            currentUserId={currentUserId}
+            onToggleReaction={onReact}
+            onOpenPicker={onTogglePicker}
+            onPressReactions={onPressReactions}
+            onPressComment={onOpen}
+            commentCount={item.commentCount}
+            flat
+            testID={`personal-feed-engage-${item.id}`}
           />
         </View>
-      ) : null}
-      <View style={styles.reactionPicker}>
-        <ActivityReactionRow
-          activityId={item.id}
-          reactions={item.reactions}
-          currentUserId={currentUserId}
-          onToggleReaction={onReact}
-          showPicker={pickerOpen}
-          onClosePicker={onTogglePicker}
-          floatPicker
-          showPills={false}
-        />
       </View>
-      <FeedEngagementRow
-        reactions={item.reactions}
-        currentUserId={currentUserId}
-        onToggleReaction={onReact}
-        onOpenPicker={onTogglePicker}
-        onPressReactions={onTogglePicker}
-        onPressComment={onOpen}
-        commentCount={item.commentCount}
-        testID={`personal-feed-engage-${item.id}`}
-      />
+      <View style={styles.itemRule} />
     </Pressable>
   );
 }
@@ -250,6 +272,7 @@ export function PersonalFeedList({
   const currentUserName = session?.user?.name?.trim() || "You";
   const queryClient = useQueryClient();
   const [pickerId, setPickerId] = useState<string | null>(null);
+  const [reactionsItemId, setReactionsItemId] = useState<string | null>(null);
   const columnPad = {
     alignSelf: "center" as const,
     width: "100%" as const,
@@ -275,6 +298,10 @@ export function PersonalFeedList({
   const items = useMemo(
     () => feed.data?.pages.flatMap((page) => page.items) ?? [],
     [feed.data],
+  );
+  const reactionsItem = useMemo(
+    () => items.find((item) => item.id === reactionsItemId) ?? null,
+    [items, reactionsItemId],
   );
 
   const reactionMutation = useMutation({
@@ -364,58 +391,105 @@ export function PersonalFeedList({
   }
 
   return (
-    <ScrollView
-      style={styles.list}
-      contentContainerStyle={[
-        styles.listScroll,
-        { paddingBottom: bottomClearance },
-      ]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-      onScroll={({ nativeEvent }) => {
-        const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-        const nearBottom =
-          layoutMeasurement.height + contentOffset.y >= contentSize.height - 180;
-        if (nearBottom && feed.hasNextPage && !feed.isFetchingNextPage) {
-          void feed.fetchNextPage();
+    <>
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={[
+          styles.listScroll,
+          { paddingBottom: bottomClearance },
+        ]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-      }}
-      scrollEventThrottle={200}
-      testID="personal-feed-list"
-    >
-      <View style={[styles.listContent, columnPad]}>
-        <Pressable
-          onPress={() => router.push("/create-post")}
-          style={styles.compose}
-          accessibilityRole="button"
-          testID="personal-feed-compose"
+        onScroll={({ nativeEvent }) => {
+          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+          const nearBottom =
+            layoutMeasurement.height + contentOffset.y >= contentSize.height - 180;
+          if (nearBottom && feed.hasNextPage && !feed.isFetchingNextPage) {
+            void feed.fetchNextPage();
+          }
+        }}
+        scrollEventThrottle={200}
+        testID="personal-feed-list"
+      >
+        <View
+          style={[
+            styles.listContent,
+            {
+              alignSelf: "center",
+              width: "100%",
+              maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
+              paddingLeft: WS.pageGutter + statusCluster.left,
+              paddingRight: WS.pageGutter + statusCluster.right,
+            },
+          ]}
         >
-          <Newspaper size={16} color={colors.brand} strokeWidth={2.2} />
-          <Text style={styles.composeText}>Share an update…</Text>
-        </Pressable>
+          <Pressable
+            onPress={() => router.push("/create-post")}
+            style={styles.compose}
+            accessibilityRole="button"
+            testID="personal-feed-compose"
+          >
+            <UserAvatar
+              user={{
+                name: currentUserName,
+                image: session?.user?.image ?? null,
+              }}
+              size={28}
+              radius={14}
+              backgroundColor="#F1F5F9"
+              textColor="#334155"
+              fontSize={11}
+              workplaceConnected={false}
+            />
+            <Text style={styles.composeText}>Share an update…</Text>
+          </Pressable>
+        </View>
 
-        {items.map((item) => (
-          <FeedCard
-            key={item.id}
-            item={item}
-            currentUserId={currentUserId}
-            pickerOpen={pickerId === item.id}
-            onTogglePicker={() =>
-              setPickerId((current) => (current === item.id ? null : item.id))
-            }
-            onReact={(emoji) => reactionMutation.mutate({ item, emoji })}
-          />
-        ))}
+        <View
+          style={[
+            styles.stream,
+            {
+              alignSelf: "center",
+              width: "100%",
+              maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
+            },
+          ]}
+        >
+          {items.map((item) => (
+            <FeedCard
+              key={item.id}
+              item={item}
+              currentUserId={currentUserId}
+              contentInsetLeft={WS.pageGutter + statusCluster.left}
+              contentInsetRight={WS.pageGutter + statusCluster.right}
+              pickerOpen={pickerId === item.id}
+              onTogglePicker={() =>
+                setPickerId((current) => (current === item.id ? null : item.id))
+              }
+              onPressReactions={() => {
+                setPickerId(null);
+                setReactionsItemId(item.id);
+              }}
+              onReact={(emoji) => reactionMutation.mutate({ item, emoji })}
+            />
+          ))}
 
-        {feed.isFetchingNextPage ? (
-          <ActivityIndicator
-            color={colors.brand}
-            style={{ marginVertical: 16 }}
-          />
-        ) : null}
-      </View>
-    </ScrollView>
+          {feed.isFetchingNextPage ? (
+            <ActivityIndicator
+              color={colors.brand}
+              style={{ marginVertical: 16 }}
+            />
+          ) : null}
+        </View>
+      </ScrollView>
+      <ReactionListSheet
+        visible={!!reactionsItem}
+        reactions={reactionsItem?.reactions ?? {}}
+        currentUserId={currentUserId}
+        onClose={() => setReactionsItemId(null)}
+      />
+    </>
   );
 }
 
@@ -449,7 +523,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 13,
   },
-  list: { flex: 1 },
+  list: { flex: 1, backgroundColor: "#FFFFFF" },
   listScroll: {
     flexGrow: 1,
     alignItems: "center",
@@ -460,26 +534,45 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: space.sm,
-    gap: 10,
+    paddingBottom: 4,
+  },
+  stream: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
   },
   compose: {
-    ...elevation.card,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#F8F9FB",
   },
   composeText: {
     fontSize: 14,
     color: "#8A96A8",
   },
-  card: {
-    ...elevation.card,
-    borderRadius: 16,
-    padding: 14,
+  item: {
+    backgroundColor: "#FFFFFF",
+  },
+  itemBody: {
+    gap: 4,
+    paddingTop: 12,
+  },
+  itemPad: {
     gap: 8,
+  },
+  engagePad: {
+    paddingTop: 0,
+    paddingBottom: 6,
+    marginBottom: 0,
+  },
+  itemRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#E4E7EC",
   },
   cardTop: {
     flexDirection: "row",
@@ -494,7 +587,7 @@ const styles = StyleSheet.create({
   cardMeta: {
     flex: 1,
     minWidth: 0,
-    gap: 4,
+    gap: 2,
   },
   author: {
     fontSize: 14,
@@ -511,22 +604,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     maxWidth: "70%",
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceSecondary,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
   },
   badgeText: {
     flexShrink: 1,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "600",
     letterSpacing: -0.1,
     color: colors.textSecondary,
   },
   time: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.textMuted,
   },
   headline: {
@@ -536,12 +623,12 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   body: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.textPrimary,
   },
   media: {
-    marginTop: 4,
+    marginTop: 2,
   },
   reactionPicker: {
     minHeight: 0,

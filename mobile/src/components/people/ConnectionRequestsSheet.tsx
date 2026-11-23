@@ -188,8 +188,8 @@ export function ConnectionRequestsSheet({
                   user={request.person}
                   size={42}
                   radius={21}
-                  backgroundColor="#EFE9FF"
-                  textColor={colors.brand}
+                  backgroundColor="#F1F5F9"
+                  textColor="#334155"
                   fontSize={15}
                 />
                 <View style={styles.copy}>

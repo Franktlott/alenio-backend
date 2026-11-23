@@ -15,8 +15,9 @@
     },
     "ios": {
       "supportsTablet": true,
+      "requireFullScreen": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
-      "buildNumber": "74",
+      "buildNumber": "75",
       "infoPlist": {
         "NSCameraUsageDescription": "Alenio uses the camera to capture photos inside the app before you publish them.",
         "NSMicrophoneUsageDescription": "Alenio uses the microphone to record check-in conversations you choose to capture, and for audio clips that stay with your in-app creations.",
@@ -41,6 +42,7 @@
       ]
     },
     "plugins": [
+      "./plugins/with-ios-scene-lifecycle",
       "./plugins/with-foldable-orientation",
       "expo-dev-client",
       "expo-router",

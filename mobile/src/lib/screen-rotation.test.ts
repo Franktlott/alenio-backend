@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { screenRotates } from "@/lib/screen-rotation";
+import { orientationForPosture, screenRotates } from "@/lib/screen-rotation";
 
 describe("screenRotates", () => {
   test("holds phones in portrait, in either orientation", () => {
@@ -15,6 +15,17 @@ describe("screenRotates", () => {
     expect(screenRotates(744, 1133)).toBe(true);
     expect(screenRotates(1024, 1366)).toBe(true);
     expect(screenRotates(700, 560)).toBe(true);
+  });
+
+  test("lets a Duo follow the status bar when folded or open", () => {
+    expect(orientationForPosture("closed", 480, 700)).toBe("all");
+    expect(orientationForPosture("fullyOpen", 390, 844)).toBe("all");
+    expect(orientationForPosture("partiallyOpen", 844, 390)).toBe("all");
+  });
+
+  test("holds a normal phone in portrait and lets a tablet turn", () => {
+    expect(orientationForPosture("unknown", 393, 852)).toBe("portrait_up");
+    expect(orientationForPosture("unknown", 1024, 1366)).toBe("all");
   });
 
   test("answers the same however the display is turned", () => {

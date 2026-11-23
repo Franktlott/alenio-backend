@@ -35,9 +35,10 @@ import {
   type CheckInFrequencyUnit,
   type WorkplaceStandards,
 } from "@/lib/workplace-standards";
+import { useDuoSheetTopClearance } from "@/lib/adaptive-layout";
 import { palette } from "@/theme";
 
-const BAND_SHEET_RADIUS = 24;
+const BAND_SHEET_RADIUS = 0;
 const HEADER_ROW = 48;
 
 const FREQUENCY_UNITS: { value: CheckInFrequencyUnit; label: string }[] = [
@@ -160,6 +161,7 @@ function ToggleRow({
 
 export default function WorkspaceStandardsScreen() {
   const insets = useSafeAreaInsets();
+  const duoSheetTop = useDuoSheetTopClearance({ fullScreen: true });
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ teamId?: string }>();
   const teamId = typeof params.teamId === "string" ? params.teamId : "";
@@ -167,7 +169,7 @@ export default function WorkspaceStandardsScreen() {
   const [draft, setDraft] = useState<WorkplaceStandards | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const bandHeight = insets.top + HEADER_ROW + 18;
+  const bandHeight = Math.max(insets.top + HEADER_ROW + 18, duoSheetTop);
 
   useFocusEffect(
     useCallback(() => {

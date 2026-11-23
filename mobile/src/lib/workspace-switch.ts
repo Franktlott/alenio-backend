@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { CancelledError, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import type { Team, Task, CalendarEvent } from "@/lib/types";
 import { hasTeamPlan, toPersistedPlan } from "@/lib/plan-access-copy";
@@ -7,6 +7,10 @@ import { useTeamStore } from "@/lib/state/team-store";
 
 /** Later switches win. An older prefetch must not rewrite the plan afterward. */
 let workspaceSwitchGeneration = 0;
+
+function isQueryCancelled(error: unknown): boolean {
+  return error instanceof CancelledError;
+}
 
 function removeTeamScopedQueries(queryClient: QueryClient, teamId: string) {
   queryClient.removeQueries({
@@ -41,23 +45,34 @@ export async function applyTeamRemovedFromAccount(
   setActiveTeamId: (id: string | null) => void,
   queryClient: QueryClient,
 ): Promise<Team[]> {
-  removeTeamScopedQueries(queryClient, removedTeamId);
-  await invalidateRelationshipQueries(queryClient);
+  try {
+    removeTeamScopedQueries(queryClient, removedTeamId);
+    await invalidateRelationshipQueries(queryClient);
 
-  const freshTeams = await fetchFreshTeams(queryClient);
+    const freshTeams = await fetchFreshTeams(queryClient);
 
-  if (activeTeamId === removedTeamId) {
-    if (freshTeams.length > 0) {
-      await performWorkspaceSwitch(freshTeams[0].id, removedTeamId, setActiveTeamId, queryClient);
-    } else {
-      // Leaving the last workspace keeps you in the app: identity, DMs and
-      // connections are account-level and survive the departure.
-      setActiveTeamId(null);
-      useSubscriptionStore.getState().setPlan("free");
+    if (activeTeamId === removedTeamId) {
+      if (freshTeams.length > 0) {
+        await performWorkspaceSwitch(
+          freshTeams[0].id,
+          removedTeamId,
+          setActiveTeamId,
+          queryClient,
+        );
+      } else {
+        // Leaving the last workspace keeps you in the app: identity, DMs and
+        // connections are account-level and survive the departure.
+        setActiveTeamId(null);
+        useSubscriptionStore.getState().setPlan("free");
+      }
     }
-  }
 
-  return freshTeams;
+    return freshTeams;
+  } catch (error) {
+    // removeQueries / invalidate can cancel in-flight fetches mid-switch.
+    if (isQueryCancelled(error)) return [];
+    throw error;
+  }
 }
 
 /** If the active workspace no longer exists, switch to another or clear selection. */
@@ -68,19 +83,29 @@ export async function reconcileActiveTeamAfterRemoval(
 ): Promise<void> {
   if (!activeTeamId) return;
 
-  const freshTeams = await fetchFreshTeams(queryClient);
-  if (freshTeams.some((team) => team.id === activeTeamId)) return;
+  try {
+    const freshTeams = await fetchFreshTeams(queryClient);
+    if (freshTeams.some((team) => team.id === activeTeamId)) return;
 
-  removeTeamScopedQueries(queryClient, activeTeamId);
-  await invalidateRelationshipQueries(queryClient);
+    removeTeamScopedQueries(queryClient, activeTeamId);
+    await invalidateRelationshipQueries(queryClient);
 
-  if (freshTeams.length > 0) {
-    await performWorkspaceSwitch(freshTeams[0].id, activeTeamId, setActiveTeamId, queryClient);
-    return;
+    if (freshTeams.length > 0) {
+      await performWorkspaceSwitch(
+        freshTeams[0].id,
+        activeTeamId,
+        setActiveTeamId,
+        queryClient,
+      );
+      return;
+    }
+
+    setActiveTeamId(null);
+    useSubscriptionStore.getState().setPlan("free");
+  } catch (error) {
+    // Focus reconcile races with navigation / cancelQueries — not user-facing.
+    if (isQueryCancelled(error)) return;
   }
-
-  setActiveTeamId(null);
-  useSubscriptionStore.getState().setPlan("free");
 }
 
 export type SwitchWorkspaceOptions = {
@@ -166,7 +191,8 @@ async function loadSwitchedWorkspace(
       queryClient.removeQueries({ queryKey: ["tasks", teamId] });
       queryClient.removeQueries({ queryKey: ["calendar-events", teamId] });
     }
-  } catch {
-    // The selection already changed. The open screen loads its own data.
+  } catch (error) {
+    // Newer switch, removeQueries, or cancel — screen loads its own data.
+    if (isQueryCancelled(error)) return;
   }
 }

@@ -73,19 +73,23 @@ const formStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E6E8F0",
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 8,
     backgroundColor: "#FFFFFF",
+    overflow: "hidden",
   },
   fieldInput: {
     fontSize: 14,
+    lineHeight: 20,
     color: "#0F172A",
-    padding: 0,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 4,
   },
   counter: {
     alignSelf: "flex-end",
-    marginTop: 4,
+    marginTop: 2,
+    marginRight: 12,
+    marginBottom: 8,
     fontSize: 11,
     color: "#94A3B8",
   },
@@ -880,6 +884,7 @@ export default function CreateTaskScreen() {
               }}
               maxLength={120}
               returnKeyType="next"
+              showSoftInputOnFocus
               testID="title-input"
             />
             <Text style={formStyles.counter}>{title.length}/120</Text>
@@ -890,13 +895,15 @@ export default function CreateTaskScreen() {
           </Text>
           <View style={[formStyles.field, { minHeight: 88 }]}>
             <TextInput
-              style={[formStyles.fieldInput, { minHeight: 52, textAlignVertical: "top" }]}
+              style={[formStyles.fieldInput, { minHeight: 88, textAlignVertical: "top" }]}
               placeholder="Add context, instructions, or resources..."
               placeholderTextColor="#94A3B8"
               value={description}
               onChangeText={(t) => setDescription(t.slice(0, 500))}
               maxLength={500}
               multiline
+              scrollEnabled={false}
+              showSoftInputOnFocus
               testID="description-input"
             />
             <Text style={formStyles.counter}>{description.length}/500</Text>

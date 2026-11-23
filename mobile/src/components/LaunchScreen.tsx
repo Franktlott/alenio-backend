@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -17,24 +17,36 @@ import Animated, {
   withDelay,
   withTiming,
 } from "react-native-reanimated";
+import {
+  LAUNCH_PHASE_LINES,
+  launchStatusLine,
+  type LaunchPhase,
+} from "@/lib/launch-status";
 import { palette } from "@/theme";
 
 type Props = {
-  /** True once the session + first paint are ready to reveal the app. */
+  /** True once session + Home’s first paint data are ready to reveal. */
   isReady: boolean;
+  /** What the cold start is waiting on right now. */
+  phase: LaunchPhase;
   onDone: () => void;
 };
 
+const LINE_ROTATE_MS = 2200;
+
 /**
  * Step 2 in cold start: Splash → Launch → Landing/Home.
- * Sits over the navigator while auth and workspace membership settle.
+ * Sits over the navigator while auth and Home settle; status copy tracks work.
  */
-export function LaunchScreen({ isReady, onDone }: Props) {
+export function LaunchScreen({ isReady, phase, onDone }: Props) {
   const insets = useSafeAreaInsets();
   const contentOpacity = useSharedValue(0);
   const contentScale = useSharedValue(0.96);
   const containerOpacity = useSharedValue(1);
   const hasStartedFadeOut = useRef(false);
+  const [tick, setTick] = useState(0);
+  const displayPhase: LaunchPhase = isReady ? "finish" : phase;
+  const status = launchStatusLine(displayPhase, tick);
 
   useEffect(() => {
     setStatusBarStyle("light");
@@ -43,10 +55,23 @@ export function LaunchScreen({ isReady, onDone }: Props) {
   }, [contentOpacity, contentScale]);
 
   useEffect(() => {
+    setTick(0);
+  }, [displayPhase]);
+
+  useEffect(() => {
+    if (displayPhase === "finish") return;
+    if (LAUNCH_PHASE_LINES[displayPhase].length < 2) return;
+    const timer = setInterval(() => {
+      setTick((current) => current + 1);
+    }, LINE_ROTATE_MS);
+    return () => clearInterval(timer);
+  }, [displayPhase]);
+
+  useEffect(() => {
     if (!isReady || hasStartedFadeOut.current) return;
     hasStartedFadeOut.current = true;
     containerOpacity.value = withDelay(
-      280,
+      380,
       withTiming(0, { duration: 420 }, () => {
         runOnJS(onDone)();
       }),
@@ -74,7 +99,11 @@ export function LaunchScreen({ isReady, onDone }: Props) {
         resizeMode="cover"
       >
         <LinearGradient
-          colors={["rgba(13,7,38,0.08)", "rgba(13,7,38,0.18)", "rgba(13,7,38,0.78)"]}
+          colors={[
+            "rgba(13,7,38,0.08)",
+            "rgba(13,7,38,0.18)",
+            "rgba(13,7,38,0.78)",
+          ]}
           locations={[0, 0.42, 1]}
           style={StyleSheet.absoluteFill}
         />
@@ -99,7 +128,9 @@ export function LaunchScreen({ isReady, onDone }: Props) {
 
         <View style={styles.footer}>
           <ActivityIndicator size="large" color={palette.violetBright} />
-          <Text style={styles.status}>Getting Alenio ready...</Text>
+          <Text style={styles.status} testID="launch-status">
+            {status}
+          </Text>
         </View>
       </Animated.View>
     </Animated.View>
@@ -133,5 +164,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "rgba(255,255,255,0.92)",
     letterSpacing: -0.1,
+    textAlign: "center",
   },
 });

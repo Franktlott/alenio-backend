@@ -1147,20 +1147,32 @@ export function DevelopmentPlanTab({
               onPress={() => openCreate()}
               hitSlop={8}
               style={{
-                width: 28,
-                height: 28,
+                minHeight: 28,
+                paddingHorizontal: 10,
                 borderRadius: 9,
                 alignItems: "center",
                 justifyContent: "center",
+                flexDirection: "row",
+                gap: 5,
                 borderWidth: 1,
                 borderColor: "#E2E5EA",
                 backgroundColor: "#FFFFFF",
               }}
               accessibilityRole="button"
-              accessibilityLabel="Add development goal"
+              accessibilityLabel="Add goal"
               testID="new-development-goal-button"
             >
-              <Plus size={15} color="#111827" strokeWidth={2.4} />
+              <Plus size={13} color="#111827" strokeWidth={2.4} />
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "700",
+                  color: "#111827",
+                  letterSpacing: -0.1,
+                }}
+              >
+                Add goal
+              </Text>
             </Pressable>
           ) : null}
         </View>

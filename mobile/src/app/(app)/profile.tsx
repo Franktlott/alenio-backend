@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
+  Modal,
   TouchableOpacity,
   ActivityIndicator,
   Platform,
@@ -30,7 +31,7 @@ import {
 } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
 import { router, useLocalSearchParams, useFocusEffect, usePathname } from "expo-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { uploadFile } from "@/lib/upload";
@@ -57,6 +58,7 @@ import { GetStartedProgressCard } from "@/components/profile/GetStartedProgressC
 import { useGetStartedProgress } from "@/lib/use-get-started-progress";
 import { useProfileSheetStore } from "@/lib/state/seneca-sheet-store";
 import { useTabBarClearanceFn } from "@/lib/tab-bar";
+import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 type NotifPrefs = {
   isAdmin?: boolean;
@@ -93,15 +95,34 @@ const MESSAGE_PRIVACY_LABELS: Record<MessagePrivacy, string> = {
   connections_only: "Connections only",
 };
 
+export async function signOutOnThisDevice(queryClient: QueryClient) {
+  markSessionSignedOut();
+  clearAccessToken();
+  await clearMobileAuthCaches(queryClient);
+  try {
+    await authClient.signOut();
+  } catch {
+    // continue cleanup even if remote sign-out call fails
+  }
+  clearAccessToken();
+  clearAllCachesForSignedOutUser(queryClient);
+  useTeamStore.getState().setActiveTeamId(null);
+  agentDebugLog("sign-out complete", { runId: "auth-simplify-v1", hypothesisId: "H15" });
+  router.replace("/welcome");
+}
+
 export function ProfileScreen({
   asSheet = false,
   visible = true,
   onClose,
+  onRequestSignOut,
   asTab = false,
 }: {
   asSheet?: boolean;
   visible?: boolean;
   onClose?: () => void;
+  /** Sheet host closes the card, then shows the confirmation on its own. */
+  onRequestSignOut?: () => void;
   asTab?: boolean;
 }) {
   const tabClearance = useTabBarClearanceFn();
@@ -118,7 +139,6 @@ export function ProfileScreen({
   const queryClient = useQueryClient();
   const getStartedProgress = useGetStartedProgress();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
-  const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const user = session?.user;
 
   useEffect(() => {
@@ -345,19 +365,15 @@ export function ProfileScreen({
 
   const handleSignOut = async () => {
     setShowSignOutConfirm(false);
-    markSessionSignedOut();
-    clearAccessToken();
-    await clearMobileAuthCaches(queryClient);
-    try {
-      await authClient.signOut();
-    } catch {
-      // continue cleanup even if remote sign-out call fails
+    await signOutOnThisDevice(queryClient);
+  };
+
+  const requestSignOut = () => {
+    if (onRequestSignOut) {
+      onRequestSignOut();
+      return;
     }
-    clearAccessToken();
-    clearAllCachesForSignedOutUser(queryClient);
-    setActiveTeamId(null);
-    agentDebugLog("sign-out complete", { runId: "auth-simplify-v1", hypothesisId: "H15" });
-    router.replace("/welcome");
+    setShowSignOutConfirm(true);
   };
 
   const displayName = meProfile?.name ?? user?.name;
@@ -1043,7 +1059,7 @@ export function ProfileScreen({
                 icon={LogOut}
                 title="Sign Out"
                 subtitle="Sign out of Alenio on this device"
-                onPress={() => setShowSignOutConfirm(true)}
+                onPress={requestSignOut}
                 testID="profile-sign-out-button"
                 destructive
               />
@@ -1366,7 +1382,7 @@ export function ProfileScreen({
               <ProfileMenuRow
                 icon={LogOut}
                 title="Sign Out"
-                onPress={() => setShowSignOutConfirm(true)}
+                onPress={requestSignOut}
                 testID="sign-out-button"
                 destructive
                 subtitle="Sign out of Alenio on this device"
@@ -1379,40 +1395,36 @@ export function ProfileScreen({
   );
 
   const signOutConfirm = showSignOutConfirm ? (
-    <Pressable
-      style={StyleSheet.absoluteFill}
-      onPress={() => setShowSignOutConfirm(false)}
-    >
-      <View style={signOutStyles.backdrop}>
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={signOutStyles.card}
-        >
-          <Text style={signOutStyles.title}>Sign out?</Text>
-          <Text style={signOutStyles.copy}>
-            You'll need to sign in again to access your account.
-          </Text>
-          <View style={signOutStyles.actions}>
-            <TouchableOpacity
-              onPress={() => setShowSignOutConfirm(false)}
-              style={signOutStyles.cancelBtn}
-              activeOpacity={0.85}
-              testID="cancel-sign-out-button"
-            >
-              <Text style={signOutStyles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleSignOut}
-              style={signOutStyles.confirmBtn}
-              activeOpacity={0.9}
-              testID="confirm-sign-out-button"
-            >
-              <Text style={signOutStyles.confirmText}>Sign out</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
+    <View style={signOutStyles.layer} pointerEvents="box-none">
+      <Pressable
+        style={signOutStyles.backdrop}
+        onPress={() => setShowSignOutConfirm(false)}
+      />
+      <View style={signOutStyles.card}>
+        <Text style={signOutStyles.title}>Sign out?</Text>
+        <Text style={signOutStyles.copy}>
+          You'll need to sign in again to access your account.
+        </Text>
+        <View style={signOutStyles.actions}>
+          <TouchableOpacity
+            onPress={() => setShowSignOutConfirm(false)}
+            style={signOutStyles.cancelBtn}
+            activeOpacity={0.85}
+            testID="cancel-sign-out-button"
+          >
+            <Text style={signOutStyles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleSignOut}
+            style={signOutStyles.confirmBtn}
+            activeOpacity={0.9}
+            testID="confirm-sign-out-button"
+          >
+            <Text style={signOutStyles.confirmText}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </Pressable>
+    </View>
   ) : null;
 
   return (
@@ -1456,7 +1468,7 @@ export function ProfileScreen({
           ) : undefined
         }
         testID="profile-screen"
-        overlay={signOutConfirm}
+        overlay={onRequestSignOut ? null : signOutConfirm}
       >
         {profileMain}
       </AlenioBottomSheet>
@@ -1466,16 +1478,19 @@ export function ProfileScreen({
 }
 
 const signOutStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  layer: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
   },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  },
   card: {
-    width: "100%",
-    maxWidth: 320,
+    width: 320,
+    maxWidth: "100%",
     borderRadius: 20,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 20,
@@ -1506,7 +1521,6 @@ const signOutStyles = StyleSheet.create({
   cancelBtn: {
     flexGrow: 1,
     flexShrink: 1,
-    flexBasis: 0,
     minHeight: 44,
     borderRadius: 12,
     alignItems: "center",
@@ -1522,7 +1536,6 @@ const signOutStyles = StyleSheet.create({
   confirmBtn: {
     flexGrow: 1,
     flexShrink: 1,
-    flexBasis: 0,
     minHeight: 44,
     borderRadius: 12,
     alignItems: "center",
@@ -1536,6 +1549,56 @@ const signOutStyles = StyleSheet.create({
     color: "#FFFFFF",
   },
 });
+
+export function SignOutConfirmModal({
+  visible,
+  onCancel,
+  onConfirm,
+}: {
+  visible: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
+      onRequestClose={onCancel}
+    >
+      <View style={[signOutStyles.layer, { flex: 1 }]}>
+        <Pressable style={signOutStyles.backdrop} onPress={onCancel} />
+        <View style={signOutStyles.card}>
+          <Text style={signOutStyles.title}>Sign out?</Text>
+          <Text style={signOutStyles.copy}>
+            You'll need to sign in again to access your account.
+          </Text>
+          <View style={signOutStyles.actions}>
+            <TouchableOpacity
+              onPress={onCancel}
+              style={signOutStyles.cancelBtn}
+              activeOpacity={0.85}
+              testID="cancel-sign-out-button"
+            >
+              <Text style={signOutStyles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onConfirm}
+              style={signOutStyles.confirmBtn}
+              activeOpacity={0.9}
+              testID="confirm-sign-out-button"
+            >
+              <Text style={signOutStyles.confirmText}>Sign out</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 export default function ProfileRoute() {
   const openSheet = useProfileSheetStore((state) => state.openSheet);

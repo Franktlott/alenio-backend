@@ -9,12 +9,16 @@ import {
   StyleSheet,
   Keyboard,
   ActivityIndicator,
+  useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAdaptiveLayout } from "@/lib/adaptive-layout";
+import {
+  useAdaptiveLayout,
+  useDuoSheetTopClearance,
+} from "@/lib/adaptive-layout";
 import {
   ArrowUp,
   Camera,
@@ -449,6 +453,11 @@ function AttachmentPickerSheet({
 
 export function SenecaAssistantSheet({ open, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const { height: windowH } = useWindowDimensions();
+  const duoSheetTop = useDuoSheetTopClearance({ fullScreen: true });
+  /** Clear the notch on phones, or stop just under the Duo status dock. */
+  const sheetTopGap = Math.max(duoSheetTop, insets.top);
+  const sheetMaxHeight = Math.round(windowH - sheetTopGap);
   const { iconRailEdge, iconRailWidth } = useAdaptiveLayout();
   const queryClient = useQueryClient();
   const pendingPrompt = useSenecaSheetStore((state) => state.pendingPrompt);
@@ -1271,13 +1280,22 @@ export function SenecaAssistantSheet({ open, onClose }: Props) {
   return (
     <Modal
       visible={open}
+      transparent
       animationType="slide"
-      presentationStyle="fullScreen"
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
       supportedOrientations={[...MODAL_SUPPORTED_ORIENTATIONS]}
       onRequestClose={handleClose}
     >
-      <View style={[styles.screenRoot, { paddingTop: insets.top }]}>
-        <SafeKeyboardAvoidingView style={styles.flex}>
+      <View style={styles.backdrop} testID="seneca-assistant-sheet">
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={handleClose}
+          accessibilityLabel="Close Seneca"
+        />
+        <View style={[styles.sheet, { height: sheetMaxHeight }]}>
+          <View style={styles.handle} />
+          <SafeKeyboardAvoidingView style={styles.flex}>
           <View style={styles.headerBar}>
             <View
               style={[
@@ -1783,62 +1801,63 @@ export function SenecaAssistantSheet({ open, onClose }: Props) {
               onRemoveAttachment={() => setPendingAttachment(null)}
             />
           ) : null}
-        </SafeKeyboardAvoidingView>
-        <AttachmentPickerSheet
-          visible={attachmentPickerOpen}
-          onClose={() => setAttachmentPickerOpen(false)}
-          onPick={(source) => void chooseAttachment(source)}
-        />
-        <AlenioBottomSheet
-          visible={deleteCurrentConfirmOpen}
-          title="Delete this chat?"
-          subtitle="This permanently removes the chat and its generated content."
-          onClose={() => {
-            if (!deletingCurrentChat) setDeleteCurrentConfirmOpen(false);
-          }}
-          compact
-          showCloseButton={false}
-          scrollEnabled={false}
-          testID="seneca-delete-chat-confirmation"
-        >
-          <View style={styles.deleteSheetActions}>
-            <Pressable
-              onPress={() => setDeleteCurrentConfirmOpen(false)}
-              disabled={deletingCurrentChat}
-              style={styles.deleteSheetCancel}
-              accessibilityRole="button"
-              testID="seneca-delete-chat-cancel"
-            >
-              <Text style={styles.deleteSheetCancelText}>Keep chat</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                if (!conversationId) return;
-                mutateDeleteConversation({
-                  id: conversationId,
-                  scopeKey: HISTORY_SCOPE,
-                });
-              }}
-              disabled={!conversationId || deletingCurrentChat}
-              style={[
-                styles.deleteSheetConfirm,
-                (!conversationId || deletingCurrentChat) &&
-                  styles.headerIconBtnDisabled,
-              ]}
-              accessibilityRole="button"
-              testID="seneca-delete-chat-confirm"
-            >
-              {deletingCurrentChat ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Trash2 size={14} color="#FFFFFF" strokeWidth={2.2} />
-                  <Text style={styles.deleteSheetConfirmText}>Delete chat</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-        </AlenioBottomSheet>
+          </SafeKeyboardAvoidingView>
+          <AttachmentPickerSheet
+            visible={attachmentPickerOpen}
+            onClose={() => setAttachmentPickerOpen(false)}
+            onPick={(source) => void chooseAttachment(source)}
+          />
+          <AlenioBottomSheet
+            visible={deleteCurrentConfirmOpen}
+            title="Delete this chat?"
+            subtitle="This permanently removes the chat and its generated content."
+            onClose={() => {
+              if (!deletingCurrentChat) setDeleteCurrentConfirmOpen(false);
+            }}
+            compact
+            showCloseButton={false}
+            scrollEnabled={false}
+            testID="seneca-delete-chat-confirmation"
+          >
+            <View style={styles.deleteSheetActions}>
+              <Pressable
+                onPress={() => setDeleteCurrentConfirmOpen(false)}
+                disabled={deletingCurrentChat}
+                style={styles.deleteSheetCancel}
+                accessibilityRole="button"
+                testID="seneca-delete-chat-cancel"
+              >
+                <Text style={styles.deleteSheetCancelText}>Keep chat</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  if (!conversationId) return;
+                  mutateDeleteConversation({
+                    id: conversationId,
+                    scopeKey: HISTORY_SCOPE,
+                  });
+                }}
+                disabled={!conversationId || deletingCurrentChat}
+                style={[
+                  styles.deleteSheetConfirm,
+                  (!conversationId || deletingCurrentChat) &&
+                    styles.headerIconBtnDisabled,
+                ]}
+                accessibilityRole="button"
+                testID="seneca-delete-chat-confirm"
+              >
+                {deletingCurrentChat ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Trash2 size={14} color="#FFFFFF" strokeWidth={2.2} />
+                    <Text style={styles.deleteSheetConfirmText}>Delete chat</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </AlenioBottomSheet>
+        </View>
       </View>
     </Modal>
   );
@@ -1846,9 +1865,26 @@ export function SenecaAssistantSheet({ open, onClose }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  screenRoot: {
+  backdrop: {
     flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  sheet: {
+    width: "100%",
     backgroundColor: COLORS.bg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: "hidden",
+  },
+  handle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D0D5DD",
+    marginTop: 8,
+    marginBottom: 2,
   },
   headerBar: {
     backgroundColor: COLORS.surface,

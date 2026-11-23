@@ -45,8 +45,8 @@ export function WorkspaceViewToggle({
         alignSelf: "center",
         width: "100%",
         maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
-        marginTop: 10,
-        marginBottom: 6,
+        marginTop: 8,
+        marginBottom: 4,
         paddingLeft: WS.pageGutter + cluster.left,
         paddingRight: WS.pageGutter + cluster.right,
       }}

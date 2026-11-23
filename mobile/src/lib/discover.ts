@@ -67,13 +67,13 @@ export type DiscoverArticleDetail = DiscoverArticleSummary & {
 export async function fetchHomeDiscoverArticles(): Promise<DiscoverArticleSummary[]> {
   try {
     const featured = await api.get<DiscoverArticleSummary[]>(
-      "/api/discover/articles?featured=1&limit=8",
+      "/api/discover/articles?featured=1&limit=1",
     );
-    if (featured.length > 0) return featured.slice(0, 8);
+    if (featured.length > 0) return featured.slice(0, 1);
     const recent = await api.get<DiscoverArticleSummary[]>(
-      "/api/discover/articles?limit=8",
+      "/api/discover/articles?limit=1",
     );
-    return recent.slice(0, 8);
+    return recent.slice(0, 1);
   } catch {
     return [];
   }

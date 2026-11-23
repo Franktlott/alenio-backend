@@ -21,6 +21,8 @@ type Props = {
   showRail?: boolean;
   /** Soften the time column (e.g. overdue / past). */
   timeMuted?: boolean;
+  /** Tighter padding for task lists. */
+  dense?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
   testID?: string;
@@ -41,6 +43,7 @@ export function TimelineRow({
   isLast = false,
   showRail = true,
   timeMuted = false,
+  dense = false,
   onPress,
   onLongPress,
   testID,
@@ -50,6 +53,7 @@ export function TimelineRow({
     <View
       style={[
         styles.row,
+        dense ? styles.rowDense : null,
         !isLast ? styles.rowDivider : null,
         selected ? styles.rowSelected : null,
       ]}
@@ -93,7 +97,7 @@ export function TimelineRow({
         onLongPress={onLongPress}
         delayLongPress={400}
         disabled={!onPress && !onLongPress}
-        style={styles.body}
+        style={[styles.body, dense ? styles.bodyDense : null]}
         testID={testID}
       >
         <View style={styles.content}>{children}</View>
@@ -111,6 +115,9 @@ const styles = StyleSheet.create({
     /** Transparent so parent rounded cards clip cleanly — no square white corners. */
     backgroundColor: "transparent",
   },
+  rowDense: {
+    minHeight: 36,
+  },
   rowDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: palette.rowDivider,
@@ -120,11 +127,13 @@ const styles = StyleSheet.create({
   },
   timeCol: {
     width: TIMELINE_TIME_COL,
-    paddingTop: 7,
-    paddingRight: 6,
     flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   timeMain: {
+    width: "100%",
+    textAlign: "center",
     fontSize: 12,
     lineHeight: 14,
     fontWeight: "700",
@@ -132,6 +141,8 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   timeSub: {
+    width: "100%",
+    textAlign: "center",
     marginTop: 0,
     fontSize: 10,
     lineHeight: 12,
@@ -182,6 +193,11 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingLeft: 8,
     paddingRight: 8,
+  },
+  bodyDense: {
+    paddingVertical: 3,
+    paddingLeft: 6,
+    paddingRight: 6,
   },
   content: {
     flex: 1,

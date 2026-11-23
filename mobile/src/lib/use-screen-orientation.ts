@@ -6,7 +6,7 @@ import {
   getHingeStatus,
   type HingeStatus,
 } from '../../modules/alenio-hinge';
-import { screenRotates } from './screen-rotation';
+import { orientationForPosture } from './screen-rotation';
 
 /**
  * The `orientation` option to hand to a native stack navigator.
@@ -25,10 +25,10 @@ import { screenRotates } from './screen-rotation';
  * navigator option never reaches UIKit under the dev client. Keep the two in
  * agreement.
  *
- * An open hinge always allows rotation, even while the window is still one
- * leaf-sized — otherwise portrait-lock keeps Duo from spanning both screens.
+ * Any real hinge reading means this is a Duo. Keep every orientation
+ * available so the window fills the display and the status bar stays upright.
  */
-export function useScreenOrientation(): 'all' | 'portrait_up' {
+export function useScreenOrientation(): 'all' | 'portrait_up' | 'landscape' {
   const { width, height } = useWindowDimensions();
   const [hinge, setHinge] = useState<HingeStatus>(() => getHingeStatus());
 
@@ -40,6 +40,5 @@ export function useScreenOrientation(): 'all' | 'portrait_up' {
     };
   }, []);
 
-  if (hinge === 'fullyOpen' || hinge === 'partiallyOpen') return 'all';
-  return screenRotates(width, height) ? 'all' : 'portrait_up';
+  return orientationForPosture(hinge, width, height);
 }

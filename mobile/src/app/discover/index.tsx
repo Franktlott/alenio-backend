@@ -275,10 +275,14 @@ function FeaturedCarousel({
 export default function DiscoverIndexScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ topic?: string }>();
-  const initialTopic =
+  const topicFromRoute =
     typeof params.topic === "string" ? params.topic : "";
-  const [topic, setTopic] = useState(initialTopic);
+  const [topic, setTopic] = useState(topicFromRoute);
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    setTopic(topicFromRoute);
+  }, [topicFromRoute]);
 
   const articlesQuery = useQuery({
     queryKey: ["discover", "all"],

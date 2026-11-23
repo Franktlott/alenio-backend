@@ -67,30 +67,23 @@ const APP_DELEGATE_BODY = `
       if open != wasOpen || !wasKnown {
         DispatchQueue.main.async {
           view.window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-          if !open, #available(iOS 16.0, *), let scene = view.window?.windowScene {
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { error in
-              NSLog("[orientation] fold-closed snap failed: %@", error.localizedDescription)
-            }
-          }
         }
       }
     }
     alenioHingeObserver = observer
   }
 
-  /// Portrait when closed / phone-sized; .all when open or big enough.
-  /// Prefer hinge over window size so a stale wide size after folding cannot
-  /// leave a black void on the cover display.
+  /// The status bar is the upright edge, folded or open. Locking the cover
+  /// to landscape letterboxes the app. A normal phone stays portrait.
   static func ${MARKER}(for window: UIWindow?) -> UIInterfaceOrientationMask {
     alenioStartOrientationUpdates()
     alenioAttachHinge(to: window)
-    if alenioHingeOpen { return .all }
-    if alenioHingeIsKnownClosed { return .portrait }
     let size = window?.windowScene?.coordinateSpace.bounds.size ?? window?.bounds.size
     guard let size, size.width > 0, size.height > 0 else {
-      return .portrait
+      return .all
     }
-    return alenioRotates(size: size) ? .all : .portrait
+    if alenioHingeKnown || alenioHingeOpen || alenioRotates(size: size) { return .all }
+    return .portrait
   }
 
   static func alenioMask(
@@ -124,13 +117,9 @@ const APP_DELEGATE_BODY = `
 `;
 
 const SCENE_DELEGATE_BODY = `
-  /// Folding changes the window size without turning the device, so UIKit has
-  /// no reason to re-ask on its own. When the display opens up while the phone
-  /// is already on its side, turn to match — asking for "all" only permits
-  /// landscape, and the screen stays portrait until the next turn.
-  ///
-  /// When folding closed, snap to portrait so the cover fills. Never do that
-  /// while the hinge is open — that pins the app to one leaf.
+  /// Do not request a geometry update here. On iPhone Duo the status bar
+  /// already defines upright, and a sensor-based request turns the app
+  /// sideways relative to that bar.
   func windowScene(
     _ windowScene: UIWindowScene,
     didUpdate previousCoordinateSpace: UICoordinateSpace,
@@ -138,39 +127,8 @@ const SCENE_DELEGATE_BODY = `
     traitCollection previousTraitCollection: UITraitCollection
   ) {
     guard let window else { return }
-    guard #available(iOS 16.0, *) else { return }
-
     AppDelegate.alenioAttachHinge(to: window)
     window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-
-    let openedUp = !AppDelegate.alenioRotates(size: previousCoordinateSpace.bounds.size)
-      && AppDelegate.alenioRotates(size: windowScene.coordinateSpace.bounds.size)
-
-    if openedUp, let catchUp = AppDelegate.alenioHeldLandscapeMask() {
-      // This callback is itself a geometry update, and a second request made
-      // from inside it is rejected. Waiting one turn also lets the supported
-      // set include landscape before we ask to turn.
-      DispatchQueue.main.async {
-        window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: catchUp)) { error in
-          NSLog("[orientation] unfold catch-up failed: %@", error.localizedDescription)
-        }
-      }
-      return
-    }
-
-    if AppDelegate.alenioHingeIsOpen { return }
-
-    let mask = AppDelegate.${MARKER}(for: window)
-    let current = windowScene.effectiveGeometry.interfaceOrientation
-    if !AppDelegate.alenioMask(mask, allows: current) {
-      DispatchQueue.main.async {
-        window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
-          NSLog("[orientation] fold-closed catch-up failed: %@", error.localizedDescription)
-        }
-      }
-    }
   }
 `;
 
@@ -194,20 +152,47 @@ module.exports = function withFoldableOrientation(config) {
           cfg.modResults.language,
       );
     }
-    if (cfg.modResults.contents.includes(MARKER)) return cfg;
+    let contents = cfg.modResults.contents;
+    if (!contents.includes("import AlenioHinge")) {
+      if (contents.includes("internal import Expo\n")) {
+        contents = contents.replace(
+          "internal import Expo\n",
+          "internal import Expo\ninternal import AlenioHinge\n",
+        );
+      } else if (contents.includes("import Expo\n")) {
+        contents = contents.replace(
+          "import Expo\n",
+          "import Expo\ninternal import AlenioHinge\n",
+        );
+      }
+    }
+    if (contents.includes(MARKER)) {
+      contents = contents.replace(
+        "if alenioHingeIsKnownClosed { return .landscape }\n    if alenioHingeOpen || alenioRotates(size: size) { return .all }",
+        "if alenioHingeKnown || alenioHingeOpen || alenioRotates(size: size) { return .all }",
+      );
+      cfg.modResults.contents = contents;
+      return cfg;
+    }
 
-    let contents = insertAfter(
-      cfg.modResults.contents,
+    contents = insertAfter(
+      contents,
       APP_DELEGATE_ANCHOR,
       APP_DELEGATE_BODY,
       "AppDelegate.swift",
     );
-    contents = insertAfter(
-      contents,
-      SCENE_DELEGATE_ANCHOR,
-      SCENE_DELEGATE_BODY,
-      "AppDelegate.swift",
-    );
+    // Expo's iOS template may manage scenes without declaring a
+    // SceneDelegate in this file. The hinge callback in APP_DELEGATE_BODY is
+    // the primary posture signal; add the scene-size fallback only when the
+    // template exposes a SceneDelegate extension point.
+    if (contents.includes(SCENE_DELEGATE_ANCHOR)) {
+      contents = insertAfter(
+        contents,
+        SCENE_DELEGATE_ANCHOR,
+        SCENE_DELEGATE_BODY,
+        "AppDelegate.swift",
+      );
+    }
     cfg.modResults.contents = contents;
     return cfg;
   });

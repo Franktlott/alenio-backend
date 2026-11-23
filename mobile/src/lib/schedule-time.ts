@@ -46,7 +46,7 @@ function clockParts(instant: Date): { main: string; sub: string } {
  * The left column of a schedule row.
  * A clock when one was chosen. 11:59 PM for a task due today with no time.
  * All day for an all-day event. A short date when a dateless-time task is another day.
- * Late work leads with how late it is.
+ * Late work leads with how late it is (skipped when done — the checkmark covers that).
  */
 export function scheduleTimeParts(input: {
   at?: string | Date | null;
@@ -55,13 +55,12 @@ export function scheduleTimeParts(input: {
   done?: boolean;
   now?: Date;
 }): { main: string; sub: string } {
-  if (input.done) return { main: "Done", sub: "" };
   if (!input.at) return { main: "—", sub: "" };
   const date = typeof input.at === "string" ? new Date(input.at) : input.at;
   if (Number.isNaN(date.getTime())) return { main: "—", sub: "" };
   const now = input.now ?? new Date();
   const delta = dayDelta(date, now);
-  if (input.taskLike && delta < 0) return lateParts(date, now);
+  if (input.taskLike && !input.done && delta < 0) return lateParts(date, now);
   if (input.allDay) return { main: "All", sub: "day" };
   if (input.taskLike && !hasChosenClock(date)) {
     if (delta === 0) return { main: "11:59", sub: "PM" };

@@ -141,8 +141,17 @@ import {
   LIVE_PCM_RECORDING_OPTIONS,
   LivePcmStreamer,
 } from "@/lib/live-pcm-streamer";
+import { NativeLivePcmCapture } from "@/lib/native-live-pcm-capture";
 
 type Step = "consent" | "recording" | "processing" | "error";
+
+type CaptureSession = {
+  pause: () => void | Promise<void>;
+  resume: () => void | Promise<void>;
+  stop: () => Promise<void>;
+  abort: () => Promise<void>;
+  ensureRecording: () => Promise<boolean>;
+};
 
 const KEEP_AWAKE_TAG = "check-in-recording";
 /** How long before the hard cap the remaining time starts being shown. */
@@ -284,7 +293,7 @@ function RecordingFlow({
   const recorder = audio.useAudioRecorder(CHECK_IN_RECORDING_OPTIONS);
   const liveRecorder = audio.useAudioRecorder(LIVE_PCM_RECORDING_OPTIONS);
   const recorderState = audio.useAudioRecorderState(recorder, 250);
-  const sessionRef = useRef<CheckInSegmentRecorder | null>(null);
+  const sessionRef = useRef<CaptureSession | null>(null);
   const liveClientRef = useRef<LiveTranscriptionClient | null>(null);
   const livePcmRef = useRef<LivePcmStreamer | null>(null);
   const recordingIdRef = useRef<string | null>(null);
@@ -300,9 +309,13 @@ function RecordingFlow({
   const [transcriptLines, setTranscriptLines] = useState<LiveTranscriptLine[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveTranscriptionStatus>("idle");
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [streamLevel, setStreamLevel] = useState(0);
+  const [usesNativeStream, setUsesNativeStream] = useState(false);
 
   const firstName = memberName.trim().split(/\s+/)[0] || memberName;
-  const level = meteringToLevel(recorderState.metering);
+  const level = usesNativeStream
+    ? streamLevel
+    : meteringToLevel(recorderState.metering);
 
   const stopLiveTranscription = useCallback(async () => {
     liveClientRef.current?.stop();
@@ -314,6 +327,7 @@ function RecordingFlow({
   const reset = useCallback(() => {
     void stopLiveTranscription();
     sessionRef.current = null;
+    setUsesNativeStream(false);
     recordingIdRef.current = null;
     finishingRef.current = false;
     stickToBottomRef.current = true;
@@ -327,6 +341,7 @@ function RecordingFlow({
     setTranscriptLines([]);
     setLiveStatus("idle");
     setLiveError(null);
+    setStreamLevel(0);
     setStep("consent");
   }, [stopLiveTranscription]);
 
@@ -368,9 +383,10 @@ function RecordingFlow({
     };
   }, [step]);
 
-  /** If the mic session drops mid-check-in, reopen the retention recorder. */
+  /** If the mic session drops mid-check-in, reopen capture. */
   useEffect(() => {
     if (step !== "recording" || paused || starting) return;
+    if (usesNativeStream) return;
     if (recorderState.isRecording) return;
     const timer = setTimeout(() => {
       void sessionRef.current?.ensureRecording().then((ok) => {
@@ -382,12 +398,18 @@ function RecordingFlow({
       });
     }, 700);
     return () => clearTimeout(timer);
-  }, [step, paused, starting, recorderState.isRecording]);
+  }, [step, paused, starting, usesNativeStream, recorderState.isRecording]);
 
   const beginCapture = useCallback(
-    async (recording: { id: string; startIndex?: number; priorDurationSec?: number; priorTranscript?: string | null }) => {
+    async (recording: {
+      id: string;
+      startIndex?: number;
+      priorDurationSec?: number;
+      priorTranscript?: string | null;
+    }) => {
       recordingIdRef.current = recording.id;
       finishingRef.current = false;
+      setStreamLevel(0);
       if (recording.priorDurationSec && recording.priorDurationSec > 0) {
         setElapsedSec(recording.priorDurationSec);
         elapsedRef.current = recording.priorDurationSec;
@@ -405,24 +427,8 @@ function RecordingFlow({
         ]);
       }
       await prepareAudioSession();
-      const session = new CheckInSegmentRecorder(
-        recorder,
-        { teamId, memberUserId, recordingId: recording.id },
-        {
-          onSegmentsChange: setSegments,
-          onError: (message) => setError(recordingErrorMessage(message)),
-        },
-      );
-      sessionRef.current = session;
-      await session.start({ startIndex: recording.startIndex ?? 0 });
 
-      /**
-       * A second file recorder for live STT steals the mic from the retention
-       * recording on iOS/Android every time it rolls a clip. Keep the long-form
-       * check-in audio first; live teeing stays on web where the stream can be shared.
-       */
-      const canTeeLivePcm = Platform.OS === "web";
-      if (canTeeLivePcm) {
+      const startLiveClient = () => {
         const liveClient = new LiveTranscriptionClient(
           { teamId, memberUserId, recordingId: recording.id },
           {
@@ -439,6 +445,73 @@ function RecordingFlow({
           },
         );
         liveClientRef.current = liveClient;
+        return liveClient;
+      };
+
+      /**
+       * Native: one AudioStream owns the mic — tees PCM to live STT and rolls
+       * WAV retention segments. A second AVAudioRecorder steals the session.
+       * Web: file recorder + short-clip tee (or shared stream where available).
+       */
+      const useNativeStream =
+        Platform.OS !== "web" && NativeLivePcmCapture.isSupported();
+
+      if (useNativeStream) {
+        setUsesNativeStream(true);
+        const liveClient = startLiveClient();
+        await liveClient.start();
+        const capture = new NativeLivePcmCapture(
+          { teamId, memberUserId, recordingId: recording.id },
+          {
+            onSegmentsChange: setSegments,
+            onError: (message) => setError(recordingErrorMessage(message)),
+            onPcmBase64: (pcm) => liveClient.sendPcmBase64(pcm),
+            onLevel: setStreamLevel,
+          },
+        );
+        sessionRef.current = capture;
+        const ok = await capture.start({
+          startIndex: recording.startIndex ?? 0,
+        });
+        if (!ok) {
+          setUsesNativeStream(false);
+          sessionRef.current = null;
+          liveClient.stop();
+          liveClientRef.current = null;
+          // Fall back to retention-only file recording if the stream path fails.
+          const session = new CheckInSegmentRecorder(
+            recorder,
+            { teamId, memberUserId, recordingId: recording.id },
+            {
+              onSegmentsChange: setSegments,
+              onError: (message) => setError(recordingErrorMessage(message)),
+            },
+          );
+          sessionRef.current = session;
+          await session.start({ startIndex: recording.startIndex ?? 0 });
+          setLiveStatus("error");
+          setLiveError(
+            "Live transcript could not open. Recording continues — Seneca will write up from the audio when you end.",
+          );
+        }
+        setStep("recording");
+        return;
+      }
+
+      setUsesNativeStream(false);
+      const session = new CheckInSegmentRecorder(
+        recorder,
+        { teamId, memberUserId, recordingId: recording.id },
+        {
+          onSegmentsChange: setSegments,
+          onError: (message) => setError(recordingErrorMessage(message)),
+        },
+      );
+      sessionRef.current = session;
+      await session.start({ startIndex: recording.startIndex ?? 0 });
+
+      if (Platform.OS === "web") {
+        const liveClient = startLiveClient();
         void liveClient.start().then(async () => {
           if (liveClient.getStatus() === "error") return;
           const streamer = new LivePcmStreamer(
@@ -637,7 +710,7 @@ function RecordingFlow({
     const session = sessionRef.current;
     if (!session || finishingRef.current) return;
     if (paused) {
-      void session.resume().then(() => {
+      void Promise.resolve(session.resume()).then(() => {
         liveClientRef.current?.resume();
         livePcmRef.current?.resume();
         setPaused(false);
@@ -647,7 +720,7 @@ function RecordingFlow({
     liveClientRef.current?.pause();
     livePcmRef.current?.pause();
     setPaused(true);
-    void session.pause();
+    void Promise.resolve(session.pause());
   };
 
   /** Empty sessions only — anything captured becomes a draft instead. */
@@ -1163,9 +1236,7 @@ function RecordingFlow({
                             Listening…
                           </Text>
                           <Text style={styles.transcriptEmpty}>
-                            {Platform.OS === "web"
-                              ? "Recognized speech will appear here as you talk."
-                              : "Lines show up as you talk. Seneca drafts the write-up when you end."}
+                            Recognized speech will appear here as you talk.
                           </Text>
                         </View>
                       ) : (

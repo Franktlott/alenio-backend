@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { EnterprisePageLoading } from "../components/EnterprisePageLoading";
 import { WorkspaceCreateJoinModals } from "../components/WorkspaceCreateJoinModals";
 import { WorkspaceCalendar } from "../components/workspace/WorkspaceCalendar";
-import { WorkspaceMembersPanel } from "../components/workspace/WorkspaceMembersPanel";
+import { PeopleTeamPage } from "../components/workspace/PeopleTeamPage";
 import { WorkspaceMomentumPanel } from "../components/workspace/WorkspaceMomentumPanel";
 import { WorkspaceSubNav, type WorkspaceSection } from "../components/workspace/WorkspaceSubNav";
 import { WorkspaceTasksPanel, isAssignedTo, isOpenTask } from "../components/workspace/WorkspaceTasksPanel";
@@ -15,12 +15,13 @@ import { PendingInvitesModal } from "../components/PendingInvitesModal";
 import { WorkspaceInviteModal } from "../components/workspace/WorkspaceInviteModal";
 import {
   fetchTeamInvites,
+  fetchTeamMemberStats,
   fetchWebTeam,
   fetchWebTeamTasks,
   inviteMemberByEmail,
   type WebTeamRow,
 } from "../lib/api";
-import { setPersistedEnterpriseTeamId } from "../lib/enterprise-selected-team";
+import { setPersistedEnterpriseTeamId, switchEnterpriseWorkspace } from "../lib/enterprise-selected-team";
 import { queryKeys } from "../lib/query-keys";
 import { resolveUserImageUrl } from "../lib/user-avatar";
 import "./discover/discover-manage.css";
@@ -65,6 +66,12 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
   });
 
   const canInvite = MANAGER_ROLES.has(detail.data?.myRole ?? team?.role ?? "");
+  const memberStats = useQuery({
+    queryKey: ["team", "member-stats", team?.id ?? ""],
+    queryFn: () => fetchTeamMemberStats(team!.id),
+    enabled: Boolean(team) && section === "members",
+    staleTime: 60_000,
+  });
   const invites = useQuery({
     queryKey: ["team", "invites", team?.id ?? ""],
     queryFn: () => fetchTeamInvites(team!.id),
@@ -134,25 +141,27 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
         onInvite={canInvite ? () => setInviteOpen(true) : undefined}
       />
       <div className={`dm-page nw-page ws-page ws-page--${section}`}>
-        <header className="dm-hero nw-hero ws-hero">
-          <img src="/alenio-home-hero-afternoon.jpg" alt="" className="dm-hero-photo" />
-          <div className="dm-hero-fade" aria-hidden />
-          <div className="dm-hero-copy ws-hero-copy">
-            <div className="ws-hero-row">
-              {heroImage ? (
-                <img src={heroImage} alt="" className="ws-hero-logo" onError={() => setBrokenLogo(heroImage)} />
-              ) : (
-                <span className="ws-hero-logo ws-hero-logo--blank">
-                  <Building2 size={22} strokeWidth={2} />
-                </span>
-              )}
-              <div>
-                <h1>{team.name}</h1>
-                <p>{SECTION_SUBTITLE[section]}</p>
+        {section === "members" ? null : (
+          <header className="dm-hero nw-hero ws-hero">
+            <img src="/alenio-home-hero-afternoon.jpg" alt="" className="dm-hero-photo" />
+            <div className="dm-hero-fade" aria-hidden />
+            <div className="dm-hero-copy ws-hero-copy">
+              <div className="ws-hero-row">
+                {heroImage ? (
+                  <img src={heroImage} alt="" className="ws-hero-logo" onError={() => setBrokenLogo(heroImage)} />
+                ) : (
+                  <span className="ws-hero-logo ws-hero-logo--blank">
+                    <Building2 size={22} strokeWidth={2} />
+                  </span>
+                )}
+                <div>
+                  <h1>{team.name}</h1>
+                  <p>{SECTION_SUBTITLE[section]}</p>
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
 
         {inviteNotice ? (
           <p className="ws-invite-notice" role="status">
@@ -195,12 +204,27 @@ export function WebWorkspacePage({ section = "overview" }: { section?: Workspace
                 <WorkspaceCalendar teamId={team.id} meId={me.id} canManage={canModerate} tasks={tasks.data} />
               </div>
             ) : section === "members" ? (
-              <WorkspaceMembersPanel
+              <PeopleTeamPage
+                teamId={team.id}
                 members={detail.data?.members ?? []}
                 loading={detail.isLoading}
                 meId={me.id}
+                teams={teams}
+                selectedTeamId={team.id}
+                invites={invites.data ?? []}
+                canInvite={canInvite}
+                stats={memberStats.data?.stats}
+                statsLoading={memberStats.isLoading}
                 onOpenMember={openMember}
                 onInvite={canInvite ? () => setInviteOpen(true) : undefined}
+                onSwitchTeam={(teamId) => switchEnterpriseWorkspace(teamId, setSelectedTeamId)}
+                onReloadInvites={async () => {
+                  await invites.refetch();
+                }}
+                onInviteError={(message) => setInviteNotice(message)}
+                inviteActionId={inviteActionId}
+                onInviteActionStart={setInviteActionId}
+                onInviteActionEnd={() => setInviteActionId(null)}
               />
             ) : (
               <WorkspaceMomentumPanel
