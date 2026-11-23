@@ -18,6 +18,7 @@ import {
 } from "../lib/group-conversation-workspace";
 import {
   canMessage,
+  dmMessagingStatusFromPermission,
   isBlockedEitherWay,
   messagePermissionErrorMessage,
 } from "../lib/messaging-permission";
@@ -193,6 +194,25 @@ dmsRouter.get("/", async (c) => {
       messagingStatusByPersonId.set(personId, "connection_required");
     }
   }
+  // After Remove connection there is no Connection row. Re-evaluate so an old
+  // 1:1 thread stays readable but the composer locks unless workspace/group/privacy allows.
+  const unresolvedDirectIds = directOtherIds.filter(
+    (personId) =>
+      !messagingStatusByPersonId.has(personId) && !acceptedIds.has(personId),
+  );
+  if (unresolvedDirectIds.length > 0) {
+    await Promise.all(
+      unresolvedDirectIds.map(async (personId) => {
+        const permission = await canMessage(user.id, personId);
+        if (!permission.allowed) {
+          messagingStatusByPersonId.set(
+            personId,
+            dmMessagingStatusFromPermission(permission),
+          );
+        }
+      }),
+    );
+  }
   const serializeListUser = (
     participant: (typeof participations)[number]["conversation"]["participants"][number]["user"],
   ) => {
@@ -326,6 +346,7 @@ dmsRouter.post("/find-or-create", async (c) => {
       }>;
       messages: Array<unknown>;
     },
+    messagingStatus: "available" | "connection_required" | "unavailable",
     status: 200 | 201 = 200,
   ) => {
     const other = existing.participants.find((p) => p.userId !== user.id);
@@ -340,6 +361,7 @@ dmsRouter.post("/find-or-create", async (c) => {
             serializeWorkplaceConnectedUser(cp.user),
           ),
           recipient: other ? serializeWorkplaceConnectedUser(other.user) : null,
+          messagingStatus,
           lastMessage: existing.messages[0] ?? null,
           createdAt: existing.createdAt,
           updatedAt: existing.updatedAt,
@@ -349,8 +371,8 @@ dmsRouter.post("/find-or-create", async (c) => {
     );
   };
 
-  // A block closes an existing thread too; a mere privacy setting does not, so
-  // people who already talk keep their conversation when preferences change later.
+  // A block closes an existing thread too. Remove connection keeps history
+  // readable; new sends still follow canMessage (workspace / group / privacy).
   const permission = await canMessage(user.id, recipientId);
   if (permission.reason === "blocked") {
     return c.json(
@@ -363,13 +385,17 @@ dmsRouter.post("/find-or-create", async (c) => {
       403,
     );
   }
+  const threadMessagingStatus =
+    dmMessagingStatusFromPermission(permission) === "available"
+      ? ("available" as const)
+      : ("connection_required" as const);
 
   const byKey = await prisma.conversation.findUnique({
     where: { dmPairKey: pairKey },
     include: includeShape,
   });
   if (byKey && !byKey.isGroup) {
-    return formatDm(byKey);
+    return formatDm(byKey, threadMessagingStatus);
   }
 
   // Legacy rows without dmPairKey
@@ -405,10 +431,10 @@ dmsRouter.post("/find-or-create", async (c) => {
           where: { dmPairKey: pairKey },
           include: includeShape,
         });
-        if (winner) return formatDm(winner);
+        if (winner) return formatDm(winner, threadMessagingStatus);
       }
     }
-    return formatDm(existing);
+    return formatDm(existing, threadMessagingStatus);
   }
 
   if (!permission.allowed) {
@@ -445,7 +471,7 @@ dmsRouter.post("/find-or-create", async (c) => {
       });
     });
 
-    return formatDm(conversation, created ? 201 : 200);
+    return formatDm(conversation, "available", created ? 201 : 200);
   } catch (err) {
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -455,7 +481,7 @@ dmsRouter.post("/find-or-create", async (c) => {
         where: { dmPairKey: pairKey },
         include: includeShape,
       });
-      if (winner) return formatDm(winner);
+      if (winner) return formatDm(winner, threadMessagingStatus);
     }
     throw err;
   }

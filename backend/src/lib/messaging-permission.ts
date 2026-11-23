@@ -103,15 +103,40 @@ export async function shareWorkspace(userIdA: string, userIdB: string): Promise<
   return shared !== null;
 }
 
+/**
+ * True when both people share a group chat. Prior 1:1 DM history alone must not
+ * count — otherwise Remove connection leaves the thread sendable forever.
+ */
 export async function shareConversation(userIdA: string, userIdB: string): Promise<boolean> {
   const shared = await prisma.conversationParticipant.findFirst({
     where: {
       userId: userIdA,
-      conversation: { participants: { some: { userId: userIdB } } },
+      conversation: {
+        isGroup: true,
+        participants: { some: { userId: userIdB } },
+      },
     },
     select: { id: true },
   });
   return shared !== null;
+}
+
+export type DmMessagingStatus =
+  | "available"
+  | "blocked_by_me"
+  | "connection_required"
+  | "unavailable";
+
+/** Maps a permission result to the DM list / composer lock state. */
+export function dmMessagingStatusFromPermission(
+  permission: MessagePermission,
+  options?: { blockedByMe?: boolean },
+): DmMessagingStatus {
+  if (permission.allowed) return "available";
+  if (permission.reason === "blocked") {
+    return options?.blockedByMe ? "blocked_by_me" : "unavailable";
+  }
+  return "connection_required";
 }
 
 /**
@@ -119,7 +144,7 @@ export async function shareConversation(userIdA: string, userIdB: string): Promi
  *
  * Evaluated in order: block, then the recipient's stated preference. A Connection is
  * never required where another real relationship already exists, so coworkers and
- * existing group members keep messaging exactly as they do today.
+ * existing group members keep messaging. An old 1:1 thread alone does not.
  */
 export async function canMessage(senderId: string, recipientId: string): Promise<MessagePermission> {
   if (senderId === recipientId) {

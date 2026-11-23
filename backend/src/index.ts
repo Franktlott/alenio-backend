@@ -2407,7 +2407,10 @@ app.get("/api/users/search", async (c) => {
     prisma.conversationParticipant.findMany({
       where: {
         userId: { in: candidateIds },
-        conversation: { participants: { some: { userId: user.id } } },
+        conversation: {
+          isGroup: true,
+          participants: { some: { userId: user.id } },
+        },
       },
       select: { userId: true },
       distinct: ["userId"],

@@ -225,6 +225,10 @@ export default function PersonScreen() {
       }),
     [activeTeamId, params.teamId, profileWorkspaces],
   );
+  const developmentWorkspace =
+    profileWorkspaces.find(
+      (workspace) => workspace.id === fallbackDevelopmentTeamId,
+    ) ?? null;
   const requestedDevelopmentSection =
     useMemo((): WorkspaceDevelopmentSection | null => {
       const tab = params.tab?.trim().toLowerCase();
@@ -640,6 +644,20 @@ export default function PersonScreen() {
                   showsVerticalScrollIndicator={false}
                 >
                   <ProfileIdentityCard person={person} actions={actionProps} />
+                  {developmentWorkspace ? (
+                    <ProfileDevelopmentShortcut
+                      person={person}
+                      workspace={developmentWorkspace}
+                      onPress={() =>
+                        router.push(
+                          workspaceDevelopmentHref(developmentWorkspace.id, {
+                            memberUserId: person.id,
+                            section: "check-ins",
+                          }),
+                        )
+                      }
+                    />
+                  ) : null}
                   <ProfileAboutSection person={person} />
                   {blockedNote}
                 </ScrollView>
@@ -697,6 +715,20 @@ export default function PersonScreen() {
                     setWorkspaceSheetSignal((current) => current + 1)
                   }
                 />
+                {developmentWorkspace ? (
+                  <ProfileDevelopmentShortcut
+                    person={person}
+                    workspace={developmentWorkspace}
+                    onPress={() =>
+                      router.push(
+                        workspaceDevelopmentHref(developmentWorkspace.id, {
+                          memberUserId: person.id,
+                          section: "check-ins",
+                        }),
+                      )
+                    }
+                  />
+                ) : null}
                 {blockedNote}
                 {relationshipSection}
                 <PersonalOverviewContent
@@ -852,12 +884,12 @@ export default function PersonScreen() {
               <MenuRow
                 icon={UserMinus}
                 label="Remove connection"
-                detail="You keep any shared workspace access"
+                detail="Chat history stays; workspace access unchanged"
                 onPress={() =>
                   confirmDestructive(
                     "remove",
                     "Remove connection",
-                    `${person.name ?? "This person"} will no longer be one of your connections.`,
+                    `${person.name ?? "This person"} will no longer be one of your connections. Chat history stays — delete the conversation from the chat if you want it gone. Shared workspace access is unchanged.`,
                   )
                 }
                 testID="person-remove-connection"
@@ -1672,6 +1704,47 @@ function profileFirstName(person: PublicPersonProfile): string {
   return person.isSelf ? "you" : "them";
 }
 
+function ProfileDevelopmentShortcut({
+  person,
+  workspace,
+  onPress,
+}: {
+  person: PublicPersonProfile;
+  workspace: PublicProfileWorkspace;
+  onPress: () => void;
+}) {
+  const label = person.isSelf ? "My development" : "View development";
+  const description = person.isSelf
+    ? `Open your goals and check-ins in ${workspace.name}.`
+    : `Open ${profileFirstName(person)}'s goals and check-ins in ${workspace.name}.`;
+
+  return (
+    <View
+      style={styles.developmentShortcutSection}
+      testID="profile-development-shortcut"
+    >
+      <Text style={styles.developmentShortcutHeading}>Development</Text>
+      <Pressable
+        onPress={onPress}
+        style={styles.developmentShortcut}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} in ${workspace.name}`}
+      >
+        <View style={styles.developmentShortcutIcon}>
+          <Target size={18} color={BRAND} strokeWidth={2.3} />
+        </View>
+        <View style={styles.developmentShortcutCopy}>
+          <Text style={styles.developmentShortcutTitle}>{label}</Text>
+          <Text style={styles.developmentShortcutText} numberOfLines={2}>
+            {description}
+          </Text>
+        </View>
+        <ChevronRight size={17} color="#98A2B3" strokeWidth={2.2} />
+      </Pressable>
+    </View>
+  );
+}
+
 function ProfileAboutSection({ person }: { person: PublicPersonProfile }) {
   const bio = person.profileBio?.trim() ?? "";
   const showAddBio = person.isSelf && !bio;
@@ -2205,6 +2278,53 @@ const styles = StyleSheet.create({
   },
   phonePillText: { fontSize: 13, lineHeight: 16, fontWeight: "700", color: "#FFFFFF" },
   phoneActionDisabled: { opacity: 0.5 },
+  developmentShortcutSection: {
+    marginTop: 12,
+  },
+  developmentShortcutHeading: {
+    marginBottom: 6,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    color: "#111A2B",
+  },
+  developmentShortcut: {
+    minHeight: 66,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 13,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#DCD6FE",
+    backgroundColor: "#F7F5FF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  developmentShortcutIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EDE9FE",
+  },
+  developmentShortcutCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  developmentShortcutTitle: {
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: "#251B69",
+  },
+  developmentShortcutText: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 15,
+    color: "#667085",
+  },
   aboutSection: { marginTop: 12 },
   aboutHeader: {
     marginBottom: 6,

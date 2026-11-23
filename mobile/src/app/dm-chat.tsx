@@ -1821,7 +1821,7 @@ export function DmThread({
             icon={<Trash2 size={16} color="white" />}
             destructive
             title="Delete conversation"
-            subtitle="Remove this chat for everyone"
+            subtitle="Permanently erase this chat for both of you"
             onPress={() => {
               setShowOptions(false);
               setTimeout(() => setShowConvDeleteConfirm(true), 300);

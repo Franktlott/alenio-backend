@@ -972,7 +972,9 @@ connectionsRouter.delete("/", zValidator("json", targetSchema), async (c) => {
     return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
   }
 
-  // Cancel and remove are both a plain delete: no tombstone, no history.
+  // Cancel and remove are both a plain delete: no tombstone.
+  // Direct-message history is kept; new 1:1 sends follow canMessage (workspace /
+  // group / privacy). Deleting the chat is a separate DM action.
   await prisma.connection.delete({ where: { pairKey } });
   return c.json({ data: { status: "none" as const } });
 });

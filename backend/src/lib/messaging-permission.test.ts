@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  dmMessagingStatusFromPermission,
   evaluateMessagePermission,
   evaluateUserSearchMessagePermission,
   type MessagePermission,
@@ -94,6 +95,24 @@ describe("messaging permission matrix", () => {
         sharedConversation: true,
       }),
     ).toEqual({ allowed: false, reason: "not_connected" });
+  });
+
+  test("maps permission results to DM composer lock states", () => {
+    expect(
+      dmMessagingStatusFromPermission({ allowed: true, reason: "connected" }),
+    ).toEqual("available");
+    expect(
+      dmMessagingStatusFromPermission({ allowed: false, reason: "not_connected" }),
+    ).toEqual("connection_required");
+    expect(
+      dmMessagingStatusFromPermission(
+        { allowed: false, reason: "blocked" },
+        { blockedByMe: true },
+      ),
+    ).toEqual("blocked_by_me");
+    expect(
+      dmMessagingStatusFromPermission({ allowed: false, reason: "blocked" }),
+    ).toEqual("unavailable");
   });
 
   test("builds global-search permissions from batched relationship facts", () => {

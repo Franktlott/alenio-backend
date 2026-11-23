@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Alert,
   findNodeHandle,
   Image,
   Pressable,
@@ -372,6 +373,55 @@ export function ZeroWorkspaceTeamHome({
     });
   };
 
+  const removeConnectionMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.delete("/api/connections", { userId }),
+    onSuccess: (_data, userId) => {
+      queryClient.setQueryData<ConnectionsResponse>(
+        ["connections", currentUserId],
+        (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            accepted: current.accepted.filter(
+              (entry) => entry.person.id !== userId,
+            ),
+          };
+        },
+      );
+      void queryClient.invalidateQueries({ queryKey: ["connections"] });
+      void queryClient.invalidateQueries({ queryKey: ["connection-suggestions"] });
+      void queryClient.invalidateQueries({ queryKey: ["person"] });
+      void queryClient.invalidateQueries({ queryKey: ["dms"] });
+      toast({ title: "Connection removed", preset: "done" });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title:
+          error instanceof Error
+            ? error.message
+            : "Couldn’t remove that connection",
+        preset: "error",
+      });
+    },
+  });
+
+  const confirmRemoveConnection = (connection: AcceptedConnectionEntry) => {
+    const name = connection.person.name?.trim() || "this person";
+    Alert.alert(
+      "Remove connection?",
+      `${name} will no longer be one of your connections. Chat history stays — delete the conversation from the chat if you want it gone. Shared workspace access is unchanged.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => removeConnectionMutation.mutate(connection.person.id),
+        },
+      ],
+    );
+  };
+
   const onMessagePress = async (connection: AcceptedConnectionEntry) => {
     if (openingChatFor) return;
     setOpeningChatFor(connection.person.id);
@@ -580,7 +630,7 @@ export function ZeroWorkspaceTeamHome({
         <SegmentedControl
           options={[
             { key: "feed", label: "Feed", Icon: Newspaper },
-            { key: "connections", label: "People", Icon: Users },
+            { key: "connections", label: "Connections", Icon: Users },
           ]}
           value={activeTab}
           onChange={setTab}
@@ -689,6 +739,22 @@ export function ZeroWorkspaceTeamHome({
         >
           <Text style={styles.menuLabel}>Message</Text>
         </Pressable>
+        {menuConnection &&
+        menuConnection.person.id !== currentUserId ? (
+          <Pressable
+            onPress={() => {
+              const connection = menuConnection;
+              setMenuConnection(null);
+              if (connection) confirmRemoveConnection(connection);
+            }}
+            style={styles.menuRow}
+            accessibilityRole="button"
+            accessibilityLabel="Remove connection"
+            testID="connection-overflow-remove"
+          >
+            <Text style={styles.menuLabelDanger}>Remove connection</Text>
+          </Pressable>
+        ) : null}
       </AlenioBottomSheet>
     </View>
   );
@@ -737,8 +803,8 @@ function ConnectionRow({
           user={{ ...entry.person, activeNow: entry.activeNow }}
           size={40}
           radius={20}
-          backgroundColor="#EFE9FF"
-          textColor={BRAND}
+          backgroundColor="#F1F5F9"
+          textColor="#334155"
           fontSize={14}
         />
         <View style={styles.personCopy}>
@@ -914,7 +980,7 @@ function ConnectionsPane({
       {total > 0 || filtering ? (
         <View style={styles.paneHeader}>
           <Text style={styles.paneTitle}>
-            {total > 0 ? `People · ${total}` : "People"}
+            {total > 0 ? `Connections · ${total}` : "Connections"}
           </Text>
           {total > 0 ? (
             <Pressable
@@ -1302,8 +1368,8 @@ function DiscoverSearchResults({
                 user={person}
                 size={40}
                 radius={20}
-                backgroundColor="#EFE9FF"
-                textColor={BRAND}
+                backgroundColor="#F1F5F9"
+                textColor="#334155"
                 fontSize={14}
               />
               <View style={styles.personCopy}>
@@ -1846,6 +1912,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   menuLabel: { fontSize: 15, fontWeight: "700", color: "#101828" },
+  menuLabelDanger: { fontSize: 15, fontWeight: "700", color: "#DC2626" },
   /** flex 1 + minHeight 0 is what lets a section claim leftover height. */
   sectionFill: { flex: 1, minHeight: 0 },
   initialLoading: {
