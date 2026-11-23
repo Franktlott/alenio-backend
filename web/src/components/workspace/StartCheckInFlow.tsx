@@ -333,22 +333,37 @@ export function StartCheckInFlow({
     }
   };
 
+  const resumeCaptureStartedRef = useRef(false);
   useEffect(() => {
-    if (!open || !resumeCapture || starting || recordingIdRef.current) return;
+    if (!open) {
+      resumeCaptureStartedRef.current = false;
+      return;
+    }
+    if (!resumeCapture?.id || resumeCaptureStartedRef.current || recordingIdRef.current) {
+      return;
+    }
+    resumeCaptureStartedRef.current = true;
+    const draft = resumeCapture;
+    let cancelled = false;
     void (async () => {
       try {
-        const resumed = await resumeCheckInRecording(teamId, userId, resumeCapture.id);
+        const resumed = await resumeCheckInRecording(teamId, userId, draft.id);
+        if (cancelled) return;
         await beginRecording({
           recordingId: resumed.id,
           startIndex: resumed.nextSegmentIndex ?? 0,
-          priorDurationSec: resumeCapture.durationSec,
-          priorTranscript: resumeCapture.transcript,
+          priorDurationSec: draft.durationSec,
+          priorTranscript: draft.transcript,
         });
       } catch (err) {
+        if (cancelled) return;
         setError(errorMessage(err, "We couldn't resume that draft."));
         setView("error");
       }
     })();
+    return () => {
+      cancelled = true;
+    };
     // Only kick off once when the sheet opens on a capture draft.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, resumeCapture?.id]);

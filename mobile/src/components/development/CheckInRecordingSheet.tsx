@@ -492,42 +492,57 @@ function RecordingFlow({
   }, [starting, teamId, memberUserId, templateId, beginCapture]);
 
   /** Continue an existing transcript draft without the consent screen. */
-  const resumeDraft = useCallback(async () => {
-    if (!resumeRecording || starting || recordingIdRef.current) return;
-    setStarting(true);
-    setError(null);
-    try {
-      const granted = await ensureMicrophoneAccess();
-      if (!granted) {
-        setError(
-          "Alenio needs microphone access to record this check-in. You can turn it on in Settings.",
-        );
-        setStep("error");
-        return;
-      }
-      const resumed = await resumeCheckInRecording(
-        teamId,
-        memberUserId,
-        resumeRecording.id,
-      );
-      await beginCapture({
-        id: resumed.id,
-        startIndex: resumed.nextSegmentIndex ?? 0,
-        priorDurationSec: resumeRecording.durationSec,
-        priorTranscript: resumeRecording.transcript,
-      });
-    } catch (err) {
-      setError(recordingErrorMessage(err));
-      setStep("error");
-    } finally {
-      setStarting(false);
-    }
-  }, [resumeRecording, starting, teamId, memberUserId, beginCapture]);
-
+  const resumeStartedRef = useRef(false);
+  const beginCaptureRef = useRef(beginCapture);
+  beginCaptureRef.current = beginCapture;
   useEffect(() => {
-    if (!visible || !resumeRecording) return;
-    void resumeDraft();
-  }, [visible, resumeRecording, resumeDraft]);
+    if (!visible) {
+      resumeStartedRef.current = false;
+      return;
+    }
+    if (!resumeRecording?.id || resumeStartedRef.current || recordingIdRef.current) {
+      return;
+    }
+    resumeStartedRef.current = true;
+    const draft = resumeRecording;
+    let cancelled = false;
+    void (async () => {
+      setStarting(true);
+      setError(null);
+      try {
+        const granted = await ensureMicrophoneAccess();
+        if (cancelled) return;
+        if (!granted) {
+          setError(
+            "Alenio needs microphone access to record this check-in. You can turn it on in Settings.",
+          );
+          setStep("error");
+          return;
+        }
+        const resumed = await resumeCheckInRecording(
+          teamId,
+          memberUserId,
+          draft.id,
+        );
+        if (cancelled) return;
+        await beginCaptureRef.current({
+          id: resumed.id,
+          startIndex: resumed.nextSegmentIndex ?? 0,
+          priorDurationSec: draft.durationSec,
+          priorTranscript: draft.transcript,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        setError(recordingErrorMessage(err));
+        setStep("error");
+      } finally {
+        if (!cancelled) setStarting(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, resumeRecording?.id, teamId, memberUserId]);
 
   const hasCapture = useCallback(() => {
     return (

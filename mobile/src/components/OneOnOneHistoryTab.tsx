@@ -3573,98 +3573,71 @@ export function OneOnOneHistoryTab({
   };
 
   const renderDraftActionSheet = () => {
-    if (!draftActionRecording) return null;
     const recording = draftActionRecording;
     const durationLabel =
-      recording.durationSec > 0
+      recording && recording.durationSec > 0
         ? `${Math.floor(recording.durationSec / 60)}:${String(recording.durationSec % 60).padStart(2, "0")} recorded`
         : "Saved transcript";
     return (
-      <Modal
-        visible
-        transparent
-        animationType="slide"
-        onRequestClose={() => setDraftActionRecording(null)}
+      <AlenioBottomSheet
+        visible={!!recording}
+        title="Saved draft"
+        subtitle={
+          recording
+            ? `${durationLabel}. Resume to keep talking, or write it up when you’re ready.`
+            : undefined
+        }
+        onClose={() => setDraftActionRecording(null)}
+        compact
+        showCloseButton
+        testID="draft-check-in-actions"
       >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(15, 23, 42, 0.45)",
-            justifyContent: "flex-end",
-          }}
-          onPress={() => setDraftActionRecording(null)}
-        >
-          <Pressable onPress={(e) => e.stopPropagation?.()}>
-            <View style={checkInActionSheetStyle(insets.bottom, false)}>
-              <View style={bottomSheetMenu.handleWrap}>
-                <View style={bottomSheetMenu.handle} />
-              </View>
-              <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
-                <Text
-                  style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}
-                  numberOfLines={1}
-                >
-                  Saved draft
-                </Text>
-                <Text style={{ fontSize: 12, color: "#667085", marginTop: 4 }}>
-                  {durationLabel}. Resume to keep talking, or write it up when you’re ready.
-                </Text>
-              </View>
+        {recording ? (
+          <View>
+            <Pressable
+              onPress={() => {
+                const target = recording;
+                setDraftActionRecording(null);
+                requestAnimationFrame(() => setResumeRecording(target));
+              }}
+              style={bottomSheetMenu.row}
+              accessibilityRole="button"
+              accessibilityLabel="Resume check-in"
+            >
+              <Text style={[bottomSheetMenu.rowLabel, { color: "#4361EE", fontWeight: "600" }]}>
+                Resume check-in
+              </Text>
+              <Mic size={bottomSheetMenu.iconSize} color="#4361EE" />
+            </Pressable>
 
-              <Pressable
-                onPress={() => {
-                  setDraftActionRecording(null);
-                  setResumeRecording(recording);
-                  setView("list");
-                }}
-                style={bottomSheetMenu.row}
-                accessibilityRole="button"
-                accessibilityLabel="Resume check-in"
-              >
-                <Text style={[bottomSheetMenu.rowLabel, { color: "#4361EE", fontWeight: "600" }]}>
-                  Resume check-in
-                </Text>
-                <Mic size={bottomSheetMenu.iconSize} color="#4361EE" />
-              </Pressable>
+            <Pressable
+              onPress={() => {
+                setDraftActionRecording(null);
+                void writeUpDraftRecording(recording);
+              }}
+              style={bottomSheetMenu.row}
+              accessibilityRole="button"
+              accessibilityLabel="Write up"
+            >
+              <Text style={bottomSheetMenu.rowLabel}>Write up</Text>
+              <Sparkles size={bottomSheetMenu.iconSize} color="#4361EE" />
+            </Pressable>
 
-              <Pressable
-                onPress={() => {
-                  setDraftActionRecording(null);
-                  void writeUpDraftRecording(recording);
-                }}
-                style={bottomSheetMenu.row}
-                accessibilityRole="button"
-                accessibilityLabel="Write up"
-              >
-                <Text style={bottomSheetMenu.rowLabel}>Write up</Text>
-                <Sparkles size={bottomSheetMenu.iconSize} color="#4361EE" />
-              </Pressable>
-
-              <Pressable
-                onPress={() => {
-                  setDraftActionRecording(null);
-                  void dismissActiveRecording(recording);
-                }}
-                style={bottomSheetMenu.row}
-                accessibilityRole="button"
-                accessibilityLabel="Dismiss draft"
-              >
-                <Text style={bottomSheetMenu.rowLabelDestructive}>Dismiss</Text>
-                <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
-              </Pressable>
-
-              <Pressable
-                onPress={() => setDraftActionRecording(null)}
-                style={bottomSheetMenu.footer}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel"
-              >
-                <Text style={bottomSheetMenu.footerText}>Cancel</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+            <Pressable
+              onPress={() => {
+                setDraftActionRecording(null);
+                void dismissActiveRecording(recording);
+              }}
+              style={bottomSheetMenu.row}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss draft"
+            >
+              <Text style={bottomSheetMenu.rowLabelDestructive}>Dismiss</Text>
+              <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
+            </Pressable>
+          </View>
+        ) : null}
+      </AlenioBottomSheet>
     );
   };
 
