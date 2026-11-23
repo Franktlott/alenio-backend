@@ -78,9 +78,12 @@ export class WebCheckInRecorder {
     }
   }
 
-  start(stream: MediaStream) {
+  start(stream: MediaStream, options?: { startIndex?: number }) {
     this.stream = stream;
     this.mimeType = pickMimeType();
+    if (typeof options?.startIndex === "number" && options.startIndex > 0) {
+      this.index = options.startIndex;
+    }
     try {
       const AudioCtx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {

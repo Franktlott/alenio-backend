@@ -111,6 +111,7 @@ export function WebWorkspaceMemberPage() {
   const tab: Tab = searchParams.get("tab") === "goals" ? "goals" : "check-ins";
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [resumeDraft, setResumeDraft] = useState<CheckIn | null>(null);
+  const [resumeCapture, setResumeCapture] = useState<ActiveCheckInRecording | null>(null);
   const [goalOpen, setGoalOpen] = useState(false);
 
   const team = useMemo(() => {
@@ -276,7 +277,17 @@ export function WebWorkspaceMemberPage() {
             onResume={
               canStartCheckIn
                 ? (meeting) => {
+                    setResumeCapture(null);
                     setResumeDraft(meeting);
+                    setCheckInOpen(true);
+                  }
+                : undefined
+            }
+            onResumeCapture={
+              canStartCheckIn
+                ? (recording) => {
+                    setResumeDraft(null);
+                    setResumeCapture(recording);
                     setCheckInOpen(true);
                   }
                 : undefined
@@ -298,12 +309,14 @@ export function WebWorkspaceMemberPage() {
       <StartCheckInFlow
         open={checkInOpen}
         resume={resumeDraft}
+        resumeCapture={resumeCapture}
         teamId={teamId}
         userId={userId}
         memberName={name}
         onClose={() => {
           setCheckInOpen(false);
           setResumeDraft(null);
+          setResumeCapture(null);
         }}
       />
       <NewGoalDrawer
@@ -359,6 +372,7 @@ function CheckInsTab({
   planned,
   onStart,
   onResume,
+  onResumeCapture,
 }: {
   teamId: string;
   userId: string;
@@ -371,6 +385,7 @@ function CheckInsTab({
   planned: { id: string; title: string; startDate: string; allDay: boolean; isVideoMeeting: boolean }[];
   onStart?: () => void;
   onResume?: (meeting: CheckIn) => void;
+  onResumeCapture?: (recording: ActiveCheckInRecording) => void;
 }) {
   const [transcriptFor, setTranscriptFor] = useState<CheckIn | null>(null);
   const [pickedId, setOpenId] = useState<string | null | undefined>(undefined);
@@ -466,7 +481,7 @@ function CheckInsTab({
                     failed
                       ? (r.error ?? "We couldn't write up this recording.")
                       : transcriptDraft
-                        ? "Transcript draft — write it up when ready."
+                        ? "Transcript draft — resume, write up, or dismiss."
                         : "Seneca is writing this up…"
                   }
                   titleAddon={
@@ -476,10 +491,15 @@ function CheckInsTab({
                   }
                   trailing={
                     transcriptDraft || failed ? (
-                      <span style={{ display: "inline-flex", gap: 8 }}>
+                      <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+                        {transcriptDraft && onResumeCapture ? (
+                          <Button variant="primary" onClick={() => onResumeCapture(r)}>
+                            Resume
+                          </Button>
+                        ) : null}
                         {transcriptDraft ? (
                           <Button
-                            variant="primary"
+                            variant="secondary"
                             onClick={() => writeUpDraft.mutate(r)}
                             disabled={writeUpDraft.isPending}
                           >

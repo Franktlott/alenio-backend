@@ -123,8 +123,10 @@ import { loadExpoAudio, type ExpoAudioApi } from "@/lib/expo-audio-module";
 import {
   cancelCheckInRecording,
   finishCheckInRecording,
+  resumeCheckInRecording,
   saveCheckInRecordingDraft,
   startCheckInRecording,
+  type CheckInRecording,
 } from "@/lib/check-in-recordings-api";
 import {
   applyLiveTranscriptEvent,
@@ -177,6 +179,11 @@ type SheetProps = {
    * watching a spinner.
    */
   onProcessingStarted: (recordingId: string) => void;
+  /**
+   * When set, skip consent and continue capturing on this existing draft
+   * recording (after /resume).
+   */
+  resumeRecording?: Pick<CheckInRecording, "id" | "durationSec" | "transcript"> | null;
 };
 
 export function CheckInRecordingSheet(props: SheetProps) {
@@ -255,12 +262,13 @@ function RecordingFlow({
   onClose,
   onWriteManually,
   onProcessingStarted,
+  resumeRecording = null,
   audio,
 }: SheetProps & { audio: ExpoAudioApi }) {
   const insets = useSafeAreaInsets();
   const { width: windowW, height: windowH } = useWindowDimensions();
   const cluster = useStatusClusterInset({ fullScreen: true });
-  const [step, setStep] = useState<Step>("consent");
+  const [step, setStep] = useState<Step>(resumeRecording ? "recording" : "consent");
   /** Top band holds the dusk mountain so white hero copy stays readable. */
   const consentHeroHeight = Math.round(Math.min(windowH * 0.48, windowW * 1.05));
   /** Shorter band on the live recording stage — transcript is the focus. */
@@ -376,32 +384,37 @@ function RecordingFlow({
     return () => clearTimeout(timer);
   }, [step, paused, starting, recorderState.isRecording]);
 
-  const begin = useCallback(async () => {
-    if (starting) return;
-    setStarting(true);
-    setError(null);
-    try {
-      const granted = await ensureMicrophoneAccess();
-      if (!granted) {
-        setError(
-          "Alenio needs microphone access to record this check-in. You can turn it on in Settings.",
-        );
-        setStep("error");
-        return;
+  const beginCapture = useCallback(
+    async (recording: { id: string; startIndex?: number; priorDurationSec?: number; priorTranscript?: string | null }) => {
+      recordingIdRef.current = recording.id;
+      finishingRef.current = false;
+      if (recording.priorDurationSec && recording.priorDurationSec > 0) {
+        setElapsedSec(recording.priorDurationSec);
+        elapsedRef.current = recording.priorDurationSec;
       }
-      const created = await startCheckInRecording(teamId, memberUserId, templateId);
-      recordingIdRef.current = created.id;
+      if (recording.priorTranscript?.trim()) {
+        setTranscriptLines([
+          {
+            id: "prior-draft",
+            text: recording.priorTranscript.trim(),
+            interim: false,
+            startMs: 0,
+            endMs: null,
+            speakerLabel: null,
+          },
+        ]);
+      }
       await prepareAudioSession();
       const session = new CheckInSegmentRecorder(
         recorder,
-        { teamId, memberUserId, recordingId: created.id },
+        { teamId, memberUserId, recordingId: recording.id },
         {
           onSegmentsChange: setSegments,
           onError: (message) => setError(recordingErrorMessage(message)),
         },
       );
       sessionRef.current = session;
-      await session.start();
+      await session.start({ startIndex: recording.startIndex ?? 0 });
 
       /**
        * A second file recorder for live STT steals the mic from the retention
@@ -411,7 +424,7 @@ function RecordingFlow({
       const canTeeLivePcm = Platform.OS === "web";
       if (canTeeLivePcm) {
         const liveClient = new LiveTranscriptionClient(
-          { teamId, memberUserId, recordingId: created.id },
+          { teamId, memberUserId, recordingId: recording.id },
           {
             onEvent: (event) => {
               setTranscriptLines((current) =>
@@ -451,13 +464,70 @@ function RecordingFlow({
       }
 
       setStep("recording");
+    },
+    [teamId, memberUserId, recorder, liveRecorder],
+  );
+
+  const begin = useCallback(async () => {
+    if (starting) return;
+    setStarting(true);
+    setError(null);
+    try {
+      const granted = await ensureMicrophoneAccess();
+      if (!granted) {
+        setError(
+          "Alenio needs microphone access to record this check-in. You can turn it on in Settings.",
+        );
+        setStep("error");
+        return;
+      }
+      const created = await startCheckInRecording(teamId, memberUserId, templateId);
+      await beginCapture({ id: created.id });
     } catch (err) {
       setError(recordingErrorMessage(err));
       setStep("error");
     } finally {
       setStarting(false);
     }
-  }, [starting, teamId, memberUserId, templateId, recorder, liveRecorder]);
+  }, [starting, teamId, memberUserId, templateId, beginCapture]);
+
+  /** Continue an existing transcript draft without the consent screen. */
+  const resumeDraft = useCallback(async () => {
+    if (!resumeRecording || starting || recordingIdRef.current) return;
+    setStarting(true);
+    setError(null);
+    try {
+      const granted = await ensureMicrophoneAccess();
+      if (!granted) {
+        setError(
+          "Alenio needs microphone access to record this check-in. You can turn it on in Settings.",
+        );
+        setStep("error");
+        return;
+      }
+      const resumed = await resumeCheckInRecording(
+        teamId,
+        memberUserId,
+        resumeRecording.id,
+      );
+      await beginCapture({
+        id: resumed.id,
+        startIndex: resumed.nextSegmentIndex ?? 0,
+        priorDurationSec: resumeRecording.durationSec,
+        priorTranscript: resumeRecording.transcript,
+      });
+    } catch (err) {
+      setError(recordingErrorMessage(err));
+      setStep("error");
+    } finally {
+      setStarting(false);
+    }
+  }, [resumeRecording, starting, teamId, memberUserId, beginCapture]);
+
+  useEffect(() => {
+    if (!visible || !resumeRecording) return;
+    void resumeDraft();
+  }, [visible, resumeRecording, resumeDraft]);
 
   const hasCapture = useCallback(() => {
     return (

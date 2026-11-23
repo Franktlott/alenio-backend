@@ -426,6 +426,55 @@ checkInRecordingsRouter.post(
   },
 );
 
+// POST /api/teams/:teamId/members/:memberUserId/check-in-recordings/:id/resume
+// Re-open a transcript draft so the leader can keep recording.
+checkInRecordingsRouter.post(
+  "/:memberUserId/check-in-recordings/:recordingId/resume",
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+    const recordingId = c.req.param("recordingId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership || !canManageCheckIns(membership.role)) {
+      return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
+    }
+
+    const recording = await loadOwnedRecording(recordingId, teamId, memberUserId, user.id);
+    if (!recording) {
+      return c.json({ error: { message: "Recording not found", code: "NOT_FOUND" } }, 404);
+    }
+    if (recording.status !== "draft") {
+      return c.json(
+        { error: { message: "Only a transcript draft can be resumed.", code: "INVALID_STATE" } },
+        409,
+      );
+    }
+
+    try {
+      const updated = await prisma.checkInRecording.update({
+        where: { id: recordingId },
+        data: { status: "recording", error: null },
+      });
+      const lastSegment = await prisma.checkInRecordingSegment.findFirst({
+        where: { recordingId },
+        orderBy: { index: "desc" },
+        select: { index: true },
+      });
+      const nextSegmentIndex = lastSegment ? lastSegment.index + 1 : 0;
+      return c.json({
+        data: {
+          ...serializeRecording(updated, user.id),
+          nextSegmentIndex,
+        },
+      });
+    } catch (err) {
+      return prismaRouteError(c, err, "[check-in-recordings] resume failed");
+    }
+  },
+);
+
 // POST /api/teams/:teamId/members/:memberUserId/check-in-recordings/:id/draft
 // Stop capture and keep audio + raw transcript. No Seneca write-up yet.
 checkInRecordingsRouter.post(

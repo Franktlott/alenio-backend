@@ -25,9 +25,11 @@ import {
   fetchCheckIns,
   finishCheckInRecording,
   isLeaderFillableField,
+  resumeCheckInRecording,
   saveCheckInRecordingDraft,
   startCheckInRecording,
   updateCheckIn,
+  type ActiveCheckInRecording,
   type CheckIn,
   type CheckInField,
 } from "../../lib/member-development-api";
@@ -91,14 +93,17 @@ export function StartCheckInFlow({
   userId,
   memberName,
   resume,
+  resumeCapture = null,
   onClose,
 }: {
   open: boolean;
   teamId: string;
   userId: string;
   memberName: string;
-  /** A draft to pick back up, skipping straight to the form. */
+  /** A draft meeting to pick back up, skipping straight to the form. */
   resume?: CheckIn | null;
+  /** A transcript draft recording to continue capturing. */
+  resumeCapture?: ActiveCheckInRecording | null;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -162,13 +167,18 @@ export function StartCheckInFlow({
     liveRef.current = null;
     if (resume) {
       loadDraft(resume);
+    } else if (resumeCapture) {
+      setEditing(null);
+      setResponses({});
+      setOpenTitle("");
+      setView("recording");
     } else {
       setEditing(null);
       setResponses({});
       setOpenTitle("");
       setView(canRecord ? "capture" : "fill");
     }
-  }, [open, resume, canRecord, loadDraft]);
+  }, [open, resume, resumeCapture, canRecord, loadDraft]);
 
   useEffect(() => {
     viewRef.current = view;
@@ -252,22 +262,36 @@ export function StartCheckInFlow({
     };
   }, [view, stage, recordingId, teamId, userId, qc, loadDraft]);
 
-  const beginRecording = async () => {
+  const beginRecording = async (options?: {
+    recordingId: string;
+    startIndex?: number;
+    priorDurationSec?: number;
+    priorTranscript?: string | null;
+  }) => {
     if (starting) return;
     setStarting(true);
     setError(null);
     let stream: MediaStream | null = null;
     try {
       stream = await WebCheckInRecorder.requestMicrophone();
-      const created = await startCheckInRecording(teamId, userId, null);
-      setRecordingId(created.id);
-      const recorder = new WebCheckInRecorder({ teamId, memberUserId: userId, recordingId: created.id }, (pending, failed) =>
-        setUploads({ pending, failed }),
+      const recording =
+        options ??
+        (await startCheckInRecording(teamId, userId, null).then((created) => ({
+          recordingId: created.id,
+          startIndex: 0,
+          priorDurationSec: 0,
+          priorTranscript: null as string | null,
+        })));
+      setRecordingId(recording.recordingId);
+      recordingIdRef.current = recording.recordingId;
+      const recorder = new WebCheckInRecorder(
+        { teamId, memberUserId: userId, recordingId: recording.recordingId },
+        (pending, failed) => setUploads({ pending, failed }),
       );
       recorderRef.current = recorder;
-      recorder.start(stream);
+      recorder.start(stream, { startIndex: recording.startIndex ?? 0 });
       const live = new WebLiveTranscription(
-        { teamId, memberUserId: userId, recordingId: created.id },
+        { teamId, memberUserId: userId, recordingId: recording.recordingId },
         {
           onLines: setTranscriptLines,
           onStatus: (status, message) => {
@@ -279,12 +303,26 @@ export function StartCheckInFlow({
       );
       liveRef.current = live;
       void live.start(stream);
-      elapsedRef.current = 0;
-      setElapsed(0);
+      const prior = recording.priorDurationSec ?? 0;
+      elapsedRef.current = prior;
+      setElapsed(prior);
       setPaused(false);
       setShowTranscript(true);
       stickTranscriptToBottomRef.current = true;
-      setTranscriptLines([]);
+      setTranscriptLines(
+        recording.priorTranscript?.trim()
+          ? [
+              {
+                id: "prior-draft",
+                text: recording.priorTranscript.trim(),
+                interim: false,
+                startMs: 0,
+                endMs: null,
+                speakerLabel: null,
+              },
+            ]
+          : [],
+      );
       setView("recording");
     } catch (err) {
       stream?.getTracks().forEach((track) => track.stop());
@@ -294,6 +332,26 @@ export function StartCheckInFlow({
       setStarting(false);
     }
   };
+
+  useEffect(() => {
+    if (!open || !resumeCapture || starting || recordingIdRef.current) return;
+    void (async () => {
+      try {
+        const resumed = await resumeCheckInRecording(teamId, userId, resumeCapture.id);
+        await beginRecording({
+          recordingId: resumed.id,
+          startIndex: resumed.nextSegmentIndex ?? 0,
+          priorDurationSec: resumeCapture.durationSec,
+          priorTranscript: resumeCapture.transcript,
+        });
+      } catch (err) {
+        setError(errorMessage(err, "We couldn't resume that draft."));
+        setView("error");
+      }
+    })();
+    // Only kick off once when the sheet opens on a capture draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, resumeCapture?.id]);
 
   const hasCapture = useCallback(() => {
     return (

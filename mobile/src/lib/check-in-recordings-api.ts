@@ -169,6 +169,18 @@ export function saveCheckInRecordingDraft(
   );
 }
 
+/** Re-open a transcript draft to continue recording. */
+export function resumeCheckInRecording(
+  teamId: string,
+  memberUserId: string,
+  recordingId: string,
+): Promise<CheckInRecording & { nextSegmentIndex: number }> {
+  return api.post<CheckInRecording & { nextSegmentIndex: number }>(
+    `${recordingsPath(teamId, memberUserId)}/${encodeURIComponent(recordingId)}/resume`,
+    {},
+  );
+}
+
 export function fetchCheckInRecording(
   teamId: string,
   memberUserId: string,

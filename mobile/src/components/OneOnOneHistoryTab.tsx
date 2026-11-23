@@ -41,6 +41,7 @@ import {
   Video,
   FileText,
   LogOut,
+  Mic,
 } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import type { Task } from "@/lib/types";
@@ -385,6 +386,13 @@ export function OneOnOneHistoryTab({
   const [editingMeeting, setEditingMeeting] = useState<OneOnOneMeeting | null>(null);
   /** New check-ins record with no template; Seneca structures the write-up. */
   const [openRecording, setOpenRecording] = useState(false);
+  /** Transcript draft opened from the list to continue or write up. */
+  const [draftActionRecording, setDraftActionRecording] =
+    useState<ActiveCheckInRecording | null>(null);
+  /** Existing draft recording to continue capturing. */
+  const [resumeRecording, setResumeRecording] = useState<ActiveCheckInRecording | null>(
+    null,
+  );
   const [transcriptMeetingId, setTranscriptMeetingId] = useState<string | null>(null);
   /** A recording handed off to the backend, watched so its draft opens itself. */
   const [processingRecordingId, setProcessingRecordingId] = useState<string | null>(null);
@@ -706,22 +714,7 @@ export function OneOnOneHistoryTab({
             return;
           }
           if (transcriptDraft) {
-            Alert.alert(
-              "Transcript draft",
-              "This conversation is saved. Write it up when you are ready, or dismiss it.",
-              [
-                { text: "Keep it", style: "cancel" },
-                {
-                  text: "Dismiss",
-                  style: "destructive",
-                  onPress: () => void dismissActiveRecording(recording),
-                },
-                {
-                  text: "Write up",
-                  onPress: () => void writeUpDraftRecording(recording),
-                },
-              ],
-            );
+            setDraftActionRecording(recording);
             return;
           }
           toast({
@@ -783,7 +776,7 @@ export function OneOnOneHistoryTab({
               {failed
                 ? "Tap for what went wrong"
                 : transcriptDraft
-                  ? "Tap to write up or dismiss"
+                  ? "Tap to resume, write up, or dismiss"
                   : "Alenio is turning your conversation into a draft"}
             </Text>
           </View>
@@ -3538,7 +3531,7 @@ export function OneOnOneHistoryTab({
   };
 
   const renderRecordingSheet = () => {
-    if (!openRecording) return null;
+    if (!openRecording && !resumeRecording) return null;
     return (
       <CheckInRecordingSheet
         visible
@@ -3548,13 +3541,28 @@ export function OneOnOneHistoryTab({
         templateId={null}
         templateTitle={OPEN_CHECK_IN_TITLE}
         questions={[]}
-        onClose={() => setOpenRecording(false)}
+        resumeRecording={
+          resumeRecording
+            ? {
+                id: resumeRecording.id,
+                durationSec: resumeRecording.durationSec,
+                transcript: resumeRecording.transcript,
+              }
+            : null
+        }
+        onClose={() => {
+          setOpenRecording(false);
+          setResumeRecording(null);
+          void refetchActiveRecordings();
+        }}
         onWriteManually={() => {
           setOpenRecording(false);
+          setResumeRecording(null);
           openNewCheckInForm();
         }}
         onProcessingStarted={(recordingId) => {
           setOpenRecording(false);
+          setResumeRecording(null);
           setProcessingRecordingId(recordingId);
           // Back to the list, where the locked row shows the write-up landing.
           setView("list");
@@ -3564,9 +3572,107 @@ export function OneOnOneHistoryTab({
     );
   };
 
+  const renderDraftActionSheet = () => {
+    if (!draftActionRecording) return null;
+    const recording = draftActionRecording;
+    const durationLabel =
+      recording.durationSec > 0
+        ? `${Math.floor(recording.durationSec / 60)}:${String(recording.durationSec % 60).padStart(2, "0")} recorded`
+        : "Saved transcript";
+    return (
+      <Modal
+        visible
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDraftActionRecording(null)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(15, 23, 42, 0.45)",
+            justifyContent: "flex-end",
+          }}
+          onPress={() => setDraftActionRecording(null)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation?.()}>
+            <View style={checkInActionSheetStyle(insets.bottom, false)}>
+              <View style={bottomSheetMenu.handleWrap}>
+                <View style={bottomSheetMenu.handle} />
+              </View>
+              <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
+                <Text
+                  style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}
+                  numberOfLines={1}
+                >
+                  Saved draft
+                </Text>
+                <Text style={{ fontSize: 12, color: "#667085", marginTop: 4 }}>
+                  {durationLabel}. Resume to keep talking, or write it up when you’re ready.
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={() => {
+                  setDraftActionRecording(null);
+                  setResumeRecording(recording);
+                  setView("list");
+                }}
+                style={bottomSheetMenu.row}
+                accessibilityRole="button"
+                accessibilityLabel="Resume check-in"
+              >
+                <Text style={[bottomSheetMenu.rowLabel, { color: "#4361EE", fontWeight: "600" }]}>
+                  Resume check-in
+                </Text>
+                <Mic size={bottomSheetMenu.iconSize} color="#4361EE" />
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setDraftActionRecording(null);
+                  void writeUpDraftRecording(recording);
+                }}
+                style={bottomSheetMenu.row}
+                accessibilityRole="button"
+                accessibilityLabel="Write up"
+              >
+                <Text style={bottomSheetMenu.rowLabel}>Write up</Text>
+                <Sparkles size={bottomSheetMenu.iconSize} color="#4361EE" />
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setDraftActionRecording(null);
+                  void dismissActiveRecording(recording);
+                }}
+                style={bottomSheetMenu.row}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss draft"
+              >
+                <Text style={bottomSheetMenu.rowLabelDestructive}>Dismiss</Text>
+                <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
+              </Pressable>
+
+              <Pressable
+                onPress={() => setDraftActionRecording(null)}
+                style={bottomSheetMenu.footer}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={bottomSheetMenu.footerText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  };
+
   const closeCheckInFlow = () => {
     setView("list");
     setOpenRecording(false);
+    setResumeRecording(null);
+    setDraftActionRecording(null);
     setSelectedTemplate(null);
     setEditingMeeting(null);
     setResponses({});
@@ -3758,6 +3864,7 @@ export function OneOnOneHistoryTab({
     >
       {renderCheckInFlowModal()}
       {renderRecordingSheet()}
+      {renderDraftActionSheet()}
       <AlenioBottomSheet
         visible={upcomingListOpen}
         title="Upcoming check-ins"

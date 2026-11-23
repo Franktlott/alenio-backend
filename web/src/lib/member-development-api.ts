@@ -251,6 +251,14 @@ export function saveCheckInRecordingDraft(
   ).then((r) => r.data);
 }
 
+/** Re-open a transcript draft to continue recording. */
+export function resumeCheckInRecording(teamId: string, userId: string, recordingId: string) {
+  return apiPostJson<{ data: CheckInRecording & { nextSegmentIndex: number } }>(
+    `${recordings(teamId, userId)}/${encodeURIComponent(recordingId)}/resume`,
+    {},
+  ).then((r) => r.data);
+}
+
 export function startLiveTranscriptionSession(
   teamId: string,
   userId: string,

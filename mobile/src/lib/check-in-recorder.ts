@@ -178,9 +178,12 @@ export class CheckInSegmentRecorder {
     return this.segments.filter((segment) => segment.status !== "uploaded").length;
   }
 
-  async start(): Promise<void> {
+  async start(options?: { startIndex?: number }): Promise<void> {
     this.stopped = false;
     this.paused = false;
+    if (typeof options?.startIndex === "number" && options.startIndex > 0) {
+      this.segmentIndex = options.startIndex;
+    }
     this.acceptedOptions = await prepareWithFallback(this.recorder, null);
     this.recorder.record();
     this.segmentStartedAt = Date.now();
