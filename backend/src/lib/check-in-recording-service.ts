@@ -32,7 +32,19 @@ export const SEGMENT_STALE_MS = 10 * 60 * 1000;
 export const RECORDING_ABANDONED_MS = 2 * RECORDING_SEGMENT_MAX_DURATION_SEC * 1000;
 export const SEGMENT_MAX_ATTEMPTS = 3;
 
-export type RecordingStatus = "recording" | "transcribing" | "ready" | "failed";
+/**
+ * recording = capture in progress;
+ * draft = capture stopped, raw transcript kept, no AI write-up yet;
+ * transcribing = write-up in flight;
+ * ready = draft check-in meeting created;
+ * failed = write-up gave up (see error).
+ */
+export type RecordingStatus =
+  | "recording"
+  | "draft"
+  | "transcribing"
+  | "ready"
+  | "failed";
 
 async function clearSegmentAudio(segment: {
   id: string;
@@ -192,12 +204,12 @@ export function recordingHasRecoverableContent(recording: {
 
 export type CancelRecordingResult =
   | { action: "deleted" }
-  | { action: "finished"; recordingId: string };
+  | { action: "drafted"; recordingId: string };
 
 /**
- * Decide cancel vs finish for a recording row.
+ * Decide cancel vs draft for a recording row.
  * - `failed`: always delete (leader dismissed a write-up that already failed).
- * - recoverable content while still live: finish to draft.
+ * - recoverable content while still live (or a transcript draft): keep as draft.
  * - empty: delete.
  */
 export function cancelRecordingDecision(recording: {
@@ -206,14 +218,15 @@ export function cancelRecordingDecision(recording: {
   transcript?: string | null;
   segmentsCount?: number;
   transcriptSegmentsCount?: number;
-}): "finish" | "delete" {
+}): "draft" | "delete" {
   if (recording.status === "failed") return "delete";
-  return recordingHasRecoverableContent(recording) ? "finish" : "delete";
+  if (recording.status === "draft") return "delete";
+  return recordingHasRecoverableContent(recording) ? "draft" : "delete";
 }
 
 /**
- * Cancel is only allowed for empty starts or already-failed write-ups.
- * Live recordings with recoverable content are finished into a draft instead.
+ * Cancel is only allowed for empty starts or already-failed/dismissed drafts.
+ * Live recordings with recoverable content are saved as transcript drafts.
  */
 export async function cancelOrFinishRecording(
   recordingId: string,
@@ -240,32 +253,138 @@ export async function cancelOrFinishRecording(
     transcriptSegmentsCount: recording._count.transcriptSegments,
   });
 
-  if (decision === "finish") {
-    if (recording.status === "recording") {
-      await prisma.checkInRecording.update({
-        where: { id: recordingId },
-        data: { status: "transcribing" },
-      });
-    }
-    // Same background path as /finish — never drop a started conversation.
-    void finishRecording(recordingId).catch(async (err) => {
-      console.error("[check-in-recordings] cancel→finish failed", err);
+  if (decision === "draft") {
+    // Keep the conversation — transcript only, no AI write-up.
+    void saveRecordingDraft(recordingId).catch(async (err) => {
+      console.error("[check-in-recordings] cancel→draft failed", err);
       await prisma.checkInRecording
         .update({
           where: { id: recordingId },
           data: {
             status: "failed",
-            error: "We could not turn that recording into a check-in.",
+            error: "We could not save that recording as a draft.",
           },
         })
         .catch(() => null);
     });
-    return { action: "finished", recordingId };
+    return { action: "drafted", recordingId };
   }
 
   await purgeRecordingAudio(recordingId);
   await prisma.checkInRecording.delete({ where: { id: recordingId } });
   return { action: "deleted" };
+}
+
+/**
+ * Assembles raw transcript text from live segments and/or audio STT.
+ * Does not create a check-in meeting.
+ */
+export async function assembleRecordingTranscript(
+  recordingId: string,
+  options: { minLiveWords?: number } = {},
+): Promise<{ transcript: string; hasAudioSegments: boolean } | null> {
+  const recording = await prisma.checkInRecording.findUnique({
+    where: { id: recordingId },
+    include: { segments: true },
+  });
+  if (!recording) return null;
+
+  const minLiveWords = options.minLiveWords ?? 1;
+
+  if (recording.segments.length === 0 && recording.transcript?.trim()) {
+    return {
+      transcript: recording.transcript.trim(),
+      hasAudioSegments: false,
+    };
+  }
+
+  const liveTranscript = await preferLiveTranscriptForFinish(
+    recordingId,
+    minLiveWords,
+  );
+  if (liveTranscript) {
+    return {
+      transcript: liveTranscript,
+      hasAudioSegments: recording.segments.length > 0,
+    };
+  }
+
+  if (recording.segments.length === 0) {
+    return {
+      transcript: recording.transcript?.trim() ?? "",
+      hasAudioSegments: false,
+    };
+  }
+
+  const pending = recording.segments.filter(
+    (segment) => segment.status === "uploaded" || segment.status === "transcribing",
+  );
+  for (const segment of pending) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const failed = await transcribeSegment(segment.id).then(
+        () => false,
+        () => true,
+      );
+      if (!failed) break;
+    }
+  }
+
+  const segments = await prisma.checkInRecordingSegment.findMany({
+    where: { recordingId },
+  });
+  return {
+    transcript: stitchTranscript(segments),
+    hasAudioSegments: true,
+  };
+}
+
+export type SaveRecordingDraftResult =
+  | { ok: true; transcript: string }
+  | { ok: false; message: string };
+
+/**
+ * Stops the write-up path: keeps audio + raw transcript as status `draft`.
+ * Seneca is not called until the leader explicitly finishes / writes up.
+ */
+export async function saveRecordingDraft(
+  recordingId: string,
+): Promise<SaveRecordingDraftResult> {
+  const recording = await prisma.checkInRecording.findUnique({
+    where: { id: recordingId },
+    select: {
+      id: true,
+      status: true,
+      meetingId: true,
+      transcript: true,
+    },
+  });
+  if (!recording) return { ok: false, message: "Recording not found." };
+  if (recording.meetingId) {
+    return { ok: true, transcript: recording.transcript ?? "" };
+  }
+  if (recording.status === "draft" && recording.transcript?.trim()) {
+    return { ok: true, transcript: recording.transcript };
+  }
+
+  const assembled = await assembleRecordingTranscript(recordingId, {
+    minLiveWords: 1,
+  });
+  if (!assembled) return { ok: false, message: "Recording not found." };
+
+  if (assembled.hasAudioSegments) {
+    await startAudioRetention(recordingId);
+  }
+
+  await prisma.checkInRecording.update({
+    where: { id: recordingId },
+    data: {
+      transcript: assembled.transcript || null,
+      status: "draft",
+      error: null,
+    },
+  });
+
+  return { ok: true, transcript: assembled.transcript };
 }
 
 /**
@@ -283,9 +402,12 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     return { ok: true, meetingId: recording.meetingId, unanswered: [] };
   }
 
-  // A video check-in arrives as a finished transcript with no audio segments,
-  // so there is nothing to transcribe or stitch: write it up as it stands.
-  if (recording.segments.length === 0 && recording.transcript?.trim()) {
+  // Transcript draft already assembled — only run the AI write-up.
+  if (recording.status === "draft" && recording.transcript?.trim()) {
+    await prisma.checkInRecording.update({
+      where: { id: recordingId },
+      data: { status: "transcribing", error: null },
+    });
     return writeUpTranscript({
       recordingId,
       teamId: recording.teamId,
@@ -296,56 +418,18 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     });
   }
 
-  // Prefer finalized live-transcription segments when they already cover enough
-  // speech. Fall back to batch segment STT so a dead live session still writes up.
-  const liveTranscript = await preferLiveTranscriptForFinish(
-    recordingId,
-    MIN_TRANSCRIPT_WORDS,
-  );
-  if (liveTranscript) {
-    if (recording.segments.length > 0) {
-      await startAudioRetention(recordingId);
-    }
-    await prisma.checkInRecording.update({
-      where: { id: recordingId },
-      data: { transcript: liveTranscript, status: "transcribing" },
-    });
-    return writeUpTranscript({
-      recordingId,
-      teamId: recording.teamId,
-      memberUserId: recording.memberUserId,
-      createdById: recording.createdById,
-      templateId: recording.templateId,
-      transcript: liveTranscript,
-    });
-  }
-
-  // Finish means every segment is uploaded, so the retention window opens here
-  // rather than after transcription. Writing it up can then take as long as it
-  // needs, and a failed write-up still leaves the audio replayable for a retry.
-  await startAudioRetention(recordingId);
-
-  const pending = recording.segments.filter(
-    (segment) => segment.status === "uploaded" || segment.status === "transcribing",
-  );
-  for (const segment of pending) {
-    // One retry inline covers a transient provider hiccup on the last segment.
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const failed = await transcribeSegment(segment.id).then(
-        () => false,
-        () => true,
-      );
-      if (!failed) break;
-    }
-  }
-
-  const segments = await prisma.checkInRecordingSegment.findMany({
-    where: { recordingId },
+  const assembled = await assembleRecordingTranscript(recordingId, {
+    minLiveWords: MIN_TRANSCRIPT_WORDS,
   });
-  const transcript = stitchTranscript(segments);
+  if (!assembled) return { ok: false, message: "Recording not found." };
+
+  if (assembled.hasAudioSegments) {
+    await startAudioRetention(recordingId);
+  }
+
   await prisma.checkInRecording.update({
     where: { id: recordingId },
-    data: { transcript, status: "transcribing" },
+    data: { transcript: assembled.transcript, status: "transcribing" },
   });
 
   return writeUpTranscript({
@@ -354,7 +438,7 @@ export async function finishRecording(recordingId: string): Promise<FinishRecord
     memberUserId: recording.memberUserId,
     createdById: recording.createdById,
     templateId: recording.templateId,
-    transcript,
+    transcript: assembled.transcript,
   });
 }
 
@@ -525,7 +609,8 @@ export async function sweepStalledRecordings(): Promise<{
       transcriptSegmentsCount: recording._count.transcriptSegments,
     });
     if (hasContent) {
-      const result = await finishRecording(recording.id).catch(() => null);
+      // Abandoned capture becomes a transcript draft — write-up waits for the leader.
+      const result = await saveRecordingDraft(recording.id).catch(() => null);
       if (result?.ok) finishedRecordings += 1;
       continue;
     }

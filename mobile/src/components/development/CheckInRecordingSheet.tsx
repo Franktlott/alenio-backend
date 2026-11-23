@@ -122,6 +122,7 @@ import {
 import { loadExpoAudio, type ExpoAudioApi } from "@/lib/expo-audio-module";
 import {
   cancelCheckInRecording,
+  finishCheckInRecording,
   saveCheckInRecordingDraft,
   startCheckInRecording,
 } from "@/lib/check-in-recordings-api";
@@ -466,24 +467,27 @@ function RecordingFlow({
     );
   }, []);
 
-  const stopAndProcess = useCallback(async () => {
+  const stopCapture = useCallback(async () => {
     const session = sessionRef.current;
+    liveClientRef.current?.commit();
+    await stopLiveTranscription();
+    if (session) await session.stop();
+    await releaseAudioSession();
+    sessionRef.current = null;
+  }, [stopLiveTranscription]);
+
+  /** Keep audio + raw transcript only — no Seneca write-up yet. */
+  const stopAndSaveDraft = useCallback(async () => {
     const recordingId = recordingIdRef.current;
-    if (!session || !recordingId || finishingRef.current) return;
+    if (!recordingId || finishingRef.current) return;
     finishingRef.current = true;
     setStep("processing");
     setStage("uploading");
     const total = elapsedRef.current;
     try {
-      liveClientRef.current?.commit();
-      await stopLiveTranscription();
-      // Uploading the final segment is the only part worth waiting on; the
-      // transcript and draft are built server-side.
-      await session.stop();
-      await releaseAudioSession();
+      await stopCapture();
       setStage("transcribing");
       await saveCheckInRecordingDraft(teamId, memberUserId, recordingId, total);
-      sessionRef.current = null;
       recordingIdRef.current = null;
       onProcessingStarted(recordingId);
     } catch (err) {
@@ -491,18 +495,39 @@ function RecordingFlow({
       setError(recordingErrorMessage(err));
       setStep("error");
     }
-  }, [teamId, memberUserId, onProcessingStarted, stopLiveTranscription]);
+  }, [teamId, memberUserId, onProcessingStarted, stopCapture]);
+
+  /** End Check-In: assemble transcript and run the AI write-up into a draft meeting. */
+  const stopAndWriteUp = useCallback(async () => {
+    const recordingId = recordingIdRef.current;
+    if (!recordingId || finishingRef.current) return;
+    finishingRef.current = true;
+    setStep("processing");
+    setStage("uploading");
+    const total = elapsedRef.current;
+    try {
+      await stopCapture();
+      setStage("transcribing");
+      await finishCheckInRecording(teamId, memberUserId, recordingId, total);
+      recordingIdRef.current = null;
+      onProcessingStarted(recordingId);
+    } catch (err) {
+      finishingRef.current = false;
+      setError(recordingErrorMessage(err));
+      setStep("error");
+    }
+  }, [teamId, memberUserId, onProcessingStarted, stopCapture]);
 
   // Stop automatically rather than letting a forgotten recording run all day.
   useEffect(() => {
     if (step !== "recording" || paused) return;
     if (elapsedSec * 1000 < MAX_RECORDING_MS) return;
-    void stopAndProcess();
-  }, [step, paused, elapsedSec, stopAndProcess]);
+    void stopAndWriteUp();
+  }, [step, paused, elapsedSec, stopAndWriteUp]);
 
   /**
-   * Leaving the app mid-check-in finishes to a draft instead of relying on the
-   * hourly abandoned sweep (and instead of losing an unflushed open segment).
+   * Leaving the app mid-check-in saves a transcript draft instead of relying on
+   * the hourly abandoned sweep (and instead of losing an unflushed open segment).
    */
   useEffect(() => {
     if (!visible) return;
@@ -511,11 +536,11 @@ function RecordingFlow({
       if (next !== "background") return;
       if (stepRef.current !== "recording") return;
       if (!recordingIdRef.current || !hasCapture()) return;
-      void stopAndProcess();
+      void stopAndSaveDraft();
     };
     const sub = AppState.addEventListener("change", onChange);
     return () => sub.remove();
-  }, [visible, hasCapture, stopAndProcess]);
+  }, [visible, hasCapture, stopAndSaveDraft]);
 
   /** Seconds until the cap stops the recording, or null while that is far off. */
   const maxSec = Math.floor(MAX_RECORDING_MS / 1000);
@@ -568,7 +593,7 @@ function RecordingFlow({
   }, [transcriptLines, showTranscript, scrollTranscriptToEnd]);
 
   /**
-   * Safe leave: finish to draft when anything was captured; cancel only empty rows.
+   * Safe leave: transcript draft when anything was captured; cancel only empty rows.
    * Closing the consent screen stays one tap.
    */
   const requestSafeExit = useCallback(() => {
@@ -580,12 +605,12 @@ function RecordingFlow({
     if (hasCapture()) {
       Alert.alert(
         "Save draft & leave?",
-        `What you covered with ${firstName} will be saved as a draft you can review anytime.`,
+        `What you covered with ${firstName} will be saved as a transcript draft. You can write it up later.`,
         [
           { text: "Keep talking", style: "cancel" },
           {
             text: "Save draft & leave",
-            onPress: () => void stopAndProcess(),
+            onPress: () => void stopAndSaveDraft(),
           },
         ],
       );
@@ -603,7 +628,7 @@ function RecordingFlow({
         },
       ],
     );
-  }, [cancelEmpty, firstName, hasCapture, stopAndProcess]);
+  }, [cancelEmpty, firstName, hasCapture, stopAndSaveDraft]);
 
   const confirmFinish = useCallback(() => {
     Alert.alert(
@@ -613,10 +638,10 @@ function RecordingFlow({
         : "Alenio will write up the questions covered, what was said, and a summary for you to review before anything is saved.",
       [
         { text: "Keep talking", style: "cancel" },
-        { text: "Finish", onPress: () => void stopAndProcess() },
+        { text: "Finish", onPress: () => void stopAndWriteUp() },
       ],
     );
-  }, [stopAndProcess, templateId, templateTitle]);
+  }, [stopAndWriteUp, templateId, templateTitle]);
 
   const pendingUploads = segments.filter((segment) => segment.status !== "uploaded").length;
   const failedUploads = segments.filter((segment) => segment.status === "failed").length;
@@ -1231,8 +1256,7 @@ function RecordingFlow({
                 {processingLabel(stage, pendingUploads)}
               </Text>
               <Text style={styles.processingHint}>
-                Saved as draft — you can review it anytime. The write-up finishes
-                in the background.
+                Saved as a transcript draft — write it up anytime from Check-ins.
               </Text>
             </View>
           ) : null}

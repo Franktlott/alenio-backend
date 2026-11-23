@@ -28,6 +28,7 @@ import {
   RECORDING_MAX_DURATION_SEC,
   RECORDING_SEGMENT_MAX_BYTES,
   RECORDING_SEGMENT_MAX_DURATION_SEC,
+  saveRecordingDraft,
   transcribeSegment,
   writeUpTranscript,
 } from "../lib/check-in-recording-service";
@@ -425,6 +426,65 @@ checkInRecordingsRouter.post(
   },
 );
 
+// POST /api/teams/:teamId/members/:memberUserId/check-in-recordings/:id/draft
+// Stop capture and keep audio + raw transcript. No Seneca write-up yet.
+checkInRecordingsRouter.post(
+  "/:memberUserId/check-in-recordings/:recordingId/draft",
+  zValidator("json", finishSchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+    const recordingId = c.req.param("recordingId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership || !canManageCheckIns(membership.role)) {
+      return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
+    }
+
+    const recording = await loadOwnedRecording(recordingId, teamId, memberUserId, user.id);
+    if (!recording) {
+      return c.json({ error: { message: "Recording not found", code: "NOT_FOUND" } }, 404);
+    }
+    if (recording.status !== "recording" && recording.status !== "draft") {
+      return c.json(
+        { error: { message: "Recording cannot be saved as a draft", code: "INVALID_STATE" } },
+        409,
+      );
+    }
+
+    const body = c.req.valid("json");
+    // Mark draft immediately so the list can show it while transcript assembles.
+    await prisma.checkInRecording.update({
+      where: { id: recordingId },
+      data: {
+        status: "draft",
+        error: null,
+        ...(typeof body.durationSec === "number"
+          ? { durationSec: body.durationSec }
+          : {}),
+      },
+    });
+
+    // Assemble transcript in the background so the app can leave immediately.
+    void saveRecordingDraft(recordingId).catch(async (err) => {
+      console.error("[check-in-recordings] draft save failed", err);
+      await prisma.checkInRecording
+        .update({
+          where: { id: recordingId },
+          data: {
+            status: "failed",
+            error: "We could not save that recording as a draft.",
+          },
+        })
+        .catch(() => null);
+    });
+
+    const updated = await prisma.checkInRecording.findUnique({ where: { id: recordingId } });
+    return c.json({ data: serializeRecording(updated ?? recording, user.id) }, 202);
+  },
+);
+
 // POST /api/teams/:teamId/members/:memberUserId/check-in-recordings/:id/finish
 checkInRecordingsRouter.post(
   "/:memberUserId/check-in-recordings/:recordingId/finish",
@@ -452,14 +512,14 @@ checkInRecordingsRouter.post(
         data: { durationSec: body.durationSec },
       });
     }
-    if (recording.status === "recording") {
+    if (recording.status === "recording" || recording.status === "draft") {
       await prisma.checkInRecording.update({
         where: { id: recordingId },
         data: { status: "transcribing" },
       });
     }
 
-    // Runs in the background; the app polls GET for the resulting draft.
+    // Runs in the background; the app polls GET for the resulting draft meeting.
     void finishRecording(recordingId).catch(async (err) => {
       console.error("[check-in-recordings] finish failed", err);
       await prisma.checkInRecording
@@ -495,18 +555,15 @@ checkInRecordingsRouter.get(
     }
 
     try {
-      // Only work the leader is waiting on. "recording" is left out because it
-      // is either happening behind the recording screen or was abandoned when
-      // the app closed, and neither is a check-in worth showing; the cleanup
-      // sweep decides whether an abandoned one becomes a draft or is dropped.
-      // "ready" is left out because the draft itself is then in the meetings
-      // list. Failures stay so the leader hears about them.
+      // Work the leader is waiting on: write-ups in flight, transcript drafts
+      // waiting for Write up, and failures. "recording" is left out (live
+      // capture or abandoned until the sweep). "ready" is the meeting draft.
       const recordings = await prisma.checkInRecording.findMany({
         where: {
           teamId,
           memberUserId,
           createdById: user.id,
-          status: { in: ["transcribing", "failed"] },
+          status: { in: ["draft", "transcribing", "failed"] },
         },
         orderBy: { createdAt: "desc" },
         take: 10,
@@ -848,7 +905,7 @@ checkInRecordingsRouter.post(
 
     try {
       const result = await cancelOrFinishRecording(recordingId);
-      if (result.action === "finished") {
+      if (result.action === "drafted") {
         const updated = await prisma.checkInRecording.findUnique({
           where: { id: recordingId },
         });

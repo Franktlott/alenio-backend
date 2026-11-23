@@ -2,6 +2,8 @@ import { api } from "@/lib/api/api";
 
 export type CheckInRecordingStatus =
   | "recording"
+  /** Capture stopped; raw transcript kept; no AI write-up yet. */
+  | "draft"
   | "transcribing"
   | "ready"
   | "failed";
@@ -151,14 +153,20 @@ export function finishCheckInRecording(
   );
 }
 
-/** Same as finish — used when leaving mid-check-in so work lands as a draft. */
+/**
+ * Stop capture and keep audio + raw transcript. Does not run the AI write-up;
+ * call finishCheckInRecording later when the leader wants a draft check-in.
+ */
 export function saveCheckInRecordingDraft(
   teamId: string,
   memberUserId: string,
   recordingId: string,
   durationSec: number,
 ): Promise<CheckInRecording> {
-  return finishCheckInRecording(teamId, memberUserId, recordingId, durationSec);
+  return api.post<CheckInRecording>(
+    `${recordingsPath(teamId, memberUserId)}/${encodeURIComponent(recordingId)}/draft`,
+    { durationSec },
+  );
 }
 
 export function fetchCheckInRecording(

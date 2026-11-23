@@ -1044,8 +1044,9 @@ model CheckInRecording {
    */
   templateId   String?
   /**
-   * recording = capture in progress; transcribing = stitching and mapping;
-   * ready = draft check-in created; failed = gave up, see error
+   * recording = capture in progress; draft = raw transcript kept, no AI write-up;
+   * transcribing = write-up in flight; ready = draft check-in created;
+   * failed = write-up gave up, see error
    */
   status       String                    @default("recording")
   /**

@@ -146,7 +146,7 @@ export function updateCheckIn(
 
 export type CheckInRecording = {
   id: string;
-  status: "recording" | "transcribing" | "ready" | "failed";
+  status: "recording" | "draft" | "transcribing" | "ready" | "failed";
   durationSec: number;
   error: string | null;
   meetingId: string | null;
@@ -238,14 +238,17 @@ export function finishCheckInRecording(teamId: string, userId: string, recording
   ).then((r) => r.data);
 }
 
-/** Same as finish — used when leaving mid-check-in so work lands as a draft. */
+/** Stop capture and keep audio + raw transcript. No AI write-up yet. */
 export function saveCheckInRecordingDraft(
   teamId: string,
   userId: string,
   recordingId: string,
   durationSec: number,
 ) {
-  return finishCheckInRecording(teamId, userId, recordingId, durationSec);
+  return apiPostJson<{ data: CheckInRecording }>(
+    `${recordings(teamId, userId)}/${encodeURIComponent(recordingId)}/draft`,
+    { durationSec },
+  ).then((r) => r.data);
 }
 
 export function startLiveTranscriptionSession(

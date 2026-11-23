@@ -65,6 +65,7 @@ import {
   fetchActiveCheckInRecordings,
   createCheckInFromTranscript,
   fetchCheckInRecording,
+  finishCheckInRecording,
   type ActiveCheckInRecording,
 } from "@/lib/check-in-recordings-api";
 import { realtimeClient } from "@/lib/realtime-client";
@@ -608,7 +609,10 @@ export function OneOnOneHistoryTab({
     queryFn: () => fetchActiveCheckInRecordings(teamId, memberUserId),
     enabled: !!teamId && !!memberUserId && canCreate,
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((recording) => recording.status !== "failed")
+      (query.state.data ?? []).some(
+        (recording) =>
+          recording.status !== "failed" && recording.status !== "draft",
+      )
         ? 2500
         : false,
   });
@@ -633,8 +637,8 @@ export function OneOnOneHistoryTab({
   const latestMeeting = sortedMeetings[0] ?? null;
 
   /** One history row, shared by the latest-check-in preview and the View all sheet. */
-  /** Clears a write-up that failed, so a dead row does not sit there forever. */
-  const dismissFailedRecording = async (recording: ActiveCheckInRecording) => {
+  /** Clears a failed write-up or transcript draft the leader no longer wants. */
+  const dismissActiveRecording = async (recording: ActiveCheckInRecording) => {
     try {
       await cancelCheckInRecording(teamId, memberUserId, recording.id);
       await refetchActiveRecordings();
@@ -647,14 +651,40 @@ export function OneOnOneHistoryTab({
     }
   };
 
+  /** Run Seneca write-up on a saved transcript draft. */
+  const writeUpDraftRecording = async (recording: ActiveCheckInRecording) => {
+    try {
+      await finishCheckInRecording(
+        teamId,
+        memberUserId,
+        recording.id,
+        recording.durationSec,
+      );
+      toast({
+        title: "Writing up your check-in…",
+        preset: "none",
+      });
+      await refetchActiveRecordings();
+    } catch {
+      toast({
+        title: "Could not start the write-up. Try again.",
+        preset: "error",
+      });
+    }
+  };
+
   /**
-   * A check-in that exists but cannot be opened yet, shown while the recording
-   * is turned into a draft. Deliberately looks like a real row so the leader can
-   * see the conversation was captured.
+   * A check-in that exists but cannot be opened yet — transcript draft waiting
+   * for Write up, write-up in flight, or a failed write-up.
    */
   const renderProcessingCheckInRow = (recording: ActiveCheckInRecording) => {
     const failed = recording.status === "failed";
-    const statusLabel = failed ? "Could not be written up" : "Writing up";
+    const transcriptDraft = recording.status === "draft";
+    const statusLabel = failed
+      ? "Could not be written up"
+      : transcriptDraft
+        ? "Draft"
+        : "Writing up";
     return (
       <Pressable
         key={recording.id}
@@ -669,7 +699,26 @@ export function OneOnOneHistoryTab({
                 {
                   text: "Dismiss",
                   style: "destructive",
-                  onPress: () => void dismissFailedRecording(recording),
+                  onPress: () => void dismissActiveRecording(recording),
+                },
+              ],
+            );
+            return;
+          }
+          if (transcriptDraft) {
+            Alert.alert(
+              "Transcript draft",
+              "This conversation is saved. Write it up when you are ready, or dismiss it.",
+              [
+                { text: "Keep it", style: "cancel" },
+                {
+                  text: "Dismiss",
+                  style: "destructive",
+                  onPress: () => void dismissActiveRecording(recording),
+                },
+                {
+                  text: "Write up",
+                  onPress: () => void writeUpDraftRecording(recording),
                 },
               ],
             );
@@ -681,10 +730,18 @@ export function OneOnOneHistoryTab({
           });
         }}
         style={{
-          backgroundColor: failed ? "#FFFBFA" : "#FBFAFF",
+          backgroundColor: failed
+            ? "#FFFBFA"
+            : transcriptDraft
+              ? "#F8FAFC"
+              : "#FBFAFF",
           borderRadius: 11,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: failed ? "#FBD5D5" : "#E4DEFF",
+          borderColor: failed
+            ? "#FBD5D5"
+            : transcriptDraft
+              ? "#E2E8F0"
+              : "#E4DEFF",
           paddingVertical: 7,
           paddingHorizontal: 10,
         }}
@@ -700,11 +757,17 @@ export function OneOnOneHistoryTab({
               borderRadius: 9,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: failed ? "#FEF2F2" : "#F0ECFF",
+              backgroundColor: failed
+                ? "#FEF2F2"
+                : transcriptDraft
+                  ? "#F1F5F9"
+                  : "#F0ECFF",
             }}
           >
             {failed ? (
               <CircleAlert size={15} color="#DC2626" strokeWidth={2.2} />
+            ) : transcriptDraft ? (
+              <FileText size={15} color="#475569" strokeWidth={2.2} />
             ) : (
               <ActivityIndicator size="small" color="#684BFF" />
             )}
@@ -719,7 +782,9 @@ export function OneOnOneHistoryTab({
             <Text style={{ fontSize: 10.5, color: "#7A8698" }} numberOfLines={1}>
               {failed
                 ? "Tap for what went wrong"
-                : "Alenio is turning your conversation into a draft"}
+                : transcriptDraft
+                  ? "Tap to write up or dismiss"
+                  : "Alenio is turning your conversation into a draft"}
             </Text>
           </View>
           <View
@@ -727,14 +792,22 @@ export function OneOnOneHistoryTab({
               paddingHorizontal: 7,
               paddingVertical: 2,
               borderRadius: 6,
-              backgroundColor: failed ? "#FEF2F2" : "#EEF2FF",
+              backgroundColor: failed
+                ? "#FEF2F2"
+                : transcriptDraft
+                  ? "#E2E8F0"
+                  : "#EEF2FF",
             }}
           >
             <Text
               style={{
                 fontSize: 9.5,
                 fontWeight: "800",
-                color: failed ? "#B91C1C" : "#4F46E5",
+                color: failed
+                  ? "#B91C1C"
+                  : transcriptDraft
+                    ? "#334155"
+                    : "#4F46E5",
               }}
             >
               {statusLabel}

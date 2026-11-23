@@ -27,7 +27,7 @@ describe("recordingHasRecoverableContent", () => {
     ).toBe(false);
   });
 
-  test("audio segments mean finish, not delete", () => {
+  test("audio segments mean keep as draft, not delete", () => {
     expect(
       recordingHasRecoverableContent({
         durationSec: 0,
@@ -38,7 +38,7 @@ describe("recordingHasRecoverableContent", () => {
     ).toBe(true);
   });
 
-  test("live transcript segments mean finish, not delete", () => {
+  test("live transcript segments mean keep as draft, not delete", () => {
     expect(
       recordingHasRecoverableContent({
         durationSec: 0,
@@ -49,7 +49,7 @@ describe("recordingHasRecoverableContent", () => {
     ).toBe(true);
   });
 
-  test("non-zero duration means finish, not delete", () => {
+  test("non-zero duration means keep as draft, not delete", () => {
     expect(
       recordingHasRecoverableContent({
         durationSec: 12,
@@ -60,7 +60,7 @@ describe("recordingHasRecoverableContent", () => {
     ).toBe(true);
   });
 
-  test("stitched transcript text means finish, not delete", () => {
+  test("stitched transcript text means keep as draft, not delete", () => {
     expect(
       recordingHasRecoverableContent({
         durationSec: 0,
@@ -73,9 +73,9 @@ describe("recordingHasRecoverableContent", () => {
 });
 
 describe("cancel and abandoned sweep draft safety", () => {
-  test("cancel with segments finishes to draft", () => {
+  test("cancel with segments saves transcript draft", () => {
     expect(cancelRecordingDecision({ status: "recording", segmentsCount: 3 })).toBe(
-      "finish",
+      "draft",
     );
   });
 
@@ -83,13 +83,13 @@ describe("cancel and abandoned sweep draft safety", () => {
     expect(cancelRecordingDecision({ status: "recording" })).toBe("delete");
   });
 
-  test("abandoned with live transcript finishes", () => {
+  test("abandoned with live transcript saves draft", () => {
     expect(
       cancelRecordingDecision({
         status: "recording",
         transcriptSegmentsCount: 1,
       }),
-    ).toBe("finish");
+    ).toBe("draft");
   });
 
   test("abandoned empty purges", () => {
@@ -111,6 +111,16 @@ describe("cancel and abandoned sweep draft safety", () => {
         durationSec: 45,
         segmentsCount: 2,
         transcript: "too quiet to write up",
+      }),
+    ).toBe("delete");
+  });
+
+  test("dismissing a transcript draft deletes", () => {
+    expect(
+      cancelRecordingDecision({
+        status: "draft",
+        durationSec: 45,
+        transcript: "raw notes from the conversation",
       }),
     ).toBe("delete");
   });

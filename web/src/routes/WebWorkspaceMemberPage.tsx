@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   Crown,
   FileAudio,
+  FileText,
   Loader2,
   Pencil,
   Plus,
@@ -29,6 +30,7 @@ import { fetchWebTeam } from "../lib/api";
 import { CheckInTranscriptDrawer } from "../components/workspace/CheckInTranscriptDrawer";
 import { StartCheckInFlow } from "../components/workspace/StartCheckInFlow";
 import {
+  cancelCheckInRecording,
   createGoal,
   deleteCheckIn,
   deleteGoal,
@@ -36,6 +38,7 @@ import {
   fetchCheckIns,
   fetchGoals,
   fetchPlannedCheckIns,
+  finishCheckInRecording,
   goalProgress,
   setGoalStatus,
   setGoalStep,
@@ -383,13 +386,26 @@ function CheckInsTab({
     enabled: canManage && Boolean(teamId && userId),
     retry: false,
     refetchInterval: (query) =>
-      (query.state.data as ActiveCheckInRecording[] | undefined)?.some((r) => r.status === "transcribing") ? 4000 : false,
+      (query.state.data as ActiveCheckInRecording[] | undefined)?.some((r) => r.status === "transcribing")
+        ? 4000
+        : false,
   });
   const active = recordings.data ?? [];
   const writingCount = active.filter((r) => r.status === "transcribing").length;
   useEffect(() => {
     if (writingCount === 0) void qc.invalidateQueries({ queryKey: keys.checkIns(teamId, userId) });
   }, [writingCount, qc, teamId, userId]);
+
+  const writeUpDraft = useMutation({
+    mutationFn: (recording: ActiveCheckInRecording) =>
+      finishCheckInRecording(teamId, userId, recording.id, recording.durationSec),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.recordings(teamId, userId) }),
+  });
+  const dismissRecording = useMutation({
+    mutationFn: (recording: ActiveCheckInRecording) =>
+      cancelCheckInRecording(teamId, userId, recording.id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.recordings(teamId, userId) }),
+  });
 
   return (
     <div className="wm-grid">
@@ -425,19 +441,71 @@ function CheckInsTab({
           >
             {active.map((r) => {
               const failed = r.status === "failed";
+              const transcriptDraft = r.status === "draft";
               return (
                 <AlenioListRow
                   key={r.id}
                   testId={`wm-recording-${r.id}`}
                   leading={
-                    <span className={`al-row-icon${failed ? " al-row-icon--danger" : " al-row-icon--accent"}`}>
-                      {failed ? <AlertCircle size={15} strokeWidth={2} /> : <Loader2 size={15} className="ci-spin" />}
+                    <span
+                      className={`al-row-icon${
+                        failed ? " al-row-icon--danger" : transcriptDraft ? "" : " al-row-icon--accent"
+                      }`}
+                    >
+                      {failed ? (
+                        <AlertCircle size={15} strokeWidth={2} />
+                      ) : transcriptDraft ? (
+                        <FileText size={15} strokeWidth={2} />
+                      ) : (
+                        <Loader2 size={15} className="ci-spin" />
+                      )}
                     </span>
                   }
                   title={r.templateTitle}
-                  description={failed ? (r.error ?? "We couldn't write up this recording.") : "Seneca is writing this up…"}
+                  description={
+                    failed
+                      ? (r.error ?? "We couldn't write up this recording.")
+                      : transcriptDraft
+                        ? "Transcript draft — write it up when ready."
+                        : "Seneca is writing this up…"
+                  }
                   titleAddon={
-                    <StatusIndicator tone={failed ? "danger" : "info"}>{failed ? "Failed" : "Writing up"}</StatusIndicator>
+                    <StatusIndicator tone={failed ? "danger" : transcriptDraft ? "neutral" : "info"}>
+                      {failed ? "Failed" : transcriptDraft ? "Draft" : "Writing up"}
+                    </StatusIndicator>
+                  }
+                  trailing={
+                    transcriptDraft || failed ? (
+                      <span style={{ display: "inline-flex", gap: 8 }}>
+                        {transcriptDraft ? (
+                          <Button
+                            variant="primary"
+                            onClick={() => writeUpDraft.mutate(r)}
+                            disabled={writeUpDraft.isPending}
+                          >
+                            Write up
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                transcriptDraft
+                                  ? "Dismiss this transcript draft? This can't be undone."
+                                  : "Dismiss this failed recording?",
+                              )
+                            ) {
+                              return;
+                            }
+                            dismissRecording.mutate(r);
+                          }}
+                          disabled={dismissRecording.isPending}
+                        >
+                          Dismiss
+                        </Button>
+                      </span>
+                    ) : undefined
                   }
                 />
               );
