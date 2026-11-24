@@ -290,35 +290,42 @@ export function HomeWorkspaceEditorPage() {
               />
             ) : null}
           </div>
-          <label className="hi-check">
+          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
             <input
               type="checkbox"
               checked={draft.isActive}
               onChange={(e) => set("isActive", e.target.checked)}
               disabled={!canEdit}
             />
-            Active in the deck
+            Active in weekly rotation
           </label>
 
-          <div className="hi-actions">
-            {canEdit ? (
+          {canEdit ? (
+            <div className="hi-actions">
               <button type="submit" className="dm-new" disabled={save.isPending || uploading}>
-                {save.isPending ? "Saving…" : "Save card"}
+                {save.isPending ? "Saving…" : savedNote ? "Saved" : "Save card"}
               </button>
-            ) : null}
-            {!isNew && canEdit ? (
               <button
                 type="button"
-                className="dm-ghost"
-                disabled={remove.isPending}
-                onClick={() => {
-                  if (window.confirm("Delete this workspace card?")) remove.mutate();
-                }}
+                className="dm-tab"
+                onClick={() => navigate("/admin/home-workspace")}
               >
-                Delete
+                Cancel
               </button>
-            ) : null}
-          </div>
+              {!isNew ? (
+                <button
+                  type="button"
+                  className="dm-tab"
+                  disabled={remove.isPending}
+                  onClick={() => {
+                    if (window.confirm("Delete this workspace card?")) remove.mutate();
+                  }}
+                >
+                  Delete
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </form>
 
         <aside className="hi-preview" style={previewStyle}>

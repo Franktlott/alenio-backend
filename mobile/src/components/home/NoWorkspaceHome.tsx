@@ -6,15 +6,17 @@ import {
   Text,
   View,
   type ImageSourcePropType,
+  type LayoutChangeEvent,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  Building2,
   ChevronRight,
   Sparkles,
   UserPlus,
   Users,
 } from "lucide-react-native";
+
+const ALENIO_ICON = require("@/assets/alenio-icon.png");
 import { router } from "expo-router";
 import { HomeDiscover } from "@/components/home/HomeDiscover";
 import { AddConnectionSheet } from "@/components/people/AddConnectionSheet";
@@ -25,6 +27,8 @@ import type { ConnectionsResponse } from "@/lib/types";
 import { elevation, gradients, palette } from "@/theme";
 
 const PURPLE = palette.violet;
+/** Shared gap between stacked Home cards (phone). */
+const CARD_GAP = 12;
 
 /** Phone / half-column hero — ~2.2:1, same mountain + sparkle as the wide asset. */
 const HOME_HERO_MOUNTAIN_HALF = require("@/assets/alenio-home-hero-mountain-half.jpg");
@@ -83,6 +87,12 @@ export function NoWorkspaceHome({
 }: Props) {
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [findPeopleOpen, setFindPeopleOpen] = useState(false);
+  /** Phone stack: match Workspace banner height to the Explore card below. */
+  const [exploreHeight, setExploreHeight] = useState(0);
+  const onExploreLayout = (event: LayoutChangeEvent) => {
+    const next = Math.round(event.nativeEvent.layout.height);
+    if (next > 0 && next !== exploreHeight) setExploreHeight(next);
+  };
   const networkReady = connections !== undefined;
   const accepted = connections?.accepted.length ?? 0;
   const incomingCount = connections?.incoming.length ?? 0;
@@ -135,18 +145,28 @@ export function NoWorkspaceHome({
   ) : null;
 
   /** Alenio Workspace promo — Insight-style banner for no-workspace Home. */
-  const workspaceCard = (flushTop = false) => (
+  const workspaceCard = (flushTop = false, paired = false) => (
     <View
       style={[
         styles.insightShadow,
         flushTop ? styles.insightFlush : null,
+        paired ? styles.insightShadowPaired : null,
+        !paired && exploreHeight > 0
+          ? { minHeight: exploreHeight }
+          : null,
       ]}
     >
       <Pressable
         onPress={openWorkspaceCard}
-        style={styles.insight}
+        style={[
+          styles.insight,
+          paired ? styles.insightPaired : null,
+          !paired && exploreHeight > 0
+            ? { minHeight: exploreHeight }
+            : null,
+        ]}
         accessibilityRole="button"
-        accessibilityLabel={(workspaceTitle ?? "").replace(/\n/g, " ")}
+        accessibilityLabel={`Workspaces. ${(workspaceTitle ?? "").replace(/\n/g, " ")}. ${workspaceAction}`}
         testID="home-workspace-promo"
       >
         <Image
@@ -168,46 +188,50 @@ export function NoWorkspaceHome({
           pointerEvents="none"
           style={styles.insightFade}
         />
-        <View style={[styles.insightCopy, !wide ? styles.insightCopyNarrow : null]}>
-          {wide ? (
-            <>
-              <View style={styles.insightLabelRow}>
-                <Building2 size={12} color="#E9DDFF" strokeWidth={2.4} />
-                <Text style={styles.insightLabel}>WORKSPACE</Text>
-              </View>
-              <Text numberOfLines={2} style={styles.insightTitle}>
+        <View
+          style={[
+            styles.insightCopy,
+            styles.workspaceCopy,
+            !wide ? styles.insightCopyNarrow : null,
+          ]}
+        >
+          <View style={styles.workspaceCopyTop}>
+            <View style={styles.workspaceBrandRow}>
+              <Image
+                source={ALENIO_ICON}
+                style={styles.workspaceBrandIcon}
+                resizeMode="contain"
+                accessibilityIgnoresInvertColors
+              />
+              <Text style={styles.workspaceBrandLabel}>Workspaces</Text>
+            </View>
+            {workspaceTitle ? (
+              <Text
+                style={styles.workspaceTitle}
+                numberOfLines={wide ? 3 : 2}
+              >
                 {workspaceTitle}
               </Text>
-              <Text style={styles.insightBody}>{workspaceBody}</Text>
-              <LinearGradient
-                colors={[...gradients.cta]}
-                locations={[0, 0.55, 1]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0.3 }}
-                style={styles.insightAction}
+            ) : null}
+            {workspaceBody ? (
+              <Text
+                style={styles.workspaceBody}
+                numberOfLines={wide ? 4 : 3}
               >
-                <Text style={styles.insightActionText}>{workspaceAction}</Text>
-                <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.4} />
-              </LinearGradient>
-            </>
-          ) : (
-            <View style={styles.insightHeaderMatch}>
-              <IconTile tint="lavender" size={32}>
-                <Building2 size={16} color={tintInk("lavender")} strokeWidth={2.3} />
-              </IconTile>
-              <View style={styles.insightHeaderCopy}>
-                <Text numberOfLines={1} style={styles.insightEyebrow}>
-                  Workspace
-                </Text>
-                <Text numberOfLines={2} style={styles.insightTitleMatch}>
-                  {workspaceTitle}
-                </Text>
-                <Text style={styles.insightLink} numberOfLines={1}>
-                  {workspaceAction} ›
-                </Text>
-              </View>
-            </View>
-          )}
+                {workspaceBody}
+              </Text>
+            ) : null}
+          </View>
+          <LinearGradient
+            colors={[...gradients.cta]}
+            locations={[0, 0.55, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0.3 }}
+            style={styles.workspaceAction}
+          >
+            <Text style={styles.insightActionText}>{workspaceAction}</Text>
+            <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.4} />
+          </LinearGradient>
         </View>
       </Pressable>
     </View>
@@ -441,9 +465,9 @@ export function NoWorkspaceHome({
                   {insightCard(true, false)}
                 </View>
               </View>
-              <View style={styles.cardRow}>
-                <View style={{ width: columnWidth }}>
-                  {showWorkspaceCard ? workspaceCard(true) : null}
+              <View style={[styles.cardRow, styles.cardRowMatch]}>
+                <View style={[styles.workspaceMatchColumn, { width: columnWidth }]}>
+                  {showWorkspaceCard ? workspaceCard(true, true) : null}
                 </View>
                 <View style={{ width: columnWidth }}>
                   <HomeDiscover width={columnWidth} />
@@ -457,9 +481,9 @@ export function NoWorkspaceHome({
             <>
               {welcomeHero}
               {showInsight ? insightCard() : null}
-              <View style={styles.cardRow}>
-                <View style={{ width: columnWidth }}>
-                  {showWorkspaceCard ? workspaceCard(true) : null}
+              <View style={[styles.cardRow, styles.cardRowMatch]}>
+                <View style={[styles.workspaceMatchColumn, { width: columnWidth }]}>
+                  {showWorkspaceCard ? workspaceCard(true, true) : null}
                 </View>
                 <View style={{ width: columnWidth }}>
                   <HomeDiscover width={columnWidth} />
@@ -470,19 +494,20 @@ export function NoWorkspaceHome({
               ) : null}
             </>
           ) : (
-            <>
+            <View style={styles.phoneStack}>
               {welcomeHero}
-              {showInsight ? insightCard() : null}
-              {showWorkspaceCard ? (
-                <View style={styles.cardStack}>{workspaceCard()}</View>
-              ) : null}
+              {showInsight ? insightCard(true) : null}
+              {showWorkspaceCard ? workspaceCard(true) : null}
               {networkSignal ? (
-                <View style={styles.cardStack}>{networkSignal}</View>
+                <View style={styles.phoneCard}>{networkSignal}</View>
               ) : null}
-              <View style={showInsight ? styles.exploreStack : null}>
+              <View
+                style={styles.phoneCard}
+                onLayout={showWorkspaceCard ? onExploreLayout : undefined}
+              >
                 <HomeDiscover />
               </View>
-            </>
+            </View>
           )}
         </>
       )}
@@ -504,7 +529,7 @@ export function NoWorkspaceHome({
 const styles = StyleSheet.create({
   heroShadow: {
     ...elevation.card,
-    marginTop: 8,
+    marginTop: 0,
     borderRadius: 22,
     backgroundColor: "#F4F0FF",
   },
@@ -675,6 +700,10 @@ const styles = StyleSheet.create({
   cardRowMatch: {
     alignItems: "stretch",
   },
+  /** Workspace fills the row so it matches Explore beside it. */
+  workspaceMatchColumn: {
+    alignSelf: "stretch",
+  },
   todayColumn: {
     alignSelf: "stretch",
   },
@@ -709,17 +738,24 @@ const styles = StyleSheet.create({
   },
   /** Phone stack: Insight's own top margin does not separate the card under it. */
   exploreStack: {
-    marginTop: 14,
+    marginTop: CARD_GAP,
+  },
+  /** Even gaps — one source of spacing, no stacked marginTop on children. */
+  phoneStack: {
+    gap: CARD_GAP,
+  },
+  phoneCard: {
+    marginTop: 0,
   },
   todaySlot: {
-    marginTop: 12,
+    marginTop: CARD_GAP,
   },
   belowPair: {
-    marginTop: 14,
+    marginTop: CARD_GAP,
   },
   cardStack: {
-    marginTop: 14,
-    gap: 14,
+    marginTop: CARD_GAP,
+    gap: CARD_GAP,
   },
   /** Beside Today, so the row's own top margin is the only offset. */
   columnStack: {
@@ -761,7 +797,7 @@ const styles = StyleSheet.create({
   },
   insightShadow: {
     ...elevation.raised,
-    marginTop: 14,
+    marginTop: CARD_GAP,
     backgroundColor: palette.dusk,
   },
   /** Fills leftover height above Explore (same as with-workspace). */
@@ -776,6 +812,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
     backgroundColor: palette.dusk,
+    justifyContent: "flex-start",
   },
   insightPaired: {
     flex: 1,
@@ -815,6 +852,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 14,
   },
+  /** Tall Workspace promo: brand + body at top, CTA pinned to the bottom. */
+  workspaceCopy: {
+    flex: 1,
+    alignSelf: "stretch",
+    height: "100%",
+    maxWidth: "64%",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  workspaceCopyTop: {
+    gap: 8,
+  },
   /** Same row as Explore's header: 32pt icon, 10pt gap, title beside it. */
   insightHeaderMatch: {
     flexDirection: "row",
@@ -825,6 +874,44 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     paddingTop: 1,
+  },
+  workspaceBrandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  workspaceBrandIcon: {
+    width: 18,
+    height: 18,
+  },
+  workspaceBrandLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+    color: "#FFFFFF",
+  },
+  workspaceTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    color: "#FFFFFF",
+  },
+  workspaceBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "rgba(255,255,255,0.78)",
+  },
+  workspaceAction: {
+    alignSelf: "flex-start",
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
   },
   insightEyebrow: {
     fontSize: 11,

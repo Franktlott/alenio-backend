@@ -6,6 +6,7 @@ import { isHttpsUrl, slugifyDiscoverTitle } from "../lib/discover-document";
 import {
   ensureHomeWorkspaceSettings,
   loadResolvedHomeWorkspace,
+  MAX_HOME_WORKSPACE_CARDS,
 } from "../lib/home-workspace-schedule";
 import { toHomeWorkspaceCardJson } from "../lib/home-workspace-serialize";
 import {
@@ -59,11 +60,12 @@ const cardBody = z.object({
 });
 
 const reorderBody = z.object({
-  ids: z.array(z.string().trim().min(1)).min(1).max(200),
+  ids: z.array(z.string().trim().min(1)).min(1).max(MAX_HOME_WORKSPACE_CARDS),
 });
 
 const scheduleBody = z.object({
   mode: z.enum(["automatic", "manual"]),
+  cadence: z.enum(["daily", "weekly"]).optional(),
   pinnedCardId: z.string().trim().min(1).nullable().optional(),
 });
 
@@ -160,6 +162,7 @@ adminHomeWorkspaceRouter.patch("/schedule", async (c) => {
     where: { id: "default" },
     data: {
       mode: input.mode,
+      cadence: input.cadence === "daily" ? "daily" : "weekly",
       pinnedCardId:
         input.mode === "manual" ? input.pinnedCardId?.trim() || null : null,
       updatedById: user?.id ?? null,
@@ -194,6 +197,13 @@ adminHomeWorkspaceRouter.post("/", async (c) => {
   const parsed = cardBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return bad(c, zodMessage(parsed.error));
   const input = parsed.data;
+  const count = await prisma.homeWorkspaceCard.count();
+  if (count >= MAX_HOME_WORKSPACE_CARDS) {
+    return bad(
+      c,
+      `Alenio Workspace cards are limited to ${MAX_HOME_WORKSPACE_CARDS}. Archive or delete one first.`,
+    );
+  }
   const user = c.get("user");
   const maxOrder = await prisma.homeWorkspaceCard.aggregate({
     _max: { displayOrder: true },

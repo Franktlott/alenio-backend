@@ -28,11 +28,16 @@ export type HomeWorkspaceApiCard = {
 export type HomeWorkspaceResolved = {
   schedule: {
     mode: "automatic" | "manual";
+    cadence?: "daily" | "weekly";
     pinnedCardId: string | null;
+    epochAt?: string;
     updatedAt: string;
   };
   cards: HomeWorkspaceApiCard[];
   current: HomeWorkspaceApiCard | null;
+  currentIndex?: number | null;
+  nextChangeAt?: string | null;
+  nextCard?: HomeWorkspaceApiCard | null;
 };
 
 export function fetchHomeWorkspaceCard(): Promise<HomeWorkspaceResolved> {

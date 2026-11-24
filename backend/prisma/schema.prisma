@@ -2733,8 +2733,13 @@ model HomeWorkspaceCard {
 model HomeWorkspaceSettings {
   id           String   @id @default("default")
   /// automatic | manual
-  mode         String   @default("manual")
+  mode         String   @default("automatic")
+  /// daily | weekly — used when mode is automatic
+  cadence      String   @default("weekly")
+  /// Shown when mode is manual (must be an active card)
   pinnedCardId String?
+  /// Rotation epoch (UTC). Weekly uses Monday of this instant; daily uses the UTC day.
+  epochAt      DateTime @default(now())
   updatedAt    DateTime @updatedAt
   updatedById  String?
 }

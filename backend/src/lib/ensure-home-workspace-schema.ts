@@ -49,12 +49,22 @@ export async function ensureHomeWorkspaceSchema(prisma: PrismaClient): Promise<v
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS public."HomeWorkspaceSettings" (
       "id" TEXT NOT NULL,
-      "mode" TEXT NOT NULL DEFAULT 'manual',
+      "mode" TEXT NOT NULL DEFAULT 'automatic',
+      "cadence" TEXT NOT NULL DEFAULT 'weekly',
       "pinnedCardId" TEXT,
+      "epochAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedById" TEXT,
       CONSTRAINT "HomeWorkspaceSettings_pkey" PRIMARY KEY ("id")
     );
+  `);
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE public."HomeWorkspaceSettings"
+      ADD COLUMN IF NOT EXISTS "cadence" TEXT NOT NULL DEFAULT 'weekly'
+  `);
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE public."HomeWorkspaceSettings"
+      ADD COLUMN IF NOT EXISTS "epochAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   `);
 
   const existing = await prisma.homeWorkspaceCard.count();
@@ -96,8 +106,10 @@ export async function ensureHomeWorkspaceSchema(prisma: PrismaClient): Promise<v
     await prisma.homeWorkspaceSettings.create({
       data: {
         id: "default",
-        mode: "manual",
+        mode: "automatic",
+        cadence: "weekly",
         pinnedCardId: first?.id ?? null,
+        epochAt: new Date(Date.UTC(2026, 7, 24)),
       },
     });
   }

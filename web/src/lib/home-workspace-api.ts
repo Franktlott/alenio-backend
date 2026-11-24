@@ -1,5 +1,7 @@
 import { apiDeleteJson, apiGetJson, apiPatchJson, apiPostJson } from "./api";
 
+export const MAX_HOME_WORKSPACE_CARDS = 5;
+
 export type HomeWorkspaceDestination =
   | { type: "create" }
   | { type: "join" };
@@ -27,7 +29,9 @@ export type HomeWorkspaceCard = {
 
 export type HomeWorkspaceSchedule = {
   mode: "automatic" | "manual";
+  cadence: "daily" | "weekly";
   pinnedCardId: string | null;
+  epochAt: string;
   updatedAt: string;
 };
 
@@ -35,6 +39,9 @@ export type HomeWorkspaceResolved = {
   schedule: HomeWorkspaceSchedule;
   cards: HomeWorkspaceCard[];
   current: HomeWorkspaceCard | null;
+  currentIndex: number | null;
+  nextChangeAt: string | null;
+  nextCard: HomeWorkspaceCard | null;
 };
 
 export type HomeWorkspaceInput = {
@@ -58,6 +65,7 @@ export type HomeWorkspaceInput = {
 
 export type HomeWorkspaceScheduleInput = {
   mode: "automatic" | "manual";
+  cadence?: "daily" | "weekly";
   pinnedCardId?: string | null;
 };
 

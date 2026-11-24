@@ -59,6 +59,16 @@ try {
 
   await ensureHomeWorkspaceSchema(prisma);
   console.log("predeploy-additive-schema: HomeWorkspaceCard ready");
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE public."HomeWorkspaceSettings"
+      ADD COLUMN IF NOT EXISTS "cadence" TEXT NOT NULL DEFAULT 'weekly'
+  `);
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE public."HomeWorkspaceSettings"
+      ADD COLUMN IF NOT EXISTS "epochAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `);
+  console.log("predeploy-additive-schema: HomeWorkspaceSettings cadence ready");
 } catch (err) {
   console.error(
     "predeploy-additive-schema: patch failed, continuing deploy for startup fallback:",
