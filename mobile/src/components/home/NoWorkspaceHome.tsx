@@ -16,13 +16,13 @@ import {
   Users,
 } from "lucide-react-native";
 
-const ALENIO_ICON = require("@/assets/alenio-icon.png");
 import { router } from "expo-router";
 import { HomeDiscover } from "@/components/home/HomeDiscover";
+import { HomeWorkspacePromo } from "@/components/home/HomeWorkspacePromo";
 import { AddConnectionSheet } from "@/components/people/AddConnectionSheet";
 import { ConnectionRequestsSheet } from "@/components/people/ConnectionRequestsSheet";
 import { IconTile, tintInk } from "@/components/ui";
-import type { HomeWorkspaceDestination } from "@/lib/home-workspace-api";
+import type { HomeWorkspaceApiCard } from "@/lib/home-workspace-api";
 import type { ConnectionsResponse } from "@/lib/types";
 import { elevation, gradients, palette } from "@/theme";
 
@@ -52,12 +52,10 @@ type Props = {
   insightAction: string;
   insightImage: ImageSourcePropType;
   onInsight: () => void;
-  /** Alenio Workspace promo — only used when hasWorkspace is false. */
-  workspaceTitle: string | null;
-  workspaceBody: string;
-  workspaceAction: string;
-  workspaceImage: ImageSourcePropType;
-  workspaceDestination: HomeWorkspaceDestination;
+  /** Active Alenio Workspace promos. Empty hides the card. */
+  workspaceCards: HomeWorkspaceApiCard[];
+  /** Scheduled card the dots open on. */
+  workspaceStartIndex: number;
 };
 
 function openNetwork(tab: "feed" | "connections" = "feed") {
@@ -79,11 +77,8 @@ export function NoWorkspaceHome({
   insightAction,
   insightImage,
   onInsight,
-  workspaceTitle,
-  workspaceBody,
-  workspaceAction,
-  workspaceImage,
-  workspaceDestination,
+  workspaceCards,
+  workspaceStartIndex,
 }: Props) {
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [findPeopleOpen, setFindPeopleOpen] = useState(false);
@@ -100,19 +95,7 @@ export function NoWorkspaceHome({
   const showWelcomeHero =
     !hasWorkspace && networkReady && accepted < 3;
   const showInsight = insightTitle != null && insightTitle.length > 0;
-  const showWorkspaceCard =
-    !hasWorkspace &&
-    workspaceTitle != null &&
-    workspaceTitle.length > 0;
-
-  const openWorkspaceCard = () => {
-    router.push({
-      pathname: "/onboarding",
-      params: {
-        mode: workspaceDestination.type === "join" ? "join" : "create",
-      },
-    });
-  };
+  const showWorkspaceCard = !hasWorkspace && workspaceCards.length > 0;
   /** Network has its own tab. Home only speaks up when a request is waiting. */
   const networkSignal = networkReady && incomingCount > 0 ? (
     <View style={styles.card} testID="home-network-requests">
@@ -146,95 +129,14 @@ export function NoWorkspaceHome({
 
   /** Alenio Workspace promo — Insight-style banner for no-workspace Home. */
   const workspaceCard = (flushTop = false, paired = false) => (
-    <View
-      style={[
-        styles.insightShadow,
-        flushTop ? styles.insightFlush : null,
-        paired ? styles.insightShadowPaired : null,
-        !paired && exploreHeight > 0
-          ? { minHeight: exploreHeight }
-          : null,
-      ]}
-    >
-      <Pressable
-        onPress={openWorkspaceCard}
-        style={[
-          styles.insight,
-          paired ? styles.insightPaired : null,
-          !paired && exploreHeight > 0
-            ? { minHeight: exploreHeight }
-            : null,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={`Workspaces. ${(workspaceTitle ?? "").replace(/\n/g, " ")}. ${workspaceAction}`}
-        testID="home-workspace-promo"
-      >
-        <Image
-          source={workspaceImage}
-          style={styles.insightPhoto}
-          resizeMode="cover"
-          accessibilityIgnoresInvertColors
-        />
-        <LinearGradient
-          colors={[
-            "rgba(20,9,56,0.96)",
-            "rgba(26,11,69,0.86)",
-            "rgba(42,15,99,0.45)",
-            "rgba(42,15,99,0.05)",
-          ]}
-          locations={[0, 0.42, 0.66, 1]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          pointerEvents="none"
-          style={styles.insightFade}
-        />
-        <View
-          style={[
-            styles.insightCopy,
-            styles.workspaceCopy,
-            !wide ? styles.insightCopyNarrow : null,
-          ]}
-        >
-          <View style={styles.workspaceCopyTop}>
-            <View style={styles.workspaceBrandRow}>
-              <Image
-                source={ALENIO_ICON}
-                style={styles.workspaceBrandIcon}
-                resizeMode="contain"
-                accessibilityIgnoresInvertColors
-              />
-              <Text style={styles.workspaceBrandLabel}>Workspaces</Text>
-            </View>
-            {workspaceTitle ? (
-              <Text
-                style={styles.workspaceTitle}
-                numberOfLines={wide ? 3 : 2}
-              >
-                {workspaceTitle}
-              </Text>
-            ) : null}
-            {workspaceBody ? (
-              <Text
-                style={styles.workspaceBody}
-                numberOfLines={wide ? 4 : 3}
-              >
-                {workspaceBody}
-              </Text>
-            ) : null}
-          </View>
-          <LinearGradient
-            colors={[...gradients.cta]}
-            locations={[0, 0.55, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0.3 }}
-            style={styles.workspaceAction}
-          >
-            <Text style={styles.insightActionText}>{workspaceAction}</Text>
-            <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.4} />
-          </LinearGradient>
-        </View>
-      </Pressable>
-    </View>
+    <HomeWorkspacePromo
+      cards={workspaceCards}
+      startIndex={workspaceStartIndex}
+      wide={wide}
+      flushTop={flushTop}
+      paired={paired}
+      minHeight={!paired && exploreHeight > 0 ? exploreHeight : 0}
+    />
   );
 
   /** The shadow lives on an outer view: iOS drops it on a view that clips. */
@@ -852,18 +754,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 14,
   },
-  /** Tall Workspace promo: brand + body at top, CTA pinned to the bottom. */
-  workspaceCopy: {
-    flex: 1,
-    alignSelf: "stretch",
-    height: "100%",
-    maxWidth: "64%",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  workspaceCopyTop: {
-    gap: 8,
-  },
   /** Same row as Explore's header: 32pt icon, 10pt gap, title beside it. */
   insightHeaderMatch: {
     flexDirection: "row",
@@ -874,44 +764,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     paddingTop: 1,
-  },
-  workspaceBrandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  workspaceBrandIcon: {
-    width: 18,
-    height: 18,
-  },
-  workspaceBrandLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-    color: "#FFFFFF",
-  },
-  workspaceTitle: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-    color: "#FFFFFF",
-  },
-  workspaceBody: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "500",
-    color: "rgba(255,255,255,0.78)",
-  },
-  workspaceAction: {
-    alignSelf: "flex-start",
-    height: 34,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
   },
   insightEyebrow: {
     fontSize: 11,

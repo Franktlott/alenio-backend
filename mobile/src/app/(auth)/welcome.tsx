@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  Pressable,
   Image,
+  Platform,
+  Pressable,
   StyleSheet,
+  Text,
+  View,
   useWindowDimensions,
   type StyleProp,
   type ViewStyle,
@@ -24,8 +25,19 @@ import Svg, {
 import { StatusBar, setStatusBarStyle } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
-import { ArrowRight, Check, CircleCheck, Heart, MessageCircle } from "lucide-react-native";
+import { ArrowRight, Calendar, Check, ChevronRight, CircleCheck, User, Users } from "lucide-react-native";
+import { Badge, PriorityBadge } from "@/components/ui";
 import { SPLIT_MIN_ASPECT, SPLIT_MIN_WIDTH } from "@/lib/adaptive-layout";
+
+/** Same purple phone field. Only the status bar changes by platform. */
+const WORKSPACE_DEVICE = Platform.select({
+  ios: require("@/assets/workspace-ios.png"),
+  android: require("@/assets/workspace-android.png"),
+  default: require("@/assets/workspace-ios.png"),
+});
+const DEVICE_ASPECT = 3 / 4;
+const DEVICE_WIDTH = 196;
+const DEVICE_HEIGHT = Math.round(DEVICE_WIDTH / DEVICE_ASPECT);
 
 /**
  * The welcome screen is the app's copy of the website hero (alenio.com), so
@@ -142,96 +154,179 @@ function Backdrop({ width, height }: { width: number; height: number }) {
   );
 }
 
-function NetworkPreview() {
+const TASK_ROWS = [
+  {
+    title: "Complete food safety checklist",
+    when: "Today · 9:00 AM",
+    done: false,
+    priority: "high" as const,
+    priorityLabel: "High",
+  },
+  {
+    title: "Review weekly report",
+    when: "Yesterday",
+    done: true,
+    priority: null,
+    priorityLabel: "",
+  },
+  {
+    title: "Check cooler temps",
+    when: "Today · 2:00 PM",
+    done: false,
+    priority: "medium" as const,
+    priorityLabel: "Medium",
+  },
+];
+
+function TasksPromo() {
   return (
-    <View style={[styles.preview, styles.networkCard]}>
-      <View style={styles.previewHeader}>
-        <Text style={styles.previewTitle}>Network</Text>
-        <Text style={styles.previewMore}>•••</Text>
+    <View style={[styles.promoCard, styles.tasksCard]}>
+      <View style={styles.cardHeader}>
+        <View style={styles.taskMark}>
+          <Check size={11} color="#FFFFFF" strokeWidth={3} />
+        </View>
+        <Text style={styles.cardTitle}>Tasks</Text>
+        <Text style={styles.viewAll}>View All</Text>
+        <ChevronRight size={12} color="#7C3AED" strokeWidth={2.4} />
       </View>
       <View style={styles.tabs}>
-        <Text style={[styles.tab, styles.tabOn]}>Feed</Text>
-        <Text style={styles.tab}>Explore</Text>
-        <Text style={styles.tab}>People</Text>
+        <Text style={[styles.tab, styles.tabOn]}>My Tasks</Text>
+        <Text style={styles.tab}>Team</Text>
+        <Text style={styles.tab}>All</Text>
       </View>
-      <View style={styles.post}>
-        <View style={[styles.avatar, { backgroundColor: "#fce7f3" }]}>
-          <Text style={[styles.avatarText, { color: "#be185d" }]}>VM</Text>
+      {TASK_ROWS.map((row) => (
+        <View key={row.title} style={styles.taskRow}>
+          <View style={[styles.checkbox, row.done ? styles.checkboxOn : null]}>
+            {row.done ? <Check size={9} color="#FFFFFF" strokeWidth={3.4} /> : null}
+          </View>
+          <View style={styles.taskCopy}>
+            <Text
+              style={[styles.taskTitle, row.done ? styles.taskDone : null]}
+              numberOfLines={1}
+            >
+              {row.title}
+            </Text>
+            <View style={styles.taskMeta}>
+              <Text style={styles.taskWhen} numberOfLines={1}>
+                {row.when}
+              </Text>
+              {row.done ? (
+                <Badge tone="success" size="sm">
+                  Done
+                </Badge>
+              ) : (
+                <PriorityBadge priority={row.priority!} label={row.priorityLabel} />
+              )}
+            </View>
+          </View>
         </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.postName} numberOfLines={1}>
-            Vera Mitchell <Text style={styles.postMeta}>· 2h</Text>
-          </Text>
-          <Text style={styles.postMeta} numberOfLines={1}>
-            Retail Operations Leader
-          </Text>
-          <Text style={styles.postText}>Great team win today! Zero criticals on our safety walk.</Text>
-        </View>
-      </View>
-      <View style={styles.win}>
-        <Text style={styles.winValue}>100%</Text>
-        <Text style={styles.winLabel}>
-          Safety walk{"\n"}6 of 6 sections
-        </Text>
-      </View>
-      <View style={styles.reactions}>
-        <Heart size={11} color="#e11d74" fill="#e11d74" />
-        <Text style={[styles.reactionText, { color: "#e11d74" }]}>46</Text>
-        <MessageCircle size={11} color="#8a86a3" style={{ marginLeft: 10 }} />
-        <Text style={styles.reactionText}>12</Text>
-        <Text style={[styles.reactionText, { marginLeft: 10 }]}>Celebrate</Text>
+      ))}
+      <View style={styles.moreRow}>
+        <Calendar size={12} color="#7C3AED" strokeWidth={2.2} />
+        <Text style={styles.moreText}>3 more tasks</Text>
+        <ChevronRight size={12} color="#94A3B8" strokeWidth={2.4} />
       </View>
     </View>
   );
 }
 
-function WorkspacePreview() {
+function DevelopmentPromo() {
+  const size = 52;
+  const stroke = 5;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const filled = circumference * 0.87;
   return (
-    <View style={[styles.preview, styles.workspaceCard]}>
-      <View style={styles.previewHeader}>
-        <Text style={[styles.previewTitle, { color: "#fff" }]}>Workspace</Text>
-        <View style={styles.meBadge}>
-          <Text style={styles.meBadgeText}>JM</Text>
+    <View style={[styles.promoCard, styles.sideCard, styles.developmentCard]}>
+      <View style={styles.sideHeader}>
+        <View style={styles.sideIcon}>
+          <User size={11} color="#7C3AED" strokeWidth={2.4} />
         </View>
+        <Text style={styles.sideTitle}>Development</Text>
       </View>
-      <View style={styles.store}>
-        <LinearGradient colors={["#8b5cf6", "#d946ef"]} style={styles.storeMark}>
-          <Text style={styles.storeMarkText}>A</Text>
-        </LinearGradient>
-        <Text style={styles.storeName}>Store #5101</Text>
+      <View style={styles.ringWrap}>
+        <Svg width={size} height={size}>
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#E9D5FF"
+            strokeWidth={stroke}
+          />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#16A34A"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${filled} ${circumference}`}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        </Svg>
+        <Text style={styles.ringValue}>87%</Text>
       </View>
-      <View style={styles.tiles}>
-        <View style={styles.tile}>
-          <Text style={styles.tileTitle}>Tasks</Text>
-          <Text style={styles.tileSub}>28 open</Text>
+      <Text style={styles.onTrack}>On Track</Text>
+      <Text style={styles.checkInLabel}>Next Check-in</Text>
+      <Text style={styles.checkInDate}>Nov 28</Text>
+    </View>
+  );
+}
+
+function TeamPromo() {
+  return (
+    <View style={[styles.promoCard, styles.sideCard, styles.teamCard]}>
+      <View style={styles.sideHeader}>
+        <View style={styles.sideIcon}>
+          <Users size={11} color="#7C3AED" strokeWidth={2.4} />
         </View>
-        <View style={styles.tile}>
-          <Text style={styles.tileTitle}>Calendar</Text>
-          <Text style={styles.tileSub}>4 events</Text>
-        </View>
+        <Text style={styles.sideTitle}>Team</Text>
       </View>
-      <Text style={styles.todayLabel}>TODAY</Text>
-      {[
-        { label: "Opening walk", done: true },
-        { label: "Deli setup", done: false },
-        { label: "Beverage check", done: false },
-      ].map((row) => (
-        <View key={row.label} style={styles.todayRow}>
-          <View style={[styles.checkbox, row.done ? styles.checkboxOn : null]}>
-            {row.done ? <Check size={9} color="#fff" strokeWidth={4} /> : null}
-          </View>
-          <Text style={[styles.todayText, row.done ? styles.todayDone : null]}>{row.label}</Text>
-        </View>
-      ))}
+      <Text style={styles.memberCount}>42</Text>
+      <Text style={styles.memberLabel}>Members</Text>
+      <View style={styles.faces}>
+        {[
+          require("@/assets/connection-person-woman-teal.png"),
+          require("@/assets/connection-person-man.png"),
+          require("@/assets/connection-person-woman-curls.png"),
+        ].map((source, index) => (
+          <Image
+            key={index}
+            source={source}
+            style={[styles.face, index > 0 ? styles.faceOverlap : null]}
+          />
+        ))}
+      </View>
+      <View style={styles.sideLink}>
+        <Text style={styles.viewAll}>View All</Text>
+        <ChevronRight size={11} color="#7C3AED" strokeWidth={2.4} />
+      </View>
     </View>
   );
 }
 
 function Previews({ scale = 1 }: { scale?: number }) {
   return (
-    <View style={[styles.stage, { transform: [{ scale }] }]} pointerEvents="none">
-      <NetworkPreview />
-      <WorkspacePreview />
+    <View
+      style={[styles.stage, { transform: [{ scale }] }]}
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      testID="welcome-device-promo"
+    >
+      <View style={styles.deviceFrame}>
+        <Image
+          source={WORKSPACE_DEVICE}
+          style={styles.deviceImage}
+          resizeMode="contain"
+          accessibilityIgnoresInvertColors
+        />
+      </View>
+      <DevelopmentPromo />
+      <TeamPromo />
+      <TasksPromo />
     </View>
   );
 }
@@ -361,47 +456,79 @@ const styles = StyleSheet.create({
   wideCopy: { flex: 1, maxWidth: 420 },
   wideStage: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  preview: {
+  deviceFrame: {
     position: "absolute",
-    borderRadius: 20,
-    padding: 12,
-    shadowColor: "#050214",
-    shadowOpacity: 0.55,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 18 },
-    elevation: 12,
+    width: DEVICE_WIDTH,
+    height: DEVICE_HEIGHT,
+    left: (350 - DEVICE_WIDTH) / 2,
+    top: 4,
+    borderRadius: 28,
+    overflow: "hidden",
   },
-  networkCard: {
-    left: 0,
-    top: 0,
-    width: 226,
+  deviceImage: {
+    width: "100%",
+    height: "100%",
+  },
+  promoCard: {
+    position: "absolute",
     backgroundColor: "#FFFFFF",
-    transform: [{ rotate: "-4deg" }],
+    borderRadius: 18,
+    shadowColor: "#050214",
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
-  workspaceCard: {
+  tasksCard: {
+    width: 214,
+    left: (350 - 214) / 2,
+    top: 46,
+    zIndex: 3,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 8,
+  },
+  sideCard: {
+    width: 112,
+    zIndex: 2,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
+    alignItems: "center",
+  },
+  developmentCard: {
+    left: 0,
+    top: 28,
+    transform: [{ rotate: "-8deg" }],
+  },
+  teamCard: {
     right: 0,
     top: 64,
-    width: 168,
-    backgroundColor: "#1b1240",
-    borderWidth: 1,
-    borderColor: "rgba(196,181,253,0.22)",
-    transform: [{ rotate: "4deg" }],
+    transform: [{ rotate: "7deg" }],
   },
-  previewHeader: {
+  cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 9,
+    gap: 6,
   },
-  previewTitle: { fontSize: 13, fontWeight: "700", color: "#14112a" },
-  previewMore: { fontSize: 11, color: "#8a86a3" },
+  taskMark: {
+    width: 18,
+    height: 18,
+    borderRadius: 6,
+    backgroundColor: "#7C3AED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardTitle: { flex: 1, fontSize: 13, fontWeight: "800", color: "#14112A" },
+  viewAll: { fontSize: 10, fontWeight: "700", color: "#7C3AED" },
   tabs: {
     flexDirection: "row",
     gap: 4,
     padding: 3,
     borderRadius: 9,
-    backgroundColor: "#f1f0f7",
-    marginBottom: 10,
+    backgroundColor: "#F4F1FB",
+    marginTop: 8,
+    marginBottom: 4,
   },
   tab: {
     flex: 1,
@@ -411,77 +538,90 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     fontSize: 10,
     fontWeight: "600",
-    color: "#6b6785",
+    color: "#6B6785",
   },
-  tabOn: { backgroundColor: "#FFFFFF", color: "#6d28d9" },
-  post: { flexDirection: "row", gap: 8 },
-  avatar: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 10, fontWeight: "700" },
-  postName: { fontSize: 11.5, fontWeight: "700", color: "#14112a" },
-  postMeta: { fontSize: 9.5, fontWeight: "400", color: "#8a86a3" },
-  postText: { marginTop: 5, maxWidth: 130, fontSize: 11, lineHeight: 15, color: "#2a2640" },
-  win: {
+  tabOn: { backgroundColor: "#FFFFFF", color: "#6D28D9" },
+  taskRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    alignSelf: "flex-start",
-    marginTop: 9,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "#f3efff",
-  },
-  winValue: { fontSize: 20, fontWeight: "800", letterSpacing: -0.5, color: "#6d28d9" },
-  winLabel: { fontSize: 9.5, lineHeight: 12, color: "#6b6785" },
-  reactions: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 8 },
-  reactionText: { fontSize: 10, color: "#8a86a3", fontWeight: "600" },
-
-  meBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#fbbf24",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  meBadgeText: { fontSize: 8, fontWeight: "800", color: "#3b2300" },
-  store: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 9,
-    borderRadius: 11,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    marginBottom: 9,
-  },
-  storeMark: { width: 20, height: 20, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  storeMarkText: { fontSize: 10, fontWeight: "800", color: "#fff" },
-  storeName: { fontSize: 11.5, fontWeight: "700", color: "#fff" },
-  tiles: { flexDirection: "row", gap: 6, marginBottom: 9 },
-  tile: { flex: 1, paddingVertical: 7, paddingHorizontal: 8, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.07)" },
-  tileTitle: { fontSize: 10.5, fontWeight: "700", color: "#fff" },
-  tileSub: { fontSize: 9, color: "#c4b5fd", marginTop: 1 },
-  todayLabel: { fontSize: 9.5, fontWeight: "700", letterSpacing: 0.6, color: "#c4b5fd", marginBottom: 3 },
-  todayRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 7,
     paddingVertical: 5,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255,255,255,0.12)",
   },
   checkbox: {
-    width: 13,
-    height: 13,
+    width: 14,
+    height: 14,
+    marginTop: 1,
     borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.35)",
+    borderColor: "#CBD5E1",
     alignItems: "center",
     justifyContent: "center",
   },
-  checkboxOn: { backgroundColor: "#8b5cf6", borderColor: "#8b5cf6" },
-  todayText: { fontSize: 10.5, color: "#fff" },
-  todayDone: { textDecorationLine: "line-through", color: "rgba(255,255,255,0.5)" },
+  checkboxOn: { backgroundColor: "#16A34A", borderColor: "#16A34A" },
+  taskCopy: { flex: 1, minWidth: 0 },
+  taskTitle: { fontSize: 11, fontWeight: "700", color: "#14112A" },
+  taskDone: { color: "#64748B", textDecorationLine: "line-through" },
+  taskMeta: {
+    marginTop: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  taskWhen: { flexShrink: 1, fontSize: 9.5, color: "#64748B" },
+  moreRow: {
+    marginTop: 2,
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E7E5EF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  moreText: { flex: 1, fontSize: 11, fontWeight: "600", color: "#334155" },
+  sideHeader: {
+    alignSelf: "stretch",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  sideIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#F3E8FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sideTitle: { flex: 1, fontSize: 11, fontWeight: "800", color: "#14112A" },
+  ringWrap: {
+    marginTop: 8,
+    width: 52,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringValue: {
+    position: "absolute",
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#14112A",
+  },
+  onTrack: { marginTop: 4, fontSize: 11, fontWeight: "800", color: "#16A34A" },
+  checkInLabel: { marginTop: 6, fontSize: 9, color: "#64748B" },
+  checkInDate: { fontSize: 11, fontWeight: "800", color: "#14112A" },
+  memberCount: { marginTop: 8, fontSize: 28, lineHeight: 30, fontWeight: "800", color: "#14112A" },
+  memberLabel: { fontSize: 11, fontWeight: "600", color: "#64748B" },
+  faces: { flexDirection: "row", marginTop: 8 },
+  face: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+    backgroundColor: "#EDE9FE",
+  },
+  faceOverlap: { marginLeft: -6 },
+  sideLink: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 1 },
 
   eyebrow: {
     alignSelf: "flex-start",

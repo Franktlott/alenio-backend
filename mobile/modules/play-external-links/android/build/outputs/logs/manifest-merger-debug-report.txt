@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/franklott/Documents/GitHub/alenio-backend/mobile/modules/play-external-links/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest9642087458807979320.xml:2:13-83
+INJECTED from /Users/franklott/Documents/GitHub/alenio-backend/mobile/modules/play-external-links/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest9642087458807979320.xml:2:13-83
+	package
+		INJECTED from /Users/franklott/Documents/GitHub/alenio-backend/mobile/modules/play-external-links/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest9642087458807979320.xml
+	xmlns:android
+		ADDED from /Users/franklott/Documents/GitHub/alenio-backend/mobile/modules/play-external-links/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest9642087458807979320.xml:2:23-81
+uses-sdk
+INJECTED from /Users/franklott/Documents/GitHub/alenio-backend/mobile/modules/play-external-links/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest9642087458807979320.xml reason: use-sdk injection requested
+INJECTED from /Users/franklott/Documents/GitHub/alenio-backend/mobile/modules/play-external-links/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest9642087458807979320.xml
+INJECTED from /Users/franklott/Documents/GitHub/alenio-backend/mobile/modules/play-external-links/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest9642087458807979320.xml
+	android:targetSdkVersion
+		INJECTED from /Users/franklott/Documents/GitHub/alenio-backend/mobile/modules/play-external-links/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest9642087458807979320.xml
+	android:minSdkVersion
+		INJECTED from /Users/franklott/Documents/GitHub/alenio-backend/mobile/modules/play-external-links/android/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest9642087458807979320.xml

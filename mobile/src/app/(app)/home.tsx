@@ -28,6 +28,7 @@ import { useSenecaSheetStore } from "@/lib/state/seneca-sheet-store";
 import { useHomeScheduleRealtime } from "@/lib/use-home-schedule-realtime";
 import { fetchHomeInsights } from "@/lib/home-insight-api";
 import { fetchHomeWorkspaceCard } from "@/lib/home-workspace-api";
+import { resolveWorkspacePromoDeck } from "@/lib/home-workspace-deck";
 import {
   homeInsightForDate,
   mapApiHomeInsight,
@@ -189,7 +190,15 @@ export default function HomeScreen() {
     enabled: !!currentUserId && teams.length === 0,
     staleTime: 5 * 60_000,
   });
-  const workspaceCard = workspacePromo?.current ?? null;
+  const workspaceDeck = useMemo(
+    () =>
+      resolveWorkspacePromoDeck(
+        workspacePromo?.cards,
+        workspacePromo?.current,
+        workspacePromo?.currentIndex,
+      ),
+    [workspacePromo],
+  );
   const deviceTimeZone = getBrowserTimeZone();
   const todayKey = calendarDayFromInstant(new Date(), deviceTimeZone);
   const { data: todayData, isPending: todayPending } = useQuery({
@@ -443,17 +452,8 @@ export default function HomeScreen() {
               insightAction={weeklyInsight?.actionLabel ?? ""}
               insightImage={weeklyInsight?.image ?? { uri: "" }}
               onInsight={openWeeklyInsight}
-              workspaceTitle={workspaceCard?.title ?? null}
-              workspaceBody={workspaceCard?.body ?? ""}
-              workspaceAction={workspaceCard?.actionLabel ?? ""}
-              workspaceImage={
-                workspaceCard?.imageUrl
-                  ? { uri: workspaceCard.imageUrl }
-                  : { uri: "" }
-              }
-              workspaceDestination={
-                workspaceCard?.destination ?? { type: "create" }
-              }
+              workspaceCards={workspaceDeck.deck}
+              workspaceStartIndex={workspaceDeck.startIndex}
             />
           </View>
         )}
