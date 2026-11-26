@@ -3,6 +3,7 @@ import {
   activitySourceFromAudience,
   inferActivityAudience,
   networkAudienceFields,
+  publicAudienceFields,
   workspaceAudienceFields,
 } from "./activity-audience";
 
@@ -10,6 +11,10 @@ describe("activity audience helpers", () => {
   test("create helpers", () => {
     expect(networkAudienceFields()).toEqual({
       audienceKind: "network",
+      audienceTeamId: null,
+    });
+    expect(publicAudienceFields()).toEqual({
+      audienceKind: "public",
       audienceTeamId: null,
     });
     expect(workspaceAudienceFields("t1")).toEqual({
@@ -47,10 +52,27 @@ describe("activity audience helpers", () => {
       sourceLabel: "Network",
     });
     expect(
+      activitySourceFromAudience({ audienceKind: "public", audienceTeamId: null }),
+    ).toEqual({
+      source: "public",
+      sourceLabel: "Public",
+    });
+    expect(
       activitySourceFromAudience(
         { audienceKind: "workspace", audienceTeamId: "t1" },
         "Acme",
       ),
     ).toEqual({ source: "workspace", sourceLabel: "Acme" });
+  });
+
+  test("prefers stored public audience", () => {
+    expect(
+      inferActivityAudience({
+        type: "network_post",
+        teamId: null,
+        audienceKind: "public",
+        audienceTeamId: null,
+      }),
+    ).toEqual({ audienceKind: "public", audienceTeamId: null });
   });
 });

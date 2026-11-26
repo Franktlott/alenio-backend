@@ -3,7 +3,7 @@ import {
   CheckSquare,
   House,
   MessageCircle,
-  Network as NetworkIcon,
+  Users,
 } from "lucide-react-native";
 import {
   View,
@@ -63,7 +63,7 @@ const ALL_TABS = [
   { name: "home", label: "Home", Icon: House },
   { name: "chat", label: "Chat", Icon: MessageCircle },
   { name: "execute", label: "Workspace", Icon: CheckSquare },
-  { name: "team", label: "My Network", Icon: NetworkIcon },
+  { name: "team", label: "My Network", Icon: Users },
 ] as const;
 
 /**

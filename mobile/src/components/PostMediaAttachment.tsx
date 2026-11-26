@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
 
@@ -60,8 +61,18 @@ export function PostMediaAttachment({
   onInteraction,
   flat = false,
 }: Props) {
+  const [imageFailed, setImageFailed] = useState(false);
   const aspectRatio =
     mediaType === "video" ? 16 / 9 : width && height ? width / height : 4 / 3;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [url]);
+
+  // Broken / deleted upload URLs leave an empty gray frame — hide instead.
+  if (mediaType !== "video" && imageFailed) {
+    return null;
+  }
 
   return (
     <View style={[styles.frame, flat ? styles.frameFlat : null, { aspectRatio }]}>
@@ -78,6 +89,7 @@ export function PostMediaAttachment({
           resizeMode="cover"
           accessibilityIgnoresInvertColors
           testID={testID}
+          onError={() => setImageFailed(true)}
         />
       )}
     </View>

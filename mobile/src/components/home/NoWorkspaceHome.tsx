@@ -396,7 +396,12 @@ export function NoWorkspaceHome({
               ) : null}
             </>
           ) : (
-            <View style={styles.phoneStack}>
+            <View
+              style={[
+                styles.phoneStack,
+                todayCard ? styles.phoneStackAfterToday : null,
+              ]}
+            >
               {welcomeHero}
               {showInsight ? insightCard(true) : null}
               {showWorkspaceCard ? workspaceCard(true) : null}
@@ -645,6 +650,10 @@ const styles = StyleSheet.create({
   /** Even gaps — one source of spacing, no stacked marginTop on children. */
   phoneStack: {
     gap: CARD_GAP,
+  },
+  /** Today sits above this stack, so the stack supplies the same gap the others use. */
+  phoneStackAfterToday: {
+    marginTop: CARD_GAP,
   },
   phoneCard: {
     marginTop: 0,

@@ -1,4 +1,4 @@
-export type PostAudienceKind = "network" | "workspace";
+export type PostAudienceKind = "network" | "public" | "workspace";
 
 export type PostAudience = {
   kind: PostAudienceKind;
@@ -17,6 +17,7 @@ export type PostAudienceOption = {
 
 export function postAudienceKey(audience: PostAudience): string {
   if (audience.kind === "network") return "network";
+  if (audience.kind === "public") return "public";
   return `workspace:${audience.teamId ?? ""}`;
 }
 
@@ -25,6 +26,9 @@ export function postAudienceFromParams(input: {
   teamId?: string;
   teamName?: string;
 }): PostAudience | null {
+  if (input.scope === "public") {
+    return { kind: "public" };
+  }
   if (input.scope === "network") {
     return { kind: "network" };
   }
@@ -49,6 +53,12 @@ export function buildPostAudienceOptions(input: {
       kind: "network",
       title: "My network",
       subtitle: "People you’re connected with",
+    },
+    {
+      key: "public",
+      kind: "public",
+      title: "Public",
+      subtitle: "Everyone on Alenio",
     },
   ];
   for (const team of input.teams) {
@@ -81,6 +91,12 @@ export function postDestinationSummary(
       detail: networkAudienceSubtitle(networkConnectionCount),
     };
   }
+  if (audience.kind === "public") {
+    return {
+      title: "Public",
+      detail: "Everyone on Alenio",
+    };
+  }
   const name = audience.teamName?.trim() || "this workspace";
   return {
     title: name,
@@ -99,6 +115,12 @@ export function postDestinationConfirmCopy(
       body: `This update goes to ${summary.detail.toLowerCase()}.`,
     };
   }
+  if (audience.kind === "public") {
+    return {
+      title: "Post publicly?",
+      body: "Anyone with an Alenio account can see this — including people you’re not connected with.",
+    };
+  }
   return {
     title: `Post to ${summary.title}?`,
     body: `${summary.detail} will see this update.`,
@@ -110,6 +132,7 @@ export function resolvePostAudience(
   teams: Array<{ id: string; name: string }>,
 ): PostAudience {
   if (option.kind === "network") return { kind: "network" };
+  if (option.kind === "public") return { kind: "public" };
   const team = teams.find((item) => item.id === option.teamId);
   return {
     kind: "workspace",

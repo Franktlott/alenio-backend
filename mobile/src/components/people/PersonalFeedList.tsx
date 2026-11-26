@@ -16,7 +16,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
-import { Building2, Users } from "lucide-react-native";
+import { Building2, Globe2, Users } from "lucide-react-native";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import {
@@ -48,7 +48,11 @@ function bodyFromMetadata(metadata: Record<string, unknown> | null): string {
 }
 
 function isNetworkItem(item: PersonalFeedItem): boolean {
-  return item.type === "network_post" || item.source === "network";
+  return (
+    item.type === "network_post" ||
+    item.source === "network" ||
+    item.source === "public"
+  );
 }
 
 function isAlenioItem(item: PersonalFeedItem): boolean {
@@ -112,7 +116,12 @@ function openFeedItem(item: PersonalFeedItem) {
 function SourceBadge({ item }: { item: PersonalFeedItem }) {
   // Alenio posts use the brand mark as the avatar — no source chip.
   if (item.source === "alenio") return null;
-  const Icon = item.source === "network" ? Users : Building2;
+  const Icon =
+    item.source === "network"
+      ? Users
+      : item.source === "public"
+        ? Globe2
+        : Building2;
   return (
     <View style={styles.badge} testID={`personal-feed-badge-${item.id}`}>
       <Icon size={11} color={colors.textMuted} strokeWidth={2} />

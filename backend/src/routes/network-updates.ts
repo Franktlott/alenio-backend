@@ -9,7 +9,11 @@ import {
   isValidReactionEmoji,
   visibleNetworkAuthorCutoffs,
 } from "../lib/network-updates-policy";
-import { networkAudienceFields } from "../lib/activity-audience";
+import {
+  inferActivityAudience,
+  networkAudienceFields,
+  publicAudienceFields,
+} from "../lib/activity-audience";
 import { buildConnectionPairKey } from "../lib/messaging-permission";
 import { isBlockedEitherDirection } from "../lib/relationship-blocks";
 import { authGuard } from "../middleware/auth-guard";
@@ -159,11 +163,14 @@ async function loadAccessiblePost(
   if (activity.userId === viewerId) return activity;
   if (!activity.userId) return null;
 
+  const audience = inferActivityAudience(activity);
   const [connection, blocked, hide] = await Promise.all([
-    prisma.connection.findUnique({
-      where: { pairKey: buildConnectionPairKey(viewerId, activity.userId) },
-      select: { status: true, updatedAt: true },
-    }),
+    audience.audienceKind === "public"
+      ? null
+      : prisma.connection.findUnique({
+          where: { pairKey: buildConnectionPairKey(viewerId, activity.userId) },
+          select: { status: true, updatedAt: true },
+        }),
     isBlockedEitherDirection(viewerId, activity.userId),
     options.includeHidden
       ? null
@@ -174,8 +181,15 @@ async function loadAccessiblePost(
           select: { id: true },
         }),
   ]);
+  if (blocked) return null;
+  if (hide) return null;
+
+  if (audience.audienceKind === "public") {
+    return activity;
+  }
+
   const authorCutoffs =
-    connection?.status === "accepted" && !blocked
+    connection?.status === "accepted"
       ? [{ authorId: activity.userId, visibleFrom: connection.updatedAt }]
       : [];
   return canAccessNetworkPost(
@@ -183,7 +197,7 @@ async function loadAccessiblePost(
     activity.userId,
     activity.createdAt,
     authorCutoffs,
-    !!hide,
+    false,
   )
     ? activity
     : null;
@@ -233,12 +247,31 @@ networkUpdatesRouter.get(
     }
 
     const allCutoffs = await currentVisibleAuthorCutoffs(user.id);
-    const authorCutoffs = authorId ? allCutoffs.filter((row) => row.authorId === authorId) : allCutoffs;
+    const authorCutoffs = authorId
+      ? allCutoffs.filter((row) => row.authorId === authorId)
+      : allCutoffs;
+
+    // Profile view of a stranger: still show their Public posts unless blocked.
     if (authorId && authorId !== user.id && authorCutoffs.length === 0) {
-      // Not connected (or blocked): nothing of theirs is visible.
-      return c.json({ data: { items: [], nextCursor: null } });
+      if (await isBlockedEitherDirection(user.id, authorId)) {
+        return c.json({ data: { items: [], nextCursor: null } });
+      }
     }
+
     const cursorDate = cursor ? new Date(cursor.createdAt) : null;
+    const publicAuthorClause =
+      authorId && authorId !== user.id
+        ? [
+            {
+              AND: [
+                { userId: authorId },
+                { audienceKind: "public" },
+                { hides: { none: { viewerId: user.id } } },
+              ],
+            },
+          ]
+        : [];
+
     const activities = await prisma.teamActivity.findMany({
       where: {
         teamId: null,
@@ -247,13 +280,14 @@ networkUpdatesRouter.get(
           {
             OR: [
               ...(authorId && authorId !== user.id ? [] : [{ userId: user.id }]),
-              ...authorCutoffs.map(({ authorId, visibleFrom }) => ({
+              ...authorCutoffs.map(({ authorId: cutoffAuthorId, visibleFrom }) => ({
                 AND: [
-                  { userId: authorId },
+                  { userId: cutoffAuthorId },
                   { createdAt: { gte: visibleFrom } },
                   { hides: { none: { viewerId: user.id } } },
                 ],
               })),
+              ...publicAuthorClause,
             ],
           },
           ...(cursorDate
@@ -295,6 +329,8 @@ const createPostSchema = z
     imageWidth: z.number().int().min(1).max(IMAGE_DIMENSION_MAX).optional(),
     imageHeight: z.number().int().min(1).max(IMAGE_DIMENSION_MAX).optional(),
     mediaType: z.enum(["image", "video"]).optional(),
+    /** Defaults to network (connections only). Public is every Alenio account. */
+    audience: z.enum(["network", "public"]).optional(),
   })
   .superRefine((value, context) => {
     if (!value.body && !value.imageUrl) {
@@ -322,7 +358,7 @@ networkUpdatesRouter.post(
   zValidator("json", createPostSchema),
   async (c) => {
     const user = c.get("user")!;
-    const { body, imageUrl, imageWidth, imageHeight, mediaType } =
+    const { body, imageUrl, imageWidth, imageHeight, mediaType, audience } =
       c.req.valid("json");
     if (imageUrl) {
       const object = parseOwnedStorageObjectFromUrl(imageUrl);
@@ -339,12 +375,15 @@ networkUpdatesRouter.post(
       }
     }
 
+    const audienceFields =
+      audience === "public" ? publicAudienceFields() : networkAudienceFields();
+
     const activity = await prisma.teamActivity.create({
       data: {
         teamId: null,
         userId: user.id,
         type: NETWORK_POST_TYPE,
-        ...networkAudienceFields(),
+        ...audienceFields,
         metadata: JSON.stringify({
           body: body || null,
           imageUrl: imageUrl ?? null,

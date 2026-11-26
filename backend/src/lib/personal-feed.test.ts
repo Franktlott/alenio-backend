@@ -4,6 +4,7 @@ import {
   decodePersonalFeedCursor,
   encodePersonalFeedCursor,
   networkAudienceVisibilityWhere,
+  publicAudienceVisibilityWhere,
   serializePersonalFeedItem,
   workspaceAudienceVisibilityWhere,
 } from "./personal-feed";
@@ -48,6 +49,29 @@ describe("serializePersonalFeedItem", () => {
       source: "network",
       sourceLabel: "Network",
       canDelete: true,
+    });
+
+    const pub = serializePersonalFeedItem(
+      {
+        id: "1b",
+        teamId: null,
+        type: "network_post",
+        audienceKind: "public",
+        audienceTeamId: null,
+        metadata: JSON.stringify({ body: "hello everyone" }),
+        createdAt: new Date("2026-11-15T12:00:00.000Z"),
+        userId: "u1",
+        user: { id: "u1", name: "Ada", image: null },
+        reactions: [],
+        _count: { comments: 0 },
+        team: null,
+      },
+      "viewer",
+    );
+    expect(pub).toMatchObject({
+      source: "public",
+      sourceLabel: "Public",
+      canDelete: false,
     });
 
     const workspace = serializePersonalFeedItem(
@@ -160,6 +184,21 @@ describe("audience visibility where", () => {
         { alenioAudience: null },
         { alenioAudience: "all" },
         { alenioAudience: "non_workspace_members" },
+      ],
+    });
+  });
+
+  test("public clause is for all viewers except blocked authors", () => {
+    const where = publicAudienceVisibilityWhere("me", ["blocked"]);
+    expect(where).toMatchObject({
+      audienceKind: "public",
+      type: "network_post",
+    });
+    expect(where.AND[0].OR).toContainEqual({ userId: "me" });
+    expect(where.AND[0].OR).toContainEqual({
+      AND: [
+        { userId: { notIn: ["blocked"] } },
+        { hides: { none: { viewerId: "me" } } },
       ],
     });
   });

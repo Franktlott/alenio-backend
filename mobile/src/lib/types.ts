@@ -609,7 +609,7 @@ export type NetworkUpdatesFeedResponse = {
 export type NetworkUpdateResponse = NetworkUpdate;
 export type NetworkUpdateCommentsResponse = NetworkUpdateComment[];
 
-export type PersonalFeedSource = "network" | "workspace" | "alenio";
+export type PersonalFeedSource = "network" | "public" | "workspace" | "alenio";
 
 export type PersonalFeedItem = {
   id: string;

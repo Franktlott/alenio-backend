@@ -25,7 +25,7 @@ export const ALENIO_POST_AUDIENCES = [
   "non_workspace_members",
 ] as const satisfies readonly AlenioPostAudience[];
 
-export type PersonalFeedSource = "network" | "workspace" | "alenio";
+export type PersonalFeedSource = "network" | "public" | "workspace" | "alenio";
 
 export type PersonalFeedCursor = {
   createdAt: string;
@@ -135,6 +135,35 @@ export function networkAudienceVisibilityWhere(
       },
     ],
     AND: [networkVisibility],
+  };
+}
+
+/**
+ * Member public posts: every signed-in viewer, except blocked authors / hidden rows.
+ * Kept separate from network visibility so strangers are not connection-gated.
+ */
+export function publicAudienceVisibilityWhere(
+  viewerId: string,
+  blockedAuthorIds: string[],
+) {
+  return {
+    audienceKind: "public",
+    type: NETWORK_POST_TYPE,
+    AND: [
+      {
+        OR: [
+          { userId: viewerId },
+          {
+            AND: [
+              ...(blockedAuthorIds.length > 0
+                ? [{ userId: { notIn: blockedAuthorIds } }]
+                : []),
+              { hides: { none: { viewerId } } },
+            ],
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -281,15 +310,30 @@ export async function getPersonalFeedPage(
   const feedStart = new Date(
     Date.now() - PERSONAL_FEED_DAYS * 24 * 60 * 60 * 1000,
   );
-  const [memberships, authorCutoffs] = await Promise.all([
+  const [memberships, authorCutoffs, blocks] = await Promise.all([
     db.teamMember.findMany({
       where: { userId: viewerId },
       select: { teamId: true },
     }),
     loadVisibleNetworkAuthorCutoffs(db, viewerId),
+    db.userBlock.findMany({
+      where: { OR: [{ blockerId: viewerId }, { blockedId: viewerId }] },
+      select: { blockerId: true, blockedId: true },
+    }),
   ]);
   const teamIds = memberships.map((row) => row.teamId);
   const hasWorkspaceMembership = teamIds.length > 0;
+  const blockedAuthorIds = [
+    ...new Set(
+      blocks.flatMap((row) =>
+        row.blockerId === viewerId
+          ? [row.blockedId]
+          : row.blockedId === viewerId
+            ? [row.blockerId]
+            : [],
+      ),
+    ),
+  ];
   const cursorDate = options.cursor
     ? new Date(options.cursor.createdAt)
     : null;
@@ -324,6 +368,7 @@ export async function getPersonalFeedPage(
         {
           OR: [
             networkAudienceVisibilityWhere(networkVisibility),
+            publicAudienceVisibilityWhere(viewerId, blockedAuthorIds),
             alenioAudienceVisibilityWhere(hasWorkspaceMembership),
             ...(teamIds.length
               ? [workspaceAudienceVisibilityWhere(teamIds)]

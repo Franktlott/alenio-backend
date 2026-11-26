@@ -12,6 +12,17 @@ export const ORPHAN_UPLOAD_MIN_AGE_DAYS = 7;
 /** Safety cap per run so cleanup cannot starve the API process. */
 export const ORPHAN_UPLOAD_MAX_DELETE_PER_RUN = 400;
 
+/**
+ * Feed / update posts that store media under users/.../uploads/ in metadata.
+ * Workspace `post` and Alenio posts must be included — protecting only
+ * `network_post` let orphan cleanup delete live workspace photos.
+ */
+export const ORPHAN_PROTECTED_ACTIVITY_TYPES = [
+  "network_post",
+  "post",
+  "alenio_post",
+] as const;
+
 function addUrl(paths: Set<string>, url: string | null | undefined) {
   if (!url?.trim()) return;
   const parsed = parseOwnedStorageObjectFromUrl(url);
@@ -121,7 +132,10 @@ export async function collectReferencedUploadObjectPaths(): Promise<Set<string>>
     }),
     prisma.userProfilePhoto.findMany({ select: { url: true } }),
     prisma.teamActivity.findMany({
-      where: { teamId: null, type: "network_post", metadata: { not: null } },
+      where: {
+        type: { in: [...ORPHAN_PROTECTED_ACTIVITY_TYPES] },
+        metadata: { not: null },
+      },
       select: { metadata: true },
     }),
     // Legacy Discover covers may still live under users/.../uploads/. New uploads use
@@ -196,7 +210,8 @@ export type OrphanUploadCleanupResult = {
 /**
  * Deletes unreferenced user upload objects older than the grace period.
  * Only paths under users/.../uploads/ are considered. Profile/team/Go/Discover/
- * Home Insight content slots are never touched.
+ * Home Insight content slots are never touched. Referenced feed media includes
+ * workspace posts, network posts, and Alenio posts.
  */
 export async function cleanupOrphanUserUploads(options?: {
   olderThanDays?: number;

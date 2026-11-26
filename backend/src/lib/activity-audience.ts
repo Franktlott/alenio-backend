@@ -1,5 +1,10 @@
 /** Explicit audience for feed posts (Phase 3+). */
-export type ActivityAudienceKind = "network" | "workspace" | "self" | "alenio";
+export type ActivityAudienceKind =
+  | "network"
+  | "public"
+  | "workspace"
+  | "self"
+  | "alenio";
 
 export type ActivityAudienceFields = {
   audienceKind: ActivityAudienceKind;
@@ -9,6 +14,11 @@ export type ActivityAudienceFields = {
 /** Values written on create for a network-scoped post. */
 export function networkAudienceFields(): ActivityAudienceFields {
   return { audienceKind: "network", audienceTeamId: null };
+}
+
+/** Member posts visible to every signed-in Alenio user (not only connections). */
+export function publicAudienceFields(): ActivityAudienceFields {
+  return { audienceKind: "public", audienceTeamId: null };
 }
 
 /** Values written on create for a workspace-scoped post. */
@@ -33,6 +43,7 @@ export function inferActivityAudience(activity: {
 }): ActivityAudienceFields {
   if (
     activity.audienceKind === "network" ||
+    activity.audienceKind === "public" ||
     activity.audienceKind === "workspace" ||
     activity.audienceKind === "self" ||
     activity.audienceKind === "alenio"
@@ -64,9 +75,15 @@ export function inferActivityAudience(activity: {
 export function activitySourceFromAudience(
   audience: ActivityAudienceFields,
   teamName?: string | null,
-): { source: "network" | "workspace" | "alenio"; sourceLabel: string } {
+): {
+  source: "network" | "public" | "workspace" | "alenio";
+  sourceLabel: string;
+} {
   if (audience.audienceKind === "alenio") {
     return { source: "alenio", sourceLabel: "Alenio" };
+  }
+  if (audience.audienceKind === "public") {
+    return { source: "public", sourceLabel: "Public" };
   }
   if (audience.audienceKind === "network") {
     return { source: "network", sourceLabel: "Network" };
