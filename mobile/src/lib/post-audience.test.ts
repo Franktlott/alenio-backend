@@ -13,12 +13,6 @@ describe("postAudienceFromParams", () => {
     });
   });
 
-  test("accepts public scope", () => {
-    expect(postAudienceFromParams({ scope: "public" })).toEqual({
-      kind: "public",
-    });
-  });
-
   test("uses workspace when teamId is set", () => {
     expect(
       postAudienceFromParams({ teamId: "t1", teamName: "Acme" }),
@@ -31,25 +25,21 @@ describe("postAudienceFromParams", () => {
 });
 
 describe("buildPostAudienceOptions", () => {
-  test("lists network, public, then workspaces", () => {
+  test("lists network then workspaces", () => {
     expect(
       buildPostAudienceOptions({
         teams: [{ id: "t1", name: "Acme" }],
         networkConnectionCount: 4,
       }).map((option) => option.key),
-    ).toEqual(["network", "public", "workspace:t1"]);
+    ).toEqual(["network", "workspace:t1"]);
   });
 });
 
 describe("destination copy", () => {
-  test("summarizes network, public, and workspace", () => {
+  test("summarizes network and workspace", () => {
     expect(postDestinationSummary({ kind: "network" }, 3)).toEqual({
       title: "My network",
       detail: "3 connections",
-    });
-    expect(postDestinationSummary({ kind: "public" })).toEqual({
-      title: "Public",
-      detail: "Everyone on Alenio",
     });
     expect(
       postDestinationSummary({
@@ -66,9 +56,6 @@ describe("destination copy", () => {
   test("confirm copy names the destination", () => {
     expect(postDestinationConfirmCopy({ kind: "network" }, 2).title).toBe(
       "Post to your network?",
-    );
-    expect(postDestinationConfirmCopy({ kind: "public" }).title).toBe(
-      "Post publicly?",
     );
     expect(
       postDestinationConfirmCopy({

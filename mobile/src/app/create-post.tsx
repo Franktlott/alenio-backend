@@ -19,7 +19,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import {
   Building2,
   ChevronDown,
-  Globe2,
   Images,
   Users,
   X,
@@ -171,11 +170,8 @@ export default function CreatePostScreen() {
         mediaType: imageUrl ? mediaType : undefined,
       };
 
-      if (audience.kind === "network" || audience.kind === "public") {
-        return api.post("/api/network-updates", {
-          ...payload,
-          audience: audience.kind,
-        });
+      if (audience.kind === "network") {
+        return api.post("/api/network-updates", payload);
       }
       return api.post(
         `/api/teams/${audience.teamId}/activity/posts`,
@@ -187,7 +183,7 @@ export default function CreatePostScreen() {
       const invalidations = [
         queryClient.invalidateQueries({ queryKey: ["personal-feed"] }),
       ];
-      if (audience.kind === "network" || audience.kind === "public") {
+      if (audience.kind === "network") {
         invalidations.push(
           queryClient.invalidateQueries({ queryKey: ["network-updates"] }),
         );
@@ -315,8 +311,6 @@ export default function CreatePostScreen() {
               >
                 {audience.kind === "network" ? (
                   <Users size={13} color={colors.brand} strokeWidth={2.2} />
-                ) : audience.kind === "public" ? (
-                  <Globe2 size={13} color={colors.brand} strokeWidth={2.2} />
                 ) : (
                   <Building2 size={13} color={colors.brand} strokeWidth={2.2} />
                 )}
@@ -337,9 +331,7 @@ export default function CreatePostScreen() {
             placeholder={
               audience.kind === "network"
                 ? "Share an update with your network"
-                : audience.kind === "public"
-                  ? "Share an update with everyone on Alenio"
-                  : "Share an update with your workspace"
+                : "Share an update with your workspace"
             }
             placeholderTextColor="#94A3B8"
             value={body}
@@ -421,11 +413,7 @@ export default function CreatePostScreen() {
               <View key={option.key}>
                 {showSection ? (
                   <Text style={styles.audienceSection}>
-                    {option.kind === "workspace"
-                      ? "Workspaces"
-                      : option.kind === "public"
-                        ? "Alenio"
-                        : "Network"}
+                    {option.kind === "network" ? "Network" : "Workspaces"}
                   </Text>
                 ) : null}
                 <Pressable
@@ -453,12 +441,6 @@ export default function CreatePostScreen() {
                   >
                     {option.kind === "network" ? (
                       <Users
-                        size={15}
-                        color={selected ? colors.brand : "#64748B"}
-                        strokeWidth={2.2}
-                      />
-                    ) : option.kind === "public" ? (
-                      <Globe2
                         size={15}
                         color={selected ? colors.brand : "#64748B"}
                         strokeWidth={2.2}

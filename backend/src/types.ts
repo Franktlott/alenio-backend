@@ -736,8 +736,6 @@ export type CreateNetworkUpdateRequest = {
   imageWidth?: number;
   imageHeight?: number;
   mediaType?: "image" | "video";
-  /** Defaults to network (connections). Public is visible to every Alenio account. */
-  audience?: "network" | "public";
 };
 
 export type NetworkUpdatesFeedResponse = {

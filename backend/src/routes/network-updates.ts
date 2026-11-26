@@ -12,7 +12,6 @@ import {
 import {
   inferActivityAudience,
   networkAudienceFields,
-  publicAudienceFields,
 } from "../lib/activity-audience";
 import { buildConnectionPairKey } from "../lib/messaging-permission";
 import { isBlockedEitherDirection } from "../lib/relationship-blocks";
@@ -329,8 +328,6 @@ const createPostSchema = z
     imageWidth: z.number().int().min(1).max(IMAGE_DIMENSION_MAX).optional(),
     imageHeight: z.number().int().min(1).max(IMAGE_DIMENSION_MAX).optional(),
     mediaType: z.enum(["image", "video"]).optional(),
-    /** Defaults to network (connections only). Public is every Alenio account. */
-    audience: z.enum(["network", "public"]).optional(),
   })
   .superRefine((value, context) => {
     if (!value.body && !value.imageUrl) {
@@ -358,7 +355,7 @@ networkUpdatesRouter.post(
   zValidator("json", createPostSchema),
   async (c) => {
     const user = c.get("user")!;
-    const { body, imageUrl, imageWidth, imageHeight, mediaType, audience } =
+    const { body, imageUrl, imageWidth, imageHeight, mediaType } =
       c.req.valid("json");
     if (imageUrl) {
       const object = parseOwnedStorageObjectFromUrl(imageUrl);
@@ -375,15 +372,12 @@ networkUpdatesRouter.post(
       }
     }
 
-    const audienceFields =
-      audience === "public" ? publicAudienceFields() : networkAudienceFields();
-
     const activity = await prisma.teamActivity.create({
       data: {
         teamId: null,
         userId: user.id,
         type: NETWORK_POST_TYPE,
-        ...audienceFields,
+        ...networkAudienceFields(),
         metadata: JSON.stringify({
           body: body || null,
           imageUrl: imageUrl ?? null,
