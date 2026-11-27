@@ -4,16 +4,14 @@ import {
   CheckSquare,
   Megaphone,
   Settings,
-  UserPlus,
   type LucideIcon,
 } from "lucide-react-native";
 
-type ActionKey = "event" | "task" | "member" | "post" | "settings";
+type ActionKey = "event" | "task" | "post" | "settings";
 
 type Action = {
   key: ActionKey;
-  line1: string;
-  line2: string;
+  label: string;
   Icon: LucideIcon;
   onPress: () => void;
   disabled?: boolean;
@@ -22,12 +20,10 @@ type Action = {
 type Props = {
   onScheduleEvent: () => void;
   onCreateTask: () => void;
-  onAddMember: () => void;
   onPostUpdate: () => void;
   onWorkspaceSettings?: () => void;
   canScheduleEvent?: boolean;
   canCreateTask?: boolean;
-  canAddMember?: boolean;
   canPostUpdate?: boolean;
   /** Owners/leaders: show Workspace settings tile. */
   canOpenSettings?: boolean;
@@ -44,48 +40,36 @@ const BORDER = "#E8EAF0";
 /**
  * Overview quick actions under the workspace card.
  * Settings appears for owners/leaders only.
+ * Labels stay on one line — no orphan second-line words.
  */
 export function WorkspaceOverviewQuickActions({
   onScheduleEvent,
   onCreateTask,
-  onAddMember,
   onPostUpdate,
   onWorkspaceSettings,
   canScheduleEvent = true,
   canCreateTask = true,
-  canAddMember = true,
   canPostUpdate = true,
   canOpenSettings = false,
 }: Props) {
   const actions: Action[] = [
     {
       key: "event",
-      line1: "Schedule",
-      line2: "an event",
+      label: "New event",
       Icon: CalendarDays,
       onPress: onScheduleEvent,
       disabled: !canScheduleEvent,
     },
     {
       key: "task",
-      line1: "Create",
-      line2: "a task",
+      label: "New task",
       Icon: CheckSquare,
       onPress: onCreateTask,
       disabled: !canCreateTask,
     },
     {
-      key: "member",
-      line1: "Add",
-      line2: "member",
-      Icon: UserPlus,
-      onPress: onAddMember,
-      disabled: !canAddMember,
-    },
-    {
       key: "post",
-      line1: "Post",
-      line2: "an update",
+      label: "Post update",
       Icon: Megaphone,
       onPress: onPostUpdate,
       disabled: !canPostUpdate,
@@ -95,27 +79,21 @@ export function WorkspaceOverviewQuickActions({
   if (canOpenSettings && onWorkspaceSettings) {
     actions.push({
       key: "settings",
-      line1: "Workspace",
-      line2: "settings",
+      label: "Settings",
       Icon: Settings,
       onPress: onWorkspaceSettings,
     });
   }
 
-  const compact = actions.length >= 5;
-
   return (
     <View style={styles.row} testID="workspace-overview-quick-actions">
-      {actions.map(({ key, line1, line2, Icon, onPress, disabled }, index) => (
-        <View
-          key={key}
-          style={[styles.cell, index > 0 ? styles.cellGap : null]}
-        >
+      {actions.map(({ key, label, Icon, onPress, disabled }) => (
+        <View key={key} style={styles.cell}>
           <Pressable
             onPress={onPress}
             disabled={disabled}
             accessibilityRole="button"
-            accessibilityLabel={`${line1} ${line2}`}
+            accessibilityLabel={label}
             accessibilityState={{ disabled: !!disabled }}
             testID={`workspace-overview-action-${key}`}
             style={styles.pressable}
@@ -124,22 +102,15 @@ export function WorkspaceOverviewQuickActions({
               <View
                 style={[
                   styles.tile,
-                  compact ? styles.tileCompact : null,
                   disabled ? styles.tileDisabled : null,
                   pressed && !disabled ? styles.tilePressed : null,
                 ]}
               >
-                <View style={[styles.iconChip, compact ? styles.iconChipCompact : null]}>
-                  <Icon
-                    size={compact ? 15 : 16}
-                    color={ICON}
-                    strokeWidth={2.2}
-                  />
+                <View style={styles.iconChip}>
+                  <Icon size={14} color={ICON} strokeWidth={2.2} />
                 </View>
-                <Text style={[styles.label, compact ? styles.labelCompact : null]}>
-                  {line1}
-                  {"\n"}
-                  {line2}
+                <Text style={styles.label} numberOfLines={1}>
+                  {label}
                 </Text>
               </View>
             )}
@@ -155,40 +126,34 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     alignItems: "stretch",
+    gap: 6,
   },
   cell: {
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: 0,
     minWidth: 0,
-  },
-  cellGap: {
-    marginLeft: 6,
+    maxWidth: 120,
   },
   pressable: {
     width: "100%",
   },
   tile: {
     width: "100%",
-    minHeight: 88,
-    borderRadius: 14,
+    minHeight: 68,
+    borderRadius: 12,
     backgroundColor: TILE,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4,
-    paddingVertical: 12,
-    shadowColor: "#1E1B4B",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
-  tileCompact: {
-    minHeight: 84,
-    paddingHorizontal: 2,
+    paddingHorizontal: 6,
     paddingVertical: 10,
+    shadowColor: "#1E1B4B",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   tilePressed: {
     backgroundColor: TILE_PRESSED,
@@ -198,30 +163,21 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   iconChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 9,
     backgroundColor: CHIP,
     alignItems: "center",
     justifyContent: "center",
   },
-  iconChipCompact: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-  },
   label: {
-    marginTop: 8,
-    fontSize: 11,
-    lineHeight: 13,
+    marginTop: 6,
+    width: "100%",
+    fontSize: 12,
+    lineHeight: 14,
     fontWeight: "600",
     letterSpacing: -0.1,
     color: LABEL,
     textAlign: "center",
-  },
-  labelCompact: {
-    marginTop: 6,
-    fontSize: 10,
-    lineHeight: 12,
   },
 });

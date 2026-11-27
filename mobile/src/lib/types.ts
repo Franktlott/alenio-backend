@@ -242,6 +242,8 @@ export type ConnectionPerson = {
   username: string | null;
   image: string | null;
   profileTitle?: string | null;
+  /** Custom cover photo when set; cards fall back to the Alenio branded header. */
+  profileHeaderImage?: string | null;
   isWorkplaceConnected?: boolean;
 };
 

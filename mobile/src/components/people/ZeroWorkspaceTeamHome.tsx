@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,18 +28,24 @@ import {
   Check,
   ChevronDown,
   Clock,
+  Building2,
   MessageCircle,
+  MessageSquare,
   MoreHorizontal,
   Search,
   SlidersHorizontal,
+  Newspaper,
   X,
   Users,
-  Newspaper,
 } from "lucide-react-native";
 import { toast } from "burnt";
+import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { UserAvatar } from "@/components/UserAvatar";
+import { AlenioDefaultProfileHeader } from "@/components/profile/AlenioDefaultProfileHeader";
+import { ProfileHeaderCurve } from "@/components/profile/ProfileHeaderCurve";
+import { profileHeaderSource } from "@/lib/profile-header";
 import {
   AlenioBottomSheet,
   AlenioSheetCard,
@@ -43,6 +56,10 @@ import { ConnectRequestConfirmationSheet } from "@/components/ConnectRequestConf
 import { DismissSuggestionConfirmationSheet } from "@/components/DismissSuggestionConfirmationSheet";
 import { SuggestionPersonCard } from "@/components/people/SuggestionPersonCard";
 import { PersonalFeedList } from "@/components/people/PersonalFeedList";
+import {
+  NetworkConnectionsSidebar,
+  NetworkDiscoverGrid,
+} from "@/components/people/NetworkFeedSidebar";
 import { SegmentedControl } from "@/components/ui";
 import {
   connectionRequestOutcome,
@@ -78,16 +95,24 @@ import {
 } from "@/lib/connection-directory";
 
 const BRAND = colors.brand;
-const GRID_GAP = 10;
+const GRID_GAP = 12;
+const CONNECTION_AVATAR = 56;
+/** Cover band height before the scoop; kept short so grid cards stay dense. */
+const CONNECTION_COVER_HEIGHT = 78;
+const CONNECTION_CURVE_DEPTH = 16;
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 type NetworkTab = "feed" | "connections";
 
-/** Phone stays one column. Tablets get two. Wide screens get three. */
+/** Compact directory tiles — denser than a list, shorter than LinkedIn covers. */
+const CONNECTION_TILE_TARGET = 176;
+
 function networkColumns(width: number) {
-  if (width >= 1080) return 3;
-  if (width >= 700) return 2;
-  return 1;
+  if (width <= 0) return 2;
+  const columns = Math.floor(
+    (width + GRID_GAP) / (CONNECTION_TILE_TARGET + GRID_GAP),
+  );
+  return Math.max(2, Math.min(4, columns));
 }
 
 /** Suggestion cards stay narrow, so a phone can hold two. */
@@ -488,10 +513,16 @@ export function ZeroWorkspaceTeamHome({
   const directoryActive = normalizedSearch.length > 0 || hasActiveFilters;
   const activeTab = tab;
   const layoutWidth = paneWidth || Math.max(0, windowWidth - 32);
+  const wideSplit = layoutWidth >= 700;
   const columns = networkColumns(layoutWidth);
   const cardWidth = columnWidth(layoutWidth, columns);
   const suggestionColumns = discoverColumns(layoutWidth);
   const suggestionCardWidth = columnWidth(layoutWidth, suggestionColumns);
+  /** Short relevance preview — full list is behind View All. */
+  const sidebarConnections = useMemo(
+    () => accepted.slice(0, 6),
+    [accepted],
+  );
 
   const peopleSearchRow = (
     <View style={styles.connectionSearchRow}>
@@ -585,10 +616,12 @@ export function ZeroWorkspaceTeamHome({
             filtering={directoryActive}
             columns={columns}
             cardWidth={cardWidth}
+            messagingId={openingChatFor}
             sort={sort}
             sortLabel={CONNECTION_DIRECTORY_SORT_LABELS[sort]}
             onSort={() => setSortSheetOpen(true)}
             onOpen={openPerson}
+            onMessage={(entry) => void onMessagePress(entry)}
             onMenu={setMenuConnection}
             registerLetter={(letter, node) => {
               letterAnchors.current[letter] = node;
@@ -606,40 +639,107 @@ export function ZeroWorkspaceTeamHome({
     </View>
   );
 
+  // Sheet already clears the Duo dock — keep a normal page gutter only.
+  const contentPadLeft = Math.max(12, WS.pageGutter + statusCluster.left);
+  const contentPadRight = Math.max(12, WS.pageGutter + statusCluster.right);
+
   const personalFeed = (
     <View style={styles.listFrame} testID="personal-feed-pane">
-      <PersonalFeedList onFindPeople={() => onAddConnection("all")} />
+      <PersonalFeedList
+        onFindPeople={() => onAddConnection("all")}
+        embedded={wideSplit && activeTab === "feed"}
+      />
+    </View>
+  );
+
+  const feedSplit = (
+    <View
+      style={[
+        styles.feedSplit,
+        { paddingLeft: contentPadLeft, paddingRight: contentPadRight },
+      ]}
+      testID="network-feed-split"
+    >
+      <View style={styles.feedSplitMain}>{personalFeed}</View>
+      <ScrollView
+        style={styles.feedSplitSide}
+        contentContainerStyle={[
+          styles.feedSplitSideContent,
+          { paddingBottom: bottomNavigationClearance },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <NetworkDiscoverGrid
+          onDiscover={() => onAddConnection("all")}
+          onByRole={() => onOpenFilters?.()}
+          onByInterest={() => onAddConnection("all")}
+          onQuickConnect={() => onAddConnection("username")}
+        />
+        <NetworkConnectionsSidebar
+          entries={sidebarConnections}
+          total={accepted.length}
+          messagingId={openingChatFor}
+          onOpen={openPerson}
+          onMessage={(entry) => void onMessagePress(entry)}
+          onMenu={setMenuConnection}
+          onViewAll={() => setTab("connections")}
+        />
+      </ScrollView>
     </View>
   );
 
   return (
-    <View style={styles.screen} testID="zero-workspace-team-home">
-      <View
-        style={[
-          styles.networkHeader,
-          {
-            // Match WorkspaceViewToggle: same column width + page gutters.
-            alignSelf: "center",
-            width: "100%",
-            maxWidth: Math.min(adaptiveColumnWidth, CONTENT_MAX_WIDTH),
-            paddingLeft: WS.pageGutter + statusCluster.left,
-            paddingRight: WS.pageGutter + statusCluster.right,
-          },
-        ]}
-      >
-        <SegmentedControl
-          options={[
-            { key: "feed", label: "Feed", Icon: Newspaper },
-            { key: "connections", label: "Connections", Icon: Users },
+    <View
+      style={styles.screen}
+      testID="zero-workspace-team-home"
+      onLayout={(event) => {
+        const next = Math.round(event.nativeEvent.layout.width);
+        setPaneWidth((current) => (current === next ? current : next));
+      }}
+    >
+      <View style={styles.pageBody}>
+        <View
+          style={[
+            styles.networkHeader,
+            {
+              alignSelf: "center",
+              width: "100%",
+              maxWidth: Math.min(
+                wideSplit ? 1120 : adaptiveColumnWidth,
+                wideSplit ? 1120 : CONTENT_MAX_WIDTH,
+              ),
+              paddingLeft: contentPadLeft,
+              paddingRight: contentPadRight,
+            },
           ]}
-          value={activeTab}
-          onChange={setTab}
-          testID="feed-view-toggle"
-          testIDPrefix="network-tab"
-        />
-        {activeTab === "connections" ? peopleSearchRow : null}
+        >
+          <SegmentedControl
+            options={[
+              { key: "feed", label: "Feed", Icon: SlidersHorizontal },
+              { key: "connections", label: "Connections", Icon: Users },
+            ]}
+            value={activeTab}
+            onChange={setTab}
+            testID="feed-view-toggle"
+            testIDPrefix="network-tab"
+          />
+          {activeTab === "connections" ? peopleSearchRow : null}
+        </View>
+        {activeTab === "feed" ? (
+          wideSplit ? (
+            feedSplit
+          ) : (
+            <View style={styles.phoneFeedPad}>
+              <PersonalFeedList
+                onFindPeople={() => onAddConnection("all")}
+                embedded
+              />
+            </View>
+          )
+        ) : (
+          peopleDirectory
+        )}
       </View>
-      {activeTab === "feed" ? personalFeed : peopleDirectory}
       <ConnectRequestConfirmationSheet
         person={suggestionToConnect}
         pending={connectMutation.isPending}
@@ -760,82 +860,191 @@ export function ZeroWorkspaceTeamHome({
   );
 }
 
-function letterGroups(entries: AcceptedConnectionEntry[]) {
-  const groups: Array<[string, AcceptedConnectionEntry[]]> = [];
-  for (const entry of entries) {
-    const letter = connectionIndexLetter(entry);
-    const last = groups[groups.length - 1];
-    if (last && last[0] === letter) last[1].push(entry);
-    else groups.push([letter, [entry]]);
-  }
-  return groups;
-}
-
 function ConnectionRow({
   entry,
   cardWidth,
+  messaging,
   onOpen,
+  onMessage,
   onMenu,
   anchorRef,
 }: {
   entry: AcceptedConnectionEntry;
   cardWidth?: number;
+  messaging: boolean;
   onOpen: (userId: string) => void;
+  onMessage: (entry: AcceptedConnectionEntry) => void;
   onMenu: (entry: AcceptedConnectionEntry) => void;
   anchorRef?: (node: View | null) => void;
 }) {
+  const [coverWidth, setCoverWidth] = useState(
+    () => Math.max(0, Math.round(cardWidth ?? 0)),
+  );
   const name = entry.person.name?.trim() || "Alenio member";
-  const detail = connectionRowDetail(entry);
+  const title = entry.person.profileTitle?.trim() || "";
+  const handle = entry.person.username ? `@${entry.person.username}` : "";
+  const workplace =
+    entry.sharedWorkspaceNames?.find((value) => value.trim().length > 0)?.trim() ||
+    "";
+  const headerImage = entry.person.profileHeaderImage?.trim() || null;
+  const showCustomHeader = Boolean(headerImage);
+
+  useEffect(() => {
+    if (!cardWidth) return;
+    const next = Math.max(0, Math.round(cardWidth));
+    setCoverWidth((current) => (current === next ? current : next));
+  }, [cardWidth]);
+
   return (
     <View
       ref={anchorRef}
       collapsable={false}
-      style={cardWidth ? { width: cardWidth } : styles.personCardFull}
+      style={[
+        styles.connectionTile,
+        cardWidth ? { width: cardWidth } : styles.personCardFull,
+      ]}
     >
       <Pressable
         onPress={() => onOpen(entry.person.id)}
-        style={[styles.personCard, styles.personCardFull]}
+        style={styles.connectionTileInner}
         accessibilityRole="button"
         accessibilityLabel={`Open ${name}'s profile`}
         testID={`zero-workspace-connection-${entry.person.id}`}
       >
-        <UserAvatar
-          user={{ ...entry.person, activeNow: entry.activeNow }}
-          size={40}
-          radius={20}
-          backgroundColor="#F1F5F9"
-          textColor="#334155"
-          fontSize={14}
-        />
-        <View style={styles.personCopy}>
-          <Text style={styles.personName} numberOfLines={1}>
+        <View
+          style={styles.connectionCover}
+          onLayout={(event) => {
+            const next = Math.round(event.nativeEvent.layout.width);
+            if (next > 0) {
+              setCoverWidth((current) => (current === next ? current : next));
+            }
+          }}
+        >
+          {coverWidth > 0 ? (
+            showCustomHeader ? (
+              <>
+                <Image
+                  source={profileHeaderSource(headerImage)}
+                  style={styles.connectionCoverFill}
+                  resizeMode="cover"
+                  accessibilityIgnoresInvertColors
+                />
+                {/**
+                 * Soft top scrim so the overflow control stays readable on
+                 * light profile photos — same idea as the live profile cover.
+                 */}
+                <LinearGradient
+                  colors={["rgba(15,23,42,0.35)", "rgba(15,23,42,0)"]}
+                  locations={[0, 1]}
+                  style={styles.connectionCoverScrim}
+                  pointerEvents="none"
+                />
+                <ProfileHeaderCurve
+                  width={coverWidth}
+                  depth={CONNECTION_CURVE_DEPTH}
+                />
+              </>
+            ) : (
+              <AlenioDefaultProfileHeader
+                width={coverWidth}
+                height={CONNECTION_COVER_HEIGHT}
+                instanceId={entry.person.id}
+                curveDepth={CONNECTION_CURVE_DEPTH}
+                showWatermark
+              />
+            )
+          ) : (
+            <View style={styles.connectionCoverFallback} />
+          )}
+
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation();
+              onMenu(entry);
+            }}
+            hitSlop={8}
+            style={styles.connectionMore}
+            accessibilityRole="button"
+            accessibilityLabel={`More actions for ${name}`}
+            testID={`connection-more-${entry.person.id}`}
+          >
+            <MoreHorizontal size={15} color="#FFFFFF" strokeWidth={2.4} />
+          </Pressable>
+        </View>
+
+        <View style={styles.connectionBody}>
+          <View style={styles.connectionAvatarWrap}>
+            <UserAvatar
+              user={{ ...entry.person, activeNow: entry.activeNow }}
+              size={CONNECTION_AVATAR}
+              radius={CONNECTION_AVATAR / 2}
+              backgroundColor="#EEF2FF"
+              textColor="#334155"
+              fontSize={20}
+            />
+          </View>
+
+          {/**
+           * Fixed three-line identity stack so Message buttons align across the
+           * row even when title or workplace is missing.
+           */}
+          <Text style={styles.connectionName} numberOfLines={1}>
             {name}
           </Text>
-          <View style={styles.personMetaRow}>
-            {detail ? (
-              <Text style={styles.personMeta} numberOfLines={1}>
-                {detail}
-              </Text>
+          <Text
+            style={[
+              styles.connectionMeta,
+              title ? null : styles.connectionMetaEmpty,
+            ]}
+            numberOfLines={1}
+          >
+            {title || " "}
+          </Text>
+          <View style={styles.connectionWorkplaceRow}>
+            {workplace ? (
+              <>
+                <Building2 size={11} color="#98A2B3" strokeWidth={2.3} />
+                <Text style={styles.connectionWorkplace} numberOfLines={1}>
+                  {workplace}
+                </Text>
+              </>
             ) : (
-              <Text style={styles.personMeta} numberOfLines={1}>
-                {entry.sharesWorkspace ? "Workspace" : "Personal"}
+              <Text
+                style={[
+                  styles.connectionHandle,
+                  handle ? null : styles.connectionHandleEmpty,
+                ]}
+                numberOfLines={1}
+              >
+                {handle || " "}
               </Text>
             )}
           </View>
+
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation();
+              onMessage(entry);
+            }}
+            disabled={messaging}
+            style={[
+              styles.connectionMessage,
+              messaging ? styles.connectionMessageBusy : null,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Message ${name}`}
+            testID={`connection-message-${entry.person.id}`}
+          >
+            {messaging ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <MessageSquare size={14} color="#FFFFFF" strokeWidth={2.3} />
+                <Text style={styles.connectionMessageText}>Message</Text>
+              </>
+            )}
+          </Pressable>
         </View>
-        <Pressable
-          onPress={(event) => {
-            event.stopPropagation();
-            onMenu(entry);
-          }}
-          hitSlop={8}
-          style={styles.moreButton}
-          accessibilityRole="button"
-          accessibilityLabel={`More actions for ${name}`}
-          testID={`connection-more-${entry.person.id}`}
-        >
-          <MoreHorizontal size={18} color="#667085" strokeWidth={2.2} />
-        </Pressable>
       </Pressable>
     </View>
   );
@@ -947,10 +1156,12 @@ function ConnectionsPane({
   filtering,
   columns,
   cardWidth,
+  messagingId,
   sort,
   sortLabel,
   onSort,
   onOpen,
+  onMessage,
   onMenu,
   registerLetter,
 }: {
@@ -962,10 +1173,12 @@ function ConnectionsPane({
   filtering: boolean;
   columns: number;
   cardWidth?: number;
+  messagingId: string | null;
   sort: ConnectionDirectorySort;
   sortLabel: string;
   onSort: () => void;
   onOpen: (userId: string) => void;
+  onMessage: (entry: AcceptedConnectionEntry) => void;
   onMenu: (entry: AcceptedConnectionEntry) => void;
   registerLetter: (letter: string, node: View | null) => void;
 }) {
@@ -1004,15 +1217,16 @@ function ConnectionsPane({
             <View
               key={index}
               style={[
-                styles.personCard,
+                styles.connectionTile,
+                styles.connectionTileBone,
                 cardWidth ? { width: cardWidth } : styles.personCardFull,
               ]}
             >
-              <View style={styles.boneAvatar} />
-              <View style={styles.boneCopy}>
-                <View style={styles.boneName} />
-                <View style={styles.boneMeta} />
-              </View>
+              <View style={styles.connectionCoverBone} />
+              <View style={styles.connectionAvatarBone} />
+              <View style={styles.boneName} />
+              <View style={styles.boneMeta} />
+              <View style={styles.connectionMessageBone} />
             </View>
           ))}
         </CardGrid>
@@ -1025,53 +1239,32 @@ function ConnectionsPane({
         />
       ) : entries.length > 0 ? (
         <View testID="connections-list" style={styles.gridWrap}>
-          {sort === "name" ? (
-            letterGroups(entries).map(([letter, group]) => (
-              <View
-                key={letter}
-                collapsable={false}
-                ref={(node) => registerLetter(letter, node)}
-              >
-                <Text style={styles.alphaHeading}>{letter}</Text>
-                <CardGrid columns={columns}>
-                  {group.map((entry) => (
-                    <ConnectionRow
-                      key={entry.id}
-                      entry={entry}
-                      cardWidth={cardWidth}
-                      onOpen={onOpen}
-                      onMenu={onMenu}
-                    />
-                  ))}
-                </CardGrid>
-              </View>
-            ))
-          ) : (
-            <CardGrid columns={columns}>
-              {(() => {
-                const seen = new Set<string>();
-                return entries.map((entry) => {
-                  const letter = connectionIndexLetter(entry);
-                  const first = !seen.has(letter);
-                  if (first) seen.add(letter);
-                  return (
-                    <ConnectionRow
-                      key={entry.id}
-                      entry={entry}
-                      cardWidth={cardWidth}
-                      onOpen={onOpen}
-                      onMenu={onMenu}
-                      anchorRef={
-                        first
-                          ? (node) => registerLetter(letter, node)
-                          : undefined
-                      }
-                    />
-                  );
-                });
-              })()}
-            </CardGrid>
-          )}
+          <CardGrid columns={columns}>
+            {(() => {
+              const seen = new Set<string>();
+              return entries.map((entry) => {
+                const letter = connectionIndexLetter(entry);
+                const first = !seen.has(letter);
+                if (first) seen.add(letter);
+                return (
+                  <ConnectionRow
+                    key={entry.id}
+                    entry={entry}
+                    cardWidth={cardWidth}
+                    messaging={messagingId === entry.person.id}
+                    onOpen={onOpen}
+                    onMessage={onMessage}
+                    onMenu={onMenu}
+                    anchorRef={
+                      first
+                        ? (node) => registerLetter(letter, node)
+                        : undefined
+                    }
+                  />
+                );
+              });
+            })()}
+          </CardGrid>
         </View>
       ) : filtering ? (
         <View style={styles.searchEmpty} testID="connections-no-search-results">
@@ -1561,7 +1754,16 @@ function InlineState({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, minHeight: 0, backgroundColor: "#FFFFFF" },
+  screen: { flex: 1, minHeight: 0, backgroundColor: "transparent" },
+  pageBody: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: "#FFFFFF",
+  },
+  phoneFeedPad: {
+    flex: 1,
+    minHeight: 0,
+  },
   scroller: { flex: 1, minHeight: 0 },
   listFrame: { flex: 1, minHeight: 0 },
   page: { paddingHorizontal: 16, paddingTop: 4 },
@@ -1613,8 +1815,32 @@ const styles = StyleSheet.create({
   },
   networkHeader: {
     marginTop: 10,
-    marginBottom: 6,
+    marginBottom: 8,
     gap: 10,
+  },
+  feedSplit: {
+    flex: 1,
+    minHeight: 0,
+    flexDirection: "row",
+    gap: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  feedSplitMain: {
+    flex: 1.65,
+    minWidth: 0,
+    minHeight: 0,
+    backgroundColor: "#FFFFFF",
+  },
+  feedSplitSide: {
+    flex: 1,
+    minWidth: 260,
+    maxWidth: 360,
+    backgroundColor: "#FFFFFF",
+  },
+  feedSplitSideContent: {
+    flexGrow: 1,
+    gap: 14,
+    backgroundColor: "#FFFFFF",
   },
   connectionSearchRow: {
     flexDirection: "row",
@@ -1756,6 +1982,165 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  connectionTile: {
+    ...elevation.card,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    overflow: "hidden",
+  },
+  connectionTileInner: {
+    alignItems: "stretch",
+    paddingBottom: 0,
+  },
+  connectionCover: {
+    width: "100%",
+    height: CONNECTION_COVER_HEIGHT,
+    overflow: "hidden",
+    backgroundColor: colors.surface,
+  },
+  connectionCoverFill: {
+    ...StyleSheet.absoluteFill,
+    width: "100%",
+    height: "100%",
+  },
+  connectionCoverFallback: {
+    flex: 1,
+    backgroundColor: "#4C1D95",
+  },
+  connectionCoverScrim: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 36,
+  },
+  connectionMore: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.22)",
+  },
+  connectionBody: {
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingBottom: 12,
+  },
+  connectionAvatarWrap: {
+    marginTop: -(CONNECTION_AVATAR / 2 + CONNECTION_CURVE_DEPTH * 0.15),
+    borderRadius: CONNECTION_AVATAR / 2 + 2,
+    padding: 2,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  connectionName: {
+    marginTop: 8,
+    paddingHorizontal: 2,
+    height: 18,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    color: colors.textPrimary,
+    textAlign: "center",
+  },
+  connectionMeta: {
+    marginTop: 3,
+    paddingHorizontal: 2,
+    height: 15,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "500",
+    color: colors.textSecondary,
+    textAlign: "center",
+  },
+  connectionMetaEmpty: {
+    color: "transparent",
+  },
+  connectionWorkplaceRow: {
+    marginTop: 2,
+    minHeight: 14,
+    maxWidth: "100%",
+    paddingHorizontal: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  connectionWorkplace: {
+    flexShrink: 1,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "600",
+    color: colors.textMuted,
+    textAlign: "center",
+  },
+  connectionHandle: {
+    height: 14,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "600",
+    color: colors.textMuted,
+    textAlign: "center",
+  },
+  connectionHandleEmpty: {
+    color: "transparent",
+  },
+  connectionMessage: {
+    marginTop: 10,
+    alignSelf: "stretch",
+    minHeight: 40,
+    borderRadius: 12,
+    backgroundColor: BRAND,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    shadowColor: "#4C1D95",
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  connectionMessageBusy: { opacity: 0.7 },
+  connectionMessageText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "700",
+    letterSpacing: -0.1,
+    color: "#FFFFFF",
+  },
+  connectionTileBone: {
+    overflow: "hidden",
+  },
+  connectionCoverBone: {
+    width: "100%",
+    height: CONNECTION_COVER_HEIGHT,
+    backgroundColor: "#E8EAF4",
+  },
+  connectionAvatarBone: {
+    alignSelf: "center",
+    marginTop: -(CONNECTION_AVATAR / 2),
+    width: CONNECTION_AVATAR,
+    height: CONNECTION_AVATAR,
+    borderRadius: CONNECTION_AVATAR / 2,
+    backgroundColor: "#E4E7EC",
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  connectionMessageBone: {
+    marginTop: 12,
+    marginHorizontal: 10,
+    alignSelf: "stretch",
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#E8EAF4",
+  },
   boneAvatar: {
     width: 40,
     height: 40,
@@ -1766,12 +2151,14 @@ const styles = StyleSheet.create({
   boneName: {
     width: "62%",
     height: 12,
+    marginTop: 10,
     borderRadius: 6,
     backgroundColor: "#E4E7EC",
   },
   boneMeta: {
     width: "40%",
     height: 10,
+    marginTop: 8,
     borderRadius: 5,
     backgroundColor: "#EEF2F6",
   },
@@ -2291,73 +2678,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#172033",
   },
-  connectionsCard: {
-    overflow: "hidden",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: "#E5E9F0",
-    backgroundColor: "#FFFFFF",
-  },
-  connectionRow: {
-    minHeight: 76,
-    paddingVertical: 9,
-    paddingHorizontal: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 13,
-  },
-  connectionRowDivider: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E8ECF2",
-  },
-  connectionCopy: { flex: 1, minWidth: 0 },
-  connectionName: {
-    ...typography.rowTitle,
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "600",
-    color: "#172033",
-  },
-  connectionMetaRow: {
-    marginTop: 2,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  connectionMeta: {
-    ...typography.meta,
-    flexShrink: 1,
-    fontSize: 12,
-    lineHeight: 16,
-    color: "#7A869A",
-  },
-  connectionTypeBadge: {
-    width: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 9,
-    borderWidth: 1,
-  },
-  workspaceConnectionBadge: {
-    borderColor: "#DDE3FF",
-    backgroundColor: "#F3F5FF",
-  },
-  personalConnectionBadge: {
-    borderColor: "#E4E7EC",
-    backgroundColor: "#F8FAFC",
-  },
-  messageButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E1E5FF",
-    backgroundColor: "#FAFAFF",
-  },
-  messageButtonDisabled: { opacity: 0.5 },
   connectionsEmptyImage: {
     width: 220,
     height: 160,

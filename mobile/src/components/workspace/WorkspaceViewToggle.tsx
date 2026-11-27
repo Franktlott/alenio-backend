@@ -32,7 +32,7 @@ export function WorkspaceViewToggle({
   calendarBadge = 0,
   tasksBadge = 0,
 }: Props) {
-  const { columnWidth } = useAdaptiveLayout();
+  const { columnWidth, iconRailEdge } = useAdaptiveLayout();
   const cluster = useStatusClusterInset();
   const options: SegmentOption<WorkspaceViewMode>[] = [
     { key: "overview", label: "Overview", Icon: LayoutGrid },
@@ -41,6 +41,11 @@ export function WorkspaceViewToggle({
     // The roster was always a workspace mode; it just had no tab of its own.
     { key: "development", label: "Members", Icon: Users },
   ];
+  /** Sheet already clears the Duo dock — don't double-pad that edge. */
+  const padLeft =
+    (iconRailEdge === "left" ? 0 : WS.pageGutter) + cluster.left;
+  const padRight =
+    (iconRailEdge === "right" ? 0 : WS.pageGutter) + cluster.right;
 
   return (
     <View
@@ -50,8 +55,8 @@ export function WorkspaceViewToggle({
         maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
         marginTop: 8,
         marginBottom: 4,
-        paddingLeft: WS.pageGutter + cluster.left,
-        paddingRight: WS.pageGutter + cluster.right,
+        paddingLeft: padLeft,
+        paddingRight: padRight,
       }}
     >
       <SegmentedControl

@@ -41,6 +41,7 @@ import {
 } from "@/lib/adaptive-layout";
 import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 import { OPEN_CHECK_IN_TITLE } from "@/lib/open-check-in";
+import { SenecaIcon } from "@/components/seneca/SenecaIcon";
 
 const CONSENT_HERO = require("@/assets/alenio-auth-dusk-mountain.jpg");
 
@@ -1006,7 +1007,7 @@ function RecordingFlow({
             ) : null}
 
             <View style={styles.senecaFooterCard}>
-              <Sparkles size={18} color="#5B3FF0" strokeWidth={2.2} />
+              <SenecaIcon size={36} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.senecaTitle}>Powered by Seneca</Text>
                 <Text style={styles.senecaBody}>

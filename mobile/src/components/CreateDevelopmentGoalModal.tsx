@@ -33,13 +33,22 @@ export type CreateDevelopmentGoalPayload = {
   steps: string[];
   dueDate: string;
   priority: DevelopmentGoalPriority;
-  managerNotes?: string;
+  /** Optional note saved as the first progress note on create. */
+  notes?: string;
 };
+
+/** Entry path chosen before opening create / Seneca sheets. */
+export type CreateDevelopmentGoalMode = "seneca" | "scratch";
 
 type Props = {
   visible: boolean;
+  teamId: string;
+  memberUserId: string;
   memberName: string;
   memberImage?: string | null;
+  managerName?: string | null;
+  /** Signed-in person is creating a goal for themselves. */
+  isSelf?: boolean;
   saving?: boolean;
   error?: string | null;
   /** Starting point chosen before the sheet opened, e.g. a goal type shortcut. */
@@ -74,6 +83,7 @@ function StepBadge({ n }: { n: number }) {
 export function CreateDevelopmentGoalModal({
   visible,
   memberName,
+  isSelf = false,
   saving = false,
   error,
   prefill = null,
@@ -89,19 +99,21 @@ export function CreateDevelopmentGoalModal({
   const [dueDate, setDueDate] = useState<Date>(() => defaultGoalDueDate());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [priority, setPriority] = useState<DevelopmentGoalPriority>("normal");
-  const [managerNotes, setManagerNotes] = useState("");
+  const [notes, setNotes] = useState("");
   const [tipsOpen, setTipsOpen] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     setCustomSkill(prefill?.skill ?? "");
     setSkillDescription(prefill?.description ?? "");
-    setSteps(prefill?.steps ?? []);
+    setSteps(prefill?.steps?.length ? prefill.steps : [""]);
     setDueDate(defaultGoalDueDate());
     setShowDatePicker(false);
     setPriority("normal");
-    setManagerNotes("");
+    setNotes("");
     setTipsOpen(false);
+    // Reset only when the sheet opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const showTips = () => {
@@ -116,7 +128,7 @@ export function CreateDevelopmentGoalModal({
       steps: trimmedSteps,
       dueDate: dueDate.toISOString(),
       priority,
-      managerNotes: managerNotes.trim() || undefined,
+      notes: notes.trim() || undefined,
     });
   };
 
@@ -185,7 +197,7 @@ export function CreateDevelopmentGoalModal({
                 }}
                 numberOfLines={1}
               >
-                For {memberName}
+                {isSelf ? "Your development goal" : `For ${memberName}`}
               </Text>
             </View>
             <Pressable
@@ -210,7 +222,9 @@ export function CreateDevelopmentGoalModal({
             showsVerticalScrollIndicator={false}
           >
             <Text style={{ fontSize: 11.5, color: "#64748B", lineHeight: 16, marginBottom: 2 }}>
-              Help {firstName} build a skill through clear actions and consistent growth.
+              {isSelf
+                ? "Build a skill through clear actions and consistent growth."
+                : `Help ${firstName} build a skill through clear actions and consistent growth.`}
             </Text>
 
             {error ? (
@@ -300,7 +314,9 @@ export function CreateDevelopmentGoalModal({
                 </Pressable>
               </View>
               <Text style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>
-                Define the key actions {firstName} will take.
+                {isSelf
+                  ? "Define the key actions you’ll take."
+                  : `Define the key actions ${firstName} will take.`}
               </Text>
 
               <View style={{ gap: 5 }}>
@@ -487,13 +503,13 @@ export function CreateDevelopmentGoalModal({
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <StepBadge n={5} />
                 <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>
-                  Manager notes <Text style={{ fontWeight: "500", color: "#94A3B8" }}>(optional)</Text>
+                  Notes <Text style={{ fontWeight: "500", color: "#94A3B8" }}>(optional)</Text>
                 </Text>
               </View>
               <TextInput
-                value={managerNotes}
-                onChangeText={(v) => setManagerNotes(v.slice(0, 250))}
-                placeholder="Add any context or notes about this goal..."
+                value={notes}
+                onChangeText={(v) => setNotes(v.slice(0, 250))}
+                placeholder="Add context for this goal…"
                 placeholderTextColor="#94A3B8"
                 multiline
                 style={{
@@ -511,7 +527,7 @@ export function CreateDevelopmentGoalModal({
                 }}
               />
               <Text style={{ fontSize: 10, color: "#94A3B8", textAlign: "right" }}>
-                {managerNotes.length}/250
+                {notes.length}/250
               </Text>
             </View>
           </ScrollView>

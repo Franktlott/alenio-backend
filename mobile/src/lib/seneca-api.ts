@@ -236,3 +236,53 @@ export function fetchSenecaAsk(teamId: string, question: string, messages: Senec
     { question, messages },
   );
 }
+
+export type SenecaQuickDevelopmentGoal = {
+  skill: string;
+  steps: string[];
+};
+
+const MAX_QUICK_GOAL_STEPS = 5;
+
+function normalizeQuickDevelopmentGoal(raw: unknown): SenecaQuickDevelopmentGoal | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const skill =
+    (typeof o.skill === "string" ? o.skill.trim() : "") ||
+    (typeof o.goalTitle === "string" ? o.goalTitle.trim() : "");
+  if (!skill) return null;
+  const stepSource = Array.isArray(o.steps)
+    ? o.steps
+    : Array.isArray(o.actionSteps30Day)
+      ? o.actionSteps30Day
+      : [];
+  const steps = stepSource
+    .filter((step): step is string => typeof step === "string")
+    .map((step) => step.trim())
+    .filter(Boolean)
+    .slice(0, MAX_QUICK_GOAL_STEPS);
+  if (steps.length === 0) return null;
+  return { skill, steps };
+}
+
+/** Draft a skill + actions for a member's development goal. */
+export async function fetchSenecaQuickGoal(
+  teamId: string,
+  memberUserId: string,
+  body: {
+    skillOrGoal: string;
+    memberName?: string;
+    managerName?: string | null;
+  },
+): Promise<SenecaQuickDevelopmentGoal> {
+  // api.post already unwraps `{ data: T }` from the response body.
+  const response = await api.post<unknown>(
+    `/api/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(memberUserId)}/seneca/quick-goal`,
+    body,
+  );
+  const normalized = normalizeQuickDevelopmentGoal(response);
+  if (!normalized) {
+    throw new Error("Seneca returned an invalid development goal.");
+  }
+  return normalized;
+}

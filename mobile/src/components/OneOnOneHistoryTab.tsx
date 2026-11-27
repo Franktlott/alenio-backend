@@ -4080,7 +4080,8 @@ export function OneOnOneHistoryTab({
         >
           Check-ins
         </Text>
-      {canCreate || upcomingPlanned.length > visibleUpcomingCount ? (
+      {(!showEmptyState && canCreate) ||
+      upcomingPlanned.length > visibleUpcomingCount ? (
         <View style={{ flexShrink: 0, flexDirection: "row", alignItems: "center", gap: 6 }}>
           {upcomingPlanned.length > visibleUpcomingCount ? (
             <Pressable
@@ -4095,7 +4096,7 @@ export function OneOnOneHistoryTab({
               </Text>
             </Pressable>
           ) : null}
-          {canCreate ? (
+          {!showEmptyState && canCreate ? (
           <>
           <Pressable
             onPress={() => void startCreate()}

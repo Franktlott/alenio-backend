@@ -11,8 +11,9 @@ import { UserPlus } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { toast } from "burnt";
 import { AddMemberModal } from "@/components/AddMemberModal";
-import { CurvedTabLayout } from "@/components/CurvedTabLayout";
 import { AlenioHeaderBrand } from "@/components/AlenioHeaderBrand";
+import { CurvedTabLayout } from "@/components/CurvedTabLayout";
+import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 import {
   AddConnectionSheet,
   type AddConnectionEntryMode,
@@ -37,6 +38,7 @@ import { reconcileActiveTeamAfterRemoval } from "@/lib/workspace-switch";
 import type { ConnectionDirectoryFilters } from "@/lib/connection-directory";
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
+  const adaptive = useAdaptiveLayout();
   const activeTeamId = useTeamStore((state) => state.activeTeamId);
   const setActiveTeamId = useTeamStore((state) => state.setActiveTeamId);
   const hasHydrated = useTeamStore((state) => state._hasHydrated);
@@ -280,9 +282,11 @@ export default function TeamScreen() {
     <CurvedTabLayout
       topInset={insets.top}
       title="My Network"
-      leftAction={<AlenioHeaderBrand tone="dark" />}
+      hideHeaderTitle
+      leftAction={<AlenioHeaderBrand title="My Network" />}
       band
       sheetColor="#FFFFFF"
+      showNotifications
       rightAction={
         <Pressable
           onPress={() => openConnectionSearch("all")}
@@ -304,7 +308,7 @@ export default function TeamScreen() {
       headerTestID="team-header"
       overlays={addPersonOverlays}
     >
-      <View style={{ flex: 1, minHeight: 0 }}>
+      <View style={{ flex: 1, minHeight: 0 }} key={`network-${adaptive.width}`}>
         <ZeroWorkspaceTeamHome
           initialTab={initialNetworkTab}
           onAddConnection={openConnectionSearch}

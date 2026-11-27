@@ -1044,6 +1044,14 @@ export function ProfileScreen({
               />
               <ProfileDivider inset />
               <ProfileMenuRow
+                icon={Sparkles}
+                title="Profile layout preview"
+                subtitle="Interactive mock of the new member profile"
+                onPress={() => router.push("/profile-layout-mock")}
+                testID="profile-layout-mock-menu-row"
+              />
+              <ProfileDivider inset />
+              <ProfileMenuRow
                 icon={Settings}
                 title="Settings"
                 subtitle="Notifications, appearance, integrations, and support"

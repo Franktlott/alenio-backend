@@ -270,8 +270,11 @@ function FeedCard({
 
 export function PersonalFeedList({
   onFindPeople,
+  embedded = false,
 }: {
   onFindPeople?: () => void;
+  /** Column inside a wide Network split — drop page max-width centering. */
+  embedded?: boolean;
 }) {
   const bottomClearance = useTabBarClearanceFn()(14);
   const { columnWidth } = useAdaptiveLayout();
@@ -282,13 +285,20 @@ export function PersonalFeedList({
   const queryClient = useQueryClient();
   const [pickerId, setPickerId] = useState<string | null>(null);
   const [reactionsItemId, setReactionsItemId] = useState<string | null>(null);
-  const columnPad = {
-    alignSelf: "center" as const,
-    width: "100%" as const,
-    maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
-    paddingLeft: WS.pageGutter + statusCluster.left,
-    paddingRight: WS.pageGutter + statusCluster.right,
-  };
+  const columnPad = embedded
+    ? {
+        alignSelf: "stretch" as const,
+        width: "100%" as const,
+        paddingLeft: 0,
+        paddingRight: 0,
+      }
+    : {
+        alignSelf: "center" as const,
+        width: "100%" as const,
+        maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
+        paddingLeft: WS.pageGutter + statusCluster.left,
+        paddingRight: WS.pageGutter + statusCluster.right,
+      };
   const [refreshing, setRefreshing] = useState(false);
   const feed = useInfiniteQuery({
     queryKey: PERSONAL_FEED_KEY,
@@ -424,18 +434,20 @@ export function PersonalFeedList({
         <View
           style={[
             styles.listContent,
-            {
-              alignSelf: "center",
-              width: "100%",
-              maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
-              paddingLeft: WS.pageGutter + statusCluster.left,
-              paddingRight: WS.pageGutter + statusCluster.right,
-            },
+            embedded
+              ? styles.listContentEmbedded
+              : {
+                  alignSelf: "center",
+                  width: "100%",
+                  maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
+                  paddingLeft: WS.pageGutter + statusCluster.left,
+                  paddingRight: WS.pageGutter + statusCluster.right,
+                },
           ]}
         >
           <Pressable
             onPress={() => router.push("/create-post")}
-            style={styles.compose}
+            style={[styles.compose, embedded ? styles.composeCard : null]}
             accessibilityRole="button"
             testID="personal-feed-compose"
           >
@@ -444,25 +456,31 @@ export function PersonalFeedList({
                 name: currentUserName,
                 image: session?.user?.image ?? null,
               }}
-              size={28}
-              radius={14}
+              size={embedded ? 36 : 28}
+              radius={embedded ? 18 : 14}
               backgroundColor="#F1F5F9"
               textColor="#334155"
-              fontSize={11}
+              fontSize={embedded ? 13 : 11}
               workplaceConnected={false}
             />
-            <Text style={styles.composeText}>Share an update…</Text>
+            <Text style={styles.composeText}>
+              {embedded
+                ? "Share an update, idea, or win..."
+                : "Share an update…"}
+            </Text>
           </Pressable>
         </View>
 
         <View
           style={[
             styles.stream,
-            {
-              alignSelf: "center",
-              width: "100%",
-              maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
-            },
+            embedded
+              ? styles.streamEmbedded
+              : {
+                  alignSelf: "center",
+                  width: "100%",
+                  maxWidth: Math.min(columnWidth, CONTENT_MAX_WIDTH),
+                },
           ]}
         >
           {items.map((item) => (
@@ -470,8 +488,12 @@ export function PersonalFeedList({
               key={item.id}
               item={item}
               currentUserId={currentUserId}
-              contentInsetLeft={WS.pageGutter + statusCluster.left}
-              contentInsetRight={WS.pageGutter + statusCluster.right}
+              contentInsetLeft={
+                embedded ? 16 : WS.pageGutter + statusCluster.left
+              }
+              contentInsetRight={
+                embedded ? 16 : WS.pageGutter + statusCluster.right
+              }
               pickerOpen={pickerId === item.id}
               onTogglePicker={() =>
                 setPickerId((current) => (current === item.id ? null : item.id))
@@ -545,9 +567,19 @@ const styles = StyleSheet.create({
     paddingTop: space.sm,
     paddingBottom: 4,
   },
+  listContentEmbedded: {
+    alignSelf: "stretch",
+    width: "100%",
+    paddingTop: 0,
+    paddingBottom: 10,
+  },
   stream: {
     width: "100%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "transparent",
+  },
+  streamEmbedded: {
+    alignSelf: "stretch",
+    width: "100%",
   },
   compose: {
     flexDirection: "row",
@@ -560,7 +592,19 @@ const styles = StyleSheet.create({
     borderColor: "#E4E7EC",
     backgroundColor: "#F8F9FB",
   },
+  composeCard: {
+    borderRadius: 18,
+    borderColor: "rgba(15, 23, 42, 0.06)",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 14,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   composeText: {
+    flex: 1,
     fontSize: 14,
     color: "#8A96A8",
   },

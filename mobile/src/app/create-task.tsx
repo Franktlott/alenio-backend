@@ -14,13 +14,14 @@ import {
   Pressable,
   ScrollView,
   Keyboard,
+  Linking,
   StyleSheet,
   useWindowDimensions,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Plus, Square, Camera, Pencil, Trash2, ImageIcon, Check, CheckSquare, ChevronRight, Lock, Search, Calendar, Clock, Users, FileText, ListChecks, ArrowLeft, ArrowRight } from "lucide-react-native";
+import { X, Bookmark, Plus, Square, Camera, ImageIcon, Check, CheckSquare, ChevronRight, Lock, Search, Calendar, Clock, Users, FileText, ListChecks, ArrowLeft, ArrowRight, Pencil, Trash2 } from "lucide-react-native";
 import { colors } from "@/theme";
 import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
@@ -33,7 +34,11 @@ import { resolveMyTeamRole } from "@/lib/member-identity";
 import { resolveTimeZone, suggestedDueClock, taskDuePayload, withDueClock } from "@/lib/timezone";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { UserAvatar } from "@/components/UserAvatar";
-import { AlenioBottomSheet, AlenioSheetCard } from "@/components/AlenioBottomSheet";
+import {
+  AlenioBottomSheet,
+  AlenioSheetCard,
+  AlenioSheetOption,
+} from "@/components/AlenioBottomSheet";
 import { AlenioList, AlenioListRow, Button } from "@/components/ui";
 import { toast } from "burnt";
 import { parseTaskKind, resolveTaskCreationPresentation } from "@/lib/task-kind";
@@ -264,6 +269,114 @@ const builderStyles = StyleSheet.create({
     borderColor: "#E6E8F0",
     backgroundColor: "#FFFFFF",
   },
+  templateCard: {
+    minHeight: 52,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "#F8F7FC",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E8E6F0",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+  templateCardSelected: {
+    backgroundColor: "#F4F2FF",
+    borderColor: ACCENT,
+  },
+  templateIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  templateTitle: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "700",
+    letterSpacing: -0.1,
+    color: "#0F172A",
+  },
+  templateMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "nowrap",
+    gap: 5,
+  },
+  templateChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+  },
+  templateChipText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  templateMeta: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  templateSelectedMark: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: ACCENT,
+  },
+  templateActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  templateActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  templatePriorityChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  templateEmpty: {
+    alignItems: "center",
+    paddingVertical: 4,
+    gap: 4,
+  },
+  templateEmptyIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  templateEmptyTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  templateEmptyBody: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "500",
+    color: "#64748B",
+    textAlign: "center",
+  },
   avatarRemove: {
     position: "absolute",
     top: -2,
@@ -332,13 +445,24 @@ const SCREEN_HEIGHT = Dimensions.get("window").height;
 const ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.72);
 
 export default function CreateTaskScreen() {
-  const { teamId, prefillTitle, initialDueDate, initialAssigneeId, kind: routeKind } =
-    useLocalSearchParams<{
+  const {
+    teamId,
+    prefillTitle,
+    initialDueDate,
+    initialAssigneeId,
+    kind: routeKind,
+    templateId,
+    openTemplates,
+  } = useLocalSearchParams<{
       teamId: string;
       prefillTitle?: string;
       initialDueDate?: string;
       initialAssigneeId?: string;
       kind?: string;
+      /** Prefill from a saved task template. */
+      templateId?: string;
+      /** Open the saved-tasks picker on mount. */
+      openTemplates?: string;
     }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
@@ -364,6 +488,8 @@ export default function CreateTaskScreen() {
   );
   const [isRecurring, setIsRecurring] = useState(false);
   const [isJoint, setIsJoint] = useState(false);
+  /** Persist this task’s fields as a reusable template on create. */
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [showSplitConfirm, setShowSplitConfirm] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("weekly");
   const [recurrenceCount, setRecurrenceCount] = useState("3");
@@ -383,6 +509,13 @@ export default function CreateTaskScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [managingTemplate, setManagingTemplate] = useState<TaskTemplate | null>(
+    null,
+  );
+  const [confirmDeleteTemplate, setConfirmDeleteTemplate] = useState(false);
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(
+    typeof templateId === "string" && templateId.trim() ? templateId.trim() : null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [subtaskTitles, setSubtaskTitles] = useState<string[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
@@ -483,12 +616,16 @@ export default function CreateTaskScreen() {
   });
 
   const applyTemplate = (t: TaskTemplate) => {
+    setAppliedTemplateId(t.id);
     setTitle(t.title);
     setDescription(t.description ?? "");
     setPriority(t.priority);
     if (t.attachmentUrl) setAttachmentUri(t.attachmentUrl);
+    else setAttachmentUri(null);
     if (t.subtasks && t.subtasks.length > 0) {
       setSubtaskTitles(t.subtasks.map((s) => s.title));
+    } else {
+      setSubtaskTitles([]);
     }
     if (t.isRecurring) {
       setIsRecurring(true);
@@ -500,8 +637,37 @@ export default function CreateTaskScreen() {
       setIsRecurring(false);
     }
     setIsJoint(t.isJoint ?? false);
+    setError(null);
     setShowTemplatePicker(false);
   };
+
+  const clearAppliedTemplate = () => {
+    setAppliedTemplateId(null);
+  };
+
+  const appliedTemplate =
+    appliedTemplateId != null
+      ? (templates.find((template) => template.id === appliedTemplateId) ?? null)
+      : null;
+
+  const appliedRouteTemplateRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (isReminder) return;
+    const id = typeof templateId === "string" ? templateId.trim() : "";
+    if (!id || templates.length === 0) return;
+    if (appliedRouteTemplateRef.current === id) return;
+    const match = templates.find((template) => template.id === id);
+    if (!match) return;
+    appliedRouteTemplateRef.current = id;
+    applyTemplate(match);
+  }, [templateId, templates, isReminder]);
+
+  useEffect(() => {
+    if (isReminder) return;
+    if (openTemplates !== "1") return;
+    if (templates.length === 0) return;
+    setShowTemplatePicker(true);
+  }, [openTemplates, templates.length, isReminder]);
 
   const createMutation = useMutation({
     mutationFn: async (input: Record<string, unknown>) => {
@@ -520,15 +686,63 @@ export default function CreateTaskScreen() {
           }
         }
       }
-      return tasks;
+
+      let templateSaved = false;
+      if (!isReminder && saveAsTemplate && title.trim()) {
+        const templatePriority =
+          priority === "urgent" || priority === "high"
+            ? "high"
+            : priority === "low"
+              ? "low"
+              : "medium";
+        await api.post(`/api/teams/${teamId}/templates`, {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          priority: templatePriority,
+          attachmentUrl: attachmentUrl ?? undefined,
+          subtasks:
+            subtaskTitles.length > 0
+              ? subtaskTitles.map((subtaskTitle, order) => ({
+                  title: subtaskTitle,
+                  order,
+                }))
+              : undefined,
+          isRecurring,
+          recurrenceType: isRecurring ? recurrenceType : null,
+          recurrenceInterval: isRecurring
+            ? clampRecurrenceCount(recurrenceCount, recurrenceType)
+            : null,
+          recurrenceDaysOfWeek:
+            isRecurring &&
+            recurrenceType === "weekly" &&
+            selectedDayOfWeek !== null
+              ? String(selectedDayOfWeek)
+              : null,
+          recurrenceDayOfMonth:
+            isRecurring &&
+            recurrenceType === "monthly" &&
+            selectedDayOfMonth !== null
+              ? selectedDayOfMonth
+              : null,
+          isJoint: isJoint || undefined,
+        });
+        templateSaved = true;
+      }
+
+      return { tasks, templateSaved };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidateTaskCaches(queryClient, teamId);
+      if (result.templateSaved) {
+        queryClient.invalidateQueries({ queryKey: ["templates", teamId] });
+      }
       toast({
-        title: "Task created",
+        title: result.templateSaved ? "Task created & saved" : "Task created",
         message: isReminder
           ? "Only you can see it. It won’t fill Stars."
-          : "Your workspace task is ready.",
+          : result.templateSaved
+            ? "Added to Saved templates for next time."
+            : "Your workspace task is ready.",
         preset: "done",
       });
       router.back();
@@ -652,15 +866,38 @@ export default function CreateTaskScreen() {
     setSubtaskTitles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const promptOpenSettings = (kind: "photos" | "camera") => {
+    Alert.alert(
+      kind === "photos" ? "Photos access needed" : "Camera access needed",
+      kind === "photos"
+        ? "Allow Alenio to access Photos in Settings so you can attach an image to this task."
+        : "Allow Alenio to use the Camera in Settings so you can take a photo for this task.",
+      [
+        { text: "Not now", style: "cancel" },
+        {
+          text: "Open Settings",
+          onPress: () => {
+            void Linking.openSettings();
+          },
+        },
+      ],
+    );
+  };
+
   const pickPhotoFromLibrary = async () => {
     setShowPhotoOptions(false);
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      setError("Permission to access photos is required.");
+    setError(null);
+    const existing = await ImagePicker.getMediaLibraryPermissionsAsync();
+    const permission =
+      existing.status === "granted"
+        ? existing
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== "granted") {
+      promptOpenSettings("photos");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'] as ImagePicker.MediaType[],
+      mediaTypes: ["images"] as ImagePicker.MediaType[],
       quality: 0.8,
       allowsEditing: true,
     });
@@ -671,9 +908,14 @@ export default function CreateTaskScreen() {
 
   const takePhotoWithCamera = async () => {
     setShowPhotoOptions(false);
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      setError("Permission to access camera is required.");
+    setError(null);
+    const existing = await ImagePicker.getCameraPermissionsAsync();
+    const permission =
+      existing.status === "granted"
+        ? existing
+        : await ImagePicker.requestCameraPermissionsAsync();
+    if (permission.status !== "granted") {
+      promptOpenSettings("camera");
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -866,6 +1108,84 @@ export default function CreateTaskScreen() {
             </View>
           ) : null}
 
+          {!isReminder ? (
+            <Pressable
+              onPress={() => setShowTemplatePicker(true)}
+              style={[builderStyles.rowButton, { marginTop: 14 }]}
+              testID="start-from-template-button"
+              accessibilityRole="button"
+              accessibilityLabel={
+                appliedTemplate
+                  ? `Template ${appliedTemplate.title}. Tap to change.`
+                  : "Start from a saved template"
+              }
+            >
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 9,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#F5F3FF",
+                }}
+              >
+                <Bookmark size={14} color="#7C3AED" strokeWidth={2.3} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{ fontSize: 14, fontWeight: "600", color: "#1E293B" }}
+                  numberOfLines={1}
+                >
+                  {appliedTemplate
+                    ? appliedTemplate.title
+                    : templates.length > 0
+                      ? "Start from a template"
+                      : "Saved templates"}
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 1,
+                    fontSize: 11,
+                    lineHeight: 14,
+                    fontWeight: "500",
+                    color: "#94A3B8",
+                  }}
+                  numberOfLines={1}
+                >
+                  {appliedTemplate
+                    ? "Prefills this task · tap to change"
+                    : templates.length > 0
+                      ? `${templates.length} saved · optional`
+                      : "Save one when you create a task"}
+                </Text>
+              </View>
+              {appliedTemplate ? (
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    clearAppliedTemplate();
+                  }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear selected template"
+                  testID="clear-template-button"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#F1F5F9",
+                  }}
+                >
+                  <X size={14} color="#64748B" strokeWidth={2.3} />
+                </Pressable>
+              ) : (
+                <ChevronRight size={16} color="#C4C9D4" strokeWidth={2.2} />
+              )}
+            </Pressable>
+          ) : null}
 
           <View style={{ marginTop: 16 }}>
           <Text style={formStyles.label}>
@@ -1009,17 +1329,6 @@ export default function CreateTaskScreen() {
             </View>
           ) : null}
 
-          {!isReminder && templates.length > 0 ? (
-            <Pressable
-              onPress={() => setShowTemplatePicker(true)}
-              style={[builderStyles.rowButton, { marginTop: 16 }]}
-              testID="use-template-button"
-            >
-              <BookOpen size={17} color="#64748B" strokeWidth={2} />
-              <Text style={builderStyles.rowButtonText}>Use a template</Text>
-              <ChevronRight size={16} color="#C4C9D4" strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
           </>
           ) : null}
 
@@ -1449,6 +1758,7 @@ export default function CreateTaskScreen() {
           ) : null}
 
           {currentStep === "review" ? (
+          <>
           <View style={builderStyles.summary} testID="task-builder-summary">
             <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }} numberOfLines={2}>
               {title.trim() || "Untitled task"}
@@ -1487,6 +1797,52 @@ export default function CreateTaskScreen() {
                 .join(" · ")}
             </Text>
           </View>
+
+          {!isReminder ? (
+            <View style={[builderStyles.card, { marginTop: 14 }]}>
+              <View className="flex-row items-center justify-between">
+                <View
+                  style={{
+                    flex: 1,
+                    marginRight: 12,
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#F5F3FF",
+                      marginTop: 1,
+                    }}
+                  >
+                    <Bookmark size={15} color="#7C3AED" strokeWidth={2.2} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text className="text-sm font-semibold text-slate-700">
+                      Save as template
+                    </Text>
+                    <Text className="text-xs text-slate-400 mt-0.5">
+                      Keep title, subtasks, and settings in Saved templates for reuse.
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={saveAsTemplate}
+                  onValueChange={setSaveAsTemplate}
+                  trackColor={{ false: "#E2E8F0", true: "#A78BFA" }}
+                  thumbColor="white"
+                  testID="save-as-template-switch"
+                />
+              </View>
+            </View>
+          ) : null}
+          </>
           ) : null}
       </AlenioBottomSheet>
 
@@ -1743,154 +2099,352 @@ export default function CreateTaskScreen() {
         </AlenioSheetCard>
       </AlenioBottomSheet>
 
-      {/* Template picker modal */}
-      <Modal visible={showTemplatePicker} transparent animationType="slide" onRequestClose={() => { setShowTemplatePicker(false); setEditingTemplate(null); }}>
-        <TouchableOpacity className="flex-1 bg-black/40 justify-end" activeOpacity={1} onPress={() => { setShowTemplatePicker(false); setEditingTemplate(null); }}>
-          <TouchableOpacity activeOpacity={1} className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-10">
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-base font-bold text-slate-900 dark:text-white">
-                {editingTemplate ? "Edit Template" : "Use Template"}
-              </Text>
-              <TouchableOpacity onPress={() => { setShowTemplatePicker(false); setEditingTemplate(null); }}>
-                <X size={20} color="#94A3B8" />
-              </TouchableOpacity>
+      <AlenioBottomSheet
+        visible={showTemplatePicker}
+        title={
+          editingTemplate
+            ? "Edit template"
+            : confirmDeleteTemplate && managingTemplate
+              ? "Delete template?"
+              : managingTemplate
+                ? managingTemplate.title
+                : "Choose a template"
+        }
+        subtitle={
+          editingTemplate
+            ? "Update for next time."
+            : confirmDeleteTemplate
+              ? "This can’t be undone."
+              : managingTemplate
+                ? "Edit or remove this saved template."
+                : templates.length > 0
+                  ? "Tap to use · icons to manage"
+                  : "Save one on the Review step."
+        }
+        onClose={() => {
+          if (editingTemplate || managingTemplate || confirmDeleteTemplate) {
+            setEditingTemplate(null);
+            setManagingTemplate(null);
+            setConfirmDeleteTemplate(false);
+            return;
+          }
+          setShowTemplatePicker(false);
+        }}
+        showCloseButton
+        compact
+        bodyHeightRatio={0.36}
+        scrollEnabled={
+          !managingTemplate &&
+          !confirmDeleteTemplate &&
+          (templates.length > 4 || editingTemplate != null)
+        }
+        testID="template-picker-sheet"
+        footer={
+          editingTemplate ? (
+            <View style={{ width: "100%", gap: 8 }}>
+              <Button
+                variant="primary"
+                size="lg"
+                fullWidth
+                label={updatingTemplate ? "Saving…" : "Save changes"}
+                disabled={updatingTemplate || !editTitle.trim()}
+                onPress={() =>
+                  updateTemplate({
+                    id: editingTemplate.id,
+                    data: {
+                      title: editTitle,
+                      description: editDescription,
+                      priority: editPriority,
+                    },
+                  })
+                }
+                testID="edit-template-save-button"
+              />
+              <Button
+                variant="secondary"
+                size="lg"
+                fullWidth
+                label="Back"
+                disabled={updatingTemplate}
+                onPress={() => setEditingTemplate(null)}
+                testID="edit-template-cancel-button"
+              />
             </View>
-
-            {editingTemplate ? (
-              /* Edit form */
-              <View style={{ gap: 12 }}>
+          ) : confirmDeleteTemplate && managingTemplate ? (
+            <View style={{ width: "100%", gap: 8 }}>
+              <Button
+                variant="primary"
+                size="lg"
+                fullWidth
+                label="Delete template"
+                onPress={() => {
+                  const id = managingTemplate.id;
+                  if (appliedTemplateId === id) setAppliedTemplateId(null);
+                  deleteTemplate(id);
+                  setManagingTemplate(null);
+                  setConfirmDeleteTemplate(false);
+                }}
+                testID="template-manage-confirm-delete"
+              />
+              <Button
+                variant="secondary"
+                size="lg"
+                fullWidth
+                label="Keep template"
+                onPress={() => {
+                  setConfirmDeleteTemplate(false);
+                  setManagingTemplate(null);
+                }}
+                testID="template-manage-cancel-delete"
+              />
+            </View>
+          ) : managingTemplate ? (
+            <Button
+              variant="secondary"
+              size="lg"
+              fullWidth
+              label="Back"
+              onPress={() => {
+                setManagingTemplate(null);
+                setConfirmDeleteTemplate(false);
+              }}
+              testID="template-manage-back"
+            />
+          ) : null
+        }
+      >
+        {editingTemplate ? (
+          <View style={{ gap: 12 }}>
+            <View>
+              <Text style={formStyles.label}>Title</Text>
+              <View style={formStyles.field}>
                 <TextInput
                   value={editTitle}
                   onChangeText={setEditTitle}
-                  placeholder="Template title..."
+                  placeholder="Template title"
                   placeholderTextColor="#94A3B8"
-                  className="text-sm font-semibold text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5"
+                  style={formStyles.fieldInput}
                   testID="edit-template-title-input"
                 />
+              </View>
+            </View>
+            <View>
+              <Text style={formStyles.label}>Description</Text>
+              <View style={[formStyles.field, { minHeight: 72 }]}>
                 <TextInput
                   value={editDescription}
                   onChangeText={setEditDescription}
-                  placeholder="Description (optional)"
+                  placeholder="Optional"
                   placeholderTextColor="#94A3B8"
-                  className="text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5"
+                  style={[
+                    formStyles.fieldInput,
+                    { minHeight: 72, textAlignVertical: "top" },
+                  ]}
                   multiline
-                  numberOfLines={2}
                   testID="edit-template-description-input"
                 />
-                <View>
-                  <Text className="text-xs font-semibold text-slate-500 mb-2">Priority</Text>
-                  <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-                    {PRIORITIES.map((p) => (
-                      <TouchableOpacity
-                        key={p.value}
-                        onPress={() => setEditPriority(p.value)}
-                        className="px-3 py-1.5 rounded-full border"
-                        style={
-                          editPriority === p.value
-                            ? { backgroundColor: p.color + "20", borderColor: p.color }
-                            : { borderColor: "#E2E8F0", backgroundColor: "transparent" }
-                        }
-                        testID={`edit-priority-${p.value}`}
+              </View>
+            </View>
+            <View>
+              <Text style={formStyles.label}>Priority</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {PRIORITIES.filter((p) => p.value !== "urgent").map((p) => {
+                  const selected = editPriority === p.value;
+                  return (
+                    <Pressable
+                      key={p.value}
+                      onPress={() => setEditPriority(p.value)}
+                      style={[
+                        builderStyles.templatePriorityChip,
+                        selected
+                          ? {
+                              backgroundColor: `${p.color}18`,
+                              borderColor: p.color,
+                            }
+                          : null,
+                      ]}
+                      testID={`edit-priority-${p.value}`}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "700",
+                          color: selected ? p.color : "#94A3B8",
+                        }}
                       >
-                        <Text
-                          className="text-xs font-semibold"
-                          style={{ color: editPriority === p.value ? p.color : "#94A3B8" }}
-                        >
-                          {p.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                        {p.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        ) : managingTemplate && confirmDeleteTemplate ? (
+          <AlenioSheetCard tint="danger" compact>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "600",
+                color: "#991B1B",
+                lineHeight: 18,
+              }}
+            >
+              Remove “{managingTemplate.title}” from Saved templates?
+            </Text>
+          </AlenioSheetCard>
+        ) : managingTemplate ? (
+          <View style={{ gap: 8 }}>
+            <AlenioSheetOption
+              compact
+              tint="purple"
+              icon={<Pencil size={15} color="#7C3AED" strokeWidth={2.3} />}
+              iconColor="#7C3AED"
+              title="Edit"
+              subtitle="Change title, notes, or priority"
+              onPress={() => {
+                const t = managingTemplate;
+                setEditingTemplate(t);
+                setEditTitle(t.title);
+                setEditDescription(t.description ?? "");
+                setEditPriority(t.priority === "urgent" ? "high" : t.priority);
+                setManagingTemplate(null);
+                setConfirmDeleteTemplate(false);
+              }}
+              testID="template-manage-edit"
+            />
+            <AlenioSheetOption
+              compact
+              destructive
+              icon={<Trash2 size={15} color="#EF4444" strokeWidth={2.3} />}
+              title="Delete"
+              subtitle="Remove from saved templates"
+              onPress={() => setConfirmDeleteTemplate(true)}
+              testID="template-manage-delete"
+            />
+          </View>
+        ) : templates.length === 0 ? (
+          <AlenioSheetCard tint="purple" compact>
+            <View style={builderStyles.templateEmpty}>
+              <View style={builderStyles.templateEmptyIcon}>
+                <Bookmark size={18} color="#7C3AED" strokeWidth={2.2} />
+              </View>
+              <Text style={builderStyles.templateEmptyTitle}>No templates yet</Text>
+              <Text style={builderStyles.templateEmptyBody}>
+                On Review, turn on Save as template. It’ll show up here next time.
+              </Text>
+            </View>
+          </AlenioSheetCard>
+        ) : (
+          <View style={{ gap: 6 }}>
+            {templates.map((t) => {
+              const selected = appliedTemplateId === t.id;
+              const priorityMeta =
+                PRIORITIES.find((p) => p.value === t.priority) ?? PRIORITIES[1]!;
+              const subtaskCount = t.subtasks?.length ?? 0;
+              const canManage = Boolean(myId && t.createdById === myId);
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => applyTemplate(t)}
+                  style={[
+                    builderStyles.templateCard,
+                    selected ? builderStyles.templateCardSelected : null,
+                  ]}
+                  testID={`template-${t.id}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`Use template ${t.title}`}
+                >
+                  <View
+                    style={[
+                      builderStyles.templateIcon,
+                      { backgroundColor: `${priorityMeta.color}14` },
+                    ]}
+                  >
+                    <Bookmark
+                      size={13}
+                      color={priorityMeta.color}
+                      strokeWidth={2.3}
+                    />
                   </View>
-                </View>
-                <View className="flex-row" style={{ gap: 8, marginTop: 4 }}>
-                  <TouchableOpacity
-                    onPress={() => setEditingTemplate(null)}
-                    className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 items-center"
-                    testID="edit-template-cancel-button"
-                  >
-                    <Text className="text-sm font-semibold text-slate-500">Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() =>
-                      updateTemplate({
-                        id: editingTemplate.id,
-                        data: { title: editTitle, description: editDescription, priority: editPriority },
-                      })
-                    }
-                    disabled={updatingTemplate || !editTitle.trim()}
-                    className="flex-1 py-2.5 rounded-xl items-center"
-                    style={{ backgroundColor: "#4361EE" }}
-                    testID="edit-template-save-button"
-                  >
-                    {updatingTemplate ? (
-                      <ActivityIndicator color="white" size="small" />
-                    ) : (
-                      <Text className="text-sm font-semibold text-white">Save</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : templates.length === 0 ? (
-              <Text className="text-sm text-slate-400 text-center py-6">No templates saved yet</Text>
-            ) : (
-              <View style={{ gap: 8 }}>
-                {templates.map((t) => (
-                  <TouchableOpacity
-                    key={t.id}
-                    onPress={() => applyTemplate(t)}
-                    className="flex-row items-center p-3 rounded-xl border border-slate-100 dark:border-slate-700"
-                    testID={`template-${t.id}`}
-                  >
-                    <View className="flex-1">
-                      <Text className="font-semibold text-slate-900 dark:text-white" numberOfLines={1}>{t.title}</Text>
-                      {t.description ? (
-                        <Text className="text-xs text-slate-400 mt-0.5" numberOfLines={1}>{t.description}</Text>
-                      ) : null}
-                    </View>
-                    <View className="ml-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#4361EE20" }}>
-                      <Text className="text-xs font-semibold text-indigo-600 capitalize">{t.priority}</Text>
-                    </View>
-                    {myId && t.createdById === myId ? (
-                      <View className="flex-row items-center ml-2" style={{ gap: 8 }}>
-                        <TouchableOpacity
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            setEditingTemplate(t);
-                            setEditTitle(t.title);
-                            setEditDescription(t.description ?? "");
-                            setEditPriority(t.priority);
+                  <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+                    <Text style={builderStyles.templateTitle} numberOfLines={1}>
+                      {t.title}
+                    </Text>
+                    <View style={builderStyles.templateMetaRow}>
+                      <View
+                        style={[
+                          builderStyles.templateChip,
+                          { backgroundColor: `${priorityMeta.color}14` },
+                        ]}
+                      >
+                        <View
+                          style={{
+                            width: 5,
+                            height: 5,
+                            borderRadius: 3,
+                            backgroundColor: priorityMeta.color,
                           }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          testID={`edit-template-${t.id}`}
+                        />
+                        <Text
+                          style={[
+                            builderStyles.templateChipText,
+                            { color: priorityMeta.color },
+                          ]}
                         >
-                          <Pencil size={15} color="#94A3B8" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            Alert.alert(
-                              "Delete Template",
-                              `Delete "${t.title}"? This cannot be undone.`,
-                              [
-                                { text: "Cancel", style: "cancel" },
-                                { text: "Delete", style: "destructive", onPress: () => deleteTemplate(t.id) },
-                              ]
-                            );
-                          }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          testID={`delete-template-${t.id}`}
-                        >
-                          <Trash2 size={15} color="#EF4444" />
-                        </TouchableOpacity>
+                          {priorityMeta.label}
+                        </Text>
                       </View>
-                    ) : null}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+                      <Text style={builderStyles.templateMeta}>
+                        {subtaskCount}{" "}
+                        {subtaskCount === 1 ? "subtask" : "subtasks"}
+                        {t.isRecurring ? " · Repeats" : ""}
+                      </Text>
+                    </View>
+                  </View>
+                  {canManage ? (
+                    <View style={builderStyles.templateActions}>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeleteTemplate(false);
+                          setManagingTemplate(t);
+                        }}
+                        hitSlop={8}
+                        style={builderStyles.templateActionBtn}
+                        testID={`manage-template-${t.id}`}
+                        accessibilityLabel={`Manage ${t.title}`}
+                      >
+                        <Pencil size={13} color="#64748B" strokeWidth={2.2} />
+                      </Pressable>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setManagingTemplate(t);
+                          setConfirmDeleteTemplate(true);
+                        }}
+                        hitSlop={8}
+                        style={builderStyles.templateActionBtn}
+                        testID={`delete-template-${t.id}`}
+                        accessibilityLabel={`Delete ${t.title}`}
+                      >
+                        <Trash2 size={13} color="#EF4444" strokeWidth={2.2} />
+                      </Pressable>
+                    </View>
+                  ) : selected ? (
+                    <View style={builderStyles.templateSelectedMark}>
+                      <Check size={12} color="#FFFFFF" strokeWidth={2.6} />
+                    </View>
+                  ) : (
+                    <ChevronRight size={14} color="#C4C9D4" strokeWidth={2.2} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </AlenioBottomSheet>
     </>
   );
 }

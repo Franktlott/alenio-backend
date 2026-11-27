@@ -26,8 +26,7 @@ type Props = {
 };
 
 /**
- * Overview hero — Alenio mark + Workspace label, name, and cover backdrop.
- * Text color follows cover brightness so photos stay readable.
+ * Overview hero — photo fills a short banner; Workspace mark + copy stacked.
  */
 export function WorkspaceOverviewCard({
   workspaceName,
@@ -51,13 +50,7 @@ export function WorkspaceOverviewCard({
   }, [coverSource, inkOverride]);
 
   return (
-    <View
-      style={[
-        styles.shadow,
-        { backgroundColor: ink === "dark" ? "#F8FAFC" : "#1A0B3A" },
-      ]}
-      testID="workspace-overview-card"
-    >
+    <View style={styles.shadow} testID="workspace-overview-card">
       <ImageBackground
         source={coverSource}
         style={styles.card}
@@ -73,24 +66,27 @@ export function WorkspaceOverviewCard({
           pointerEvents="none"
           style={styles.fade}
         />
+        <View style={styles.brandRow}>
+          <Image
+            source={ALENIO_ICON}
+            style={styles.brandIcon}
+            resizeMode="contain"
+            accessibilityIgnoresInvertColors
+          />
+          <Text style={[styles.brandLabel, { color: palette.label }]}>
+            Workspace
+          </Text>
+        </View>
         <View style={styles.copy}>
-          <View style={styles.brandRow}>
-            <Image
-              source={ALENIO_ICON}
-              style={styles.brandIcon}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-            />
-            <Text style={[styles.brandLabel, { color: palette.label }]}>
-              Workspace
-            </Text>
-          </View>
-          <Text style={[styles.title, { color: palette.title }]} numberOfLines={2}>
+          <Text
+            style={[styles.title, { color: palette.title }]}
+            numberOfLines={2}
+          >
             {name}
           </Text>
           <Text
             style={[styles.subtitle, { color: palette.subtitle }]}
-            numberOfLines={3}
+            numberOfLines={2}
           >
             Team operations, communication, and development in one place.
           </Text>
@@ -102,60 +98,65 @@ export function WorkspaceOverviewCard({
 
 const styles = StyleSheet.create({
   shadow: {
-    borderRadius: 16,
-    shadowColor: "#1A0B3A",
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 3,
+    width: "100%",
+    borderRadius: 14,
+    backgroundColor: "transparent",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   card: {
     width: "100%",
-    aspectRatio: Math.max(WORKSPACE_COVER_ASPECT, 2.75),
-    minHeight: 96,
-    borderRadius: 16,
+    aspectRatio: WORKSPACE_COVER_ASPECT,
+    minHeight: 88,
+    borderRadius: 14,
     overflow: "hidden",
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
     justifyContent: "center",
+    gap: 6,
   },
   photo: {
-    borderRadius: 16,
+    borderRadius: 14,
   },
   fade: {
     ...StyleSheet.absoluteFillObject,
   },
-  copy: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    maxWidth: "84%",
-    zIndex: 1,
-  },
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
+    alignSelf: "flex-start",
+    gap: 5,
+    zIndex: 2,
+  },
+  copy: {
+    maxWidth: "90%",
+    zIndex: 2,
+    gap: 2,
   },
   brandIcon: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
+    width: 16,
+    height: 16,
+    borderRadius: 4,
   },
   brandLabel: {
-    fontSize: 12,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: "700",
-    letterSpacing: 0.15,
+    letterSpacing: 0.12,
   },
   title: {
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 17,
+    lineHeight: 21,
     fontWeight: "800",
-    letterSpacing: -0.4,
+    letterSpacing: -0.35,
   },
   subtitle: {
-    marginTop: 4,
-    fontSize: 12,
-    lineHeight: 15,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: "500",
   },
 });

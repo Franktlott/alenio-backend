@@ -3066,7 +3066,7 @@ export default function TasksScreen() {
             task={previewTask}
             onClose={() => setPreviewTask(null)}
             onEdit={
-              previewTask
+              access.canWrite && previewTask
                 ? () => {
                     const task = previewTask;
                     setPreviewTask(null);
@@ -3075,7 +3075,9 @@ export default function TasksScreen() {
                 : undefined
             }
             onComplete={
-              previewTask && previewTask.status !== "done"
+              access.canWrite &&
+              previewTask &&
+              previewTask.status !== "done"
                 ? () => {
                     const task = previewTask;
                     setPreviewTask(null);
@@ -4907,7 +4909,6 @@ export default function TasksScreen() {
                 <WorkspaceOverviewQuickActions
                   canScheduleEvent={access.canWrite}
                   canCreateTask={access.canWrite}
-                  canAddMember={canManageRoster}
                   canPostUpdate={access.canWrite}
                   canOpenSettings={Boolean(
                     activeTeamId && isOwnerOrLeader && access.canWrite,
@@ -4927,10 +4928,6 @@ export default function TasksScreen() {
                         kind: isOwnerOrLeader ? "workspace_task" : "reminder",
                       },
                     });
-                  }}
-                  onAddMember={() => {
-                    if (!canManageRoster) return;
-                    setInviteOpen(true);
                   }}
                   onPostUpdate={() => {
                     if (!access.canWrite || !activeTeamId) return;
@@ -5480,15 +5477,14 @@ export default function TasksScreen() {
                 flex: 1,
                 minHeight: 0,
                 paddingBottom: workspacePageBottom,
+                paddingHorizontal: WS.pageGutter,
+                backgroundColor: WS.surface,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
               }}
             >
               <ScrollView
-                style={{
-                  flex: 1,
-                  backgroundColor: WS.surface,
-                  borderTopLeftRadius: 24,
-                  borderTopRightRadius: 24,
-                }}
+                style={{ flex: 1 }}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                   <RefreshControl
@@ -5499,8 +5495,10 @@ export default function TasksScreen() {
                   />
                 }
                 contentContainerStyle={{
-                  flexGrow: 0,
+                  flexGrow: 1,
+                  justifyContent: "center",
                   paddingTop: 4,
+                  paddingBottom: 8,
                 }}
               >
                 <MemberTasksEmptyState />
@@ -5573,16 +5571,12 @@ export default function TasksScreen() {
                   style={{
                     flex: 1,
                     minHeight: 140,
-                        paddingHorizontal: showTasksWelcome
-                          ? 0
-                          : showTaskDetailPane
-                            ? 12
-                            : WS.pageGutter,
-                    paddingBottom: showTasksWelcome
-                      ? 0
-                      : showTaskDetailPane
-                        ? 8
-                        : workspacePageBottom,
+                    paddingHorizontal: showTaskDetailPane
+                      ? 12
+                      : WS.pageGutter,
+                    paddingBottom: showTaskDetailPane
+                      ? 8
+                      : workspacePageBottom,
                   }}
                 >
                   <ScrollView
@@ -5601,7 +5595,8 @@ export default function TasksScreen() {
                       justifyContent:
                         showTasksListEmpty && !showTasksWelcome
                           ? "center"
-                          : undefined,
+                          : "flex-start",
+                      paddingBottom: 8,
                     }}
                   >
                     <TaskListCard
@@ -5698,45 +5693,41 @@ export default function TasksScreen() {
                             : undefined
                       }
                       footer={
-                        <>
-                          {nextCursor !== null ? (
-                            <Pressable
-                              onPress={handleLoadMore}
+                        nextCursor !== null ? (
+                          <Pressable
+                            onPress={handleLoadMore}
+                            style={{
+                              margin: 12,
+                              marginTop: 0,
+                              paddingVertical: 12,
+                              borderRadius: 10,
+                              alignItems: "center",
+                              backgroundColor: "#EFE9FF",
+                              flexDirection: "row",
+                              justifyContent: "center",
+                              gap: 8,
+                            }}
+                            testID="load-more-button"
+                            disabled={loadingMore}
+                          >
+                            {loadingMore ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#6d28d9"
+                                testID="load-more-indicator"
+                              />
+                            ) : null}
+                            <Text
                               style={{
-                                margin: 12,
-                                marginTop: 0,
-                                paddingVertical: 12,
-                                borderRadius: 10,
-                                alignItems: "center",
-                                backgroundColor: "#EFE9FF",
-                                flexDirection: "row",
-                                justifyContent: "center",
-                                gap: 8,
+                                fontSize: 13,
+                                fontWeight: "600",
+                                color: "#6d28d9",
                               }}
-                              testID="load-more-button"
-                              disabled={loadingMore}
                             >
-                              {loadingMore ? (
-                                <ActivityIndicator
-                                  size="small"
-                                  color="#6d28d9"
-                                  testID="load-more-indicator"
-                                />
-                              ) : null}
-                              <Text
-                                style={{
-                                  fontSize: 13,
-                                  fontWeight: "600",
-                                  color: "#6d28d9",
-                                }}
-                              >
-                                    {loadingMore
-                                      ? "Loading..."
-                                      : "Load more tasks"}
-                              </Text>
-                            </Pressable>
-                          ) : null}
-                        </>
+                              {loadingMore ? "Loading..." : "Load more tasks"}
+                            </Text>
+                          </Pressable>
+                        ) : null
                       }
                     />
                   </ScrollView>

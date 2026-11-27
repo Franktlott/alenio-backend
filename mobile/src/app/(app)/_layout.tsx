@@ -14,7 +14,6 @@ import {
   Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import {
   TAB_BAR_ACTIVE_COLOR,
@@ -25,16 +24,14 @@ import {
   TAB_BAR_LABEL_SIZE,
   TAB_BAR_DIVIDER_COLOR,
   TAB_BAR_ACTIVE_HIGHLIGHT,
-  TAB_BAR_BOTTOM_GAP,
-  TAB_BAR_MAX_WIDTH,
-  TAB_BAR_WIDE_MIN_WIDTH,
   SENECA_FAB_SIZE,
   SENECA_FAB_VISIBLE_SIZE,
   SENECA_FAB_RIGHT_INSET,
 } from "@/lib/tab-bar";
 import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 import { COMPACT_DOCK_WIDTH } from "@/lib/adaptive-navigation";
-import { colors, radii } from "@/theme";
+import { useDuoHeaderBleedHeight } from "@/lib/duo-header-bleed";
+import { colors, palette, radii } from "@/theme";
 import { useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -293,7 +290,6 @@ function SenecaFab({
 function FixedTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const {
-    width: windowWidth,
     showRail,
     railEdge,
     railWidth,
@@ -549,7 +545,7 @@ function FixedTabBar({ state, navigation }: any) {
     if (senecaOpen) closeSeneca();
     else openSeneca();
   };
-  // Labeled iPad rail still uses the floating Seneca control.
+  // Side rails keep the floating Seneca control; the phone bar hosts Seneca inline.
   const fabBottom = Math.max(insets.bottom, 8) + 16;
   const fabRight =
     showRail && railEdge === "right"
@@ -597,13 +593,6 @@ function FixedTabBar({ state, navigation }: any) {
     );
   }
 
-  const dockBottom = Math.max(insets.bottom, 8) + TAB_BAR_BOTTOM_GAP;
-  const dockSpan = Math.max(0, windowWidth - TAB_BAR_HORIZONTAL_INSET * 2);
-  const limitWideDock = windowWidth >= TAB_BAR_WIDE_MIN_WIDTH;
-  const dockWidth = limitWideDock
-    ? Math.min(dockSpan, TAB_BAR_MAX_WIDTH)
-    : dockSpan;
-  const dockLeft = (windowWidth - dockWidth) / 2;
   const tabs = tabDescriptors.map((descriptor: any) => {
     const { route, tab, isFocused, badge } = descriptor;
     const { Icon, label, name } = tab;
@@ -618,12 +607,7 @@ function FixedTabBar({ state, navigation }: any) {
         accessibilityState={{ selected: isFocused }}
         accessibilityLabel={label}
       >
-        <View
-          style={[
-            tabBarStyles.iconDisc,
-            isFocused ? tabBarStyles.iconDiscActive : null,
-          ]}
-        >
+        <View style={tabBarStyles.iconWrap}>
           <GradientTabIcon
             Icon={Icon}
             size={TAB_BAR_ICON_SIZE}
@@ -642,8 +626,8 @@ function FixedTabBar({ state, navigation }: any) {
           style={[
             tabBarStyles.label,
             {
-              color: isFocused ? TAB_BAR_ACTIVE_COLOR : "#0F172A",
-              fontWeight: isFocused ? "600" : "500",
+              color: isFocused ? TAB_BAR_ACTIVE_COLOR : TAB_BAR_INACTIVE_COLOR,
+              fontWeight: isFocused ? "700" : "500",
             },
           ]}
           numberOfLines={1}
@@ -662,7 +646,7 @@ function FixedTabBar({ state, navigation }: any) {
         style={[
           tabBarStyles.container,
           {
-            height: TAB_BAR_HEIGHT + dockBottom,
+            height: TAB_BAR_HEIGHT + Math.max(insets.bottom, 8),
           },
         ]}
         pointerEvents="box-none"
@@ -670,47 +654,53 @@ function FixedTabBar({ state, navigation }: any) {
       >
         <View
           style={[
-            tabBarStyles.dock,
-            {
-              height: TAB_BAR_HEIGHT,
-              bottom: dockBottom,
-              left: dockLeft,
-              width: dockWidth,
-            },
+            tabBarStyles.barSurface,
+            { height: TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) },
           ]}
-          testID="phone-nav-dock"
+          pointerEvents="none"
+        />
+        <View
+          style={[
+            tabBarStyles.row,
+            { bottom: Math.max(insets.bottom, 8) },
+          ]}
         >
-          <BlurView
-            intensity={70}
-            tint="systemThickMaterialLight"
-            style={StyleSheet.absoluteFillObject}
-          />
-          <View style={tabBarStyles.dockGlass} pointerEvents="none" />
-          <View style={tabBarStyles.row}>
-            {tabs}
-            <View style={tabBarStyles.senecaDivider} pointerEvents="none" />
-            <Pressable
-              onPress={toggleSeneca}
-              style={tabBarStyles.senecaTab}
-              testID="tab-seneca"
-              accessibilityRole="button"
-              accessibilityLabel="Open Seneca leadership assistant"
-              accessibilityState={{ selected: senecaOpen }}
+          {tabs}
+          <Pressable
+            onPress={toggleSeneca}
+            style={tabBarStyles.tab}
+            testID="tab-seneca"
+            accessibilityRole="button"
+            accessibilityLabel="Open Seneca leadership assistant"
+            accessibilityState={{ selected: senecaOpen }}
+          >
+            <View
+              style={[
+                tabBarStyles.senecaTabDisc,
+                senecaOpen ? tabBarStyles.senecaTabDiscOpen : null,
+              ]}
             >
-              <View
-                style={[
-                  tabBarStyles.senecaDisc,
-                  senecaOpen ? tabBarStyles.senecaDiscOpen : null,
-                ]}
-              >
-                <Image
-                  source={require("@/assets/seneca-button-icon.png")}
-                  style={tabBarStyles.senecaIcon}
-                  resizeMode="cover"
-                />
-              </View>
-            </Pressable>
-          </View>
+              <Image
+                source={require("@/assets/seneca-button-icon.png")}
+                style={tabBarStyles.senecaTabIcon}
+                resizeMode="cover"
+              />
+            </View>
+            <Text
+              style={[
+                tabBarStyles.label,
+                {
+                  color: senecaOpen
+                    ? TAB_BAR_ACTIVE_COLOR
+                    : TAB_BAR_INACTIVE_COLOR,
+                  fontWeight: senecaOpen ? "700" : "500",
+                },
+              ]}
+              numberOfLines={1}
+            >
+              Seneca
+            </Text>
+          </Pressable>
         </View>
       </View>
       <SenecaAssistantSheet open={senecaOpen} onClose={closeSeneca} />
@@ -721,109 +711,80 @@ function FixedTabBar({ state, navigation }: any) {
 const tabBarStyles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    left: TAB_BAR_HORIZONTAL_INSET,
+    right: TAB_BAR_HORIZONTAL_INSET,
     bottom: 0,
     zIndex: 10100,
     elevation: 10100,
     backgroundColor: "transparent",
     overflow: "visible",
   },
-  dock: {
+  barSurface: {
     position: "absolute",
-    borderRadius: 26,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.65)",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 12,
-    backgroundColor: "rgba(255,255,255,0.94)",
-  },
-  dockGlass: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255,255,255,0.82)",
+    left: 0,
+    right: 0,
+    bottom: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255,255,255,0.9)",
+    borderTopColor: "rgba(20, 30, 60, 0.10)",
+    backgroundColor: "#FFFFFF",
   },
   row: {
-    flex: 1,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: TAB_BAR_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    paddingLeft: 4,
-    paddingRight: 4,
     backgroundColor: "transparent",
   },
   tab: {
     flex: 1,
     minHeight: 44,
-    minWidth: 0,
+    minWidth: 44,
     alignItems: "center",
     justifyContent: "center",
     gap: 2,
-    paddingHorizontal: 0,
+    paddingHorizontal: 2,
   },
-  iconDisc: {
-    width: 32,
+  iconWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  senecaTabDisc: {
+    width: 26,
     height: 26,
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
-  iconDiscActive: {
+  senecaTabDiscOpen: {
     backgroundColor: TAB_BAR_ACTIVE_HIGHLIGHT,
+  },
+  senecaTabIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
   },
   label: {
     fontSize: TAB_BAR_LABEL_SIZE,
-    letterSpacing: 0.15,
   },
   badge: {
     position: "absolute",
-    top: -3,
-    right: -7,
+    top: -4,
+    right: -10,
     backgroundColor: "#EF4444",
-    borderRadius: 7,
-    minWidth: 15,
-    height: 15,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 3,
   },
   badgeText: {
     color: "white",
-    fontSize: 8.5,
+    fontSize: 9,
     fontWeight: "700",
-  },
-  senecaDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 22,
-    marginHorizontal: 2,
-    backgroundColor: "rgba(15, 23, 42, 0.12)",
-  },
-  senecaTab: {
-    width: 40,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  senecaDisc: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.9)",
-  },
-  senecaDiscOpen: {
-    backgroundColor: TAB_BAR_ACTIVE_HIGHLIGHT,
-  },
-  senecaIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
   },
   senecaFab: {
     position: "absolute",
@@ -953,8 +914,21 @@ const railStyles = StyleSheet.create({
 
 export default function AppLayout() {
   const insets = useSafeAreaInsets();
-  const { showRail, railEdge, railWidth } = useAdaptiveLayout();
+  const {
+    showRail,
+    railEdge,
+    railWidth,
+    iconRailEdge,
+    sceneInsetLeft,
+    sceneInsetRight,
+  } = useAdaptiveLayout();
+  const duoHeaderBleedHeight = useDuoHeaderBleedHeight();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const duoBleedWidth = Math.max(
+    sceneInsetLeft,
+    sceneInsetRight,
+    iconRailEdge ? 84 : 0,
+  );
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const { data: session } = useSession();
 
@@ -998,18 +972,36 @@ export default function AppLayout() {
 
   return (
     <View style={styles.shell}>
+      {/**
+       * Duo status column only — dusk strip matched to the live header height
+       * so purple stops on the same line as the white page (no hanging rail).
+       */}
+      {iconRailEdge && duoHeaderBleedHeight > 0 ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.duoHeaderBleed,
+            {
+              height: duoHeaderBleedHeight,
+              width: duoBleedWidth,
+              ...(iconRailEdge === "right" ? { right: 0 } : { left: 0 }),
+            },
+          ]}
+        />
+      ) : null}
       <Tabs
         initialRouteName="home"
         tabBar={(props) => <FixedTabBar {...props} />}
         screenOptions={{
           headerShown: false,
           animation: "none",
-          // Duo icon-rail scenes stay full-bleed so the mountain band reaches
+          // Duo icon-rail scenes stay full-bleed so the purple band reaches
           // the glass; content clears the status column itself. Labeled rails
           // still inset the scene — the rail is a sibling overlay.
           sceneStyle: {
             backgroundColor: "transparent",
             flex: 1,
+            overflow: "visible",
             paddingLeft:
               showRail && railEdge === "left" ? railWidth + insets.left : 0,
             paddingRight:
@@ -1051,8 +1043,12 @@ export default function AppLayout() {
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
-    // Fills the Duo status column under a transparent icon rail so cards keep
-    // a white edge while the header band can paint the mountain through.
     backgroundColor: "#FFFFFF",
+  },
+  duoHeaderBleed: {
+    position: "absolute",
+    top: 0,
+    backgroundColor: palette.dusk,
+    zIndex: 0,
   },
 });

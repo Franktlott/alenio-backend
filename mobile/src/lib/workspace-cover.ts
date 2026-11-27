@@ -12,10 +12,10 @@ import {
  * Overview hero card shape (width ÷ height). Matches WorkspaceOverviewCard.
  * Wider than 16:9 so the short banner fills without letterboxing.
  */
-export const WORKSPACE_COVER_ASPECT = 2.2;
+export const WORKSPACE_COVER_ASPECT = 2.75;
 
-/** Integer pair for the system crop UI (~2.2:1). */
-export const WORKSPACE_COVER_PICKER_ASPECT: [number, number] = [11, 5];
+/** Integer pair for the system crop UI (~2.75:1). */
+export const WORKSPACE_COVER_PICKER_ASPECT: [number, number] = [11, 4];
 
 const COVER_MAX_WIDTH = 2400;
 const ASPECT_TOLERANCE = 0.04;

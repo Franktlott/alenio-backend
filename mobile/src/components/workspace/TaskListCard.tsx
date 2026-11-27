@@ -137,14 +137,17 @@ export function TaskListCard({
 
   if (!loading && !loadError && taskCount === 0) {
     return (
-      <TasksEmptyState
-        title={emptyTitle}
-        accentTitle={emptyAccentTitle}
-        subtitle={emptySubtitle}
-        actionLabel={emptyActionLabel}
-        onAction={onEmptyAction}
-        welcome={emptyWelcome}
-      />
+      <View style={{ width: "100%" }}>
+        <TasksEmptyState
+          title={emptyTitle}
+          accentTitle={emptyAccentTitle}
+          subtitle={emptySubtitle}
+          actionLabel={emptyActionLabel}
+          onAction={onEmptyAction}
+          welcome={emptyWelcome}
+        />
+        {footer}
+      </View>
     );
   }
 

@@ -271,6 +271,13 @@ networkUpdatesRouter.get(
           ]
         : [];
 
+    /**
+     * Person/home network feed is never a workspace surface:
+     * - `teamId: null` + `network_post` already exclude workspace posts
+     * - connection cutoffs are scoped to network (and legacy null) only
+     * - public posts use a separate ungated clause for non-connections
+     * Defense-in-depth: never return workspace/self/alenio audience kinds here.
+     */
     const activities = await prisma.teamActivity.findMany({
       where: {
         teamId: null,
@@ -278,10 +285,22 @@ networkUpdatesRouter.get(
         AND: [
           {
             OR: [
+              { audienceKind: { in: ["network", "public"] } },
+              { audienceKind: null },
+            ],
+          },
+          {
+            OR: [
               ...(authorId && authorId !== user.id ? [] : [{ userId: user.id }]),
               ...authorCutoffs.map(({ authorId: cutoffAuthorId, visibleFrom }) => ({
                 AND: [
                   { userId: cutoffAuthorId },
+                  {
+                    OR: [
+                      { audienceKind: "network" },
+                      { audienceKind: null },
+                    ],
+                  },
                   { createdAt: { gte: visibleFrom } },
                   { hides: { none: { viewerId: user.id } } },
                 ],

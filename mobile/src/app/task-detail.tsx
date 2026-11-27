@@ -79,7 +79,10 @@ import {
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { ProFeatureLockedView } from "@/components/ProFeatureLockedView";
-import { hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
+import {
+  hasWorkspaceTaskAccess,
+  workspacePlanHref,
+} from "@/lib/plan-access-copy";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { TaskNotesSection } from "@/components/tasks/TaskNotesSection";
 import { AssigneeStack } from "@/components/workspace/AssigneeStack";
@@ -1046,6 +1049,34 @@ export function TaskDetail({
         </>
       )}
     </TouchableOpacity>
+  ) : !showFocusedFeedbackTask && canComplete && !access.canWrite ? (
+    <View
+      style={styles.readOnlyCompleteCard}
+      testID="task-complete-read-only-note"
+    >
+      <View style={styles.readOnlyCompleteHeader}>
+        <Lock size={16} color="#98A2B3" strokeWidth={2.2} />
+        <Text style={styles.readOnlyCompleteTitle}>Workspace is read-only</Text>
+      </View>
+      <Text style={styles.readOnlyCompleteBody}>
+        {team?.role === "owner"
+          ? "Choose a plan to restore full workspace functionality, including completing tasks."
+          : "Task completion is currently unavailable. Contact your workspace owner to restore full access."}
+      </Text>
+      {team?.role === "owner" ? (
+        <TouchableOpacity
+          onPress={() => router.push(workspacePlanHref(teamId))}
+          style={[
+            alenioSheetStyles.primaryButton,
+            { backgroundColor: colors.brand, marginTop: 12 },
+          ]}
+          testID="task-complete-choose-plan"
+          accessibilityRole="button"
+        >
+          <Text style={alenioSheetStyles.primaryButtonText}>Choose a plan</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
   ) : undefined;
 
   const body = (
@@ -2534,7 +2565,10 @@ export function TaskDetail({
             isJoint={task.isJoint === true}
             isReminder={isReminder}
             currentUserId={currentUserId}
-            canWrite={isCreator || isSelfAssigned || isOwnerOrLeader}
+            canWrite={
+              access.canWrite &&
+              (isCreator || isSelfAssigned || isOwnerOrLeader)
+            }
             canModerate={isCreator || isOwnerOrLeader}
           />
         ) : null}
@@ -3612,6 +3646,37 @@ export function TaskDetail({
   );
 }
 
+
+const styles = StyleSheet.create({
+  readOnlyCompleteCard: {
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E6E4F0",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  readOnlyCompleteHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  readOnlyCompleteTitle: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    color: "#111A2B",
+  },
+  readOnlyCompleteBody: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#667085",
+  },
+});
 
 const completionMomentStyles = StyleSheet.create({
   backdrop: {

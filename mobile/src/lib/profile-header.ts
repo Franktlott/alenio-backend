@@ -22,17 +22,19 @@ export type HeaderPhotoPick = {
   height: number;
 };
 
-/** Phone / portrait banner — ~2.2:1 so small screens fill edge to edge. */
+/** Legacy mountain assets — kept for edit-preview fallbacks that still need an Image source. */
 const DEFAULT_PROFILE_HEADER_PHONE = require("@/assets/alenio-profile-header-phone.jpg");
-/** Wide / landscape banner — ~3:1 so large screens fill without letterboxing. */
 const DEFAULT_PROFILE_HEADER_WIDE = require("@/assets/alenio-profile-header-wide.jpg");
 
 export type ProfileHeaderSourceOptions = {
-  /** Prefer the wide default mountain (tablets, two-column, landscape). */
+  /** Prefer the wide default asset (tablets, two-column, landscape). */
   wide?: boolean;
 };
 
-/** Default mountain sized for the screen — no runtime resize gymnastics. */
+/**
+ * @deprecated Prefer `AlenioDefaultProfileHeader` for live profile covers.
+ * Still used where an Image source is required (e.g. crop tooling).
+ */
 export function profileDefaultHeaderSource(
   options?: ProfileHeaderSourceOptions,
 ): ImageSourcePropType {
@@ -41,7 +43,7 @@ export function profileDefaultHeaderSource(
     : DEFAULT_PROFILE_HEADER_PHONE;
 }
 
-/** Custom cover when one is saved, otherwise the sized default mountain. */
+/** Custom cover when one is saved; otherwise a legacy default image source. */
 export function profileHeaderSource(
   url?: string | null,
   options?: ProfileHeaderSourceOptions,
@@ -143,7 +145,7 @@ function readImageSize(uri: string): Promise<{ width: number; height: number }> 
   });
 }
 
-/** Restore the default mountain header. */
+/** Restore the branded Alenio default header. */
 export async function clearProfileHeaderImage(): Promise<void> {
   await api.patch("/api/profile", { profileHeaderImage: null });
 }

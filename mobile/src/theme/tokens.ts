@@ -164,9 +164,10 @@ export const brandGradient = {
  * welcome and auth pages and the header band on the main tabs.
  */
 export const palette = {
-  night: "#0d0726",
-  dusk: "#1a0b45",
-  plum: "#2a0f63",
+  /** Band colors lightened ~15% toward white for the home/tab header. */
+  night: "#312c47",
+  dusk: "#3c3061",
+  plum: "#4a337a",
   violet: "#6d28d9",
   violetBright: "#8b5cf6",
   lilac: "#c4b5fd",

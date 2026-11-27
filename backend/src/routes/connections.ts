@@ -57,6 +57,7 @@ const personSelect = {
 
 const connectionListPersonSelect = {
   ...personSelect,
+  profileHeaderImage: true,
   lastActiveAt: true,
   showActiveStatus: true,
 } as const;

@@ -9,14 +9,16 @@ import {
 } from "react-native";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Activity } from "lucide-react-native";
 import { toast } from "burnt";
+import { Image as ImageIcon } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { NetworkUpdateCard } from "@/components/people/NetworkUpdatesFeed";
 import type { NetworkUpdate, NetworkUpdatesFeedResponse } from "@/lib/types";
 
-const BRAND = "#4361EE";
+import { colors } from "@/theme";
+
+const BRAND = colors.brand;
 const PREVIEW_COUNT = 2;
 
 function activityFirstName(name: string, isSelf: boolean): string {
@@ -29,10 +31,13 @@ export function ProfileActivitySection({
   personId,
   personName,
   isSelf,
+  variant = "section",
 }: {
   personId: string;
   personName: string;
   isSelf: boolean;
+  /** Panel hides the heading and uses the mock empty state. */
+  variant?: "section" | "panel";
 }) {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
@@ -40,6 +45,7 @@ export function ProfileActivitySection({
   const [expanded, setExpanded] = useState(false);
   const [pickerId, setPickerId] = useState<string | null>(null);
   const queryKey = ["profile-activity", personId] as const;
+  const isPanel = variant === "panel";
 
   const feed = useInfiniteQuery({
     queryKey,
@@ -58,12 +64,16 @@ export function ProfileActivitySection({
     () => feed.data?.pages.flatMap((page) => page.items) ?? [],
     [feed.data],
   );
-  const visible = expanded ? posts : posts.slice(0, PREVIEW_COUNT);
-  const hasMore = posts.length > PREVIEW_COUNT || !!feed.hasNextPage;
-  const firstName = activityFirstName(personName, isSelf);
-  const emptyCopy = isSelf
-    ? "When you post, it’ll show up here."
-    : `When ${firstName} posts, it’ll show up here.`;
+  const visible = isPanel || expanded ? posts : posts.slice(0, PREVIEW_COUNT);
+  const hasMore = !isPanel && (posts.length > PREVIEW_COUNT || !!feed.hasNextPage);
+  const emptyTitle = isPanel ? "No public activity yet" : "No posts yet";
+  const emptyCopy = isPanel
+    ? isSelf
+      ? "Share a public post to start building your professional presence."
+      : "Public posts from this member will appear here."
+    : isSelf
+      ? "When you post, it’ll show up here."
+      : `When ${activityFirstName(personName, isSelf)} posts, it’ll show up here.`;
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey });
@@ -101,17 +111,43 @@ export function ProfileActivitySection({
   };
 
   return (
-    <View style={styles.section} testID="profile-activity-section">
-      <View style={styles.header}>
-        <Activity size={14} color="#111A2B" strokeWidth={2.2} />
-        <Text style={styles.heading}>Activity</Text>
-      </View>
+    <View
+      style={[styles.section, isPanel ? styles.sectionPanel : null]}
+      testID="profile-activity-section"
+    >
+      {isPanel ? null : (
+        <View style={styles.header}>
+          <Text style={styles.heading}>Activity</Text>
+        </View>
+      )}
       {feed.isLoading ? (
         <ActivityIndicator color={BRAND} style={styles.loader} />
       ) : visible.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No posts yet</Text>
-          <Text style={styles.emptyText}>{emptyCopy}</Text>
+        <View style={[styles.empty, isPanel ? styles.emptyPanel : null]}>
+          {isPanel ? (
+            <View style={styles.emptyArt} accessibilityElementsHidden>
+              <View style={styles.emptyIconWell}>
+                <ImageIcon size={20} color="#8B5CF6" strokeWidth={1.9} />
+              </View>
+            </View>
+          ) : null}
+          <Text style={[styles.emptyTitle, isPanel ? styles.emptyTitlePanel : null]}>
+            {emptyTitle}
+          </Text>
+          <Text style={[styles.emptyText, isPanel ? styles.emptyTextPanel : null]}>
+            {emptyCopy}
+          </Text>
+          {isPanel && isSelf ? (
+            <Pressable
+              onPress={() => router.push("/create-post")}
+              style={styles.createPostBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Create a post"
+              testID="profile-activity-create-post"
+            >
+              <Text style={styles.createPostBtnText}>Create a post</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <View style={styles.list}>
@@ -152,6 +188,22 @@ export function ProfileActivitySection({
           )}
         </Pressable>
       ) : null}
+      {isPanel && visible.length > 0 && feed.hasNextPage ? (
+        <Pressable
+          onPress={() => {
+            if (!feed.isFetchingNextPage) void feed.fetchNextPage();
+          }}
+          style={styles.footer}
+          accessibilityRole="button"
+          accessibilityLabel="Load more activity"
+        >
+          {feed.isFetchingNextPage ? (
+            <ActivityIndicator color={BRAND} />
+          ) : (
+            <Text style={styles.seeAll}>Load more</Text>
+          )}
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -161,6 +213,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
     width: "100%",
     alignSelf: "stretch",
+  },
+  sectionPanel: {
+    marginTop: 0,
+    flexGrow: 1,
   },
   header: {
     marginBottom: 6,
@@ -187,17 +243,72 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
   },
+  emptyPanel: {
+    minHeight: 168,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 0,
+    backgroundColor: "transparent",
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+  },
+  emptyArt: {
+    marginBottom: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyIconWell: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3EEFF",
+    borderWidth: 1,
+    borderColor: "#E4DFF8",
+  },
   emptyTitle: {
     fontSize: 13,
     lineHeight: 17,
     fontWeight: "700",
     color: "#344054",
   },
+  emptyTitlePanel: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    color: "#111A2B",
+    textAlign: "center",
+  },
   emptyText: {
     marginTop: 3,
     fontSize: 12,
     lineHeight: 16,
     color: "#667085",
+  },
+  emptyTextPanel: {
+    marginTop: 6,
+    maxWidth: 340,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+    color: "#667085",
+  },
+  createPostBtn: {
+    marginTop: 14,
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: BRAND,
+  },
+  createPostBtnText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   footer: {
     marginTop: 8,

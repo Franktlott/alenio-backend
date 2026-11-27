@@ -20,10 +20,11 @@ import {
   Building2,
   ChevronDown,
   Images,
+  Lock,
   Users,
   X,
 } from "lucide-react-native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { pickMedia, type PickedFile } from "@/lib/file-picker";
 import { uploadFile } from "@/lib/upload";
@@ -36,7 +37,11 @@ import {
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { useStatusClusterInset } from "@/lib/adaptive-layout";
-import { useWorkspaceAccess } from "@/lib/workspace-access";
+import {
+  deriveWorkspaceAccess,
+  useWorkspaceAccess,
+  type WorkspaceSubscription,
+} from "@/lib/workspace-access";
 import {
   buildPostAudienceOptions,
   postAudienceFromParams,
@@ -46,6 +51,9 @@ import {
   resolvePostAudience,
   type PostAudience,
 } from "@/lib/post-audience";
+import {
+  workspacePlanHref,
+} from "@/lib/plan-access-copy";
 import type { ConnectionsResponse, Team } from "@/lib/types";
 import { colors } from "@/theme";
 
@@ -108,9 +116,44 @@ export default function CreatePostScreen() {
 
   const selectedTeamId =
     audience.kind === "workspace" ? audience.teamId ?? null : null;
+  const selectedTeam = selectedTeamId
+    ? teams.find((team) => team.id === selectedTeamId) ?? null
+    : null;
   const { access } = useWorkspaceAccess(selectedTeamId);
-  const workspaceWritable =
-    audience.kind === "network" || access.canWrite !== false;
+
+  /** Prefetch write access for every workspace so the picker can label them. */
+  const teamAccessQueries = useQueries({
+    queries: teams.map((team) => ({
+      queryKey: ["subscription", team.id] as const,
+      queryFn: () =>
+        api.get<WorkspaceSubscription>(`/api/teams/${team.id}/subscription`),
+      staleTime: 30_000,
+    })),
+  });
+  const readOnlyTeamIds = useMemo(() => {
+    const ids = new Set<string>();
+    teams.forEach((team, index) => {
+      const sub = teamAccessQueries[index]?.data;
+      if (!sub) return;
+      if (!deriveWorkspaceAccess(sub).canWrite) ids.add(team.id);
+    });
+    // Keep selected team in sync even before its list query settles.
+    if (
+      selectedTeamId &&
+      audience.kind === "workspace" &&
+      access.canWrite === false
+    ) {
+      ids.add(selectedTeamId);
+    }
+    return ids;
+  }, [access.canWrite, audience.kind, selectedTeamId, teamAccessQueries, teams]);
+
+  const workspaceReadOnly =
+    audience.kind === "workspace" &&
+    !!selectedTeamId &&
+    readOnlyTeamIds.has(selectedTeamId);
+  const workspaceWritable = !workspaceReadOnly;
+  const canManagePlan = selectedTeam?.role === "owner";
 
   const [body, setBody] = useState(draft ?? "");
   const [media, setMedia] = useState<PickedFile | null>(null);
@@ -327,20 +370,55 @@ export default function CreatePostScreen() {
             {destination.detail ? ` · ${destination.detail}` : ""}
           </Text>
 
+          {workspaceReadOnly ? (
+            <View
+              style={styles.readOnlyCard}
+              testID="create-post-read-only-note"
+            >
+              <View style={styles.readOnlyHeader}>
+                <Lock size={16} color="#98A2B3" strokeWidth={2.2} />
+                <Text style={styles.readOnlyTitle}>Workspace is read-only</Text>
+              </View>
+              <Text style={styles.readOnlyBody}>
+                {canManagePlan
+                  ? "Choose a plan to restore full workspace functionality, including posting updates."
+                  : "Posting to this workspace is currently unavailable. Contact your workspace owner to restore full access."}
+              </Text>
+              {canManagePlan && selectedTeamId ? (
+                <Pressable
+                  onPress={() => router.push(workspacePlanHref(selectedTeamId))}
+                  style={[
+                    alenioSheetStyles.primaryButton,
+                    { backgroundColor: colors.brand, marginTop: 12 },
+                  ]}
+                  testID="create-post-choose-plan"
+                  accessibilityRole="button"
+                >
+                  <Text style={alenioSheetStyles.primaryButtonText}>
+                    Choose a plan
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
           <TextInput
             placeholder={
               audience.kind === "network"
                 ? "Share an update with your network"
-                : "Share an update with your workspace"
+                : workspaceReadOnly
+                  ? "Switch audience to post, or restore workspace access"
+                  : "Share an update with your workspace"
             }
             placeholderTextColor="#94A3B8"
             value={body}
             onChangeText={setBody}
             multiline
-            autoFocus
+            autoFocus={!workspaceReadOnly}
             maxLength={BODY_MAX}
             style={styles.input}
             testID="create-post-input"
+            editable={!workspaceReadOnly}
           />
 
           {media ? (
@@ -382,13 +460,21 @@ export default function CreatePostScreen() {
           ]}
         >
           <Pressable
-            onPress={onAttach}
+            onPress={() => {
+              if (workspaceReadOnly) return;
+              void onAttach();
+            }}
+            disabled={workspaceReadOnly}
             accessibilityRole="button"
             accessibilityLabel="Add a photo or video"
             testID="create-post-attach"
-            style={styles.attach}
+            style={[styles.attach, workspaceReadOnly ? styles.attachDisabled : null]}
           >
-            <Images size={21} color="#4361EE" strokeWidth={2.1} />
+            <Images
+              size={21}
+              color={workspaceReadOnly ? "#94A3B8" : "#4361EE"}
+              strokeWidth={2.1}
+            />
           </Pressable>
         </View>
       </SafeKeyboardAvoidingView>
@@ -406,6 +492,10 @@ export default function CreatePostScreen() {
         <View style={styles.audienceList}>
           {options.map((option, index) => {
             const selected = postAudienceKey(audience) === option.key;
+            const optionReadOnly =
+              option.kind === "workspace" &&
+              !!option.teamId &&
+              readOnlyTeamIds.has(option.teamId);
             const showSection =
               index === 0 ||
               options[index - 1]?.kind !== option.kind;
@@ -464,7 +554,9 @@ export default function CreatePostScreen() {
                       {option.title}
                     </Text>
                     <Text style={styles.audienceSub} numberOfLines={1}>
-                      {option.subtitle}
+                      {optionReadOnly
+                        ? "Read-only — posting unavailable"
+                        : option.subtitle}
                     </Text>
                   </View>
                   <View
@@ -628,6 +720,34 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: "#64748B",
   },
+  readOnlyCard: {
+    marginBottom: 14,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E6E4F0",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  readOnlyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  readOnlyTitle: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    color: "#111A2B",
+  },
+  readOnlyBody: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#667085",
+  },
   input: {
     minHeight: 120,
     fontSize: 16,
@@ -665,6 +785,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 12,
     backgroundColor: "#F3F6FF",
+  },
+  attachDisabled: {
+    backgroundColor: "#F1F5F9",
   },
   audienceList: {
     borderRadius: 14,

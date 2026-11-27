@@ -177,6 +177,10 @@ export function TeamDevelopmentCard({
         ) : null}
       </View>
 
+      <Text style={styles.sectionTitle} testID="workspace-members-section-title">
+        Workspace members
+      </Text>
+
       <View style={[styles.card, flush ? styles.cardFlush : null]}>
         {visibleMembers.length === 0 ? (
         <View style={styles.emptyState}>
@@ -507,6 +511,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: WS.pageGutter,
     paddingTop: 2,
     paddingBottom: 6,
+  },
+  sectionTitle: {
+    paddingHorizontal: WS.pageGutter,
+    paddingTop: 6,
+    paddingBottom: 8,
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    color: colors.textPrimary,
   },
   card: {
     flex: 1,

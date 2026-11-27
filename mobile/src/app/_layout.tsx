@@ -717,6 +717,10 @@ function RootLayoutNav() {
             }}
           />
           <Stack.Screen name="person" />
+          <Stack.Screen
+            name="profile-layout-mock"
+            options={{ headerShown: false, animation: "slide_from_right" }}
+          />
           <Stack.Screen name="workspace-activity" />
           <Stack.Screen
             name="recognition-hub"

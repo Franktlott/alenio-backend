@@ -3,34 +3,25 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "@/theme";
 import { useAdaptiveLayout } from "@/lib/adaptive-layout";
 
-/** Floating phone dock content height (excludes safe-area / float gap). */
+/** Fixed bottom tab bar content height (excludes safe-area inset). */
 export const TAB_BAR_HEIGHT = 58;
 
-/** Side inset so the dock floats as a pill, not edge-to-edge. */
-export const TAB_BAR_HORIZONTAL_INSET = 28;
+/** Edge-to-edge fixed navigation bar. */
+export const TAB_BAR_HORIZONTAL_INSET = 0;
 
-/**
- * Max dock width on larger / landscape screens so it does not stretch edge to
- * edge. Narrow portrait phones keep the normal side insets instead.
- */
-export const TAB_BAR_MAX_WIDTH = 380;
-
-/** Apply the max-width cap once the window is at least this wide. */
-export const TAB_BAR_WIDE_MIN_WIDTH = 430;
-
-/** Air between the dock and the home indicator. */
-export const TAB_BAR_BOTTOM_GAP = 12;
+/** Fixed navigation bar uses the device safe area directly. */
+export const TAB_BAR_BOTTOM_GAP = 0;
 
 export const TAB_BAR_ACTIVE_COLOR = colors.brand;
-export const TAB_BAR_INACTIVE_COLOR = "#0F172A";
+export const TAB_BAR_INACTIVE_COLOR = colors.textMuted;
 export const TAB_BAR_DIVIDER_COLOR = colors.borderStrong;
-export const TAB_BAR_ACTIVE_HIGHLIGHT = "rgba(109, 40, 217, 0.10)";
+export const TAB_BAR_ACTIVE_HIGHLIGHT = "rgba(109, 40, 217, 0.08)";
 export const WORKSPACE_CARD_BOTTOM_GAP = 12;
 
-export const TAB_BAR_ICON_SIZE = 21;
-export const TAB_BAR_LABEL_SIZE = 9.5;
+export const TAB_BAR_ICON_SIZE = 22;
+export const TAB_BAR_LABEL_SIZE = 10;
 
-/** Scroll/content clearance: floating dock + safe area + optional extra. */
+/** Scroll/content clearance: fixed tab bar + safe area + optional extra. */
 export function tabBarClearance(bottomInset: number, extra = 16): number {
   return (
     TAB_BAR_HEIGHT +

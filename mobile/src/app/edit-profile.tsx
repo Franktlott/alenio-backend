@@ -33,11 +33,10 @@ import {
   alenioSheetStyles,
 } from "@/components/AlenioBottomSheet";
 import { colors } from "@/theme";
-import {
-  clearProfileHeaderImage,
-  profileHeaderSource,
-} from "@/lib/profile-header";
+import { clearProfileHeaderImage, profileHeaderSource } from "@/lib/profile-header";
 import { useHeaderPhotoChooser } from "@/components/profile/use-header-photo";
+import { AlenioDefaultProfileHeader } from "@/components/profile/AlenioDefaultProfileHeader";
+import { ProfileHeaderCurve } from "@/components/profile/ProfileHeaderCurve";
 import {
   HEADER_SIZE_NOTE,
   headerBannerHeight,
@@ -244,13 +243,30 @@ export default function EditProfileScreen() {
             testID="edit-profile-header"
           >
             {headerPreviewWidth > 0 ? (
-              <Image
-                source={profileHeaderSource(profile?.profileHeaderImage, {
-                  wide: window.width / Math.max(window.height, 1) >= 1.2,
-                })}
-                style={{ width: headerPreviewWidth, height: headerPreviewHeight }}
-                resizeMode="cover"
-              />
+              profile?.profileHeaderImage?.trim() ? (
+                <View
+                  style={{
+                    width: headerPreviewWidth,
+                    height: headerPreviewHeight,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Image
+                    source={profileHeaderSource(profile.profileHeaderImage)}
+                    style={{
+                      width: headerPreviewWidth,
+                      height: headerPreviewHeight,
+                    }}
+                    resizeMode="cover"
+                  />
+                  <ProfileHeaderCurve width={headerPreviewWidth} />
+                </View>
+              ) : (
+                <AlenioDefaultProfileHeader
+                  height={headerPreviewHeight}
+                  width={headerPreviewWidth}
+                />
+              )
             ) : (
               <View style={{ height: headerPreviewHeight }} />
             )}

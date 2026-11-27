@@ -88,22 +88,21 @@ export default function HomeScreen() {
   const splitHome =
     adaptive.isSplit && adaptive.height >= 560 && bodyWidth > 0;
   /**
-   * CurvedTabLayout already clears the Duo dock. Keep a normal left gutter and
-   * only a slim right gutter so Home cards sit closer to the column.
+   * Home keeps a full-bleed purple band, so CurvedTabLayout does not pad the
+   * sheet for the Duo dock — cards clear that column here instead.
    */
-  const edgeInsetLeft =
-    adaptive.iconRailEdge === "left" ? 0 : insets.left;
-  const edgeInsetRight =
-    adaptive.iconRailEdge === "right" ? 0 : insets.right;
   const pageGutter = 16;
-  const duoSideGutter = adaptive.iconRailEdge ? 8 : pageGutter;
   const gutterLeft = Math.max(
     splitHome ? adaptive.contentPadLeft : pageGutter,
-    edgeInsetLeft + pageGutter,
+    adaptive.iconRailEdge === "left"
+      ? adaptive.sceneInsetLeft
+      : insets.left + pageGutter,
   );
   const gutterRight = Math.max(
-    splitHome ? adaptive.contentPadRight : duoSideGutter,
-    edgeInsetRight + duoSideGutter,
+    splitHome ? adaptive.contentPadRight : pageGutter,
+    adaptive.iconRailEdge === "right"
+      ? adaptive.sceneInsetRight
+      : insets.right + pageGutter,
   );
   const availableArea = Math.max(
     0,
@@ -378,7 +377,7 @@ export default function HomeScreen() {
       topInset={insets.top}
       title="Alenio"
       hideHeaderTitle
-      leftAction={<AlenioHeaderBrand tone="dark" />}
+      leftAction={<AlenioHeaderBrand tone="dark" wordmark />}
       headerTone="brand"
       backdrop={heroBackdrop}
       backdropVisible

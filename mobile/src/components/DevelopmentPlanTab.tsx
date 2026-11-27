@@ -16,6 +16,18 @@ import {
 import { toast } from "burnt";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import {
   Plus,
   X,
@@ -26,7 +38,6 @@ import {
   ChevronLeft,
   Pencil,
   Trash2,
-  ChevronRight,
   Check,
   Printer,
   Download,
@@ -35,6 +46,9 @@ import {
   ArrowDown,
   ChartColumn,
   CircleCheck,
+  ListChecks,
+  ArrowRight,
+  Sparkles,
 } from "lucide-react-native";
 import {
   addDevelopmentGoalNote,
@@ -69,10 +83,13 @@ import {
 } from "@/lib/development-goal-presets";
 import {
   CreateDevelopmentGoalModal,
+  type CreateDevelopmentGoalMode,
   type CreateDevelopmentGoalPayload,
 } from "@/components/CreateDevelopmentGoalModal";
 import { invalidateDevelopmentCaches } from "@/lib/invalidate-development-caches";
 import { GoalEmptyState } from "@/components/development/GoalEmptyState";
+import { CreateGoalEntrySheet } from "@/components/development/CreateGoalEntrySheet";
+import { SenecaGenerateGoalSheet } from "@/components/development/SenecaGenerateGoalSheet";
 import { MODAL_SUPPORTED_ORIENTATIONS } from "@/lib/modal-supported-orientations";
 
 type Props = {
@@ -96,7 +113,6 @@ type Props = {
 };
 
 const VISIBLE_DETAIL_ROWS = 3;
-const GOAL_LIST_ROW_GAP = 5;
 const GOAL_STEP_ROW_HEIGHT = 44;
 const GOAL_NOTE_ROW_HEIGHT = 48;
 const DETAIL_ROW_GAP = 4;
@@ -306,7 +322,7 @@ function GoalSectionHeader({
   testID,
 }: {
   title: string;
-  count: number;
+  count?: number;
   open?: boolean;
   onToggle?: () => void;
   testID?: string;
@@ -315,7 +331,9 @@ function GoalSectionHeader({
     <>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Text style={sectionStyles.title}>{title}</Text>
-        <Text style={sectionStyles.count}>{count}</Text>
+        {typeof count === "number" ? (
+          <Text style={sectionStyles.count}>{count}</Text>
+        ) : null}
       </View>
       {onToggle ? (
         open ? (
@@ -364,6 +382,159 @@ const sectionStyles = StyleSheet.create({
   count: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
 });
 
+function GoalCompletePulse({ delay, size }: { delay: number; size: number }) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 1400, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: 0 }),
+        ),
+        -1,
+      ),
+    );
+  }, [delay, progress]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.4 * (1 - progress.value),
+    transform: [{ scale: 0.78 + progress.value * 0.5 }],
+  }));
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 2,
+          borderColor: "#A78BFA",
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+function GoalCompletionEffect({
+  celebrating,
+  percent,
+}: {
+  celebrating: boolean;
+  percent: number;
+}) {
+  const fill = useSharedValue(Math.max(0, Math.min(100, percent)) / 100);
+  const burst = useSharedValue(0);
+
+  useEffect(() => {
+    if (celebrating) {
+      fill.value = withTiming(1, {
+        duration: 700,
+        easing: Easing.out(Easing.cubic),
+      });
+      burst.value = withSequence(
+        withSpring(1, { damping: 12, stiffness: 160 }),
+        withTiming(0.92, { duration: 180 }),
+      );
+    } else {
+      fill.value = withTiming(Math.max(0, Math.min(100, percent)) / 100, {
+        duration: 450,
+      });
+      burst.value = withTiming(0, { duration: 200 });
+    }
+  }, [burst, celebrating, fill, percent]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${Math.round(fill.value * 100)}%`,
+  }));
+
+  const markStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: celebrating ? 0.92 + burst.value * 0.18 : 1 }],
+  }));
+
+  return (
+    <View style={completionStyles.stage}>
+      {!celebrating ? (
+        <>
+          <GoalCompletePulse delay={0} size={92} />
+          <GoalCompletePulse delay={700} size={92} />
+        </>
+      ) : null}
+      <Animated.View style={[completionStyles.mark, markStyle]}>
+        {celebrating ? (
+          <CircleCheck size={34} color="#0F9D6E" strokeWidth={2.2} />
+        ) : (
+          <Target size={30} color="#6D28D9" strokeWidth={2.2} />
+        )}
+      </Animated.View>
+      <View style={completionStyles.barTrack}>
+        <Animated.View style={[completionStyles.barFill, fillStyle]} />
+      </View>
+      {celebrating ? (
+        <Animated.View
+          entering={FadeIn.duration(220)}
+          style={completionStyles.sparkRow}
+        >
+          <Sparkles size={14} color="#A78BFA" strokeWidth={2.2} />
+          <Text style={completionStyles.sparkLabel}>Goal complete</Text>
+          <Sparkles size={14} color="#F2B84B" strokeWidth={2.2} />
+        </Animated.View>
+      ) : null}
+    </View>
+  );
+}
+
+const completionStyles = StyleSheet.create({
+  stage: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 8,
+    paddingBottom: 4,
+    minHeight: 118,
+  },
+  mark: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F0FF",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E4DEFF",
+    zIndex: 1,
+  },
+  barTrack: {
+    marginTop: 14,
+    width: "100%",
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden",
+    backgroundColor: "#E9ECF3",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: "#6D28D9",
+  },
+  sparkRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sparkLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+    color: "#6D28D9",
+  },
+});
+
 export function DevelopmentPlanTab({
   teamId,
   memberUserId,
@@ -387,6 +558,10 @@ export function DevelopmentPlanTab({
   const [err, setErr] = useState<string | null>(null);
   const [closedOpen, setClosedOpen] = useState(false);
   const [inactiveOpen, setInactiveOpen] = useState(false);
+  const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [goalCompleteCelebrating, setGoalCompleteCelebrating] = useState(false);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [stepSavingKey, setStepSavingKey] = useState<string | null>(null);
   const [stepCompletionConfirmation, setStepCompletionConfirmation] = useState<{
@@ -436,7 +611,9 @@ export function DevelopmentPlanTab({
   const [noteErr, setNoteErr] = useState<string | null>(null);
   const autoCreateHandledRef = React.useRef(false);
 
+  const [createChooserOpen, setCreateChooserOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<CreateDevelopmentGoalMode>("scratch");
   const [starterPrefill, setStarterPrefill] = useState<{
     skill: string;
     description: string;
@@ -544,8 +721,19 @@ export function DevelopmentPlanTab({
     }
   };
 
-  const openCreate = (starter?: GoalStarter) => {
+  const openCreateChooser = () => {
     setModalErr(null);
+    setStarterPrefill(null);
+    setCreateChooserOpen(true);
+  };
+
+  const openCreate = (
+    mode: CreateDevelopmentGoalMode = "scratch",
+    starter?: GoalStarter,
+  ) => {
+    setModalErr(null);
+    setCreateChooserOpen(false);
+    setCreateMode(mode);
     setStarterPrefill(
       starter
         ? {
@@ -566,7 +754,7 @@ export function DevelopmentPlanTab({
     if (!canCreateGoal || autoCreateHandledRef.current || loading) return;
     autoCreateHandledRef.current = true;
     onAutoOpenCreateHandled?.();
-    openCreate();
+    openCreateChooser();
   }, [
     autoOpenCreate,
     canCreateGoal,
@@ -593,8 +781,8 @@ export function DevelopmentPlanTab({
         priority: payload.priority,
         steps: payload.steps,
       });
-      if (payload.managerNotes?.trim()) {
-        await addDevelopmentGoalNote(teamId, memberUserId, created.id, payload.managerNotes.trim());
+      if (payload.notes?.trim()) {
+        await addDevelopmentGoalNote(teamId, memberUserId, created.id, payload.notes.trim());
       }
       toast({ title: "Goal created", preset: "done" });
       closeModal();
@@ -665,6 +853,7 @@ export function DevelopmentPlanTab({
   };
 
   const closeModal = () => {
+    setCreateChooserOpen(false);
     setCreateOpen(false);
     setUpdateGoal(null);
     setModalErr(null);
@@ -715,6 +904,32 @@ export function DevelopmentPlanTab({
     setCompleteGoal(goal);
   };
 
+  /** True when marking this action complete would finish every action on an active goal. */
+  const stepWouldFinishGoal = (goal: DevelopmentGoal, stepIndex: number) => {
+    if (isGoalStepComplete(goal, stepIndex)) return false;
+    if (normalizeDevelopmentGoalStatus(goal.status) !== "active") return false;
+    const progress = goalProgress(goal);
+    return (
+      progress.totalStepCount > 0 &&
+      progress.completedStepCount === progress.totalStepCount - 1 &&
+      !progress.completedStepIndexes.includes(stepIndex)
+    );
+  };
+
+  /**
+   * Ask before the last action closes the goal; other toggles stay one-tap.
+   */
+  const requestToggleGoalStep = (
+    goal: DevelopmentGoal,
+    stepIndex: number,
+  ) => {
+    if (stepWouldFinishGoal(goal, stepIndex)) {
+      setStepCompletionConfirmation({ goal, stepIndex });
+      return;
+    }
+    void toggleGoalStep(goal, stepIndex);
+  };
+
   const toggleGoalStep = async (
     goal: DevelopmentGoal,
     stepIndex: number,
@@ -737,8 +952,7 @@ export function DevelopmentPlanTab({
       );
       void invalidateDevelopmentCaches(queryClient, teamId, memberUserId);
 
-      // Ticking off the last action leaves nothing to do, so the goal closes
-      // itself instead of waiting to be marked complete by hand.
+      // After the user confirms the last action, close the goal.
       if (
         completed &&
         normalizeDevelopmentGoalStatus(updated.status) === "active" &&
@@ -866,140 +1080,289 @@ export function DevelopmentPlanTab({
     const status = normalizeDevelopmentGoalStatus(goal.status);
     const isClosed = status === "closed";
     const isInactive = status === "inactive";
-    const accent = isClosed ? "#94A3B8" : isInactive ? "#F59E0B" : "#4361EE";
+    const accent = isClosed ? "#94A3B8" : isInactive ? "#F59E0B" : "#6D28D9";
     const iconBackground = isClosed ? "#F1F5F9" : isInactive ? "#FFF3E0" : "#F0ECFF";
-    const showStatusBadge = section !== "active";
     const duePriority = goalDuePriority(goal);
-    const stepCount = goal.steps?.length ?? 0;
     const progress = goalProgress(goal);
-    const metadata = [
-      duePriority ? `Due ${duePriority.dueLabel}` : null,
-      `${stepCount} action${stepCount === 1 ? "" : "s"}`,
-    ].filter(Boolean);
+    const expanded = expandedGoalIds.has(goal.id);
+    const steps = goal.steps ?? [];
+    const statusPill =
+      section !== "active"
+        ? goalStatusLabel(status)
+        : progress.progressPercent <= 0
+          ? "Not started"
+          : progress.progressPercent >= 100
+            ? "Complete"
+            : "In progress";
+    const statusPillBg =
+      section !== "active"
+        ? isClosed
+          ? "#F1F5F9"
+          : "#FFEDD5"
+        : progress.progressPercent <= 0
+          ? "#F1F5F9"
+          : progress.progressPercent >= 100
+            ? "#E7F8F1"
+            : "#F0ECFF";
+    const statusPillColor =
+      section !== "active"
+        ? isClosed
+          ? "#64748B"
+          : "#C2410C"
+        : progress.progressPercent <= 0
+          ? "#64748B"
+          : progress.progressPercent >= 100
+            ? "#0F9D6E"
+            : "#6D28D9";
+
+    const toggleExpanded = () => {
+      setExpandedGoalIds((current) => {
+        const next = new Set(current);
+        if (next.has(goal.id)) next.delete(goal.id);
+        else next.add(goal.id);
+        return next;
+      });
+    };
 
     return (
-      <Pressable
+      <View
         key={goal.id}
-        onPress={() => {
-          setDetailScrollOffset(0);
-          setPreviewGoal(goal);
-        }}
         style={{
           backgroundColor: "#FFFFFF",
-          borderRadius: 11,
+          borderRadius: 16,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: "#ECEEF5",
-          paddingHorizontal: 10,
-          paddingVertical: 7,
+          borderColor: "#E8ECF4",
+          paddingHorizontal: 14,
+          paddingTop: 14,
+          paddingBottom: 4,
           shadowColor: "#1E1B4B",
-          shadowOpacity: 0.025,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 2,
         }}
-        accessibilityRole="button"
-        accessibilityLabel={`View ${goal.skill} goal summary`}
+        testID={`goal-card-${goal.id}`}
       >
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Pressable
+          onPress={toggleExpanded}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={`${expanded ? "Collapse" : "Expand"} ${goal.skill} actions`}
+        >
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
             <View
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: 9,
+                width: 36,
+                height: 36,
+                borderRadius: 11,
                 backgroundColor: iconBackground,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Target size={15} color={accent} strokeWidth={2.3} />
+              <Target size={17} color={accent} strokeWidth={2.3} />
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text
-                  style={{ fontSize: 12, fontWeight: "500", color: "#0F172A", flexShrink: 1 }}
-                  numberOfLines={1}
-                >
-                  {goal.skill}
-                </Text>
-                {showStatusBadge ? (
-                  <View
-                    style={{
-                      backgroundColor: isClosed ? "#F1F5F9" : "#FFEDD5",
-                      borderRadius: 4,
-                      paddingHorizontal: 6,
-                      paddingVertical: 2,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 9,
-                        fontWeight: "800",
-                        letterSpacing: 0.5,
-                        textTransform: "uppercase",
-                        color: isClosed ? "#64748B" : "#C2410C",
-                      }}
-                    >
-                      {goalStatusLabel(status)}
-                    </Text>
-                  </View>
-                ) : null}
-                {goal.isArchived ? (
-                  <View style={{ borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: "#F1F5F9" }}>
-                    <Text style={{ fontSize: 9, fontWeight: "800", color: "#64748B", textTransform: "uppercase" }}>
-                      Archived
-                    </Text>
-                  </View>
-                ) : null}
-                <Text
-                  style={{
-                    marginLeft: "auto",
-                    fontSize: 9.5,
-                    fontWeight: "700",
-                    color:
-                      isClosed ? "#64748B" : isInactive ? "#A16207" : "#684BFF",
-                  }}
-                >
-                  {progress.progressPercent}%
-                </Text>
-              </View>
-
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
               <Text
                 style={{
-                  marginTop: 1,
-                  fontSize: 9.5,
-                  fontWeight: "400",
-                  color: "#64748B",
+                  fontSize: 15,
+                  lineHeight: 19,
+                  fontWeight: "800",
+                  letterSpacing: -0.2,
+                  color: "#0F172A",
                 }}
+                numberOfLines={2}
+              >
+                {goal.skill}
+              </Text>
+              <Text
+                style={{ fontSize: 12, lineHeight: 15, fontWeight: "500", color: "#8A96A8" }}
                 numberOfLines={1}
               >
-                {metadata.join("  ·  ")}
+                {duePriority ? `Due ${duePriority.dueLabel}` : "No due date"}
               </Text>
+            </View>
+            {expanded ? (
+              <ChevronUp size={18} color="#A0A9B8" />
+            ) : (
+              <ChevronDown size={18} color="#A0A9B8" />
+            )}
+          </View>
 
-              <View
+          <View style={{ marginTop: 14, gap: 8 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#5B667A" }}>
+                Goal progress
+              </Text>
+              <Text
                 style={{
-                  height: 4,
-                  marginTop: 3,
-                  borderRadius: 2,
-                  overflow: "hidden",
-                  backgroundColor: "#E9ECF3",
+                  fontSize: 13,
+                  fontWeight: "800",
+                  color: isClosed ? "#64748B" : isInactive ? "#A16207" : "#6D28D9",
                 }}
               >
-                <View
-                  style={{
-                    width: `${progress.progressPercent}%`,
-                    height: "100%",
-                    borderRadius: 2,
-                    backgroundColor:
-                      isClosed ? "#94A3B8" : isInactive ? "#B48A4C" : "#684BFF",
-                  }}
-                />
-              </View>
-
+                {progress.progressPercent}%
+              </Text>
             </View>
-            <ChevronRight size={16} color="#A0A9B8" />
+            <View
+              style={{
+                height: 8,
+                borderRadius: 4,
+                overflow: "hidden",
+                backgroundColor: "#E9ECF3",
+              }}
+            >
+              <View
+                style={{
+                  width: `${progress.progressPercent}%`,
+                  height: "100%",
+                  borderRadius: 4,
+                  backgroundColor: isClosed
+                    ? "#94A3B8"
+                    : isInactive
+                      ? "#B48A4C"
+                      : "#6D28D9",
+                }}
+              />
+            </View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+                <ListChecks size={14} color="#8A96A8" strokeWidth={2.2} />
+                <Text
+                  style={{ fontSize: 12, fontWeight: "600", color: "#5B667A" }}
+                  numberOfLines={1}
+                >
+                  {progress.completedStepCount} of {progress.totalStepCount}{" "}
+                  {progress.totalStepCount === 1 ? "action" : "actions"} completed
+                </Text>
+              </View>
+              <View
+                style={{
+                  borderRadius: 999,
+                  paddingHorizontal: 9,
+                  paddingVertical: 4,
+                  backgroundColor: statusPillBg,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: statusPillColor,
+                  }}
+                >
+                  {statusPill}
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
-      </Pressable>
+        </Pressable>
+
+        {expanded && steps.length > 0 ? (
+          <View
+            style={{
+              marginTop: 12,
+              paddingTop: 10,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: "#EEF0F5",
+              gap: 6,
+            }}
+          >
+            {steps.map((step, index) => {
+              const completed = isGoalStepComplete(goal, index);
+              const saving = stepSavingKey === `${goal.id}:${index}`;
+              const canToggle =
+                canCompleteSteps && section === "active" && !goal.readOnly;
+              return (
+                <Pressable
+                  key={`${goal.id}-step-${index}`}
+                  disabled={!canToggle || saving}
+                  onPress={() => {
+                    if (!canToggle) return;
+                    requestToggleGoalStep(goal, index);
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    paddingVertical: 6,
+                    opacity: saving ? 0.6 : 1,
+                  }}
+                  accessibilityRole={canToggle ? "checkbox" : "text"}
+                  accessibilityState={{ checked: completed }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 6,
+                      borderWidth: completed ? 0 : 1.5,
+                      borderColor: "#CBD5E1",
+                      backgroundColor: completed ? "#6D28D9" : "#FFFFFF",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {completed ? (
+                      <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                    ) : null}
+                  </View>
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontSize: 13,
+                      lineHeight: 17,
+                      fontWeight: "500",
+                      color: completed ? "#94A3B8" : "#1F2937",
+                      textDecorationLine: completed ? "line-through" : "none",
+                    }}
+                  >
+                    {step}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
+        <Pressable
+          onPress={() => {
+            setDetailScrollOffset(0);
+            setPreviewGoal(goal);
+          }}
+          style={{
+            marginTop: 10,
+            paddingTop: 12,
+            paddingBottom: 12,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: "#EEF0F5",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`View details for ${goal.skill}`}
+          testID={`goal-card-details-${goal.id}`}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "800", color: "#6D28D9" }}>
+            View goal details
+          </Text>
+          <ArrowRight size={16} color="#6D28D9" strokeWidth={2.4} />
+        </Pressable>
+      </View>
     );
   };
 
@@ -1007,7 +1370,7 @@ export function DevelopmentPlanTab({
     list: DevelopmentGoal[],
     section: "active" | "inactive" | "closed",
   ) => (
-    <View style={{ gap: GOAL_LIST_ROW_GAP }}>
+    <View style={{ gap: 12 }}>
       {list.map((goal) => renderGoalRow(goal, section))}
     </View>
   );
@@ -1097,7 +1460,7 @@ export function DevelopmentPlanTab({
           </Text>
         </View>
       ) : null}
-      {goals.length > 0 || canCreateGoal ? (
+      {goals.length > 0 || (canCreateGoal && !showCenteredEmpty) ? (
         <View
           style={{
             flexDirection: "row",
@@ -1120,31 +1483,11 @@ export function DevelopmentPlanTab({
               >
                 Goals
               </Text>
-              {/* The whole plan, now that each section carries its own count. */}
-              {goals.length > 0 ? (
-                <View
-                  style={{
-                    minWidth: 22,
-                    height: 22,
-                    paddingHorizontal: 6,
-                    borderRadius: 11,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#F0ECFF",
-                  }}
-                >
-                  <Text
-                    style={{ fontSize: 11, fontWeight: "800", color: "#684BFF" }}
-                  >
-                    {goals.length}
-                  </Text>
-                </View>
-              ) : null}
             </View>
           </View>
-          {canCreateGoal ? (
+          {canCreateGoal && !showCenteredEmpty ? (
             <Pressable
-              onPress={() => openCreate()}
+              onPress={openCreateChooser}
               hitSlop={8}
               style={{
                 minHeight: 28,
@@ -1194,14 +1537,13 @@ export function DevelopmentPlanTab({
                 canCreate={canCreateGoal}
                 hasAnyGoals={goals.length > 0}
                 error={err}
-                onCreate={() => openCreate()}
+                onCreate={openCreateChooser}
               />
             </View>
           ) : (
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 10 }}>
               <GoalSectionHeader
                 title="Active goals"
-                count={activeGoals.length}
                 testID="active-goals-section"
               />
               {renderGoalList(activeGoals, "active")}
@@ -1209,10 +1551,9 @@ export function DevelopmentPlanTab({
           )}
 
           {inactiveGoals.length > 0 ? (
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 10 }}>
               <GoalSectionHeader
                 title="Inactive goals"
-                count={inactiveGoals.length}
                 open={inactiveOpen}
                 onToggle={() => setInactiveOpen(!inactiveOpen)}
                 testID="inactive-goals-section"
@@ -1222,10 +1563,9 @@ export function DevelopmentPlanTab({
           ) : null}
 
           {closedGoals.length > 0 ? (
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 10 }}>
               <GoalSectionHeader
                 title="Completed goals"
-                count={closedGoals.length}
                 open={closedOpen}
                 onToggle={() => setClosedOpen(!closedOpen)}
                 testID="completed-goals-section"
@@ -1363,10 +1703,10 @@ export function DevelopmentPlanTab({
           }}
           style={{
             flex: 1,
-            paddingHorizontal: 24,
+            paddingHorizontal: 22,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "rgba(15, 23, 42, 0.46)",
+            backgroundColor: "rgba(15, 23, 42, 0.5)",
           }}
         >
           <Pressable
@@ -1374,86 +1714,140 @@ export function DevelopmentPlanTab({
             style={{
               width: "100%",
               maxWidth: 360,
-              padding: 20,
-              borderRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 16,
+              borderRadius: 22,
               backgroundColor: "#FFFFFF",
-              shadowColor: "#312E81",
-              shadowOpacity: 0.2,
-              shadowRadius: 24,
-              shadowOffset: { width: 0, height: 12 },
-              elevation: 12,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: "#E8E4F8",
+              shadowColor: "#1E1B4B",
+              shadowOpacity: 0.18,
+              shadowRadius: 28,
+              shadowOffset: { width: 0, height: 14 },
+              elevation: 14,
             }}
           >
             <View
               style={{
-                width: 48,
-                height: 48,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 14,
+              }}
+            >
+              <Image
+                source={require("@/assets/alenio-icon.png")}
+                style={{ width: 28, height: 28, borderRadius: 8 }}
+              />
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "800",
+                  letterSpacing: 0.8,
+                  color: "#8B7CC8",
+                }}
+              >
+                ALENIO
+              </Text>
+            </View>
+
+            <View
+              style={{
+                width: 52,
+                height: 52,
                 borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: "#FEF2F2",
-                marginBottom: 15,
+                marginBottom: 14,
+                alignSelf: "center",
               }}
             >
-              <Trash2 size={22} color="#DC2626" strokeWidth={2.2} />
+              <Trash2 size={24} color="#DC2626" strokeWidth={2.2} />
             </View>
-            <Text style={{ fontSize: 20, lineHeight: 25, fontWeight: "800", color: "#111827" }}>
+
+            <Text
+              style={{
+                fontSize: 20,
+                lineHeight: 25,
+                fontWeight: "800",
+                letterSpacing: -0.3,
+                color: "#111827",
+                textAlign: "center",
+              }}
+            >
               Delete this goal?
             </Text>
-            <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 20, color: "#667085" }}>
-              {deleteGoalConfirmation
-                ? `“${deleteGoalConfirmation.skill}” and its progress notes will be permanently removed. This cannot be undone.`
-                : ""}
-            </Text>
-            <View
+
+            {deleteGoalConfirmation ? (
+              <Text
+                style={{
+                  marginTop: 6,
+                  fontSize: 14,
+                  lineHeight: 18,
+                  fontWeight: "700",
+                  color: "#3F4860",
+                  textAlign: "center",
+                }}
+                numberOfLines={2}
+              >
+                {deleteGoalConfirmation.skill}
+              </Text>
+            ) : null}
+
+            <Text
               style={{
-                marginTop: 20,
-                paddingTop: 14,
-                borderTopWidth: 1,
-                borderTopColor: "#EEF0F5",
-                flexDirection: "row",
-                gap: 10,
+                marginTop: 10,
+                fontSize: 13.5,
+                lineHeight: 19,
+                fontWeight: "500",
+                color: "#667085",
+                textAlign: "center",
               }}
             >
-              <Pressable
-                onPress={() => setDeleteGoalConfirmation(null)}
-                disabled={deletingGoal}
-                style={{
-                  flex: 1,
-                  minHeight: 46,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: "#E0E5EF",
-                  backgroundColor: "#FFFFFF",
-                  opacity: deletingGoal ? 0.55 : 1,
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#53627A" }}>
-                  Cancel
-                </Text>
-              </Pressable>
+              This permanently removes the goal and its progress notes. You
+              can&apos;t undo this.
+            </Text>
+
+            <View style={{ marginTop: 18, gap: 8 }}>
               <Pressable
                 onPress={() => void confirmDeleteGoal()}
                 disabled={deletingGoal}
                 style={{
-                  flex: 1.25,
-                  minHeight: 46,
+                  minHeight: 48,
                   alignItems: "center",
                   justifyContent: "center",
                   borderRadius: 14,
                   backgroundColor: "#DC2626",
-                  opacity: deletingGoal ? 0.6 : 1,
-                  shadowColor: "#DC2626",
-                  shadowOpacity: 0.18,
-                  shadowRadius: 8,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: 3,
+                  opacity: deletingGoal ? 0.65 : 1,
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="Delete goal"
               >
-                <Text style={{ fontSize: 13, fontWeight: "800", color: "#FFFFFF" }}>
+                <Text
+                  style={{ fontSize: 15, fontWeight: "800", color: "#FFFFFF" }}
+                >
                   {deletingGoal ? "Deleting…" : "Delete goal"}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setDeleteGoalConfirmation(null)}
+                disabled={deletingGoal}
+                style={{
+                  minHeight: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  opacity: deletingGoal ? 0.55 : 1,
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text
+                  style={{ fontSize: 14, fontWeight: "700", color: "#53627A" }}
+                >
+                  Not yet
                 </Text>
               </Pressable>
             </View>
@@ -1750,10 +2144,37 @@ export function DevelopmentPlanTab({
         </Pressable>
       </Modal>
 
+      <CreateGoalEntrySheet
+        visible={createChooserOpen}
+        memberName={memberName}
+        isSelf={isSelf}
+        onClose={() => setCreateChooserOpen(false)}
+        onSelect={(mode) => openCreate(mode)}
+      />
+
+      <SenecaGenerateGoalSheet
+        visible={createOpen && createMode === "seneca"}
+        teamId={teamId}
+        memberUserId={memberUserId}
+        memberName={memberName}
+        managerName={managerName}
+        isSelf={isSelf}
+        saving={saving}
+        error={modalErr}
+        onClose={closeModal}
+        onCreate={(payload) => {
+          void onCreateGoalFromSheet(payload);
+        }}
+      />
+
       <CreateDevelopmentGoalModal
-        visible={createOpen}
+        visible={createOpen && createMode === "scratch"}
+        teamId={teamId}
+        memberUserId={memberUserId}
         memberName={memberName}
         memberImage={memberImage}
+        managerName={managerName}
+        isSelf={isSelf}
         saving={saving}
         error={modalErr}
         prefill={starterPrefill}
@@ -2079,7 +2500,9 @@ export function DevelopmentPlanTab({
                           return (
                             <Pressable
                               key={`${index}-${step}`}
-                              onPress={() => void toggleGoalStep(previewGoal, index)}
+                              onPress={() =>
+                                requestToggleGoalStep(previewGoal, index)
+                              }
                               disabled={
                                 (!canUpdate && !canCompleteSteps) ||
                                 saving ||
@@ -2530,16 +2953,24 @@ export function DevelopmentPlanTab({
         transparent
         animationType="fade"
         statusBarTranslucent
-        onRequestClose={() => setStepCompletionConfirmation(null)}
+        onRequestClose={() => {
+          if (goalCompleteCelebrating) return;
+          setGoalCompleteCelebrating(false);
+          setStepCompletionConfirmation(null);
+        }}
+        onShow={() => setGoalCompleteCelebrating(false)}
       >
         <Pressable
-          onPress={() => setStepCompletionConfirmation(null)}
+          onPress={() => {
+            if (goalCompleteCelebrating) return;
+            setStepCompletionConfirmation(null);
+          }}
           style={{
             flex: 1,
-            paddingHorizontal: 24,
+            paddingHorizontal: 22,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "rgba(15, 23, 42, 0.46)",
+            backgroundColor: "rgba(15, 23, 42, 0.5)",
           }}
         >
           <Pressable
@@ -2547,99 +2978,178 @@ export function DevelopmentPlanTab({
             style={{
               width: "100%",
               maxWidth: 360,
-              padding: 20,
-              borderRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 16,
+              borderRadius: 22,
               backgroundColor: "#FFFFFF",
-              shadowColor: "#312E81",
-              shadowOpacity: 0.2,
-              shadowRadius: 24,
-              shadowOffset: { width: 0, height: 12 },
-              elevation: 12,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: "#E8E4F8",
+              shadowColor: "#1E1B4B",
+              shadowOpacity: 0.18,
+              shadowRadius: 28,
+              shadowOffset: { width: 0, height: 14 },
+              elevation: 14,
             }}
           >
             <View
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 16,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#F0ECFF",
-                marginBottom: 15,
-              }}
-            >
-              <Check size={22} color="#684BFF" strokeWidth={2.5} />
-            </View>
-            <Text style={{ fontSize: 20, lineHeight: 25, fontWeight: "800", color: "#111827" }}>
-              {stepCompletionFinishesGoal
-                ? "Complete this goal?"
-                : "Mark action complete?"}
-            </Text>
-            <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 20, color: "#667085" }}>
-              {stepCompletionConfirmation
-                ? `Confirm that “${stepCompletionConfirmation.goal.steps[stepCompletionConfirmation.stepIndex]}” is complete.${
-                    stepCompletionFinishesGoal
-                      ? " This is the last action, so the goal will be marked complete. You can reopen it later."
-                      : ""
-                  }`
-                : ""}
-            </Text>
-            <View
-              style={{
-                marginTop: 20,
-                paddingTop: 14,
-                borderTopWidth: 1,
-                borderTopColor: "#EEF0F5",
                 flexDirection: "row",
-                gap: 10,
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 4,
               }}
             >
-              <Pressable
-                onPress={() => setStepCompletionConfirmation(null)}
+              <Image
+                source={require("@/assets/alenio-icon.png")}
+                style={{ width: 28, height: 28, borderRadius: 8 }}
+              />
+              <Text
                 style={{
-                  flex: 1,
-                  minHeight: 46,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: "#E0E5EF",
-                  backgroundColor: "#FFFFFF",
+                  fontSize: 11,
+                  fontWeight: "800",
+                  letterSpacing: 0.8,
+                  color: "#8B7CC8",
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#53627A" }}>
-                  Cancel
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  const confirmation = stepCompletionConfirmation;
-                  if (!confirmation) return;
-                  setStepCompletionConfirmation(null);
-                  void toggleGoalStep(
-                    confirmation.goal,
-                    confirmation.stepIndex,
-                  );
-                }}
-                style={{
-                  flex: 1.25,
-                  minHeight: 46,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 14,
-                  backgroundColor: "#5B42F3",
-                  shadowColor: "#5B42F3",
-                  shadowOpacity: 0.2,
-                  shadowRadius: 8,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: 3,
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "800", color: "#FFFFFF" }}>
-                  Mark complete
-                </Text>
-              </Pressable>
+                ALENIO
+              </Text>
             </View>
+
+            <GoalCompletionEffect
+              celebrating={goalCompleteCelebrating}
+              percent={
+                stepCompletionConfirmation
+                  ? goalProgress(stepCompletionConfirmation.goal).progressPercent
+                  : 0
+              }
+            />
+
+            <Animated.Text
+              entering={FadeInDown.duration(280)}
+              style={{
+                marginTop: 8,
+                fontSize: 20,
+                lineHeight: 25,
+                fontWeight: "800",
+                letterSpacing: -0.3,
+                color: "#111827",
+                textAlign: "center",
+              }}
+            >
+              {goalCompleteCelebrating
+                ? "Goal completed"
+                : stepCompletionFinishesGoal
+                  ? "Complete this goal?"
+                  : "Mark action complete?"}
+            </Animated.Text>
+
+            {stepCompletionConfirmation ? (
+              <Text
+                style={{
+                  marginTop: 6,
+                  fontSize: 14,
+                  lineHeight: 18,
+                  fontWeight: "700",
+                  color: "#3F4860",
+                  textAlign: "center",
+                }}
+                numberOfLines={2}
+              >
+                {stepCompletionConfirmation.goal.skill}
+              </Text>
+            ) : null}
+
+            <Text
+              style={{
+                marginTop: 10,
+                fontSize: 13.5,
+                lineHeight: 19,
+                fontWeight: "500",
+                color: "#667085",
+                textAlign: "center",
+              }}
+            >
+              {goalCompleteCelebrating
+                ? "Nice work — this goal is moving to Completed."
+                : stepCompletionFinishesGoal
+                  ? "Every action is done. Complete the goal now, or keep it open."
+                  : "This marks the action done on the goal."}
+            </Text>
+
+            {!goalCompleteCelebrating ? (
+              <View style={{ marginTop: 18, gap: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    const confirmation = stepCompletionConfirmation;
+                    if (!confirmation) return;
+                    if (stepCompletionFinishesGoal) {
+                      setGoalCompleteCelebrating(true);
+                      setTimeout(() => {
+                        setStepCompletionConfirmation(null);
+                        setGoalCompleteCelebrating(false);
+                        void toggleGoalStep(
+                          confirmation.goal,
+                          confirmation.stepIndex,
+                        );
+                      }, 980);
+                      return;
+                    }
+                    setStepCompletionConfirmation(null);
+                    void toggleGoalStep(
+                      confirmation.goal,
+                      confirmation.stepIndex,
+                    );
+                  }}
+                  style={{
+                    minHeight: 48,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 14,
+                    backgroundColor: "#6D28D9",
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    stepCompletionFinishesGoal
+                      ? "Complete goal"
+                      : "Mark action complete"
+                  }
+                >
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      fontWeight: "800",
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    {stepCompletionFinishesGoal
+                      ? "Complete goal"
+                      : "Mark complete"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setStepCompletionConfirmation(null)}
+                  style={{
+                    minHeight: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 14,
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "700",
+                      color: "#53627A",
+                    }}
+                  >
+                    Not yet
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </Pressable>
         </Pressable>
       </Modal>

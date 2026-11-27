@@ -27,6 +27,22 @@ export function WorkspaceOverviewPage({
 }: Props) {
   const adaptive = useAdaptiveLayout();
   const landscape = adaptive.isSplit;
+  /**
+   * Band tabs already pad the sheet for the Duo dock. Skip contentPad on that
+   * edge so Overview matches Home width.
+   */
+  const padLeft =
+    adaptive.iconRailEdge === "left"
+      ? 0
+      : adaptive.iconRailEdge
+        ? Math.max(WS.pageGutter, adaptive.contentPadLeft)
+        : adaptive.contentPadLeft + WS.pageGutter;
+  const padRight =
+    adaptive.iconRailEdge === "right"
+      ? 0
+      : adaptive.iconRailEdge
+        ? Math.max(WS.pageGutter, adaptive.contentPadRight)
+        : adaptive.contentPadRight + WS.pageGutter;
 
   return (
     <ScrollView
@@ -34,8 +50,8 @@ export function WorkspaceOverviewPage({
       contentContainerStyle={{
         paddingTop: 10,
         paddingBottom: bottomInset + 16,
-        paddingLeft: adaptive.contentPadLeft + WS.pageGutter,
-        paddingRight: adaptive.contentPadRight + WS.pageGutter,
+        paddingLeft: padLeft,
+        paddingRight: padRight,
       }}
       showsVerticalScrollIndicator={false}
       testID="workspace-overview-page"

@@ -101,11 +101,13 @@ export function CurvedTabLayout({
   const sheetClear = backdropVisible && !band;
   /**
    * Duo scenes stay full-bleed so the purple band can paint under the glass.
-   * Pad the sheet for every Duo tab (Home included) so cards clear the dock.
+   * Pad the sheet for labeled / compact rails — except when a tall backdrop
+   * band is showing: padding there left a transparent strip where purple hung
+   * below the header. Those screens clear the dock in their own content.
    */
-  const spanStraight = band;
+  const spanStraight = band || backdropVisible;
   const sheetInset =
-    iconRailEdge != null
+    iconRailEdge != null && !sheetClear
       ? {
           paddingLeft: sceneInsetLeft,
           paddingRight: sceneInsetRight,
@@ -127,9 +129,15 @@ export function CurvedTabLayout({
           height={headerHeight > 0 ? headerHeight : topInset + 120}
           pageColor={fill}
         />
-      ) : (
-        backdrop ?? null
-      )}
+      ) : backdrop ? (
+        /**
+         * Keep the band in a full-bleed layer so sheet rail padding cannot
+         * leave a white drop beside the purple on Duo / tablet.
+         */
+        <View pointerEvents="none" style={styles.backdropLayer}>
+          {backdrop}
+        </View>
+      ) : null}
       <View onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}>
         <AppTabHeader
           topInset={topInset}
@@ -189,6 +197,11 @@ const styles = StyleSheet.create({
   /** Home's purple band must paint into the Duo status column inset. */
   screenBleed: {
     overflow: "visible",
+  },
+  backdropLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "visible",
+    zIndex: 0,
   },
   body: {
     flex: 1,

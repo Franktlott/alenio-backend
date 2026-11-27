@@ -5,10 +5,8 @@ import {
   StyleSheet,
   Text,
   Pressable,
-  TouchableOpacity,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { router } from "expo-router";
 import { ChevronDown, Lock, Video } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { HeaderActionPill } from "@/components/HeaderAddButton";
@@ -16,10 +14,6 @@ import { HeaderNotificationsButton } from "@/components/HeaderNotificationsButto
 import { HeaderProfileButton } from "@/components/HeaderProfileButton";
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { SwitchWorkspaceSheet } from "@/components/SwitchWorkspaceSheet";
-import {
-  AlenioBottomSheet,
-  alenioSheetStyles,
-} from "@/components/AlenioBottomSheet";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { canOpenWorkspaceTitleMenu } from "@/lib/workspace-management";
@@ -116,16 +110,12 @@ export function AppTabHeader({
   showWorkspaceSubtitle = false,
 }: Props) {
   const [switchOpen, setSwitchOpen] = useState(false);
-  const [readOnlySheetOpen, setReadOnlySheetOpen] = useState(false);
   const [meetingNow, setMeetingNow] = useState(Date.now());
   const cluster = useStatusClusterInset();
   const { iconRailEdge, sceneInsetLeft, sceneInsetRight } = useAdaptiveLayout();
   const activeTeamId = useTeamStore((state) => state.activeTeamId);
   const { access } = useWorkspaceAccess(activeTeamId);
   const readOnlyWorkspace = Boolean(activeTeamId && !access.canWrite);
-  useEffect(() => {
-    setReadOnlySheetOpen(false);
-  }, [activeTeamId]);
   const dismissedMeetingIds = useMeetingBannerStore(
     (state) => state.dismissedMeetingIds,
   );
@@ -168,27 +158,23 @@ export function AppTabHeader({
   });
   const pageTitleMode = Boolean(title?.trim());
   const titleLayoutMode = pageTitleMode || hideCenterContent;
+  /** Status only — not tappable, so it never blocks the workspace switcher. */
   const readOnlyPill = readOnlyWorkspace ? (
-    <Pressable
-      onPress={() => setReadOnlySheetOpen(true)}
-      accessibilityRole="button"
-      accessibilityLabel="Read-only workspace. View plan."
+    <View
+      accessibilityRole="text"
+      accessibilityLabel="Read-only workspace"
       testID="workspace-read-only-status"
-      hitSlop={6}
-      style={({ pressed }) => [
-        styles.readOnlyBadge,
-        pressed ? styles.readOnlyBadgePressed : null,
-      ]}
+      style={styles.readOnlyBadge}
     >
       <View style={styles.readOnlyBadgeInner}>
         <View style={styles.readOnlyBadgeIcon}>
-          <Lock size={10} color="#4361EE" strokeWidth={2.5} />
+          <Lock size={8} color="#4361EE" strokeWidth={2.5} />
         </View>
         <Text style={styles.readOnlyBadgeText} numberOfLines={1}>
           Read-only
         </Text>
       </View>
-    </Pressable>
+    </View>
   ) : null;
   const titleControl = pageTitleMode ? (
     <View
@@ -406,48 +392,6 @@ export function AppTabHeader({
         visible={switchOpen}
         onClose={() => setSwitchOpen(false)}
       />
-      <AlenioBottomSheet
-        visible={readOnlySheetOpen && readOnlyWorkspace}
-        title="Read-only workspace"
-        onClose={() => setReadOnlySheetOpen(false)}
-        compact
-        testID="workspace-read-only-sheet"
-      >
-        <Text
-          style={{
-            fontSize: 14,
-            lineHeight: 20,
-            color: "#64748B",
-            textAlign: "center",
-          }}
-        >
-          You can explore your workspace and view existing content. Creating or
-          editing content requires an eligible plan.
-        </Text>
-        <TouchableOpacity
-          onPress={() => {
-            setReadOnlySheetOpen(false);
-            if (!activeTeamId) return;
-            router.push({
-              pathname: "/choose-plan",
-              params: { teamId: activeTeamId },
-            });
-          }}
-          style={[alenioSheetStyles.primaryButton, { marginTop: 16 }]}
-          activeOpacity={0.92}
-          testID="workspace-read-only-view-plans"
-        >
-          <Text style={alenioSheetStyles.primaryButtonText}>View plans</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setReadOnlySheetOpen(false)}
-          style={[alenioSheetStyles.cancelButton, { marginTop: 8 }]}
-          activeOpacity={0.7}
-          testID="workspace-read-only-not-now"
-        >
-          <Text style={alenioSheetStyles.cancelButtonText}>Not now</Text>
-        </TouchableOpacity>
-      </AlenioBottomSheet>
     </>
   );
 }
@@ -591,33 +535,30 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
     alignSelf: "center",
-    height: 20,
-    paddingHorizontal: 8,
+    height: 16,
+    paddingHorizontal: 6,
     borderRadius: 999,
     backgroundColor: "#EEF2FF",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#C7D2FE",
     justifyContent: "center",
   },
-  readOnlyBadgePressed: {
-    backgroundColor: "#E0E7FF",
-  },
   readOnlyBadgeInner: {
     flexDirection: "row",
     alignItems: "center",
   },
   readOnlyBadgeIcon: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   readOnlyBadgeText: {
-    marginLeft: 4,
-    fontSize: 10,
-    lineHeight: 12,
+    marginLeft: 3,
+    fontSize: 9,
+    lineHeight: 11,
     fontWeight: "700",
-    letterSpacing: 0.15,
+    letterSpacing: 0.1,
     color: "#4361EE",
   },
   workspaceSelectorCluster: {

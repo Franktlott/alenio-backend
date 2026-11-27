@@ -1,11 +1,11 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Plus, Target } from "lucide-react-native";
-import {
-  DevelopmentEmptyMark,
-  DevelopmentEmptyState,
-} from "@/components/development/DevelopmentEmptyState";
+import { DevelopmentEmptyState } from "@/components/development/DevelopmentEmptyState";
+import { SenecaIcon } from "@/components/seneca/SenecaIcon";
 import { colors } from "@/theme";
+
+const GOALS_EMPTY_ART = require("@/assets/growth-empty-goals.png");
 
 export function GoalEmptyState({
   memberName,
@@ -59,68 +59,137 @@ export function GoalEmptyState({
     );
   }
 
+  if (!canCreate) {
+    return (
+      <DevelopmentEmptyState
+        icon={Target}
+        title="No goals yet"
+        body={
+          isSelf
+            ? "Your goals will appear here once a leader adds one."
+            : `Goals for ${firstName} will appear here once a leader adds one.`
+        }
+        testID="growth-empty-state"
+      />
+    );
+  }
+
   return (
     <View style={styles.wrap} testID="growth-empty-state">
-      <DevelopmentEmptyMark icon={Target} label="No goals yet" />
+      <View style={styles.heroCard}>
+        <Image
+          source={GOALS_EMPTY_ART}
+          style={styles.heroArt}
+          resizeMode="contain"
+          accessibilityIgnoresInvertColors
+        />
 
-      <View style={styles.copy}>
-        <Text style={styles.title}>No goals yet</Text>
-        <Text style={styles.subhead}>
-          {canCreate
-            ? isSelf
-              ? "Pick a skill to build."
-              : `Pick a skill to build with ${firstName}.`
-            : isSelf
-              ? "Your goals will appear here once a leader adds one."
-              : `Goals for ${firstName} will appear here once a leader adds one.`}
-        </Text>
+        <View style={styles.copy}>
+          <Text style={styles.heroTitle}>Turn potential into progress.</Text>
+          <Text style={styles.heroBody}>
+            Set meaningful development goals, build new skills and track your
+            growth.
+          </Text>
+        </View>
+
+        {onCreate ? (
+          <Pressable
+            onPress={onCreate}
+            style={styles.cta}
+            accessibilityRole="button"
+            accessibilityLabel="Add a goal"
+            testID="growth-empty-state-create"
+          >
+            <Plus size={16} color="#FFFFFF" strokeWidth={2.7} />
+            <Text style={styles.ctaText}>Add a goal</Text>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.senecaRow}>
+          <SenecaIcon size={28} />
+          <Text style={styles.senecaLabel}>
+            Powered by <Text style={styles.senecaBrand}>Seneca</Text>
+          </Text>
+        </View>
       </View>
-
-      {canCreate && onCreate ? (
-        <Pressable
-          onPress={onCreate}
-          style={styles.cta}
-          accessibilityRole="button"
-          accessibilityLabel="Add a goal"
-          testID="growth-empty-state-create"
-        >
-          <Plus size={13} color="#FFFFFF" strokeWidth={2.8} />
-          <Text style={styles.ctaText}>Add a goal</Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 14, paddingVertical: 10, gap: 12, alignItems: "center" },
-  copy: { alignItems: "center", gap: 3 },
-  title: {
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    color: "#0F172A",
+  wrap: {
+    gap: 16,
+    paddingHorizontal: 2,
+    paddingBottom: 8,
   },
-  subhead: {
-    maxWidth: 280,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "700",
-    color: "#1F2739",
+  heroCard: {
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingTop: 22,
+    paddingBottom: 16,
+    backgroundColor: "#F3F0FF",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#E4DEFF",
+    alignItems: "center",
+    gap: 14,
+  },
+  heroArt: {
+    width: 198,
+    height: 198,
+    marginBottom: 2,
+    backgroundColor: "transparent",
+  },
+  copy: {
+    alignItems: "center",
+    gap: 6,
+    maxWidth: 300,
+  },
+  heroTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    color: "#17142B",
     textAlign: "center",
   },
-  /** Matches the workspace "+ New" pill so buttons read the same app-wide. */
+  heroBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#6B7388",
+    textAlign: "center",
+  },
   cta: {
-    alignSelf: "center",
-    height: 32,
-    paddingHorizontal: 13,
+    alignSelf: "stretch",
+    minHeight: 48,
+    paddingHorizontal: 18,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
-    borderRadius: 999,
+    gap: 8,
+    borderRadius: 14,
     backgroundColor: colors.brand,
   },
-  ctaText: { fontSize: 12.5, lineHeight: 15, fontWeight: "700", color: "#FFFFFF" },
+  ctaText: {
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  senecaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+  },
+  senecaLabel: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: "#667085",
+  },
+  senecaBrand: {
+    fontWeight: "800",
+    color: "#17142B",
+  },
 });

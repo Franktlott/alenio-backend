@@ -29,12 +29,19 @@ export function toPersistedPlan(
   return hasTeamPlan(sub) ? "team" : "free";
 }
 
-/** Use live subscription when loaded; otherwise fall back to persisted workspace plan. */
+/**
+ * Use live subscription when loaded; otherwise fall back to persisted workspace plan.
+ * Expired/canceled paid workspaces stay view-entitled (read-only) so task details
+ * still open — writes are gated separately by `access.canWrite`.
+ */
 export function hasWorkspaceTaskAccess(
   subscription: { plan?: string | null; status?: string | null; hasTeamFeatures?: boolean | null } | null | undefined,
   persistedPlan: string | null | undefined,
 ): boolean {
-  if (subscription) return hasTeamPlan(subscription);
+  if (subscription) {
+    if (hasTeamPlan(subscription)) return true;
+    return isPersistedPaidPlan(subscription.plan);
+  }
   return isPersistedPaidPlan(persistedPlan);
 }
 

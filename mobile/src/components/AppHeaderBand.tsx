@@ -1,8 +1,9 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Defs, Pattern, RadialGradient, Rect, Stop } from "react-native-svg";
 import { useAdaptiveLayout } from "@/lib/adaptive-layout";
+import { setDuoHeaderBleedHeight } from "@/lib/duo-header-bleed";
 import { gradients, palette } from "@/theme";
 
 type Props = {
@@ -26,18 +27,33 @@ export function AppHeaderBand({
   height,
   pageColor = palette.page,
 }: Props) {
-  const { width, sceneInsetLeft, sceneInsetRight } = useAdaptiveLayout();
-  const bandWidth = Math.max(1, Math.round(width));
+  const { width, sceneInsetLeft, sceneInsetRight, iconRailEdge } =
+    useAdaptiveLayout();
   const bandHeight = Math.max(1, Math.round(height));
   /**
-   * Scene content is inset for the Duo column; the band bleeds back into that
-   * inset. Width is the full window so dots/gradients never stop at the hinge.
+   * Stretch to the parent edges, then bleed into any rail / Duo column inset
+   * so the purple runs straight across under the status cluster — never stops
+   * short with a white drop on the trailing edge.
    */
-  const layoutKey = `${bandWidth}x${bandHeight}:${sceneInsetLeft}:${sceneInsetRight}`;
+  const paintWidth = Math.max(
+    1,
+    Math.round(width + sceneInsetLeft + sceneInsetRight),
+  );
+  const layoutKey = `${paintWidth}x${bandHeight}:${sceneInsetLeft}:${sceneInsetRight}`;
+
+  useEffect(() => {
+    if (!iconRailEdge) {
+      setDuoHeaderBleedHeight(0);
+      return;
+    }
+    // Next band screen replaces this height; avoid clearing on unmount so the
+    // Duo strip does not flash white between tab switches.
+    setDuoHeaderBleedHeight(bandHeight);
+  }, [bandHeight, iconRailEdge]);
 
   const dots = useMemo(
     () => (
-      <Svg width={bandWidth} height={bandHeight}>
+      <Svg width={paintWidth} height={bandHeight}>
         <Defs>
           <RadialGradient id={`bandViolet-${layoutKey}`} cx="100%" cy="0%" rx="70%" ry="90%">
             <Stop offset="0" stopColor="#9333ea" stopOpacity="0.28" />
@@ -57,42 +73,60 @@ export function AppHeaderBand({
           </Pattern>
         </Defs>
         <Rect
-          width={bandWidth}
+          width={paintWidth}
           height={bandHeight}
           fill={`url(#bandViolet-${layoutKey})`}
         />
         <Rect
-          width={bandWidth}
+          width={paintWidth}
           height={bandHeight}
           fill={`url(#bandCyan-${layoutKey})`}
         />
         <Rect
-          width={bandWidth}
+          width={paintWidth}
           height={bandHeight}
           fill={`url(#bandDots-${layoutKey})`}
         />
       </Svg>
     ),
-    [bandHeight, bandWidth, layoutKey],
+    [bandHeight, paintWidth, layoutKey],
   );
 
   return (
-    <View
-      pointerEvents="none"
-      style={[
-        StyleSheet.absoluteFill,
-        styles.host,
-        { backgroundColor: pageColor },
-      ]}
-    >
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.host]}>
+      {/**
+       * Solid dusk across the full width (including the Duo column) so purple
+       * never stops short with a white drop beside the header.
+       */}
+      <View
+        style={[
+          styles.bandFill,
+          {
+            height: bandHeight,
+            left: -sceneInsetLeft,
+            right: -sceneInsetRight,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.pageFill,
+          {
+            top: bandHeight,
+            left: -sceneInsetLeft,
+            right: -sceneInsetRight,
+            backgroundColor: pageColor,
+          },
+        ]}
+      />
       <View
         key={layoutKey}
         style={[
           styles.band,
           {
             height: bandHeight,
-            width: bandWidth,
             left: -sceneInsetLeft,
+            right: -sceneInsetRight,
           },
         ]}
       >
@@ -107,9 +141,9 @@ export function AppHeaderBand({
         <LinearGradient
           key={`wash-${layoutKey}`}
           colors={[
-            "rgba(13,7,38,0.4)",
-            "rgba(13,7,38,0.1)",
-            "rgba(26,11,69,0.3)",
+            "rgba(49,44,71,0.4)",
+            "rgba(49,44,71,0.1)",
+            "rgba(60,48,97,0.3)",
           ]}
           locations={[0, 0.55, 1]}
           style={StyleSheet.absoluteFill}
@@ -124,10 +158,19 @@ const styles = StyleSheet.create({
   host: {
     overflow: "visible",
   },
+  bandFill: {
+    position: "absolute",
+    top: 0,
+    backgroundColor: palette.dusk,
+  },
+  pageFill: {
+    position: "absolute",
+    bottom: 0,
+  },
   band: {
     position: "absolute",
     top: 0,
     overflow: "hidden",
-    backgroundColor: palette.dusk,
+    backgroundColor: "transparent",
   },
 });

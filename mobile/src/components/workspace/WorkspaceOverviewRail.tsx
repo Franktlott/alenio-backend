@@ -23,7 +23,6 @@ type DevelopmentProps = {
 };
 
 const PURPLE = "#6d28d9";
-const TILE = "#EDE7FF";
 const AMBER = "#F59E0B";
 const SLATE = "#CBD5E1";
 const GREEN = "#22C55E";
@@ -176,6 +175,7 @@ export function WorkspaceOverviewTeamDevelopment({
         </View>
         <Pressable
           onPress={onPressViewMembers}
+          hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={isPersonal ? "Open your development" : "View members"}
           testID={
@@ -184,14 +184,16 @@ export function WorkspaceOverviewTeamDevelopment({
               : "workspace-overview-view-members"
           }
           style={({ pressed }) => [
-            styles.viewMembers,
-            pressed ? styles.pressed : null,
+            styles.viewMembersPress,
+            pressed ? styles.viewMembersPressed : null,
           ]}
         >
-          <Text style={styles.viewMembersText}>
-            {isPersonal ? "Open" : "Members"}
-          </Text>
-          <ArrowRight size={12} color={PURPLE} strokeWidth={2.4} />
+          <View style={styles.viewMembers}>
+            <Text style={styles.viewMembersText}>
+              {isPersonal ? "Open" : "Members"}
+            </Text>
+            <ArrowRight size={14} color={PURPLE} strokeWidth={2.4} />
+          </View>
         </Pressable>
       </View>
 
@@ -305,19 +307,21 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#6B7280",
   },
-  viewMembers: {
+  viewMembersPress: {
     flexShrink: 0,
+  },
+  viewMembers: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
-    backgroundColor: TILE,
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
+    flexWrap: "nowrap",
+  },
+  viewMembersPressed: {
+    opacity: 0.65,
   },
   viewMembersText: {
-    fontSize: 10,
-    lineHeight: 12,
+    marginRight: 4,
+    fontSize: 13,
+    lineHeight: 16,
     fontWeight: "700",
     color: PURPLE,
   },

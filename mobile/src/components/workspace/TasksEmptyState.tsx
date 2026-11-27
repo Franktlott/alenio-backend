@@ -76,33 +76,30 @@ export function TasksEmptyState({
 
 const styles = StyleSheet.create({
   welcome: {
-    flexGrow: 1,
     alignSelf: "stretch",
-    minHeight: "100%",
   },
   welcomeBody: {
-    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   art: {
-    width: 112,
-    height: 98,
+    width: 88,
+    height: 76,
   },
   title: {
-    marginTop: 10,
-    fontSize: 18,
-    lineHeight: 22,
+    marginTop: 8,
+    fontSize: 17,
+    lineHeight: 21,
     fontWeight: "700",
     letterSpacing: -0.2,
     color: palette.ink,
     textAlign: "center",
   },
   body: {
-    marginTop: 6,
+    marginTop: 4,
     maxWidth: 280,
     fontSize: 13,
     lineHeight: 18,
@@ -112,6 +109,6 @@ const styles = StyleSheet.create({
   },
   button: {
     alignSelf: "center",
-    marginTop: 14,
+    marginTop: 12,
   },
 });
